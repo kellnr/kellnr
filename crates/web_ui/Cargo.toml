@@ -1,0 +1,28 @@
+[package]
+name = "web_ui"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+# Internal dependencies from Kellnr
+index.workspace = true
+db.workspace = true
+common.workspace = true
+json_payload.workspace = true
+derive_jsonresponder.workspace = true
+docs.workspace = true
+registry.workspace = true
+settings.workspace = true
+auth.workspace = true
+
+# External dependencies from crates.io
+rocket.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+reqwest.workspace = true
+
+[dev-dependencies]
+mockall.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "pg_testcontainer"
+version = "0.1.0"
+edition.workspace = true
+autotests = false
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn.workspace = true
+quote.workspace = true
+proc-macro2.workspace = true

@@ -1,0 +1,21 @@
+[package]
+name = "auth"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Internal dependencies from Kellnr
+settings.workspace = true
+db.workspace = true
+error.workspace = true
+
+# External dependencies from crates.io
+rocket.workspace = true
+rand.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+mockall.workspace = true

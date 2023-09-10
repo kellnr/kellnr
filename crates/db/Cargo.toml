@@ -1,0 +1,30 @@
+[package]
+name = "db"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+# Internal dependencies from Kellnr
+common.workspace = true
+settings.workspace = true
+pg_testcontainer.workspace = true
+entity.workspace = true
+migration.workspace = true
+
+# External dependencies from crates.io
+serde.workspace = true
+rocket.workspace = true
+anyhow.workspace = true
+rand.workspace = true
+chrono.workspace = true
+hex.workspace = true
+mockall.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+sea-orm.workspace = true
+sea-orm-migration.workspace = true
+
+
+[dev-dependencies]
+rm_rf.workspace = true
+testcontainers.workspace = true

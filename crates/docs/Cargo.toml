@@ -1,0 +1,27 @@
+[package]
+name = "docs"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+# Internal dependencies from Kellnr
+json_payload.workspace = true
+derive_jsonresponder.workspace = true
+settings.workspace = true
+registry.workspace = true
+common.workspace = true
+db.workspace = true
+error.workspace = true
+auth.workspace = true
+
+# External dependencies from crates.io
+rocket.workspace = true
+zip.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+flate2.workspace = true
+tar.workspace = true
+cargo.workspace = true
+fs_extra.workspace = true
+tracing.workspace = true

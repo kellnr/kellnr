@@ -1,0 +1,27 @@
+[package]
+name = "migration"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[lib]
+name = "migration"
+path = "src/lib.rs"
+
+[dependencies]
+# Internal dependencies
+common.workspace = true
+settings.workspace = true
+
+# External dependencies
+async-std = { version = "^1", features = ["attributes", "tokio1"] }
+sea-orm-migration.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sea-orm.workspace = true
+sea-query.workspace = true
+sea-query-derive.workspace = true
+sha2.workspace = true
+hex.workspace = true

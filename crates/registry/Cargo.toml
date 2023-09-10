@@ -1,0 +1,33 @@
+[package]
+name = "registry"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+# Internal dependencies from Kellnr
+index.workspace = true
+settings.workspace = true
+json_payload.workspace = true
+derive_jsonresponder.workspace = true
+common.workspace = true
+db.workspace = true
+auth.workspace = true
+error.workspace = true
+
+# External dependencies from crates.io
+anyhow.workspace = true
+rocket.workspace = true
+chrono.workspace = true
+hex.workspace = true
+sha2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+cached.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+mockall.workspace = true
+rm_rf.workspace = true
+rand.workspace = true

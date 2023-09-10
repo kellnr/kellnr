@@ -1,0 +1,186 @@
+name: kellnr-ci
+on:
+  push:
+   branches:
+     - master
+#     - devel
+  pull_request:
+    branches:
+      - master
+  release:
+    types:
+      - published
+
+jobs:
+  test-kellnr:
+    name: Kellnr Test x64
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: NPM Install
+        uses: bahmutov/npm-install@v1
+        with:
+          working-directory: ui
+
+      - name: Install Rust
+        uses: hecrj/setup-rust-action@v1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --workspace
+
+  build-kellnr:
+    name: Kellnr Build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        target:
+          [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+            "armv7-unknown-linux-gnueabihf",
+          ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: NPM Install
+        uses: bahmutov/npm-install@v1
+        with:
+          working-directory: ui
+
+      - name: Update APT Repositories
+        run: sudo apt update
+
+      - name: Install dependencies
+        run: sudo apt install -y build-essential gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu sed
+
+      - name: Setup Rust
+        uses: hecrj/setup-rust-action@v1
+
+      - name: Add Rust Targets
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Cargo Strip
+        run: cargo install --force cargo-strip
+
+      - name: Extract Version
+        run: |
+          echo "KELLNR_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo $KELLNR_VERSION
+
+      - name: Replace Version in web_ui/ui
+        run: sed -i 's/0.0.0-debug/'"$KELLNR_VERSION"'/' crates/web_ui/src/ui.rs
+
+      - name: Build Release {{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} --features vendored-openssl
+
+      - name: Strip Debug Symbols
+        run: cargo strip --target ${{ matrix.target }}
+
+      - name: Set Packagename
+        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_VERSION.zip" >> $GITHUB_ENV
+
+      - name: Print Packagename
+        run: echo $KELLNR_PACKAGE
+
+      - name: Package Resources
+        uses: montudor/action-zip@v0.1.1
+        with:
+          args: zip -qq -r ${{ env.KELLNR_PACKAGE }} static config
+
+      - name: Package Kellnr
+        uses: montudor/action-zip@v0.1.1
+        with:
+          args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/release/kellnr
+
+      - name: Upload Kellner
+        uses: actions/upload-artifact@v1
+        with:
+          name: kellnr
+          path: ${{ github.workspace }}/${{ env.KELLNR_PACKAGE }}
+
+  deploy-kellnr:
+    name: Kellnr Deploy
+    if: github.event_name == 'release'
+    runs-on: ubuntu-22.04
+    needs:
+      - test-kellnr
+      - build-kellnr
+    strategy:
+      matrix:
+        target:
+          [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+            "armv7-unknown-linux-gnueabihf",
+          ]
+
+    steps:
+      - name: Extract Version
+        run: |
+          echo "KELLNR_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo $KELLNR_VERSION
+
+      - name: Set Package Name
+        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_VERSION.zip" >> $GITHUB_ENV
+
+      - name: Set Asset Name
+        run: echo "KELLNR_ASSET=kellnr-${{ matrix.target }}.zip" >> $GITHUB_ENV
+
+      - name: Download Kellnr
+        uses: actions/download-artifact@v1
+        with:
+          name: kellnr
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: kellnr/${{ env.KELLNR_PACKAGE }}
+          asset_name: ${{ env.KELLNR_ASSET }}
+          tag: ${{ github.ref }}
+          overwrite: true
+
+  deploy-container:
+    name: Deploy Container Image X-Plat
+    if: github.event_name == 'release'
+    runs-on: ubuntu-22.04
+    needs:
+      - deploy-kellnr
+    permissions:
+      packages: write
+      contents: read
+    env:
+      IMAGE: ghcr.io/kellnr/kellnr
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Extract Version
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo $RELEASE_VERSION
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+      
+      - name: Log in to registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
+
+      - name: Docker Build & Push
+        run: chmod u+x build_and_push.sh && ./build_and_push.sh $IMAGE $RELEASE_VERSION
+        working-directory: docker

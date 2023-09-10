@@ -1,0 +1,24 @@
+[package]
+authors.workspace = true
+autotests = false
+edition.workspace = true
+name = "derive_jsonresponder"
+publish = false
+version = "0.1.0"
+
+[lib]
+proc-macro = true
+
+[[test]]
+name = "tests"
+path = "tests/test.rs"
+
+[dependencies]
+quote.workspace = true
+rocket.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+syn.workspace = true
+
+[dev-dependencies]
+trybuild.workspace = true

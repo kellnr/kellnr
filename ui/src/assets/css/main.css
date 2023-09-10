@@ -1,0 +1,338 @@
+@import url("https://fonts.googleapis.com/css?family=Nunito:300,400,600,700&display=swap");
+
+/*
+    Light theme support
+*/
+
+:root {
+    /*Old color palette (remove)*/
+    --light-bg: #f5f5f5f5;
+
+    --border-radius: 8px;
+
+    /*New light color palette*/
+    --color-darkest: #43474b;
+    --color-dark: #2f55d3;
+    --color-middle: #2f55d3;
+    --color-light: #90E0EF;
+    --color-lightest: #CAF0F8;
+}
+
+
+body {
+    font-family: "Nunito", sans-serif;
+}
+
+body[color-theme="light"] .glass {
+    background: rgba(248,248,248, 0.7);
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 0.5rem;
+    border: 1px solid rgba(248,248,248, 0.25);
+}
+
+.k-h1, .k-h2, .k-h3 {
+    font-family: "Nunito", sans-serif;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.k-h1 {
+    font-size: 2rem;
+}
+
+.k-h2 {
+    font-size: 1.5rem;
+}
+
+.k-h3 {
+    font-size: 1.2rem;
+}
+
+.k-p {
+    margin-bottom: 0.7rem;
+    margin-top: 0.5rem;
+}
+
+.k-button {
+    background: rgba(255, 255, 255, 0.46);
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    color: var(--color-darkest);
+    cursor: pointer;
+
+    letter-spacing: 0.8px;
+}
+
+.k-button:hover {
+    color: var(--color-dark);
+}
+
+.clickable {
+    cursor: pointer;
+    color: var(--color-darkest);
+}
+
+.clickable:hover {
+    color: var(--color-dark);
+}
+
+.link {
+    cursor: pointer;
+    color: var(--color-darkest);
+    text-decoration: underline;
+}
+
+.link:hover {
+    color: var(--color-dark);
+}
+
+body[color-theme="light"] {
+    /*generate with https://app.haikei.app/*/
+    background-image: url("blob-scene-haikei3.svg");
+    background-repeat: no-repeat;
+    background-size: cover;
+    color: var(--color-darkest);
+}
+
+/*Scrollbar form Firefox*/
+body[color-theme="light"] * {
+    scrollbar-color: var(--color-middle) transparent;
+    scrollbar-width: thin;
+    scrollbar-radius: var(--border-radius);
+}
+
+/*Scrollbar for Chrome*/
+body[color-theme="light"] ::-webkit-scrollbar {
+    width: 0.3rem;
+    background: transparent;
+}
+
+body[color-theme="light"] ::-webkit-scrollbar-thumb {
+    background: var(--color-middle);
+    border-radius: var(--border-radius);
+}
+
+/*
+    Dark theme support
+*/
+:root {
+    /*New dark color palette*/
+    --dark-color-lightest: #FFBE0B;
+    --dark-color-light: #FB5607;
+    --dark-color-middle: #FF006E;
+    --dark-color-dark: #8338EC;
+    --dark-color-darkest: #3A86FF;
+    --dark-color-white: #e8e8e8;
+}
+
+body[color-theme="dark"] {
+    background-image: url("layered-peaks-haikei.svg");
+    background-repeat: no-repeat;
+    background-size: cover;
+    color: var(--dark-color-white);
+}
+
+body[color-theme="dark"] .glass {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: var(--border-radius);
+    box-shadow: 0 5px 5px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body[color-theme="dark"] .clickable {
+    color: var(--dark-color-white);
+}
+
+body[color-theme="dark"] .clickable:hover {
+    color: var(--dark-color-middle);
+}
+
+body[color-theme="dark"] .link {
+    color: var(--dark-color-white);
+}
+
+body[color-theme="dark"] .link:hover {
+    color: var(--dark-color-middle);
+}
+
+body[color-theme="dark"] .k-button {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--dark-color-middle);
+}
+
+body[color-theme="dark"] .k-button:hover {
+    color: var(--dark-color-dark);
+}
+
+
+body[color-theme="dark"] .k-h1, body[color-theme="dark"] .k-h2, body[color-theme="dark"] .k-h3 {
+    /*Gradient text*/
+    background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+body[color-theme="dark"] input {
+    background-color: transparent !important;
+    border-color: var(--dark-color-middle) !important;
+}
+
+body[color-theme="dark"] .control > .icon {
+    color: var(--dark-color-dark);
+}
+
+body[color-theme="dark"] ::placeholder {
+    color: var(--dark-color-dark);
+}
+
+body[color-theme="dark"] input {
+    color: var(--dark-color-white);
+}
+
+body[color-theme="dark"] input:focus {
+    color: var(--dark-color-white);
+}
+
+body[color-theme="dark"] input:focus + .icon {
+    color: var(--dark-color-dark);
+}
+
+body[color-theme="dark"] .button {
+    background-color: var(--dark-color-middle);
+    color: white;
+    border-color: var(--dark-color-middle);
+}
+
+body[color-theme="dark"] .button:hover {
+    background-color: var(--dark-color-dark);
+    color: white;
+    border-color: var(--dark-color-dark);
+}
+
+/*Scrollbar form Firefox*/
+body[color-theme="dark"] * {
+    scrollbar-color: var(--dark-color-middle) transparent;
+    scrollbar-width: thin;
+    scrollbar-radius: var(--border-radius);
+}
+
+/*Scrollbar for Chrome*/
+body[color-theme="dark"] ::-webkit-scrollbar {
+    width: 0.3rem;
+    background: transparent;
+}
+
+body[color-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: var(--dark-color-middle);
+    border-radius: var(--border-radius);
+}
+
+body[color-theme="light"] pre {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 0.3rem;
+    margin: 0.5rem 0 0.5rem 0;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/*
+ Dark theme for code blocks
+*/
+
+body[color-theme="dark"] pre {
+    background: rgba(255, 255, 255, 0.0);
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 0.3rem;
+    margin: 0.5rem 0 0.5rem 0;
+    border: 1px solid rgba(100, 100, 100, 0.25);
+}
+
+body[color-theme="dark"] pre {
+    color: var(--dark-color-white);
+}
+
+body[color-theme="dark"] .hljs-string {
+    color: var(--dark-color-darkest);
+}
+
+body[color-theme="dark"] .hljs-built_in {
+    color: var(--dark-color-dark);
+}
+
+body[color-theme="dark"] .hljs-title {
+    color: var(--dark-color-middle);
+}
+
+
+/*
+  Tooltip
+*/
+
+/* Tooltip container */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+/* Tooltip text */
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 120px;
+    background-color: var(--color-dark);
+    color: var(--color-light);
+    text-align: center;
+    padding: 5px 0;
+    border-radius: 6px;
+    font-size: small;
+
+    /* Position the tooltip text */
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -60px;
+
+    /* Fade in tooltip */
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+/* Tooltip arrow */
+.tooltip .tooltiptext::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--color-dark) transparent transparent transparent;
+}
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
