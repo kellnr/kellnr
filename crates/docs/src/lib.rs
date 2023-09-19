@@ -79,14 +79,18 @@ pub async fn delete(
     crate_version: &str,
     settings: &Settings,
 ) -> Result<(), std::io::Error> {
+    // Delete the docs folder for the crate version.
     let docs_path = settings.docs_path().join(crate_name).join(crate_version);
     if docs_path.exists() {
         rocket::tokio::fs::remove_dir_all(docs_path).await?;
     }
 
+    // If it was the last version, delete the empty crate docs folder.
     if get_latest_version_with_doc(crate_name, settings).is_none() {
         let crate_path = settings.docs_path().join(crate_name);
-        rocket::tokio::fs::remove_dir_all(crate_path).await?;
+        if crate_path.exists() {
+            rocket::tokio::fs::remove_dir_all(crate_path).await?;
+        }
     }
 
     Ok(())

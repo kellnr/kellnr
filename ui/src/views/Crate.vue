@@ -253,7 +253,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import CrateSidebarElement from "@/components/CrateSidebarElement.vue";
 import {store} from "@/store/store";
 import {CrateData, CrateVersionData, defaultCrateData, defaultCrateVersionData, CrateRegistryDep} from "@/types/crate_data";
-import {CRATE_DATA, DOCS_BUILD, kellnr_url} from "@/remote-routes";
+import {CRATE_DATA, CRATE_DELETE, DOCS_BUILD, kellnr_url} from "@/remote-routes";
 import Readme from "@/components/Readme.vue";
 
 dayjs.extend(relativeTime);
@@ -316,7 +316,7 @@ const sortedOwners = computed(() => {
 
 function deleteVersion(crate: string, version: string) {
   if(confirm('Delete "' + crate + '" version "' + version + '"?')) {
-    axios.delete(CRATE_DATA,
+    axios.delete(CRATE_DELETE,
       {
         params: {
           name: crate,
