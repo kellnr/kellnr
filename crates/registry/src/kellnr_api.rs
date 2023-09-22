@@ -239,8 +239,7 @@ pub async fn yank(
         idx.yank(&crate_name, &version.to_string(), true).await?;
     }
 
-    let normalized_name = NormalizedName::from(crate_name);
-    db.yank_crate(&normalized_name, &version).await?;
+    db.yank_crate(&crate_name, &version).await?;
 
     Ok(YankSuccess::new())
 }
@@ -262,8 +261,7 @@ pub async fn unyank(
         idx.yank(&crate_name, &version.to_string(), false).await?;
     }
 
-    let normalized_name = NormalizedName::from(crate_name);
-    db.unyank_crate(&normalized_name, &version).await?;
+    db.unyank_crate(&crate_name, &version).await?;
 
     Ok(YankSuccess::new())
 }
