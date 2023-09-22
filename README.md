@@ -24,14 +24,7 @@ The following tools are needed to build **kellnr**: [Rust](https://www.rust-lang
 
 ### Build Kellnr
 
-Install all NPM dependencies (only needed once):
-
-```bash
-cd ui
-npm install
-```
-
-After installing the dependencies, the [build.rs](./build.rs) file does the rest.
+The [build.rs](crates/kellnr/build.rs) installs all **node.js** dependencies, builds the UI and **kellnr*. Simply run one of the commands below:
 
 ```bash
 # Build Kellnr
