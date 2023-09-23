@@ -3,10 +3,11 @@ on:
   push:
    branches:
      - main
-#     - devel
+     - devel
   pull_request:
     branches:
       - main
+      - devel
   release:
     types:
       - published
