@@ -6,10 +6,25 @@
 </template>
 
 <script setup lang="ts">
-import {marked} from 'marked';
+import {Marked} from 'marked';
+import {mangle} from 'marked-mangle';
+import { gfmHeadingId } from "marked-gfm-heading-id";
+import {markedHighlight} from "marked-highlight";
 import DOMPurify from 'dompurify';
 import {computed} from "vue";
+import hljs from 'highlight.js';
 
+const marked = new Marked(
+  markedHighlight({
+    langPrefix: 'hljs language-',
+    highlight(code, lang) {
+      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+      return hljs.highlight(code, { language }).value;
+    }
+  })
+);
+marked.use(mangle());
+marked.use(gfmHeadingId());
 
 const props = defineProps<{
   readme: string | null
@@ -17,14 +32,6 @@ const props = defineProps<{
 
 const markedReadme = computed(() => {
   // Use marked.js with heighlight.js to render the readme
-  marked.setOptions({
-    highlight: function (code: any, lang: any) {
-      const hljs = require('highlight.js');
-      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-      return hljs.highlight(code, { language }).value;
-    }
-  });
-
   return DOMPurify.sanitize(marked.parse(props.readme || ''))
 })
 
@@ -89,6 +96,13 @@ const markedReadme = computed(() => {
 
 /*Dark theme*/
 body[color-theme="dark"] #mdContainer > * strong {
+  color: var(--dark-color-white);
+}
+
+body[color-theme="dark"] #mdContainer > * code {
+  background-color: transparent;
+  padding: 0;
+  font-size: 1rem;
   color: var(--dark-color-white);
 }
 

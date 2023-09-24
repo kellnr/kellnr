@@ -4,6 +4,7 @@ static UI_DIR: &str = "../../ui";
 static UI_DIR_SRC: &str = "../../ui/src";
 static UI_DIST_DIR: &str = "../../ui/dist";
 static STATIC_DIR: &str = "../../static";
+static INDEX_HTML: &str = "../../ui/index.html";
 
 #[cfg(windows)]
 static NPM_CMD: &str = "npm.cmd";
@@ -14,6 +15,7 @@ fn main() {
     println!("Build Kellnr - build.rs!");
 
     println!("cargo:rerun-if-changed={}", UI_DIR_SRC);
+    println!("cargo:rerun-if-changed={}", INDEX_HTML);
 
     install_ui_deps();
     build_ui();
