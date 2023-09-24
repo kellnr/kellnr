@@ -36,7 +36,7 @@
     "@types/marked": "^5.0.1",
     "@vitejs/plugin-vue": "^4.2.3",
     "@vue/compiler-sfc": "^3.3.4",
-    "@vue/eslint-config-typescript": "^11.0.3",
+    "@vue/eslint-config-typescript": "^12.0.0",
     "@vue/tsconfig": "^0.4.0",
     "babel-eslint": "^10.1.0",
     "eslint": "^8.45.0",
