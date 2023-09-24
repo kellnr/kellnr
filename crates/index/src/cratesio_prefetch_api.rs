@@ -187,14 +187,14 @@ async fn fetch_cratesio_description(
 
 pub async fn cratesio_prefetch_thread(
     db: Arc<impl DbProvider>,
-    mut channel: Arc<flume::Receiver<CratesioPrefetchMsg>>,
+    channel: Arc<flume::Receiver<CratesioPrefetchMsg>>,
 ) {
     let mut cache: TimedCache<String, String> =
         TimedCache::with_lifespan(UPDATE_CACHE_TIMEOUT_SECS);
 
     loop {
         if let Some((name, metadata, desc, etag, last_modified)) =
-            get_insert_data(&mut cache, &mut channel).await
+            get_insert_data(&mut cache, &channel).await
         {
             trace!("Update crates.io prefetch data for {}", name);
             if let Err(e) = db
@@ -249,7 +249,7 @@ async fn convert_index_data(
 
 async fn get_insert_data(
     cache: &mut TimedCache<String, String>,
-    channel: &mut Arc<flume::Receiver<CratesioPrefetchMsg>>,
+    channel: &Arc<flume::Receiver<CratesioPrefetchMsg>>,
 ) -> Option<(
     OriginalName,
     Vec<IndexMetadata>,

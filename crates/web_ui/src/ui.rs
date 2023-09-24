@@ -121,7 +121,7 @@ pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
             StatusCode::NOT_FOUND => Err(http::Status::NotFound),
             _ => {
                 error!("Failed to get crates.io data: {}", resp.status());
-                return Err(http::Status::NotFound);
+                Err(http::Status::NotFound)
             }
         },
         Err(e) => {

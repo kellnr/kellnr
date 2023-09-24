@@ -183,8 +183,7 @@ async fn init_kellnr_git_index(settings: &Settings) -> Box<dyn RwIndex> {
     let kellnr_idx = KellnrIdx::new(settings, kellnr_idx_storage)
         .await
         .expect("Failed to create index.");
-    let kellnr_idx = Box::new(kellnr_idx) as Box<dyn RwIndex>;
-    kellnr_idx
+    Box::new(kellnr_idx) as Box<dyn RwIndex>
 }
 
 #[derive(Debug)]
