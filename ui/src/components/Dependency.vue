@@ -26,11 +26,11 @@
 
 <script setup lang="ts">
 import {onBeforeMount, ref, watch} from "vue";
-import axios, {AxiosRequestConfig} from "axios";
+import axios from "axios";
 import {store} from "@/store/store"
 import {useRoute, useRouter} from "vue-router";
 import {CrateData} from "@/types/crate_data";
-import {CRATE_DATA, CRATESIO_DATA, kellnr_url} from "@/remote-routes";
+import {CRATE_DATA, CRATESIO_DATA, CRATESIO_LINK} from "@/remote-routes";
 
 const props = defineProps<{
   name: string
@@ -52,7 +52,7 @@ onBeforeMount(() => {
 })
 
 function getCratesIoUrl(crate: string) {
-  return CRATE_DATA + "/" + crate;
+  return CRATESIO_LINK(crate);
 }
 
 function isCratesIoDep(registry: string | undefined) {
