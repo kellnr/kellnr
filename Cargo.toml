@@ -33,21 +33,21 @@ auth = { path = "./crates/auth" }
 error = { path = "./crates/error" }
 
 # External dependencies from crates.io
-anyhow = "1.0.71"
+anyhow = "1.0.75"
 jsonwebtoken = "8.3.0"
 reqwest = {version = "0.11.18", features = ["json", "blocking"]}
 rocket = {version = "0.5.0-rc.3", features = ["secrets", "json"]}
-serde = {version = "1.0.163", features = ["derive"]}
+serde = {version = "1.0.164", features = ["derive"]}
 sysinfo = "0.29.0"
 rocket_cors = "0.6.0-alpha2"
 #rocket_cors = { git = "https://github.com/secana/rocket_cors", branch = "master" }
 #rocket_cors = { git = "https://github.com/lawliet89/rocket_cors.git", rev = "54fae070"  }
 semver = "1.0.17"
 regex = "1.8.3"
-serde_json = "1.0.96"
+serde_json = "1.0.107"
 mockall = "0.11.4"
 rand = "0.8.5"
-chrono = "0.4.26"
+chrono = "0.4.31"
 hex = "0.4.3"
 sha2 = "0.10.6"
 thiserror = "1.0.40"
@@ -61,7 +61,7 @@ quote = "1.0.28"
 syn = {version = "2.0.18", features = ["full"]}
 trybuild = {version = "1.0.80", features = ["diff"]}
 zip = "0.6.6"
-flate2 = "1.0.26"
+flate2 = "1.0.27"
 tar = "0.4.38"
 cargo = "0.71.0"
 fs_extra = "1.3.0"
