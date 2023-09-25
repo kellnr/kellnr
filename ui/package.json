@@ -27,7 +27,7 @@
     "vue": "^3.3.4",
     "vue-axios": "^3.5.2",
     "vue-class-component": "^8.0.0-0",
-    "vue-router": "^4.2.4",
+    "vue-router": "^4.2.5",
     "vue3-highlightjs": "^1.0.5",
     "vuex": "^4.1.0",
     "vuex-persistedstate": "^4.1.0"
