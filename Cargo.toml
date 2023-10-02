@@ -40,8 +40,6 @@ rocket = {version = "0.5.0-rc.3", features = ["secrets", "json"]}
 serde = {version = "1.0.164", features = ["derive"]}
 sysinfo = "0.29.10"
 rocket_cors = "0.6.0-alpha2"
-#rocket_cors = { git = "https://github.com/secana/rocket_cors", branch = "master" }
-#rocket_cors = { git = "https://github.com/lawliet89/rocket_cors.git", rev = "54fae070"  }
 semver = "1.0.19"
 regex = "1.8.3"
 serde_json = "1.0.107"
@@ -51,7 +49,7 @@ chrono = "0.4.31"
 hex = "0.4.3"
 sha2 = "0.10.8"
 thiserror = "1.0.40"
-sea-orm = { version = "0.11.3", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
+sea-orm = { version = "0.11.3", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] } # Must not upgrade sea-orm to 0.12.3 as that breaks migrations for sqlite
 sea-query = "0.28.5"
 sea-query-derive = "0.3.0"
 sea-orm-migration = { version = "0.11.3", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
@@ -74,6 +72,7 @@ time = "0.3.29"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["json", "fmt"]}
 flume = "0.11.0"
+axum = "0.6.20"
 
 [profile.release]
 lto = "thin"

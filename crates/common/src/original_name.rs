@@ -9,7 +9,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct OriginalName(String);
 
 #[derive(Debug, PartialEq, Eq)]

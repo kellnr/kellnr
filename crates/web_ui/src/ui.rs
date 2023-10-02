@@ -16,21 +16,20 @@ use rocket::{catch, delete, get, http, post, Request, State};
 use settings::Settings;
 use tracing::error;
 
-#[json_payload]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct KellnrVersion {
     pub version: String,
 }
 
-#[json_payload]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Pagination {
     crates: Vec<CrateOverview>,
     current_num: usize,
     total_num: usize,
 }
 
-#[get("/version")]
-pub async fn kellnr_version() -> Json<KellnrVersion> {
-    Json(KellnrVersion {
+pub async fn kellnr_version() -> axum::response::Json<KellnrVersion> {
+    axum::response::Json(KellnrVersion {
         // Replaced automatically by the version from the build job,
         // if a new release is built.
         version: "0.0.0-debug".to_string(),
@@ -38,13 +37,17 @@ pub async fn kellnr_version() -> Json<KellnrVersion> {
     })
 }
 
-#[get("/crates?<page>&<page_size>")]
-pub async fn crates(
+pub struct CratesParams {
     page: Option<usize>,
     page_size: Option<usize>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Pagination {
-    let page_size = page_size.unwrap_or(10);
+} 
+
+pub async fn crates(
+    params: axum::extract::Query<CratesParams>,
+    axum::extract::State(db): axum::extract::State<Box<dyn DbProvider>>,
+) -> axum::response::Json<Pagination> {
+    let page_size = params.page_size.unwrap_or(10);
+    let page = params.page;
     let crates = db.get_crate_overview_list().await.unwrap_or_default();
     let total = crates.len();
 
@@ -73,11 +76,28 @@ pub async fn crates(
         None => (total, crates),
     };
 
+    axum::Json(
     Pagination {
         crates,
         current_num: end,
         total_num: total,
-    }
+    })
+}
+
+pub struct SearchParams {
+    name: OriginalName,
+}
+
+pub async fn search(
+    params: axum::extract::Query<SearchParams>, 
+    axum::extract::State(db): axum::extract::State<Box<dyn DbProvider>>,
+    ) -> axum::response::Json<Pagination> {
+    let crates = db.search_in_crate_name(&params.name).await.unwrap_or_default();
+    axum::Json(Pagination {
+        current_num: crates.len(),
+        total_num: crates.len(),
+        crates,
+    })
 }
 
 #[get("/crate_data?<name>")]
@@ -131,15 +151,7 @@ pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
     }
 }
 
-#[get("/search?<name>")]
-pub async fn search(name: OriginalName, db: &State<Box<dyn DbProvider>>) -> Pagination {
-    let crates = db.search_in_crate_name(&name).await.unwrap_or_default();
-    Pagination {
-        current_num: crates.len(),
-        total_num: crates.len(),
-        crates,
-    }
-}
+
 
 #[delete("/crate?<name>&<version>")]
 pub async fn delete(

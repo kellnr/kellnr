@@ -23,6 +23,7 @@ time.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 reqwest.workspace = true
+axum.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

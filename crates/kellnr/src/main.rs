@@ -13,7 +13,7 @@ use rocket::config::{Config, SecretKey};
 use rocket::fs::FileServer;
 use rocket::tokio::fs::create_dir_all;
 use rocket::tokio::sync::{Mutex, RwLock};
-use rocket::{catchers, launch, routes, tokio, Build};
+use rocket::{catchers, routes, tokio, Build};
 use rocket_cors::{Cors, CorsOptions};
 use settings::{LogFormat, Settings};
 use std::convert::TryFrom;
@@ -24,9 +24,72 @@ use sysinfo::{System, SystemExt};
 use tracing::{debug, info};
 use tracing_subscriber::fmt::format;
 use web_ui::{ui, user};
+use axum::{Router, routing::get};
 
-#[launch]
-async fn rocket_launch() -> _ {
+// #[launch]
+// async fn rocket_launch() -> _ {
+//     let settings = Settings::try_from(Path::new("config")).expect("Cannot read config");
+//
+//     // Configure tracing subscriber
+//     init_tracing(&settings);
+//
+//     info!("Starting kellnr");
+//
+//     // Initialize kellnr crate storage
+//     let kellnr_crate_storage = init_kellnr_crate_storage(&settings).await;
+//
+//     // Kellnr Index and Storage
+//     let kellnr_idx = init_kellnr_git_index(&settings).await;
+//
+//     // Create the database connection. Has to be done after the index and storage
+//     // as the needed folders for the sqlite database my not been created before that.
+//     let con_string = get_connect_string(&settings);
+//     let db = Database::new(&con_string)
+//         .await
+//         .expect("Failed to create database");
+//     let db = Box::new(db) as Box<dyn DbProvider>;
+//
+//     // Start git daemon to service the indices
+//     // Has to be done, before the crates.io index gets cloned, as the container script kills
+//     // the container if the daemon is not running, which happens if the daemon is not started due the
+//     // clone process of the crates.io proxy
+//     if settings.git_index {
+//         start_git_daemon(&settings);
+//     }
+//
+//     // Crates.io Proxy
+//     let (cratesio_crate_storage, cratesio_idx) = init_cratesio_proxy(&settings).await;
+//     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
+//         flume::unbounded::<CratesioPrefetchMsg>();
+//     let cratesio_prefetch_sender = Arc::new(cratesio_prefetch_sender);
+//     let cratesio_prefetch_receiver = Arc::new(cratesio_prefetch_receiver);
+//
+//     init_cratesio_prefetch_thread(
+//         get_connect_string(&settings),
+//         cratesio_prefetch_sender.clone(),
+//         cratesio_prefetch_receiver,
+//         settings.crates_io_num_threads,
+//     )
+//     .await;
+//
+//     // Docs hosting
+//     init_docs_hosting(&settings, &con_string).await;
+//
+//     // Start Kellnr
+//     build_rocket(
+//         settings,
+//         db,
+//         kellnr_idx,
+//         kellnr_crate_storage,
+//         cratesio_idx,
+//         cratesio_crate_storage,
+//         cratesio_prefetch_sender.clone(),
+//     )
+// }
+
+
+#[tokio::main]
+async fn main() {
     let settings = Settings::try_from(Path::new("config")).expect("Cannot read config");
 
     // Configure tracing subscriber
@@ -74,16 +137,17 @@ async fn rocket_launch() -> _ {
     // Docs hosting
     init_docs_hosting(&settings, &con_string).await;
 
-    // Start Kellnr
-    build_rocket(
-        settings,
-        db,
-        kellnr_idx,
-        kellnr_crate_storage,
-        cratesio_idx,
-        cratesio_crate_storage,
-        cratesio_prefetch_sender.clone(),
-    )
+    let db_state = Arc::new(db);
+
+    let app = Router::new()
+        .route("/version", get(ui::kellnr_version))
+        .route("/crates", get(ui::crates))
+        .route("/search", get(ui::search)).with_state(db_state);
+
+    axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }
 
 async fn init_cratesio_prefetch_thread(
@@ -218,10 +282,7 @@ pub fn build_rocket(
         .mount(
             "/",
             routes![
-                ui::kellnr_version,
-                ui::crates,
                 registry::kellnr_api::me,
-                ui::search,
                 ui::statistic,
                 web_ui::settings::settings,
                 ui::crate_data,
