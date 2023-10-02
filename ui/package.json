@@ -18,7 +18,7 @@
     "bulma-switch": "^2.0.4",
     "core-js": "^3.32.2",
     "dayjs": "^1.11.9",
-    "dompurify": "^3.0.5",
+    "dompurify": "^3.0.6",
     "js-cookie": "^3.0.5",
     "marked": "^9.0.3",
     "marked-gfm-heading-id": "^3.1.0",
