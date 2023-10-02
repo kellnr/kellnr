@@ -49,7 +49,7 @@ mockall = "0.11.4"
 rand = "0.8.5"
 chrono = "0.4.31"
 hex = "0.4.3"
-sha2 = "0.10.7"
+sha2 = "0.10.8"
 thiserror = "1.0.40"
 sea-orm = { version = "0.11.3", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
 sea-query = "0.28.5"
