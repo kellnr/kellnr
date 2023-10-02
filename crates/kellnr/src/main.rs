@@ -140,7 +140,9 @@ async fn main() {
 
     let state = Arc::new(AppStateData { db, settings });
 
-    let user = Router::new().route("/login", post(user::login));
+    let user = Router::new()
+        .route("/login", post(user::login))
+        .route("/logout", get(user::logout));
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
@@ -307,18 +309,18 @@ pub fn build_rocket(
         .mount(
             "/user",
             routes![
-                // user::login,            // x
-                user::logout,           // x
-                user::change_pwd,       // x
-                user::add,              // x
-                user::delete,           // x
-                user::delete_forbidden, // x
-                user::reset_pwd,        // x
-                user::add_token,        // x
-                user::delete_token,     // x
-                user::list_tokens,      // x
-                user::list_users,       // x
-                user::login_state,      // x
+                // user::login,
+                // user::logout,
+                user::change_pwd,
+                user::add,
+                user::delete,
+                user::delete_forbidden,
+                user::reset_pwd,
+                user::add_token,
+                user::delete_token,
+                user::list_tokens,
+                user::list_users,
+                user::login_state,
             ],
         )
         .mount(

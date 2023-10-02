@@ -1,4 +1,5 @@
 use crate::session::{AdminUser, AnyUser, Name};
+use appstate::AppState;
 use auth::token;
 use axum::http::StatusCode;
 use common::util::generate_rand_string;
@@ -145,7 +146,7 @@ pub struct Credentials {
 
 pub async fn login(
     cookies: axum_extra::extract::CookieJar,
-    axum::extract::State(state): appstate::AppState,
+    axum::extract::State(state): AppState,
     axum::extract::Json(credentials): axum::extract::Json<Credentials>,
 ) -> Result<
     (
@@ -215,21 +216,25 @@ pub async fn login_state(
     }
 }
 
-#[get("/logout")]
-pub async fn logout(cookies: &CookieJar<'_>, db: &State<Box<dyn DbProvider>>) -> Status {
-    let session_id = match cookies.get_private(COOKIE_SESSION_ID) {
+pub async fn logout(
+    mut jar: axum_extra::extract::CookieJar,
+    axum::extract::State(state): AppState,
+) -> (axum_extra::extract::CookieJar, axum::http::StatusCode) {
+    let session_id = match jar.get(COOKIE_SESSION_ID) {
         Some(c) => c.value().to_owned(),
-        None => return Status::Ok, // Already logged out as no cookie can be found
+        None => return (jar, StatusCode::OK), // Already logged out as no cookie can be found
     };
 
-    cookies.remove_private(Cookie::named(COOKIE_SESSION_ID));
-    cookies.remove(Cookie::build(COOKIE_SESSION_USER, "").path("/").finish());
+    jar = jar.remove(Cookie::named(COOKIE_SESSION_ID));
+    jar = jar.remove(Cookie::build(COOKIE_SESSION_USER, "").path("/").finish());
 
-    if db.delete_session_token(&session_id).await.is_err() {
-        Status::InternalServerError
+    let code = if state.db.delete_session_token(&session_id).await.is_err() {
+        StatusCode::INTERNAL_SERVER_ERROR
     } else {
-        Status::Ok
-    }
+        StatusCode::OK
+    };
+
+    (jar, code)
 }
 
 #[derive(Deserialize)]
