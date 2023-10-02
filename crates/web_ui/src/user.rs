@@ -270,6 +270,7 @@ pub async fn change_pwd(
 
 #[derive(Deserialize)]
 pub struct NewUser {
+    // TODO: Consider checking only on client
     pub pwd1: String,
     pub pwd2: String,
     pub name: String,
@@ -277,24 +278,27 @@ pub struct NewUser {
     pub is_admin: bool,
 }
 
-#[post("/add", data = "<new_user>")]
+// #[post("/add", data = "<new_user>")]
 pub async fn add(
-    user: AdminUser,
-    new_user: Json<NewUser>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Status {
-    let _ = user;
+    user: MaybeUser,
+    axum::extract::State(state): appstate::AppState,
+    axum::extract::Json(new_user): axum::extract::Json<NewUser>,
+) -> StatusCode {
+    if !matches!(user, MaybeUser::Admin(_)) {
+        return StatusCode::FORBIDDEN;
+    }
 
     if new_user.pwd1 != new_user.pwd2 {
-        return Status::BadRequest;
+        return StatusCode::BAD_REQUEST;
     }
 
     let salt = generate_salt();
-    match db
+    match state
+        .db
         .add_user(&new_user.name, &new_user.pwd1, &salt, new_user.is_admin)
         .await
     {
-        Ok(_) => Status::Ok,
-        Err(_) => Status::InternalServerError,
+        Ok(_) => StatusCode::BAD_REQUEST,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }

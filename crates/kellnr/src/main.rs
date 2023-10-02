@@ -143,7 +143,8 @@ async fn main() {
     let user = Router::new()
         .route("/login", post(user::login))
         .route("/logout", get(user::logout))
-        .route("/changepwd", post(user::change_pwd));
+        .route("/changepwd", post(user::change_pwd))
+        .route("/add", post(user::add));
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
@@ -313,7 +314,7 @@ pub fn build_rocket(
                 // user::login,
                 // user::logout,
                 // user::change_pwd,
-                user::add,
+                // user::add,
                 user::delete,
                 user::delete_forbidden,
                 user::reset_pwd,
