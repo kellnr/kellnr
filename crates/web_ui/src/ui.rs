@@ -1129,10 +1129,10 @@ mod tests {
             .mount(
                 "/",
                 routes![
-                    search,
-                    crates,
-                    kellnr_version,
-                    statistic,
+                    // search,
+                    // crates,
+                    // kellnr_version,
+                    // statistic,
                     crate_data,
                     build_rustdoc,
                     cratesio_data,

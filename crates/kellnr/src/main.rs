@@ -1,3 +1,6 @@
+use appstate::AppStateData;
+use axum::routing::post;
+use axum::{routing::get, Router};
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use common::storage::Storage;
 use db::DbProvider;
@@ -24,8 +27,6 @@ use sysinfo::{System, SystemExt};
 use tracing::{debug, info};
 use tracing_subscriber::fmt::format;
 use web_ui::{ui, user};
-use axum::{Router, routing::get};
-use appstate::AppStateData;
 
 // #[launch]
 // async fn rocket_launch() -> _ {
@@ -88,7 +89,6 @@ use appstate::AppStateData;
 //     )
 // }
 
-
 #[tokio::main]
 async fn main() {
     let settings = Settings::try_from(Path::new("config")).expect("Cannot read config");
@@ -138,13 +138,15 @@ async fn main() {
     // Docs hosting
     init_docs_hosting(&settings, &con_string).await;
 
-    let state = Arc::new(AppStateData { db: db });
+    let state = Arc::new(AppStateData { db, settings });
 
+    let user = Router::new().route("/login", post(user::login));
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
         .route("/search", get(ui::search))
         .route("/statistic", get(ui::statistic))
+        .nest("/user", user)
         .with_state(state);
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
@@ -305,18 +307,18 @@ pub fn build_rocket(
         .mount(
             "/user",
             routes![
-                user::login,
-                user::logout,
-                user::change_pwd,
-                user::add,
-                user::delete,
-                user::delete_forbidden,
-                user::reset_pwd,
-                user::add_token,
-                user::delete_token,
-                user::list_tokens,
-                user::list_users,
-                user::login_state,
+                // user::login,            // x
+                user::logout,           // x
+                user::change_pwd,       // x
+                user::add,              // x
+                user::delete,           // x
+                user::delete_forbidden, // x
+                user::reset_pwd,        // x
+                user::add_token,        // x
+                user::delete_token,     // x
+                user::list_tokens,      // x
+                user::list_users,       // x
+                user::login_state,      // x
             ],
         )
         .mount(

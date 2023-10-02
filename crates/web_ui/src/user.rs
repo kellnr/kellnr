@@ -1,5 +1,6 @@
 use crate::session::{AdminUser, AnyUser, Name};
 use auth::token;
+use axum::http::StatusCode;
 use common::util::generate_rand_string;
 use db::password::generate_salt;
 use db::DbProvider;
@@ -10,6 +11,7 @@ use rocket::serde::{json::Json, Deserialize, Serialize};
 use rocket::{get, post, State};
 use settings::constants::*;
 use settings::Settings;
+use std::sync::Arc;
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {
@@ -141,43 +143,53 @@ pub struct Credentials {
     pub pwd: String,
 }
 
-#[post("/login", data = "<credentials>")]
 pub async fn login(
-    credentials: Json<Credentials>,
-    cookies: &CookieJar<'_>,
-    settings: &State<Settings>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<LoggedInUser>, Status> {
-    match db
+    cookies: axum_extra::extract::CookieJar,
+    axum::extract::State(state): appstate::AppState,
+    axum::extract::Json(credentials): axum::extract::Json<Credentials>,
+) -> Result<
+    (
+        axum_extra::extract::CookieJar,
+        axum::extract::Json<LoggedInUser>,
+    ),
+    StatusCode,
+> {
+    match state
+        .db
         .authenticate_user(&credentials.user, &credentials.pwd)
         .await
     {
         Ok(user) => {
             let session_token = generate_rand_string(12);
-            if db
+            if state
+                .db
                 .add_session_token(&credentials.user, &session_token)
                 .await
                 .is_err()
             {
-                return Err(Status::InternalServerError);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
 
-            cookies.add_private(
+            let jar = cookies.add(
                 Cookie::build(COOKIE_SESSION_ID, session_token)
                     .max_age(rocket::time::Duration::seconds(
-                        settings.session_age_seconds as i64,
+                        state.settings.session_age_seconds as i64,
                     ))
                     .same_site(SameSite::Strict)
                     .finish(),
             );
 
-            Ok(Json(LoggedInUser {
-                user: credentials.user.clone(),
-                is_admin: user.is_admin,
-                is_logged_in: true,
-            }))
+            Ok((
+                jar,
+                LoggedInUser {
+                    user: credentials.user.clone(),
+                    is_admin: user.is_admin,
+                    is_logged_in: true,
+                }
+                .into(),
+            ))
         }
-        Err(_) => Err(Status::Unauthorized),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 

@@ -1,9 +1,10 @@
-use std::sync::Arc;
 use db::DbProvider;
+use settings::Settings;
+use std::sync::Arc;
 
 pub type AppState = axum::extract::State<Arc<AppStateData>>;
 
 pub struct AppStateData {
-    pub db: Box<dyn DbProvider>
+    pub db: Box<dyn DbProvider>,
+    pub settings: Settings,
 }
-
