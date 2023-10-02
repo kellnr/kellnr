@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::session::{AdminUser, AnyUser};
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
@@ -33,18 +35,18 @@ pub async fn kellnr_version() -> axum::response::Json<KellnrVersion> {
         // Replaced automatically by the version from the build job,
         // if a new release is built.
         version: "0.0.0-debug".to_string(),
-
     })
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CratesParams {
     page: Option<usize>,
     page_size: Option<usize>,
-} 
+}
 
 pub async fn crates(
-    params: axum::extract::Query<CratesParams>,
-    axum::extract::State(db): axum::extract::State<Box<dyn DbProvider>>,
+    axum::extract::Query(params): axum::extract::Query<CratesParams>,
+    axum::extract::State(db): axum::extract::State<Arc<Box<dyn DbProvider>>>,
 ) -> axum::response::Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
     let page = params.page;
@@ -76,23 +78,26 @@ pub async fn crates(
         None => (total, crates),
     };
 
-    axum::Json(
-    Pagination {
+    axum::Json(Pagination {
         crates,
         current_num: end,
         total_num: total,
     })
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct SearchParams {
     name: OriginalName,
 }
 
 pub async fn search(
-    params: axum::extract::Query<SearchParams>, 
-    axum::extract::State(db): axum::extract::State<Box<dyn DbProvider>>,
-    ) -> axum::response::Json<Pagination> {
-    let crates = db.search_in_crate_name(&params.name).await.unwrap_or_default();
+    axum::extract::Query(params): axum::extract::Query<SearchParams>,
+    axum::extract::State(db): axum::extract::State<Arc<Box<dyn DbProvider>>>,
+) -> axum::response::Json<Pagination> {
+    let crates = db
+        .search_in_crate_name(&params.name)
+        .await
+        .unwrap_or_default();
     axum::Json(Pagination {
         current_num: crates.len(),
         total_num: crates.len(),
@@ -150,8 +155,6 @@ pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
         }
     }
 }
-
-
 
 #[delete("/crate?<name>&<version>")]
 pub async fn delete(
