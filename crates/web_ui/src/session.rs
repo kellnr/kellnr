@@ -43,7 +43,7 @@ impl Name for AnyUser {
     }
 }
 
-// TODO: A better idea would probably to use DbError and use other variants for different purposes
+// TODO(ItsEthra): A better idea would probably to use DbError and use other variants for different purposes
 #[derive(Debug)]
 pub enum LoginError {
     Invalid(String),

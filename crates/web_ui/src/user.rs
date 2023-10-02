@@ -97,22 +97,27 @@ pub struct ResetPwd {
     user: String,
 }
 
-#[get("/resetpwd/<name>")]
 pub async fn reset_pwd(
-    user: AdminUser,
-    name: String,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<ResetPwd>, status::Custom<&'static str>> {
+    user: MaybeUser,
+    Path(name): Path<String>,
+    axum::extract::State(state): appstate::AppState,
+) -> Result<axum::Json<ResetPwd>, (StatusCode, &'static str)> {
+    user.assert_admin()
+        .map_err(|c| (c, "Insufficient privileges"))?;
+
     let new_pwd = generate_rand_string(12);
-    match db.change_pwd(&name, &new_pwd).await {
-        Err(_) => Err(status::Custom(
-            Status::InternalServerError,
+    match state.db.change_pwd(&name, &new_pwd).await {
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
             "Unable to reset user password.",
         )),
-        Ok(_) => Ok(Json(ResetPwd {
+        Ok(_) => Ok(ResetPwd {
+            // TODO(ItsEthra): I wasn't looking at frontend code at all, was using admin's name intended,
+            // or should it be target user's name?
+            user: user.name().unwrap().to_owned(),
             new_pwd,
-            user: user.name(),
-        })),
+        }
+        .into()),
     }
 }
 
@@ -127,13 +132,6 @@ pub async fn delete(
         Ok(_) => Ok(()),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
-}
-
-#[get("/delete/<name>", rank = 2)]
-pub fn delete_forbidden(name: String) -> Status {
-    // If a user without admin rights tries to delete an user, throw a 403
-    let _ = name;
-    Status::Forbidden
 }
 
 #[derive(Serialize)]
@@ -275,7 +273,7 @@ pub async fn change_pwd(
 
 #[derive(Deserialize)]
 pub struct NewUser {
-    // TODO: Consider checking only on client
+    // TODO(ItsEthra): Consider checking only on client
     pub pwd1: String,
     pub pwd2: String,
     pub name: String,
