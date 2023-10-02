@@ -73,6 +73,18 @@ impl MaybeUser {
             Self::Normal(name) | Self::Admin(name) => Some(name),
         }
     }
+
+    pub fn assert_atleast_normal(&self) -> Result<(), axum::http::StatusCode> {
+        matches!(self, MaybeUser::Normal(_) | MaybeUser::Admin(_))
+            .then_some(())
+            .ok_or(axum::http::StatusCode::FORBIDDEN)
+    }
+
+    pub fn assert_admin(&self) -> Result<(), axum::http::StatusCode> {
+        matches!(self, MaybeUser::Admin(_))
+            .then_some(())
+            .ok_or(axum::http::StatusCode::FORBIDDEN)
+    }
 }
 
 #[axum::async_trait]

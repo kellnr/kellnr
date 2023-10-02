@@ -1,5 +1,5 @@
 use appstate::AppStateData;
-use axum::routing::post;
+use axum::routing::{delete, post};
 use axum::{routing::get, Router};
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use common::storage::Storage;
@@ -144,7 +144,8 @@ async fn main() {
         .route("/login", post(user::login))
         .route("/logout", get(user::logout))
         .route("/changepwd", post(user::change_pwd))
-        .route("/add", post(user::add));
+        .route("/add", post(user::add))
+        .route("/delete/:name", delete(user::delete));
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
@@ -315,7 +316,7 @@ pub fn build_rocket(
                 // user::logout,
                 // user::change_pwd,
                 // user::add,
-                user::delete,
+                // user::delete,
                 user::delete_forbidden,
                 user::reset_pwd,
                 user::add_token,

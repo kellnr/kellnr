@@ -1,6 +1,7 @@
 use crate::session::{AdminUser, AnyUser, MaybeUser, Name};
 use appstate::AppState;
 use auth::token;
+use axum::extract::Path;
 use axum::http::StatusCode;
 use common::util::generate_rand_string;
 use db::password::generate_salt;
@@ -115,12 +116,16 @@ pub async fn reset_pwd(
     }
 }
 
-#[get("/delete/<name>")]
-pub async fn delete(user: AdminUser, name: String, db: &State<Box<dyn DbProvider>>) -> Status {
-    let _ = user;
-    match db.delete_user(&name).await {
-        Ok(_) => Status::Ok,
-        Err(_) => Status::InternalServerError,
+pub async fn delete(
+    user: MaybeUser,
+    Path(name): Path<String>,
+    axum::extract::State(state): appstate::AppState,
+) -> Result<(), StatusCode> {
+    user.assert_admin()?;
+
+    match state.db.delete_user(&name).await {
+        Ok(_) => Ok(()),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
@@ -283,13 +288,11 @@ pub async fn add(
     user: MaybeUser,
     axum::extract::State(state): appstate::AppState,
     axum::extract::Json(new_user): axum::extract::Json<NewUser>,
-) -> StatusCode {
-    if !matches!(user, MaybeUser::Admin(_)) {
-        return StatusCode::FORBIDDEN;
-    }
+) -> Result<(), StatusCode> {
+    user.assert_admin()?;
 
     if new_user.pwd1 != new_user.pwd2 {
-        return StatusCode::BAD_REQUEST;
+        return Err(StatusCode::BAD_REQUEST);
     }
 
     let salt = generate_salt();
@@ -298,7 +301,7 @@ pub async fn add(
         .add_user(&new_user.name, &new_user.pwd1, &salt, new_user.is_admin)
         .await
     {
-        Ok(_) => StatusCode::BAD_REQUEST,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        Ok(_) => Ok(()),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
