@@ -146,6 +146,7 @@ async fn main() {
         .route("/search", get(ui::search))
         .route("/statistic", get(ui::statistic))
         .route("/crate_data", get(ui::crate_data))
+        .route("/cratesio_data", get(ui::cratesio_data))
         .with_state(state);
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
@@ -288,7 +289,6 @@ pub fn build_rocket(
             routes![
                 registry::kellnr_api::me,
                 web_ui::settings::settings,
-                ui::cratesio_data,
                 ui::delete,
             ],
         )

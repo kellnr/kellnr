@@ -126,9 +126,14 @@ pub async fn crate_data(
     }
 }
 
-#[get("/cratesio_data?<name>")]
-pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
-    let url = format!("https://crates.io/api/v1/crates/{}", name);
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CratesIoDataParams {
+    name: OriginalName,
+}
+
+pub async fn cratesio_data(axum::extract::Query(params): axum::extract::Query<CratesIoDataParams>) -> 
+Result<String, axum::http::StatusCode> {
+    let url = format!("https://crates.io/api/v1/crates/{}", params.name);
 
     let client = reqwest::Client::new();
     let req = client
@@ -145,19 +150,19 @@ pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
                     Ok(data) => Ok(data),
                     Err(e) => {
                         error!("Failed to parse crates.io data: {}", e);
-                        Err(http::Status::InternalServerError)
+                        Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
                     }
                 }
             }
-            StatusCode::NOT_FOUND => Err(http::Status::NotFound),
+            StatusCode::NOT_FOUND => Err(axum::http::StatusCode::NOT_FOUND),
             _ => {
                 error!("Failed to get crates.io data: {}", resp.status());
-                Err(http::Status::NotFound)
+                Err(axum::http::StatusCode::NOT_FOUND)
             }
         },
         Err(e) => {
             error!("Failed to get crates.io data: {}", e);
-            Err(http::Status::InternalServerError)
+            Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }
