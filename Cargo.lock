@@ -1687,9 +1687,20 @@ checksum = "1657b4441c3403d9f7b3409e47575237dac27b1b5726df654a6ecbf92f0f7577"
 dependencies = [
  "futures-core",
  "futures-sink",
- "nanorand",
  "pin-project",
- "spin 0.9.7",
+ "spin 0.9.8",
+]
+
+[[package]]
+name = "flume"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55ac459de2512911e4b674ce33cf20befaba382d05b62b008afc1c8b57cbf181"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "nanorand",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -2821,7 +2832,7 @@ dependencies = [
  "common",
  "db",
  "derive_jsonresponder",
- "flume",
+ "flume 0.11.0",
  "hex",
  "json_payload",
  "mockall",
@@ -2993,7 +3004,7 @@ dependencies = [
  "derive_jsonresponder",
  "docs",
  "entity",
- "flume",
+ "flume 0.11.0",
  "index",
  "json_payload",
  "openssl",
@@ -3312,7 +3323,7 @@ dependencies = [
  "log",
  "memchr",
  "mime",
- "spin 0.9.7",
+ "spin 0.9.8",
  "tokio",
  "tokio-util",
  "version_check",
@@ -5029,9 +5040,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spin"
-version = "0.9.7"
+version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0959fd6f767df20b231736396e4f602171e00d95205676286e79d4a4eb67bef"
+checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 dependencies = [
  "lock_api",
 ]
@@ -5086,7 +5097,7 @@ dependencies = [
  "dotenvy",
  "either",
  "event-listener",
- "flume",
+ "flume 0.10.14",
  "futures-channel",
  "futures-core",
  "futures-executor",
