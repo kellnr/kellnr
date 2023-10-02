@@ -191,7 +191,7 @@ pub async fn delete(
     http::Status::Ok
 }
 
-#[json_payload]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Statistic {
     unique_crates: u32,
     crate_versions: u32,
@@ -201,8 +201,7 @@ pub struct Statistic {
     top3: (String, u32),
 }
 
-#[get("/statistic")]
-pub async fn statistic(db: &State<Box<dyn DbProvider>>) -> Statistic {
+pub async fn statistic(axum::extract::State(db): axum::extract::State<Arc<Box<dyn DbProvider>>>) -> axum::response::Json<Statistic> {
     let unique_crates = db.get_total_unique_crates().await.unwrap_or_default();
     let crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
     let downloads = db.get_total_downloads().await.unwrap_or_default();
@@ -216,14 +215,14 @@ pub async fn statistic(db: &State<Box<dyn DbProvider>>) -> Statistic {
         }
     }
 
-    Statistic {
+    axum::Json(Statistic {
         unique_crates,
         crate_versions,
         downloads,
         top1: extract(&tops, 0),
         top2: extract(&tops, 1),
         top3: extract(&tops, 2),
-    }
+    })
 }
 
 #[post("/build?<package>&<version>")]

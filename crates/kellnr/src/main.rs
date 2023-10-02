@@ -142,7 +142,9 @@ async fn main() {
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
-        .route("/search", get(ui::search)).with_state(db_state);
+        .route("/search", get(ui::search))
+        .route("/statistic", get(ui::statistic))
+        .with_state(db_state);
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
         .serve(app.into_make_service())
@@ -283,7 +285,6 @@ pub fn build_rocket(
             "/",
             routes![
                 registry::kellnr_api::me,
-                ui::statistic,
                 web_ui::settings::settings,
                 ui::crate_data,
                 ui::cratesio_data,
