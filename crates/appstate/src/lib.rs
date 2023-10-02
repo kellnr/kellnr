@@ -1,14 +1,9 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+use std::sync::Arc;
+use db::DbProvider;
+
+pub type AppState = axum::extract::State<Arc<AppStateData>>;
+
+pub struct AppStateData {
+    pub db: Box<dyn DbProvider>
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}

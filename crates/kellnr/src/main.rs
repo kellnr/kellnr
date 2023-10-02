@@ -25,6 +25,7 @@ use tracing::{debug, info};
 use tracing_subscriber::fmt::format;
 use web_ui::{ui, user};
 use axum::{Router, routing::get};
+use appstate::AppStateData;
 
 // #[launch]
 // async fn rocket_launch() -> _ {
@@ -137,14 +138,14 @@ async fn main() {
     // Docs hosting
     init_docs_hosting(&settings, &con_string).await;
 
-    let db_state = Arc::new(db);
+    let state = Arc::new(AppStateData { db: db });
 
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
         .route("/search", get(ui::search))
         .route("/statistic", get(ui::statistic))
-        .with_state(db_state);
+        .with_state(state);
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
         .serve(app.into_make_service())

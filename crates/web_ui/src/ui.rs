@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::session::{AdminUser, AnyUser};
+use appstate::AppState;
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
 use common::normalized_name::NormalizedName;
@@ -46,11 +47,11 @@ pub struct CratesParams {
 
 pub async fn crates(
     axum::extract::Query(params): axum::extract::Query<CratesParams>,
-    axum::extract::State(db): axum::extract::State<Arc<Box<dyn DbProvider>>>,
+    axum::extract::State(state): AppState,
 ) -> axum::response::Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
     let page = params.page;
-    let crates = db.get_crate_overview_list().await.unwrap_or_default();
+    let crates = state.db.get_crate_overview_list().await.unwrap_or_default();
     let total = crates.len();
 
     let comp_start = |page: usize| {
@@ -92,9 +93,10 @@ pub struct SearchParams {
 
 pub async fn search(
     axum::extract::Query(params): axum::extract::Query<SearchParams>,
-    axum::extract::State(db): axum::extract::State<Arc<Box<dyn DbProvider>>>,
+    axum::extract::State(state): AppState,
 ) -> axum::response::Json<Pagination> {
-    let crates = db
+    let crates = state
+        .db
         .search_in_crate_name(&params.name)
         .await
         .unwrap_or_default();
@@ -201,11 +203,19 @@ pub struct Statistic {
     top3: (String, u32),
 }
 
-pub async fn statistic(axum::extract::State(db): axum::extract::State<Arc<Box<dyn DbProvider>>>) -> axum::response::Json<Statistic> {
-    let unique_crates = db.get_total_unique_crates().await.unwrap_or_default();
-    let crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
-    let downloads = db.get_total_downloads().await.unwrap_or_default();
-    let tops = db.get_top_crates_downloads(3).await.unwrap_or_default();
+pub async fn statistic(axum::extract::State(state): AppState) -> axum::response::Json<Statistic> {
+    let unique_crates = state.db.get_total_unique_crates().await.unwrap_or_default();
+    let crate_versions = state
+        .db
+        .get_total_crate_versions()
+        .await
+        .unwrap_or_default();
+    let downloads = state.db.get_total_downloads().await.unwrap_or_default();
+    let tops = state
+        .db
+        .get_top_crates_downloads(3)
+        .await
+        .unwrap_or_default();
 
     fn extract(tops: &[(String, u32)], i: usize) -> (String, u32) {
         if tops.len() > i {
