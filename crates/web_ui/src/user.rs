@@ -51,15 +51,17 @@ pub struct AuthTokenList {
     tokens: Vec<AuthToken>,
 }
 
-#[get("/list_tokens")]
 pub async fn list_tokens(
-    user: AnyUser,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<AuthTokenList>, status::Custom<&'static str>> {
-    match db.get_auth_tokens(&user.name()).await {
-        Ok(tokens) => Ok(Json(AuthTokenList { tokens })),
-        Err(_) => Err(status::Custom(
-            Status::InternalServerError,
+    user: MaybeUser,
+    axum::extract::State(state): appstate::AppState,
+) -> Result<axum::Json<AuthTokenList>, (StatusCode, &'static str)> {
+    user.assert_atleast_normal()
+        .map_err(|c| (c, "Guests are forbidden"))?;
+
+    match state.db.get_auth_tokens(user.name().unwrap()).await {
+        Ok(tokens) => Ok(AuthTokenList { tokens }.into()),
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
             "Unable to fetch authentication tokens from database.",
         )),
     }

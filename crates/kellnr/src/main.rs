@@ -148,9 +148,11 @@ async fn main() {
         .route("/delete/:name", delete(user::delete))
         // TODO(ItsEthra): Consider post?
         .route("/resetpwd/:name", get(user::reset_pwd))
+        // TODO(ItsEthra): Consider put?
         .route("/addtoken", post(user::add_token))
         // TODO(ItsEthra): Consider delete?
-        .route("/delete_token/:id", get(user::delete_token));
+        .route("/delete_token/:id", get(user::delete_token))
+        .route("/list_tokens", get(user::list_tokens));
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
@@ -326,7 +328,7 @@ pub fn build_rocket(
                 // user::reset_pwd,
                 // user::add_token,
                 // user::delete_token,
-                user::list_tokens,
+                // user::list_tokens,
                 user::list_users,
                 user::login_state,
             ],
