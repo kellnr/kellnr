@@ -107,17 +107,21 @@ pub async fn search(
     })
 }
 
-#[get("/crate_data?<name>")]
-pub async fn crate_data(
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CrateDataParams {
     name: OriginalName,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<CrateData>, http::Status> {
-    let index_name = NormalizedName::from(name);
-    match db.get_crate_data(&index_name).await {
-        Ok(cd) => Ok(Json(cd)),
+}
+
+pub async fn crate_data(
+    axum::extract::Query(params): axum::extract::Query<CrateDataParams>,
+    axum::extract::State(state): AppState,
+) -> Result<axum::response::Json<CrateData>, axum::http::StatusCode> {
+    let index_name = NormalizedName::from(params.name);
+    match state.db.get_crate_data(&index_name).await {
+        Ok(cd) => Ok(axum::Json(cd)),
         Err(e) => match e {
-            DbError::CrateNotFound(_) => Err(http::Status::NotFound),
-            _ => Err(http::Status::InternalServerError),
+            DbError::CrateNotFound(_) => Err(axum::http::StatusCode::NOT_FOUND),
+            _ => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
         },
     }
 }
