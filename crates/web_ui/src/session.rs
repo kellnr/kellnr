@@ -1,3 +1,6 @@
+use axum::http::request::Parts;
+use axum::response::IntoResponse;
+use axum_extra::extract::CookieJar;
 use db::DbProvider;
 use rocket::http::{Cookie, Status};
 use rocket::outcome::Outcome::*;
@@ -40,10 +43,59 @@ impl Name for AnyUser {
     }
 }
 
+// TODO: A better idea would probably to use DbError and use other variants for different purposes
 #[derive(Debug)]
 pub enum LoginError {
     Invalid(String),
     NoSettings(String),
+}
+
+impl IntoResponse for LoginError {
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            LoginError::Invalid(e) => (axum::http::StatusCode::BAD_REQUEST, e).into_response(),
+            LoginError::NoSettings(e) => (axum::http::StatusCode::BAD_REQUEST, e).into_response(),
+        }
+    }
+}
+
+pub enum MaybeUser {
+    Guest,
+    // Consider using a db model or something?
+    Normal(String),
+    Admin(String),
+}
+
+impl MaybeUser {
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Self::Guest => None,
+            Self::Normal(name) | Self::Admin(name) => Some(name),
+        }
+    }
+}
+
+#[axum::async_trait]
+impl axum::extract::FromRequestParts<appstate::ArcAppState> for MaybeUser {
+    type Rejection = LoginError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &appstate::ArcAppState,
+    ) -> Result<Self, Self::Rejection> {
+        let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
+        let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+        match session_cookie {
+            Some(cookie) => match state.db.validate_session(cookie.value()).await {
+                // admin
+                Ok((name, true)) => Ok(Self::Admin(name)),
+                // not admin
+                Ok((name, false)) => Ok(Self::Normal(name)),
+                Err(e) => Err(LoginError::Invalid(e.to_string())),
+            },
+            None => Ok(Self::Guest),
+        }
+    }
 }
 
 #[rocket::async_trait]

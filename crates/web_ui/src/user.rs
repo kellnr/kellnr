@@ -1,4 +1,4 @@
-use crate::session::{AdminUser, AnyUser, Name};
+use crate::session::{AdminUser, AnyUser, MaybeUser, Name};
 use appstate::AppState;
 use auth::token;
 use axum::http::StatusCode;
@@ -240,31 +240,31 @@ pub async fn logout(
 #[derive(Deserialize)]
 pub struct PwdChange {
     pub old_pwd: String,
+    // Maybe checking on client is enough?
     pub new_pwd1: String,
     pub new_pwd2: String,
 }
 
-#[post("/changepwd", data = "<pwd_change>")]
 pub async fn change_pwd(
-    user: AnyUser,
-    pwd_change: Json<PwdChange>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Status {
-    let user = match db
-        .authenticate_user(&user.name(), &pwd_change.old_pwd)
-        .await
-    {
-        Ok(user) => user,
-        Err(_) => return Status::BadRequest,
+    user: MaybeUser,
+    axum::extract::State(state): appstate::AppState,
+    axum::extract::Json(pwd_change): axum::extract::Json<PwdChange>,
+) -> StatusCode {
+    let Some(name) = user.name() else {
+        return StatusCode::UNAUTHORIZED;
+    };
+
+    let Ok(user) = state.db.authenticate_user(name, &pwd_change.old_pwd).await else {
+        return StatusCode::BAD_REQUEST;
     };
 
     if pwd_change.new_pwd1 != pwd_change.new_pwd2 {
-        return Status::BadRequest;
+        return StatusCode::BAD_REQUEST;
     }
 
-    match db.change_pwd(&user.name, &pwd_change.new_pwd1).await {
-        Ok(_) => Status::Ok,
-        Err(_) => Status::InternalServerError,
+    match state.db.change_pwd(&user.name, &pwd_change.new_pwd1).await {
+        Ok(_) => StatusCode::OK,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
