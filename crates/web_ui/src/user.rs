@@ -1,16 +1,13 @@
-use crate::session::{AdminUser, AnyUser, MaybeUser, Name};
+use crate::session::MaybeUser;
 use appstate::AppState;
 use auth::token;
 use axum::extract::Path;
 use axum::http::StatusCode;
+use axum_extra::extract::cookie::Cookie;
 use common::util::generate_rand_string;
 use db::password::generate_salt;
-use db::DbProvider;
 use db::{self, AuthToken, User};
-use rocket::http::{Cookie, SameSite, Status};
-use rocket::response::status;
-use rocket::serde::{json::Json, Deserialize, Serialize};
-use rocket::{get, State};
+use serde::{Deserialize, Serialize};
 use settings::constants::*;
 
 #[derive(Serialize)]
@@ -72,16 +69,17 @@ pub struct UserList {
     users: Vec<User>,
 }
 
-#[get("/list_users")]
 pub async fn list_users(
-    user: AdminUser,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<UserList>, status::Custom<&'static str>> {
-    let _ = user;
-    match db.get_users().await {
-        Ok(users) => Ok(Json(UserList { users })),
-        Err(_) => Err(status::Custom(
-            Status::InternalServerError,
+    user: MaybeUser,
+    axum::extract::State(state): appstate::AppState,
+) -> Result<axum::Json<UserList>, (StatusCode, &'static str)> {
+    user.assert_admin()
+        .map_err(|c| (c, "Insufficient privileges"))?;
+
+    match state.db.get_users().await {
+        Ok(users) => Ok(UserList { users }.into()),
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
             "Unable to fetch users from database.",
         )),
     }
@@ -190,7 +188,7 @@ pub async fn login(
                     .max_age(rocket::time::Duration::seconds(
                         state.settings.session_age_seconds as i64,
                     ))
-                    .same_site(SameSite::Strict)
+                    .same_site(axum_extra::extract::cookie::SameSite::Strict)
                     .finish(),
             );
 
@@ -208,26 +206,25 @@ pub async fn login(
     }
 }
 
-#[get("/login_state")]
-pub async fn login_state(
-    user: Option<AnyUser>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<LoggedInUser>, Status> {
+pub async fn login_state(user: MaybeUser) -> axum::Json<LoggedInUser> {
     match user {
-        Some(user) => match db.get_user(&user.name()).await {
-            Ok(user) => Ok(Json(LoggedInUser {
-                user: user.name,
-                is_admin: user.is_admin,
-                is_logged_in: true,
-            })),
-            Err(_) => Err(Status::InternalServerError),
-        },
-        None => Ok(Json(LoggedInUser {
-            user: String::new(),
+        MaybeUser::Guest => LoggedInUser {
+            user: "".into(),
             is_admin: false,
             is_logged_in: false,
-        })),
+        },
+        MaybeUser::Normal(user) => LoggedInUser {
+            user,
+            is_admin: false,
+            is_logged_in: true,
+        },
+        MaybeUser::Admin(user) => LoggedInUser {
+            user,
+            is_admin: true,
+            is_logged_in: true,
+        },
     }
+    .into()
 }
 
 pub async fn logout(
