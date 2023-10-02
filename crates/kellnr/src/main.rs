@@ -147,7 +147,10 @@ async fn main() {
         .route("/add", post(user::add))
         .route("/delete/:name", delete(user::delete))
         // TODO(ItsEthra): Consider post?
-        .route("/resetpwd/:name", get(user::reset_pwd));
+        .route("/resetpwd/:name", get(user::reset_pwd))
+        .route("/addtoken", post(user::add_token))
+        // TODO(ItsEthra): Consider delete?
+        .route("/delete_token/:id", get(user::delete_token));
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
@@ -321,8 +324,8 @@ pub fn build_rocket(
                 // user::delete,
                 // user::delete_forbidden, not needed, we use assert in delete now
                 // user::reset_pwd,
-                user::add_token,
-                user::delete_token,
+                // user::add_token,
+                // user::delete_token,
                 user::list_tokens,
                 user::list_users,
                 user::login_state,

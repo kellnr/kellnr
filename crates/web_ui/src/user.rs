@@ -7,13 +7,11 @@ use common::util::generate_rand_string;
 use db::password::generate_salt;
 use db::DbProvider;
 use db::{self, AuthToken, User};
-use rocket::http::{Cookie, CookieJar, SameSite, Status};
+use rocket::http::{Cookie, SameSite, Status};
 use rocket::response::status;
 use rocket::serde::{json::Json, Deserialize, Serialize};
-use rocket::{get, post, State};
+use rocket::{get, State};
 use settings::constants::*;
-use settings::Settings;
-use std::sync::Arc;
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {
@@ -21,25 +19,30 @@ pub struct NewTokenResponse {
     token: String,
 }
 
-#[post("/add_token", data = "<auth_token>")]
+// #[post("/add_token", data = "<auth_token>")]
 pub async fn add_token(
-    user: AnyUser,
-    auth_token: Json<token::NewTokenReqData>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<NewTokenResponse>, status::Custom<&'static str>> {
+    user: MaybeUser,
+    axum::extract::State(state): appstate::AppState,
+    axum::Json(auth_token): axum::Json<token::NewTokenReqData>,
+) -> Result<axum::Json<NewTokenResponse>, (StatusCode, &'static str)> {
+    user.assert_atleast_normal()
+        .map_err(|c| (c, "Guests are forbidden"))?;
+
     let token = token::generate_token();
-    match db
-        .add_auth_token(&auth_token.name, &token, &user.name())
+    match state
+        .db
+        .add_auth_token(&auth_token.name, &token, user.name().unwrap())
         .await
     {
-        Err(_) => Err(status::Custom(
-            Status::InternalServerError,
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
             "Unable to add authentication token to database.",
         )),
-        Ok(_) => Ok(Json(NewTokenResponse {
+        Ok(_) => Ok(NewTokenResponse {
             name: auth_token.name.clone(),
             token,
-        })),
+        }
+        .into()),
     }
 }
 
@@ -82,12 +85,18 @@ pub async fn list_users(
     }
 }
 
-#[get("/delete_token/<id>")]
-pub async fn delete_token(user: AnyUser, id: i32, db: &State<Box<dyn DbProvider>>) -> Status {
-    let _ = user;
-    match db.delete_auth_token(id).await {
-        Ok(_) => Status::Ok,
-        Err(_) => Status::InternalServerError,
+pub async fn delete_token(
+    user: MaybeUser,
+    Path(id): Path<i32>,
+    axum::extract::State(state): appstate::AppState,
+) -> Result<(), axum::http::StatusCode> {
+    user.assert_atleast_normal()?;
+
+    // TODO(ItsEthra): Should be checking if user owns the token i believe
+
+    match state.db.delete_auth_token(id).await {
+        Ok(_) => Ok(()),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 

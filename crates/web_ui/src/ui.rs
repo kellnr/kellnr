@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::session::{AdminUser, AnyUser};
 use appstate::AppState;
 use common::crate_data::CrateData;
@@ -10,7 +8,6 @@ use common::version::Version;
 use db::error::DbError;
 use db::DbProvider;
 use index::rwindex::RwIndex;
-use json_payload::json_payload;
 use registry::kellnr_crate_storage::KellnrCrateStorage;
 use reqwest::StatusCode;
 use rocket::serde::json::Json;
