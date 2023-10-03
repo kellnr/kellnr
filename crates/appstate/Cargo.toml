@@ -13,3 +13,4 @@ settings.workspace = true
 
 # External dependencies
 axum.workspace = true
+axum-extra.workspace = true

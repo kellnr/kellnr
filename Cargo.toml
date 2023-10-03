@@ -75,7 +75,7 @@ tracing-subscriber = { version = "0.3.17", features = ["json", "fmt"]}
 flume = "0.11.0"
 # axum = "0.6.20" 
 axum = { version = "0.6.20", features = ["macros"] }
-axum-extra = { version = "0.8.0", features = ["cookie"] }
+axum-extra = { version = "0.8.0", features = ["cookie", "cookie-private"] }
 
 [profile.release]
 lto = "thin"

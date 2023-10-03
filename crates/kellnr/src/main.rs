@@ -1,6 +1,7 @@
 use appstate::AppStateData;
 use axum::routing::{delete, post};
 use axum::{routing::get, Router};
+use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use common::storage::Storage;
 use db::DbProvider;
@@ -138,7 +139,12 @@ async fn main() {
     // Docs hosting
     init_docs_hosting(&settings, &con_string).await;
 
-    let state = Arc::new(AppStateData { db, settings });
+    let signing_key = Key::generate();
+    let state = Arc::new(AppStateData {
+        db,
+        signing_key,
+        settings,
+    });
 
     let user = Router::new()
         .route("/login", post(user::login))
