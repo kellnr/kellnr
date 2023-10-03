@@ -8,8 +8,7 @@ use rocket::outcome::Outcome::*;
 use rocket::request::{self, FromRequest, Request};
 use rocket::State;
 use settings::constants;
-
-use crate::user::RouteError;
+use crate::error::RouteError;
 
 pub trait Name {
     fn name(&self) -> String;

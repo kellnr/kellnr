@@ -3,7 +3,6 @@ use appstate::{AppState, DbState};
 use auth::token;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::Json;
 use axum_extra::extract::cookie::Cookie;
 use axum_extra::extract::PrivateCookieJar;
@@ -12,36 +11,12 @@ use db::password::generate_salt;
 use db::{self, AuthToken, User};
 use serde::{Deserialize, Serialize};
 use settings::constants::*;
+use crate::error::RouteError;
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {
     name: String,
     token: String,
-}
-
-pub enum RouteError {
-    DbError(db::error::DbError),
-    InsufficientPrivileges,
-    Status(StatusCode),
-}
-
-impl From<db::error::DbError> for RouteError {
-    fn from(err: db::error::DbError) -> Self {
-        Self::DbError(err)
-    }
-}
-
-impl IntoResponse for RouteError {
-    fn into_response(self) -> Response {
-        match self {
-            RouteError::DbError(err) => {
-                tracing::error!("Db: {err:?}");
-                StatusCode::INTERNAL_SERVER_ERROR.into_response()
-            }
-            RouteError::Status(status) => status.into_response(),
-            RouteError::InsufficientPrivileges => StatusCode::FORBIDDEN.into_response(),
-        }
-    }
 }
 
 // #[post("/add_token", data = "<auth_token>")]
