@@ -3,6 +3,7 @@ use appstate::{AppState, DbState};
 use auth::token;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::Json;
 use axum_extra::extract::cookie::Cookie;
 use axum_extra::extract::PrivateCookieJar;
@@ -18,32 +19,51 @@ pub struct NewTokenResponse {
     token: String,
 }
 
+pub enum RouteError {
+    DbError(db::error::DbError),
+    InsufficientPrivileges,
+    Status(StatusCode),
+}
+
+impl From<db::error::DbError> for RouteError {
+    fn from(err: db::error::DbError) -> Self {
+        Self::DbError(err)
+    }
+}
+
+impl IntoResponse for RouteError {
+    fn into_response(self) -> Response {
+        match self {
+            RouteError::DbError(err) => {
+                tracing::error!("Db: {err:?}");
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+            RouteError::Status(status) => status.into_response(),
+            RouteError::InsufficientPrivileges => StatusCode::FORBIDDEN.into_response(),
+        }
+    }
+}
+
 // #[post("/add_token", data = "<auth_token>")]
 pub async fn add_token(
     user: MaybeUser,
     State(db): DbState,
     Json(auth_token): Json<token::NewTokenReqData>,
-) -> Result<Json<NewTokenResponse>, (StatusCode, &'static str)> {
-    user.assert_atleast_normal()
-        .map_err(|c| (c, "Guests are forbidden"))?;
+) -> Result<Json<NewTokenResponse>, RouteError> {
+    user.assert_atleast_normal()?;
 
     let token = token::generate_token();
-    match db
-        .add_auth_token(&auth_token.name, &token, user.name().unwrap())
-        .await
-    {
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Unable to add authentication token to database.",
-        )),
-        Ok(_) => Ok(NewTokenResponse {
-            name: auth_token.name.clone(),
-            token,
-        }
-        .into()),
+    db.add_auth_token(&auth_token.name, &token, user.name().unwrap())
+        .await?;
+
+    Ok(NewTokenResponse {
+        name: auth_token.name.clone(),
+        token,
     }
+    .into())
 }
 
+// TODO(ItsEthra): This should probably be inlined, i.e just return Json<Vec<AuthToken>> in list_tokens, but for now I'm not touching frontend
 #[derive(Serialize)]
 pub struct AuthTokenList {
     tokens: Vec<AuthToken>,
@@ -52,19 +72,16 @@ pub struct AuthTokenList {
 pub async fn list_tokens(
     user: MaybeUser,
     State(db): DbState,
-) -> Result<Json<AuthTokenList>, (StatusCode, &'static str)> {
-    user.assert_atleast_normal()
-        .map_err(|c| (c, "Guests are forbidden"))?;
+) -> Result<Json<AuthTokenList>, RouteError> {
+    user.assert_atleast_normal()?;
 
-    match db.get_auth_tokens(user.name().unwrap()).await {
-        Ok(tokens) => Ok(AuthTokenList { tokens }.into()),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Unable to fetch authentication tokens from database.",
-        )),
-    }
+    Ok(db
+        .get_auth_tokens(user.name().unwrap())
+        .await
+        .map(|tokens| AuthTokenList { tokens }.into())?)
 }
 
+// TODO(ItsEthra): Same as AuthTokenList
 #[derive(Serialize)]
 pub struct UserList {
     users: Vec<User>,
@@ -73,32 +90,25 @@ pub struct UserList {
 pub async fn list_users(
     user: MaybeUser,
     State(db): appstate::DbState,
-) -> Result<Json<UserList>, (StatusCode, &'static str)> {
-    user.assert_admin()
-        .map_err(|c| (c, "Insufficient privileges"))?;
+) -> Result<Json<UserList>, RouteError> {
+    user.assert_admin()?;
 
-    match db.get_users().await {
-        Ok(users) => Ok(UserList { users }.into()),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Unable to fetch users from database.",
-        )),
-    }
+    Ok(db
+        .get_users()
+        .await
+        .map(|users| UserList { users }.into())?)
 }
 
 pub async fn delete_token(
     user: MaybeUser,
     Path(id): Path<i32>,
     State(db): DbState,
-) -> Result<(), axum::http::StatusCode> {
+) -> Result<(), RouteError> {
     user.assert_atleast_normal()?;
 
     // TODO(ItsEthra): Should be checking if user owns the token i believe
 
-    match db.delete_auth_token(id).await {
-        Ok(_) => Ok(()),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
+    Ok(db.delete_auth_token(id).await?)
 }
 
 #[derive(Serialize)]
@@ -111,37 +121,29 @@ pub async fn reset_pwd(
     user: MaybeUser,
     Path(name): Path<String>,
     State(db): DbState,
-) -> Result<Json<ResetPwd>, (StatusCode, &'static str)> {
-    user.assert_admin()
-        .map_err(|c| (c, "Insufficient privileges"))?;
+) -> Result<Json<ResetPwd>, RouteError> {
+    user.assert_admin()?;
 
     let new_pwd = generate_rand_string(12);
-    match db.change_pwd(&name, &new_pwd).await {
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Unable to reset user password.",
-        )),
-        Ok(_) => Ok(ResetPwd {
-            // TODO(ItsEthra): I wasn't looking at frontend code at all, was using admin's name intended,
-            // or should it be target user's name?
-            user: user.name().unwrap().to_owned(),
-            new_pwd,
-        }
-        .into()),
+    db.change_pwd(&name, &new_pwd).await?;
+
+    Ok(ResetPwd {
+        // TODO(ItsEthra): I wasn't looking at frontend code at all, was using admin's name intended,
+        // or should it be target user's name?
+        user: user.name().unwrap().to_owned(),
+        new_pwd,
     }
+    .into())
 }
 
 pub async fn delete(
     user: MaybeUser,
     Path(name): Path<String>,
     State(db): DbState,
-) -> Result<(), StatusCode> {
+) -> Result<(), RouteError> {
     user.assert_admin()?;
 
-    match db.delete_user(&name).await {
-        Ok(_) => Ok(()),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
+    Ok(db.delete_user(&name).await?)
 }
 
 #[derive(Serialize)]
@@ -161,44 +163,36 @@ pub async fn login(
     cookies: PrivateCookieJar,
     State(state): appstate::AppState,
     Json(credentials): Json<Credentials>,
-) -> Result<(PrivateCookieJar, Json<LoggedInUser>), StatusCode> {
-    match state
+) -> Result<(PrivateCookieJar, Json<LoggedInUser>), RouteError> {
+    let user = state
         .db
         .authenticate_user(&credentials.user, &credentials.pwd)
-        .await
-    {
-        Ok(user) => {
-            let session_token = generate_rand_string(12);
-            if state
-                .db
-                .add_session_token(&credentials.user, &session_token)
-                .await
-                .is_err()
-            {
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
+        .await?;
 
-            let jar = cookies.add(
-                Cookie::build(COOKIE_SESSION_ID, session_token)
-                    .max_age(rocket::time::Duration::seconds(
-                        state.settings.session_age_seconds as i64,
-                    ))
-                    .same_site(axum_extra::extract::cookie::SameSite::Strict)
-                    .finish(),
-            );
+    let session_token = generate_rand_string(12);
+    state
+        .db
+        .add_session_token(&credentials.user, &session_token)
+        .await?;
 
-            Ok((
-                jar,
-                LoggedInUser {
-                    user: credentials.user.clone(),
-                    is_admin: user.is_admin,
-                    is_logged_in: true,
-                }
-                .into(),
+    let jar = cookies.add(
+        Cookie::build(COOKIE_SESSION_ID, session_token)
+            .max_age(rocket::time::Duration::seconds(
+                state.settings.session_age_seconds as i64,
             ))
+            .same_site(axum_extra::extract::cookie::SameSite::Strict)
+            .finish(),
+    );
+
+    Ok((
+        jar,
+        LoggedInUser {
+            user: credentials.user.clone(),
+            is_admin: user.is_admin,
+            is_logged_in: true,
         }
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
+        .into(),
+    ))
 }
 
 pub async fn login_state(user: MaybeUser) -> Json<LoggedInUser> {
@@ -225,22 +219,17 @@ pub async fn login_state(user: MaybeUser) -> Json<LoggedInUser> {
 pub async fn logout(
     mut jar: PrivateCookieJar,
     State(state): AppState,
-) -> (PrivateCookieJar, axum::http::StatusCode) {
+) -> Result<PrivateCookieJar, RouteError> {
     let session_id = match jar.get(COOKIE_SESSION_ID) {
         Some(c) => c.value().to_owned(),
-        None => return (jar, StatusCode::OK), // Already logged out as no cookie can be found
+        None => return Ok(jar), // Already logged out as no cookie can be found
     };
 
     jar = jar.remove(Cookie::named(COOKIE_SESSION_ID));
     jar = jar.remove(Cookie::build(COOKIE_SESSION_USER, "").path("/").finish());
 
-    let code = if state.db.delete_session_token(&session_id).await.is_err() {
-        StatusCode::INTERNAL_SERVER_ERROR
-    } else {
-        StatusCode::OK
-    };
-
-    (jar, code)
+    state.db.delete_session_token(&session_id).await?;
+    Ok(jar)
 }
 
 #[derive(Deserialize)]
@@ -289,19 +278,15 @@ pub async fn add(
     user: MaybeUser,
     State(db): DbState,
     Json(new_user): Json<NewUser>,
-) -> Result<(), StatusCode> {
+) -> Result<(), RouteError> {
     user.assert_admin()?;
 
     if new_user.pwd1 != new_user.pwd2 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
     let salt = generate_salt();
-    match db
+    Ok(db
         .add_user(&new_user.name, &new_user.pwd1, &salt, new_user.is_admin)
-        .await
-    {
-        Ok(_) => Ok(()),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
+        .await?)
 }

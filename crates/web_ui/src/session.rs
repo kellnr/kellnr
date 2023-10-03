@@ -9,6 +9,8 @@ use rocket::request::{self, FromRequest, Request};
 use rocket::State;
 use settings::constants;
 
+use crate::user::RouteError;
+
 pub trait Name {
     fn name(&self) -> String;
     fn new(name: String) -> Self;
@@ -75,17 +77,17 @@ impl MaybeUser {
         }
     }
 
-    pub fn assert_atleast_normal(&self) -> Result<(), axum::http::StatusCode> {
+    pub fn assert_atleast_normal(&self) -> Result<(), RouteError> {
         match self {
             MaybeUser::Normal(_) | MaybeUser::Admin(_) => Ok(()),
-            _ => Err(axum::http::StatusCode::FORBIDDEN),
+            _ => Err(RouteError::Status(axum::http::StatusCode::FORBIDDEN)),
         }
     }
 
-    pub fn assert_admin(&self) -> Result<(), axum::http::StatusCode> {
+    pub fn assert_admin(&self) -> Result<(), RouteError> {
         match self {
             MaybeUser::Admin(_) => Ok(()),
-            _ => Err(axum::http::StatusCode::FORBIDDEN),
+            _ => Err(RouteError::Status(axum::http::StatusCode::FORBIDDEN)),
         }
     }
 }
