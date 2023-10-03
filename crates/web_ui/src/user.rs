@@ -1,8 +1,9 @@
 use crate::session::MaybeUser;
-use appstate::AppState;
+use appstate::{AppState, DbState};
 use auth::token;
-use axum::extract::Path;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::Json;
 use axum_extra::extract::cookie::Cookie;
 use common::util::generate_rand_string;
 use db::password::generate_salt;
@@ -19,15 +20,14 @@ pub struct NewTokenResponse {
 // #[post("/add_token", data = "<auth_token>")]
 pub async fn add_token(
     user: MaybeUser,
-    axum::extract::State(state): appstate::AppState,
-    axum::Json(auth_token): axum::Json<token::NewTokenReqData>,
-) -> Result<axum::Json<NewTokenResponse>, (StatusCode, &'static str)> {
+    State(db): DbState,
+    Json(auth_token): Json<token::NewTokenReqData>,
+) -> Result<Json<NewTokenResponse>, (StatusCode, &'static str)> {
     user.assert_atleast_normal()
         .map_err(|c| (c, "Guests are forbidden"))?;
 
     let token = token::generate_token();
-    match state
-        .db
+    match db
         .add_auth_token(&auth_token.name, &token, user.name().unwrap())
         .await
     {
@@ -50,12 +50,12 @@ pub struct AuthTokenList {
 
 pub async fn list_tokens(
     user: MaybeUser,
-    axum::extract::State(state): appstate::AppState,
-) -> Result<axum::Json<AuthTokenList>, (StatusCode, &'static str)> {
+    State(db): DbState,
+) -> Result<Json<AuthTokenList>, (StatusCode, &'static str)> {
     user.assert_atleast_normal()
         .map_err(|c| (c, "Guests are forbidden"))?;
 
-    match state.db.get_auth_tokens(user.name().unwrap()).await {
+    match db.get_auth_tokens(user.name().unwrap()).await {
         Ok(tokens) => Ok(AuthTokenList { tokens }.into()),
         Err(_) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -71,12 +71,12 @@ pub struct UserList {
 
 pub async fn list_users(
     user: MaybeUser,
-    axum::extract::State(state): appstate::AppState,
-) -> Result<axum::Json<UserList>, (StatusCode, &'static str)> {
+    State(db): appstate::DbState,
+) -> Result<Json<UserList>, (StatusCode, &'static str)> {
     user.assert_admin()
         .map_err(|c| (c, "Insufficient privileges"))?;
 
-    match state.db.get_users().await {
+    match db.get_users().await {
         Ok(users) => Ok(UserList { users }.into()),
         Err(_) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -88,13 +88,13 @@ pub async fn list_users(
 pub async fn delete_token(
     user: MaybeUser,
     Path(id): Path<i32>,
-    axum::extract::State(state): appstate::AppState,
+    State(db): DbState,
 ) -> Result<(), axum::http::StatusCode> {
     user.assert_atleast_normal()?;
 
     // TODO(ItsEthra): Should be checking if user owns the token i believe
 
-    match state.db.delete_auth_token(id).await {
+    match db.delete_auth_token(id).await {
         Ok(_) => Ok(()),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
@@ -109,13 +109,13 @@ pub struct ResetPwd {
 pub async fn reset_pwd(
     user: MaybeUser,
     Path(name): Path<String>,
-    axum::extract::State(state): appstate::AppState,
-) -> Result<axum::Json<ResetPwd>, (StatusCode, &'static str)> {
+    State(db): DbState,
+) -> Result<Json<ResetPwd>, (StatusCode, &'static str)> {
     user.assert_admin()
         .map_err(|c| (c, "Insufficient privileges"))?;
 
     let new_pwd = generate_rand_string(12);
-    match state.db.change_pwd(&name, &new_pwd).await {
+    match db.change_pwd(&name, &new_pwd).await {
         Err(_) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             "Unable to reset user password.",
@@ -133,11 +133,11 @@ pub async fn reset_pwd(
 pub async fn delete(
     user: MaybeUser,
     Path(name): Path<String>,
-    axum::extract::State(state): appstate::AppState,
+    State(db): DbState,
 ) -> Result<(), StatusCode> {
     user.assert_admin()?;
 
-    match state.db.delete_user(&name).await {
+    match db.delete_user(&name).await {
         Ok(_) => Ok(()),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
@@ -158,15 +158,9 @@ pub struct Credentials {
 
 pub async fn login(
     cookies: axum_extra::extract::CookieJar,
-    axum::extract::State(state): AppState,
-    axum::extract::Json(credentials): axum::extract::Json<Credentials>,
-) -> Result<
-    (
-        axum_extra::extract::CookieJar,
-        axum::extract::Json<LoggedInUser>,
-    ),
-    StatusCode,
-> {
+    State(state): appstate::AppState,
+    Json(credentials): Json<Credentials>,
+) -> Result<(axum_extra::extract::CookieJar, Json<LoggedInUser>), StatusCode> {
     match state
         .db
         .authenticate_user(&credentials.user, &credentials.pwd)
@@ -206,7 +200,7 @@ pub async fn login(
     }
 }
 
-pub async fn login_state(user: MaybeUser) -> axum::Json<LoggedInUser> {
+pub async fn login_state(user: MaybeUser) -> Json<LoggedInUser> {
     match user {
         MaybeUser::Guest => LoggedInUser {
             user: "".into(),
@@ -229,7 +223,7 @@ pub async fn login_state(user: MaybeUser) -> axum::Json<LoggedInUser> {
 
 pub async fn logout(
     mut jar: axum_extra::extract::CookieJar,
-    axum::extract::State(state): AppState,
+    State(state): AppState,
 ) -> (axum_extra::extract::CookieJar, axum::http::StatusCode) {
     let session_id = match jar.get(COOKIE_SESSION_ID) {
         Some(c) => c.value().to_owned(),
@@ -258,14 +252,14 @@ pub struct PwdChange {
 
 pub async fn change_pwd(
     user: MaybeUser,
-    axum::extract::State(state): appstate::AppState,
-    axum::extract::Json(pwd_change): axum::extract::Json<PwdChange>,
+    State(db): DbState,
+    Json(pwd_change): Json<PwdChange>,
 ) -> StatusCode {
     let Some(name) = user.name() else {
         return StatusCode::UNAUTHORIZED;
     };
 
-    let Ok(user) = state.db.authenticate_user(name, &pwd_change.old_pwd).await else {
+    let Ok(user) = db.authenticate_user(name, &pwd_change.old_pwd).await else {
         return StatusCode::BAD_REQUEST;
     };
 
@@ -273,7 +267,7 @@ pub async fn change_pwd(
         return StatusCode::BAD_REQUEST;
     }
 
-    match state.db.change_pwd(&user.name, &pwd_change.new_pwd1).await {
+    match db.change_pwd(&user.name, &pwd_change.new_pwd1).await {
         Ok(_) => StatusCode::OK,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
@@ -292,8 +286,8 @@ pub struct NewUser {
 // #[post("/add", data = "<new_user>")]
 pub async fn add(
     user: MaybeUser,
-    axum::extract::State(state): appstate::AppState,
-    axum::extract::Json(new_user): axum::extract::Json<NewUser>,
+    State(db): DbState,
+    Json(new_user): Json<NewUser>,
 ) -> Result<(), StatusCode> {
     user.assert_admin()?;
 
@@ -302,8 +296,7 @@ pub async fn add(
     }
 
     let salt = generate_salt();
-    match state
-        .db
+    match db
         .add_user(&new_user.name, &new_user.pwd1, &salt, new_user.is_admin)
         .await
     {

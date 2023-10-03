@@ -92,7 +92,9 @@ use web_ui::{ui, user};
 
 #[tokio::main]
 async fn main() {
-    let settings = Settings::try_from(Path::new("config")).expect("Cannot read config");
+    let settings: Arc<Settings> = Settings::try_from(Path::new("config"))
+        .expect("Cannot read config")
+        .into();
 
     // Configure tracing subscriber
     init_tracing(&settings);
@@ -111,7 +113,7 @@ async fn main() {
     let db = Database::new(&con_string)
         .await
         .expect("Failed to create database");
-    let db = Box::new(db) as Box<dyn DbProvider>;
+    let db = Arc::new(db) as Arc<dyn DbProvider>;
 
     // Start git daemon to service the indices
     // Has to be done, before the crates.io index gets cloned, as the container script kills
@@ -140,11 +142,11 @@ async fn main() {
     init_docs_hosting(&settings, &con_string).await;
 
     let signing_key = Key::generate();
-    let state = Arc::new(AppStateData {
+    let state = AppStateData {
         db,
         signing_key,
         settings,
-    });
+    };
 
     let user = Router::new()
         .route("/login", post(user::login))

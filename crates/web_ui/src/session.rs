@@ -91,12 +91,12 @@ impl MaybeUser {
 }
 
 #[axum::async_trait]
-impl axum::extract::FromRequestParts<appstate::ArcAppState> for MaybeUser {
+impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
     type Rejection = LoginError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &appstate::ArcAppState,
+        state: &appstate::AppStateData,
     ) -> Result<Self, Self::Rejection> {
         let jar: CookieJar = parts.extract().await.unwrap();
         let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
