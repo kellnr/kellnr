@@ -5,6 +5,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use axum_extra::extract::cookie::Cookie;
+use axum_extra::extract::PrivateCookieJar;
 use common::util::generate_rand_string;
 use db::password::generate_salt;
 use db::{self, AuthToken, User};
@@ -157,10 +158,10 @@ pub struct Credentials {
 }
 
 pub async fn login(
-    cookies: axum_extra::extract::CookieJar,
+    cookies: PrivateCookieJar,
     State(state): appstate::AppState,
     Json(credentials): Json<Credentials>,
-) -> Result<(axum_extra::extract::CookieJar, Json<LoggedInUser>), StatusCode> {
+) -> Result<(PrivateCookieJar, Json<LoggedInUser>), StatusCode> {
     match state
         .db
         .authenticate_user(&credentials.user, &credentials.pwd)
@@ -222,9 +223,9 @@ pub async fn login_state(user: MaybeUser) -> Json<LoggedInUser> {
 }
 
 pub async fn logout(
-    mut jar: axum_extra::extract::CookieJar,
+    mut jar: PrivateCookieJar,
     State(state): AppState,
-) -> (axum_extra::extract::CookieJar, axum::http::StatusCode) {
+) -> (PrivateCookieJar, axum::http::StatusCode) {
     let session_id = match jar.get(COOKIE_SESSION_ID) {
         Some(c) => c.value().to_owned(),
         None => return (jar, StatusCode::OK), // Already logged out as no cookie can be found

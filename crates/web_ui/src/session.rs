@@ -1,7 +1,7 @@
 use axum::http::request::Parts;
 use axum::response::IntoResponse;
 use axum::RequestPartsExt;
-use axum_extra::extract::CookieJar;
+use axum_extra::extract::PrivateCookieJar;
 use db::DbProvider;
 use rocket::http::{Cookie, Status};
 use rocket::outcome::Outcome::*;
@@ -98,7 +98,7 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
         parts: &mut Parts,
         state: &appstate::AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        let jar: CookieJar = parts.extract().await.unwrap();
+        let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
         let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
         match session_cookie {
             Some(cookie) => match state.db.validate_session(cookie.value()).await {
