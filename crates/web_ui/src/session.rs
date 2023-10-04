@@ -1,9 +1,9 @@
 use crate::error::RouteError;
 use axum::http::request::Parts;
-use axum::response::IntoResponse;
 use axum::RequestPartsExt;
 use axum_extra::extract::PrivateCookieJar;
 use db::DbProvider;
+use hyper::StatusCode;
 use rocket::http::{Cookie, Status};
 use rocket::outcome::Outcome::*;
 use rocket::request::{self, FromRequest, Request};
@@ -52,15 +52,7 @@ pub enum LoginError {
     NoSettings(String),
 }
 
-impl IntoResponse for LoginError {
-    fn into_response(self) -> axum::response::Response {
-        match self {
-            LoginError::Invalid(e) => (axum::http::StatusCode::BAD_REQUEST, e).into_response(),
-            LoginError::NoSettings(e) => (axum::http::StatusCode::BAD_REQUEST, e).into_response(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub enum MaybeUser {
     Guest,
     // Consider using a db model or something?
@@ -93,7 +85,7 @@ impl MaybeUser {
 
 #[axum::async_trait]
 impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
-    type Rejection = LoginError;
+    type Rejection = RouteError;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -107,7 +99,7 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
                 Ok((name, true)) => Ok(Self::Admin(name)),
                 // not admin
                 Ok((name, false)) => Ok(Self::Normal(name)),
-                Err(e) => Err(LoginError::Invalid(e.to_string())),
+                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
             },
             None => Ok(Self::Guest),
         }
@@ -222,30 +214,30 @@ async fn get_db<'r>(
 
 #[cfg(test)]
 mod session_tests {
-    use std::{borrow::Cow, sync::Arc};
+    use std::{borrow::Cow, result, sync::Arc};
 
     use super::*;
     use appstate::AppStateData;
     use axum::{routing::get, Router};
     use axum_extra::extract::cookie::Key;
     use cookie::CookieJar;
-    use db::mock::MockDb;
-    use hyper::{header, Body, Request};
+    use db::{error::DbError, mock::MockDb};
+    use hyper::{header, Body, Request, StatusCode};
     use mockall::predicate::*;
     use settings::Settings;
     use tower::ServiceExt;
 
-    async fn admin_endpoint(user: MaybeUser) {
-        assert!(matches!(user, MaybeUser::Admin(name) if name == "admin"));
+    async fn admin_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
+        user.assert_admin()?;
+        Ok(())
     }
 
-    async fn normal_endpoint(user: MaybeUser) {
-        assert!(matches!(user, MaybeUser::Normal(name) if name == "normal"));
+    async fn normal_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
+        user.assert_atleast_normal()?;
+        Ok(())
     }
 
-    async fn guest_endpoint(user: MaybeUser) {
-        assert!(matches!(user, MaybeUser::Guest));
-    }
+    async fn guest_endpoint(_user: MaybeUser) {}
 
     const TEST_KEY: &[u8] = &[1; 64];
 
@@ -282,6 +274,10 @@ mod session_tests {
             .join("; ")
     }
 
+    fn c1234() -> String {
+        encode_cookies([(constants::COOKIE_SESSION_ID, "1234")])
+    }
+
     #[tokio::test]
     async fn admin_auth_works() -> Result {
         let mut mock_db = MockDb::new();
@@ -290,7 +286,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("admin".to_string(), true)));
 
-        app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db))
             .oneshot(
                 Request::get("/admin")
                     .header(
@@ -300,159 +296,137 @@ mod session_tests {
                     .body(Body::empty())?,
             )
             .await?;
+        assert!(r.status().is_success());
 
         Ok(())
     }
 
-    // #[test]
-    // fn admin_auth_user_is_no_admin() {
-    //     let mut mock_db = MockDb::new();
-    //     mock_db
-    //         .expect_validate_session()
-    //         .with(eq("1234"))
-    //         .returning(|_st| Ok(("admin".to_string(), false)));
+    #[tokio::test]
+    async fn admin_auth_user_is_no_admin() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("1234"))
+            .returning(|_st| Ok(("admin".to_string(), false)));
 
-    //     let rocket = rocket::custom(rocket_conf())
-    //         .mount("/", routes![admin_endpoint])
-    //         .manage(Box::new(mock_db) as Box<dyn DbProvider>);
+        let r = app(Arc::new(mock_db))
+            .oneshot(
+                Request::get("/admin")
+                    .header(header::COOKIE, c1234())
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
 
-    //     let client = Client::tracked(rocket).expect("valid rocket client");
-    //     let req = client
-    //         .get("/admin")
-    //         .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "1234"));
+        Ok(())
+    }
 
-    //     let result = req.dispatch();
+    #[tokio::test]
+    async fn admin_auth_user_but_no_cookie_sent() -> Result {
+        let mock_db = MockDb::new();
 
-    //     assert_eq!(result.status(), Status::NotFound);
-    // }
+        let r = app(Arc::new(mock_db))
+            .oneshot(Request::get("/admin").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
 
-    // #[test]
-    // fn admin_auth_user_but_no_cookie_sent() {
-    //     let mock_db = MockDb::new();
-    //     let rocket = rocket::custom(rocket_conf())
-    //         .mount("/", routes![admin_endpoint])
-    //         .manage(Box::new(mock_db) as Box<dyn DbProvider>);
+        Ok(())
+    }
 
-    //     let client = Client::tracked(rocket).expect("valid rocket client");
-    //     let req = client.get("/admin");
+    #[tokio::test]
+    async fn admin_auth_user_but_no_cookie_in_store() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("1234"))
+            .returning(|_st| Err(DbError::SessionNotFound));
 
-    //     let result = req.dispatch();
+        let r = app(Arc::new(mock_db))
+            .oneshot(
+                Request::get("/admin")
+                    .header(header::COOKIE, c1234())
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
-    //     // NotFound as the forward isn't caught by any route
-    //     assert_eq!(result.status(), Status::NotFound);
-    // }
-
-    // #[test]
-    // fn admin_auth_user_but_no_cookie_in_store() {
-    //     let mut mock_db = MockDb::new();
-    //     mock_db
-    //         .expect_validate_session()
-    //         .with(eq("1234"))
-    //         .returning(|_st| Err(DbError::SessionNotFound));
-
-    //     use rocket::config::{Config, SecretKey};
-    //     let rocket_conf = Config {
-    //         secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-    //         ..Config::default()
-    //     };
-
-    //     let rocket = rocket::custom(rocket_conf)
-    //         .mount("/", routes![admin_endpoint])
-    //         .manage(Box::new(mock_db) as Box<dyn DbProvider>);
-
-    //     let client = Client::tracked(rocket).expect("valid rocket client");
-    //     let req = client
-    //         .get("/admin")
-    //         .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "1234"));
-
-    //     let result = req.dispatch();
-
-    //     assert_eq!(result.status(), Status::Unauthorized);
-    // }
+        Ok(())
+    }
 
     // // NormalUser tests
 
-    // #[test]
-    // fn normal_auth_works() {
-    //     let mut mock_db = MockDb::new();
-    //     mock_db
-    //         .expect_validate_session()
-    //         .with(eq("1234"))
-    //         .returning(|_st| Ok(("normal".to_string(), false)));
+    #[tokio::test]
+    async fn normal_auth_works() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("1234"))
+            .returning(|_st| Ok(("normal".to_string(), false)));
 
-    //     let rocket = rocket::custom(rocket_conf())
-    //         .mount("/", routes![normal_endpoint])
-    //         .manage(Box::new(mock_db) as Box<dyn DbProvider>);
+        let r = app(Arc::new(mock_db))
+            .oneshot(
+                Request::get("/normal")
+                    .header(header::COOKIE, c1234())
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(r.status(), StatusCode::OK);
 
-    //     let client = Client::tracked(rocket).expect("valid rocket client");
-    //     let req = client
-    //         .get("/normal")
-    //         .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "1234"));
+        Ok(())
+    }
 
-    //     let result = req.dispatch();
+    #[tokio::test]
+    async fn normal_auth_user_is_admin() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("1234"))
+            .returning(|_st| Ok(("normal".to_string(), true)));
 
-    //     assert_eq!(result.status(), Status::Ok);
-    // }
+        let r = app(Arc::new(mock_db))
+            .oneshot(
+                Request::get("/normal")
+                    .header(header::COOKIE, c1234())
+                    .body(Body::empty())?,
+            )
+            .await?;
+        // TODO(ItsEthra): Why should it return not found?
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
 
-    // #[test]
-    // fn normal_auth_user_is_admin() {
-    //     let mut mock_db = MockDb::new();
-    //     mock_db
-    //         .expect_validate_session()
-    //         .with(eq("1234"))
-    //         .returning(|_st| Ok(("normal".to_string(), true)));
+        Ok(())
+    }
 
-    //     let rocket = rocket::custom(rocket_conf())
-    //         .mount("/", routes![normal_endpoint])
-    //         .manage(Box::new(mock_db) as Box<dyn DbProvider>);
+    #[tokio::test]
+    async fn normal_auth_user_but_no_cookie_sent() -> Result {
+        let mock_db = MockDb::new();
 
-    //     let client = Client::tracked(rocket).expect("valid rocket client");
-    //     let req = client
-    //         .get("/normal")
-    //         .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "1234"));
+        let r = app(Arc::new(mock_db))
+            .oneshot(Request::get("/normal").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
 
-    //     let result = req.dispatch();
+        Ok(())
+    }
 
-    //     assert_eq!(result.status(), Status::NotFound);
-    // }
+    #[tokio::test]
+    async fn normal_auth_user_but_no_cookie_in_store() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("1234"))
+            .returning(|_st| Err(DbError::SessionNotFound));
 
-    // #[test]
-    // fn normal_auth_user_but_no_cookie_sent() {
-    //     let mock_db = MockDb::new();
-    //     let rocket = rocket::custom(rocket_conf())
-    //         .mount("/", routes![normal_endpoint])
-    //         .manage(Box::new(mock_db) as Box<dyn DbProvider>);
+        let r = app(Arc::new(mock_db))
+            .oneshot(
+                Request::get("/normal")
+                    .header(header::COOKIE, c1234())
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
-    //     let client = Client::tracked(rocket).expect("valid rocket client");
-    //     let req = client.get("/normal");
-
-    //     let result = req.dispatch();
-
-    //     // NotFound as the forward isn't caught by any route
-    //     assert_eq!(result.status(), Status::NotFound);
-    // }
-
-    // #[test]
-    // fn normal_auth_user_but_no_cookie_in_store() {
-    //     let mut mock_db = MockDb::new();
-    //     mock_db
-    //         .expect_validate_session()
-    //         .with(eq("1234"))
-    //         .returning(|_st| Err(DbError::SessionNotFound));
-
-    //     let rocket = rocket::custom(rocket_conf())
-    //         .mount("/", routes![normal_endpoint])
-    //         .manage(Box::new(mock_db) as Box<dyn DbProvider>);
-
-    //     let client = Client::tracked(rocket).expect("valid rocket client");
-    //     let req = client
-    //         .get("/normal")
-    //         .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "1234"));
-
-    //     let result = req.dispatch();
-
-    //     assert_eq!(result.status(), Status::Unauthorized);
-    // }
+        Ok(())
+    }
 
     // // AnyUser tests
 
