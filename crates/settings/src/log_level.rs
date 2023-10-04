@@ -25,7 +25,6 @@ impl DeserializeWith for Level {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde;
     use serde::Deserialize;
 
     #[derive(Debug, Deserialize)]

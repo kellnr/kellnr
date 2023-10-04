@@ -332,7 +332,7 @@ mod reg_api_tests {
                 .len()
         );
         let owners = serde_json::from_str::<owner::OwnerResponse>(&result_msg).unwrap();
-        assert_eq!(true, owners.ok);
+        assert!(owners.ok);
     }
 
     #[async_test]
@@ -375,7 +375,7 @@ mod reg_api_tests {
         let result_msg = result.into_string().await.expect("Missing success message");
 
         let owners = serde_json::from_str::<owner::OwnerResponse>(&result_msg).unwrap();
-        assert_eq!(true, owners.ok);
+        assert!(owners.ok);
     }
 
     #[async_test]
@@ -767,6 +767,8 @@ mod reg_api_tests {
     }
 
     impl TestKellnr {
+        // why is T needed?
+        #[allow(clippy::extra_unused_type_parameters)]
         async fn new<T: StorageProvider>(settings: Settings, idx: Box<dyn RwIndex>) -> Self {
             std::fs::create_dir_all(&settings.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));

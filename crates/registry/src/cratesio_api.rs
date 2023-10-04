@@ -233,6 +233,8 @@ mod tests {
     }
 
     impl TestKellnr {
+        // why is T needed?
+        #[allow(clippy::extra_unused_type_parameters)]
         async fn new<T: StorageProvider>(settings: Settings, idx: Box<dyn RoIndex>) -> Self {
             std::fs::create_dir_all(&settings.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));

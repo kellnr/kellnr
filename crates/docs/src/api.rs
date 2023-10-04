@@ -98,7 +98,7 @@ mod tests {
         let rocket = rocket::build().manage(db);
         let state = State::get(&rocket).unwrap();
 
-        let actual = docs_in_queue(&state).await.unwrap();
+        let actual = docs_in_queue(state).await.unwrap();
 
         assert_eq!(
             DocQueueResponse {

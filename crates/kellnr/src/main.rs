@@ -102,10 +102,10 @@ async fn main() {
     info!("Starting kellnr");
 
     // Initialize kellnr crate storage
-    let kellnr_crate_storage = init_kellnr_crate_storage(&settings).await;
+    let _kellnr_crate_storage = init_kellnr_crate_storage(&settings).await;
 
     // Kellnr Index and Storage
-    let kellnr_idx = init_kellnr_git_index(&settings).await;
+    let _kellnr_idx = init_kellnr_git_index(&settings).await;
 
     // Create the database connection. Has to be done after the index and storage
     // as the needed folders for the sqlite database my not been created before that.
@@ -124,7 +124,7 @@ async fn main() {
     }
 
     // Crates.io Proxy
-    let (cratesio_crate_storage, cratesio_idx) = init_cratesio_proxy(&settings).await;
+    let (_cratesio_crate_storage, _cratesio_idx) = init_cratesio_proxy(&settings).await;
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
     let cratesio_prefetch_sender = Arc::new(cratesio_prefetch_sender);

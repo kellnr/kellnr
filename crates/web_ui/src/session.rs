@@ -1,3 +1,4 @@
+use crate::error::RouteError;
 use axum::http::request::Parts;
 use axum::response::IntoResponse;
 use axum::RequestPartsExt;
@@ -8,7 +9,6 @@ use rocket::outcome::Outcome::*;
 use rocket::request::{self, FromRequest, Request};
 use rocket::State;
 use settings::constants;
-use crate::error::RouteError;
 
 pub trait Name {
     fn name(&self) -> String;

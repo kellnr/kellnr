@@ -190,7 +190,7 @@ pub async fn delete(
     http::Status::Ok
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Statistic {
     unique_crates: u32,
     crate_versions: u32,

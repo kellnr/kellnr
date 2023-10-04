@@ -63,7 +63,6 @@ impl Serialize for Protocol {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde;
     use serde::Deserialize;
 
     #[test]

@@ -652,11 +652,11 @@ async fn delete_owner_valid_owner() {
 
     test_db.db.delete_owner("mycrate", "admin").await.unwrap();
 
-    assert!(!test_db
+    assert!(test_db
         .db
         .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
         .await
-        .is_err());
+        .is_ok());
 }
 
 #[async_test]
@@ -1013,7 +1013,7 @@ async fn bootstrap_db_inserts_admin() {
         admin.pwd
     );
     assert_eq!("salt", admin.salt);
-    assert_eq!(true, admin.is_admin);
+    assert!(admin.is_admin);
 }
 
 #[async_test]
@@ -2265,7 +2265,7 @@ async fn is_cratesio_cache_up_to_date_up_to_date() {
             "etag",
             "last_modified",
             None,
-            &vec![],
+            &[],
         )
         .await
         .unwrap();
@@ -2346,7 +2346,7 @@ async fn is_cratesio_cache_up_to_date_needs_update() {
 
     let expected_prefetch = Prefetch {
         data: IndexMetadata::serialize_indices(&indices2)
-            .and_then(|idx| Ok(idx.into_bytes()))
+            .map(|idx| idx.into_bytes())
             .unwrap(),
         etag: "etag2".to_string(),
         last_modified: "last_modified2".to_string(),
