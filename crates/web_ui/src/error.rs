@@ -1,5 +1,9 @@
-use axum::{response::{Response, IntoResponse}, http::StatusCode};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 
+#[derive(Debug)]
 pub enum RouteError {
     DbError(db::error::DbError),
     InsufficientPrivileges,
@@ -24,4 +28,3 @@ impl IntoResponse for RouteError {
         }
     }
 }
-
