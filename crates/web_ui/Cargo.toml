@@ -29,3 +29,8 @@ axum-extra.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
+tokio.workspace = true
+axum-extra.workspace = true
+hyper.workspace = true
+tower.workspace = true
+cookie = "0.17"
