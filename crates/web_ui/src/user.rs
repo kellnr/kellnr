@@ -1,3 +1,4 @@
+use crate::error::RouteError;
 use crate::session::MaybeUser;
 use appstate::{AppState, DbState};
 use auth::token;
@@ -11,7 +12,6 @@ use db::password::generate_salt;
 use db::{self, AuthToken, User};
 use serde::{Deserialize, Serialize};
 use settings::constants::*;
-use crate::error::RouteError;
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {
@@ -25,10 +25,10 @@ pub async fn add_token(
     State(db): DbState,
     Json(auth_token): Json<token::NewTokenReqData>,
 ) -> Result<Json<NewTokenResponse>, RouteError> {
-    user.assert_atleast_normal()?;
+    user.assert_normal()?;
 
     let token = token::generate_token();
-    db.add_auth_token(&auth_token.name, &token, user.name().unwrap())
+    db.add_auth_token(&auth_token.name, &token, user.name())
         .await?;
 
     Ok(NewTokenResponse {
@@ -48,10 +48,10 @@ pub async fn list_tokens(
     user: MaybeUser,
     State(db): DbState,
 ) -> Result<Json<AuthTokenList>, RouteError> {
-    user.assert_atleast_normal()?;
+    user.assert_normal()?;
 
     Ok(db
-        .get_auth_tokens(user.name().unwrap())
+        .get_auth_tokens(user.name())
         .await
         .map(|tokens| AuthTokenList { tokens }.into())?)
 }
@@ -79,7 +79,7 @@ pub async fn delete_token(
     Path(id): Path<i32>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_atleast_normal()?;
+    user.assert_normal()?;
 
     // TODO(ItsEthra): Should be checking if user owns the token i believe
 
@@ -105,7 +105,7 @@ pub async fn reset_pwd(
     Ok(ResetPwd {
         // TODO(ItsEthra): I wasn't looking at frontend code at all, was using admin's name intended,
         // or should it be target user's name?
-        user: user.name().unwrap().to_owned(),
+        user: user.name().to_owned(),
         new_pwd,
     }
     .into())
@@ -172,11 +172,6 @@ pub async fn login(
 
 pub async fn login_state(user: MaybeUser) -> Json<LoggedInUser> {
     match user {
-        MaybeUser::Guest => LoggedInUser {
-            user: "".into(),
-            is_admin: false,
-            is_logged_in: false,
-        },
         MaybeUser::Normal(user) => LoggedInUser {
             user,
             is_admin: false,
@@ -219,23 +214,17 @@ pub async fn change_pwd(
     user: MaybeUser,
     State(db): DbState,
     Json(pwd_change): Json<PwdChange>,
-) -> StatusCode {
-    let Some(name) = user.name() else {
-        return StatusCode::UNAUTHORIZED;
-    };
-
-    let Ok(user) = db.authenticate_user(name, &pwd_change.old_pwd).await else {
-        return StatusCode::BAD_REQUEST;
+) -> Result<(), RouteError> {
+    let Ok(user) = db.authenticate_user(user.name(), &pwd_change.old_pwd).await else {
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     };
 
     if pwd_change.new_pwd1 != pwd_change.new_pwd2 {
-        return StatusCode::BAD_REQUEST;
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
-    match db.change_pwd(&user.name, &pwd_change.new_pwd1).await {
-        Ok(_) => StatusCode::OK,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
-    }
+    db.change_pwd(&user.name, &pwd_change.new_pwd1).await?;
+    Ok(())
 }
 
 #[derive(Deserialize)]

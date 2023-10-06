@@ -53,31 +53,29 @@ pub enum LoginError {
 
 #[derive(Debug)]
 pub enum MaybeUser {
-    Guest,
     // Consider using a db model or something?
     Normal(String),
     Admin(String),
 }
 
 impl MaybeUser {
-    pub fn name(&self) -> Option<&str> {
+    pub fn name(&self) -> &str {
         match self {
-            Self::Guest => None,
-            Self::Normal(name) | Self::Admin(name) => Some(name),
+            Self::Normal(name) | Self::Admin(name) => name,
         }
     }
 
-    pub fn assert_atleast_normal(&self) -> Result<(), RouteError> {
+    pub fn assert_normal(&self) -> Result<(), RouteError> {
         match self {
-            MaybeUser::Normal(_) | MaybeUser::Admin(_) => Ok(()),
-            _ => Err(RouteError::Status(axum::http::StatusCode::FORBIDDEN)),
+            MaybeUser::Normal(_) => Ok(()),
+            MaybeUser::Admin(_) => Err(RouteError::InsufficientPrivileges),
         }
     }
 
     pub fn assert_admin(&self) -> Result<(), RouteError> {
         match self {
+            MaybeUser::Normal(_) => Err(RouteError::InsufficientPrivileges),
             MaybeUser::Admin(_) => Ok(()),
-            _ => Err(RouteError::Status(axum::http::StatusCode::FORBIDDEN)),
         }
     }
 }
@@ -100,7 +98,7 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
                 Ok((name, false)) => Ok(Self::Normal(name)),
                 Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
             },
-            None => Ok(Self::Guest),
+            None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
         }
     }
 }
@@ -232,11 +230,11 @@ mod session_tests {
     }
 
     async fn normal_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
-        user.assert_atleast_normal()?;
+        user.assert_normal()?;
         Ok(())
     }
 
-    async fn guest_endpoint(_user: MaybeUser) {}
+    async fn any_endpoint(_user: MaybeUser) {}
 
     const TEST_KEY: &[u8] = &[1; 64];
 
@@ -244,7 +242,7 @@ mod session_tests {
         Router::new()
             .route("/admin", get(admin_endpoint))
             .route("/normal", get(normal_endpoint))
-            .route("/guest", get(guest_endpoint))
+            .route("/any", get(any_endpoint))
             .with_state(AppStateData {
                 db,
                 signing_key: Key::from(TEST_KEY),
@@ -327,7 +325,7 @@ mod session_tests {
         let r = app(Arc::new(mock_db))
             .oneshot(Request::get("/admin").body(Body::empty())?)
             .await?;
-        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
         Ok(())
     }
@@ -352,7 +350,7 @@ mod session_tests {
         Ok(())
     }
 
-    // // NormalUser tests
+    // NormalUser tests
 
     #[tokio::test]
     async fn normal_auth_works() -> Result {
@@ -389,8 +387,7 @@ mod session_tests {
                     .body(Body::empty())?,
             )
             .await?;
-        // TODO(ItsEthra): Why should it return not found?
-        assert_eq!(r.status(), StatusCode::NOT_FOUND);
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
 
         Ok(())
     }
@@ -402,7 +399,7 @@ mod session_tests {
         let r = app(Arc::new(mock_db))
             .oneshot(Request::get("/normal").body(Body::empty())?)
             .await?;
-        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
         Ok(())
     }
@@ -430,7 +427,7 @@ mod session_tests {
     // Guest User tests
 
     #[tokio::test]
-    async fn guest_auth_user_is_normal() -> Result {
+    async fn any_auth_user_is_normal() -> Result {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
@@ -439,7 +436,7 @@ mod session_tests {
 
         let r = app(Arc::new(mock_db))
             .oneshot(
-                Request::get("/guest")
+                Request::get("/any")
                     .header(header::COOKIE, c1234())
                     .body(Body::empty())?,
             )
@@ -450,7 +447,7 @@ mod session_tests {
     }
 
     #[tokio::test]
-    async fn guest_auth_user_is_admin() -> Result {
+    async fn any_auth_user_is_admin() -> Result {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
@@ -459,7 +456,7 @@ mod session_tests {
 
         let r = app(Arc::new(mock_db))
             .oneshot(
-                Request::get("/guest")
+                Request::get("/any")
                     .header(header::COOKIE, c1234())
                     .body(Body::empty())?,
             )
@@ -470,18 +467,18 @@ mod session_tests {
     }
 
     #[tokio::test]
-    async fn guest_auth_user_but_no_cookie_sent() -> Result {
+    async fn any_auth_user_but_no_cookie_sent() -> Result {
         let mock_db = MockDb::new();
 
         let r = app(Arc::new(mock_db))
-            .oneshot(Request::get("/guest").body(Body::empty())?)
+            .oneshot(Request::get("/any").body(Body::empty())?)
             .await?;
-        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
     #[tokio::test]
-    async fn guest_auth_user_but_no_cookie_in_store() -> Result {
+    async fn any_auth_user_but_no_cookie_in_store() -> Result {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
@@ -490,7 +487,7 @@ mod session_tests {
 
         let r = app(Arc::new(mock_db))
             .oneshot(
-                Request::get("/guest")
+                Request::get("/any")
                     .header(header::COOKIE, c1234())
                     .body(Body::empty())?,
             )
