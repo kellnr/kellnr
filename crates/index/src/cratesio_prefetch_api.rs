@@ -529,7 +529,8 @@ mod tests {
     fn client() -> Client {
         let settings = Settings {
             api_address: String::from("test.api.com"),
-            api_port: 1234,
+            api_port: 8000,
+            api_port_proxy: 1234,
             ..Settings::new().unwrap()
         };
 
