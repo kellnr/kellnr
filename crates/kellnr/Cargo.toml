@@ -17,6 +17,7 @@ web_ui.workspace = true
 registry.workspace = true
 entity.workspace = true
 pg_testcontainer.workspace = true
+appstate.workspace = true
 
 # External dependencies from crates.io
 rocket.workspace = true
@@ -25,7 +26,8 @@ sysinfo.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 flume.workspace = true
-
+axum.workspace = true
+axum-extra.workspace = true
 openssl = {version = "*", optional = true} # Not needed directly but for cross-compilation with the vendored-openssl feature
 
 

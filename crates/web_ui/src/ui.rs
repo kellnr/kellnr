@@ -1,4 +1,5 @@
 use crate::session::{AdminUser, AnyUser};
+use appstate::AppState;
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
 use common::normalized_name::NormalizedName;
@@ -7,7 +8,6 @@ use common::version::Version;
 use db::error::DbError;
 use db::DbProvider;
 use index::rwindex::RwIndex;
-use json_payload::json_payload;
 use registry::kellnr_crate_storage::KellnrCrateStorage;
 use reqwest::StatusCode;
 use rocket::serde::json::Json;
@@ -16,36 +16,39 @@ use rocket::{catch, delete, get, http, post, Request, State};
 use settings::Settings;
 use tracing::error;
 
-#[json_payload]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct KellnrVersion {
     pub version: String,
 }
 
-#[json_payload]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Pagination {
     crates: Vec<CrateOverview>,
     current_num: usize,
     total_num: usize,
 }
 
-#[get("/version")]
-pub async fn kellnr_version() -> Json<KellnrVersion> {
-    Json(KellnrVersion {
+pub async fn kellnr_version() -> axum::response::Json<KellnrVersion> {
+    axum::response::Json(KellnrVersion {
         // Replaced automatically by the version from the build job,
         // if a new release is built.
         version: "0.0.0-debug".to_string(),
-
     })
 }
 
-#[get("/crates?<page>&<page_size>")]
-pub async fn crates(
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CratesParams {
     page: Option<usize>,
     page_size: Option<usize>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Pagination {
-    let page_size = page_size.unwrap_or(10);
-    let crates = db.get_crate_overview_list().await.unwrap_or_default();
+}
+
+pub async fn crates(
+    axum::extract::Query(params): axum::extract::Query<CratesParams>,
+    axum::extract::State(state): AppState,
+) -> axum::response::Json<Pagination> {
+    let page_size = params.page_size.unwrap_or(10);
+    let page = params.page;
+    let crates = state.db.get_crate_overview_list().await.unwrap_or_default();
     let total = crates.len();
 
     let comp_start = |page: usize| {
@@ -73,31 +76,61 @@ pub async fn crates(
         None => (total, crates),
     };
 
-    Pagination {
+    axum::Json(Pagination {
         crates,
         current_num: end,
         total_num: total,
-    }
+    })
 }
 
-#[get("/crate_data?<name>")]
-pub async fn crate_data(
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct SearchParams {
     name: OriginalName,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<CrateData>, http::Status> {
-    let index_name = NormalizedName::from(name);
-    match db.get_crate_data(&index_name).await {
-        Ok(cd) => Ok(Json(cd)),
+}
+
+pub async fn search(
+    axum::extract::Query(params): axum::extract::Query<SearchParams>,
+    axum::extract::State(state): AppState,
+) -> axum::response::Json<Pagination> {
+    let crates = state
+        .db
+        .search_in_crate_name(&params.name)
+        .await
+        .unwrap_or_default();
+    axum::Json(Pagination {
+        current_num: crates.len(),
+        total_num: crates.len(),
+        crates,
+    })
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CrateDataParams {
+    name: OriginalName,
+}
+
+pub async fn crate_data(
+    axum::extract::Query(params): axum::extract::Query<CrateDataParams>,
+    axum::extract::State(state): AppState,
+) -> Result<axum::response::Json<CrateData>, axum::http::StatusCode> {
+    let index_name = NormalizedName::from(params.name);
+    match state.db.get_crate_data(&index_name).await {
+        Ok(cd) => Ok(axum::Json(cd)),
         Err(e) => match e {
-            DbError::CrateNotFound(_) => Err(http::Status::NotFound),
-            _ => Err(http::Status::InternalServerError),
+            DbError::CrateNotFound(_) => Err(axum::http::StatusCode::NOT_FOUND),
+            _ => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
         },
     }
 }
 
-#[get("/cratesio_data?<name>")]
-pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
-    let url = format!("https://crates.io/api/v1/crates/{}", name);
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CratesIoDataParams {
+    name: OriginalName,
+}
+
+pub async fn cratesio_data(axum::extract::Query(params): axum::extract::Query<CratesIoDataParams>) -> 
+Result<String, axum::http::StatusCode> {
+    let url = format!("https://crates.io/api/v1/crates/{}", params.name);
 
     let client = reqwest::Client::new();
     let req = client
@@ -114,30 +147,20 @@ pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
                     Ok(data) => Ok(data),
                     Err(e) => {
                         error!("Failed to parse crates.io data: {}", e);
-                        Err(http::Status::InternalServerError)
+                        Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
                     }
                 }
             }
-            StatusCode::NOT_FOUND => Err(http::Status::NotFound),
+            StatusCode::NOT_FOUND => Err(axum::http::StatusCode::NOT_FOUND),
             _ => {
                 error!("Failed to get crates.io data: {}", resp.status());
-                Err(http::Status::NotFound)
+                Err(axum::http::StatusCode::NOT_FOUND)
             }
         },
         Err(e) => {
             error!("Failed to get crates.io data: {}", e);
-            Err(http::Status::InternalServerError)
+            Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
         }
-    }
-}
-
-#[get("/search?<name>")]
-pub async fn search(name: OriginalName, db: &State<Box<dyn DbProvider>>) -> Pagination {
-    let crates = db.search_in_crate_name(&name).await.unwrap_or_default();
-    Pagination {
-        current_num: crates.len(),
-        total_num: crates.len(),
-        crates,
     }
 }
 
@@ -176,7 +199,7 @@ pub async fn delete(
     http::Status::Ok
 }
 
-#[json_payload]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Statistic {
     unique_crates: u32,
     crate_versions: u32,
@@ -186,12 +209,19 @@ pub struct Statistic {
     top3: (String, u32),
 }
 
-#[get("/statistic")]
-pub async fn statistic(db: &State<Box<dyn DbProvider>>) -> Statistic {
-    let unique_crates = db.get_total_unique_crates().await.unwrap_or_default();
-    let crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
-    let downloads = db.get_total_downloads().await.unwrap_or_default();
-    let tops = db.get_top_crates_downloads(3).await.unwrap_or_default();
+pub async fn statistic(axum::extract::State(state): AppState) -> axum::response::Json<Statistic> {
+    let unique_crates = state.db.get_total_unique_crates().await.unwrap_or_default();
+    let crate_versions = state
+        .db
+        .get_total_crate_versions()
+        .await
+        .unwrap_or_default();
+    let downloads = state.db.get_total_downloads().await.unwrap_or_default();
+    let tops = state
+        .db
+        .get_top_crates_downloads(3)
+        .await
+        .unwrap_or_default();
 
     fn extract(tops: &[(String, u32)], i: usize) -> (String, u32) {
         if tops.len() > i {
@@ -201,14 +231,14 @@ pub async fn statistic(db: &State<Box<dyn DbProvider>>) -> Statistic {
         }
     }
 
-    Statistic {
+    axum::Json(Statistic {
         unique_crates,
         crate_versions,
         downloads,
         top1: extract(&tops, 0),
         top2: extract(&tops, 1),
         top3: extract(&tops, 2),
-    }
+    })
 }
 
 #[post("/build?<package>&<version>")]
@@ -1105,10 +1135,10 @@ mod tests {
             .mount(
                 "/",
                 routes![
-                    search,
-                    crates,
-                    kellnr_version,
-                    statistic,
+                    // search,
+                    // crates,
+                    // kellnr_version,
+                    // statistic,
                     crate_data,
                     build_rustdoc,
                     cratesio_data,

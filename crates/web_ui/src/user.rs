@@ -1,15 +1,17 @@
-use crate::session::{AdminUser, AnyUser, Name};
+use crate::error::RouteError;
+use crate::session::MaybeUser;
+use appstate::{AppState, DbState};
 use auth::token;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::Json;
+use axum_extra::extract::cookie::Cookie;
+use axum_extra::extract::PrivateCookieJar;
 use common::util::generate_rand_string;
 use db::password::generate_salt;
-use db::DbProvider;
 use db::{self, AuthToken, User};
-use rocket::http::{Cookie, CookieJar, SameSite, Status};
-use rocket::response::status;
-use rocket::serde::{json::Json, Deserialize, Serialize};
-use rocket::{get, post, State};
+use serde::{Deserialize, Serialize};
 use settings::constants::*;
-use settings::Settings;
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {
@@ -17,74 +19,71 @@ pub struct NewTokenResponse {
     token: String,
 }
 
-#[post("/add_token", data = "<auth_token>")]
+// #[post("/add_token", data = "<auth_token>")]
 pub async fn add_token(
-    user: AnyUser,
-    auth_token: Json<token::NewTokenReqData>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<NewTokenResponse>, status::Custom<&'static str>> {
+    user: MaybeUser,
+    State(db): DbState,
+    Json(auth_token): Json<token::NewTokenReqData>,
+) -> Result<Json<NewTokenResponse>, RouteError> {
+    user.assert_normal()?;
+
     let token = token::generate_token();
-    match db
-        .add_auth_token(&auth_token.name, &token, &user.name())
-        .await
-    {
-        Err(_) => Err(status::Custom(
-            Status::InternalServerError,
-            "Unable to add authentication token to database.",
-        )),
-        Ok(_) => Ok(Json(NewTokenResponse {
-            name: auth_token.name.clone(),
-            token,
-        })),
+    db.add_auth_token(&auth_token.name, &token, user.name())
+        .await?;
+
+    Ok(NewTokenResponse {
+        name: auth_token.name.clone(),
+        token,
     }
+    .into())
 }
 
+// TODO(ItsEthra): This should probably be inlined, i.e just return Json<Vec<AuthToken>> in list_tokens, but for now I'm not touching frontend
 #[derive(Serialize)]
 pub struct AuthTokenList {
     tokens: Vec<AuthToken>,
 }
 
-#[get("/list_tokens")]
 pub async fn list_tokens(
-    user: AnyUser,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<AuthTokenList>, status::Custom<&'static str>> {
-    match db.get_auth_tokens(&user.name()).await {
-        Ok(tokens) => Ok(Json(AuthTokenList { tokens })),
-        Err(_) => Err(status::Custom(
-            Status::InternalServerError,
-            "Unable to fetch authentication tokens from database.",
-        )),
-    }
+    user: MaybeUser,
+    State(db): DbState,
+) -> Result<Json<AuthTokenList>, RouteError> {
+    user.assert_normal()?;
+
+    Ok(db
+        .get_auth_tokens(user.name())
+        .await
+        .map(|tokens| AuthTokenList { tokens }.into())?)
 }
 
+// TODO(ItsEthra): Same as AuthTokenList
 #[derive(Serialize)]
 pub struct UserList {
     users: Vec<User>,
 }
 
-#[get("/list_users")]
 pub async fn list_users(
-    user: AdminUser,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<UserList>, status::Custom<&'static str>> {
-    let _ = user;
-    match db.get_users().await {
-        Ok(users) => Ok(Json(UserList { users })),
-        Err(_) => Err(status::Custom(
-            Status::InternalServerError,
-            "Unable to fetch users from database.",
-        )),
-    }
+    user: MaybeUser,
+    State(db): appstate::DbState,
+) -> Result<Json<UserList>, RouteError> {
+    user.assert_admin()?;
+
+    Ok(db
+        .get_users()
+        .await
+        .map(|users| UserList { users }.into())?)
 }
 
-#[get("/delete_token/<id>")]
-pub async fn delete_token(user: AnyUser, id: i32, db: &State<Box<dyn DbProvider>>) -> Status {
-    let _ = user;
-    match db.delete_auth_token(id).await {
-        Ok(_) => Status::Ok,
-        Err(_) => Status::InternalServerError,
-    }
+pub async fn delete_token(
+    user: MaybeUser,
+    Path(id): Path<i32>,
+    State(db): DbState,
+) -> Result<(), RouteError> {
+    user.assert_normal()?;
+
+    // TODO(ItsEthra): Should be checking if user owns the token i believe
+
+    Ok(db.delete_auth_token(id).await?)
 }
 
 #[derive(Serialize)]
@@ -93,39 +92,33 @@ pub struct ResetPwd {
     user: String,
 }
 
-#[get("/resetpwd/<name>")]
 pub async fn reset_pwd(
-    user: AdminUser,
-    name: String,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<ResetPwd>, status::Custom<&'static str>> {
+    user: MaybeUser,
+    Path(name): Path<String>,
+    State(db): DbState,
+) -> Result<Json<ResetPwd>, RouteError> {
+    user.assert_admin()?;
+
     let new_pwd = generate_rand_string(12);
-    match db.change_pwd(&name, &new_pwd).await {
-        Err(_) => Err(status::Custom(
-            Status::InternalServerError,
-            "Unable to reset user password.",
-        )),
-        Ok(_) => Ok(Json(ResetPwd {
-            new_pwd,
-            user: user.name(),
-        })),
+    db.change_pwd(&name, &new_pwd).await?;
+
+    Ok(ResetPwd {
+        // TODO(ItsEthra): I wasn't looking at frontend code at all, was using admin's name intended,
+        // or should it be target user's name?
+        user: user.name().to_owned(),
+        new_pwd,
     }
+    .into())
 }
 
-#[get("/delete/<name>")]
-pub async fn delete(user: AdminUser, name: String, db: &State<Box<dyn DbProvider>>) -> Status {
-    let _ = user;
-    match db.delete_user(&name).await {
-        Ok(_) => Status::Ok,
-        Err(_) => Status::InternalServerError,
-    }
-}
+pub async fn delete(
+    user: MaybeUser,
+    Path(name): Path<String>,
+    State(db): DbState,
+) -> Result<(), RouteError> {
+    user.assert_admin()?;
 
-#[get("/delete/<name>", rank = 2)]
-pub fn delete_forbidden(name: String) -> Status {
-    // If a user without admin rights tries to delete an user, throw a 403
-    let _ = name;
-    Status::Forbidden
+    Ok(db.delete_user(&name).await?)
 }
 
 #[derive(Serialize)]
@@ -141,118 +134,102 @@ pub struct Credentials {
     pub pwd: String,
 }
 
-#[post("/login", data = "<credentials>")]
 pub async fn login(
-    credentials: Json<Credentials>,
-    cookies: &CookieJar<'_>,
-    settings: &State<Settings>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<LoggedInUser>, Status> {
-    match db
+    cookies: PrivateCookieJar,
+    State(state): appstate::AppState,
+    Json(credentials): Json<Credentials>,
+) -> Result<(PrivateCookieJar, Json<LoggedInUser>), RouteError> {
+    let user = state
+        .db
         .authenticate_user(&credentials.user, &credentials.pwd)
-        .await
-    {
-        Ok(user) => {
-            let session_token = generate_rand_string(12);
-            if db
-                .add_session_token(&credentials.user, &session_token)
-                .await
-                .is_err()
-            {
-                return Err(Status::InternalServerError);
-            }
+        .await?;
 
-            cookies.add_private(
-                Cookie::build(COOKIE_SESSION_ID, session_token)
-                    .max_age(rocket::time::Duration::seconds(
-                        settings.session_age_seconds as i64,
-                    ))
-                    .same_site(SameSite::Strict)
-                    .finish(),
-            );
+    let session_token = generate_rand_string(12);
+    state
+        .db
+        .add_session_token(&credentials.user, &session_token)
+        .await?;
 
-            Ok(Json(LoggedInUser {
-                user: credentials.user.clone(),
-                is_admin: user.is_admin,
-                is_logged_in: true,
-            }))
+    let jar = cookies.add(
+        Cookie::build(COOKIE_SESSION_ID, session_token)
+            .max_age(rocket::time::Duration::seconds(
+                state.settings.session_age_seconds as i64,
+            ))
+            .same_site(axum_extra::extract::cookie::SameSite::Strict)
+            .finish(),
+    );
+
+    Ok((
+        jar,
+        LoggedInUser {
+            user: credentials.user.clone(),
+            is_admin: user.is_admin,
+            is_logged_in: true,
         }
-        Err(_) => Err(Status::Unauthorized),
-    }
+        .into(),
+    ))
 }
 
-#[get("/login_state")]
-pub async fn login_state(
-    user: Option<AnyUser>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<LoggedInUser>, Status> {
+pub async fn login_state(user: MaybeUser) -> Json<LoggedInUser> {
     match user {
-        Some(user) => match db.get_user(&user.name()).await {
-            Ok(user) => Ok(Json(LoggedInUser {
-                user: user.name,
-                is_admin: user.is_admin,
-                is_logged_in: true,
-            })),
-            Err(_) => Err(Status::InternalServerError),
-        },
-        None => Ok(Json(LoggedInUser {
-            user: String::new(),
+        MaybeUser::Normal(user) => LoggedInUser {
+            user,
             is_admin: false,
-            is_logged_in: false,
-        })),
+            is_logged_in: true,
+        },
+        MaybeUser::Admin(user) => LoggedInUser {
+            user,
+            is_admin: true,
+            is_logged_in: true,
+        },
     }
+    .into()
 }
 
-#[get("/logout")]
-pub async fn logout(cookies: &CookieJar<'_>, db: &State<Box<dyn DbProvider>>) -> Status {
-    let session_id = match cookies.get_private(COOKIE_SESSION_ID) {
+pub async fn logout(
+    mut jar: PrivateCookieJar,
+    State(state): AppState,
+) -> Result<PrivateCookieJar, RouteError> {
+    let session_id = match jar.get(COOKIE_SESSION_ID) {
         Some(c) => c.value().to_owned(),
-        None => return Status::Ok, // Already logged out as no cookie can be found
+        None => return Ok(jar), // Already logged out as no cookie can be found
     };
 
-    cookies.remove_private(Cookie::named(COOKIE_SESSION_ID));
-    cookies.remove(Cookie::build(COOKIE_SESSION_USER, "").path("/").finish());
+    jar = jar.remove(Cookie::named(COOKIE_SESSION_ID));
+    jar = jar.remove(Cookie::build(COOKIE_SESSION_USER, "").path("/").finish());
 
-    if db.delete_session_token(&session_id).await.is_err() {
-        Status::InternalServerError
-    } else {
-        Status::Ok
-    }
+    state.db.delete_session_token(&session_id).await?;
+    Ok(jar)
 }
 
 #[derive(Deserialize)]
 pub struct PwdChange {
     pub old_pwd: String,
+    // Maybe checking on client is enough?
     pub new_pwd1: String,
     pub new_pwd2: String,
 }
 
-#[post("/changepwd", data = "<pwd_change>")]
 pub async fn change_pwd(
-    user: AnyUser,
-    pwd_change: Json<PwdChange>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Status {
-    let user = match db
-        .authenticate_user(&user.name(), &pwd_change.old_pwd)
-        .await
-    {
-        Ok(user) => user,
-        Err(_) => return Status::BadRequest,
+    user: MaybeUser,
+    State(db): DbState,
+    Json(pwd_change): Json<PwdChange>,
+) -> Result<(), RouteError> {
+    let Ok(user) = db.authenticate_user(user.name(), &pwd_change.old_pwd).await else {
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     };
 
     if pwd_change.new_pwd1 != pwd_change.new_pwd2 {
-        return Status::BadRequest;
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
-    match db.change_pwd(&user.name, &pwd_change.new_pwd1).await {
-        Ok(_) => Status::Ok,
-        Err(_) => Status::InternalServerError,
-    }
+    db.change_pwd(&user.name, &pwd_change.new_pwd1).await?;
+    Ok(())
 }
 
 #[derive(Deserialize)]
 pub struct NewUser {
+    // TODO(ItsEthra): Consider checking only on client
     pub pwd1: String,
     pub pwd2: String,
     pub name: String,
@@ -260,24 +237,20 @@ pub struct NewUser {
     pub is_admin: bool,
 }
 
-#[post("/add", data = "<new_user>")]
+// #[post("/add", data = "<new_user>")]
 pub async fn add(
-    user: AdminUser,
-    new_user: Json<NewUser>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Status {
-    let _ = user;
+    user: MaybeUser,
+    State(db): DbState,
+    Json(new_user): Json<NewUser>,
+) -> Result<(), RouteError> {
+    user.assert_admin()?;
 
     if new_user.pwd1 != new_user.pwd2 {
-        return Status::BadRequest;
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
     let salt = generate_salt();
-    match db
+    Ok(db
         .add_user(&new_user.name, &new_user.pwd1, &salt, new_user.is_admin)
-        .await
-    {
-        Ok(_) => Status::Ok,
-        Err(_) => Status::InternalServerError,
-    }
+        .await?)
 }

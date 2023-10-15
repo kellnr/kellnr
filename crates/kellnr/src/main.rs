@@ -1,3 +1,7 @@
+use appstate::AppStateData;
+use axum::routing::{delete, post};
+use axum::{routing::get, Router};
+use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use common::storage::Storage;
 use db::DbProvider;
@@ -13,7 +17,7 @@ use rocket::config::{Config, SecretKey};
 use rocket::fs::FileServer;
 use rocket::tokio::fs::create_dir_all;
 use rocket::tokio::sync::{Mutex, RwLock};
-use rocket::{catchers, launch, routes, tokio, Build};
+use rocket::{catchers, routes, tokio, Build};
 use rocket_cors::{Cors, CorsOptions};
 use settings::{LogFormat, Settings};
 use std::convert::TryFrom;
@@ -25,9 +29,72 @@ use tracing::{debug, info};
 use tracing_subscriber::fmt::format;
 use web_ui::{ui, user};
 
-#[launch]
-async fn rocket_launch() -> _ {
-    let settings = Settings::try_from(Path::new("config")).expect("Cannot read config");
+// #[launch]
+// async fn rocket_launch() -> _ {
+//     let settings = Settings::try_from(Path::new("config")).expect("Cannot read config");
+//
+//     // Configure tracing subscriber
+//     init_tracing(&settings);
+//
+//     info!("Starting kellnr");
+//
+//     // Initialize kellnr crate storage
+//     let kellnr_crate_storage = init_kellnr_crate_storage(&settings).await;
+//
+//     // Kellnr Index and Storage
+//     let kellnr_idx = init_kellnr_git_index(&settings).await;
+//
+//     // Create the database connection. Has to be done after the index and storage
+//     // as the needed folders for the sqlite database my not been created before that.
+//     let con_string = get_connect_string(&settings);
+//     let db = Database::new(&con_string)
+//         .await
+//         .expect("Failed to create database");
+//     let db = Box::new(db) as Box<dyn DbProvider>;
+//
+//     // Start git daemon to service the indices
+//     // Has to be done, before the crates.io index gets cloned, as the container script kills
+//     // the container if the daemon is not running, which happens if the daemon is not started due the
+//     // clone process of the crates.io proxy
+//     if settings.git_index {
+//         start_git_daemon(&settings);
+//     }
+//
+//     // Crates.io Proxy
+//     let (cratesio_crate_storage, cratesio_idx) = init_cratesio_proxy(&settings).await;
+//     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
+//         flume::unbounded::<CratesioPrefetchMsg>();
+//     let cratesio_prefetch_sender = Arc::new(cratesio_prefetch_sender);
+//     let cratesio_prefetch_receiver = Arc::new(cratesio_prefetch_receiver);
+//
+//     init_cratesio_prefetch_thread(
+//         get_connect_string(&settings),
+//         cratesio_prefetch_sender.clone(),
+//         cratesio_prefetch_receiver,
+//         settings.crates_io_num_threads,
+//     )
+//     .await;
+//
+//     // Docs hosting
+//     init_docs_hosting(&settings, &con_string).await;
+//
+//     // Start Kellnr
+//     build_rocket(
+//         settings,
+//         db,
+//         kellnr_idx,
+//         kellnr_crate_storage,
+//         cratesio_idx,
+//         cratesio_crate_storage,
+//         cratesio_prefetch_sender.clone(),
+//     )
+// }
+
+#[tokio::main]
+async fn main() {
+    let settings: Arc<Settings> = Settings::try_from(Path::new("config"))
+        .expect("Cannot read config")
+        .into();
 
     // Configure tracing subscriber
     init_tracing(&settings);
@@ -35,10 +102,10 @@ async fn rocket_launch() -> _ {
     info!("Starting kellnr");
 
     // Initialize kellnr crate storage
-    let kellnr_crate_storage = init_kellnr_crate_storage(&settings).await;
+    let _kellnr_crate_storage = init_kellnr_crate_storage(&settings).await;
 
     // Kellnr Index and Storage
-    let kellnr_idx = init_kellnr_git_index(&settings).await;
+    let _kellnr_idx = init_kellnr_git_index(&settings).await;
 
     // Create the database connection. Has to be done after the index and storage
     // as the needed folders for the sqlite database my not been created before that.
@@ -46,7 +113,7 @@ async fn rocket_launch() -> _ {
     let db = Database::new(&con_string)
         .await
         .expect("Failed to create database");
-    let db = Box::new(db) as Box<dyn DbProvider>;
+    let db = Arc::new(db) as Arc<dyn DbProvider>;
 
     // Start git daemon to service the indices
     // Has to be done, before the crates.io index gets cloned, as the container script kills
@@ -57,7 +124,7 @@ async fn rocket_launch() -> _ {
     }
 
     // Crates.io Proxy
-    let (cratesio_crate_storage, cratesio_idx) = init_cratesio_proxy(&settings).await;
+    let (_cratesio_crate_storage, _cratesio_idx) = init_cratesio_proxy(&settings).await;
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
     let cratesio_prefetch_sender = Arc::new(cratesio_prefetch_sender);
@@ -74,16 +141,43 @@ async fn rocket_launch() -> _ {
     // Docs hosting
     init_docs_hosting(&settings, &con_string).await;
 
-    // Start Kellnr
-    build_rocket(
-        settings,
+    let signing_key = Key::generate();
+    let state = AppStateData {
         db,
-        kellnr_idx,
-        kellnr_crate_storage,
-        cratesio_idx,
-        cratesio_crate_storage,
-        cratesio_prefetch_sender.clone(),
-    )
+        signing_key,
+        settings,
+    };
+
+    let user = Router::new()
+        .route("/login", post(user::login))
+        .route("/logout", get(user::logout))
+        .route("/changepwd", post(user::change_pwd))
+        .route("/add", post(user::add))
+        .route("/delete/:name", delete(user::delete))
+        // TODO(ItsEthra): Consider post?
+        .route("/resetpwd/:name", get(user::reset_pwd))
+        // TODO(ItsEthra): Consider put?
+        .route("/addtoken", post(user::add_token))
+        // TODO(ItsEthra): Consider delete?
+        .route("/delete_token/:id", get(user::delete_token))
+        .route("/list_tokens", get(user::list_tokens))
+        .route("/list_users", get(user::list_users))
+        .route("/login_state", get(user::login_state));
+
+    let app = Router::new()
+        .route("/version", get(ui::kellnr_version))
+        .route("/crates", get(ui::crates))
+        .route("/search", get(ui::search))
+        .route("/statistic", get(ui::statistic))
+        .route("/crate_data", get(ui::crate_data))
+        .route("/cratesio_data", get(ui::cratesio_data))
+        .nest("/user", user)
+        .with_state(state);
+
+    axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }
 
 async fn init_cratesio_prefetch_thread(
@@ -218,14 +312,8 @@ pub fn build_rocket(
         .mount(
             "/",
             routes![
-                ui::kellnr_version,
-                ui::crates,
                 registry::kellnr_api::me,
-                ui::search,
-                ui::statistic,
                 web_ui::settings::settings,
-                ui::crate_data,
-                ui::cratesio_data,
                 ui::delete,
             ],
         )
@@ -242,18 +330,18 @@ pub fn build_rocket(
         .mount(
             "/user",
             routes![
-                user::login,
-                user::logout,
-                user::change_pwd,
-                user::add,
-                user::delete,
-                user::delete_forbidden,
-                user::reset_pwd,
-                user::add_token,
-                user::delete_token,
-                user::list_tokens,
-                user::list_users,
-                user::login_state,
+                // user::login,
+                // user::logout,
+                // user::change_pwd,
+                // user::add,
+                // user::delete,
+                // user::delete_forbidden, not needed, we use assert in delete now
+                // user::reset_pwd,
+                // user::add_token,
+                // user::delete_token,
+                // user::list_tokens,
+                // user::list_users,
+                // user::login_state,
             ],
         )
         .mount(
