@@ -104,24 +104,33 @@ pub async fn search(
     })
 }
 
-#[get("/crate_data?<name>")]
-pub async fn crate_data(
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CrateDataParams {
     name: OriginalName,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<CrateData>, http::Status> {
-    let index_name = NormalizedName::from(name);
-    match db.get_crate_data(&index_name).await {
-        Ok(cd) => Ok(Json(cd)),
+}
+
+pub async fn crate_data(
+    axum::extract::Query(params): axum::extract::Query<CrateDataParams>,
+    axum::extract::State(state): AppState,
+) -> Result<axum::response::Json<CrateData>, axum::http::StatusCode> {
+    let index_name = NormalizedName::from(params.name);
+    match state.db.get_crate_data(&index_name).await {
+        Ok(cd) => Ok(axum::Json(cd)),
         Err(e) => match e {
-            DbError::CrateNotFound(_) => Err(http::Status::NotFound),
-            _ => Err(http::Status::InternalServerError),
+            DbError::CrateNotFound(_) => Err(axum::http::StatusCode::NOT_FOUND),
+            _ => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
         },
     }
 }
 
-#[get("/cratesio_data?<name>")]
-pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
-    let url = format!("https://crates.io/api/v1/crates/{}", name);
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CratesIoDataParams {
+    name: OriginalName,
+}
+
+pub async fn cratesio_data(axum::extract::Query(params): axum::extract::Query<CratesIoDataParams>) -> 
+Result<String, axum::http::StatusCode> {
+    let url = format!("https://crates.io/api/v1/crates/{}", params.name);
 
     let client = reqwest::Client::new();
     let req = client
@@ -138,19 +147,19 @@ pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
                     Ok(data) => Ok(data),
                     Err(e) => {
                         error!("Failed to parse crates.io data: {}", e);
-                        Err(http::Status::InternalServerError)
+                        Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
                     }
                 }
             }
-            StatusCode::NOT_FOUND => Err(http::Status::NotFound),
+            StatusCode::NOT_FOUND => Err(axum::http::StatusCode::NOT_FOUND),
             _ => {
                 error!("Failed to get crates.io data: {}", resp.status());
-                Err(http::Status::NotFound)
+                Err(axum::http::StatusCode::NOT_FOUND)
             }
         },
         Err(e) => {
             error!("Failed to get crates.io data: {}", e);
-            Err(http::Status::InternalServerError)
+            Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }

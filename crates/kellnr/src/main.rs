@@ -169,6 +169,8 @@ async fn main() {
         .route("/crates", get(ui::crates))
         .route("/search", get(ui::search))
         .route("/statistic", get(ui::statistic))
+        .route("/crate_data", get(ui::crate_data))
+        .route("/cratesio_data", get(ui::cratesio_data))
         .nest("/user", user)
         .with_state(state);
 
@@ -312,8 +314,6 @@ pub fn build_rocket(
             routes![
                 registry::kellnr_api::me,
                 web_ui::settings::settings,
-                ui::crate_data,
-                ui::cratesio_data,
                 ui::delete,
             ],
         )
