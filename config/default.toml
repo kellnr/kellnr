@@ -76,13 +76,6 @@ max_crate_size = 100
 # Max size of a crate docs that can be uploaded to Kellnr in MB
 max_docs_size = 100
 
-# Enable git index (needed for cargo < 1.70)
-# Enabling the git index will increase the memory usage of Kellnr and requires a lot of disk space.
-# If you pushed crates before enabling the git index, they will not be available in the git index but
-# only in the sparse index. You can reindex them by deleting the crates from the sparse index and pushing
-# them again.
-git_index = false
-
 ####################################################################################
 # Kellnr Enterprise only                                                           #
 ####################################################################################

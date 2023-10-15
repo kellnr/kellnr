@@ -1,5 +1,5 @@
 use crate::error::RouteError;
-use crate::session::{AdminUser, MaybeUser};
+use crate::session::MaybeUser;
 use appstate::AppState;
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
@@ -8,8 +8,7 @@ use common::original_name::OriginalName;
 use common::version::Version;
 use db::error::DbError;
 use reqwest::StatusCode;
-use rocket::{catch, delete, http, Request, State};
-use settings::Settings;
+use rocket::{catch, Request};
 use tracing::error;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -176,15 +175,6 @@ pub async fn delete(
     let version = params.version;
     let name = params.name;
 
-    if state.settings.git_index {
-        if let Err(e) = state.crate_index.delete(&name, &version).await {
-            error!("Failed to delete crate from index: {}", e);
-            return Err(RouteError::Status(
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            ));
-        }
-    }
-
     if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
         error!("Failed to delete crate from database: {:?}", e);
         return Err(RouteError::Status(
@@ -334,12 +324,6 @@ pub async fn build_rustdoc(
     .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(())
-}
-
-#[delete("/index")]
-pub async fn delete_cratesio_index(settings: &State<Settings>, _user: AdminUser) -> http::Status {
-    index::cratesio_idx::remove_cratesio_index(settings.crates_io_index_path()).await;
-    http::Status::Ok
 }
 
 /*

@@ -3,30 +3,23 @@ use axum::routing::{delete, post};
 use axum::{routing::get, Router};
 use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
-use common::storage::Storage;
 use db::DbProvider;
 use db::{ConString, Database, PgConString, SqliteConString};
-use index::cratesio_idx::CratesIoIdx;
 use index::cratesio_prefetch_api::{background_update_thread, cratesio_prefetch_thread};
-use index::kellnr_idx::KellnrIdx;
-use index::rwindex::RoIndex;
-use index::rwindex::RwIndex;
 use registry::cratesio_crate_storage::CratesIoCrateStorage;
 use registry::kellnr_crate_storage::KellnrCrateStorage;
 use rocket::config::{Config, SecretKey};
 use rocket::fs::FileServer;
 use rocket::tokio::fs::create_dir_all;
-use rocket::tokio::sync::{Mutex, RwLock};
+use rocket::tokio::sync::RwLock;
 use rocket::{catchers, routes, tokio, Build};
 use rocket_cors::{Cors, CorsOptions};
 use settings::{LogFormat, Settings};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::{process, process::Stdio};
-use sysinfo::{System, SystemExt};
 use tower_http::services::ServeDir;
-use tracing::{debug, info};
+use tracing::info;
 use tracing_subscriber::fmt::format;
 use web_ui::{ui, user};
 
@@ -105,9 +98,6 @@ async fn main() {
     // Initialize kellnr crate storage
     let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).await.into();
 
-    // Kellnr Index and Storage
-    let crate_index: Arc<dyn RwIndex> = init_kellnr_git_index(&settings).await.into();
-
     // Create the database connection. Has to be done after the index and storage
     // as the needed folders for the sqlite database my not been created before that.
     let con_string = get_connect_string(&settings);
@@ -116,16 +106,8 @@ async fn main() {
         .expect("Failed to create database");
     let db = Arc::new(db) as Arc<dyn DbProvider>;
 
-    // Start git daemon to service the indices
-    // Has to be done, before the crates.io index gets cloned, as the container script kills
-    // the container if the daemon is not running, which happens if the daemon is not started due the
-    // clone process of the crates.io proxy
-    if settings.git_index {
-        start_git_daemon(&settings);
-    }
-
     // Crates.io Proxy
-    let (_cratesio_crate_storage, _cratesio_idx) = init_cratesio_proxy(&settings).await;
+    let _cratesio_crate_storage = init_cratesio_proxy(&settings).await;
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
     let cratesio_prefetch_sender = Arc::new(cratesio_prefetch_sender);
@@ -148,7 +130,6 @@ async fn main() {
         signing_key,
         settings,
         crate_storage,
-        crate_index,
     };
 
     let user = Router::new()
@@ -258,36 +239,16 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
     }
 }
 
-async fn init_cratesio_proxy(settings: &Settings) -> (CratesIoCrateStorage, Box<dyn RoIndex>) {
-    let cratesio_idx_storage = Storage::new();
-    let mut cratesio_idx = CratesIoIdx::new(settings, cratesio_idx_storage);
-    let cratesio_crate_storage = CratesIoCrateStorage::new(settings)
+async fn init_cratesio_proxy(settings: &Settings) -> CratesIoCrateStorage {
+    CratesIoCrateStorage::new(settings)
         .await
-        .expect("Failed to create crates.io crate storage.");
-
-    if settings.crates_io_proxy && settings.git_index {
-        cratesio_idx
-            .start()
-            .await
-            .expect("Failed to start crates.io index.");
-    }
-
-    let cratesio_idx = Box::new(cratesio_idx) as Box<dyn RoIndex>;
-    (cratesio_crate_storage, cratesio_idx)
+        .expect("Failed to create crates.io crate storage.")
 }
 
 async fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
     KellnrCrateStorage::new(settings)
         .await
         .expect("Failed to create crate storage.")
-}
-
-async fn init_kellnr_git_index(settings: &Settings) -> Box<dyn RwIndex> {
-    let kellnr_idx_storage = Storage::new();
-    let kellnr_idx = KellnrIdx::new(settings, kellnr_idx_storage)
-        .await
-        .expect("Failed to create index.");
-    Box::new(kellnr_idx) as Box<dyn RwIndex>
 }
 
 #[derive(Debug)]
@@ -300,9 +261,7 @@ enum Environment {
 pub fn build_rocket(
     settings: Settings,
     db: Box<dyn DbProvider>,
-    kellnr_idx: Box<dyn RwIndex>,
     kellnr_crate_storage: KellnrCrateStorage,
-    cratesio_idx: Box<dyn RoIndex>,
     cratesio_crate_storage: CratesIoCrateStorage,
     cratesio_prefetch_sender: Arc<flume::Sender<CratesioPrefetchMsg>>,
 ) -> rocket::Rocket<Build> {
@@ -378,15 +337,12 @@ pub fn build_rocket(
                 index::cratesio_prefetch_api::config_cratesio,
                 registry::cratesio_api::download,
                 registry::cratesio_api::search,
-                ui::delete_cratesio_index
             ],
         )
         .register("/", catchers![ui::not_found])
         .manage(settings)
         .manage(db)
         .manage(RwLock::new(kellnr_crate_storage))
-        .manage(Mutex::new(kellnr_idx))
-        .manage(Mutex::new(cratesio_idx))
         .manage(RwLock::new(cratesio_crate_storage))
         .manage(cratesio_prefetch_sender)
         .attach(get_cors_header(env))
@@ -410,27 +366,4 @@ fn get_cors_header(env: Environment) -> Cors {
     }
     .to_cors()
     .expect("Unable to create CORS header")
-}
-
-fn start_git_daemon(settings: &Settings) {
-    // Check if git-daemon is running. If so, do not start another instance.
-    let s = System::new_all();
-    if s.processes_by_exact_name("git-daemon").count() > 0 {
-        debug!("git-daemon already running. No need to start a new instance.");
-        return;
-    }
-
-    // start the git daemon
-    process::Command::new("git")
-        .args([
-            "daemon",
-            &format!("--base-path={}", settings.base_path().to_string_lossy()),
-            // &settings.base_path().to_string_lossy(),
-            &format!("--listen={}", settings.index_address),
-            &format!("--port={}", settings.index_port),
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
-        .spawn()
-        .expect("Unable to start index. Please make sure there is not git-daemon running already.");
 }

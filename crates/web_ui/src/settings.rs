@@ -30,7 +30,6 @@ pub struct SettingsState {
     pub postgresql: ::settings::Postgresql,
     pub max_crate_size: usize,
     pub max_docs_size: usize,
-    pub git_index: bool,
     pub auth_required: bool,
 }
 
@@ -56,7 +55,6 @@ impl From<&Settings> for SettingsState {
             postgresql: settings.postgresql.clone(),
             max_crate_size: settings.max_crate_size,
             max_docs_size: settings.max_docs_size,
-            git_index: settings.git_index,
             auth_required: settings.auth_required,
         }
     }

@@ -17,7 +17,6 @@ export type Settings = {
     max_crate_size: number
     max_docs_size: number
     cache_size: number
-    git_index: boolean
     auth_required: boolean
     postgresql: {
         enabled: boolean
@@ -47,7 +46,6 @@ export const defaultSettings = {
     max_crate_size: 0,
     max_docs_size: 0,
     cache_size: 0,
-    git_index: false,
     auth_required: false,
     postgresql: {
         enabled: false,

@@ -4,7 +4,6 @@ use db::DbProvider;
 use settings::Settings;
 use std::sync::Arc;
 use registry::kellnr_crate_storage::KellnrCrateStorage;
-use index::rwindex::RwIndex;
 
 pub type AppState = axum::extract::State<AppStateData>;
 
@@ -19,5 +18,4 @@ pub struct AppStateData {
     pub signing_key: Key,
     pub settings: Arc<Settings>,
     pub crate_storage: Arc<KellnrCrateStorage>,
-    pub crate_index: Arc<dyn RwIndex>,
 }

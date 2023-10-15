@@ -8,7 +8,6 @@ use anyhow::Result;
 use auth::auth_req_token::AuthReqToken;
 use auth::token;
 use chrono::Utc;
-use common::index_metadata::IndexMetadata;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
 use common::search_result;
@@ -16,9 +15,8 @@ use common::search_result::{Crate, SearchResult};
 use common::version::Version;
 use db::DbProvider;
 use error::error::{ApiError, ApiResult};
-use index::rwindex::RwIndex;
 use rocket::serde::json::Json;
-use rocket::tokio::sync::{Mutex, RwLock};
+use rocket::tokio::sync::RwLock;
 use rocket::{delete, get, put, State};
 use settings::Settings;
 use std::convert::TryFrom;
@@ -165,7 +163,6 @@ pub async fn download(
 pub async fn publish(
     input: ApiResult<PubData>,
     db: &State<Box<dyn DbProvider>>,
-    idx: &State<Mutex<Box<dyn RwIndex>>>,
     cs: &KellnrCrateStorageState,
     settings: &State<Settings>,
     token: token::Token,
@@ -198,13 +195,6 @@ pub async fn publish(
 
     let created = Utc::now();
 
-    // Add crate to git index
-    if settings.git_index {
-        let idx = idx.lock().await;
-        let index_metadata = IndexMetadata::from_reg_meta(&pub_data.metadata, &cksum);
-        idx.add_to_index(&index_metadata).await?;
-    }
-
     // Add crate to DB
     db.add_crate(&pub_data.metadata, &cksum, &created, &token.user)
         .await?;
@@ -227,17 +217,10 @@ pub async fn yank(
     crate_name: OriginalName,
     version: Version,
     db: &State<Box<dyn DbProvider>>,
-    idx: &State<Mutex<Box<dyn RwIndex>>>,
     token: token::Token,
-    settings: &State<Settings>,
 ) -> ApiResult<YankSuccess> {
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, db).await?;
-
-    if settings.git_index {
-        let idx = idx.lock().await;
-        idx.yank(&crate_name, &version.to_string(), true).await?;
-    }
 
     db.yank_crate(&crate_name, &version).await?;
 
@@ -249,17 +232,10 @@ pub async fn unyank(
     crate_name: OriginalName,
     version: Version,
     db: &State<Box<dyn DbProvider>>,
-    idx: &State<Mutex<Box<dyn RwIndex>>>,
     token: token::Token,
-    settings: &State<Settings>,
 ) -> ApiResult<YankSuccess> {
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, db).await?;
-
-    if settings.git_index {
-        let idx = idx.lock().await;
-        idx.yank(&crate_name, &version.to_string(), false).await?;
-    }
 
     db.unyank_crate(&crate_name, &version).await?;
 
@@ -273,8 +249,6 @@ mod reg_api_tests {
     use common::storage_provider::{mock::MockStorage, StorageProvider};
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString};
-    use index::kellnr_idx::KellnrIdx;
-    use index::rwindex::mock::MockIdx;
     use mockall::predicate::*;
     use rand::{distributions::Alphanumeric, thread_rng, Rng};
     use rocket::http::{ContentType, Header, Status};
@@ -291,8 +265,7 @@ mod reg_api_tests {
     async fn remove_owner_valid_owner() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = KellnrIdx::new(&settings, storage).await.unwrap();
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
 
         // Use valid crate publish data to test.
         let mut file = File::open("../test_data/pub_data.bin")
@@ -339,8 +312,7 @@ mod reg_api_tests {
     async fn add_owner_valid_owner() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = KellnrIdx::new(&settings, storage).await.unwrap();
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         // Use valid crate publish data to test.
         let mut file = File::open("../test_data/pub_data.bin")
             .await
@@ -382,8 +354,7 @@ mod reg_api_tests {
     async fn list_owners_valid_owner() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = KellnrIdx::new(&settings, storage).await.unwrap();
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
 
         // Use valid crate publish data to test.
         let mut file = File::open("../test_data/pub_data.bin")
@@ -418,8 +389,7 @@ mod reg_api_tests {
     async fn publish_garbage() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = KellnrIdx::new(&settings, storage).await.unwrap();
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
 
         let garbage: [u8; 4] = [0x00, 0x11, 0x22, 0x33];
         let mut request = kellnr
@@ -446,8 +416,7 @@ mod reg_api_tests {
     async fn download_not_existing_package() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = KellnrIdx::new(&settings, storage).await.unwrap();
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let response = kellnr
             .client
             .get("/api/v1/crates/does_not_exist/0.1.0/download")
@@ -460,8 +429,7 @@ mod reg_api_tests {
     async fn download_invalid_package_name() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = KellnrIdx::new(&settings, storage).await.unwrap();
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let response = kellnr
             .client
             .get("/api/v1/crates/-invalid_name/0.1.0/download")
@@ -474,8 +442,7 @@ mod reg_api_tests {
     async fn download_not_existing_version() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = KellnrIdx::new(&settings, storage).await.unwrap();
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let response = kellnr
             .client
             .get("/api/v1/crates/test-lib/99.1.0/download")
@@ -488,8 +455,7 @@ mod reg_api_tests {
     async fn download_invalid_package_version() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = KellnrIdx::new(&settings, storage).await.unwrap();
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let response = kellnr
             .client
             .get("/api/v1/crates/invalid_version/0.a.0/download")
@@ -534,10 +500,8 @@ mod reg_api_tests {
 
     #[async_test]
     async fn search_verify_per_page_out_of_range() {
-        let mock_idx = MockIdx::new();
-
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings, Box::new(mock_idx)).await;
+        let kellnr = TestKellnr::fake(settings).await;
         let request = kellnr.client.get("/api/v1/crates?q=foo&per_page=200");
 
         let result = request.dispatch().await;
@@ -548,12 +512,8 @@ mod reg_api_tests {
 
     #[async_test]
     async fn yank_success() {
-        let mut mock_idx = MockIdx::new();
-        mock_idx.expect_add_to_index().returning(|_| Ok(()));
-        mock_idx.expect_yank().returning(|_, _, _| Ok(()));
-
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings, Box::new(mock_idx)).await;
+        let kellnr = TestKellnr::fake(settings).await;
         // Use valid crate publish data to test.
         let mut file = File::open("../test_data/pub_data.bin")
             .await
@@ -582,14 +542,8 @@ mod reg_api_tests {
 
     #[async_test]
     async fn yank_error() {
-        let mut mock_idx = MockIdx::new();
-        mock_idx.expect_add_to_index().returning(|_| Ok(()));
-        mock_idx
-            .expect_yank()
-            .returning(|_, _, _| Err(anyhow::anyhow!("")));
-
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings, Box::new(mock_idx)).await;
+        let kellnr = TestKellnr::fake(settings).await;
         let request = kellnr
             .client
             .delete("/api/v1/crates/test/0.1.0/yank")
@@ -603,12 +557,8 @@ mod reg_api_tests {
 
     #[async_test]
     async fn unyank_success() {
-        let mut mock_idx = MockIdx::new();
-        mock_idx.expect_add_to_index().returning(|_| Ok(()));
-        mock_idx.expect_yank().returning(|_, _, _| Ok(()));
-
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings, Box::new(mock_idx)).await;
+        let kellnr = TestKellnr::fake(settings).await;
         // Use valid crate publish data to test.
         let mut file = File::open("../test_data/pub_data.bin")
             .await
@@ -637,14 +587,8 @@ mod reg_api_tests {
 
     #[async_test]
     async fn unyank_error() {
-        let mut mock_idx = MockIdx::new();
-        mock_idx.expect_add_to_index().returning(|_| Ok(()));
-        mock_idx
-            .expect_yank()
-            .returning(|_, _, _| Err(anyhow::anyhow!("")));
-
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings, Box::new(mock_idx)).await;
+        let kellnr = TestKellnr::fake(settings).await;
         let request = kellnr
             .client
             .put("/api/v1/crates/test/0.1.0/unyank")
@@ -667,11 +611,8 @@ mod reg_api_tests {
             .await
             .expect("Cannot read valid package file.");
 
-        let mut mock_idx = MockIdx::new();
-        mock_idx.expect_add_to_index().returning(|_| Ok(()));
-
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings, Box::new(mock_idx)).await;
+        let kellnr = TestKellnr::fake(settings).await;
 
         let request = kellnr
             .client
@@ -717,8 +658,7 @@ mod reg_api_tests {
             .expect("Cannot read valid package file.");
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = KellnrIdx::new(&settings, storage).await.unwrap();
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let request = kellnr
             .client
             .put("/api/v1/crates/new")
@@ -769,20 +709,20 @@ mod reg_api_tests {
     impl TestKellnr {
         // why is T needed?
         #[allow(clippy::extra_unused_type_parameters)]
-        async fn new<T: StorageProvider>(settings: Settings, idx: Box<dyn RwIndex>) -> Self {
+        async fn new<T: StorageProvider>(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             let db = Database::new(&con_string).await.unwrap();
             TestKellnr {
                 path: path::PathBuf::from(&settings.data_dir),
                 db,
-                client: Client::tracked(test_rocket(settings, idx).await)
+                client: Client::tracked(test_rocket(settings).await)
                     .await
                     .expect("valid rocket instance"),
             }
         }
 
-        async fn fake(settings: Settings, idx: Box<dyn RwIndex>) -> Self {
+        async fn fake(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             let db = Database::new(&con_string).await.unwrap();
@@ -790,7 +730,7 @@ mod reg_api_tests {
             TestKellnr {
                 path: path::PathBuf::from(&settings.data_dir),
                 db,
-                client: Client::tracked(test_rocket(settings, idx).await)
+                client: Client::tracked(test_rocket(settings).await)
                     .await
                     .expect("valid rocket instance"),
             }
@@ -803,7 +743,7 @@ mod reg_api_tests {
         }
     }
 
-    async fn test_rocket(settings: Settings, idx: Box<dyn RwIndex>) -> rocket::Rocket<Build> {
+    async fn test_rocket(settings: Settings) -> rocket::Rocket<Build> {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
         let db = Database::new(&con_string).await.unwrap();
 
@@ -832,7 +772,6 @@ mod reg_api_tests {
                 ],
             )
             .manage(settings)
-            .manage(Mutex::new(idx))
             .manage(db)
             .manage(RwLock::new(cs))
     }
