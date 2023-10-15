@@ -122,12 +122,6 @@ impl Settings {
             .ok_or_else(|| ConfigError::Message("Invalid UTF-8 string".to_string()))
     }
 
-    pub fn index_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.data_dir)
-            .join("git")
-            .join("index")
-    }
-
     pub fn bin_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.data_dir).join("crates")
     }
@@ -146,12 +140,6 @@ impl Settings {
 
     pub fn base_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.data_dir).join("git")
-    }
-
-    pub fn crates_io_index_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.data_dir)
-            .join("git")
-            .join("cratesio")
     }
 
     pub fn crates_io_bin_path(&self) -> path::PathBuf {
