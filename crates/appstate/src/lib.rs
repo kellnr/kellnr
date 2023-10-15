@@ -3,6 +3,8 @@ use axum_extra::extract::cookie::Key;
 use db::DbProvider;
 use settings::Settings;
 use std::sync::Arc;
+use registry::kellnr_crate_storage::KellnrCrateStorage;
+use index::rwindex::RwIndex;
 
 pub type AppState = axum::extract::State<AppStateData>;
 
@@ -16,4 +18,6 @@ pub struct AppStateData {
     // key that is used for signing cookies
     pub signing_key: Key,
     pub settings: Arc<Settings>,
+    pub crate_storage: Arc<KellnrCrateStorage>,
+    pub crate_index: Arc<dyn RwIndex>,
 }

@@ -188,6 +188,8 @@ dependencies = [
  "axum",
  "axum-extra",
  "db",
+ "index",
+ "registry",
  "settings",
 ]
 

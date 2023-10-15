@@ -1,4 +1,5 @@
-use crate::session::{AdminUser, AnyUser};
+use crate::error::RouteError;
+use crate::session::{AdminUser, AnyUser, MaybeUser};
 use appstate::AppState;
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
@@ -7,10 +8,9 @@ use common::original_name::OriginalName;
 use common::version::Version;
 use db::error::DbError;
 use db::DbProvider;
-use index::rwindex::RwIndex;
 use registry::kellnr_crate_storage::KellnrCrateStorage;
 use reqwest::StatusCode;
-use rocket::tokio::sync::{Mutex, RwLock};
+use rocket::tokio::sync::RwLock;
 use rocket::{catch, delete, http, post, Request, State};
 use settings::Settings;
 use tracing::error;
@@ -127,8 +127,9 @@ pub struct CratesIoDataParams {
     name: OriginalName,
 }
 
-pub async fn cratesio_data(axum::extract::Query(params): axum::extract::Query<CratesIoDataParams>) -> 
-Result<String, axum::http::StatusCode> {
+pub async fn cratesio_data(
+    axum::extract::Query(params): axum::extract::Query<CratesIoDataParams>,
+) -> Result<String, axum::http::StatusCode> {
     let url = format!("https://crates.io/api/v1/crates/{}", params.name);
 
     let client = reqwest::Client::new();
@@ -163,39 +164,44 @@ Result<String, axum::http::StatusCode> {
     }
 }
 
-#[delete("/crate?<name>&<version>")]
-pub async fn delete(
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct DeleteCrateParams {
     name: OriginalName,
     version: Version,
-    _user: AdminUser,
-    db: &State<Box<dyn DbProvider>>,
-    idx: &State<Mutex<Box<dyn RwIndex>>>,
-    storage: &State<RwLock<KellnrCrateStorage>>,
-    settings: &State<Settings>,
-) -> http::Status {
-    if settings.git_index {
-        if let Err(e) = idx.lock().await.delete(&name, &version).await {
+}
+
+pub async fn delete(
+    axum::extract::Query(params): axum::extract::Query<DeleteCrateParams>,
+    user: MaybeUser,
+    axum::extract::State(state): AppState,
+) -> Result<(), RouteError> {
+    user.assert_admin()?;
+    let version = params.version;
+    let name = params.name;
+
+    if state.settings.git_index {
+        if let Err(e) = state.crate_index.delete(&name, &version).await {
             error!("Failed to delete crate from index: {}", e);
-            return http::Status::InternalServerError;
+            return Err(RouteError::Status(axum::http::StatusCode::INTERNAL_SERVER_ERROR));
         }
     }
 
-    if let Err(e) = db.delete_crate(&name.to_normalized(), &version).await {
+    if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
         error!("Failed to delete crate from database: {:?}", e);
-        return http::Status::InternalServerError;
+        return Err(RouteError::Status(axum::http::StatusCode::INTERNAL_SERVER_ERROR));
     }
 
-    if let Err(e) = storage.write().await.delete(&name, &version).await {
+    if let Err(e) = state.crate_storage.delete(&name, &version).await {
         error!("Failed to delete crate from storage: {}", e);
-        return http::Status::InternalServerError;
+        return Err(RouteError::Status(axum::http::StatusCode::INTERNAL_SERVER_ERROR));
     }
 
-    if let Err(e) = docs::delete(&name, &version, settings).await {
+    if let Err(e) = docs::delete(&name, &version, &state.settings).await {
         error!("Failed to delete crate from docs: {}", e);
-        return http::Status::InternalServerError;
+        return Err(RouteError::Status(axum::http::StatusCode::INTERNAL_SERVER_ERROR));
     }
 
-    http::Status::Ok
+    Ok(())
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]

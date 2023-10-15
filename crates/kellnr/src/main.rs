@@ -25,10 +25,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{process, process::Stdio};
 use sysinfo::{System, SystemExt};
+use tower_http::services::ServeDir;
 use tracing::{debug, info};
 use tracing_subscriber::fmt::format;
 use web_ui::{ui, user};
-use tower_http::services::ServeDir;
 
 // #[launch]
 // async fn rocket_launch() -> _ {
@@ -103,10 +103,10 @@ async fn main() {
     info!("Starting kellnr");
 
     // Initialize kellnr crate storage
-    let _kellnr_crate_storage = init_kellnr_crate_storage(&settings).await;
+    let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).await.into();
 
     // Kellnr Index and Storage
-    let _kellnr_idx = init_kellnr_git_index(&settings).await;
+    let crate_index: Arc<dyn RwIndex> = init_kellnr_git_index(&settings).await.into();
 
     // Create the database connection. Has to be done after the index and storage
     // as the needed folders for the sqlite database my not been created before that.
@@ -147,6 +147,8 @@ async fn main() {
         db,
         signing_key,
         settings,
+        crate_storage,
+        crate_index,
     };
 
     let user = Router::new()
@@ -172,6 +174,7 @@ async fn main() {
         .route("/statistic", get(ui::statistic))
         .route("/crate_data", get(ui::crate_data))
         .route("/cratesio_data", get(ui::cratesio_data))
+        .route("/crate", delete(ui::delete))
         .nest("/user", user)
         .with_state(state)
         .nest_service("/", ServeDir::new(PathBuf::from("static")));
@@ -316,7 +319,7 @@ pub fn build_rocket(
             routes![
                 registry::kellnr_api::me,
                 web_ui::settings::settings,
-                ui::delete,
+                //ui::delete,
             ],
         )
         .mount("/", FileServer::from("./static"))

@@ -8,7 +8,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 
-#[derive(Debug, Eq, Clone)]
+#[derive(Debug, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Version(String);
 
 #[derive(Debug, Eq, PartialEq)]
