@@ -10,9 +10,8 @@ use db::DbProvider;
 use index::rwindex::RwIndex;
 use registry::kellnr_crate_storage::KellnrCrateStorage;
 use reqwest::StatusCode;
-use rocket::serde::json::Json;
 use rocket::tokio::sync::{Mutex, RwLock};
-use rocket::{catch, delete, get, http, post, Request, State};
+use rocket::{catch, delete, http, post, Request, State};
 use settings::Settings;
 use tracing::error;
 
