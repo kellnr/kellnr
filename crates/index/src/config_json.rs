@@ -39,7 +39,7 @@ impl From<(&Settings, &str)> for ConfigJson {
         Self::new(
             &value.0.api_protocol,
             &value.0.api_address,
-            value.0.api_port,
+            value.0.api_port_proxy,
             value.1,
             value.0.auth_required,
         )
