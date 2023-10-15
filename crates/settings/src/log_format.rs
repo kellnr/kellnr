@@ -40,7 +40,6 @@ impl Display for LogFormat {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde;
     use serde::Deserialize;
 
     #[derive(Debug, Deserialize)]

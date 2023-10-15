@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::session::{AdminUser, AnyUser};
 use appstate::AppState;
 use common::crate_data::CrateData;
@@ -10,7 +8,6 @@ use common::version::Version;
 use db::error::DbError;
 use db::DbProvider;
 use index::rwindex::RwIndex;
-use json_payload::json_payload;
 use registry::kellnr_crate_storage::KellnrCrateStorage;
 use reqwest::StatusCode;
 use rocket::serde::json::Json;
@@ -202,7 +199,7 @@ pub async fn delete(
     http::Status::Ok
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Statistic {
     unique_crates: u32,
     crate_versions: u32,
@@ -1138,10 +1135,10 @@ mod tests {
             .mount(
                 "/",
                 routes![
-                    search,
-                    crates,
-                    kellnr_version,
-                    statistic,
+                    // search,
+                    // crates,
+                    // kellnr_version,
+                    // statistic,
                     crate_data,
                     build_rustdoc,
                     cratesio_data,

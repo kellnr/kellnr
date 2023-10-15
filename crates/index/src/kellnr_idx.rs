@@ -287,7 +287,7 @@ mod kellnr_idx_tests {
     impl TestIndex {
         async fn from(data_dir: &str) -> TestIndex {
             let settings = Settings {
-                data_dir: "/tmp/".to_string() + &data_dir.to_string(),
+                data_dir: "/tmp/".to_string() + data_dir,
                 ..Settings::new().unwrap()
             };
             let storage = Storage::new();

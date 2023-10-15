@@ -9,6 +9,8 @@ version.workspace = true
 [dependencies]
 # Internal dependencies
 db.workspace = true
+settings.workspace = true
 
 # External dependencies
 axum.workspace = true
+axum-extra.workspace = true
