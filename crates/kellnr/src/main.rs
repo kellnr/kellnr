@@ -21,13 +21,14 @@ use rocket::{catchers, routes, tokio, Build};
 use rocket_cors::{Cors, CorsOptions};
 use settings::{LogFormat, Settings};
 use std::convert::TryFrom;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{process, process::Stdio};
 use sysinfo::{System, SystemExt};
 use tracing::{debug, info};
 use tracing_subscriber::fmt::format;
 use web_ui::{ui, user};
+use tower_http::services::ServeDir;
 
 // #[launch]
 // async fn rocket_launch() -> _ {
@@ -172,7 +173,8 @@ async fn main() {
         .route("/crate_data", get(ui::crate_data))
         .route("/cratesio_data", get(ui::cratesio_data))
         .nest("/user", user)
-        .with_state(state);
+        .with_state(state)
+        .nest_service("/", ServeDir::new(PathBuf::from("static")));
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
         .serve(app.into_make_service())
