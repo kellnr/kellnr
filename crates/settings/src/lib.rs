@@ -62,7 +62,6 @@ pub struct Settings {
     pub cache_size: usize,
     pub max_crate_size: usize,
     pub max_docs_size: usize,
-    pub git_index: bool,
     #[serde(default)]
     pub auth_required: bool,
 }
@@ -86,7 +85,6 @@ impl TryFrom<&Path> for Settings {
             .set_default("rustdoc_auto_gen", true)?
             .set_default("max_crate_size", 100 * 1000)?
             .set_default("max_docs_size", 100 * 1000)?
-            .set_default("git_index", true)? // Enabled per default for the case that the setting is missing and the customer used it before.
             .set_default("crates_io_num_threads", 10)?
             // Start off by merging in the "default" configuration file
             .add_source(File::with_name(&default_file))
@@ -124,12 +122,6 @@ impl Settings {
             .ok_or_else(|| ConfigError::Message("Invalid UTF-8 string".to_string()))
     }
 
-    pub fn index_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.data_dir)
-            .join("git")
-            .join("index")
-    }
-
     pub fn bin_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.data_dir).join("crates")
     }
@@ -148,12 +140,6 @@ impl Settings {
 
     pub fn base_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.data_dir).join("git")
-    }
-
-    pub fn crates_io_index_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.data_dir)
-            .join("git")
-            .join("cratesio")
     }
 
     pub fn crates_io_bin_path(&self) -> path::PathBuf {
