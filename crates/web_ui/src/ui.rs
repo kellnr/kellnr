@@ -1,5 +1,5 @@
 use crate::error::RouteError;
-use crate::session::{AdminUser, AnyUser, MaybeUser};
+use crate::session::{AdminUser, MaybeUser};
 use appstate::AppState;
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
@@ -7,11 +7,8 @@ use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
 use common::version::Version;
 use db::error::DbError;
-use db::DbProvider;
-use registry::kellnr_crate_storage::KellnrCrateStorage;
 use reqwest::StatusCode;
-use rocket::tokio::sync::RwLock;
-use rocket::{catch, delete, http, post, Request, State};
+use rocket::{catch, delete, http, Request, State};
 use settings::Settings;
 use tracing::error;
 
@@ -182,23 +179,31 @@ pub async fn delete(
     if state.settings.git_index {
         if let Err(e) = state.crate_index.delete(&name, &version).await {
             error!("Failed to delete crate from index: {}", e);
-            return Err(RouteError::Status(axum::http::StatusCode::INTERNAL_SERVER_ERROR));
+            return Err(RouteError::Status(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
         }
     }
 
     if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
         error!("Failed to delete crate from database: {:?}", e);
-        return Err(RouteError::Status(axum::http::StatusCode::INTERNAL_SERVER_ERROR));
+        return Err(RouteError::Status(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        ));
     }
 
     if let Err(e) = state.crate_storage.delete(&name, &version).await {
         error!("Failed to delete crate from storage: {}", e);
-        return Err(RouteError::Status(axum::http::StatusCode::INTERNAL_SERVER_ERROR));
+        return Err(RouteError::Status(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        ));
     }
 
     if let Err(e) = docs::delete(&name, &version, &state.settings).await {
         error!("Failed to delete crate from docs: {}", e);
-        return Err(RouteError::Status(axum::http::StatusCode::INTERNAL_SERVER_ERROR));
+        return Err(RouteError::Status(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        ));
     }
 
     Ok(())
@@ -246,61 +251,89 @@ pub async fn statistic(axum::extract::State(state): AppState) -> axum::response:
     })
 }
 
-#[post("/build?<package>&<version>")]
-pub async fn build_rustdoc(
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct BuildParams {
     package: OriginalName,
     version: Version,
-    db: &State<Box<dyn DbProvider>>,
-    cs: &State<RwLock<KellnrCrateStorage>>,
-    user: AnyUser,
-) -> Result<rocket::http::Status, http::Status> {
-    let normalized_name = NormalizedName::from(package);
+}
+
+pub async fn build_rustdoc(
+    axum::extract::Query(params): axum::extract::Query<BuildParams>,
+    axum::extract::State(state): AppState,
+    user: MaybeUser,
+) -> Result<(), axum::http::StatusCode> {
+    let normalized_name = NormalizedName::from(params.package);
+    let db = state.db;
+    let version = params.version;
+
     // Check if crate with the version exists.
     if let Some(id) = db
         .get_crate_id(&normalized_name)
         .await
-        .map_err(|_| http::Status::InternalServerError)?
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
     {
         if !db
             .crate_version_exists(id, &version)
             .await
-            .map_err(|_| http::Status::InternalServerError)?
+            .map_err(|_|axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
         {
-            return Err(http::Status::BadRequest);
+            return Err(axum::http::StatusCode::BAD_REQUEST);
         }
     } else {
-        return Err(http::Status::BadRequest);
+        return Err(axum::http::StatusCode::BAD_REQUEST);
     }
 
     // Check if the current user is the owner of the crate
-    use crate::session::Name;
     if !db
         .is_owner(&normalized_name, &user.name())
         .await
-        .map_err(|_| http::Status::InternalServerError)?
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
         && !db
             .get_user(&user.name())
             .await
-            .map_err(|_| http::Status::InternalServerError)?
+            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
             .is_admin
     {
-        return Err(http::Status::Unauthorized);
+        return Err( axum::http::StatusCode::UNAUTHORIZED);
+    }
+
+    // If the user is the owner of the crate or any admin user,
+    // the build operation is allowed.
+    let is_allowed = match user {
+        MaybeUser::Normal(user) => {
+            tracing::debug!("User {} is trying to build crate {}", user, normalized_name);
+            db
+                .is_owner(&normalized_name, &user)
+                .await
+                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+        },
+        MaybeUser::Admin(_) => {
+            tracing::debug!("Admin user is trying to build crate {}", normalized_name);
+            true
+        },
+    };
+
+    if !is_allowed {
+        tracing::debug!("User is not allowed to build crate {}", normalized_name);
+        return Err(axum::http::StatusCode::UNAUTHORIZED);
+    } else {
+        tracing::debug!("User is allowed to build crate {}", normalized_name);
     }
 
     // Add to build queue
     db.add_doc_queue(
         &normalized_name,
         &version,
-        &cs.read()
-            .await
+        &state
+            .crate_storage
             .create_rand_doc_queue_path()
             .await
-            .map_err(|_| http::Status::InternalServerError)?,
+            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
     )
     .await
-    .map_err(|_| http::Status::InternalServerError)?;
+    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(http::Status::Ok)
+    Ok(())
 }
 
 #[delete("/index")]
@@ -1144,9 +1177,9 @@ mod tests {
                     // crates,
                     // kellnr_version,
                     // statistic,
-                    crate_data,
+                    // crate_data,
                     build_rustdoc,
-                    cratesio_data,
+                    // cratesio_data,
                 ],
             )
             .manage(RwLock::new(crate_storage))

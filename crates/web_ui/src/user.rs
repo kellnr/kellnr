@@ -48,8 +48,6 @@ pub async fn list_tokens(
     user: MaybeUser,
     State(db): DbState,
 ) -> Result<Json<AuthTokenList>, RouteError> {
-    user.assert_normal()?;
-
     Ok(db
         .get_auth_tokens(user.name())
         .await
@@ -156,6 +154,7 @@ pub async fn login(
                 state.settings.session_age_seconds as i64,
             ))
             .same_site(axum_extra::extract::cookie::SameSite::Strict)
+            .path("/")
             .finish(),
     );
 

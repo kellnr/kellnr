@@ -167,6 +167,9 @@ async fn main() {
         .route("/list_users", get(user::list_users))
         .route("/login_state", get(user::login_state));
 
+    let docs = Router::new()
+        .route("/build", post(ui::build_rustdoc));
+
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
@@ -176,8 +179,10 @@ async fn main() {
         .route("/cratesio_data", get(ui::cratesio_data))
         .route("/crate", delete(ui::delete))
         .nest("/user", user)
+        .nest("/api/v1/docs", docs)
         .with_state(state)
-        .nest_service("/", ServeDir::new(PathBuf::from("static")));
+        .nest_service("/", ServeDir::new(PathBuf::from("static")))
+        .layer(tower_http::trace::TraceLayer::new_for_http());
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
         .serve(app.into_make_service())
@@ -329,7 +334,7 @@ pub fn build_rocket(
             routes![
                 docs::api::publish_docs,
                 docs::api::docs_in_queue,
-                ui::build_rustdoc
+                //ui::build_rustdoc
             ],
         )
         .mount(

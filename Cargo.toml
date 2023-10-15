@@ -78,7 +78,7 @@ axum-extra = { version = "0.8.0", features = ["cookie", "cookie-private"] }
 tokio = { version = "1.32.0", features = ["macros"] }
 tower = { version = "0.4.13", features = ["util"] }
 hyper = "0.14.27"
-tower-http = { version = "0.4.4", features = ["fs"] }
+tower-http = { version = "0.4.4", features = ["fs", "trace"] }
 
 [profile.release]
 lto = "thin"
