@@ -41,7 +41,7 @@ rocket = {version = "0.5.0-rc.3", features = ["secrets", "json"]}
 serde = {version = "1.0.164", features = ["derive"]}
 sysinfo = "0.29.10"
 rocket_cors = "0.6.0-alpha2"
-semver = "1.0.19"
+semver = "1.0.20"
 regex = "1.8.3"
 serde_json = "1.0.107"
 mockall = "0.11.4"
