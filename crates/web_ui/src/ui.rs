@@ -71,7 +71,7 @@ pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> J
         None => (total, crates),
     };
 
-    axum::Json(Pagination {
+    Json(Pagination {
         crates,
         current_num: end,
         total_num: total,
@@ -307,8 +307,14 @@ pub async fn build_rustdoc(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
+    use appstate::AppStateData;
+    use axum::Router;
+    use axum::routing::{post, get};
     use common::crate_data::{CrateRegistryDep, CrateVersionData};
+    use cookie::Key;
     use db::error::DbError;
     use db::mock::MockDb;
     use db::{DbProvider, User};
@@ -333,7 +339,7 @@ mod tests {
             .with(eq("cookie"))
             .returning(move |_| Ok(("user".to_string(), false)));
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -368,7 +374,7 @@ mod tests {
             .with(eq(1), eq("1.0.0"))
             .returning(move |_, _| Ok(false));
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -422,7 +428,7 @@ mod tests {
                 })
             });
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -486,7 +492,7 @@ mod tests {
             .returning(move |_, _, _| Ok(()));
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -550,7 +556,7 @@ mod tests {
             .returning(move |_, _, _| Ok(()));
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -587,7 +593,7 @@ mod tests {
             .returning(move |_| Ok(vec![("top1".to_string(), 1000)]));
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -630,7 +636,7 @@ mod tests {
             .returning(move |_| Err(DbError::FailedToCountTotalDownloads));
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -679,7 +685,7 @@ mod tests {
             });
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -709,7 +715,7 @@ mod tests {
         let settings = test_settings();
         let mock_db = MockDb::new();
 
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -736,7 +742,7 @@ mod tests {
             .with(eq("doesnotexist"))
             .returning(move |_name| Ok(vec![]));
 
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -776,7 +782,7 @@ mod tests {
             .with(eq("hello"))
             .returning(move |_| Ok(vec![tc.clone()]));
 
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -848,7 +854,7 @@ mod tests {
             .expect_get_crate_data()
             .returning(move |_| Ok(ecd.clone()));
 
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -913,7 +919,7 @@ mod tests {
             .expect_get_crate_overview_list()
             .returning(move || Ok(tc.clone()));
 
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -982,7 +988,7 @@ mod tests {
             .expect_get_crate_overview_list()
             .returning(move || Ok(tc.clone()));
 
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -1042,7 +1048,7 @@ mod tests {
             .expect_get_crate_overview_list()
             .returning(move || Ok(crate_overview.clone()));
 
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -1068,7 +1074,7 @@ mod tests {
     async fn cratesio_data_returns_data() {
         let mock_db = MockDb::new();
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -1090,7 +1096,7 @@ mod tests {
     async fn cratesio_data_not_found() {
         let mock_db = MockDb::new();
         let settings = test_settings();
-        let rocket = create_rocket(
+        let rocket = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -1113,32 +1119,27 @@ mod tests {
         }
     }
 
-    fn create_rocket(
+    const TEST_KEY: &[u8] = &[1; 64];
+    fn app(
         mock_db: MockDb,
         crate_storage: KellnrCrateStorage,
         settings: Settings,
-    ) -> Rocket<Build> {
-        use rocket::config::{Config, SecretKey};
-        let rocket_conf = Config {
-            secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-            ..Config::default()
-        };
-
-        rocket::custom(rocket_conf)
-            .mount(
-                "/",
-                routes![
-                    // search,
-                    // crates,
-                    // kellnr_version,
-                    // statistic,
-                    // crate_data,
-                    // build_rustdoc,
-                    // cratesio_data,
-                ],
-            )
-            .manage(RwLock::new(crate_storage))
-            .manage(Box::new(mock_db) as Box<dyn DbProvider>)
-            .manage(settings)
+    ) -> Router {
+        Router::new()
+            .route("/search", get(search))
+            .route("/crates", get(crates))
+            .route("/crate_data", get(crate_data))
+            .route("/version", get(kellnr_version))
+            .route("/statistic", get(statistic))
+            .route("/build", post(build_rustdoc))
+            .route("/cratesio_data", get(cratesio_data))
+            .with_state(AppStateData {
+                db: Arc::new(mock_db),
+                signing_key: Key::from(TEST_KEY),
+                settings: Arc::new(settings),
+                crate_storage: Arc::new(crate_storage),
+            })
     }
+
+
 }
