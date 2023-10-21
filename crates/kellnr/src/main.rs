@@ -1,5 +1,5 @@
 use appstate::AppStateData;
-use axum::routing::{delete, post};
+use axum::routing::{delete, get_service, post};
 use axum::{routing::get, Router};
 use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
@@ -12,13 +12,13 @@ use rocket::config::{Config, SecretKey};
 use rocket::fs::FileServer;
 use rocket::tokio::fs::create_dir_all;
 use rocket::tokio::sync::RwLock;
-use rocket::{catchers, routes, tokio, Build};
+use rocket::{routes, tokio, Build};
 use rocket_cors::{Cors, CorsOptions};
 use settings::{LogFormat, Settings};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use tracing::info;
 use tracing_subscriber::fmt::format;
 use web_ui::{ui, user};
@@ -148,8 +148,13 @@ async fn main() {
         .route("/list_users", get(user::list_users))
         .route("/login_state", get(user::login_state));
 
-    let docs = Router::new()
-        .route("/build", post(ui::build_rustdoc));
+    let docs = Router::new().route("/build", post(ui::build_rustdoc));
+
+    let static_files_service = get_service(
+        ServeDir::new(PathBuf::from("static"))
+            .append_index_html_on_directories(true)
+            .fallback(
+                ServeFile::new(PathBuf::from("static/index.html"))));
 
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
@@ -158,11 +163,11 @@ async fn main() {
         .route("/statistic", get(ui::statistic))
         .route("/crate_data", get(ui::crate_data))
         .route("/cratesio_data", get(ui::cratesio_data))
-        .route("/crate", delete(ui::delete))
+        .route("/delete_crate", delete(ui::delete))
         .nest("/user", user)
         .nest("/api/v1/docs", docs)
+        .fallback(static_files_service)
         .with_state(state)
-        .nest_service("/", ServeDir::new(PathBuf::from("static")))
         .layer(tower_http::trace::TraceLayer::new_for_http());
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
@@ -339,7 +344,6 @@ pub fn build_rocket(
                 registry::cratesio_api::search,
             ],
         )
-        .register("/", catchers![ui::not_found])
         .manage(settings)
         .manage(db)
         .manage(RwLock::new(kellnr_crate_storage))

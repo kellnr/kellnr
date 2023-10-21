@@ -12,7 +12,6 @@ use common::original_name::OriginalName;
 use common::version::Version;
 use db::error::DbError;
 use reqwest::StatusCode;
-use rocket::{catch, Request};
 use tracing::error;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -304,17 +303,6 @@ pub async fn build_rustdoc(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(())
-}
-
-/*
-   Catch all 404 for SPA (Vue) as SPAs use their own routing in the browser. This is needed to
-   support direct links to pages and page refreshes.
-   See: https://router.vuejs.org/guide/essentials/history-mode.html
-*/
-#[catch(404)]
-pub async fn not_found(_req: &Request<'_>) -> Option<rocket::fs::NamedFile> {
-    let result = rocket::fs::NamedFile::open("static/index.html").await;
-    result.ok()
 }
 
 #[cfg(test)]
