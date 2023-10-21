@@ -128,7 +128,6 @@ pub async fn download(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::storage::Storage;
     use common::util::generate_rand_string;
     use db::{ConString, Database, SqliteConString};
     use rocket::http::Status;
@@ -141,7 +140,6 @@ mod tests {
     #[async_test]
     async fn download_not_existing_package() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client
@@ -154,7 +152,6 @@ mod tests {
     #[async_test]
     async fn download_invalid_package_name() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client
@@ -167,7 +164,6 @@ mod tests {
     #[async_test]
     async fn download_not_existing_version() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client
@@ -180,7 +176,6 @@ mod tests {
     #[async_test]
     async fn download_invalid_package_version() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client
@@ -193,7 +188,6 @@ mod tests {
     #[async_test]
     async fn download_valid_package() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client

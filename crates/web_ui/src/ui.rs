@@ -265,7 +265,7 @@ pub async fn build_rustdoc(
         if !db
             .crate_version_exists(id, &version)
             .await
-            .map_err(|_|axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
         {
             return Err(axum::http::StatusCode::BAD_REQUEST);
         }
@@ -284,7 +284,7 @@ pub async fn build_rustdoc(
             .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
             .is_admin
     {
-        return Err( axum::http::StatusCode::UNAUTHORIZED);
+        return Err(axum::http::StatusCode::UNAUTHORIZED);
     }
 
     // If the user is the owner of the crate or any admin user,
@@ -292,15 +292,14 @@ pub async fn build_rustdoc(
     let is_allowed = match user {
         MaybeUser::Normal(user) => {
             tracing::debug!("User {} is trying to build crate {}", user, normalized_name);
-            db
-                .is_owner(&normalized_name, &user)
+            db.is_owner(&normalized_name, &user)
                 .await
                 .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
-        },
+        }
         MaybeUser::Admin(_) => {
             tracing::debug!("Admin user is trying to build crate {}", normalized_name);
             true
-        },
+        }
     };
 
     if !is_allowed {
@@ -343,12 +342,15 @@ mod tests {
     use common::crate_data::{CrateRegistryDep, CrateVersionData};
     use db::error::DbError;
     use db::mock::MockDb;
-    use db::User;
+    use db::{User, DbProvider};
     use mockall::predicate::*;
+    use registry::kellnr_crate_storage::KellnrCrateStorage;
     use rocket::http::{ContentType, Cookie, Header, Status};
     use rocket::local::asynchronous::Client;
     use rocket::{routes, Build, Rocket};
     use settings::constants;
+    use settings::Settings;
+    use tokio::sync::RwLock;
 
     #[rocket::async_test]
     async fn build_rust_doc_crate_not_found() {
@@ -1162,7 +1164,7 @@ mod tests {
                     // kellnr_version,
                     // statistic,
                     // crate_data,
-                    build_rustdoc,
+                    // build_rustdoc,
                     // cratesio_data,
                 ],
             )

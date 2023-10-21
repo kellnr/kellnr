@@ -264,7 +264,6 @@ mod reg_api_tests {
     #[async_test]
     async fn remove_owner_valid_owner() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
 
         // Use valid crate publish data to test.
@@ -311,7 +310,6 @@ mod reg_api_tests {
     #[async_test]
     async fn add_owner_valid_owner() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         // Use valid crate publish data to test.
         let mut file = File::open("../test_data/pub_data.bin")
@@ -353,7 +351,6 @@ mod reg_api_tests {
     #[async_test]
     async fn list_owners_valid_owner() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
 
         // Use valid crate publish data to test.
@@ -388,7 +385,6 @@ mod reg_api_tests {
     #[async_test]
     async fn publish_garbage() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
 
         let garbage: [u8; 4] = [0x00, 0x11, 0x22, 0x33];
@@ -415,7 +411,6 @@ mod reg_api_tests {
     #[async_test]
     async fn download_not_existing_package() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let response = kellnr
             .client
@@ -428,7 +423,6 @@ mod reg_api_tests {
     #[async_test]
     async fn download_invalid_package_name() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let response = kellnr
             .client
@@ -441,7 +435,6 @@ mod reg_api_tests {
     #[async_test]
     async fn download_not_existing_version() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let response = kellnr
             .client
@@ -454,7 +447,6 @@ mod reg_api_tests {
     #[async_test]
     async fn download_invalid_package_version() {
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let response = kellnr
             .client
@@ -657,7 +649,6 @@ mod reg_api_tests {
             .await
             .expect("Cannot read valid package file.");
         let settings = get_settings();
-        let storage = Storage::new();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
         let request = kellnr
             .client
@@ -692,7 +683,6 @@ mod reg_api_tests {
             admin_pwd: "admin".to_string(),
             data_dir: "/tmp/".to_string() + &generate_rand_string(10),
             session_age_seconds: 10,
-            git_index: true,
             ..Settings::new().unwrap()
         }
     }

@@ -144,7 +144,6 @@ mod tests {
             cache_size: 100,
             max_crate_size: 100,
             max_docs_size: 100,
-            git_index: true,
             auth_required: false,
             postgresql: Postgresql {
                 enabled: false,
