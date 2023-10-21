@@ -33,4 +33,4 @@ tokio.workspace = true
 axum-extra.workspace = true
 hyper.workspace = true
 tower.workspace = true
-cookie = "0.17"
+cookie.workspace = true

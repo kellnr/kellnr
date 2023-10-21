@@ -307,8 +307,7 @@ pub async fn build_rustdoc(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
+    use crate::test_helper::encode_cookies;
     use super::*;
     use appstate::AppStateData;
     use axum::routing::{get, post};
@@ -317,13 +316,14 @@ mod tests {
     use common::crate_data::{CrateRegistryDep, CrateVersionData};
     use db::error::DbError;
     use db::mock::MockDb;
-    use db::{DbProvider, User};
+    use db::User;
     use hyper::body::HttpBody;
-    use hyper::{Body, Request};
+    use hyper::{header, Body, Request};
     use mockall::predicate::*;
     use registry::kellnr_crate_storage::KellnrCrateStorage;
     use settings::constants;
     use settings::Settings;
+    use std::sync::Arc;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -338,23 +338,26 @@ mod tests {
             .with(eq("cookie"))
             .returning(move |_| Ok(("user".to_string(), false)));
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::BadRequest, result.status());
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
@@ -373,23 +376,26 @@ mod tests {
             .with(eq(1), eq("1.0.0"))
             .returning(move |_, _| Ok(false));
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::BadRequest, result.status());
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
@@ -427,23 +433,26 @@ mod tests {
                 })
             });
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::Unauthorized, result.status());
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
@@ -491,23 +500,26 @@ mod tests {
             .returning(move |_, _, _| Ok(()));
 
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::Ok, result.status());
+        assert_eq!(r.status(), StatusCode::OK);
     }
 
     #[tokio::test]
@@ -555,23 +567,26 @@ mod tests {
             .returning(move |_, _, _| Ok(()));
 
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::Ok, result.status());
+        assert_eq!(r.status(), StatusCode::OK);
     }
 
     #[tokio::test]
@@ -596,15 +611,13 @@ mod tests {
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/statistic");
+        )
+        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_stat = serde_json::from_str::<Statistic>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(rocket.into_body()).await.unwrap();
+        let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
             unique_crates: 0,
@@ -639,15 +652,13 @@ mod tests {
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/statistic");
+        )
+        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_stat = serde_json::from_str::<Statistic>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(rocket.into_body()).await.unwrap();
+        let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
             unique_crates: 0,
@@ -688,15 +699,13 @@ mod tests {
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/statistic");
+        )
+        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_stat = serde_json::from_str::<Statistic>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(rocket.into_body()).await.unwrap();
+        let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
             unique_crates: 1000,
@@ -714,19 +723,17 @@ mod tests {
         let settings = test_settings();
         let mock_db = MockDb::new();
 
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/version");
+        )
+        .oneshot(Request::get("/version").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_version = serde_json::from_str::<KellnrVersion>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_version = serde_json::from_slice::<KellnrVersion>(&result_msg).unwrap();
 
         assert_eq!("0.0.0-debug", result_version.version);
     }
@@ -741,22 +748,23 @@ mod tests {
             .with(eq("doesnotexist"))
             .returning(move |_name| Ok(vec![]));
 
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/search?name=doesnotexist");
+        )
+        .oneshot(
+            Request::get("/search?name=doesnotexist")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_crates = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(r.status(), StatusCode::OK);
         assert_eq!(0, result_crates.crates.len());
         assert_eq!(0, result_crates.total_num);
         assert_eq!(0, result_crates.current_num);
@@ -781,22 +789,23 @@ mod tests {
             .with(eq("hello"))
             .returning(move |_| Ok(vec![tc.clone()]));
 
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/search?name=hello");
+        )
+        .oneshot(
+            Request::get("/search?name=hello")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_crates = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(r.status(), StatusCode::OK);
         assert_eq!(1, result_crates.crates.len());
         assert_eq!(1, result_crates.total_num);
         assert_eq!(1, result_crates.current_num);
@@ -853,22 +862,23 @@ mod tests {
             .expect_get_crate_data()
             .returning(move |_| Ok(ecd.clone()));
 
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/crate_data?name=c1&version=1.0.0");
+        )
+        .oneshot(
+            Request::get("/crate_data?name=crate1&version=1.0.0")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_crate_data = serde_json::from_str::<CrateData>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_crate_data = serde_json::from_slice::<CrateData>(&result_msg).unwrap();
 
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(r.status(), StatusCode::OK);
         assert_eq!(expected_crate_data, result_crate_data);
     }
 
@@ -922,9 +932,12 @@ mod tests {
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        ).oneshot(Request::get("/crates?page=1").body(Body::empty()).unwrap()).await.unwrap();
+        )
+        .oneshot(Request::get("/crates?page=1").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap(); 
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         let expected = test_crates[0..10].to_vec();

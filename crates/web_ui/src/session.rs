@@ -211,13 +211,12 @@ async fn get_db<'r>(
 
 #[cfg(test)]
 mod session_tests {
-    use std::{borrow::Cow, result, sync::Arc};
-
+    use std::{result, sync::Arc};
+    use crate::test_helper::encode_cookies;
     use super::*;
     use appstate::AppStateData;
     use axum::{routing::get, Router};
     use axum_extra::extract::cookie::Key;
-    use cookie::CookieJar;
     use db::{error::DbError, mock::MockDb};
     use hyper::{header, Body, Request, StatusCode};
     use mockall::predicate::*;
@@ -247,7 +246,7 @@ mod session_tests {
             .route("/any", get(any_endpoint))
             .with_state(AppStateData {
                 db,
-                signing_key: Key::from(TEST_KEY),
+                signing_key: Key::from(crate::test_helper::TEST_KEY),
                 // TODO(ItsEthra): impl Default for Settings
                 crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
                 settings: Arc::new(settings),
@@ -257,22 +256,6 @@ mod session_tests {
     // AdminUser tests
 
     type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-    // there has to be a better way to set cookies, i really don't like improrting cookie crate just to do this
-    fn encode_cookies<const N: usize, K: Into<Cow<'static, str>>, V: Into<Cow<'static, str>>>(
-        cookies: [(K, V); N],
-    ) -> String {
-        let mut clear = CookieJar::new();
-        let mut jar = clear.private_mut(&TEST_KEY.try_into().unwrap());
-        cookies
-            .into_iter()
-            .for_each(|(k, v)| jar.add(Cookie::new(k, v)));
-        clear
-            .iter()
-            .map(|c| c.encoded().to_string())
-            .collect::<Vec<_>>()
-            .join("; ")
-    }
 
     fn c1234() -> String {
         encode_cookies([(constants::COOKIE_SESSION_ID, "1234")])
