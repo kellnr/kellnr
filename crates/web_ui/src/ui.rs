@@ -1,6 +1,10 @@
 use crate::error::RouteError;
 use crate::session::MaybeUser;
 use appstate::AppState;
+use axum::{
+    extract::{Query, State},
+    Json,
+};
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
 use common::normalized_name::NormalizedName;
@@ -23,8 +27,8 @@ pub struct Pagination {
     total_num: usize,
 }
 
-pub async fn kellnr_version() -> axum::response::Json<KellnrVersion> {
-    axum::response::Json(KellnrVersion {
+pub async fn kellnr_version() -> Json<KellnrVersion> {
+    Json(KellnrVersion {
         // Replaced automatically by the version from the build job,
         // if a new release is built.
         version: "0.0.0-debug".to_string(),
@@ -38,9 +42,9 @@ pub struct CratesParams {
 }
 
 pub async fn crates(
-    axum::extract::Query(params): axum::extract::Query<CratesParams>,
-    axum::extract::State(state): AppState,
-) -> axum::response::Json<Pagination> {
+    Query(params): Query<CratesParams>,
+    State(state): AppState,
+) -> Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
     let page = params.page;
     let crates = state.db.get_crate_overview_list().await.unwrap_or_default();
@@ -84,15 +88,15 @@ pub struct SearchParams {
 }
 
 pub async fn search(
-    axum::extract::Query(params): axum::extract::Query<SearchParams>,
-    axum::extract::State(state): AppState,
-) -> axum::response::Json<Pagination> {
+    Query(params): Query<SearchParams>,
+    State(state): AppState,
+) -> Json<Pagination> {
     let crates = state
         .db
         .search_in_crate_name(&params.name)
         .await
         .unwrap_or_default();
-    axum::Json(Pagination {
+    Json(Pagination {
         current_num: crates.len(),
         total_num: crates.len(),
         crates,
@@ -105,15 +109,15 @@ pub struct CrateDataParams {
 }
 
 pub async fn crate_data(
-    axum::extract::Query(params): axum::extract::Query<CrateDataParams>,
-    axum::extract::State(state): AppState,
-) -> Result<axum::response::Json<CrateData>, axum::http::StatusCode> {
+    Query(params): Query<CrateDataParams>,
+    State(state): AppState,
+) -> Result<Json<CrateData>, StatusCode> {
     let index_name = NormalizedName::from(params.name);
     match state.db.get_crate_data(&index_name).await {
-        Ok(cd) => Ok(axum::Json(cd)),
+        Ok(cd) => Ok(Json(cd)),
         Err(e) => match e {
-            DbError::CrateNotFound(_) => Err(axum::http::StatusCode::NOT_FOUND),
-            _ => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+            DbError::CrateNotFound(_) => Err(StatusCode::NOT_FOUND),
+            _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
         },
     }
 }
@@ -123,9 +127,7 @@ pub struct CratesIoDataParams {
     name: OriginalName,
 }
 
-pub async fn cratesio_data(
-    axum::extract::Query(params): axum::extract::Query<CratesIoDataParams>,
-) -> Result<String, axum::http::StatusCode> {
+pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<String, StatusCode> {
     let url = format!("https://crates.io/api/v1/crates/{}", params.name);
 
     let client = reqwest::Client::new();
@@ -143,19 +145,19 @@ pub async fn cratesio_data(
                     Ok(data) => Ok(data),
                     Err(e) => {
                         error!("Failed to parse crates.io data: {}", e);
-                        Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                        Err(StatusCode::INTERNAL_SERVER_ERROR)
                     }
                 }
             }
-            StatusCode::NOT_FOUND => Err(axum::http::StatusCode::NOT_FOUND),
+            StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
             _ => {
                 error!("Failed to get crates.io data: {}", resp.status());
-                Err(axum::http::StatusCode::NOT_FOUND)
+                Err(StatusCode::NOT_FOUND)
             }
         },
         Err(e) => {
             error!("Failed to get crates.io data: {}", e);
-            Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }
@@ -167,9 +169,9 @@ pub struct DeleteCrateParams {
 }
 
 pub async fn delete(
-    axum::extract::Query(params): axum::extract::Query<DeleteCrateParams>,
+    Query(params): Query<DeleteCrateParams>,
     user: MaybeUser,
-    axum::extract::State(state): AppState,
+    State(state): AppState,
 ) -> Result<(), RouteError> {
     user.assert_admin()?;
     let version = params.version;
@@ -177,23 +179,17 @@ pub async fn delete(
 
     if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
         error!("Failed to delete crate from database: {:?}", e);
-        return Err(RouteError::Status(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-        ));
+        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     if let Err(e) = state.crate_storage.delete(&name, &version).await {
         error!("Failed to delete crate from storage: {}", e);
-        return Err(RouteError::Status(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-        ));
+        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     if let Err(e) = docs::delete(&name, &version, &state.settings).await {
         error!("Failed to delete crate from docs: {}", e);
-        return Err(RouteError::Status(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-        ));
+        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     Ok(())
@@ -209,7 +205,7 @@ pub struct Statistic {
     top3: (String, u32),
 }
 
-pub async fn statistic(axum::extract::State(state): AppState) -> axum::response::Json<Statistic> {
+pub async fn statistic(State(state): AppState) -> Json<Statistic> {
     let unique_crates = state.db.get_total_unique_crates().await.unwrap_or_default();
     let crate_versions = state
         .db
@@ -231,7 +227,7 @@ pub async fn statistic(axum::extract::State(state): AppState) -> axum::response:
         }
     }
 
-    axum::Json(Statistic {
+    Json(Statistic {
         unique_crates,
         crate_versions,
         downloads,
@@ -248,10 +244,10 @@ pub struct BuildParams {
 }
 
 pub async fn build_rustdoc(
-    axum::extract::Query(params): axum::extract::Query<BuildParams>,
-    axum::extract::State(state): AppState,
+    Query(params): Query<BuildParams>,
+    State(state): AppState,
     user: MaybeUser,
-) -> Result<(), axum::http::StatusCode> {
+) -> Result<(), StatusCode> {
     let normalized_name = NormalizedName::from(params.package);
     let db = state.db;
     let version = params.version;
@@ -260,31 +256,31 @@ pub async fn build_rustdoc(
     if let Some(id) = db
         .get_crate_id(&normalized_name)
         .await
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     {
         if !db
             .crate_version_exists(id, &version)
             .await
-            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         {
-            return Err(axum::http::StatusCode::BAD_REQUEST);
+            return Err(StatusCode::BAD_REQUEST);
         }
     } else {
-        return Err(axum::http::StatusCode::BAD_REQUEST);
+        return Err(StatusCode::BAD_REQUEST);
     }
 
     // Check if the current user is the owner of the crate
     if !db
         .is_owner(&normalized_name, &user.name())
         .await
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         && !db
             .get_user(&user.name())
             .await
-            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .is_admin
     {
-        return Err(axum::http::StatusCode::UNAUTHORIZED);
+        return Err(StatusCode::UNAUTHORIZED);
     }
 
     // If the user is the owner of the crate or any admin user,
@@ -304,7 +300,7 @@ pub async fn build_rustdoc(
 
     if !is_allowed {
         tracing::debug!("User is not allowed to build crate {}", normalized_name);
-        return Err(axum::http::StatusCode::UNAUTHORIZED);
+        return Err(StatusCode::UNAUTHORIZED);
     } else {
         tracing::debug!("User is allowed to build crate {}", normalized_name);
     }
@@ -317,10 +313,10 @@ pub async fn build_rustdoc(
             .crate_storage
             .create_rand_doc_queue_path()
             .await
-            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     )
     .await
-    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(())
 }
@@ -342,7 +338,7 @@ mod tests {
     use common::crate_data::{CrateRegistryDep, CrateVersionData};
     use db::error::DbError;
     use db::mock::MockDb;
-    use db::{User, DbProvider};
+    use db::{DbProvider, User};
     use mockall::predicate::*;
     use registry::kellnr_crate_storage::KellnrCrateStorage;
     use rocket::http::{ContentType, Cookie, Header, Status};
