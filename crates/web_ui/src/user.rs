@@ -62,7 +62,7 @@ pub struct UserList {
 
 pub async fn list_users(
     user: MaybeUser,
-    State(db): appstate::DbState,
+    State(db): DbState,
 ) -> Result<Json<UserList>, RouteError> {
     user.assert_admin()?;
 

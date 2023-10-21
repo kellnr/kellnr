@@ -10,6 +10,8 @@ pub type AppState = axum::extract::State<AppStateData>;
 // Substates
 pub type DbState = axum::extract::State<Arc<dyn DbProvider>>;
 pub type SettingsState = axum::extract::State<Arc<Settings>>;
+pub type CrateStorageState = axum::extract::State<Arc<KellnrCrateStorage>>;
+pub type SigningKeyState = axum::extract::State<Key>;
 
 #[derive(Clone, FromRef)]
 pub struct AppStateData {

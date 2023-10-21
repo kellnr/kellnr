@@ -1,6 +1,6 @@
 use crate::error::RouteError;
 use crate::session::MaybeUser;
-use appstate::AppState;
+use appstate::{AppState, DbState};
 use axum::{
     extract::{Query, State},
     Json,
@@ -41,13 +41,10 @@ pub struct CratesParams {
     page_size: Option<usize>,
 }
 
-pub async fn crates(
-    Query(params): Query<CratesParams>,
-    State(state): AppState,
-) -> Json<Pagination> {
+pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
     let page = params.page;
-    let crates = state.db.get_crate_overview_list().await.unwrap_or_default();
+    let crates = db.get_crate_overview_list().await.unwrap_or_default();
     let total = crates.len();
 
     let comp_start = |page: usize| {
@@ -87,12 +84,8 @@ pub struct SearchParams {
     name: OriginalName,
 }
 
-pub async fn search(
-    Query(params): Query<SearchParams>,
-    State(state): AppState,
-) -> Json<Pagination> {
-    let crates = state
-        .db
+pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
+    let crates = db
         .search_in_crate_name(&params.name)
         .await
         .unwrap_or_default();
@@ -110,10 +103,10 @@ pub struct CrateDataParams {
 
 pub async fn crate_data(
     Query(params): Query<CrateDataParams>,
-    State(state): AppState,
+    State(db): DbState,
 ) -> Result<Json<CrateData>, StatusCode> {
     let index_name = NormalizedName::from(params.name);
-    match state.db.get_crate_data(&index_name).await {
+    match db.get_crate_data(&index_name).await {
         Ok(cd) => Ok(Json(cd)),
         Err(e) => match e {
             DbError::CrateNotFound(_) => Err(StatusCode::NOT_FOUND),
@@ -205,19 +198,11 @@ pub struct Statistic {
     top3: (String, u32),
 }
 
-pub async fn statistic(State(state): AppState) -> Json<Statistic> {
-    let unique_crates = state.db.get_total_unique_crates().await.unwrap_or_default();
-    let crate_versions = state
-        .db
-        .get_total_crate_versions()
-        .await
-        .unwrap_or_default();
-    let downloads = state.db.get_total_downloads().await.unwrap_or_default();
-    let tops = state
-        .db
-        .get_top_crates_downloads(3)
-        .await
-        .unwrap_or_default();
+pub async fn statistic(State(db): DbState) -> Json<Statistic> {
+    let unique_crates = db.get_total_unique_crates().await.unwrap_or_default();
+    let crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
+    let downloads = db.get_total_downloads().await.unwrap_or_default();
+    let tops = db.get_top_crates_downloads(3).await.unwrap_or_default();
 
     fn extract(tops: &[(String, u32)], i: usize) -> (String, u32) {
         if tops.len() > i {
