@@ -221,6 +221,7 @@ mod session_tests {
     use db::{error::DbError, mock::MockDb};
     use hyper::{header, Body, Request, StatusCode};
     use mockall::predicate::*;
+    use registry::kellnr_crate_storage::KellnrCrateStorage;
     use settings::Settings;
     use tower::ServiceExt;
 
@@ -238,7 +239,8 @@ mod session_tests {
 
     const TEST_KEY: &[u8] = &[1; 64];
 
-    fn app(db: Arc<dyn DbProvider>) -> Router {
+    async fn app(db: Arc<dyn DbProvider>) -> Router {
+        let settings = Settings::new().unwrap();
         Router::new()
             .route("/admin", get(admin_endpoint))
             .route("/normal", get(normal_endpoint))
@@ -247,7 +249,8 @@ mod session_tests {
                 db,
                 signing_key: Key::from(TEST_KEY),
                 // TODO(ItsEthra): impl Default for Settings
-                settings: Arc::new(Settings::new().unwrap()),
+                crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
+                settings: Arc::new(settings),
             })
     }
 
@@ -283,7 +286,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("admin".to_string(), true)));
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(
                 Request::get("/admin")
                     .header(
@@ -306,7 +309,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("admin".to_string(), false)));
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(
                 Request::get("/admin")
                     .header(header::COOKIE, c1234())
@@ -322,7 +325,7 @@ mod session_tests {
     async fn admin_auth_user_but_no_cookie_sent() -> Result {
         let mock_db = MockDb::new();
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(Request::get("/admin").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -338,7 +341,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Err(DbError::SessionNotFound));
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(
                 Request::get("/admin")
                     .header(header::COOKIE, c1234())
@@ -360,7 +363,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("normal".to_string(), false)));
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(
                 Request::get("/normal")
                     .header(header::COOKIE, c1234())
@@ -380,7 +383,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("normal".to_string(), true)));
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(
                 Request::get("/normal")
                     .header(header::COOKIE, c1234())
@@ -396,7 +399,7 @@ mod session_tests {
     async fn normal_auth_user_but_no_cookie_sent() -> Result {
         let mock_db = MockDb::new();
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(Request::get("/normal").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -412,7 +415,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Err(DbError::SessionNotFound));
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(
                 Request::get("/normal")
                     .header(header::COOKIE, c1234())
@@ -434,7 +437,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("guest".to_string(), false)));
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(
                 Request::get("/any")
                     .header(header::COOKIE, c1234())
@@ -454,7 +457,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("guest".to_string(), true)));
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(
                 Request::get("/any")
                     .header(header::COOKIE, c1234())
@@ -470,7 +473,7 @@ mod session_tests {
     async fn any_auth_user_but_no_cookie_sent() -> Result {
         let mock_db = MockDb::new();
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(Request::get("/any").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -485,7 +488,7 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Err(DbError::SessionNotFound));
 
-        let r = app(Arc::new(mock_db))
+        let r = app(Arc::new(mock_db)).await
             .oneshot(
                 Request::get("/any")
                     .header(header::COOKIE, c1234())
