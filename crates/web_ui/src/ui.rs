@@ -311,23 +311,22 @@ mod tests {
 
     use super::*;
     use appstate::AppStateData;
+    use axum::routing::{get, post};
     use axum::Router;
-    use axum::routing::{post, get};
+    use axum_extra::extract::cookie::Key;
     use common::crate_data::{CrateRegistryDep, CrateVersionData};
-    use cookie::Key;
     use db::error::DbError;
     use db::mock::MockDb;
     use db::{DbProvider, User};
+    use hyper::body::HttpBody;
+    use hyper::{Body, Request};
     use mockall::predicate::*;
     use registry::kellnr_crate_storage::KellnrCrateStorage;
-    use rocket::http::{ContentType, Cookie, Header, Status};
-    use rocket::local::asynchronous::Client;
-    use rocket::{routes, Build, Rocket};
     use settings::constants;
     use settings::Settings;
-    use tokio::sync::RwLock;
+    use tower::ServiceExt;
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn build_rust_doc_crate_not_found() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -358,7 +357,7 @@ mod tests {
         assert_eq!(rocket::http::Status::BadRequest, result.status());
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn build_rust_doc_version_not_found() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -393,7 +392,7 @@ mod tests {
         assert_eq!(rocket::http::Status::BadRequest, result.status());
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn build_rust_doc_not_owner() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -447,7 +446,7 @@ mod tests {
         assert_eq!(rocket::http::Status::Unauthorized, result.status());
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn build_rust_doc_is_owner() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -511,7 +510,7 @@ mod tests {
         assert_eq!(rocket::http::Status::Ok, result.status());
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn build_rust_doc_not_owner_but_admin() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -575,7 +574,7 @@ mod tests {
         assert_eq!(rocket::http::Status::Ok, result.status());
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn statistic_returns_sparse_statistics() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -618,7 +617,7 @@ mod tests {
         assert_eq!(expect, result_stat);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn statistic_returns_empty_statistics() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -661,7 +660,7 @@ mod tests {
         assert_eq!(expect, result_stat);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn statistic_returns_crate_statistics() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -710,7 +709,7 @@ mod tests {
         assert_eq!(expect, result_stat);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn kellnr_version_returns_version() {
         let settings = test_settings();
         let mock_db = MockDb::new();
@@ -732,7 +731,7 @@ mod tests {
         assert_eq!("0.0.0-debug", result_version.version);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn search_not_hits_returns_nothing() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -763,7 +762,7 @@ mod tests {
         assert_eq!(0, result_crates.current_num);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn search_returns_only_searched_results() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -804,7 +803,7 @@ mod tests {
         assert_eq!(test_crate_summary, result_crates.crates[0]);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn crate_get_crate_information() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -873,7 +872,7 @@ mod tests {
         assert_eq!(expected_crate_data, result_crate_data);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn crates_get_page() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -919,30 +918,24 @@ mod tests {
             .expect_get_crate_overview_list()
             .returning(move || Ok(tc.clone()));
 
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/crates?page=1");
+        ).oneshot(Request::get("/crates?page=1").body(Body::empty()).unwrap()).await.unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_pagination = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap(); 
+        let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         let expected = test_crates[0..10].to_vec();
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(r.status(), StatusCode::OK);
         assert_eq!(24, result_pagination.total_num);
         assert_eq!(20, result_pagination.current_num);
         assert_eq!(10, result_pagination.crates.len());
         assert_eq!(expected, result_pagination.crates);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn crates_get_page_out_of_bounds() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -988,30 +981,27 @@ mod tests {
             .expect_get_crate_overview_list()
             .returning(move || Ok(tc.clone()));
 
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/crates?page=2");
+        )
+        .oneshot(Request::get("/crates?page=2").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_pagination = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         let expected = test_crates[0..4].to_vec();
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(r.status(), StatusCode::OK);
         assert_eq!(4, result_pagination.crates.len());
         assert_eq!(24, result_pagination.total_num);
         assert_eq!(24, result_pagination.current_num);
         assert_eq!(expected, result_pagination.crates);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn crates_get_all_crates() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -1048,67 +1038,65 @@ mod tests {
             .expect_get_crate_overview_list()
             .returning(move || Ok(crate_overview.clone()));
 
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/crates");
+        )
+        .oneshot(Request::get("/crates").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_pagination = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
-        assert_eq!(Status::Ok, status);
+        assert_eq!(r.status(), StatusCode::OK);
         assert_eq!(3, result_pagination.crates.len());
         assert_eq!(3, result_pagination.total_num);
         assert_eq!(3, result_pagination.current_num);
         assert_eq!(expected_crate_overview, result_pagination.crates);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn cratesio_data_returns_data() {
         let mock_db = MockDb::new();
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
+        )
+        .oneshot(
+            Request::get("/cratesio_data?name=quote")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let req = client.get("/cratesio_data?name=quote");
-        let result = req.dispatch().await;
-        let status = result.status();
-        let body = result.into_string().await.expect("Missing body message");
-
-        assert_eq!(Status::Ok, status);
+        let body = String::from_utf8(r.data().await.unwrap().unwrap().to_vec()).unwrap();
         assert!(body.contains("quote"));
+        assert_eq!(r.status(), StatusCode::OK);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn cratesio_data_not_found() {
         let mock_db = MockDb::new();
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
+        )
+        .oneshot(
+            Request::get("/cratesio_data?name=thisdoesnotevenexist")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let req = client.get("/cratesio_data?name=thisdoesnotevenexist");
-        let result = req.dispatch().await;
-
-        assert_eq!(Status::NotFound, result.status());
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
     fn test_settings() -> Settings {
@@ -1120,11 +1108,7 @@ mod tests {
     }
 
     const TEST_KEY: &[u8] = &[1; 64];
-    fn app(
-        mock_db: MockDb,
-        crate_storage: KellnrCrateStorage,
-        settings: Settings,
-    ) -> Router {
+    fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
         Router::new()
             .route("/search", get(search))
             .route("/crates", get(crates))
@@ -1140,6 +1124,4 @@ mod tests {
                 crate_storage: Arc::new(crate_storage),
             })
     }
-
-
 }
