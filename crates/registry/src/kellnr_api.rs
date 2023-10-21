@@ -245,7 +245,6 @@ pub async fn unyank(
 #[cfg(test)]
 mod reg_api_tests {
     use super::*;
-    use common::storage::Storage;
     use common::storage_provider::{mock::MockStorage, StorageProvider};
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString};
