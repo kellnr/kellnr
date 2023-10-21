@@ -129,14 +129,10 @@ pub async fn download(
 mod tests {
     use super::*;
     use common::storage::Storage;
-    use common::storage_provider::{mock::MockStorage, StorageProvider};
     use common::util::generate_rand_string;
     use db::{ConString, Database, SqliteConString};
-    use index::cratesio_idx::CratesIoIdx;
-    use index::rwindex::RoIndex;
     use rocket::http::Status;
     use rocket::local::asynchronous::Client;
-    use rocket::tokio::sync::Mutex;
     use rocket::{async_test, routes, Build};
     use settings::Settings;
     use std::path;
@@ -146,8 +142,7 @@ mod tests {
     async fn download_not_existing_package() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = CratesIoIdx::new(&settings, storage);
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client
             .get("/api/v1/cratesio/does_not_exist/0.1.0/download")
@@ -160,8 +155,7 @@ mod tests {
     async fn download_invalid_package_name() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = CratesIoIdx::new(&settings, storage);
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client
             .get("/api/v1/cratesio/-invalid_name/0.1.0/download")
@@ -174,8 +168,7 @@ mod tests {
     async fn download_not_existing_version() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = CratesIoIdx::new(&settings, storage);
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client
             .get("/api/v1/cratesio/test-lib/99.1.0/download")
@@ -188,8 +181,7 @@ mod tests {
     async fn download_invalid_package_version() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = CratesIoIdx::new(&settings, storage);
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client
             .get("/api/v1/cratesio/invalid_version/0.a.0/download")
@@ -202,8 +194,7 @@ mod tests {
     async fn download_valid_package() {
         let settings = get_settings();
         let storage = Storage::new();
-        let idx = CratesIoIdx::new(&settings, storage);
-        let kellnr = TestKellnr::new::<MockStorage>(settings, Box::new(idx)).await;
+        let kellnr = TestKellnr::new(settings).await;
         let response = kellnr
             .client
             .get("/api/v1/cratesio/adler/1.0.2/download")
@@ -233,16 +224,14 @@ mod tests {
     }
 
     impl TestKellnr {
-        // why is T needed?
-        #[allow(clippy::extra_unused_type_parameters)]
-        async fn new<T: StorageProvider>(settings: Settings, idx: Box<dyn RoIndex>) -> Self {
+        async fn new(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             let db = Database::new(&con_string).await.unwrap();
             TestKellnr {
                 path: path::PathBuf::from(&settings.data_dir),
                 db,
-                client: Client::tracked(test_rocket(settings, idx).await)
+                client: Client::tracked(test_rocket(settings).await)
                     .await
                     .expect("valid rocket instance"),
             }
@@ -255,7 +244,7 @@ mod tests {
         }
     }
 
-    async fn test_rocket(settings: Settings, idx: Box<dyn RoIndex>) -> rocket::Rocket<Build> {
+    async fn test_rocket(settings: Settings) -> rocket::Rocket<Build> {
         let cs = CratesIoCrateStorage::new(&settings).await.unwrap();
 
         use rocket::config::{Config, SecretKey};
@@ -267,7 +256,6 @@ mod tests {
         rocket::custom(rocket_conf)
             .mount("/api/v1/cratesio", routes![download, search,])
             .manage(settings)
-            .manage(Mutex::new(idx))
             .manage(RwLock::new(cs))
     }
 }
