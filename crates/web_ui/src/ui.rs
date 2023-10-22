@@ -253,40 +253,18 @@ pub async fn build_rustdoc(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Check if the current user is the owner of the crate
-    if !db
-        .is_owner(&normalized_name, &user.name())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        && !db
-            .get_user(&user.name())
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .is_admin
-    {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
     // If the user is the owner of the crate or any admin user,
     // the build operation is allowed.
     let is_allowed = match user {
-        MaybeUser::Normal(user) => {
-            tracing::debug!("User {} is trying to build crate {}", user, normalized_name);
-            db.is_owner(&normalized_name, &user)
-                .await
-                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
-        }
-        MaybeUser::Admin(_) => {
-            tracing::debug!("Admin user is trying to build crate {}", normalized_name);
-            true
-        }
+        MaybeUser::Normal(user) => db
+            .is_owner(&normalized_name, &user)
+            .await
+            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+        MaybeUser::Admin(_) => true,
     };
 
     if !is_allowed {
-        tracing::debug!("User is not allowed to build crate {}", normalized_name);
         return Err(StatusCode::UNAUTHORIZED);
-    } else {
-        tracing::debug!("User is allowed to build crate {}", normalized_name);
     }
 
     // Add to build queue
@@ -307,8 +285,8 @@ pub async fn build_rustdoc(
 
 #[cfg(test)]
 mod tests {
-    use crate::test_helper::encode_cookies;
     use super::*;
+    use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
     use axum::routing::{get, post};
     use axum::Router;
@@ -532,7 +510,7 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("cookie"))
-            .returning(move |_| Ok(("user".to_string(), false)));
+            .returning(move |_| Ok(("user".to_string(), true)));
         mock_db
             .expect_crate_version_exists()
             .with(eq(1), eq("1.0.0"))
@@ -761,10 +739,11 @@ mod tests {
         .await
         .unwrap();
 
+        let result_status = r.status();
         let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
-        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(0, result_crates.crates.len());
         assert_eq!(0, result_crates.total_num);
         assert_eq!(0, result_crates.current_num);
@@ -802,10 +781,11 @@ mod tests {
         .await
         .unwrap();
 
+        let result_status = r.status();
         let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
-        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(1, result_crates.crates.len());
         assert_eq!(1, result_crates.total_num);
         assert_eq!(1, result_crates.current_num);
@@ -875,10 +855,11 @@ mod tests {
         .await
         .unwrap();
 
+        let result_status = r.status();
         let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_crate_data = serde_json::from_slice::<CrateData>(&result_msg).unwrap();
 
-        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(expected_crate_data, result_crate_data);
     }
 
@@ -937,11 +918,12 @@ mod tests {
         .await
         .unwrap();
 
+        let result_status = r.status();
         let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         let expected = test_crates[0..10].to_vec();
-        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(24, result_pagination.total_num);
         assert_eq!(20, result_pagination.current_num);
         assert_eq!(10, result_pagination.crates.len());
@@ -1003,11 +985,12 @@ mod tests {
         .await
         .unwrap();
 
+        let result_status = r.status();
         let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         let expected = test_crates[0..4].to_vec();
-        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(4, result_pagination.crates.len());
         assert_eq!(24, result_pagination.total_num);
         assert_eq!(24, result_pagination.current_num);
@@ -1060,10 +1043,11 @@ mod tests {
         .await
         .unwrap();
 
+        let result_status = r.status();
         let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
-        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(3, result_pagination.crates.len());
         assert_eq!(3, result_pagination.total_num);
         assert_eq!(3, result_pagination.current_num);
@@ -1074,7 +1058,7 @@ mod tests {
     async fn cratesio_data_returns_data() {
         let mock_db = MockDb::new();
         let settings = test_settings();
-        let r = app(
+        let mut r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -1087,9 +1071,10 @@ mod tests {
         .await
         .unwrap();
 
+        let result_status = r.status();
         let body = String::from_utf8(r.data().await.unwrap().unwrap().to_vec()).unwrap();
         assert!(body.contains("quote"));
-        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(StatusCode::OK, result_status);
     }
 
     #[tokio::test]

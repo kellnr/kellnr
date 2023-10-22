@@ -236,8 +236,6 @@ mod session_tests {
 
     async fn any_endpoint(_user: MaybeUser) {}
 
-    const TEST_KEY: &[u8] = &[1; 64];
-
     async fn app(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::new().unwrap();
         Router::new()
