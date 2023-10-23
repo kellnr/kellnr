@@ -19,7 +19,6 @@ pub struct NewTokenResponse {
     token: String,
 }
 
-// #[post("/add_token", data = "<auth_token>")]
 pub async fn add_token(
     user: MaybeUser,
     State(db): DbState,

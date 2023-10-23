@@ -1,6 +1,6 @@
-use crate::error::RouteError;
 use crate::session::MaybeUser;
-use appstate::{AppState, DbState};
+use crate::{error::RouteError, settings::StartupSettings};
+use appstate::{AppState, DbState, SettingsState};
 use axum::{
     extract::{Query, State},
     Json,
@@ -14,16 +14,18 @@ use db::error::DbError;
 use reqwest::StatusCode;
 use tracing::error;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct KellnrVersion {
-    pub version: String,
+pub async fn settings(
+    user: MaybeUser,
+    State(settings): SettingsState,
+) -> Result<Json<StartupSettings>, RouteError> {
+    user.assert_admin()?;
+    let settings_state = StartupSettings::from(&(*settings));
+    Ok(Json(settings_state))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct Pagination {
-    crates: Vec<CrateOverview>,
-    current_num: usize,
-    total_num: usize,
+pub struct KellnrVersion {
+    pub version: String,
 }
 
 pub async fn kellnr_version() -> Json<KellnrVersion> {
@@ -38,6 +40,13 @@ pub async fn kellnr_version() -> Json<KellnrVersion> {
 pub struct CratesParams {
     page: Option<usize>,
     page_size: Option<usize>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct Pagination {
+    crates: Vec<CrateOverview>,
+    current_num: usize,
+    total_num: usize,
 }
 
 pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> Json<Pagination> {
@@ -299,10 +308,80 @@ mod tests {
     use hyper::{header, Body, Request};
     use mockall::predicate::*;
     use registry::kellnr_crate_storage::KellnrCrateStorage;
-    use settings::constants;
     use settings::Settings;
+    use settings::{constants, Postgresql};
     use std::sync::Arc;
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn settings_no_admin_returns_unauthorized() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .returning(|_| Ok(("admin".to_string(), true)));
+
+        let settings = Settings::new().unwrap();
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings).await.unwrap(),
+            settings,
+        )
+        .oneshot(
+            Request::get("/settings")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn settings_returns_from_settings() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .returning(|_| Ok(("admin".to_string(), true)));
+
+        let settings = Settings::new().unwrap();
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings).await.unwrap(),
+            settings,
+        )
+        .oneshot(
+            Request::get("/settings")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let result_status = r.status();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_state = serde_json::from_slice::<StartupSettings>(&result_msg).unwrap();
+
+        // Set the password to empty string because it is not serialized
+        let tmp = StartupSettings::from(&Settings::new().unwrap());
+        let psq = Postgresql {
+            pwd: String::default(),
+            ..tmp.postgresql
+        };
+        let expected_state = StartupSettings {
+            postgresql: psq,
+            ..tmp
+        };
+
+        assert_eq!(result_status, StatusCode::OK);
+        assert_eq!(result_state, expected_state);
+    }
 
     #[tokio::test]
     async fn build_rust_doc_crate_not_found() {
@@ -585,7 +664,7 @@ mod tests {
             .returning(move |_| Ok(vec![("top1".to_string(), 1000)]));
 
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -594,7 +673,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result_msg = hyper::body::to_bytes(rocket.into_body()).await.unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
@@ -626,7 +705,7 @@ mod tests {
             .returning(move |_| Err(DbError::FailedToCountTotalDownloads));
 
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -635,7 +714,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result_msg = hyper::body::to_bytes(rocket.into_body()).await.unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
@@ -673,7 +752,7 @@ mod tests {
             });
 
         let settings = test_settings();
-        let rocket = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -682,7 +761,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result_msg = hyper::body::to_bytes(rocket.into_body()).await.unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
@@ -1115,6 +1194,7 @@ mod tests {
             .route("/statistic", get(statistic))
             .route("/build", post(build_rustdoc))
             .route("/cratesio_data", get(cratesio_data))
+            .route("/settings", get(crate::ui::settings))
             .with_state(AppStateData {
                 db: Arc::new(mock_db),
                 signing_key: Key::from(TEST_KEY),

@@ -1,16 +1,7 @@
-use crate::session::AdminUser;
 use ::settings::{Protocol, Settings};
-use json_payload::json_payload;
-use rocket::{get, serde::json::Json, State};
 
-#[get("/settings")]
-pub fn settings(_user: AdminUser, settings: &State<Settings>) -> Json<SettingsState> {
-    let settings_state = SettingsState::from(settings);
-    Json(settings_state)
-}
-
-#[json_payload]
-pub struct SettingsState {
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub struct StartupSettings {
     pub data_dir: String,
     pub session_age_seconds: u64,
     pub api_address: String,
@@ -33,9 +24,9 @@ pub struct SettingsState {
     pub auth_required: bool,
 }
 
-impl From<&Settings> for SettingsState {
+impl From<&Settings> for StartupSettings {
     fn from(settings: &Settings) -> Self {
-        SettingsState {
+        StartupSettings {
             data_dir: settings.data_dir.to_string(),
             session_age_seconds: settings.session_age_seconds,
             api_address: settings.api_address.to_string(),
@@ -60,65 +51,10 @@ impl From<&Settings> for SettingsState {
     }
 }
 
-impl From<&State<Settings>> for SettingsState {
-    fn from(settings: &State<Settings>) -> Self {
-        SettingsState::from(settings.inner())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ::settings::{constants, LogFormat, Postgresql, Settings};
-    use db::{mock::MockDb, DbProvider};
-    use rocket::{
-        http::{ContentType, Cookie, Header},
-        local::blocking::Client,
-        routes, Build, Rocket,
-    };
-
-    #[test]
-    fn settings_returns_from_settings() {
-        let rocket = create_rocket(Settings::new().unwrap());
-        let client = Client::tracked(rocket).expect("Unable to create rocket client");
-        let req = client
-            .get("/settings")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
-
-        let result = req.dispatch();
-        let status = result.status();
-        let result_msg = result
-            .into_string()
-            .expect("Unable to convert response to string");
-        let result_state = serde_json::from_str::<SettingsState>(&result_msg).unwrap();
-
-        // Set the password to empty string because it is not serialized
-        let tmp = SettingsState::from(&Settings::new().unwrap());
-        let psq = Postgresql {
-            pwd: String::default(),
-            ..tmp.postgresql
-        };
-        let expected_state = SettingsState {
-            postgresql: psq,
-            ..tmp
-        };
-        assert_eq!(status, rocket::http::Status::Ok);
-        assert_eq!(result_state, expected_state);
-    }
-
-    #[test]
-    fn settings_no_admin_forward() {
-        let rocket = create_rocket(Settings::new().unwrap());
-        let client = Client::tracked(rocket).expect("Unable to create rocket client");
-        let req = client.get("/settings");
-
-        let result = req.dispatch();
-        let status = result.status();
-
-        assert_eq!(status, rocket::http::Status::NotFound);
-    }
+    use ::settings::{LogFormat, Postgresql, Settings};
 
     #[test]
     fn settings_state_from_settings() {
@@ -155,7 +91,7 @@ mod tests {
             },
         };
 
-        let state = SettingsState::from(&settings);
+        let state = StartupSettings::from(&settings);
 
         assert_eq!(state.data_dir, settings.data_dir);
         assert_eq!(state.session_age_seconds, settings.session_age_seconds);
@@ -176,24 +112,5 @@ mod tests {
         assert_eq!(state.max_crate_size, settings.max_crate_size);
         assert_eq!(state.max_docs_size, settings.max_docs_size);
         assert_eq!(state.postgresql, settings.postgresql)
-    }
-
-    fn create_rocket(settings: Settings) -> Rocket<Build> {
-        use rocket::config::{Config, SecretKey};
-        let rocket_conf = Config {
-            secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-            ..Config::default()
-        };
-
-        let mut db_mock = MockDb::new();
-        db_mock
-            .expect_validate_session()
-            .returning(|_| Ok(("admin".to_string(), true)));
-
-        let db = Box::new(db_mock) as Box<dyn DbProvider>;
-        rocket::custom(rocket_conf)
-            .mount("/", routes![settings])
-            .manage(settings)
-            .manage(db)
     }
 }
