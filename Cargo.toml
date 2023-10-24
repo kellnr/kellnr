@@ -59,7 +59,7 @@ rm_rf = "0.6.2"
 testcontainers = "0.14.0"
 quote = "1.0.33"
 syn = {version = "2.0.18", features = ["full"]}
-trybuild = {version = "1.0.80", features = ["diff"]}
+trybuild = {version = "1.0.85", features = ["diff"]}
 zip = "0.6.6"
 flate2 = "1.0.27"
 tar = "0.4.40"
