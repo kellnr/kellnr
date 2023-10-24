@@ -157,9 +157,16 @@ async fn main() {
             .fallback(
                 ServeFile::new(PathBuf::from("static/index.html"))));
 
-    // let kellnr_api = Router::new()
-    //     .route("/:crate_name/owners", delete(kellnr_api::remove_owner));
-    //
+    let kellnr_api = Router::new()
+        .route("/:crate_name/owners", delete(kellnr_api::remove_owner))
+        .route("/:crate_name/owners", put(kellnr_api::add_owner))
+        .route("/:crate_name/owners", get(kellnr_api::list_owners))
+        .route("", get(kellnr_api::search))
+        .route("/:package/:version/download", get(kellnr_api::download))
+        .route("/new", put(kellnr_api::publish))
+        .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
+        .route("/:crate_name/:version/unyank", put(kellnr_api::unyank));
+
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
@@ -172,7 +179,7 @@ async fn main() {
         .route("/me", get(kellnr_api::me))
         .nest("/user", user)
         .nest("/api/v1/docs", docs)
-        // .nest("/api/v1/crates", kellnr_api)
+        .nest("/api/v1/crates", kellnr_api)
         .fallback(static_files_service)
         .with_state(state)
         .layer(tower_http::trace::TraceLayer::new_for_http());

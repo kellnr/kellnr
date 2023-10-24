@@ -18,4 +18,5 @@ mockall.workspace = true
 sha2.workspace = true
 tracing.workspace = true
 hex.workspace = true
-cached.workspace = true
+moka.workspace = true
+rm_rf.workspace = true

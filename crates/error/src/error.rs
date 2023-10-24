@@ -3,6 +3,7 @@ use common::version::VersionError;
 use json_payload::json_payload;
 use rocket::tokio::task::JoinError;
 use std::fmt::Display;
+use std::sync::Arc;
 use zip::result::ZipError;
 
 pub type ApiResult<T> = core::result::Result<T, ApiError>;

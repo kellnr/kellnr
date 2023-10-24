@@ -307,7 +307,7 @@ mod tests {
     use hyper::body::HttpBody;
     use hyper::{header, Body, Request};
     use mockall::predicate::*;
-    use registry::kellnr_crate_storage::KellnrCrateStorage;
+    use storage::kellnr_crate_storage::KellnrCrateStorage;
     use settings::Settings;
     use settings::{constants, Postgresql};
     use std::sync::Arc;

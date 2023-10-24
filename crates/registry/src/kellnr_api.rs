@@ -4,8 +4,14 @@ use crate::pub_data::PubData;
 use crate::pub_success::PubDataSuccess;
 use crate::yank_success::YankSuccess;
 use anyhow::Result;
+use appstate::AppState;
+use appstate::DbState;
 use auth::auth_req_token::AuthReqToken;
 use auth::token;
+use axum::Json;
+use axum::extract::Path;
+use axum::extract::Query;
+use axum::extract::State;
 use axum::response::Redirect;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
@@ -15,22 +21,18 @@ use common::search_result::{Crate, SearchResult};
 use common::version::Version;
 use db::DbProvider;
 use error::error::{ApiError, ApiResult};
-use rocket::serde::json::Json;
-use rocket::tokio::sync::RwLock;
-use rocket::{delete, get, put, State};
+use serde::Deserialize;
 use settings::Settings;
 use std::convert::TryFrom;
-use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tracing::warn;
-
-type KellnrCrateStorageState = State<RwLock<KellnrCrateStorage>>;
 
 #[allow(clippy::borrowed_box)]
 pub async fn check_ownership(
     crate_name: &NormalizedName,
     token: &token::Token,
-    db: &Box<dyn DbProvider>,
+    db: &Arc<dyn DbProvider>,
 ) -> Result<(), ApiError> {
     if token.is_admin || db.is_owner(crate_name, &token.user).await? {
         Ok(())
@@ -39,7 +41,7 @@ pub async fn check_ownership(
     }
 }
 
-pub fn crate_path(bin_path: &Path, name: &str, version: &str) -> PathBuf {
+pub fn crate_path(bin_path: &std::path::Path, name: &str, version: &str) -> std::path::PathBuf {
     bin_path.join(format!("{}-{}.crate", name, version))
 }
 
@@ -47,15 +49,15 @@ pub async fn me() -> Redirect {
     Redirect::to("/login")
 }
 
-#[delete("/<crate_name>/owners", data = "<input>")]
+// #[delete("/<crate_name>/owners", data = "<input>")]
 pub async fn remove_owner(
-    crate_name: OriginalName,
-    input: owner::OwnerRequest,
+    Path(crate_name): Path<OriginalName>,
+    Json(input): Json<owner::OwnerRequest>,
     token: token::Token,
-    db: &State<Box<dyn DbProvider>>,
+    State(db): DbState,
 ) -> ApiResult<Json<owner::OwnerResponse>> {
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, db).await?;
+    check_ownership(&crate_name, &token, &db).await?;
 
     for user in input.users.iter() {
         db.delete_owner(&crate_name, user).await?;
@@ -66,15 +68,15 @@ pub async fn remove_owner(
     )))
 }
 
-#[put("/<crate_name>/owners", data = "<input>")]
+// #[put("/<crate_name>/owners", data = "<input>")]
 pub async fn add_owner(
-    crate_name: OriginalName,
-    input: owner::OwnerRequest,
+    Path(crate_name): Path<OriginalName>,
+    Json(input): Json<owner::OwnerRequest>,
     token: token::Token,
-    db: &State<Box<dyn DbProvider>>,
+    State(db): DbState
 ) -> ApiResult<Json<owner::OwnerResponse>> {
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, db).await?;
+    check_ownership(&crate_name, &token, &db).await?;
     for user in input.users.iter() {
         db.add_owner(&crate_name, user).await?;
     }
@@ -82,10 +84,10 @@ pub async fn add_owner(
     Ok(Json(owner::OwnerResponse::from("Added owners to crate.")))
 }
 
-#[get("/<crate_name>/owners")]
+// #[get("/<crate_name>/owners")]
 pub async fn list_owners(
-    crate_name: OriginalName,
-    db: &State<Box<dyn DbProvider>>,
+    Path(crate_name): Path<OriginalName>,
+    State(db): DbState,
 ) -> ApiResult<Json<owner::OwnerList>> {
     let crate_name = crate_name.to_normalized();
 
@@ -103,16 +105,21 @@ pub async fn list_owners(
     Ok(Json(owner::OwnerList::from(owners)))
 }
 
-#[get("/?<q>&<per_page>")]
-pub async fn search(
+#[derive(Deserialize)]
+struct SearchParams {
     q: OriginalName,
     per_page: per_page::PerPage,
+}
+
+// #[get("/?<q>&<per_page>")]
+pub async fn search(
+    Query(params): Query<SearchParams>,
     auth_req_token: AuthReqToken,
-    db: &State<Box<dyn DbProvider>>,
+    State(db): DbState
 ) -> ApiResult<Json<search_result::SearchResult>> {
     _ = auth_req_token;
     let crates = db
-        .search_in_crate_name(&q)
+        .search_in_crate_name(&params.q)
         .await?
         .into_iter()
         .map(|c| search_result::Crate {
@@ -122,7 +129,7 @@ pub async fn search(
                 .description
                 .unwrap_or_else(|| "No description set".to_string()),
         })
-        .take(per_page.0 as usize)
+        .take(params.per_page.0 as usize)
         .collect::<Vec<Crate>>();
 
     Ok(Json(SearchResult {
@@ -133,16 +140,18 @@ pub async fn search(
     }))
 }
 
-#[get("/<package>/<version>/download")]
+// #[get("/<package>/<version>/download")]
 pub async fn download(
-    package: OriginalName,
-    version: Version,
+    Path(package): Path<OriginalName>,
+    Path(version): Path<Version>,
     auth_req_token: AuthReqToken,
-    settings: &State<Settings>,
-    db: &State<Box<dyn DbProvider>>,
-    cs: &KellnrCrateStorageState,
+    State(state): AppState,
 ) -> Option<Vec<u8>> {
     _ = auth_req_token;
+    let settings = state.settings;
+    let db = state.db;
+    let cs = state.crate_storage;
+
     let file_path = crate_path(
         &settings.bin_path(),
         &package.to_string(),
@@ -156,7 +165,7 @@ pub async fn download(
         warn!("Failed to increase download counter: {}", e);
     }
 
-    cs.write().await.get_file(file_path).await
+    cs.get_file(file_path).await
 }
 
 #[put("/new", data = "<input>")]

@@ -59,7 +59,7 @@ pub struct Settings {
     pub postgresql: Postgresql,
     pub rustdoc_auto_gen: bool,
     #[serde(default)]
-    pub cache_size: usize,
+    pub cache_size: u64,
     pub max_crate_size: usize,
     pub max_docs_size: usize,
     #[serde(default)]
@@ -122,7 +122,7 @@ impl Settings {
             .ok_or_else(|| ConfigError::Message("Invalid UTF-8 string".to_string()))
     }
 
-    pub fn bin_path(&self) -> path::PathBuf {
+pub fn bin_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.data_dir).join("crates")
     }
 

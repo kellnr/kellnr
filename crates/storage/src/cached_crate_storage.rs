@@ -1,5 +1,4 @@
 use anyhow::{bail, Context, Result};
-use cached::{Cached, SizedCache};
 use common::original_name::OriginalName;
 use common::util::generate_rand_string;
 use common::version::Version;
@@ -12,12 +11,13 @@ use settings::Settings;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use tracing::{error, warn};
+use moka::future::Cache;
 
-pub type CrateCache = SizedCache<PathBuf, Vec<u8>>;
+pub type CrateCache = Cache<PathBuf, Vec<u8>>;
 
 pub struct CachedCrateStorage {
     crate_folder: PathBuf,
-    pub(crate) doc_queue_path: PathBuf,
+    pub doc_queue_path: PathBuf,
     cache: Option<CrateCache>,
 }
 
@@ -27,7 +27,7 @@ impl CachedCrateStorage {
             crate_folder: settings.bin_path(),
             doc_queue_path: settings.doc_queue_path(),
             cache: if settings.cache_size > 0 {
-                Some(SizedCache::with_size(settings.cache_size))
+                Some(Cache::new(settings.cache_size))
             } else {
                 None
             },
@@ -133,21 +133,21 @@ impl CachedCrateStorage {
         Ok(())
     }
 
-    pub async fn get_file(&mut self, file_path: PathBuf) -> Option<Vec<u8>> {
-        async fn from_cache(cache: &mut CrateCache, file_path: PathBuf) -> Option<Vec<u8>> {
-            match cache.cache_get(&file_path) {
+    pub async fn get_file(&self, file_path: PathBuf) -> Option<Vec<u8>> {
+        async fn from_cache(cache: &CrateCache, file_path: PathBuf) -> Option<Vec<u8>> {
+            match cache.get(&file_path).await {
                 None => {
                     let mut file = File::open(&file_path).await.ok()?;
                     let mut krate = Vec::new();
                     file.read_to_end(&mut krate).await.ok()?;
-                    let _ = cache.cache_set(file_path, krate.clone());
+                    cache.insert(file_path, krate.clone()).await;
                     Some(krate)
                 }
                 Some(krate) => Some(krate.to_owned()),
             }
         }
 
-        match self.cache.as_mut() {
+        match &self.cache {
             None => {
                 let mut file = File::open(&file_path).await.ok()?;
                 let mut krate = Vec::new();

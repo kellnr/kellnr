@@ -220,7 +220,7 @@ mod session_tests {
     use db::{error::DbError, mock::MockDb};
     use hyper::{header, Body, Request, StatusCode};
     use mockall::predicate::*;
-    use registry::kellnr_crate_storage::KellnrCrateStorage;
+    use storage::kellnr_crate_storage::KellnrCrateStorage;
     use settings::Settings;
     use tower::ServiceExt;
 

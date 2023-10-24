@@ -1,7 +1,9 @@
 use rocket::data::ToByteUnit;
 use rocket::form::{self, DataField, FromFormField, ValueField};
+use serde::Deserialize;
 use std::convert::TryFrom;
 
+#[derive(Deserialize)]
 pub struct PerPage(pub i32);
 
 impl TryFrom<i32> for PerPage {

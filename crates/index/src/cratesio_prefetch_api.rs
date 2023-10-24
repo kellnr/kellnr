@@ -1,6 +1,5 @@
 use super::config_json::ConfigJson;
 use auth::auth_req_token::AuthReqToken;
-use cached::{Cached, TimedCache};
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use common::index_metadata::IndexMetadata;
 use common::normalized_name::NormalizedName;
@@ -16,8 +15,9 @@ use serde::Deserialize;
 use settings::Settings;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{error, trace, warn};
-
+use moka::future::Cache;
 /// The API for the crates.io sparse index
 /// https://github.com/rust-lang/cargo/blob/c015bfd1efb04c0bf60df9bfef2b8b3b6633310b/src/doc/src/reference/registry-index.md#index-protocols
 
@@ -189,12 +189,12 @@ pub async fn cratesio_prefetch_thread(
     db: Arc<impl DbProvider>,
     channel: Arc<flume::Receiver<CratesioPrefetchMsg>>,
 ) {
-    let mut cache: TimedCache<String, String> =
-        TimedCache::with_lifespan(UPDATE_CACHE_TIMEOUT_SECS);
+    let cache: Cache<String, String> =
+        Cache::builder().time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS)).build();
 
     loop {
         if let Some((name, metadata, desc, etag, last_modified)) =
-            get_insert_data(&mut cache, &channel).await
+            get_insert_data(&cache, &channel).await
         {
             trace!("Update crates.io prefetch data for {}", name);
             if let Err(e) = db
@@ -248,7 +248,7 @@ async fn convert_index_data(
 }
 
 async fn get_insert_data(
-    cache: &mut TimedCache<String, String>,
+    cache: &Cache<String, String>,
     channel: &Arc<flume::Receiver<CratesioPrefetchMsg>>,
 ) -> Option<(
     OriginalName,
@@ -261,18 +261,18 @@ async fn get_insert_data(
         Ok(CratesioPrefetchMsg::Insert(msg)) => {
             trace!("Inserting prefetch data from crates.io for {}", msg.name);
             let date = chrono::Utc::now().to_rfc3339();
-            cache.cache_set(msg.name.to_string(), date);
+            cache.insert(msg.name.to_string(), date).await;
             convert_index_data(&msg.name, msg.data)
                 .await
                 .map(|(m, d)| (msg.name.clone(), m, d, msg.etag, msg.last_modified))
         }
         Ok(CratesioPrefetchMsg::Update(msg)) => {
             trace!("Updating prefetch data for {}", msg.name);
-            if let Some(date) = cache.cache_get(msg.name.deref()) {
+            if let Some(date) = cache.get(msg.name.deref()).await {
                 trace!("No update needed for {}. Last update: {}", msg.name, date);
                 None
             } else {
-                cache.cache_set(msg.name.to_string(), chrono::Utc::now().to_rfc3339());
+                cache.insert(msg.name.to_string(), chrono::Utc::now().to_rfc3339()).await;
                 fetch_index_data(msg.name, msg.etag, msg.last_modified).await
             }
         }

@@ -15,6 +15,7 @@ registry.workspace = true
 settings.workspace = true
 auth.workspace = true
 appstate.workspace = true
+storage.workspace = true
 
 # External dependencies from crates.io
 rocket.workspace = true

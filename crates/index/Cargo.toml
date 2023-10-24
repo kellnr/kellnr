@@ -27,5 +27,5 @@ rm_rf.workspace = true
 tracing.workspace = true
 reqwest.workspace = true
 chrono.workspace = true
-cached.workspace = true
+moka.workspace = true
 flume.workspace = true
