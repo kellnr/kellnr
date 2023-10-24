@@ -1,9 +1,13 @@
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json
+};
 use common::original_name::NameError;
 use common::version::VersionError;
 use json_payload::json_payload;
 use rocket::tokio::task::JoinError;
 use std::fmt::Display;
-use std::sync::Arc;
 use zip::result::ZipError;
 
 pub type ApiResult<T> = core::result::Result<T, ApiError>;
@@ -50,6 +54,12 @@ impl ApiError {
 
     pub fn not_owner() -> Self {
         Self::from_str("Not an owner of the crate.")
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        (StatusCode::OK, Json(self)).into_response()
     }
 }
 

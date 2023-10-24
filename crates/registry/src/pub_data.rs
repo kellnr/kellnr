@@ -1,3 +1,6 @@
+use appstate::AppStateData;
+use axum::body::{Body, Bytes};
+use axum::extract::FromRequest;
 use common::publish_metadata::PublishMetadata;
 use error::error::ApiError;
 use rocket::data::{self, FromData, ToByteUnit};
@@ -34,6 +37,60 @@ fn convert_length(raw_data: &[u8]) -> Result<u32, ApiError> {
     match std::convert::TryInto::try_into(raw_data) {
         Ok(i) => Ok(u32::from_le_bytes(i)),
         Err(e) => Err(ApiError::new("Invalid metadata length.", &e.to_string())),
+    }
+}
+
+#[axum::async_trait]
+impl FromRequest<AppStateData, Body> for PubData {
+    type Rejection = ApiError;
+
+    async fn from_request(
+        req: axum::http::Request<axum::body::Body>,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
+
+        let data_bytes: Vec<u8> = match Bytes::from_request(req, state).await {
+            Ok(b) => b.to_vec(),
+            Err(e) => return Err(ApiError::from(&e.to_string())),
+        };
+
+        if data_bytes.len() < MIN_BODY_CRATE_AND_DOC_BYTES {
+            return Err(ApiError::from(&format!(
+                "Invalid min. length. {}/{} bytes.",
+                data_bytes.len(),
+                MIN_BODY_CRATE_AND_DOC_BYTES
+            )));
+        }
+
+        let metadata_length = match convert_length(&data_bytes[0..4]) {
+            Ok(l) => l,
+            Err(e) => return Err(ApiError::from(e)),
+        };
+        let metadata_end = 4 + (metadata_length as usize);
+
+        if metadata_end >= data_bytes.len() {
+            return Err(ApiError::from("Invalid metadata size."));
+        }
+
+        let metadata: PublishMetadata = match deserialize_metadata(&data_bytes[4..metadata_end]) {
+            Ok(md) => md,
+            Err(e) => return Err(ApiError::from(e)),
+        };
+        let crate_length = match convert_length(&data_bytes[metadata_end..(metadata_end + 4)]) {
+            Ok(l) => l,
+            Err(e) => return Err(ApiError::from(e)),
+        };
+        let crate_end = metadata_end + 4 + (crate_length as usize);
+        let cratedata: Vec<u8> = data_bytes[metadata_end + 4..crate_end].to_vec();
+
+        let pub_data = PubData {
+            metadata_length,
+            metadata,
+            crate_length,
+            cratedata,
+        };
+
+        Ok(pub_data)
     }
 }
 

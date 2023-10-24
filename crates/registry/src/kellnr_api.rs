@@ -28,7 +28,6 @@ use std::sync::Arc;
 use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tracing::warn;
 
-#[allow(clippy::borrowed_box)]
 pub async fn check_ownership(
     crate_name: &NormalizedName,
     token: &token::Token,
@@ -168,7 +167,7 @@ pub async fn download(
     cs.get_file(file_path).await
 }
 
-#[put("/new", data = "<input>")]
+// #[put("/new", data = "<input>")]
 pub async fn publish(
     input: ApiResult<PubData>,
     db: &State<Box<dyn DbProvider>>,

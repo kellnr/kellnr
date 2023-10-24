@@ -1650,6 +1650,7 @@ name = "error"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "common",
  "db",
  "derive_jsonresponder",
