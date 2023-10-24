@@ -165,6 +165,7 @@ async fn main() {
         .route("/cratesio_data", get(ui::cratesio_data))
         .route("/delete_crate", delete(ui::delete))
         .route("/settings", get(ui::settings))
+        .route("/me", get(registry::kellnr_api::me))
         .nest("/user", user)
         .nest("/api/v1/docs", docs)
         .fallback(static_files_service)
@@ -287,7 +288,7 @@ pub fn build_rocket(
         .mount(
             "/",
             routes![
-                registry::kellnr_api::me,
+                //registry::kellnr_api::me,
                 // web_ui::settings::settings,
                 // //ui::delete,
             ],

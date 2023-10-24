@@ -26,6 +26,7 @@ regex.workspace = true
 reqwest.workspace = true
 cached.workspace = true
 tracing.workspace = true
+axum.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

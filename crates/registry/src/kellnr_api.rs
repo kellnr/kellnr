@@ -22,6 +22,7 @@ use settings::Settings;
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use tracing::warn;
+use axum::response::Redirect;
 
 type KellnrCrateStorageState = State<RwLock<KellnrCrateStorage>>;
 
@@ -42,9 +43,8 @@ pub fn crate_path(bin_path: &Path, name: &str, version: &str) -> PathBuf {
     bin_path.join(format!("{}-{}.crate", name, version))
 }
 
-#[get("/me")]
-pub async fn me() -> rocket::response::Redirect {
-    rocket::response::Redirect::to("/settings")
+pub async fn me() -> Redirect {
+    Redirect::to("/login")
 }
 
 #[delete("/<crate_name>/owners", data = "<input>")]
