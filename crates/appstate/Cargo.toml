@@ -10,7 +10,6 @@ version.workspace = true
 # Internal dependencies
 db.workspace = true
 settings.workspace = true
-index.workspace = true
 storage.workspace = true
 
 # External dependencies

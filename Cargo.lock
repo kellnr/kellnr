@@ -182,7 +182,6 @@ dependencies = [
  "axum",
  "axum-extra",
  "db",
- "index",
  "settings",
  "storage",
 ]
@@ -379,6 +378,8 @@ checksum = "debc29dde2e69f9e47506b525f639ed42300fc014a3e007832592448fa8e4599"
 name = "auth"
 version = "0.1.0"
 dependencies = [
+ "appstate",
+ "axum",
  "db",
  "error",
  "mockall",
@@ -1487,7 +1488,9 @@ name = "docs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "appstate",
  "auth",
+ "axum",
  "cargo",
  "common",
  "db",

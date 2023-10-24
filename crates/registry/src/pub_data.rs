@@ -1,6 +1,7 @@
 use appstate::AppStateData;
 use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
+use axum::http::Request;
 use common::publish_metadata::PublishMetadata;
 use error::error::ApiError;
 use settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
@@ -41,7 +42,7 @@ impl FromRequest<AppStateData, Body> for PubData {
     type Rejection = ApiError;
 
     async fn from_request(
-        req: axum::http::Request<axum::body::Body>,
+        req: Request<Body>,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
 

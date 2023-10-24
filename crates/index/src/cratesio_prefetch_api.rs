@@ -10,7 +10,7 @@ use db::DbProvider;
 use reqwest::{Client, StatusCode, Url};
 use rocket::http::Status;
 use rocket::response::status;
-use rocket::{get, State};
+use rocket::State;
 use serde::Deserialize;
 use settings::Settings;
 use std::ops::Deref;
@@ -24,7 +24,7 @@ use moka::future::Cache;
 static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
 
-#[get("/config.json")]
+// #[get("/config.json")]
 pub async fn config_cratesio(
     settings: &State<Settings>,
     auth_req_token: AuthReqToken,
@@ -33,7 +33,7 @@ pub async fn config_cratesio(
     ConfigJson::from((settings.inner(), "cratesio"))
 }
 
-#[get("/<_>/<_>/<name>", rank = 1)]
+// #[get("/<_>/<_>/<name>", rank = 1)]
 pub async fn prefetch_cratesio(
     name: OriginalName,
     headers: Headers,
@@ -46,7 +46,7 @@ pub async fn prefetch_cratesio(
 }
 
 // Example: The package "h2" is under "/2/h2" in the index and thus no second path element exists.
-#[get("/<_>/<name>", rank = 1)]
+// #[get("/<_>/<name>", rank = 1)]
 pub async fn prefetch_len2_cratesio(
     name: OriginalName,
     headers: Headers,

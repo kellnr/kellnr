@@ -1,5 +1,5 @@
 use appstate::AppStateData;
-use axum::routing::{delete, get_service, post};
+use axum::routing::{delete, get_service, post, put};
 use axum::{routing::get, Router};
 use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
@@ -149,7 +149,9 @@ async fn main() {
         .route("/list_users", get(user::list_users))
         .route("/login_state", get(user::login_state));
 
-    let docs = Router::new().route("/build", post(ui::build_rustdoc));
+    let docs = Router::new().route("/build", post(ui::build_rustdoc))
+        .route("/queue", get(docs::api::docs_in_queue))
+        .route("/:package/:version", put(docs::api::publish_docs));
 
     let static_files_service = get_service(
         ServeDir::new(PathBuf::from("static"))
@@ -161,7 +163,7 @@ async fn main() {
         .route("/:crate_name/owners", delete(kellnr_api::remove_owner))
         .route("/:crate_name/owners", put(kellnr_api::add_owner))
         .route("/:crate_name/owners", get(kellnr_api::list_owners))
-        .route("", get(kellnr_api::search))
+        .route("/", get(kellnr_api::search))
         .route("/:package/:version/download", get(kellnr_api::download))
         .route("/new", put(kellnr_api::publish))
         .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
@@ -310,8 +312,8 @@ pub fn build_rocket(
         .mount(
             "/api/v1/docs",
             routes![
-                docs::api::publish_docs,
-                docs::api::docs_in_queue,
+                // docs::api::publish_docs,
+                // docs::api::docs_in_queue,
                 //ui::build_rustdoc
             ],
         )
@@ -335,27 +337,27 @@ pub fn build_rocket(
         .mount(
             "/api/v1/crates",
             routes![
-                index::kellnr_prefetch_api::prefetch_kellnr,
-                index::kellnr_prefetch_api::prefetch_len2_kellnr,
-                index::kellnr_prefetch_api::config_kellnr,
-                registry::kellnr_api::download,
-                registry::kellnr_api::publish,
-                registry::kellnr_api::yank,
-                registry::kellnr_api::unyank,
-                registry::kellnr_api::search,
-                registry::kellnr_api::list_owners,
-                registry::kellnr_api::add_owner,
-                registry::kellnr_api::remove_owner,
+                // index::kellnr_prefetch_api::prefetch_kellnr,
+                // index::kellnr_prefetch_api::prefetch_len2_kellnr,
+                // index::kellnr_prefetch_api::config_kellnr,
+                // registry::kellnr_api::download,
+                // registry::kellnr_api::publish,
+                // registry::kellnr_api::yank,
+                // registry::kellnr_api::unyank,
+                // registry::kellnr_api::search,
+                // registry::kellnr_api::list_owners,
+                // registry::kellnr_api::add_owner,
+                // registry::kellnr_api::remove_owner,
             ],
         )
         .mount(
             "/api/v1/cratesio",
             routes![
-                index::cratesio_prefetch_api::prefetch_cratesio,
-                index::cratesio_prefetch_api::prefetch_len2_cratesio,
-                index::cratesio_prefetch_api::config_cratesio,
-                registry::cratesio_api::download,
-                registry::cratesio_api::search,
+                // index::cratesio_prefetch_api::prefetch_cratesio,
+                // index::cratesio_prefetch_api::prefetch_len2_cratesio,
+                // index::cratesio_prefetch_api::config_cratesio,
+                // registry::cratesio_api::download,
+                // registry::cratesio_api::search,
             ],
         )
         .manage(settings)

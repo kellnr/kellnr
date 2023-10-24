@@ -6,7 +6,7 @@ use error::error::{ApiError, ApiResult};
 use reqwest::Url;
 use rocket::log::private::{debug, trace};
 use rocket::tokio::sync::RwLock;
-use rocket::{get, State};
+use rocket::State;
 use settings::Settings;
 use storage::cratesio_crate_storage::CratesIoCrateStorage;
 use std::path::Path;
@@ -14,7 +14,7 @@ use tracing::error;
 
 type CratesIoCrateStorageState = State<RwLock<CratesIoCrateStorage>>;
 
-#[get("/?<q>&<per_page>")]
+// #[get("/?<q>&<per_page>")]
 pub async fn search(
     q: OriginalName,
     per_page: per_page::PerPage,
@@ -55,7 +55,7 @@ pub async fn search(
     Ok(body)
 }
 
-#[get("/<package>/<version>/download")]
+// #[get("/<package>/<version>/download")]
 pub async fn download(
     package: OriginalName,
     version: Version,

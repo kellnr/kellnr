@@ -6,16 +6,16 @@ use common::prefetch::{Headers, Prefetch};
 use db::DbProvider;
 use rocket::http::Status;
 use rocket::response::status;
-use rocket::{get, State};
+use rocket::State;
 use settings::Settings;
 
-#[get("/config.json")]
+// #[get("/config.json")]
 pub async fn config_kellnr(settings: &State<Settings>, auth_req_token: AuthReqToken) -> ConfigJson {
     _ = auth_req_token;
     ConfigJson::from((settings.inner(), "crates"))
 }
 
-#[get("/<_>/<_>/<package>", rank = 1)]
+// #[get("/<_>/<_>/<package>", rank = 1)]
 pub async fn prefetch_kellnr(
     package: OriginalName,
     headers: Headers,
@@ -27,7 +27,7 @@ pub async fn prefetch_kellnr(
     internal_kellnr_prefetch(&index_name, &headers, db).await
 }
 
-#[get("/<_>/<package>", rank = 1)]
+// #[get("/<_>/<package>", rank = 1)]
 pub async fn prefetch_len2_kellnr(
     package: OriginalName,
     headers: Headers,

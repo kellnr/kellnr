@@ -8,11 +8,11 @@ use appstate::AppState;
 use appstate::DbState;
 use auth::auth_req_token::AuthReqToken;
 use auth::token;
-use axum::Json;
 use axum::extract::Path;
 use axum::extract::Query;
 use axum::extract::State;
 use axum::response::Redirect;
+use axum::Json;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -21,11 +21,10 @@ use common::search_result::{Crate, SearchResult};
 use common::version::Version;
 use db::DbProvider;
 use error::error::{ApiError, ApiResult};
+use reqwest::StatusCode;
 use serde::Deserialize;
-use settings::Settings;
 use std::convert::TryFrom;
 use std::sync::Arc;
-use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tracing::warn;
 
 pub async fn check_ownership(
@@ -50,10 +49,10 @@ pub async fn me() -> Redirect {
 
 // #[delete("/<crate_name>/owners", data = "<input>")]
 pub async fn remove_owner(
-    Path(crate_name): Path<OriginalName>,
-    Json(input): Json<owner::OwnerRequest>,
     token: token::Token,
     State(db): DbState,
+    Path(crate_name): Path<OriginalName>,
+    Json(input): Json<owner::OwnerRequest>,
 ) -> ApiResult<Json<owner::OwnerResponse>> {
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
@@ -69,10 +68,10 @@ pub async fn remove_owner(
 
 // #[put("/<crate_name>/owners", data = "<input>")]
 pub async fn add_owner(
+    token: token::Token,
+    State(db): DbState,
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<owner::OwnerRequest>,
-    token: token::Token,
-    State(db): DbState
 ) -> ApiResult<Json<owner::OwnerResponse>> {
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
@@ -105,16 +104,16 @@ pub async fn list_owners(
 }
 
 #[derive(Deserialize)]
-struct SearchParams {
-    q: OriginalName,
-    per_page: per_page::PerPage,
+pub struct SearchParams {
+    pub q: OriginalName,
+    pub per_page: per_page::PerPage,
 }
 
 // #[get("/?<q>&<per_page>")]
 pub async fn search(
-    Query(params): Query<SearchParams>,
     auth_req_token: AuthReqToken,
-    State(db): DbState
+    State(db): DbState,
+    Query(params): Query<SearchParams>,
 ) -> ApiResult<Json<search_result::SearchResult>> {
     _ = auth_req_token;
     let crates = db
@@ -141,11 +140,11 @@ pub async fn search(
 
 // #[get("/<package>/<version>/download")]
 pub async fn download(
-    Path(package): Path<OriginalName>,
-    Path(version): Path<Version>,
     auth_req_token: AuthReqToken,
     State(state): AppState,
-) -> Option<Vec<u8>> {
+    Path(package): Path<OriginalName>,
+    Path(version): Path<Version>,
+) -> Result<Vec<u8>, StatusCode> {
     _ = auth_req_token;
     let settings = state.settings;
     let db = state.db;
@@ -164,18 +163,21 @@ pub async fn download(
         warn!("Failed to increase download counter: {}", e);
     }
 
-    cs.get_file(file_path).await
+    match cs.get_file(file_path).await {
+        Some(file) => Ok(file),
+        None => Err(StatusCode::NOT_FOUND),
+    }
 }
 
 // #[put("/new", data = "<input>")]
 pub async fn publish(
-    input: ApiResult<PubData>,
-    db: &State<Box<dyn DbProvider>>,
-    cs: &KellnrCrateStorageState,
-    settings: &State<Settings>,
+    State(state): AppState,
     token: token::Token,
-) -> ApiResult<PubDataSuccess> {
-    let pub_data = input?;
+    pub_data: PubData,
+) -> ApiResult<Json<PubDataSuccess>> {
+    let db = state.db;
+    let settings = state.settings;
+    let cs = state.crate_storage;
     let orig_name = OriginalName::try_from(&pub_data.metadata.name)?;
     let normalized_name = orig_name.to_normalized();
 
@@ -184,7 +186,7 @@ pub async fn publish(
     // Check if crate with same version already exists.
     let id = db.get_crate_id(&normalized_name).await?;
     if let Some(id) = id {
-        check_ownership(&normalized_name, &token, db).await?;
+        check_ownership(&normalized_name, &token, &db).await?;
         if db.crate_version_exists(id, &pub_data.metadata.vers).await? {
             return Err(ApiError::from(&format!(
                 "Crate with version already exists: {}-{}",
@@ -196,8 +198,6 @@ pub async fn publish(
     // Set SHA256 from crate file
     let version = Version::try_from(&pub_data.metadata.vers)?;
     let cksum = cs
-        .read()
-        .await
         .add_bin_package(&orig_name, &version, &pub_data.cratedata)
         .await?;
 
@@ -212,48 +212,47 @@ pub async fn publish(
         db.add_doc_queue(
             &normalized_name,
             &version,
-            &cs.read().await.create_rand_doc_queue_path().await?,
+            &cs.create_rand_doc_queue_path().await?,
         )
         .await?;
     }
 
-    Ok(PubDataSuccess::new())
+    Ok(Json(PubDataSuccess::new()))
 }
 
-#[delete("/<crate_name>/<version>/yank")]
+// #[delete("/<crate_name>/<version>/yank")]
 pub async fn yank(
-    crate_name: OriginalName,
-    version: Version,
-    db: &State<Box<dyn DbProvider>>,
+    Path(crate_name): Path<OriginalName>,
+    Path(version): Path<Version>,
     token: token::Token,
-) -> ApiResult<YankSuccess> {
+    State(db): DbState,
+) -> ApiResult<Json<YankSuccess>> {
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, db).await?;
+    check_ownership(&crate_name, &token, &db).await?;
 
     db.yank_crate(&crate_name, &version).await?;
 
-    Ok(YankSuccess::new())
+    Ok(Json(YankSuccess::new()))
 }
 
-#[put("/<crate_name>/<version>/unyank")]
+// #[put("/<crate_name>/<version>/unyank")]
 pub async fn unyank(
-    crate_name: OriginalName,
-    version: Version,
-    db: &State<Box<dyn DbProvider>>,
+    Path(crate_name): Path<OriginalName>,
+    Path(version): Path<Version>,
     token: token::Token,
-) -> ApiResult<YankSuccess> {
+    State(db): DbState,
+) -> ApiResult<Json<YankSuccess>> {
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, db).await?;
+    check_ownership(&crate_name, &token, &db).await?;
 
     db.unyank_crate(&crate_name, &version).await?;
 
-    Ok(YankSuccess::new())
+    Ok(Json(YankSuccess::new()))
 }
 
 #[cfg(test)]
 mod reg_api_tests {
     use super::*;
-    use storage::storage_provider::{mock::MockStorage, StorageProvider};
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString};
     use mockall::predicate::*;
@@ -265,6 +264,7 @@ mod reg_api_tests {
     use rocket::{async_test, routes, Build};
     use std::path::PathBuf;
     use std::{iter, path};
+    use storage::storage_provider::{mock::MockStorage, StorageProvider};
 
     const TOKEN: &str = "854DvwSlUwEHtIo3kWy6x7UCPKHfzCmy";
 

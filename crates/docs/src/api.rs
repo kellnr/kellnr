@@ -5,27 +5,27 @@ use crate::upload_response::DocUploadResponse;
 use auth::token::Token;
 use common::original_name::OriginalName;
 use common::version::Version;
-use db::DbProvider;
 use error::error::{ApiError, ApiResult};
 use registry::kellnr_api::check_ownership;
-use rocket::{get, put, State};
-use settings::Settings;
+use appstate::{AppState, DbState};
+use axum::{extract::{State, Path}, Json};
 
-#[get("/queue")]
-pub async fn docs_in_queue(db: &State<Box<dyn DbProvider>>) -> ApiResult<DocQueueResponse> {
+// #[get("/queue")]
+pub async fn docs_in_queue(State(db): DbState ) -> ApiResult<Json<DocQueueResponse>> {
     let doc = db.get_doc_queue().await?;
-    Ok(DocQueueResponse::from(doc))
+    Ok(Json(DocQueueResponse::from(doc)))
 }
 
-#[put("/<package>/<version>", data = "<docs>")]
+// #[put("/<package>/<version>", data = "<docs>")]
 pub async fn publish_docs(
-    package: OriginalName,
-    version: Version,
+    Path(package): Path<OriginalName>,
+    Path(version): Path<Version>,
     token: Token,
-    docs: ApiResult<DocArchive>,
-    settings: &State<Settings>,
-    db: &State<Box<dyn DbProvider>>,
-) -> ApiResult<DocUploadResponse> {
+    State(state): AppState,
+    mut docs: DocArchive,
+) -> ApiResult<Json<DocUploadResponse>> {
+    let db = state.db;
+    let settings = state.settings;
     let normalized_name = package.to_normalized();
     let crate_version = &version.to_string();
 
@@ -40,11 +40,11 @@ pub async fn publish_docs(
 
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed to push the docs.
-    check_ownership(&normalized_name, &token, db).await?;
+    check_ownership(&normalized_name, &token, &db).await?;
 
     let doc_path = settings.docs_path().join(&*package).join(crate_version);
 
-    rocket::tokio::task::spawn_blocking(move || docs?.extract(&doc_path)).await??;
+    rocket::tokio::task::spawn_blocking(move || docs.extract(&doc_path)).await??;
 
     db.update_docs_link(
         &normalized_name,
@@ -53,14 +53,14 @@ pub async fn publish_docs(
     )
     .await?;
 
-    Ok(DocUploadResponse::new(
+    Ok(Json(DocUploadResponse::new(
         "Successfully published docs.".to_string(),
         &package,
         &version,
-    ))
+    )))
 }
 
-fn crate_does_not_exist(crate_name: &str, crate_version: &str) -> ApiResult<DocUploadResponse> {
+fn crate_does_not_exist(crate_name: &str, crate_version: &str) -> ApiResult<Json<DocUploadResponse>> {
     Err(ApiError::from(&format!(
         "No Crate with version exists: {}-{}",
         crate_name, crate_version

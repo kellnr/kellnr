@@ -17,7 +17,7 @@ pub struct StartupSettings {
     pub log_level_rocket: String,
     pub log_format: String,
     pub rustdoc_auto_gen: bool,
-    pub cache_size: usize,
+    pub cache_size: u64,
     pub postgresql: ::settings::Postgresql,
     pub max_crate_size: usize,
     pub max_docs_size: usize,

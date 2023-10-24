@@ -1,10 +1,8 @@
 use crate::token::Token;
-use error::error::ApiError;
-use rocket::http::Status;
-use rocket::outcome::Outcome::*;
-use rocket::request::{self, FromRequest, Request};
-use rocket::State;
-use settings::Settings;
+use appstate::AppStateData;
+use axum::extract::FromRequestParts;
+use axum::http::StatusCode;
+use axum::http::request::Parts;
 
 // This token checks if "auth_required = true" and if so, it requires a token.
 // Else, it does not require a token.
@@ -13,34 +11,21 @@ use settings::Settings;
 #[derive(Debug)]
 pub struct AuthReqToken(Option<Token>);
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for AuthReqToken {
-    type Error = ApiError;
+#[axum::async_trait]
+impl FromRequestParts<AppStateData> for AuthReqToken {
+    type Rejection = StatusCode;
 
-    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let settings = match get_settings(request).await {
-            Ok(s) => s,
-            Err(e) => return Failure(e),
-        };
-
-        if settings.auth_required {
-            Token::from_request(request).await.map(|t| Self(Some(t)))
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
+        if state.settings.auth_required {
+            Token::from_request_parts(parts, state)
+                .await
+                .map(|t| Self(Some(t)))
         } else {
-            Success(Self(None))
+            Ok(Self(None))
         }
-    }
-}
-
-async fn get_settings<'r>(
-    request: &'r Request<'_>,
-) -> Result<&'r State<Settings>, (Status, ApiError)> {
-    match request.guard::<&State<Settings>>().await {
-        Success(s) => Ok(s),
-        Failure(e) => Err((Status::InternalServerError, ApiError::from(&e.0))),
-        Forward(_) => Err((
-            Status::InternalServerError,
-            ApiError::from("Forward instead of getting settings"),
-        )),
     }
 }
 

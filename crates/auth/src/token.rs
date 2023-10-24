@@ -1,12 +1,10 @@
-use db::DbProvider;
-use error::error::ApiError;
+use appstate::AppStateData;
+use axum::extract::FromRequestParts;
+use axum::http::StatusCode;
+use axum::http::request::Parts;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use rocket::http::Status;
-use rocket::outcome::Outcome::{self, *};
-use rocket::request::{self, FromRequest, Request};
-use rocket::serde::Deserialize;
-use rocket::State;
+use serde::Deserialize;
 use std::iter;
 
 #[derive(Debug)]
@@ -25,62 +23,37 @@ pub fn generate_token() -> String {
         .collect::<String>()
 }
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for Token {
-    type Error = ApiError;
 
-    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let token = request.headers().get_one("Authorization");
-        let db = match get_db(request).await {
-            Ok(s) => s,
-            Err(e) => return Outcome::Failure(e),
-        };
+#[axum::async_trait]
+impl FromRequestParts<AppStateData> for Token {
+    type Rejection = StatusCode;
 
-        match token {
-            Some(token) => {
-                let user = match db.get_user_from_token(token).await {
-                    Ok(u) => u,
-                    Err(_) => {
-                        return Outcome::Failure((
-                            Status::Forbidden,
-                            ApiError::from("Invalid authentication token"),
-                        ))
-                    }
-                };
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
+        let token = parts
+            .headers
+            .get("Authorization")
+            .ok_or_else(|| StatusCode::UNAUTHORIZED)?
+            .to_str()
+            .map_err(|_| StatusCode::BAD_REQUEST)?
+            .to_owned();
 
-                Outcome::Success(Token {
-                    token: token.to_owned(),
-                    user: user.name,
-                    is_admin: user.is_admin,
-                })
-            }
-            None => Outcome::Failure((
-                Status::Unauthorized,
-                ApiError::from("Missing authentication token"),
-            )),
-        }
+        let user = state.db
+            .get_user_from_token(&token)
+            .await
+            .map_err(|_| StatusCode::FORBIDDEN)?;
+
+        Ok(Token {
+            token,
+            user: user.name,
+            is_admin: user.is_admin,
+        })
     }
 }
 
 #[derive(Deserialize)]
 pub struct NewTokenReqData {
     pub name: String,
-}
-
-async fn get_db<'r>(
-    request: &'r Request<'_>,
-) -> Result<&'r State<Box<dyn DbProvider>>, (Status, ApiError)> {
-    match request.guard::<&State<Box<dyn DbProvider>>>().await {
-        Success(s) => Ok(s),
-        Failure(e) => Err((Status::InternalServerError, ApiError::from(&e.0))),
-        Forward(_) => Err((
-            Status::InternalServerError,
-            ApiError::from("Forward instead of getting db."),
-        )),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    // Indirectly tested through API access to higher level functions
 }
