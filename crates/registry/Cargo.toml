@@ -13,6 +13,8 @@ common.workspace = true
 db.workspace = true
 auth.workspace = true
 error.workspace = true
+appstate.workspace = true
+storage.workspace = true
 
 # External dependencies from crates.io
 anyhow.workspace = true

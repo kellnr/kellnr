@@ -6,8 +6,9 @@ use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use db::DbProvider;
 use db::{ConString, Database, PgConString, SqliteConString};
 use index::cratesio_prefetch_api::{background_update_thread, cratesio_prefetch_thread};
-use registry::cratesio_crate_storage::CratesIoCrateStorage;
-use registry::kellnr_crate_storage::KellnrCrateStorage;
+use storage::cratesio_crate_storage::CratesIoCrateStorage;
+use registry::kellnr_api;
+use storage::kellnr_crate_storage::KellnrCrateStorage;
 use rocket::config::{Config, SecretKey};
 use rocket::fs::FileServer;
 use rocket::tokio::fs::create_dir_all;
@@ -156,6 +157,9 @@ async fn main() {
             .fallback(
                 ServeFile::new(PathBuf::from("static/index.html"))));
 
+    // let kellnr_api = Router::new()
+    //     .route("/:crate_name/owners", delete(kellnr_api::remove_owner));
+    //
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
@@ -165,9 +169,10 @@ async fn main() {
         .route("/cratesio_data", get(ui::cratesio_data))
         .route("/delete_crate", delete(ui::delete))
         .route("/settings", get(ui::settings))
-        .route("/me", get(registry::kellnr_api::me))
+        .route("/me", get(kellnr_api::me))
         .nest("/user", user)
         .nest("/api/v1/docs", docs)
+        // .nest("/api/v1/crates", kellnr_api)
         .fallback(static_files_service)
         .with_state(state)
         .layer(tower_http::trace::TraceLayer::new_for_http());

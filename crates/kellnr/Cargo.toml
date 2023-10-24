@@ -18,6 +18,7 @@ registry.workspace = true
 entity.workspace = true
 pg_testcontainer.workspace = true
 appstate.workspace = true
+storage.workspace = true
 
 # External dependencies from crates.io
 rocket.workspace = true

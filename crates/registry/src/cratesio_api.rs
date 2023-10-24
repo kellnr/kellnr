@@ -1,4 +1,3 @@
-use super::cratesio_crate_storage::CratesIoCrateStorage;
 use crate::per_page;
 use auth::auth_req_token::AuthReqToken;
 use common::original_name::OriginalName;
@@ -9,6 +8,7 @@ use rocket::log::private::{debug, trace};
 use rocket::tokio::sync::RwLock;
 use rocket::{get, State};
 use settings::Settings;
+use storage::cratesio_crate_storage::CratesIoCrateStorage;
 use std::path::Path;
 use tracing::error;
 

@@ -235,7 +235,6 @@ pub struct NewUser {
     pub is_admin: bool,
 }
 
-// #[post("/add", data = "<new_user>")]
 pub async fn add(
     user: MaybeUser,
     State(db): DbState,

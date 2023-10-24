@@ -32,6 +32,7 @@ pg_testcontainer = { path = "./crates/db/pg_testcontainer" }
 auth = { path = "./crates/auth" }
 error = { path = "./crates/error" }
 appstate = { path = "./crates/appstate" }
+storage = { path = "./crates/storage" }
 
 # External dependencies from crates.io
 anyhow = "1.0.75"

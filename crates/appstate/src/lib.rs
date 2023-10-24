@@ -2,8 +2,8 @@ use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use db::DbProvider;
 use settings::Settings;
+use storage::kellnr_crate_storage::KellnrCrateStorage;
 use std::sync::Arc;
-use registry::kellnr_crate_storage::KellnrCrateStorage;
 
 pub type AppState = axum::extract::State<AppStateData>;
 

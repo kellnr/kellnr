@@ -133,7 +133,7 @@ impl CachedCrateStorage {
         Ok(())
     }
 
-    pub(crate) async fn get_file(&mut self, file_path: PathBuf) -> Option<Vec<u8>> {
+    pub async fn get_file(&mut self, file_path: PathBuf) -> Option<Vec<u8>> {
         async fn from_cache(cache: &mut CrateCache, file_path: PathBuf) -> Option<Vec<u8>> {
             match cache.cache_get(&file_path) {
                 None => {

@@ -1,4 +1,3 @@
-use crate::kellnr_crate_storage::KellnrCrateStorage;
 use crate::owner;
 use crate::per_page;
 use crate::pub_data::PubData;
@@ -7,6 +6,7 @@ use crate::yank_success::YankSuccess;
 use anyhow::Result;
 use auth::auth_req_token::AuthReqToken;
 use auth::token;
+use axum::response::Redirect;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -21,8 +21,8 @@ use rocket::{delete, get, put, State};
 use settings::Settings;
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
+use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tracing::warn;
-use axum::response::Redirect;
 
 type KellnrCrateStorageState = State<RwLock<KellnrCrateStorage>>;
 

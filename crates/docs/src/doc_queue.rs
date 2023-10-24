@@ -9,7 +9,7 @@ use common::version::Version;
 use db::{Database, DbProvider, DocQueueEntry};
 use flate2::read::GzDecoder;
 use fs_extra::dir::{copy, CopyOptions};
-use registry::kellnr_crate_storage::KellnrCrateStorage;
+use storage::kellnr_crate_storage::KellnrCrateStorage;
 use rocket::tokio::fs::{create_dir_all, remove_dir_all, File};
 use rocket::tokio::io::AsyncReadExt;
 use std::path::{Path, PathBuf};

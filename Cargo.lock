@@ -189,8 +189,8 @@ dependencies = [
  "axum-extra",
  "db",
  "index",
- "registry",
  "settings",
+ "storage",
 ]
 
 [[package]]
@@ -1547,6 +1547,7 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
+ "storage",
  "tar",
  "tracing",
  "zip",
@@ -3132,6 +3133,7 @@ dependencies = [
  "rocket",
  "rocket_cors",
  "settings",
+ "storage",
  "sysinfo",
  "tower-http",
  "tracing",
@@ -4344,6 +4346,7 @@ name = "registry"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "appstate",
  "auth",
  "axum",
  "cached",
@@ -4365,6 +4368,7 @@ dependencies = [
  "serde_json",
  "settings",
  "sha2",
+ "storage",
  "tracing",
 ]
 
@@ -5377,6 +5381,21 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cached",
+ "common",
+ "hex",
+ "mockall",
+ "rocket",
+ "settings",
+ "sha2",
+ "tracing",
+]
 
 [[package]]
 name = "stringprep"
