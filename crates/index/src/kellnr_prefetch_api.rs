@@ -1,58 +1,59 @@
+use std::sync::Arc;
+
 use super::config_json::ConfigJson;
+use appstate::{DbState, SettingsState};
 use auth::auth_req_token::AuthReqToken;
-use common::normalized_name::NormalizedName;
-use common::original_name::OriginalName;
-use common::prefetch::{Headers, Prefetch};
+use axum::{extract::{Path, State}, http::{StatusCode, HeaderMap}, Json};
+use common::{normalized_name::NormalizedName, original_name::OriginalName, prefetch::Prefetch};
 use db::DbProvider;
-use rocket::http::Status;
-use rocket::response::status;
-use rocket::State;
-use settings::Settings;
 
-// #[get("/config.json")]
-pub async fn config_kellnr(settings: &State<Settings>, auth_req_token: AuthReqToken) -> ConfigJson {
+pub async fn config_kellnr(
+    State(settings): SettingsState,
+    auth_req_token: AuthReqToken,
+) -> Json<ConfigJson> {
     _ = auth_req_token;
-    ConfigJson::from((settings.inner(), "crates"))
+    Json(ConfigJson::from((&(*settings), "crates")))
 }
 
-// #[get("/<_>/<_>/<package>", rank = 1)]
 pub async fn prefetch_kellnr(
-    package: OriginalName,
-    headers: Headers,
+    Path(package): Path<OriginalName>,
+    headers: HeaderMap,
+    State(db): DbState,
     auth_req_token: AuthReqToken,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Prefetch, status::Custom<&'static str>> {
+) -> Result<Prefetch, StatusCode> {
     _ = auth_req_token;
     let index_name = NormalizedName::from(package);
-    internal_kellnr_prefetch(&index_name, &headers, db).await
+    internal_kellnr_prefetch(&index_name, &headers, &db).await
 }
 
-// #[get("/<_>/<package>", rank = 1)]
 pub async fn prefetch_len2_kellnr(
-    package: OriginalName,
-    headers: Headers,
+    Path(package): Path<OriginalName>,
+    headers: HeaderMap,
     auth_req_token: AuthReqToken,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Prefetch, status::Custom<&'static str>> {
+    State(db): DbState,
+) -> Result<Prefetch, StatusCode> {
     _ = auth_req_token;
     let index_name = NormalizedName::from(package);
-    internal_kellnr_prefetch(&index_name, &headers, db).await
+    internal_kellnr_prefetch(&index_name, &headers, &db).await
 }
 
 async fn internal_kellnr_prefetch(
     name: &NormalizedName,
-    headers: &Headers,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Prefetch, status::Custom<&'static str>> {
+    headers: &HeaderMap,
+    db: &Arc<dyn DbProvider>,
+) -> Result<Prefetch, StatusCode> {
     match db.get_prefetch_data(name).await {
         Ok(prefetch) if needs_update(headers, &prefetch) => Ok(prefetch),
-        Ok(_prefetch) => Err(status::Custom(Status::NotModified, "Index up-to-date")),
-        Err(_) => Err(status::Custom(Status::NotFound, "Index not found")),
+        Ok(_prefetch) => Err(StatusCode::NOT_MODIFIED),
+        Err(_) => Err(StatusCode::NOT_FOUND),
     }
 }
 
-fn needs_update(headers: &Headers, prefetch: &Prefetch) -> bool {
-    match (&headers.if_none_match, &headers.if_modified_since) {
+fn needs_update(headers: &HeaderMap, prefetch: &Prefetch) -> bool {
+    let if_none_match = headers.get("if-none-match");
+    let if_modified_since = headers.get("if-modified-since");
+
+    match (if_none_match, if_modified_since) {
         (Some(etag), Some(date)) => *etag != prefetch.etag || *date != prefetch.last_modified,
         (_, _) => true,
     }

@@ -7,6 +7,7 @@ use common::original_name::OriginalName;
 use common::prefetch::{Headers, Prefetch};
 use db::provider::PrefetchState;
 use db::DbProvider;
+use moka::future::Cache;
 use reqwest::{Client, StatusCode, Url};
 use rocket::http::Status;
 use rocket::response::status;
@@ -17,7 +18,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, trace, warn};
-use moka::future::Cache;
 /// The API for the crates.io sparse index
 /// https://github.com/rust-lang/cargo/blob/c015bfd1efb04c0bf60df9bfef2b8b3b6633310b/src/doc/src/reference/registry-index.md#index-protocols
 
@@ -189,8 +189,9 @@ pub async fn cratesio_prefetch_thread(
     db: Arc<impl DbProvider>,
     channel: Arc<flume::Receiver<CratesioPrefetchMsg>>,
 ) {
-    let cache: Cache<String, String> =
-        Cache::builder().time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS)).build();
+    let cache: Cache<String, String> = Cache::builder()
+        .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
+        .build();
 
     loop {
         if let Some((name, metadata, desc, etag, last_modified)) =
@@ -272,7 +273,9 @@ async fn get_insert_data(
                 trace!("No update needed for {}. Last update: {}", msg.name, date);
                 None
             } else {
-                cache.insert(msg.name.to_string(), chrono::Utc::now().to_rfc3339()).await;
+                cache
+                    .insert(msg.name.to_string(), chrono::Utc::now().to_rfc3339())
+                    .await;
                 fetch_index_data(msg.name, msg.etag, msg.last_modified).await
             }
         }
@@ -464,13 +467,9 @@ mod tests {
     use super::*;
     use crate::config_json::ConfigJson;
     use db::mock::MockDb;
-    use rocket::config::{Config, SecretKey};
-    use rocket::http::{Header, Status};
-    use rocket::local::blocking::Client;
-    use rocket::response::status::Custom;
-    use rocket::{async_test, routes};
     use settings::{Protocol, Settings};
     use std::mem;
+    use axum::Router;
 
     #[async_test]
     async fn fetch_cratesio_description_works() {
@@ -524,6 +523,48 @@ mod tests {
             ConfigJson::new(&Protocol::Http, "test.api.com", 1234, "cratesio", false),
             actual
         );
+    }
+
+    async fn app() -> Router {
+        let settings = Settings {
+            api_address: String::from("test.api.com"),
+            api_port: 8000,
+            api_port_proxy: 1234,
+            ..Settings::new().unwrap()
+        };
+
+        let mut mock_db = MockDb::new();
+
+        mock_db
+            .expect_add_cratesio_prefetch_data()
+            .returning(move |_, _, _, _, _| {
+                Ok(Prefetch {
+                    data: vec![0x1, 0x2, 0x3],
+                    etag: String::from("etag"),
+                    last_modified: String::from("date"),
+                })
+            });
+
+        mock_db
+            .expect_is_cratesio_cache_up_to_date()
+            .returning(move |_, _, _| Ok(PrefetchState::NotFound));
+
+        let (sender, receiver) = flume::unbounded::<CratesioPrefetchMsg>();
+        let sender = Arc::new(sender);
+        // Make receiver undroppable, else the sender will fail, as the receiver is dropped when
+        // this function goes out of scope
+        mem::forget(receiver);
+
+        
+        let cratesio_prefetch = Router::new()
+        .route("/config.json", get(cratesio_prefetch_api::config_cratesio))
+        .route("/:_/:_/:name", get(cratesio_prefetch_api::prefetch_cratesio))
+        .route("/:_/:name", get(cratesio_prefetch_api::prefetch_len2_cratesio));
+
+
+        Router::new()
+            .nest("/api/v1/cratesio", cratesio_prefetch)
+            .withState(appstate)
     }
 
     fn client() -> Client {

@@ -11,7 +11,9 @@ version.workspace = true
 db.workspace = true
 settings.workspace = true
 storage.workspace = true
+common.workspace = true
 
 # External dependencies
 axum.workspace = true
 axum-extra.workspace = true
+flume.workspace = true

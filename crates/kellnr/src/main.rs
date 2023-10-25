@@ -6,9 +6,8 @@ use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use db::DbProvider;
 use db::{ConString, Database, PgConString, SqliteConString};
 use index::cratesio_prefetch_api::{background_update_thread, cratesio_prefetch_thread};
-use storage::cratesio_crate_storage::CratesIoCrateStorage;
+use index::kellnr_prefetch_api;
 use registry::kellnr_api;
-use storage::kellnr_crate_storage::KellnrCrateStorage;
 use rocket::config::{Config, SecretKey};
 use rocket::fs::FileServer;
 use rocket::tokio::fs::create_dir_all;
@@ -19,6 +18,8 @@ use settings::{LogFormat, Settings};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use storage::cratesio_crate_storage::CratesIoCrateStorage;
+use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::info;
 use tracing_subscriber::fmt::format;
@@ -131,6 +132,7 @@ async fn main() {
         signing_key,
         settings,
         crate_storage,
+        cratesio_prefetch_sender
     };
 
     let user = Router::new()
@@ -149,15 +151,16 @@ async fn main() {
         .route("/list_users", get(user::list_users))
         .route("/login_state", get(user::login_state));
 
-    let docs = Router::new().route("/build", post(ui::build_rustdoc))
+    let docs = Router::new()
+        .route("/build", post(ui::build_rustdoc))
         .route("/queue", get(docs::api::docs_in_queue))
         .route("/:package/:version", put(docs::api::publish_docs));
 
     let static_files_service = get_service(
         ServeDir::new(PathBuf::from("static"))
             .append_index_html_on_directories(true)
-            .fallback(
-                ServeFile::new(PathBuf::from("static/index.html"))));
+            .fallback(ServeFile::new(PathBuf::from("static/index.html"))),
+    );
 
     let kellnr_api = Router::new()
         .route("/:crate_name/owners", delete(kellnr_api::remove_owner))
@@ -167,7 +170,15 @@ async fn main() {
         .route("/:package/:version/download", get(kellnr_api::download))
         .route("/new", put(kellnr_api::publish))
         .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
-        .route("/:crate_name/:version/unyank", put(kellnr_api::unyank));
+        .route("/:crate_name/:version/unyank", put(kellnr_api::unyank))
+        .route("/config.json", get(kellnr_prefetch_api::config_kellnr))
+        .route("/:_/:_/:package", get(kellnr_prefetch_api::prefetch_kellnr))
+        .route("/:_/:package", get(kellnr_prefetch_api::prefetch_len2_kellnr));
+
+    // let cratesio_prefetch = Router::new()
+    //     .route("/config.json", get(cratesio_prefetch_api::config_cratesio))
+    //     .route("/:_/:_/:name", get(cratesio_prefetch_api::prefetch_cratesio))
+    //     .route("/:_/:name", get(cratesio_prefetch_api::prefetch_len2_cratesio));
 
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
@@ -182,6 +193,7 @@ async fn main() {
         .nest("/user", user)
         .nest("/api/v1/docs", docs)
         .nest("/api/v1/crates", kellnr_api)
+        // .nest("/api/v1/cratesio", cratesio_prefetch")
         .fallback(static_files_service)
         .with_state(state)
         .layer(tower_http::trace::TraceLayer::new_for_http());

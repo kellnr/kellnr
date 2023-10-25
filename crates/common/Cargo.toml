@@ -22,4 +22,4 @@ rand.workspace = true
 sea-orm.workspace = true
 sea-query-derive.workspace = true
 tracing.workspace = true
-
+axum.workspace = true
