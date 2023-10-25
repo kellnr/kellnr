@@ -1,5 +1,4 @@
 use std::sync::Arc;
-
 use super::config_json::ConfigJson;
 use appstate::{DbState, SettingsState};
 use auth::auth_req_token::AuthReqToken;
@@ -63,22 +62,24 @@ fn needs_update(headers: &HeaderMap, prefetch: &Prefetch) -> bool {
 mod tests {
     use super::*;
     use crate::config_json::ConfigJson;
+    use appstate::AppStateData;
+    use axum::{Router, routing::get, http::Request, body::Body};
     use db::error::DbError;
     use db::mock::MockDb;
     use mockall::predicate::*;
-    use rocket::config::{Config, SecretKey};
-    use rocket::http::{Header, Status};
-    use rocket::local::blocking::Client;
-    use rocket::routes;
+    use reqwest::header;
     use settings::{Protocol, Settings};
+    use tower::ServiceExt;
 
-    #[test]
-    fn config_returns_config_json() {
-        let client = client();
-        let req = client.get("/api/v1/index/config.json");
-        let result = req.dispatch();
-        let result_msg = result.into_string().unwrap();
-        let actual = serde_json::from_str::<ConfigJson>(&result_msg).unwrap();
+    #[tokio::test]
+    async fn config_returns_config_json() {
+        let r = app().await
+            .oneshot(Request::get("/api/v1/index/config.json").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap(); 
+        let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
 
         assert_eq!(
             ConfigJson::new(&Protocol::Http, "test.api.com", 1234, "crates", false),
@@ -86,47 +87,51 @@ mod tests {
         );
     }
 
-    #[test]
-    fn prefetch_returns_prefetch_data() {
-        let client = client();
-        let req = client
-            .get("/api/v1/index/me/ta/metadata")
-            .header(Header::new("If-Modified-Since", "foo"))
-            .header(Header::new("ETag", "bar"));
-        let result = req.dispatch();
-        let result_status = result.status();
+    #[tokio::test]
+    async fn prefetch_returns_prefetch_data() {
+        let r = app().await
+            .oneshot(Request::get("/api/v1/index/me/ta/metadata")
+                .header(header::IF_MODIFIED_SINCE, "foo")
+                .header(header::ETAG, "bar")
+                .body(Body::empty()).unwrap())
+            .await
+            .unwrap();
 
-        assert_eq!(Status::Ok, result_status);
-        assert_eq!("3", result.headers().get_one("Content-Length").unwrap());
-        assert_eq!("date", result.headers().get_one("Last-Modified").unwrap());
-        assert_eq!(vec![0x1, 0x2, 0x3], result.into_bytes().unwrap());
+        let result_status = r.status();
+
+        assert_eq!(StatusCode::OK, result_status);
+        assert_eq!("3", r.headers().get(header::CONTENT_LENGTH).unwrap());
+        assert_eq!("date", r.headers().get(header::LAST_MODIFIED).unwrap());
+        assert_eq!(vec![0x1, 0x2, 0x3], hyper::body::to_bytes(r.into_body()).await.unwrap());
     }
 
-    #[test]
-    fn prefetch_returns_not_modified() {
-        let client = client();
-        let req = client
-            .get("/api/v1/index/me/ta/metadata")
-            .header(Header::new("If-Modified-Since", "date"))
-            .header(Header::new("If-None-Match", "etag"));
-        let result = req.dispatch();
+    #[tokio::test]
+    async fn prefetch_returns_not_modified() {
+        let r = app().await
+            .oneshot(Request::get("/api/v1/index/me/ta/metadata")
+                .header(header::IF_MODIFIED_SINCE, "date")
+                .header(header::ETAG, "etag")
+                .body(Body::empty()).unwrap())
+            .await
+            .unwrap();
 
-        assert_eq!(Status::NotModified, result.status());
+        assert_eq!(StatusCode::NOT_MODIFIED, r.status());
     }
 
-    #[test]
-    fn prefetch_returns_not_found() {
-        let client = client();
-        let req = client
-            .get("/api/v1/index/no/tf/notfound")
-            .header(Header::new("If-Modified-Since", "date"))
-            .header(Header::new("If-None-Match", "etag"));
-        let result = req.dispatch();
+    #[tokio::test]
+    async fn prefetch_returns_not_found() {
+        let r = app().await
+            .oneshot(Request::get("/api/v1/index/no/tf/notfound")
+                .header(header::IF_MODIFIED_SINCE, "date")
+                .header(header::ETAG, "etag")
+                .body(Body::empty()).unwrap())
+            .await
+            .unwrap();
 
-        assert_eq!(Status::NotFound, result.status());
+        assert_eq!(StatusCode::NOT_FOUND, r.status());
     }
 
-    fn client() -> Client {
+    async fn app() -> Router {
         let settings = Settings {
             api_address: String::from("test.api.com"),
             api_port: 8000,
@@ -150,21 +155,19 @@ mod tests {
             .with(eq("notfound"))
             .returning(move |_| Err(DbError::CrateNotFound("notfound".to_string())));
 
-        let db = Box::new(mock_db) as Box<dyn DbProvider>;
+        let kellnr_prefetch = Router::new()
+            .route("/config.json", get(config_kellnr))
+            .route("/:_/:_/:name", get(prefetch_kellnr))
+            .route("/:_/:name", get(prefetch_len2_kellnr));
 
-        let rocket_conf = Config {
-            secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-            ..Config::default()
+        let state = AppStateData {
+            db: Arc::new(mock_db),
+            settings: Arc::new(settings),
+            ..appstate::test_state().await
         };
 
-        let rocket = rocket::custom(rocket_conf)
-            .mount(
-                "/api/v1/index",
-                routes![config_kellnr, prefetch_kellnr, prefetch_len2_kellnr],
-            )
-            .manage(db)
-            .manage(settings);
-
-        Client::tracked(rocket).unwrap()
+        Router::new()
+            .nest("/api/v1/index", kellnr_prefetch)
+            .with_state(state)
     }
 }

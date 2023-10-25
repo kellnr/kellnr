@@ -2945,6 +2945,7 @@ dependencies = [
  "derive_jsonresponder",
  "flume 0.11.0",
  "hex",
+ "hyper",
  "json_payload",
  "mockall",
  "moka",
@@ -2955,6 +2956,8 @@ dependencies = [
  "serde_json",
  "settings",
  "sha2",
+ "tokio",
+ "tower",
  "tracing",
  "wax",
 ]

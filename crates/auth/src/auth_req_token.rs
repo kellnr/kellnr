@@ -36,7 +36,6 @@ mod test {
     use axum::http::{header, Request, StatusCode};
     use axum::Router;
     use axum::routing::get;
-    use axum_extra::extract::cookie::Key;
     use db::error::DbError;
     use db::mock::MockDb;
     use db::User;
@@ -44,7 +43,6 @@ mod test {
     use settings::Settings;
     use std::sync::Arc;
     use tower::ServiceExt;
-    use storage::kellnr_crate_storage::KellnrCrateStorage;
 
     #[tokio::test]
     async fn no_auth_required() {
@@ -121,7 +119,6 @@ mod test {
     }
 
     async fn app(settings: Settings) -> Router {
-        const TEST_KEY: &[u8] = &[1; 64];
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
@@ -140,13 +137,12 @@ mod test {
             .with(eq("wrong_token"))
             .returning(move |_| Err(DbError::UserNotFound("user".to_string())));
 
+        let state = AppStateData { 
+            db: Arc::new(mock_db),
+            settings: Arc::new(settings),
+            ..appstate::test_state().await };
         Router::new()
             .route("/test", get(test_auth_req_token))
-            .with_state(AppStateData {
-                db: Arc::new(mock_db),
-                crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
-                settings: Arc::new(settings),
-                signing_key: Key::from(TEST_KEY),
-            })
+            .with_state(state)
     }
 }

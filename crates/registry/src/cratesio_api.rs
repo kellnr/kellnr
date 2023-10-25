@@ -1,29 +1,30 @@
 use crate::per_page;
+use appstate::DbState;
 use auth::auth_req_token::AuthReqToken;
-use common::original_name::OriginalName;
+use axum::{extract::{State, Query}, Json};
+use common::{original_name::OriginalName, search_result};
 use common::version::Version;
 use error::error::{ApiError, ApiResult};
 use reqwest::Url;
-use rocket::log::private::{debug, trace};
-use rocket::tokio::sync::RwLock;
-use rocket::State;
+use serde::Deserialize;
 use settings::Settings;
-use storage::cratesio_crate_storage::CratesIoCrateStorage;
 use std::path::Path;
 use tracing::error;
 
-type CratesIoCrateStorageState = State<RwLock<CratesIoCrateStorage>>;
+#[derive(Deserialize)]
+pub struct SearchParams {
+    pub q: OriginalName,
+    pub per_page: per_page::PerPage,
+}
 
-// #[get("/?<q>&<per_page>")]
 pub async fn search(
-    q: OriginalName,
-    per_page: per_page::PerPage,
     auth_req_token: AuthReqToken,
+    Query(params): Query<SearchParams>,
 ) -> ApiResult<String> {
     _ = auth_req_token;
     let url = match Url::parse(&format!(
         "https://crates.io/api/v1/crates?q={}&per_page={}",
-        q, per_page.0
+        params.q, params.per_page.0
     )) {
         Ok(url) => url,
         Err(e) => {

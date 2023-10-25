@@ -31,3 +31,8 @@ chrono.workspace = true
 moka.workspace = true
 flume.workspace = true
 axum.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tower.workspace = true
+hyper.workspace = true
