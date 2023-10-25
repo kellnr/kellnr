@@ -380,6 +380,7 @@ version = "0.1.0"
 dependencies = [
  "appstate",
  "axum",
+ "axum-extra",
  "db",
  "error",
  "mockall",
@@ -387,6 +388,9 @@ dependencies = [
  "rocket",
  "serde",
  "settings",
+ "storage",
+ "tokio",
+ "tower",
 ]
 
 [[package]]

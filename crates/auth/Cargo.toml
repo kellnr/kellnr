@@ -21,3 +21,7 @@ axum.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
+axum-extra.workspace = true
+tokio.workspace = true
+tower.workspace = true
+storage.workspace = true
