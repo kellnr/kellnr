@@ -7,7 +7,7 @@ use db::DbProvider;
 use db::{ConString, Database, PgConString, SqliteConString};
 use index::cratesio_prefetch_api::{background_update_thread, cratesio_prefetch_thread};
 use index::kellnr_prefetch_api;
-use registry::kellnr_api;
+use registry::{kellnr_api, cratesio_api};
 use rocket::config::{Config, SecretKey};
 use rocket::fs::FileServer;
 use rocket::tokio::fs::create_dir_all;
@@ -109,7 +109,7 @@ async fn main() {
     let db = Arc::new(db) as Arc<dyn DbProvider>;
 
     // Crates.io Proxy
-    let _cratesio_crate_storage = init_cratesio_proxy(&settings).await;
+    let cratesio_storage: Arc<CratesIoCrateStorage> = init_cratesio_proxy(&settings).await.into();
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
     let cratesio_prefetch_sender = Arc::new(cratesio_prefetch_sender);
@@ -132,6 +132,7 @@ async fn main() {
         signing_key,
         settings,
         crate_storage,
+        cratesio_storage,
         cratesio_prefetch_sender
     };
 
@@ -180,6 +181,10 @@ async fn main() {
     //     .route("/:_/:_/:name", get(cratesio_prefetch_api::prefetch_cratesio))
     //     .route("/:_/:name", get(cratesio_prefetch_api::prefetch_len2_cratesio));
 
+    let cratesio_api = Router::new()
+        .route("/", get(cratesio_api::search))
+        .route("/:package/:version/download", get(cratesio_api::download));
+
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
@@ -193,6 +198,7 @@ async fn main() {
         .nest("/user", user)
         .nest("/api/v1/docs", docs)
         .nest("/api/v1/crates", kellnr_api)
+        .nest("/api/v1/cratesio", cratesio_api)
         // .nest("/api/v1/cratesio", cratesio_prefetch")
         .fallback(static_files_service)
         .with_state(state)

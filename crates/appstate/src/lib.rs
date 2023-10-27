@@ -5,7 +5,7 @@ use db::DbProvider;
 use flume::Sender;
 use settings::Settings;
 use std::sync::Arc;
-use storage::kellnr_crate_storage::KellnrCrateStorage;
+use storage::{kellnr_crate_storage::KellnrCrateStorage, cratesio_crate_storage::CratesIoCrateStorage};
 
 pub type AppState = axum::extract::State<AppStateData>;
 
@@ -13,6 +13,7 @@ pub type AppState = axum::extract::State<AppStateData>;
 pub type DbState = axum::extract::State<Arc<dyn DbProvider>>;
 pub type SettingsState = axum::extract::State<Arc<Settings>>;
 pub type CrateStorageState = axum::extract::State<Arc<KellnrCrateStorage>>;
+pub type CrateIoStorageState = axum::extract::State<Arc<CratesIoCrateStorage>>;
 pub type SigningKeyState = axum::extract::State<Key>;
 pub type CratesIoPrefetchSenderState = axum::extract::State<Arc<Sender<CratesioPrefetchMsg>>>;
 
@@ -23,6 +24,7 @@ pub struct AppStateData {
     pub signing_key: Key,
     pub settings: Arc<Settings>,
     pub crate_storage: Arc<KellnrCrateStorage>,
+    pub cratesio_storage: Arc<CratesIoCrateStorage>,
     pub cratesio_prefetch_sender: Arc<Sender<CratesioPrefetchMsg>>,
 }
 
@@ -31,12 +33,14 @@ pub async fn test_state() -> AppStateData {
     let signing_key = Key::generate();
     let settings = Arc::new(Settings::new().unwrap());
     let crate_storage = Arc::new(KellnrCrateStorage::new(&settings).await.unwrap());
+    let crateio_storage = Arc::new(CratesIoCrateStorage::new(&settings).await.unwrap());
     let (cratesio_prefetch_sender, _) = flume::unbounded();
     AppStateData {
         db,
         signing_key,
         settings,
         crate_storage,
+        cratesio_storage: crateio_storage,
         cratesio_prefetch_sender: Arc::new(cratesio_prefetch_sender),
     }
 }

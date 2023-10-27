@@ -1,15 +1,15 @@
 use crate::per_page;
-use appstate::DbState;
+use appstate::{DbState, SettingsState, CrateIoStorageState};
 use auth::auth_req_token::AuthReqToken;
-use axum::{extract::{State, Query}, Json};
+use axum::{extract::{State, Query, Path}, Json, http::StatusCode};
 use common::{original_name::OriginalName, search_result};
 use common::version::Version;
 use error::error::{ApiError, ApiResult};
 use reqwest::Url;
 use serde::Deserialize;
 use settings::Settings;
-use std::path::Path;
-use tracing::error;
+use storage::cratesio_crate_storage::CratesIoCrateStorage;
+use tracing::{error, trace, debug};
 
 #[derive(Deserialize)]
 pub struct SearchParams {
@@ -58,22 +58,20 @@ pub async fn search(
 
 // #[get("/<package>/<version>/download")]
 pub async fn download(
-    package: OriginalName,
-    version: Version,
+    Path(package): Path<OriginalName>,
+    Path(version): Path<Version>,
     auth_req_token: AuthReqToken,
-    settings: &State<Settings>,
-    crate_storage: &CratesIoCrateStorageState,
-) -> Option<Vec<u8>> {
+    State(settings): SettingsState, 
+    State(crate_storage):CrateIoStorageState
+) -> Result<Vec<u8>, StatusCode> {
     _ = auth_req_token;
     // Return None if the feature is disabled
     match settings.crates_io_proxy {
         true => (),
-        _ => return None,
+        _ => return Err(StatusCode::NOT_FOUND),
     };
 
     let file_path = crate_storage
-        .read()
-        .await
         .crate_path(&package.to_string(), &version.to_string());
 
     trace!(
@@ -83,7 +81,7 @@ pub async fn download(
         file_path.display()
     );
 
-    if !Path::exists(&file_path) {
+    if !std::path::Path::exists(&file_path) {
         debug!("Crate not found on disk, downloading from crates.io");
         let target = format!(
             "https://crates.io/api/v1/crates/{}/{}/download",
@@ -95,10 +93,8 @@ pub async fn download(
                     Ok(crate_data) => {
                         // Check again after the download, as another thread maybe
                         // added the crate already to disk and we can skip the step.
-                        if !Path::exists(&file_path) {
+                        if !std::path::Path::exists(&file_path) {
                             if let Err(e) = crate_storage
-                                .read()
-                                .await
                                 .add_bin_package(&package, &version, &crate_data)
                                 .await
                             {
@@ -108,22 +104,25 @@ pub async fn download(
                     }
                     Err(e) => {
                         error!("Failed to get crate data from response: {}", e);
-                        return None;
+                        return Err(StatusCode::NOT_FOUND);
                     }
                 },
                 // crates.io returned a 404 or another error -> Return NotFound
-                false => return None,
+                false => return Err(StatusCode::NOT_FOUND),
             },
             Err(e) => {
                 error!("Failed to download crate from crates.io: {}", e);
-                return None;
+                return Err(StatusCode::NOT_FOUND);
             }
         }
     } else {
         trace!("Crate found in cache, skipping download");
     }
 
-    crate_storage.write().await.get_file(file_path).await
+    match crate_storage.get_file(file_path).await {
+        Some(file) => Ok(file),
+        None => Err(StatusCode::NOT_FOUND),
+    }
 }
 
 #[cfg(test)]
