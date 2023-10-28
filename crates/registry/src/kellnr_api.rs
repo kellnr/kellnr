@@ -47,7 +47,6 @@ pub async fn me() -> Redirect {
     Redirect::to("/login")
 }
 
-// #[delete("/<crate_name>/owners", data = "<input>")]
 pub async fn remove_owner(
     token: token::Token,
     State(db): DbState,
@@ -66,7 +65,6 @@ pub async fn remove_owner(
     )))
 }
 
-// #[put("/<crate_name>/owners", data = "<input>")]
 pub async fn add_owner(
     token: token::Token,
     State(db): DbState,
@@ -82,7 +80,6 @@ pub async fn add_owner(
     Ok(Json(owner::OwnerResponse::from("Added owners to crate.")))
 }
 
-// #[get("/<crate_name>/owners")]
 pub async fn list_owners(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
@@ -109,7 +106,6 @@ pub struct SearchParams {
     pub per_page: per_page::PerPage,
 }
 
-// #[get("/?<q>&<per_page>")]
 pub async fn search(
     auth_req_token: AuthReqToken,
     State(db): DbState,
