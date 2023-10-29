@@ -134,12 +134,10 @@ pub async fn search(
     }))
 }
 
-// #[get("/<package>/<version>/download")]
 pub async fn download(
     auth_req_token: AuthReqToken,
     State(state): AppState,
-    Path(package): Path<OriginalName>,
-    Path(version): Path<Version>,
+    Path((package, version)): Path<(OriginalName, Version)>,
 ) -> Result<Vec<u8>, StatusCode> {
     _ = auth_req_token;
     let settings = state.settings;
@@ -165,7 +163,6 @@ pub async fn download(
     }
 }
 
-// #[put("/new", data = "<input>")]
 pub async fn publish(
     State(state): AppState,
     token: token::Token,
@@ -216,10 +213,8 @@ pub async fn publish(
     Ok(Json(PubDataSuccess::new()))
 }
 
-// #[delete("/<crate_name>/<version>/yank")]
 pub async fn yank(
-    Path(crate_name): Path<OriginalName>,
-    Path(version): Path<Version>,
+    Path((crate_name, version)): Path<(OriginalName, Version)>,
     token: token::Token,
     State(db): DbState,
 ) -> ApiResult<Json<YankSuccess>> {
@@ -231,10 +226,8 @@ pub async fn yank(
     Ok(Json(YankSuccess::new()))
 }
 
-// #[put("/<crate_name>/<version>/unyank")]
 pub async fn unyank(
-    Path(crate_name): Path<OriginalName>,
-    Path(version): Path<Version>,
+    Path((crate_name, version)): Path<(OriginalName, Version)>,
     token: token::Token,
     State(db): DbState,
 ) -> ApiResult<Json<YankSuccess>> {
