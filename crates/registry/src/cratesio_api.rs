@@ -57,8 +57,7 @@ pub async fn search(
 }
 
 pub async fn download(
-    Path(package): Path<OriginalName>,
-    Path(version): Path<Version>,
+    Path((package, version)): Path<(OriginalName, Version)>,
     auth_req_token: AuthReqToken,
     State(settings): SettingsState,
     State(crate_storage): CrateIoStorageState,
@@ -271,7 +270,7 @@ mod tests {
 
         let routes = Router::new()
             .route("/", get(search))
-            .route("/<package>/<version>/download", get(download));
+            .route("/:package/:version/download", get(download));
 
         Router::new()
             .nest("/api/v1/cratesio", routes)
