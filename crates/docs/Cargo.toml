@@ -28,3 +28,8 @@ cargo.workspace = true
 fs_extra.workspace = true
 tracing.workspace = true
 axum.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tower.workspace = true
+hyper.workspace = true

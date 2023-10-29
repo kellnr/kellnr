@@ -2,16 +2,19 @@ use crate::compute_doc_url;
 use crate::doc_archive::DocArchive;
 use crate::doc_queue_response::DocQueueResponse;
 use crate::upload_response::DocUploadResponse;
+use appstate::{AppState, DbState};
 use auth::token::Token;
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 use common::original_name::OriginalName;
 use common::version::Version;
 use error::error::{ApiError, ApiResult};
 use registry::kellnr_api::check_ownership;
-use appstate::{AppState, DbState};
-use axum::{extract::{State, Path}, Json};
 
 // #[get("/queue")]
-pub async fn docs_in_queue(State(db): DbState ) -> ApiResult<Json<DocQueueResponse>> {
+pub async fn docs_in_queue(State(db): DbState) -> ApiResult<Json<DocQueueResponse>> {
     let doc = db.get_doc_queue().await?;
     Ok(Json(DocQueueResponse::from(doc)))
 }
@@ -60,7 +63,10 @@ pub async fn publish_docs(
     )))
 }
 
-fn crate_does_not_exist(crate_name: &str, crate_version: &str) -> ApiResult<Json<DocUploadResponse>> {
+fn crate_does_not_exist(
+    crate_name: &str,
+    crate_version: &str,
+) -> ApiResult<Json<DocUploadResponse>> {
     Err(ApiError::from(&format!(
         "No Crate with version exists: {}-{}",
         crate_name, crate_version
@@ -71,11 +77,18 @@ fn crate_does_not_exist(crate_name: &str, crate_version: &str) -> ApiResult<Json
 mod tests {
     use super::*;
     use crate::doc_queue_response::DocQueueEntryResponse;
+    use appstate::AppStateData;
+    use axum::body::Body;
+    use axum::http::Request;
+    use axum::routing::get;
+    use axum::Router;
     use common::normalized_name::NormalizedName;
     use db::mock::MockDb;
-    use db::DocQueueEntry;
+    use db::{DbProvider, DocQueueEntry};
+    use std::sync::Arc;
+    use tower::ServiceExt;
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn doc_in_queue_returns_queue_entries() {
         let mut db = MockDb::new();
         db.expect_get_doc_queue().returning(|| {
@@ -94,12 +107,16 @@ mod tests {
                 },
             ])
         });
-        let db = Box::new(db) as Box<dyn DbProvider>;
-        let rocket = rocket::build().manage(db);
-        let state = State::get(&rocket).unwrap();
 
-        let actual = docs_in_queue(state).await.unwrap();
-
+        let kellnr = app(Arc::new(db)).await;
+        let r = kellnr.oneshot(
+            Request::get("/queue")
+                .body(Body::empty())
+                .unwrap(),
+        ).await.unwrap();
+       
+        let actual = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let actual = serde_json::from_slice::<DocQueueResponse>(&actual).unwrap();
         assert_eq!(
             DocQueueResponse {
                 queue: vec![
@@ -115,5 +132,14 @@ mod tests {
             },
             actual
         );
+    }
+
+    async fn app(db: Arc<dyn DbProvider>) -> Router {
+        Router::new()
+            .route("/queue", get(docs_in_queue))
+            .with_state(AppStateData {
+                db,
+                ..appstate::test_state().await
+            })
     }
 }

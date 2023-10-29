@@ -307,10 +307,10 @@ mod tests {
     use hyper::body::HttpBody;
     use hyper::{header, Body, Request};
     use mockall::predicate::*;
-    use storage::kellnr_crate_storage::KellnrCrateStorage;
     use settings::Settings;
     use settings::{constants, Postgresql};
     use std::sync::Arc;
+    use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -326,11 +326,8 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
-        .oneshot(
-            Request::get("/settings")
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .await
+        .oneshot(Request::get("/settings").body(Body::empty()).unwrap())
         .await
         .unwrap();
 
@@ -350,6 +347,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::get("/settings")
                 .header(
@@ -400,6 +398,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -438,6 +437,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -495,6 +495,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -562,6 +563,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -629,6 +631,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(header::CONTENT_TYPE, "application/json")
@@ -669,6 +672,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -710,6 +714,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -757,6 +762,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -785,6 +791,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(Request::get("/version").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -810,6 +817,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::get("/search?name=doesnotexist")
                 .body(Body::empty())
@@ -852,6 +860,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::get("/search?name=hello")
                 .body(Body::empty())
@@ -926,6 +935,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::get("/crate_data?name=crate1&version=1.0.0")
                 .body(Body::empty())
@@ -993,6 +1003,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(Request::get("/crates?page=1").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -1060,6 +1071,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(Request::get("/crates?page=2").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -1118,6 +1130,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(Request::get("/crates").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -1142,6 +1155,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::get("/cratesio_data?name=quote")
                 .body(Body::empty())
@@ -1165,6 +1179,7 @@ mod tests {
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
         )
+        .await
         .oneshot(
             Request::get("/cratesio_data?name=thisdoesnotevenexist")
                 .body(Body::empty())
@@ -1185,7 +1200,7 @@ mod tests {
     }
 
     const TEST_KEY: &[u8] = &[1; 64];
-    fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
+    async fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
         Router::new()
             .route("/search", get(search))
             .route("/crates", get(crates))
@@ -1200,6 +1215,7 @@ mod tests {
                 signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings),
                 crate_storage: Arc::new(crate_storage),
+                ..appstate::test_state().await
             })
     }
 }
