@@ -176,14 +176,12 @@ async fn main() {
         .route("/:a/:b/:package", get(kellnr_prefetch_api::prefetch_kellnr))
         .route("/:a/:package", get(kellnr_prefetch_api::prefetch_len2_kellnr));
 
-    let cratesio_prefetch = Router::new()
+    let cratesio_api = Router::new()
+        .route("/", get(cratesio_api::search))
+        .route("/:package/:version/download", get(cratesio_api::download))
         .route("/config.json", get(cratesio_prefetch_api::config_cratesio))
         .route("/:a/:b/:name", get(cratesio_prefetch_api::prefetch_cratesio))
         .route("/:a/:name", get(cratesio_prefetch_api::prefetch_len2_cratesio));
-
-    let cratesio_api = Router::new()
-        .route("/", get(cratesio_api::search))
-        .route("/:package/:version/download", get(cratesio_api::download));
 
     let app = Router::new()
         .route("/version", get(ui::kellnr_version))
@@ -199,7 +197,6 @@ async fn main() {
         .nest("/api/v1/docs", docs)
         .nest("/api/v1/crates", kellnr_api)
         .nest("/api/v1/cratesio", cratesio_api)
-        // .nest("/api/v1/cratesio", cratesio_prefetch")
         .fallback(static_files_service)
         .with_state(state)
         .layer(tower_http::trace::TraceLayer::new_for_http());
