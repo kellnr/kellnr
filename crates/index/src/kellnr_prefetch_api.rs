@@ -15,7 +15,7 @@ pub async fn config_kellnr(
 }
 
 pub async fn prefetch_kellnr(
-    Path(package): Path<OriginalName>,
+    Path((_a, _b, package)): Path<(String, String, OriginalName)>,
     headers: HeaderMap,
     State(db): DbState,
     auth_req_token: AuthReqToken,
@@ -26,7 +26,7 @@ pub async fn prefetch_kellnr(
 }
 
 pub async fn prefetch_len2_kellnr(
-    Path(package): Path<OriginalName>,
+    Path((_a, package)): Path<(String, OriginalName)>,
     headers: HeaderMap,
     auth_req_token: AuthReqToken,
     State(db): DbState,

@@ -31,7 +31,7 @@ pub async fn config_cratesio(
 }
 
 pub async fn prefetch_cratesio(
-    Path(name): Path<OriginalName>,
+    Path((_a, _b, name)): Path<(String, String, OriginalName)>,
     headers: HeaderMap,
     auth_req_token: AuthReqToken,
     State(db): DbState,
@@ -42,7 +42,7 @@ pub async fn prefetch_cratesio(
 }
 
 pub async fn prefetch_len2_cratesio(
-    Path(name): Path<OriginalName>,
+    Path((_a, name)): Path<(String, OriginalName)>,
     headers: HeaderMap,
     auth_req_token: AuthReqToken,
     db: DbState,
