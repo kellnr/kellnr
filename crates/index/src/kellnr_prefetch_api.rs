@@ -51,7 +51,6 @@ async fn internal_kellnr_prefetch(
 fn needs_update(headers: &HeaderMap, prefetch: &Prefetch) -> bool {
     let if_none_match = headers.get("if-none-match");
     let if_modified_since = headers.get("if-modified-since");
-
     match (if_none_match, if_modified_since) {
         (Some(etag), Some(date)) => *etag != prefetch.etag || *date != prefetch.last_modified,
         (_, _) => true,
@@ -92,7 +91,7 @@ mod tests {
         let r = app().await
             .oneshot(Request::get("/api/v1/index/me/ta/metadata")
                 .header(header::IF_MODIFIED_SINCE, "foo")
-                .header(header::ETAG, "bar")
+                .header(header::IF_NONE_MATCH, "bar")
                 .body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -110,7 +109,7 @@ mod tests {
         let r = app().await
             .oneshot(Request::get("/api/v1/index/me/ta/metadata")
                 .header(header::IF_MODIFIED_SINCE, "date")
-                .header(header::ETAG, "etag")
+                .header(header::IF_NONE_MATCH, "etag")
                 .body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -123,7 +122,7 @@ mod tests {
         let r = app().await
             .oneshot(Request::get("/api/v1/index/no/tf/notfound")
                 .header(header::IF_MODIFIED_SINCE, "date")
-                .header(header::ETAG, "etag")
+                .header(header::IF_NONE_MATCH, "etag")
                 .body(Body::empty()).unwrap())
             .await
             .unwrap();
