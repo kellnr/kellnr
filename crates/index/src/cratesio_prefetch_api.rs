@@ -45,8 +45,8 @@ pub async fn prefetch_len2_cratesio(
     Path((_a, name)): Path<(String, OriginalName)>,
     headers: HeaderMap,
     auth_req_token: AuthReqToken,
-    db: DbState,
-    sender: CratesIoPrefetchSenderState,
+    State(db): DbState,
+    State(sender): CratesIoPrefetchSenderState,
 ) -> Result<Prefetch, StatusCode> {
     _ = auth_req_token;
     internal_prefetch_cratesio(name, headers, &db, &sender).await

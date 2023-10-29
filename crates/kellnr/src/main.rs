@@ -5,7 +5,7 @@ use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use db::DbProvider;
 use db::{ConString, Database, PgConString, SqliteConString};
-use index::cratesio_prefetch_api::{background_update_thread, cratesio_prefetch_thread};
+use index::cratesio_prefetch_api::{background_update_thread, cratesio_prefetch_thread, self};
 use index::kellnr_prefetch_api;
 use registry::{kellnr_api, cratesio_api};
 use rocket::config::{Config, SecretKey};
@@ -173,13 +173,13 @@ async fn main() {
         .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
         .route("/:crate_name/:version/unyank", put(kellnr_api::unyank))
         .route("/config.json", get(kellnr_prefetch_api::config_kellnr))
-        .route("/:_/:_/:package", get(kellnr_prefetch_api::prefetch_kellnr))
-        .route("/:_/:package", get(kellnr_prefetch_api::prefetch_len2_kellnr));
+        .route("/:a/:b/:package", get(kellnr_prefetch_api::prefetch_kellnr))
+        .route("/:a/:package", get(kellnr_prefetch_api::prefetch_len2_kellnr));
 
-    // let cratesio_prefetch = Router::new()
-    //     .route("/config.json", get(cratesio_prefetch_api::config_cratesio))
-    //     .route("/:_/:_/:name", get(cratesio_prefetch_api::prefetch_cratesio))
-    //     .route("/:_/:name", get(cratesio_prefetch_api::prefetch_len2_cratesio));
+    let cratesio_prefetch = Router::new()
+        .route("/config.json", get(cratesio_prefetch_api::config_cratesio))
+        .route("/:a/:b/:name", get(cratesio_prefetch_api::prefetch_cratesio))
+        .route("/:a/:name", get(cratesio_prefetch_api::prefetch_len2_cratesio));
 
     let cratesio_api = Router::new()
         .route("/", get(cratesio_api::search))
