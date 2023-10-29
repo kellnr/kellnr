@@ -806,6 +806,7 @@ mod reg_api_tests {
 
     impl TestKellnr {
         async fn new(settings: Settings) -> Self {
+            std::fs::create_dir_all(&settings.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             let db = Database::new(&con_string).await.unwrap();
             TestKellnr {
