@@ -245,9 +245,9 @@ mod session_tests {
             .with_state(AppStateData {
                 db,
                 signing_key: Key::from(crate::test_helper::TEST_KEY),
-                // TODO(ItsEthra): impl Default for Settings
                 crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
                 settings: Arc::new(settings),
+                ..appstate::test_state().await
             })
     }
 

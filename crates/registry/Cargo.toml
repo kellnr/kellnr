@@ -34,3 +34,6 @@ axum.workspace = true
 mockall.workspace = true
 rm_rf.workspace = true
 rand.workspace = true
+tokio.workspace = true
+tower.workspace = true
+hyper.workspace = true

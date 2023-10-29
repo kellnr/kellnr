@@ -1,15 +1,15 @@
 use crate::per_page;
-use appstate::{DbState, SettingsState, CrateIoStorageState};
+use appstate::{CrateIoStorageState, SettingsState};
 use auth::auth_req_token::AuthReqToken;
-use axum::{extract::{State, Query, Path}, Json, http::StatusCode};
-use common::{original_name::OriginalName, search_result};
-use common::version::Version;
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+};
+use common::{original_name::OriginalName, version::Version};
 use error::error::{ApiError, ApiResult};
 use reqwest::Url;
 use serde::Deserialize;
-use settings::Settings;
-use storage::cratesio_crate_storage::CratesIoCrateStorage;
-use tracing::{error, trace, debug};
+use tracing::{debug, error, trace};
 
 #[derive(Deserialize)]
 pub struct SearchParams {
@@ -56,13 +56,12 @@ pub async fn search(
     Ok(body)
 }
 
-// #[get("/<package>/<version>/download")]
 pub async fn download(
     Path(package): Path<OriginalName>,
     Path(version): Path<Version>,
     auth_req_token: AuthReqToken,
-    State(settings): SettingsState, 
-    State(crate_storage):CrateIoStorageState
+    State(settings): SettingsState,
+    State(crate_storage): CrateIoStorageState,
 ) -> Result<Vec<u8>, StatusCode> {
     _ = auth_req_token;
     // Return None if the feature is disabled
@@ -71,8 +70,7 @@ pub async fn download(
         _ => return Err(StatusCode::NOT_FOUND),
     };
 
-    let file_path = crate_storage
-        .crate_path(&package.to_string(), &version.to_string());
+    let file_path = crate_storage.crate_path(&package.to_string(), &version.to_string());
 
     trace!(
         "Downloading crate: {} ({}) from path {}",
@@ -128,83 +126,108 @@ pub async fn download(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use appstate::AppStateData;
+    use axum::body::Body;
+    use axum::http::Request;
+    use axum::routing::get;
+    use axum::Router;
     use common::util::generate_rand_string;
-    use db::{ConString, Database, SqliteConString};
-    use rocket::http::Status;
-    use rocket::local::asynchronous::Client;
-    use rocket::{async_test, routes, Build};
     use settings::Settings;
     use std::path;
     use std::path::PathBuf;
+    use storage::cratesio_crate_storage::CratesIoCrateStorage;
+    use tower::ServiceExt;
 
-    #[async_test]
+    #[tokio::test]
     async fn download_not_existing_package() {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
-        let response = kellnr
+        let r = kellnr
             .client
-            .get("/api/v1/cratesio/does_not_exist/0.1.0/download")
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::NotFound);
+            .oneshot(
+                Request::get("/api/v1/cratesio/does_not_exist/0.1.0/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn download_invalid_package_name() {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
-        let response = kellnr
+        let r = kellnr
             .client
-            .get("/api/v1/cratesio/-invalid_name/0.1.0/download")
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::NotFound);
+            .oneshot(
+                Request::get("/api/v1/cratesio/-invalid_name/0.1.0/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn download_not_existing_version() {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
-        let response = kellnr
+        let r = kellnr
             .client
-            .get("/api/v1/cratesio/test-lib/99.1.0/download")
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::NotFound);
+            .oneshot(
+                Request::get("/api/v1/cratesio/test-lib/99.1.0/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn download_invalid_package_version() {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
-        let response = kellnr
+        let r = kellnr
             .client
-            .get("/api/v1/cratesio/invalid_version/0.a.0/download")
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::NotFound);
+            .oneshot(
+                Request::get("/api/v1/cratesio/invalid_version/0.a.0/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn download_valid_package() {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
-        let response = kellnr
+        let r = kellnr
             .client
-            .get("/api/v1/cratesio/adler/1.0.2/download")
-            .dispatch()
-            .await;
+            .oneshot(
+                Request::get("/api/v1/cratesio/adler/1.0.2/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        assert_eq!(response.status(), Status::Ok);
-        let body = response.into_bytes().await;
-        assert_eq!(12778, body.unwrap().len());
+        assert_eq!(r.status(), StatusCode::OK);
+        let body = hyper::body::to_bytes(r.into_body()).await.unwrap(); 
+        assert_eq!(12778, body.len());
     }
 
     struct TestKellnr {
         path: PathBuf,
-        client: Client,
-        #[allow(dead_code)]
-        db: Database,
+        client: Router,
     }
 
     fn get_settings() -> Settings {
@@ -220,14 +243,9 @@ mod tests {
     impl TestKellnr {
         async fn new(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.data_dir).unwrap();
-            let con_string = ConString::Sqlite(SqliteConString::from(&settings));
-            let db = Database::new(&con_string).await.unwrap();
             TestKellnr {
                 path: path::PathBuf::from(&settings.data_dir),
-                db,
-                client: Client::tracked(test_rocket(settings).await)
-                    .await
-                    .expect("valid rocket instance"),
+                client: app(settings).await,
             }
         }
     }
@@ -238,18 +256,20 @@ mod tests {
         }
     }
 
-    async fn test_rocket(settings: Settings) -> rocket::Rocket<Build> {
+    async fn app(settings: Settings) -> Router {
         let cs = CratesIoCrateStorage::new(&settings).await.unwrap();
-
-        use rocket::config::{Config, SecretKey};
-        let rocket_conf = Config {
-            secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-            ..Config::default()
+        let state = AppStateData {
+            settings: settings.into(),
+            cratesio_storage: cs.into(),
+            ..appstate::test_state().await
         };
 
-        rocket::custom(rocket_conf)
-            .mount("/api/v1/cratesio", routes![download, search,])
-            .manage(settings)
-            .manage(RwLock::new(cs))
+        let routes = Router::new()
+            .route("/", get(search))
+            .route("/<package>/<version>/download", get(download));
+
+        Router::new()
+            .nest("/api/v1/cratesio", routes)
+            .with_state(state)
     }
 }

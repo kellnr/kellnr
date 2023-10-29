@@ -249,53 +249,63 @@ pub async fn unyank(
 #[cfg(test)]
 mod reg_api_tests {
     use super::*;
+    use appstate::AppStateData;
+    use axum::body::Body;
+    use axum::http::Request;
+    use axum::routing::{delete, get, put};
+    use axum::Router;
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString};
+    use hyper::header;
     use mockall::predicate::*;
     use rand::{distributions::Alphanumeric, thread_rng, Rng};
-    use rocket::http::{ContentType, Header, Status};
-    use rocket::local::asynchronous::Client;
-    use rocket::tokio::fs::File;
-    use rocket::tokio::io::AsyncReadExt;
-    use rocket::{async_test, routes, Build};
+    use settings::Settings;
     use std::path::PathBuf;
     use std::{iter, path};
-    use storage::storage_provider::{mock::MockStorage, StorageProvider};
+    use storage::kellnr_crate_storage::KellnrCrateStorage;
+    use storage::storage_provider::mock::MockStorage;
+    use tokio::fs::read;
+    use tower::ServiceExt;
 
     const TOKEN: &str = "854DvwSlUwEHtIo3kWy6x7UCPKHfzCmy";
 
-    #[async_test]
+    #[tokio::test]
     async fn remove_owner_valid_owner() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
 
         // Use valid crate publish data to test.
-        let mut file = File::open("../test_data/pub_data.bin")
+        let valid_pub_package = read("../test_data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
-        let mut valid_pub_package = vec![];
-        file.read_to_end(&mut valid_pub_package)
-            .await
-            .expect("Cannot read valid package file.");
-        let request = kellnr
-            .client
-            .put("/api/v1/crates/new")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN))
-            .body(valid_pub_package);
-        request.dispatch().await;
         let del_owner = owner::OwnerRequest {
             users: vec![String::from("admin")],
         };
-
-        let request = kellnr
+        let _ = kellnr
             .client
-            .delete("/api/v1/crates/test_lib/owners")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN))
-            .body(serde_json::to_string(&del_owner).unwrap().as_bytes());
-        let result = request.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing success message");
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let r = kellnr
+            .client
+            .oneshot(
+                Request::delete("/api/v1/crates/test_lib/owners")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(serde_json::to_string(&del_owner).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
 
         assert_eq!(
             0,
@@ -306,29 +316,29 @@ mod reg_api_tests {
                 .unwrap()
                 .len()
         );
-        let owners = serde_json::from_str::<owner::OwnerResponse>(&result_msg).unwrap();
+        let owners = serde_json::from_slice::<owner::OwnerResponse>(&result_msg).unwrap();
         assert!(owners.ok);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn add_owner_valid_owner() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         // Use valid crate publish data to test.
-        let mut file = File::open("../test_data/pub_data.bin")
+        let valid_pub_package = read("../test_data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
-        let mut valid_pub_package = vec![];
-        file.read_to_end(&mut valid_pub_package)
-            .await
-            .expect("Cannot read valid package file.");
-        let request = kellnr
+        let _ = kellnr
             .client
-            .put("/api/v1/crates/new")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN))
-            .body(valid_pub_package);
-        request.dispatch().await;
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
         kellnr
             .db
             .add_user("user", "123", "123", false)
@@ -338,80 +348,95 @@ mod reg_api_tests {
             users: vec![String::from("user")],
         };
 
-        let request = kellnr
+        let r = kellnr
             .client
-            .put("/api/v1/crates/test_lib/owners")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN))
-            .body(serde_json::to_string(&add_owner).unwrap().as_bytes());
-        let result = request.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing success message");
+            .oneshot(
+                Request::put("/api/v1/crates/test_lib/owners")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(serde_json::to_string(&add_owner).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        let owners = serde_json::from_str::<owner::OwnerResponse>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.await.unwrap().into_body())
+            .await
+            .unwrap();
+        let owners = serde_json::from_slice::<owner::OwnerResponse>(&result_msg).unwrap();
         assert!(owners.ok);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn list_owners_valid_owner() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
 
         // Use valid crate publish data to test.
-        let mut file = File::open("../test_data/pub_data.bin")
+        let valid_pub_package = read("../test_data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
-        let mut valid_pub_package = vec![];
-        file.read_to_end(&mut valid_pub_package)
+        let _ = kellnr
+            .client
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
             .await
-            .expect("Cannot read valid package file.");
-        let request = kellnr
+            .unwrap();
+
+        let r = kellnr
             .client
-            .put("/api/v1/crates/new")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN))
-            .body(valid_pub_package);
-        request.dispatch().await;
+            .oneshot(
+                Request::get("/api/v1/crates/test_lib/owners")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        let request = kellnr
-            .client
-            .get("/api/v1/crates/test_lib/owners")
-            .header(Header::new("Authorization", TOKEN));
-        let result = request.dispatch().await;
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
 
-        let result_msg = result.into_string().await.expect("Missing success message");
-
-        let owners = serde_json::from_str::<owner::OwnerList>(&result_msg).unwrap();
+        let owners = serde_json::from_slice::<owner::OwnerList>(&result_msg).unwrap();
         assert_eq!(1, owners.users.len());
         assert_eq!("admin", owners.users[0].login);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn publish_garbage() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
 
-        let garbage: [u8; 4] = [0x00, 0x11, 0x22, 0x33];
-        let mut request = kellnr
+        let garbage = vec![0x00, 0x11, 0x22, 0x33];
+        let r = kellnr
             .client
-            .put("/api/v1/crates/new")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN));
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(garbage))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        request.set_body(garbage);
-        let response = request.dispatch().await;
-        let response_status = response.status();
+        let response_status = r.status();
         let error: ApiError =
-            serde_json::from_str(&response.into_string().await.expect("Missing error message"))
+            serde_json::from_slice(hyper::body::to_bytes(r.into_body()).await.unwrap().as_ref())
                 .expect("Cannot deserialize error message");
 
-        assert_eq!(Status::Ok, response_status);
+        assert_eq!(StatusCode::OK, response_status);
         assert_eq!(
             "ERROR: Invalid min. length. 4/10 bytes.",
             error.errors[0].detail
         );
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn download_not_existing_package() {
         let settings = get_settings();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
@@ -423,7 +448,7 @@ mod reg_api_tests {
         assert_eq!(response.status(), Status::NotFound);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn download_invalid_package_name() {
         let settings = get_settings();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
@@ -435,7 +460,7 @@ mod reg_api_tests {
         assert_eq!(response.status(), Status::NotFound);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn download_not_existing_version() {
         let settings = get_settings();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
@@ -447,7 +472,7 @@ mod reg_api_tests {
         assert_eq!(response.status(), Status::NotFound);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn download_invalid_package_version() {
         let settings = get_settings();
         let kellnr = TestKellnr::new::<MockStorage>(settings).await;
@@ -459,7 +484,7 @@ mod reg_api_tests {
         assert_eq!(response.status(), Status::NotFound);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn search_verify_query_and_default() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -467,7 +492,7 @@ mod reg_api_tests {
             .with(eq("foo"))
             .returning(|_| Ok(vec![]));
 
-        let kellnr = test_client(Box::new(mock_db)).await;
+        let kellnr = app_search(Box::new(mock_db)).await;
         let request = kellnr.get("/api/v1/crates?q=foo");
 
         let result = request.dispatch().await;
@@ -476,7 +501,7 @@ mod reg_api_tests {
         assert!(serde_json::from_str::<SearchResult>(&result_msg).is_ok());
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn search_verify_per_page() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -484,7 +509,7 @@ mod reg_api_tests {
             .with(eq("foo"))
             .returning(|_| Ok(vec![]));
 
-        let kellnr = test_client(Box::new(mock_db)).await;
+        let kellnr = app_search(Box::new(mock_db)).await;
         let request = kellnr.get("/api/v1/crates?q=foo&per_page=20");
 
         let result = request.dispatch().await;
@@ -493,7 +518,7 @@ mod reg_api_tests {
         assert!(serde_json::from_str::<SearchResult>(&result_msg).is_ok());
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn search_verify_per_page_out_of_range() {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
@@ -505,7 +530,7 @@ mod reg_api_tests {
         assert!(serde_json::from_str::<search_result::SearchResult>(&result_msg).is_err());
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn yank_success() {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
@@ -535,7 +560,7 @@ mod reg_api_tests {
         assert!(serde_json::from_str::<YankSuccess>(&result_msg).is_ok());
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn yank_error() {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
@@ -550,7 +575,7 @@ mod reg_api_tests {
         assert!(serde_json::from_str::<ApiError>(&result_msg).is_ok());
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn unyank_success() {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
@@ -580,7 +605,7 @@ mod reg_api_tests {
         assert!(serde_json::from_str::<YankSuccess>(&result_msg).is_ok());
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn unyank_error() {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
@@ -595,7 +620,7 @@ mod reg_api_tests {
         assert!(serde_json::from_str::<ApiError>(&result_msg).is_ok());
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn publish_package() {
         // Use valid crate publish data to test.
         let mut file = File::open("../test_data/pub_data.bin")
@@ -641,7 +666,7 @@ mod reg_api_tests {
         );
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn publish_existing_package() {
         // Use valid crate publish data to test.
         let mut file = File::open("../test_data/pub_data.bin")
@@ -677,7 +702,7 @@ mod reg_api_tests {
 
     struct TestKellnr {
         path: PathBuf,
-        client: Client,
+        client: Router,
         db: Database,
     }
 
@@ -700,18 +725,13 @@ mod reg_api_tests {
     }
 
     impl TestKellnr {
-        // why is T needed?
-        #[allow(clippy::extra_unused_type_parameters)]
-        async fn new<T: StorageProvider>(settings: Settings) -> Self {
-            std::fs::create_dir_all(&settings.data_dir).unwrap();
+        async fn new(settings: Settings) -> Self {
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             let db = Database::new(&con_string).await.unwrap();
             TestKellnr {
                 path: path::PathBuf::from(&settings.data_dir),
                 db,
-                client: Client::tracked(test_rocket(settings).await)
-                    .await
-                    .expect("valid rocket instance"),
+                client: app(settings).await,
             }
         }
 
@@ -723,9 +743,7 @@ mod reg_api_tests {
             TestKellnr {
                 path: path::PathBuf::from(&settings.data_dir),
                 db,
-                client: Client::tracked(test_rocket(settings).await)
-                    .await
-                    .expect("valid rocket instance"),
+                client: app(settings).await,
             }
         }
     }
@@ -736,54 +754,40 @@ mod reg_api_tests {
         }
     }
 
-    async fn test_rocket(settings: Settings) -> rocket::Rocket<Build> {
+    async fn app(settings: Settings) -> Router {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
         let db = Database::new(&con_string).await.unwrap();
-
-        let db = Box::new(db) as Box<dyn DbProvider>;
         let cs = KellnrCrateStorage::new(&settings).await.unwrap();
         db.add_auth_token("test", TOKEN, "admin").await.unwrap();
 
-        use rocket::config::{Config, SecretKey};
-        let rocket_conf = Config {
-            secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-            ..Config::default()
+        let state = AppStateData {
+            db: Arc::new(db),
+            settings: settings.into(),
+            crate_storage: cs.into(),
+            ..appstate::test_state().await
         };
 
-        rocket::custom(rocket_conf)
-            .mount(
-                "/api/v1/crates",
-                routes![
-                    download,
-                    publish,
-                    yank,
-                    unyank,
-                    search,
-                    list_owners,
-                    add_owner,
-                    remove_owner,
-                ],
-            )
-            .manage(settings)
-            .manage(db)
-            .manage(RwLock::new(cs))
+        let routes = Router::new()
+            .route("/:crate_name/owners", delete(remove_owner))
+            .route("/:crate_name/owners", put(add_owner))
+            .route("/:crate_name/owners", get(list_owners))
+            .route("/", get(search))
+            .route("/:package/:version/download", get(download))
+            .route("/new", put(publish))
+            .route("/:crate_name/:version/yank", delete(yank))
+            .route("/:crate_name/:version/unyank", put(unyank));
+
+        Router::new()
+            .nest("/api/v1/crates", routes)
+            .with_state(state)
     }
 
-    async fn test_client(db: Box<dyn DbProvider>) -> Client {
-        use rocket::config::{Config, SecretKey};
-        let rocket_conf = Config {
-            secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-            ..Config::default()
-        };
-
-        let settings = Settings::new().unwrap();
-        let rocket = rocket::custom(rocket_conf)
-            .mount("/api/v1/crates", routes![search,])
-            .manage(db)
-            .manage(settings);
-
-        Client::tracked(rocket)
-            .await
-            .expect("valid rocket instance")
+    async fn app_search(db: Arc<dyn DbProvider>) -> Router {
+        Router::new()
+            .route("/api/v1/crates/", get(search))
+            .with_state(AppStateData {
+                db,
+                ..appstate::test_state().await
+            })
     }
 }

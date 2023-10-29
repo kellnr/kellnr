@@ -4425,6 +4425,7 @@ dependencies = [
  "derive_jsonresponder",
  "error",
  "hex",
+ "hyper",
  "index",
  "json_payload",
  "mockall",
@@ -4439,6 +4440,8 @@ dependencies = [
  "settings",
  "sha2",
  "storage",
+ "tokio",
+ "tower",
  "tracing",
 ]
 
