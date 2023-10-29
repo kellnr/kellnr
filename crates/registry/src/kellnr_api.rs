@@ -263,7 +263,6 @@ mod reg_api_tests {
     use std::path::PathBuf;
     use std::{iter, path};
     use storage::kellnr_crate_storage::KellnrCrateStorage;
-    use storage::storage_provider::mock::MockStorage;
     use tokio::fs::read;
     use tower::ServiceExt;
 
@@ -283,6 +282,7 @@ mod reg_api_tests {
         };
         let _ = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::put("/api/v1/crates/new")
                     .header(header::CONTENT_TYPE, "application/json")
@@ -295,6 +295,7 @@ mod reg_api_tests {
 
         let r = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::delete("/api/v1/crates/test_lib/owners")
                     .header(header::CONTENT_TYPE, "application/json")
@@ -330,6 +331,7 @@ mod reg_api_tests {
             .expect("Cannot open valid package file.");
         let _ = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::put("/api/v1/crates/new")
                     .header(header::CONTENT_TYPE, "application/json")
@@ -350,6 +352,7 @@ mod reg_api_tests {
 
         let r = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::put("/api/v1/crates/test_lib/owners")
                     .header(header::CONTENT_TYPE, "application/json")
@@ -360,9 +363,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.await.unwrap().into_body())
-            .await
-            .unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let owners = serde_json::from_slice::<owner::OwnerResponse>(&result_msg).unwrap();
         assert!(owners.ok);
     }
@@ -378,6 +379,7 @@ mod reg_api_tests {
             .expect("Cannot open valid package file.");
         let _ = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::put("/api/v1/crates/new")
                     .header(header::CONTENT_TYPE, "application/json")
@@ -390,6 +392,7 @@ mod reg_api_tests {
 
         let r = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::get("/api/v1/crates/test_lib/owners")
                     .header(header::AUTHORIZATION, TOKEN)
@@ -414,6 +417,7 @@ mod reg_api_tests {
         let garbage = vec![0x00, 0x11, 0x22, 0x33];
         let r = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::put("/api/v1/crates/new")
                     .header(header::CONTENT_TYPE, "application/json")
@@ -439,49 +443,73 @@ mod reg_api_tests {
     #[tokio::test]
     async fn download_not_existing_package() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
-        let response = kellnr
+        let kellnr = TestKellnr::new(settings).await;
+        let r = kellnr
             .client
-            .get("/api/v1/crates/does_not_exist/0.1.0/download")
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::NotFound);
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/cratesio/does_not_exist/0.1.0/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn download_invalid_package_name() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
-        let response = kellnr
+        let kellnr = TestKellnr::new(settings).await;
+        let r = kellnr
             .client
-            .get("/api/v1/crates/-invalid_name/0.1.0/download")
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::NotFound);
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/cratesio/-invalid_name/0.1.0/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn download_not_existing_version() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
-        let response = kellnr
+        let kellnr = TestKellnr::new(settings).await;
+        let r = kellnr
             .client
-            .get("/api/v1/crates/test-lib/99.1.0/download")
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::NotFound);
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/test-lib/99.1.0/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn download_invalid_package_version() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
-        let response = kellnr
+        let kellnr = TestKellnr::new(settings).await;
+        let r = kellnr
             .client
-            .get("/api/v1/crates/invalid_version/0.a.0/download")
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::NotFound);
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/invalid_version/0.a.0/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -492,13 +520,18 @@ mod reg_api_tests {
             .with(eq("foo"))
             .returning(|_| Ok(vec![]));
 
-        let kellnr = app_search(Box::new(mock_db)).await;
-        let request = kellnr.get("/api/v1/crates?q=foo");
+        let kellnr = app_search(Arc::new(mock_db)).await;
+        let r = kellnr
+            .oneshot(
+                Request::get("/api/v1/crates?q=foo")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        let result = request.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing success message");
-
-        assert!(serde_json::from_str::<SearchResult>(&result_msg).is_ok());
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_ok());
     }
 
     #[tokio::test]
@@ -509,25 +542,37 @@ mod reg_api_tests {
             .with(eq("foo"))
             .returning(|_| Ok(vec![]));
 
-        let kellnr = app_search(Box::new(mock_db)).await;
-        let request = kellnr.get("/api/v1/crates?q=foo&per_page=20");
+        let kellnr = app_search(Arc::new(mock_db)).await;
+        let r = kellnr
+            .oneshot(
+                Request::get("/api/v1/crates?q=foo&per_page=20")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        let result = request.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing success message");
-
-        assert!(serde_json::from_str::<SearchResult>(&result_msg).is_ok());
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_ok());
     }
 
     #[tokio::test]
     async fn search_verify_per_page_out_of_range() {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
-        let request = kellnr.client.get("/api/v1/crates?q=foo&per_page=200");
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates?q=foo&per_page=200")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        let result = request.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing success message");
-
-        assert!(serde_json::from_str::<search_result::SearchResult>(&result_msg).is_err());
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        assert!(serde_json::from_slice::<search_result::SearchResult>(&result_msg).is_err());
     }
 
     #[tokio::test]
@@ -535,44 +580,57 @@ mod reg_api_tests {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
         // Use valid crate publish data to test.
-        let mut file = File::open("../test_data/pub_data.bin")
+        let valid_pub_package = read("../test_data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
-        let mut valid_pub_package = vec![];
-        file.read_to_end(&mut valid_pub_package)
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
             .await
-            .expect("Cannot read valid package file.");
-        let request = kellnr
-            .client
-            .put("/api/v1/crates/new")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN))
-            .body(valid_pub_package);
-        request.dispatch().await;
+            .unwrap();
 
-        let request = kellnr
+        let r = kellnr
             .client
-            .delete("/api/v1/crates/test_lib/0.2.0/yank")
-            .header(Header::new("Authorization", TOKEN));
+            .clone()
+            .oneshot(
+                Request::delete("/api/v1/crates/test_lib/0.2.0/yank")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        let result = request.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing success message");
-        assert!(serde_json::from_str::<YankSuccess>(&result_msg).is_ok());
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        assert!(serde_json::from_slice::<YankSuccess>(&result_msg).is_ok());
     }
 
     #[tokio::test]
     async fn yank_error() {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
-        let request = kellnr
+
+        let r = kellnr
             .client
-            .delete("/api/v1/crates/test/0.1.0/yank")
-            .header(Header::new("Authorization", TOKEN));
+            .clone()
+            .oneshot(
+                Request::delete("/api/v1/crates/test/0.1.0/yank")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        let result = request.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing success message");
-
-        assert!(serde_json::from_str::<ApiError>(&result_msg).is_ok());
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        assert!(serde_json::from_slice::<ApiError>(&result_msg).is_ok());
     }
 
     #[tokio::test]
@@ -580,83 +638,92 @@ mod reg_api_tests {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
         // Use valid crate publish data to test.
-        let mut file = File::open("../test_data/pub_data.bin")
+        let valid_pub_package = read("../test_data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
-        let mut valid_pub_package = vec![];
-        file.read_to_end(&mut valid_pub_package)
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
             .await
-            .expect("Cannot read valid package file.");
-        let request = kellnr
-            .client
-            .put("/api/v1/crates/new")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN))
-            .body(valid_pub_package);
-        request.dispatch().await;
+            .unwrap();
 
-        let request = kellnr
+        let r = kellnr
             .client
-            .put("/api/v1/crates/test_lib/0.2.0/unyank")
-            .header(Header::new("Authorization", TOKEN));
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/test_lib/0.2.0/unyank")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        let result = request.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing success message");
-        assert!(serde_json::from_str::<YankSuccess>(&result_msg).is_ok());
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        assert!(serde_json::from_slice::<YankSuccess>(&result_msg).is_ok());
     }
 
     #[tokio::test]
     async fn unyank_error() {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
-        let request = kellnr
+
+        let r = kellnr
             .client
-            .put("/api/v1/crates/test/0.1.0/unyank")
-            .header(Header::new("Authorization", TOKEN));
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/test/0.1.0/unyank")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        let result = request.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing success message");
-
-        assert!(serde_json::from_str::<ApiError>(&result_msg).is_ok());
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        assert!(serde_json::from_slice::<ApiError>(&result_msg).is_ok());
     }
 
     #[tokio::test]
     async fn publish_package() {
         // Use valid crate publish data to test.
-        let mut file = File::open("../test_data/pub_data.bin")
+        let valid_pub_package = read("../test_data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
-        let mut valid_pub_package = vec![];
-        file.read_to_end(&mut valid_pub_package)
-            .await
-            .expect("Cannot read valid package file.");
-
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
-
-        let request = kellnr
+        let r = kellnr
             .client
-            .put("/api/v1/crates/new")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN))
-            .body(valid_pub_package);
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
         // Get the empty success results message.
-        let response = request.dispatch().await;
-        let response_status = response.status();
-        let result_msg = &mut response
-            .into_string()
-            .await
-            .expect("Missing success message");
+        let response_status = r.status();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let success: PubDataSuccess =
-            serde_json::from_str(result_msg).expect("Cannot deserialize success message");
+            serde_json::from_slice(&result_msg).expect("Cannot deserialize success message");
 
-        assert_eq!(Status::Ok, response_status);
+        assert_eq!(StatusCode::OK, response_status);
         assert_eq!(None, success.warnings);
         // As the success message is empty in the normal case, the deserialization works even
         // if an error message was returned. That's why we need to test for an error message, too.
         assert!(
-            serde_json::from_str::<ApiError>(result_msg).is_err(),
+            serde_json::from_slice::<ApiError>(&result_msg).is_err(),
             "An error message instead of a success message was returned"
         );
         assert_eq!(1, kellnr.db.get_crate_meta_list(1).await.unwrap().len());
@@ -669,31 +736,44 @@ mod reg_api_tests {
     #[tokio::test]
     async fn publish_existing_package() {
         // Use valid crate publish data to test.
-        let mut file = File::open("../test_data/pub_data.bin")
+        let valid_pub_package = read("../test_data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
-        let mut valid_pub_package = vec![];
-        file.read_to_end(&mut valid_pub_package)
-            .await
-            .expect("Cannot read valid package file.");
         let settings = get_settings();
-        let kellnr = TestKellnr::new::<MockStorage>(settings).await;
-        let request = kellnr
+        let kellnr = TestKellnr::new(settings).await;
+        let _ = kellnr
             .client
-            .put("/api/v1/crates/new")
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", TOKEN))
-            .body(&valid_pub_package);
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package.clone()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
         // Publish same package a second time.
-        let _response = request.clone().dispatch().await;
-        let response = request.dispatch().await;
-        let response_status = response.status();
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let response_status = r.status();
 
-        let msg = response.into_string().await.expect("Missing error message");
-        let error: ApiError = serde_json::from_str(&msg).expect("Cannot deserialize error message");
+        let msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let error: ApiError =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
 
-        assert_eq!(Status::Ok, response_status);
+        assert_eq!(StatusCode::OK, response_status);
         assert_eq!(
             "ERROR: Crate with version already exists: test_lib-0.2.0",
             error.errors[0].detail

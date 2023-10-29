@@ -144,6 +144,7 @@ mod tests {
         let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::get("/api/v1/cratesio/does_not_exist/0.1.0/download")
                     .body(Body::empty())
@@ -161,6 +162,7 @@ mod tests {
         let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::get("/api/v1/cratesio/-invalid_name/0.1.0/download")
                     .body(Body::empty())
@@ -178,6 +180,7 @@ mod tests {
         let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::get("/api/v1/cratesio/test-lib/99.1.0/download")
                     .body(Body::empty())
@@ -195,6 +198,7 @@ mod tests {
         let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::get("/api/v1/cratesio/invalid_version/0.a.0/download")
                     .body(Body::empty())
@@ -212,6 +216,7 @@ mod tests {
         let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
+            .clone()
             .oneshot(
                 Request::get("/api/v1/cratesio/adler/1.0.2/download")
                     .body(Body::empty())
@@ -221,7 +226,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(r.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(r.into_body()).await.unwrap(); 
+        let body = hyper::body::to_bytes(r.into_body()).await.unwrap();
         assert_eq!(12778, body.len());
     }
 
