@@ -103,15 +103,15 @@ pub async fn list_owners(
 #[derive(Deserialize)]
 pub struct SearchParams {
     pub q: OriginalName,
-    pub per_page: per_page::PerPage,
+    pub per_page: Option<per_page::PerPage>,
 }
 
 pub async fn search(
-    auth_req_token: AuthReqToken,
+    _auth_req_token: AuthReqToken,
     State(db): DbState,
     Query(params): Query<SearchParams>,
 ) -> ApiResult<Json<search_result::SearchResult>> {
-    _ = auth_req_token;
+    let per_page = params.per_page.unwrap_or(per_page::PerPage(10)).0;
     let crates = db
         .search_in_crate_name(&params.q)
         .await?
@@ -123,7 +123,7 @@ pub async fn search(
                 .description
                 .unwrap_or_else(|| "No description set".to_string()),
         })
-        .take(params.per_page.0 as usize)
+        .take(per_page as usize)
         .collect::<Vec<Crate>>();
 
     Ok(Json(SearchResult {
@@ -858,7 +858,7 @@ mod reg_api_tests {
 
     async fn app_search(db: Arc<dyn DbProvider>) -> Router {
         Router::new()
-            .route("/api/v1/crates/", get(search))
+            .route("/api/v1/crates", get(search))
             .with_state(AppStateData {
                 db,
                 ..appstate::test_state().await

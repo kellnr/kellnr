@@ -14,17 +14,18 @@ use tracing::{debug, error, trace};
 #[derive(Deserialize)]
 pub struct SearchParams {
     pub q: OriginalName,
-    pub per_page: per_page::PerPage,
+    pub per_page: Option<per_page::PerPage>,
 }
 
 pub async fn search(
     auth_req_token: AuthReqToken,
     Query(params): Query<SearchParams>,
 ) -> ApiResult<String> {
+    let per_page = params.per_page.unwrap_or(per_page::PerPage(10)).0;
     _ = auth_req_token;
     let url = match Url::parse(&format!(
         "https://crates.io/api/v1/crates?q={}&per_page={}",
-        params.q, params.per_page.0
+        params.q, per_page
     )) {
         Ok(url) => url,
         Err(e) => {

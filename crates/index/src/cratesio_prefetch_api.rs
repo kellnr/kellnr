@@ -162,7 +162,7 @@ async fn fetch_cratesio_description(name: &str) -> Result<Option<String>, Status
         .header("User-Agent", "kellnr.io/kellnr")
         .send()
         .await
-        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let desc = response
         .json::<MinimalCrate>()
