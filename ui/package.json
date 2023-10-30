@@ -40,7 +40,7 @@
     "@vue/tsconfig": "^0.4.0",
     "babel-eslint": "^10.1.0",
     "eslint": "^8.52.0",
-    "eslint-plugin-vue": "^9.18.0",
+    "eslint-plugin-vue": "^9.18.1",
     "typescript": "~5.2.2",
     "vite": "4.5.0",
     "vue-tsc": "^1.8.15"
