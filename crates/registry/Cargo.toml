@@ -29,6 +29,7 @@ reqwest.workspace = true
 moka.workspace = true
 tracing.workspace = true
 axum.workspace = true
+hyper.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
@@ -36,4 +37,3 @@ rm_rf.workspace = true
 rand.workspace = true
 tokio.workspace = true
 tower.workspace = true
-hyper.workspace = true

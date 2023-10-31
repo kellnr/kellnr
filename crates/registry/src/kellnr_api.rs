@@ -1,7 +1,7 @@
 use crate::owner;
-use crate::per_page;
 use crate::pub_data::PubData;
 use crate::pub_success::PubDataSuccess;
+use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
 use anyhow::Result;
 use appstate::AppState;
@@ -9,7 +9,6 @@ use appstate::DbState;
 use auth::auth_req_token::AuthReqToken;
 use auth::token;
 use axum::extract::Path;
-use axum::extract::Query;
 use axum::extract::State;
 use axum::response::Redirect;
 use axum::Json;
@@ -22,7 +21,6 @@ use common::version::Version;
 use db::DbProvider;
 use error::error::{ApiError, ApiResult};
 use reqwest::StatusCode;
-use serde::Deserialize;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tracing::warn;
@@ -100,18 +98,11 @@ pub async fn list_owners(
     Ok(Json(owner::OwnerList::from(owners)))
 }
 
-#[derive(Deserialize)]
-pub struct SearchParams {
-    pub q: OriginalName,
-    pub per_page: Option<per_page::PerPage>,
-}
-
 pub async fn search(
     _auth_req_token: AuthReqToken,
     State(db): DbState,
-    Query(params): Query<SearchParams>,
+    params: SearchParams,
 ) -> ApiResult<Json<search_result::SearchResult>> {
-    let per_page = params.per_page.unwrap_or(per_page::PerPage(10)).0;
     let crates = db
         .search_in_crate_name(&params.q)
         .await?
@@ -123,7 +114,7 @@ pub async fn search(
                 .description
                 .unwrap_or_else(|| "No description set".to_string()),
         })
-        .take(per_page as usize)
+        .take(params.per_page.0 as usize)
         .collect::<Vec<Crate>>();
 
     Ok(Json(SearchResult {
