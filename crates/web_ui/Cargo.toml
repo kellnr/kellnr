@@ -18,7 +18,6 @@ appstate.workspace = true
 storage.workspace = true
 
 # External dependencies from crates.io
-rocket.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 time.workspace = true

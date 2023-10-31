@@ -13,7 +13,6 @@ migration.workspace = true
 
 # External dependencies from crates.io
 serde.workspace = true
-rocket.workspace = true
 anyhow.workspace = true
 rand.workspace = true
 chrono.workspace = true

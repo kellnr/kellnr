@@ -13,7 +13,6 @@ common.workspace = true
 
 # External dependencies
 anyhow.workspace = true
-rocket.workspace = true
 mockall.workspace = true
 sha2.workspace = true
 tracing.workspace = true

@@ -15,7 +15,6 @@ derive_jsonresponder.workspace = true
 
 # External dependencies
 zip.workspace = true
-rocket.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

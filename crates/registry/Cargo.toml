@@ -18,7 +18,6 @@ storage.workspace = true
 
 # External dependencies from crates.io
 anyhow.workspace = true
-rocket.workspace = true
 chrono.workspace = true
 hex.workspace = true
 sha2.workspace = true
