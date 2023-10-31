@@ -1,9 +1,9 @@
 use super::config_json::ConfigJson;
 use appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
 use auth::auth_req_token::AuthReqToken;
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
+use axum::Json;
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use common::index_metadata::IndexMetadata;
 use common::normalized_name::NormalizedName;
@@ -134,10 +134,7 @@ pub async fn background_update_thread(
             }
         }
 
-        rocket::tokio::time::sleep(rocket::tokio::time::Duration::from_secs(
-            UPDATE_INTERVAL_SECS,
-        ))
-        .await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(UPDATE_INTERVAL_SECS)).await;
     }
 }
 
@@ -498,8 +495,13 @@ mod tests {
 
     #[tokio::test]
     async fn config_returns_config_json() {
-        let r = app().await
-            .oneshot(Request::get("/api/v1/cratesio/config.json").body(Body::empty()).unwrap())
+        let r = app()
+            .await
+            .oneshot(
+                Request::get("/api/v1/cratesio/config.json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

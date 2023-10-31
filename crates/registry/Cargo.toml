@@ -7,8 +7,6 @@ edition.workspace = true
 # Internal dependencies from Kellnr
 index.workspace = true
 settings.workspace = true
-json_payload.workspace = true
-derive_jsonresponder.workspace = true
 common.workspace = true
 db.workspace = true
 auth.workspace = true

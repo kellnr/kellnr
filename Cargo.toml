@@ -21,10 +21,8 @@ common = {path = "./crates/common"}
 db = {path = "./crates/db"}
 entity = { path = "./crates/db/entity" }
 migration = {path = "./crates/db/migration"}
-derive_jsonresponder = {path = "./crates/derive_jsonresponder"}
 docs = {path = "./crates/docs"}
 index = {path = "./crates/index"}
-json_payload = {path = "./crates/json_payload"}
 settings = {path = "./crates/settings"}
 web_ui = {path = "./crates/web_ui"}
 registry = {path = "./crates/registry"}

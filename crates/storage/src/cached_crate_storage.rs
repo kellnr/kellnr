@@ -3,15 +3,15 @@ use common::original_name::OriginalName;
 use common::util::generate_rand_string;
 use common::version::Version;
 use hex::ToHex;
-use rocket::tokio::{
-    fs::{create_dir_all, DirBuilder, File},
-    io::{AsyncReadExt, AsyncWriteExt},
-};
+use moka::future::Cache;
 use settings::Settings;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+use tokio::{
+    fs::{create_dir_all, DirBuilder, File},
+    io::{AsyncReadExt, AsyncWriteExt},
+};
 use tracing::{error, warn};
-use moka::future::Cache;
 
 pub type CrateCache = Cache<PathBuf, Vec<u8>>;
 

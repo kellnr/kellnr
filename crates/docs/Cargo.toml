@@ -5,8 +5,6 @@ edition.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
-json_payload.workspace = true
-derive_jsonresponder.workspace = true
 settings.workspace = true
 registry.workspace = true
 common.workspace = true
@@ -27,6 +25,7 @@ cargo.workspace = true
 fs_extra.workspace = true
 tracing.workspace = true
 axum.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

@@ -2,11 +2,6 @@ use crate::error::RouteError;
 use axum::http::request::Parts;
 use axum::RequestPartsExt;
 use axum_extra::extract::PrivateCookieJar;
-use db::DbProvider;
-use rocket::http::{Cookie, Status};
-use rocket::outcome::Outcome::*;
-use rocket::request::{self, FromRequest, Request};
-use rocket::State;
 use settings::constants;
 
 pub trait Name {
@@ -42,13 +37,6 @@ impl Name for AnyUser {
     fn new(name: String) -> Self {
         Self(name)
     }
-}
-
-// TODO(ItsEthra): A better idea would probably to use DbError and use other variants for different purposes
-#[derive(Debug)]
-pub enum LoginError {
-    Invalid(String),
-    NoSettings(String),
 }
 
 #[derive(Debug)]
@@ -103,125 +91,19 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
     }
 }
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for AnyUser {
-    type Error = LoginError;
-
-    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        #[allow(clippy::borrowed_box)]
-        async fn validate(
-            db: &Box<dyn DbProvider>,
-            cookie: &Cookie<'_>,
-        ) -> request::Outcome<AnyUser, LoginError> {
-            match db.validate_session(cookie.value()).await {
-                Ok((name, _)) => Success(Self(name)),
-                Err(e) => Failure((Status::Unauthorized, LoginError::Invalid(e.to_string()))),
-            }
-        }
-
-        let db = match get_db(request).await {
-            Ok(s) => s,
-            Err(e) => return Failure(e),
-        };
-
-        let session_cookie = request.cookies().get_private(constants::COOKIE_SESSION_ID);
-        match session_cookie {
-            Some(cookie) => validate(db, &cookie).await,
-            None => Forward(()),
-        }
-    }
-}
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for NormalUser {
-    type Error = LoginError;
-
-    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        #[allow(clippy::borrowed_box)]
-        async fn validate(
-            db: &Box<dyn DbProvider>,
-            cookie: &Cookie<'_>,
-        ) -> request::Outcome<NormalUser, LoginError> {
-            match db.validate_session(cookie.value()).await {
-                Ok((name, false)) => Success(Self(name)),
-                Ok((_, true)) => Forward(()),
-                Err(e) => Failure((Status::Unauthorized, LoginError::Invalid(e.to_string()))),
-            }
-        }
-
-        let db = match get_db(request).await {
-            Ok(s) => s,
-            Err(e) => return Failure(e),
-        };
-
-        let session_cookie = request.cookies().get_private(constants::COOKIE_SESSION_ID);
-        match session_cookie {
-            Some(cookie) => validate(db, &cookie).await,
-            None => Forward(()),
-        }
-    }
-}
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for AdminUser {
-    type Error = LoginError;
-
-    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        #[allow(clippy::borrowed_box)]
-        async fn validate(
-            db: &Box<dyn DbProvider>,
-            cookie: &Cookie<'_>,
-        ) -> request::Outcome<AdminUser, LoginError> {
-            match db.validate_session(cookie.value()).await {
-                Ok((name, true)) => Success(Self(name)),
-                Ok((_, false)) => Forward(()),
-                Err(e) => Failure((Status::Unauthorized, LoginError::Invalid(e.to_string()))),
-            }
-        }
-
-        let db = match get_db(request).await {
-            Ok(s) => s,
-            Err(e) => return Failure(e),
-        };
-
-        let session_cookie = request.cookies().get_private(constants::COOKIE_SESSION_ID);
-        match session_cookie {
-            Some(cookie) => validate(db, &cookie).await,
-            None => Forward(()),
-        }
-    }
-}
-
-async fn get_db<'r>(
-    request: &'r Request<'_>,
-) -> Result<&'r State<Box<dyn DbProvider>>, (Status, LoginError)> {
-    let db = request.guard::<&State<Box<dyn DbProvider>>>().await;
-    match db {
-        Success(s) => Ok(s),
-        Failure(e) => Err((
-            Status::InternalServerError,
-            LoginError::NoSettings(e.0.to_string()),
-        )),
-        Forward(_) => Err((
-            Status::InternalServerError,
-            LoginError::NoSettings("Forward instead of getting db.".to_string()),
-        )),
-    }
-}
-
 #[cfg(test)]
 mod session_tests {
-    use std::{result, sync::Arc};
-    use crate::test_helper::encode_cookies;
     use super::*;
+    use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
     use axum::{routing::get, Router};
     use axum_extra::extract::cookie::Key;
     use db::{error::DbError, mock::MockDb};
     use hyper::{header, Body, Request, StatusCode};
     use mockall::predicate::*;
-    use storage::kellnr_crate_storage::KellnrCrateStorage;
     use settings::Settings;
+    use std::{result, sync::Arc};
+    use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tower::ServiceExt;
 
     async fn admin_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
@@ -267,7 +149,8 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("admin".to_string(), true)));
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(
                 Request::get("/admin")
                     .header(
@@ -290,7 +173,8 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("admin".to_string(), false)));
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(
                 Request::get("/admin")
                     .header(header::COOKIE, c1234())
@@ -306,7 +190,8 @@ mod session_tests {
     async fn admin_auth_user_but_no_cookie_sent() -> Result {
         let mock_db = MockDb::new();
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(Request::get("/admin").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -322,7 +207,8 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Err(DbError::SessionNotFound));
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(
                 Request::get("/admin")
                     .header(header::COOKIE, c1234())
@@ -344,7 +230,8 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("normal".to_string(), false)));
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(
                 Request::get("/normal")
                     .header(header::COOKIE, c1234())
@@ -364,7 +251,8 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("normal".to_string(), true)));
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(
                 Request::get("/normal")
                     .header(header::COOKIE, c1234())
@@ -380,7 +268,8 @@ mod session_tests {
     async fn normal_auth_user_but_no_cookie_sent() -> Result {
         let mock_db = MockDb::new();
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(Request::get("/normal").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -396,7 +285,8 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Err(DbError::SessionNotFound));
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(
                 Request::get("/normal")
                     .header(header::COOKIE, c1234())
@@ -418,7 +308,8 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("guest".to_string(), false)));
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(
                 Request::get("/any")
                     .header(header::COOKIE, c1234())
@@ -438,7 +329,8 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Ok(("guest".to_string(), true)));
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(
                 Request::get("/any")
                     .header(header::COOKIE, c1234())
@@ -454,7 +346,8 @@ mod session_tests {
     async fn any_auth_user_but_no_cookie_sent() -> Result {
         let mock_db = MockDb::new();
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(Request::get("/any").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -469,7 +362,8 @@ mod session_tests {
             .with(eq("1234"))
             .returning(|_st| Err(DbError::SessionNotFound));
 
-        let r = app(Arc::new(mock_db)).await
+        let r = app(Arc::new(mock_db))
+            .await
             .oneshot(
                 Request::get("/any")
                     .header(header::COOKIE, c1234())

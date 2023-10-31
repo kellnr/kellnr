@@ -1,13 +1,11 @@
 use crate::storage_provider::StorageProvider;
 use anyhow::{bail, Context, Error, Result};
-use rocket::{
-    async_trait,
-    tokio::{
-        fs::{read, File, OpenOptions},
-        io::AsyncReadExt,
-    },
-};
+use axum::async_trait;
 use std::path::Path;
+use tokio::{
+    fs::{read, File, OpenOptions},
+    io::AsyncReadExt,
+};
 
 #[derive(Clone)]
 pub struct Storage {}

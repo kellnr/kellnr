@@ -11,10 +11,7 @@ use tracing::{debug, error, trace};
 
 use crate::search_params::SearchParams;
 
-pub async fn search(
-    auth_req_token: AuthReqToken,
-    params: SearchParams,
-) -> ApiResult<String> {
+pub async fn search(auth_req_token: AuthReqToken, params: SearchParams) -> ApiResult<String> {
     _ = auth_req_token;
     let url = match Url::parse(&format!(
         "https://crates.io/api/v1/crates?q={}&per_page={}",

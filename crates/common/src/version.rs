@@ -1,7 +1,3 @@
-use rocket::data::ToByteUnit;
-use rocket::form::{self, FromFormField};
-use rocket::http::RawStr;
-use rocket::request::FromParam;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
@@ -47,14 +43,6 @@ impl TryFrom<&String> for Version {
     }
 }
 
-impl TryFrom<&RawStr> for Version {
-    type Error = VersionError;
-
-    fn try_from(version: &RawStr) -> Result<Self, Self::Error> {
-        Version::try_from(&version.to_string())
-    }
-}
-
 impl Deref for Version {
     type Target = String;
 
@@ -94,67 +82,6 @@ impl PartialEq for Version {
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", &self.0)
-    }
-}
-
-impl<'r> FromParam<'r> for Version {
-    type Error = &'r str;
-
-    fn from_param(param: &'r str) -> Result<Self, Self::Error> {
-        let pkg_version = Version::try_from(param);
-
-        match pkg_version {
-            Ok(version) => Ok(version),
-            Err(VersionError::InvalidSemVer) => {
-                Err("Invalid crate version: All versions must be in the SemVer format.")
-            }
-        }
-    }
-}
-
-#[rocket::async_trait]
-impl<'r> FromFormField<'r> for Version {
-    fn from_value(field: rocket::form::ValueField<'r>) -> rocket::form::Result<'r, Self> {
-        let pkg_version = Self::try_from(field.value);
-        match pkg_version {
-            Ok(version) => Ok(version),
-            Err(VersionError::InvalidSemVer) => {
-                return Err(form::Error::validation("Invalid semver version string.").into())
-            }
-        }
-    }
-
-    async fn from_data(field: rocket::form::DataField<'r, '_>) -> rocket::form::Result<'r, Self> {
-        // Retrieve the configured data limit or use `1KiB` as default.
-        let limit = field
-            .request
-            .limits()
-            .get("version")
-            .unwrap_or_else(|| 1_u64.kibibytes());
-
-        // Read the capped data stream, returning a limit error as needed.
-        let bytes = field.data.open(limit).into_bytes().await?;
-        if !bytes.is_complete() {
-            return Err((None, Some(limit)).into());
-        }
-
-        // Store the bytes in request-local cache and split at ':'.
-        let bytes = bytes.into_inner();
-        let bytes = rocket::request::local_cache!(field.request, bytes);
-
-        // Try to parse the version as UTF-8 or return an error if it fails.
-        let version = std::str::from_utf8(bytes)?;
-        let pkg_version = Self::try_from(version);
-        match pkg_version {
-            Ok(version) => Ok(version),
-            Err(VersionError::InvalidSemVer) => {
-                return Err(form::Error::validation("Invalid semver version string.").into())
-            }
-        }
-    }
-
-    fn default() -> Option<Self> {
-        None
     }
 }
 

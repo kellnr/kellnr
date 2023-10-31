@@ -14,8 +14,10 @@ common.workspace = true
 # External dependencies
 anyhow.workspace = true
 mockall.workspace = true
+tokio.workspace = true
 sha2.workspace = true
 tracing.workspace = true
 hex.workspace = true
 moka.workspace = true
 rm_rf.workspace = true
+axum.workspace = true

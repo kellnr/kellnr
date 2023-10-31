@@ -24,7 +24,10 @@ impl DocArchive {
 impl FromRequest<AppStateData, Body> for DocArchive {
     type Rejection = ApiError;
 
-    async fn from_request(req: Request<Body>, state: &AppStateData) -> Result<Self, Self::Rejection> {
+    async fn from_request(
+        req: Request<Body>,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
         let data_bytes: Vec<u8> = match Bytes::from_request(req, state).await {
             Ok(b) => b.to_vec(),
             Err(e) => return Err(ApiError::from(&e.to_string())),
@@ -43,7 +46,7 @@ impl FromRequest<AppStateData, Body> for DocArchive {
 
         match ZipArchive::new(reader) {
             Ok(zip) => Ok(DocArchive(zip)),
-            Err(e) =>  Err(ApiError::from(e)),
+            Err(e) => Err(ApiError::from(e)),
         }
     }
 }

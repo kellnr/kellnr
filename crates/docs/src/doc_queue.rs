@@ -9,17 +9,19 @@ use common::version::Version;
 use db::{Database, DbProvider, DocQueueEntry};
 use flate2::read::GzDecoder;
 use fs_extra::dir::{copy, CopyOptions};
-use storage::kellnr_crate_storage::KellnrCrateStorage;
-use rocket::tokio::fs::{create_dir_all, remove_dir_all, File};
-use rocket::tokio::io::AsyncReadExt;
 use std::path::{Path, PathBuf};
+use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tar::Archive;
+use tokio::{
+    fs::{create_dir_all, remove_dir_all, File},
+    io::AsyncReadExt,
+};
 use tracing::error;
 
 pub async fn doc_extraction_queue(db: Database, cs: KellnrCrateStorage, docs_path: PathBuf) {
-    rocket::tokio::spawn(async move {
+    tokio::spawn(async move {
         loop {
-            rocket::tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
             if let Err(e) = inner_loop(&db, &cs, &docs_path).await {
                 error!("Rustdoc generation loop failed: {e}");
             }

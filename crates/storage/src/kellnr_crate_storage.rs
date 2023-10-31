@@ -1,5 +1,4 @@
 use crate::cached_crate_storage::CachedCrateStorage;
-use rocket::tokio;
 use settings::Settings;
 use std::ops::{Deref, DerefMut};
 

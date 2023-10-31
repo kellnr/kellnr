@@ -529,15 +529,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
-name = "basic-toml"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c0de75129aa8d0cceaf750b89013f0e08804d6ec61416da787b35ad0d7cddf1"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "bigdecimal"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -996,8 +987,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "derive_jsonresponder",
- "json_payload",
  "mockall",
  "rand",
  "regex",
@@ -1006,6 +995,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 
@@ -1350,6 +1340,7 @@ dependencies = [
  "sea-orm",
  "sea-orm-migration",
  "serde",
+ "serde_json",
  "settings",
  "sha2",
  "testcontainers",
@@ -1374,17 +1365,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2696e8a945f658fd14dc3b87242e6b80cd0f36ff04ea560fa39082368847946"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "derive_jsonresponder"
-version = "0.1.0"
-dependencies = [
- "quote",
- "serde",
- "serde_json",
- "syn 2.0.38",
- "trybuild",
 ]
 
 [[package]]
@@ -1426,12 +1406,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dissimilar"
-version = "1.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "210ec60ae7d710bed8683e333e9d2855a8a56a3e9892b38bad3bb0d4d29b0d5e"
-
-[[package]]
 name = "dlv-list"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1448,12 +1422,10 @@ dependencies = [
  "cargo",
  "common",
  "db",
- "derive_jsonresponder",
  "error",
  "flate2",
  "fs_extra",
  "hyper",
- "json_payload",
  "registry",
  "serde",
  "serde_json",
@@ -1611,8 +1583,6 @@ dependencies = [
  "axum",
  "common",
  "db",
- "derive_jsonresponder",
- "json_payload",
  "serde",
  "serde_json",
  "zip",
@@ -2861,11 +2831,9 @@ dependencies = [
  "chrono",
  "common",
  "db",
- "derive_jsonresponder",
  "flume 0.11.0",
  "hex",
  "hyper",
- "json_payload",
  "mockall",
  "moka",
  "reqwest",
@@ -3011,19 +2979,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "json_payload"
-version = "0.1.0"
-dependencies = [
- "derive_jsonresponder",
- "proc-macro2",
- "quote",
- "serde",
- "serde_json",
- "syn 2.0.38",
- "trybuild",
-]
-
-[[package]]
 name = "kellnr"
 version = "0.1.0"
 dependencies = [
@@ -3032,18 +2987,17 @@ dependencies = [
  "axum-extra",
  "common",
  "db",
- "derive_jsonresponder",
  "docs",
  "entity",
  "flume 0.11.0",
  "index",
- "json_payload",
  "openssl",
  "pg_testcontainer",
  "registry",
  "settings",
  "storage",
  "sysinfo",
+ "tokio",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -4239,12 +4193,10 @@ dependencies = [
  "chrono",
  "common",
  "db",
- "derive_jsonresponder",
  "error",
  "hex",
  "hyper",
  "index",
- "json_payload",
  "mockall",
  "moka",
  "rand",
@@ -5177,6 +5129,7 @@ name = "storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "common",
  "hex",
  "mockall",
@@ -5184,6 +5137,7 @@ dependencies = [
  "rm_rf",
  "settings",
  "sha2",
+ "tokio",
  "tracing",
 ]
 
@@ -5710,22 +5664,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
-name = "trybuild"
-version = "1.0.85"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "196a58260a906cedb9bf6d8034b6379d0c11f552416960452f267402ceeddff1"
-dependencies = [
- "basic-toml",
- "dissimilar",
- "glob",
- "once_cell",
- "serde",
- "serde_derive",
- "serde_json",
- "termcolor",
-]
-
-[[package]]
 name = "typenum"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6020,11 +5958,9 @@ dependencies = [
  "common",
  "cookie",
  "db",
- "derive_jsonresponder",
  "docs",
  "hyper",
  "index",
- "json_payload",
  "mockall",
  "registry",
  "reqwest",

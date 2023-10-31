@@ -5,7 +5,9 @@ use db::DbProvider;
 use flume::Sender;
 use settings::Settings;
 use std::sync::Arc;
-use storage::{kellnr_crate_storage::KellnrCrateStorage, cratesio_crate_storage::CratesIoCrateStorage};
+use storage::{
+    cratesio_crate_storage::CratesIoCrateStorage, kellnr_crate_storage::KellnrCrateStorage,
+};
 
 pub type AppState = axum::extract::State<AppStateData>;
 

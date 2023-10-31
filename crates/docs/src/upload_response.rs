@@ -1,9 +1,9 @@
 use crate::compute_doc_url;
 use common::original_name::OriginalName;
 use common::version::Version;
-use json_payload::json_payload;
+use serde::{Deserialize, Serialize};
 
-#[json_payload]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DocUploadResponse {
     pub message: String,
     pub url: String,

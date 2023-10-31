@@ -1,7 +1,7 @@
 use appstate::AppStateData;
 use axum::extract::FromRequestParts;
-use axum::http::StatusCode;
 use axum::http::request::Parts;
+use axum::http::StatusCode;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
@@ -23,7 +23,6 @@ pub fn generate_token() -> String {
         .collect::<String>()
 }
 
-
 #[axum::async_trait]
 impl FromRequestParts<AppStateData> for Token {
     type Rejection = StatusCode;
@@ -40,7 +39,8 @@ impl FromRequestParts<AppStateData> for Token {
             .map_err(|_| StatusCode::BAD_REQUEST)?
             .to_owned();
 
-        let user = state.db
+        let user = state
+            .db
             .get_user_from_token(&token)
             .await
             .map_err(|_| StatusCode::FORBIDDEN)?;

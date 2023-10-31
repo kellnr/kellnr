@@ -8,8 +8,6 @@ edition.workspace = true
 index.workspace = true
 db.workspace = true
 common.workspace = true
-json_payload.workspace = true
-derive_jsonresponder.workspace = true
 docs.workspace = true
 registry.workspace = true
 settings.workspace = true
@@ -26,11 +24,10 @@ tracing.workspace = true
 reqwest.workspace = true
 axum.workspace = true
 axum-extra.workspace = true
+cookie.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
-tokio.workspace = true
-axum-extra.workspace = true
 hyper.workspace = true
 tower.workspace = true
-cookie.workspace = true
+tokio.workspace = true

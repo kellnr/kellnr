@@ -9,9 +9,7 @@ version.workspace = true
 [dependencies]
 # Internal dependencies
 common.workspace = true
-json_payload.workspace = true
 db.workspace = true
-derive_jsonresponder.workspace = true
 
 # External dependencies
 zip.workspace = true

@@ -122,7 +122,7 @@ impl Settings {
             .ok_or_else(|| ConfigError::Message("Invalid UTF-8 string".to_string()))
     }
 
-pub fn bin_path(&self) -> path::PathBuf {
+    pub fn bin_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.data_dir).join("crates")
     }
 

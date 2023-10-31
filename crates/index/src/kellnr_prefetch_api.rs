@@ -1,10 +1,14 @@
-use std::sync::Arc;
 use super::config_json::ConfigJson;
 use appstate::{DbState, SettingsState};
 use auth::auth_req_token::AuthReqToken;
-use axum::{extract::{Path, State}, http::{StatusCode, HeaderMap}, Json};
+use axum::{
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
+    Json,
+};
 use common::{normalized_name::NormalizedName, original_name::OriginalName, prefetch::Prefetch};
 use db::DbProvider;
+use std::sync::Arc;
 
 pub async fn config_kellnr(
     State(settings): SettingsState,
@@ -62,7 +66,7 @@ mod tests {
     use super::*;
     use crate::config_json::ConfigJson;
     use appstate::AppStateData;
-    use axum::{Router, routing::get, http::Request, body::Body};
+    use axum::{body::Body, http::Request, routing::get, Router};
     use db::error::DbError;
     use db::mock::MockDb;
     use mockall::predicate::*;
@@ -72,12 +76,17 @@ mod tests {
 
     #[tokio::test]
     async fn config_returns_config_json() {
-        let r = app().await
-            .oneshot(Request::get("/api/v1/index/config.json").body(Body::empty()).unwrap())
+        let r = app()
+            .await
+            .oneshot(
+                Request::get("/api/v1/index/config.json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap(); 
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
 
         assert_eq!(
@@ -88,11 +97,15 @@ mod tests {
 
     #[tokio::test]
     async fn prefetch_returns_prefetch_data() {
-        let r = app().await
-            .oneshot(Request::get("/api/v1/index/me/ta/metadata")
-                .header(header::IF_MODIFIED_SINCE, "foo")
-                .header(header::IF_NONE_MATCH, "bar")
-                .body(Body::empty()).unwrap())
+        let r = app()
+            .await
+            .oneshot(
+                Request::get("/api/v1/index/me/ta/metadata")
+                    .header(header::IF_MODIFIED_SINCE, "foo")
+                    .header(header::IF_NONE_MATCH, "bar")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -101,16 +114,23 @@ mod tests {
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!("3", r.headers().get(header::CONTENT_LENGTH).unwrap());
         assert_eq!("date", r.headers().get(header::LAST_MODIFIED).unwrap());
-        assert_eq!(vec![0x1, 0x2, 0x3], hyper::body::to_bytes(r.into_body()).await.unwrap());
+        assert_eq!(
+            vec![0x1, 0x2, 0x3],
+            hyper::body::to_bytes(r.into_body()).await.unwrap()
+        );
     }
 
     #[tokio::test]
     async fn prefetch_returns_not_modified() {
-        let r = app().await
-            .oneshot(Request::get("/api/v1/index/me/ta/metadata")
-                .header(header::IF_MODIFIED_SINCE, "date")
-                .header(header::IF_NONE_MATCH, "etag")
-                .body(Body::empty()).unwrap())
+        let r = app()
+            .await
+            .oneshot(
+                Request::get("/api/v1/index/me/ta/metadata")
+                    .header(header::IF_MODIFIED_SINCE, "date")
+                    .header(header::IF_NONE_MATCH, "etag")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -119,11 +139,15 @@ mod tests {
 
     #[tokio::test]
     async fn prefetch_returns_not_found() {
-        let r = app().await
-            .oneshot(Request::get("/api/v1/index/no/tf/notfound")
-                .header(header::IF_MODIFIED_SINCE, "date")
-                .header(header::IF_NONE_MATCH, "etag")
-                .body(Body::empty()).unwrap())
+        let r = app()
+            .await
+            .oneshot(
+                Request::get("/api/v1/index/no/tf/notfound")
+                    .header(header::IF_MODIFIED_SINCE, "date")
+                    .header(header::IF_NONE_MATCH, "etag")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

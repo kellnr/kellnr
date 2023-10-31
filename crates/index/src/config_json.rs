@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
-use json_payload::json_payload;
+use serde::{Deserialize, Serialize};
 use settings::{Protocol, Settings};
 
-#[json_payload]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConfigJson {
     dl: String,
     api: String,

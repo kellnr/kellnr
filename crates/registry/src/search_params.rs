@@ -47,16 +47,20 @@ impl<S> axum::extract::FromRequestParts<S> for SearchParams {
         let q = query_params
             .get("q")
             .ok_or((StatusCode::BAD_REQUEST, "missing q".to_owned()))?;
-        let q = OriginalName::try_from(q)
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        let q = OriginalName::try_from(q).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
         let per_page = query_params
             .get("per_page")
             .unwrap_or(&"10".to_string())
             .parse::<usize>()
-            .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid value for per_page: {}", e)))?;
-        let per_page = PerPage::try_from(per_page)
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("Invalid value for per_page: {}", e),
+                )
+            })?;
+        let per_page =
+            PerPage::try_from(per_page).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
         Ok(Self { q, per_page })
     }

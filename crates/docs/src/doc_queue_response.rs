@@ -1,12 +1,12 @@
 use db::DocQueueEntry;
-use json_payload::json_payload;
+use serde::{Deserialize, Serialize};
 
-#[json_payload]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct DocQueueResponse {
     pub(crate) queue: Vec<DocQueueEntryResponse>,
 }
 
-#[json_payload]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct DocQueueEntryResponse {
     pub(crate) name: String,
     pub(crate) version: String,

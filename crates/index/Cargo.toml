@@ -7,8 +7,6 @@ edition.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
-json_payload.workspace = true
-derive_jsonresponder.workspace = true
 settings.workspace = true
 common.workspace = true
 db.workspace = true
@@ -30,6 +28,7 @@ chrono.workspace = true
 moka.workspace = true
 flume.workspace = true
 axum.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

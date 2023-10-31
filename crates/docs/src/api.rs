@@ -47,7 +47,9 @@ pub async fn publish_docs(
 
     let doc_path = settings.docs_path().join(&*package).join(crate_version);
 
-    rocket::tokio::task::spawn_blocking(move || docs.extract(&doc_path)).await??;
+    let _ = tokio::task::spawn_blocking(move || docs.extract(&doc_path))
+        .await
+        .map_err(|_| ApiError::from("Failed to extract docs."))?;
 
     db.update_docs_link(
         &normalized_name,
@@ -109,12 +111,11 @@ mod tests {
         });
 
         let kellnr = app(Arc::new(db)).await;
-        let r = kellnr.oneshot(
-            Request::get("/queue")
-                .body(Body::empty())
-                .unwrap(),
-        ).await.unwrap();
-       
+        let r = kellnr
+            .oneshot(Request::get("/queue").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
         let actual = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let actual = serde_json::from_slice::<DocQueueResponse>(&actual).unwrap();
         assert_eq!(

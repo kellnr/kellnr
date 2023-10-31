@@ -34,8 +34,8 @@ mod test {
     use super::*;
     use axum::body::Body;
     use axum::http::{header, Request, StatusCode};
-    use axum::Router;
     use axum::routing::get;
+    use axum::Router;
     use db::error::DbError;
     use db::mock::MockDb;
     use db::User;
@@ -51,7 +51,8 @@ mod test {
             ..Settings::new().unwrap()
         };
 
-        let r = app(settings).await
+        let r = app(settings)
+            .await
             .oneshot(Request::get("/test").body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -66,7 +67,8 @@ mod test {
             ..Settings::new().unwrap()
         };
 
-        let r = app(settings).await
+        let r = app(settings)
+            .await
             .oneshot(Request::get("/test").body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -81,7 +83,8 @@ mod test {
             ..Settings::new().unwrap()
         };
 
-        let r = app(settings).await
+        let r = app(settings)
+            .await
             .oneshot(
                 Request::get("/test")
                     .header(header::AUTHORIZATION, "wrong_token")
@@ -101,7 +104,8 @@ mod test {
             ..Settings::new().unwrap()
         };
 
-        let r = app(settings).await
+        let r = app(settings)
+            .await
             .oneshot(
                 Request::get("/test")
                     .header(header::AUTHORIZATION, "token")
@@ -137,10 +141,11 @@ mod test {
             .with(eq("wrong_token"))
             .returning(move |_| Err(DbError::UserNotFound("user".to_string())));
 
-        let state = AppStateData { 
+        let state = AppStateData {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
-            ..appstate::test_state().await };
+            ..appstate::test_state().await
+        };
         Router::new()
             .route("/test", get(test_auth_req_token))
             .with_state(state)

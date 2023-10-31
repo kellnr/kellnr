@@ -1,7 +1,7 @@
 use axum::{
     body::Full,
     http::StatusCode,
-    response::{IntoResponse, Response}
+    response::{IntoResponse, Response},
 };
 use serde::Deserialize;
 
@@ -19,10 +19,11 @@ impl IntoResponse for Prefetch {
             .header("ETag", self.etag)
             .header("Last-Modified", self.last_modified)
             .status(StatusCode::OK)
-            .body(Full::from(self.data)).unwrap().into_response()
+            .body(Full::from(self.data))
+            .unwrap()
+            .into_response()
     }
 }
-
 
 #[derive(Debug)]
 pub struct Headers {

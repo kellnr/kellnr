@@ -8,6 +8,7 @@ use axum::Json;
 use axum_extra::extract::cookie::Cookie;
 use axum_extra::extract::PrivateCookieJar;
 use common::util::generate_rand_string;
+use cookie::time;
 use db::password::generate_salt;
 use db::{self, AuthToken, User};
 use serde::{Deserialize, Serialize};
@@ -59,10 +60,7 @@ pub struct UserList {
     users: Vec<User>,
 }
 
-pub async fn list_users(
-    user: MaybeUser,
-    State(db): DbState,
-) -> Result<Json<UserList>, RouteError> {
+pub async fn list_users(user: MaybeUser, State(db): DbState) -> Result<Json<UserList>, RouteError> {
     user.assert_admin()?;
 
     Ok(db
@@ -149,7 +147,7 @@ pub async fn login(
 
     let jar = cookies.add(
         Cookie::build(COOKIE_SESSION_ID, session_token)
-            .max_age(rocket::time::Duration::seconds(
+            .max_age(time::Duration::seconds(
                 state.settings.session_age_seconds as i64,
             ))
             .same_site(axum_extra::extract::cookie::SameSite::Strict)
