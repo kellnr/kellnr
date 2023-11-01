@@ -31,9 +31,9 @@ async fn main() {
     let settings: Arc<Settings> = Settings::try_from(Path::new("config"))
         .expect("Cannot read config")
         .into();
-    let addr = &format!("{}:{}", settings.api_address, settings.api_port)
+    let addr = &format!("{}:{}", settings.web_address, settings.api_port)
         .parse()
-        .expect("Failed to parse address and port");
+        .expect("Failed to parse address and port: {settings.web_address}:{settings.api_port}");
 
     // Configure tracing subscriber
     init_tracing(&settings);
