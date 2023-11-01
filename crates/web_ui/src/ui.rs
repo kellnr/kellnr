@@ -32,7 +32,7 @@ pub async fn kellnr_version() -> Json<KellnrVersion> {
     Json(KellnrVersion {
         // Replaced automatically by the version from the build job,
         // if a new release is built.
-        version: "5.0.0-pre2".to_string(),
+        version: "0.0.0-debug".to_string(),
     })
 }
 
@@ -799,7 +799,7 @@ mod tests {
         let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
         let result_version = serde_json::from_slice::<KellnrVersion>(&result_msg).unwrap();
 
-        assert_eq!("5.0.0-pre2", result_version.version);
+        assert_eq!("0.0.0-debug", result_version.version);
     }
 
     #[tokio::test]
