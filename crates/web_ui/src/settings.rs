@@ -14,7 +14,7 @@ pub struct StartupSettings {
     pub crates_io_proxy: bool,
     pub crates_io_num_threads: usize,
     pub log_level: String,
-    pub log_level_rocket: String,
+    pub log_level_web_server: String,
     pub log_format: String,
     pub rustdoc_auto_gen: bool,
     pub cache_size: u64,
@@ -39,7 +39,7 @@ impl From<&Settings> for StartupSettings {
             crates_io_proxy: settings.crates_io_proxy,
             crates_io_num_threads: settings.crates_io_num_threads,
             log_level: settings.log_level.to_string(),
-            log_level_rocket: settings.log_level_rocket.to_string(),
+            log_level_web_server: settings.log_level_web_server.to_string(),
             log_format: settings.log_format.to_string(),
             rustdoc_auto_gen: settings.rustdoc_auto_gen,
             cache_size: settings.cache_size,
@@ -74,7 +74,7 @@ mod tests {
             crates_io_proxy: true,
             crates_io_num_threads: 10,
             log_level: tracing::Level::DEBUG,
-            log_level_rocket: tracing::Level::WARN,
+            log_level_web_server: tracing::Level::WARN,
             log_format: LogFormat::Compact,
             rustdoc_auto_gen: true,
             cache_size: 100,
@@ -104,8 +104,8 @@ mod tests {
         assert_eq!(state.crates_io_proxy, settings.crates_io_proxy);
         assert_eq!(state.log_level, settings.log_level.to_string());
         assert_eq!(
-            state.log_level_rocket,
-            settings.log_level_rocket.to_string()
+            state.log_level_web_server,
+            settings.log_level_web_server.to_string()
         );
         assert_eq!(state.rustdoc_auto_gen, settings.rustdoc_auto_gen);
         assert_eq!(state.cache_size, settings.cache_size);

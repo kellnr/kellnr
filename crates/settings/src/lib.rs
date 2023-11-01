@@ -52,7 +52,7 @@ pub struct Settings {
     #[serde(deserialize_with = "tracing::Level::deserialize_with")]
     pub log_level: tracing::Level,
     #[serde(deserialize_with = "tracing::Level::deserialize_with")]
-    pub log_level_rocket: tracing::Level,
+    pub log_level_web_server: tracing::Level,
     #[serde(deserialize_with = "LogFormat::deserialize_with")]
     pub log_format: LogFormat,
     #[serde(default)]
@@ -79,7 +79,7 @@ impl TryFrom<&Path> for Settings {
             // Set default values of settings that where added after the first Kellnr release
             // and thus can be missing on the customer site.
             .set_default("log_level", "info")?
-            .set_default("log_level_rocket", "warn")?
+            .set_default("log_level_web_server", "warn")?
             .set_default("log_format", "compact")?
             .set_default("api_port_proxy", 8000)?
             .set_default("rustdoc_auto_gen", true)?

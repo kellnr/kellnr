@@ -190,8 +190,7 @@ async fn init_cratesio_prefetch_thread(
 
 fn init_tracing(settings: &Settings) {
     let ts = tracing_subscriber::fmt().with_max_level(settings.log_level)
-    .with_env_filter(format!("{},mio::poll=error,want=error,sqlx::query=error,sqlx::postgres=warn,sea_orm_migration=warn,cargo=error,globset=warn,hyper=warn,_=warn,reqwest=warn,rocket::server={},rocket::launch={},rocket::shield::shield={},rocket:launch_={}",
-                             settings.log_level, settings.log_level_rocket, settings.log_level_rocket, settings.log_level_rocket, settings.log_level_rocket));
+    .with_env_filter(format!("{},mio::poll=error,want=error,sqlx::query=error,sqlx::postgres=warn,sea_orm_migration=warn,cargo=error,globset=warn,hyper=warn,_=warn,reqwest=warn,tower_http={}", settings.log_level, settings.log_level_web_server));
 
     match settings.log_format {
         LogFormat::Compact => ts.event_format(format().compact()).init(),

@@ -23,8 +23,8 @@
   <startup-config-item toml="crates_io_num_threads" env="KELLNR_CRATES_IO_NUM_THREADS"
                        :value="settings.crates_io_num_threads"></startup-config-item>
   <startup-config-item toml="log_level" env="KELLNR_LOG_LEVEL" :value="settings.log_level"></startup-config-item>
-  <startup-config-item toml="log_level_rocket" env="KELLNR_LOG_LEVEL_ROCKET"
-                       :value="settings.log_level_rocket"></startup-config-item>
+  <startup-config-item toml="log_level_web_server" env="KELLNR_LOG_LEVEL_WEB_SERVER"
+                       :value="settings.log_level_web_server"></startup-config-item>
   <startup-config-item toml="log_format" env="KELLNR_LOG_FORMAT" :value="settings.log_format"></startup-config-item>
   <startup-config-item toml="rustdoc_auto_gen" env="KELLNR_RUSTDOC_AUTO_GEN"
                        :value="settings.rustdoc_auto_gen"></startup-config-item>

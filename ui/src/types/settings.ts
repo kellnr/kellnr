@@ -11,7 +11,7 @@ export type Settings = {
     crates_io_proxy: boolean
     crates_io_num_threads: number
     log_level: string
-    log_level_rocket: string
+    log_level_web_server: string
     log_format: string
     rustdoc_auto_gen: boolean
     max_crate_size: number
@@ -40,7 +40,7 @@ export const defaultSettings = {
     crates_io_proxy: false,
     crates_io_num_threads: 0,
     log_level: "",
-    log_level_rocket: "",
+    log_level_web_server: "",
     log_format: "",
     rustdoc_auto_gen: false,
     max_crate_size: 0,

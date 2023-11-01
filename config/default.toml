@@ -57,8 +57,8 @@ crates_io_num_threads = 10
 # Set the log level to "trace", "debug", "info", "warn", or "error".
 log_level = "info"
 
-# Set the log level for the underlaying rocket web framework to "trace", "debug", "info", "warn", or "error".
-log_level_rocket = "warn"
+# Set the log level for the underlaying web framework to "trace", "debug", "info", "warn", or "error".
+log_level_web_server = "warn"
 
 # Set the log format to "compact", "pretty" or "json".
 log_format = "compact"
