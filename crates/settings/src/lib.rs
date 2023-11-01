@@ -42,9 +42,7 @@ pub struct Settings {
         default = "Protocol::default"
     )]
     pub api_protocol: Protocol,
-    pub index_address: String,
     pub web_address: IpAddr,
-    pub index_port: u16,
     pub admin_token: String,
     #[serde(default)]
     pub crates_io_proxy: bool,

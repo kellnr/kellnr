@@ -36,10 +36,6 @@ api_protocol = "http"
 # Directory where Kellnr stores all its data, e.g. crates, incides etc.
 data_dir = "/opt/kdata"
 
-# Address where the crates index is reachable. Usually no change is needed.
-index_address = "0.0.0.0"
-index_port = 9418
-
 # Seconds until a user is logged out automatically after inactivity in the UI
 session_age_seconds = 28800
 

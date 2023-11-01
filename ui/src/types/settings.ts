@@ -5,8 +5,6 @@ export type Settings = {
     api_port: number
     api_port_proxy: number
     api_protocol: string
-    index_address: string
-    index_port: number
     web_address: string
     crates_io_proxy: boolean
     crates_io_num_threads: number
@@ -34,8 +32,6 @@ export const defaultSettings = {
     api_port: 0,
     api_port_proxy: 0,
     api_protocol: "",
-    index_address: "",
-    index_port: 0,
     web_address: "",
     crates_io_proxy: false,
     crates_io_num_threads: 0,

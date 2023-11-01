@@ -14,9 +14,6 @@
                        :value="settings.api_port_proxy"></startup-config-item>
   <startup-config-item toml="api_protocol" env="KELLNR_API_PROTOCOL"
                        :value="settings.api_protocol"></startup-config-item>
-  <startup-config-item toml="index_address" env="KELLNR_INDEX_ADDRESS"
-                       :value="settings.index_address"></startup-config-item>
-  <startup-config-item toml="index_port" env="KELLNR_INDEX_PORT" :value="settings.index_port"></startup-config-item>
   <startup-config-item toml="web_address" env="KELLNR_WEB_ADDRESS" :value="settings.web_address"></startup-config-item>
   <startup-config-item toml="crates_io_proxy" env="KELLNR_CRATES_IO_PROXY"
                        :value="settings.crates_io_proxy"></startup-config-item>

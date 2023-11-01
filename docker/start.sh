@@ -29,17 +29,9 @@ fi
 while sleep 10; do
     pgrep kellnr > /dev/null
     PROCESS_KELLNR_STATUS=$?
-    pgrep git-daemon > /dev/null
-    PROCESS_GIT_DAEMON_STATUS=$?
     
     if [ $PROCESS_KELLNR_STATUS -ne 0 ]; then
         echo "Error: Kellnr has exited."
         exit 1
-    fi
-    if [ $PROCESS_GIT_DAEMON_STATUS -ne 0 ]; then
-        if [ "$ENABLE_GIT_DAEMON" = "true" ]; then
-                echo "Error: Git daemon has exited"
-                exit 1
-        fi
     fi
 done
