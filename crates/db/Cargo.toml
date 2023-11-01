@@ -27,3 +27,4 @@ serde_json.workspace = true
 [dev-dependencies]
 rm_rf.workspace = true
 testcontainers.workspace = true
+tokio.workspace = true

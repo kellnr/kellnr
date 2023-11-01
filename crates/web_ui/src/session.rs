@@ -98,6 +98,7 @@ mod session_tests {
     use appstate::AppStateData;
     use axum::{routing::get, Router};
     use axum_extra::extract::cookie::Key;
+    use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
     use hyper::{header, Body, Request, StatusCode};
     use mockall::predicate::*;

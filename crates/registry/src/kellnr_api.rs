@@ -703,7 +703,7 @@ mod reg_api_tests {
             serde_json::from_slice(&result_msg).expect("Cannot deserialize success message");
 
         assert_eq!(StatusCode::OK, response_status);
-        assert_eq!(None, success.warnings);
+        assert!(success.warnings.is_none());
         // As the success message is empty in the normal case, the deserialization works even
         // if an error message was returned. That's why we need to test for an error message, too.
         assert!(

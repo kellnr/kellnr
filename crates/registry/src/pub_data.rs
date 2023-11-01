@@ -92,15 +92,13 @@ impl FromRequest<AppStateData, Body> for PubData {
 
 #[cfg(test)]
 mod bin_tests {
-    use crate::pub_data::PubData;
+    use tokio::io::AsyncReadExt;
+use crate::pub_data::PubData;
     use common::original_name::OriginalName;
     use common::publish_metadata::PublishMetadata;
     use common::version::Version;
-    use rocket::{
-        async_test,
-        tokio::{fs::File, io::AsyncReadExt},
-    };
     use settings::Settings;
+    use tokio::fs::File;
     use std::{convert::TryFrom, path::Path};
     use storage::kellnr_crate_storage::KellnrCrateStorage;
 
@@ -132,7 +130,7 @@ mod bin_tests {
         }
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn add_crate_binary() {
         let pub_data = PubData {
             crate_length: 5,
@@ -163,7 +161,7 @@ mod bin_tests {
         assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], data);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn add_crate_binary_with_upper_case_name() {
         let pub_data = PubData {
             crate_length: 5,
@@ -195,7 +193,7 @@ mod bin_tests {
         assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], data);
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn add_duplicate_crate_binary() {
         let pub_data = PubData {
             crate_length: 5,
@@ -224,7 +222,7 @@ mod bin_tests {
         );
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn create_rand_doc_queue_path() {
         let test_bin = TestBin::from("test_doc_queue").await;
 
@@ -244,7 +242,7 @@ mod bin_tests {
         ));
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn delete_crate() {
         let pub_data = PubData {
             crate_length: 5,

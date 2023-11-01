@@ -3,7 +3,7 @@ use common::original_name::OriginalName;
 use common::version::Version;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DocUploadResponse {
     pub message: String,
     pub url: String,

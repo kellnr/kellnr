@@ -21,3 +21,6 @@ hex.workspace = true
 moka.workspace = true
 rm_rf.workspace = true
 axum.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
