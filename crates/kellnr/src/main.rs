@@ -68,7 +68,7 @@ async fn main() {
 
     // Docs hosting
     init_docs_hosting(&settings, &con_string).await;
-
+    let data_dir = settings.data_dir.clone();
     let signing_key = Key::generate();
     let state = AppStateData {
         db,
@@ -100,7 +100,7 @@ async fn main() {
         .route("/queue", get(docs::api::docs_in_queue))
         .route("/:package/:version", put(docs::api::publish_docs));
 
-    let docs_service = get_service(ServeDir::new(PathBuf::from("docs")));
+    let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir)));
     let static_files_service = get_service(
         ServeDir::new(PathBuf::from("static"))
             .append_index_html_on_directories(true)
