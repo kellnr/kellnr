@@ -1,5 +1,6 @@
 use appstate::AppStateData;
 use axum::{
+    middleware,
     routing::{delete, get, get_service, post, put},
     Router,
 };
@@ -24,7 +25,7 @@ use tokio::fs::create_dir_all;
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::info;
 use tracing_subscriber::fmt::format;
-use web_ui::{ui, user};
+use web_ui::{session, ui, user};
 
 #[tokio::main]
 async fn main() {
@@ -100,7 +101,9 @@ async fn main() {
         .route("/queue", get(docs::api::docs_in_queue))
         .route("/:package/:version", put(docs::api::publish_docs));
 
-    let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir)));
+    let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir))).route_layer(
+        middleware::from_fn_with_state(state.clone(), session::auth_when_required),
+    );
     let static_files_service = get_service(
         ServeDir::new(PathBuf::from("static"))
             .append_index_html_on_directories(true)

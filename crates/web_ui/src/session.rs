@@ -1,6 +1,10 @@
 use crate::error::RouteError;
-use axum::http::request::Parts;
-use axum::RequestPartsExt;
+use axum::{extract::State, RequestPartsExt};
+use axum::{
+    http::request::{Parts, Request},
+    middleware::Next,
+    response::Response,
+};
 use axum_extra::extract::PrivateCookieJar;
 use settings::constants;
 
@@ -88,6 +92,31 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
             },
             None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
         }
+    }
+}
+
+/// Middleware that checks if a user is logged in, when settings.auth_required is true.<br>
+/// If the user is not logged in, a 401 is returned.
+pub async fn auth_when_required<B>(
+    State(state): State<appstate::AppStateData>,
+    jar: PrivateCookieJar,
+    request: Request<B>,
+    next: Next<B>,
+) -> Result<Response, RouteError> {
+    if !state.settings.auth_required {
+        // If auth_required is not true, pass through.
+        return Ok(next.run(request).await);
+    }
+    let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+    match session_cookie {
+        Some(cookie) => match state.db.validate_session(cookie.value()).await {
+            // user is logged in
+            Ok(_) => Ok(next.run(request).await),
+            // user is not logged in
+            Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+        },
+        // user is not logged in
+        None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
     }
 }
 
