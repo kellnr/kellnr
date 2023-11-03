@@ -405,3 +405,146 @@ mod session_tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod auth_middleware_tests {
+    use super::*;
+    use crate::test_helper::encode_cookies;
+    use appstate::AppStateData;
+    use axum::middleware::from_fn_with_state;
+    use axum::{routing::get, Router};
+    use axum_extra::extract::cookie::Key;
+    use db::DbProvider;
+    use db::{error::DbError, mock::MockDb};
+    use hyper::{header, Body, Request, StatusCode};
+    use mockall::predicate::*;
+    use settings::Settings;
+    use std::sync::Arc;
+    use storage::kellnr_crate_storage::KellnrCrateStorage;
+    use tower::ServiceExt;
+
+    async fn handler_return_200() -> StatusCode {
+        StatusCode::OK
+    }
+
+    async fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
+        let settings = Settings::new().unwrap();
+        let state = AppStateData {
+            db,
+            signing_key: Key::from(crate::test_helper::TEST_KEY),
+            crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
+            settings: Arc::new(Settings {
+                auth_required: true,
+                ..settings
+            }),
+            ..appstate::test_state().await
+        };
+        Router::new()
+            .route("/guarded", get(handler_return_200))
+            .route_layer(from_fn_with_state(state.clone(), auth_when_required))
+            .route("/not_guarded", get(handler_return_200))
+            .with_state(state)
+    }
+
+    async fn app_not_required_auth(db: Arc<dyn DbProvider>) -> Router {
+        let settings = Settings::new().unwrap();
+        let state = AppStateData {
+            db,
+            signing_key: Key::from(crate::test_helper::TEST_KEY),
+            crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
+            settings: Arc::new(settings),
+            ..appstate::test_state().await
+        };
+        Router::new()
+            .route("/guarded", get(handler_return_200))
+            .route_layer(from_fn_with_state(state.clone(), auth_when_required))
+            .with_state(state)
+    }
+
+    type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    fn c1234() -> String {
+        encode_cookies([(constants::COOKIE_SESSION_ID, "1234")])
+    }
+
+    #[tokio::test]
+    async fn guarded_route_with_valid_cookie() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("1234"))
+            .returning(|_st| Ok(("guest".to_string(), false)));
+
+        let r = app_required_auth(Arc::new(mock_db))
+            .await
+            .oneshot(
+                Request::get("/guarded")
+                    .header(header::COOKIE, c1234())
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(r.status(), StatusCode::OK);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn guarded_route_with_invalid_cookie() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("1234"))
+            .returning(|_st| Err(DbError::SessionNotFound));
+
+        let r = app_required_auth(Arc::new(mock_db))
+            .await
+            .oneshot(
+                Request::get("/guarded")
+                    .header(header::COOKIE, c1234())
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn guarded_route_without_cookie() -> Result {
+        let mock_db = MockDb::new();
+
+        let r = app_required_auth(Arc::new(mock_db))
+            .await
+            .oneshot(Request::get("/guarded").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn not_guarded_route_without_cookie() -> Result {
+        let mock_db = MockDb::new();
+
+        let r = app_required_auth(Arc::new(mock_db))
+            .await
+            .oneshot(Request::get("/not_guarded").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::OK);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn app_not_required_auth_with_guarded_route() -> Result {
+        let mock_db = MockDb::new();
+
+        let r = app_not_required_auth(Arc::new(mock_db))
+            .await
+            .oneshot(Request::get("/guarded").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::OK);
+
+        Ok(())
+    }
+}
