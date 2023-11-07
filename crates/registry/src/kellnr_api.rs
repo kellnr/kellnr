@@ -6,7 +6,6 @@ use crate::yank_success::YankSuccess;
 use anyhow::Result;
 use appstate::AppState;
 use appstate::DbState;
-use auth::auth_req_token::AuthReqToken;
 use auth::token;
 use axum::extract::Path;
 use axum::extract::State;
@@ -99,7 +98,6 @@ pub async fn list_owners(
 }
 
 pub async fn search(
-    _auth_req_token: AuthReqToken,
     State(db): DbState,
     params: SearchParams,
 ) -> ApiResult<Json<search_result::SearchResult>> {
@@ -126,11 +124,9 @@ pub async fn search(
 }
 
 pub async fn download(
-    auth_req_token: AuthReqToken,
     State(state): AppState,
     Path((package, version)): Path<(OriginalName, Version)>,
 ) -> Result<Vec<u8>, StatusCode> {
-    _ = auth_req_token;
     let settings = state.settings;
     let db = state.db;
     let cs = state.crate_storage;

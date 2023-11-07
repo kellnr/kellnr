@@ -124,7 +124,11 @@ async fn main() {
         .route(
             "/:a/:package",
             get(kellnr_prefetch_api::prefetch_len2_kellnr),
-        );
+        )
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            session::auth_when_required,
+        ));
 
     let cratesio_api = Router::new()
         .route("/", get(cratesio_api::search))
@@ -137,7 +141,11 @@ async fn main() {
         .route(
             "/:a/:name",
             get(cratesio_prefetch_api::prefetch_len2_cratesio),
-        );
+        )
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            session::auth_when_required,
+        ));
 
     let ui = Router::new()
         .route("/version", get(ui::kellnr_version))
@@ -147,7 +155,11 @@ async fn main() {
         .route("/crate_data", get(ui::crate_data))
         .route("/cratesio_data", get(ui::cratesio_data))
         .route("/delete_crate", delete(ui::delete))
-        .route("/settings", get(ui::settings));
+        .route("/settings", get(ui::settings))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            session::auth_when_required,
+        ));
 
     let app = Router::new()
         .route("/me", get(kellnr_api::me))

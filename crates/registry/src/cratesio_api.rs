@@ -1,5 +1,4 @@
 use appstate::{CrateIoStorageState, SettingsState};
-use auth::auth_req_token::AuthReqToken;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -11,8 +10,7 @@ use tracing::{debug, error, trace};
 
 use crate::search_params::SearchParams;
 
-pub async fn search(auth_req_token: AuthReqToken, params: SearchParams) -> ApiResult<String> {
-    _ = auth_req_token;
+pub async fn search(params: SearchParams) -> ApiResult<String> {
     let url = match Url::parse(&format!(
         "https://crates.io/api/v1/crates?q={}&per_page={}",
         params.q, params.per_page.0
@@ -49,11 +47,9 @@ pub async fn search(auth_req_token: AuthReqToken, params: SearchParams) -> ApiRe
 
 pub async fn download(
     Path((package, version)): Path<(OriginalName, Version)>,
-    auth_req_token: AuthReqToken,
     State(settings): SettingsState,
     State(crate_storage): CrateIoStorageState,
 ) -> Result<Vec<u8>, StatusCode> {
-    _ = auth_req_token;
     // Return None if the feature is disabled
     match settings.crates_io_proxy {
         true => (),

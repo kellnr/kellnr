@@ -1,6 +1,5 @@
 use super::config_json::ConfigJson;
 use appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
-use auth::auth_req_token::AuthReqToken;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use axum::Json;
@@ -24,31 +23,25 @@ static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
 
 pub async fn config_cratesio(
     State(settings): SettingsState,
-    auth_req_token: AuthReqToken,
 ) -> Json<ConfigJson> {
-    _ = auth_req_token;
     Json(ConfigJson::from((&(*settings), "cratesio")))
 }
 
 pub async fn prefetch_cratesio(
     Path((_a, _b, name)): Path<(String, String, OriginalName)>,
     headers: HeaderMap,
-    auth_req_token: AuthReqToken,
     State(db): DbState,
     State(sender): CratesIoPrefetchSenderState,
 ) -> Result<Prefetch, StatusCode> {
-    _ = auth_req_token;
     internal_prefetch_cratesio(name, headers, &db, &sender).await
 }
 
 pub async fn prefetch_len2_cratesio(
     Path((_a, name)): Path<(String, OriginalName)>,
     headers: HeaderMap,
-    auth_req_token: AuthReqToken,
     State(db): DbState,
     State(sender): CratesIoPrefetchSenderState,
 ) -> Result<Prefetch, StatusCode> {
-    _ = auth_req_token;
     internal_prefetch_cratesio(name, headers, &db, &sender).await
 }
 

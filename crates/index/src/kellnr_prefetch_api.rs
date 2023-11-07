@@ -1,6 +1,5 @@
 use super::config_json::ConfigJson;
 use appstate::{DbState, SettingsState};
-use auth::auth_req_token::AuthReqToken;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -12,9 +11,7 @@ use std::sync::Arc;
 
 pub async fn config_kellnr(
     State(settings): SettingsState,
-    auth_req_token: AuthReqToken,
 ) -> Json<ConfigJson> {
-    _ = auth_req_token;
     Json(ConfigJson::from((&(*settings), "crates")))
 }
 
@@ -22,9 +19,7 @@ pub async fn prefetch_kellnr(
     Path((_a, _b, package)): Path<(String, String, OriginalName)>,
     headers: HeaderMap,
     State(db): DbState,
-    auth_req_token: AuthReqToken,
 ) -> Result<Prefetch, StatusCode> {
-    _ = auth_req_token;
     let index_name = NormalizedName::from(package);
     internal_kellnr_prefetch(&index_name, &headers, &db).await
 }
@@ -32,10 +27,8 @@ pub async fn prefetch_kellnr(
 pub async fn prefetch_len2_kellnr(
     Path((_a, package)): Path<(String, OriginalName)>,
     headers: HeaderMap,
-    auth_req_token: AuthReqToken,
     State(db): DbState,
 ) -> Result<Prefetch, StatusCode> {
-    _ = auth_req_token;
     let index_name = NormalizedName::from(package);
     internal_kellnr_prefetch(&index_name, &headers, &db).await
 }
