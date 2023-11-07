@@ -159,7 +159,7 @@ mod tests {
             api_address: String::from("test.api.com"),
             api_port: 8000,
             api_port_proxy: 1234,
-            ..Settings::new().unwrap()
+            ..Settings::default()
         };
 
         let mut mock_db = MockDb::new();
@@ -180,8 +180,8 @@ mod tests {
 
         let kellnr_prefetch = Router::new()
             .route("/config.json", get(config_kellnr))
-            .route("/:_/:_/:name", get(prefetch_kellnr))
-            .route("/:_/:name", get(prefetch_len2_kellnr));
+            .route("/:a/:b/:name", get(prefetch_kellnr))
+            .route("/:a/:name", get(prefetch_len2_kellnr));
 
         let state = AppStateData {
             db: Arc::new(mock_db),

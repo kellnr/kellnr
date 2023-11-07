@@ -139,7 +139,7 @@ async fn main() {
             get(cratesio_prefetch_api::prefetch_len2_cratesio),
         );
 
-    let app = Router::new()
+    let ui = Router::new()
         .route("/version", get(ui::kellnr_version))
         .route("/crates", get(ui::crates))
         .route("/search", get(ui::search))
@@ -147,8 +147,11 @@ async fn main() {
         .route("/crate_data", get(ui::crate_data))
         .route("/cratesio_data", get(ui::cratesio_data))
         .route("/delete_crate", delete(ui::delete))
-        .route("/settings", get(ui::settings))
+        .route("/settings", get(ui::settings));
+
+    let app = Router::new()
         .route("/me", get(kellnr_api::me))
+        .nest("/", ui)
         .nest("/user", user)
         .nest("/api/v1/docs", docs)
         .nest("/api/v1/crates", kellnr_api)

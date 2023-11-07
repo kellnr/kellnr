@@ -231,7 +231,7 @@ mod tests {
             data_dir: "/tmp/".to_string() + &generate_rand_string(10),
             session_age_seconds: 10,
             crates_io_proxy: true,
-            ..Settings::new().unwrap()
+            ..Settings::default()
         }
     }
 

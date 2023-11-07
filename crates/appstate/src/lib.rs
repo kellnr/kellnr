@@ -33,7 +33,7 @@ pub struct AppStateData {
 pub async fn test_state() -> AppStateData {
     let db = Arc::new(db::mock::MockDb::new());
     let signing_key = Key::generate();
-    let settings = Arc::new(Settings::new().unwrap());
+    let settings = Arc::new(Settings::default());
     let crate_storage = Arc::new(KellnrCrateStorage::new(&settings).await.unwrap());
     let crateio_storage = Arc::new(CratesIoCrateStorage::new(&settings).await.unwrap());
     let (cratesio_prefetch_sender, _) = flume::unbounded();

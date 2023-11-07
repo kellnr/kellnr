@@ -775,7 +775,7 @@ mod reg_api_tests {
             admin_pwd: "admin".to_string(),
             data_dir: "/tmp/".to_string() + &generate_rand_string(10),
             session_age_seconds: 10,
-            ..Settings::new().unwrap()
+            ..Settings::default()
         }
     }
 

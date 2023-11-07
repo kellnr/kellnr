@@ -519,7 +519,7 @@ mod tests {
             api_address: String::from("test.api.com"),
             api_port: 8000,
             api_port_proxy: 1234,
-            ..Settings::new().unwrap()
+            ..Settings::default()
         };
 
         let mut mock_db = MockDb::new();

@@ -7,7 +7,6 @@ use axum::http::StatusCode;
 // This token checks if "auth_required = true" and if so, it requires a token.
 // Else, it does not require a token.
 // Returns None if "auth_required = false", else returns Some(Token) or an error.
-// Feature is only available in Enterprise version.
 #[derive(Debug)]
 pub struct AuthReqToken(Option<Token>);
 
@@ -48,7 +47,7 @@ mod test {
     async fn no_auth_required() {
         let settings = Settings {
             auth_required: false,
-            ..Settings::new().unwrap()
+            ..Settings::default()
         };
 
         let r = app(settings)
@@ -64,7 +63,7 @@ mod test {
     async fn auth_required_but_not_provided() {
         let settings = Settings {
             auth_required: true,
-            ..Settings::new().unwrap()
+            ..Settings::default()
         };
 
         let r = app(settings)
@@ -80,7 +79,7 @@ mod test {
     async fn auth_required_but_wrong_token_provided() {
         let settings = Settings {
             auth_required: true,
-            ..Settings::new().unwrap()
+            ..Settings::default()
         };
 
         let r = app(settings)
@@ -101,7 +100,7 @@ mod test {
     async fn auth_required_and_right_token_provided() {
         let settings = Settings {
             auth_required: true,
-            ..Settings::new().unwrap()
+            ..Settings::default()
         };
 
         let r = app(settings)

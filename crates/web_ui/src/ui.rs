@@ -320,7 +320,7 @@ mod tests {
             .expect_validate_session()
             .returning(|_| Ok(("admin".to_string(), true)));
 
-        let settings = Settings::new().unwrap();
+        let settings = Settings::default();
         let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
@@ -341,7 +341,7 @@ mod tests {
             .expect_validate_session()
             .returning(|_| Ok(("admin".to_string(), true)));
 
-        let settings = Settings::new().unwrap();
+        let settings = Settings::default();
         let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
@@ -367,7 +367,7 @@ mod tests {
         let result_state = serde_json::from_slice::<StartupSettings>(&result_msg).unwrap();
 
         // Set the password to empty string because it is not serialized
-        let tmp = StartupSettings::from(&Settings::new().unwrap());
+        let tmp = StartupSettings::from(&Settings::default());
         let psq = Postgresql {
             pwd: String::default(),
             ..tmp.postgresql
@@ -1192,7 +1192,7 @@ mod tests {
     }
 
     fn test_settings() -> Settings {
-        let settings = Settings::new().unwrap();
+        let settings = Settings::default();
         Settings {
             data_dir: "/tmp/data".to_string(),
             ..settings

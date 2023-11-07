@@ -2,6 +2,7 @@ use config::{Config, ConfigError, Environment, File};
 use deserialize_with::DeserializeWith;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::{
     convert::TryFrom,
     env,
@@ -108,10 +109,6 @@ impl TryFrom<&Path> for Settings {
 }
 
 impl Settings {
-    pub fn new() -> Result<Self, ConfigError> {
-        Settings::try_from(Path::new("../../config"))
-    }
-
     fn join_path(config_path: &Path, file: &str) -> Result<String, ConfigError> {
         config_path
             .join(file)
@@ -142,6 +139,40 @@ impl Settings {
 
     pub fn crates_io_bin_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.data_dir).join("cratesio")
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            admin_pwd: "admin".to_string(),
+            data_dir: "/tmp/kellnr".to_string(), // Differs from default.toml for testing
+            session_age_seconds: 28800,
+            api_address: "127.0.0.1".to_string(),
+            api_port: 8000,
+            api_port_proxy: 8000,
+            api_protocol: Protocol::Http,
+            web_address: IpAddr::from_str("0.0.0.0").unwrap(),
+            admin_token: "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD".to_string(),
+            crates_io_proxy: false,
+            crates_io_num_threads: 10,
+            log_level: tracing::Level::INFO,
+            log_level_web_server: tracing::Level::WARN,
+            log_format: LogFormat::Compact,
+            postgresql: Postgresql {
+                enabled: false,
+                address: "localhost".to_string(),
+                port: 5432,
+                db: "kellnr".to_string(),
+                user: "".to_string(),
+                pwd: "".to_string(),
+            },
+            rustdoc_auto_gen: false, // Differs from default.toml for testing
+            cache_size: 1000,
+            max_crate_size: 100 * 1000,
+            max_docs_size: 100 * 1000,
+            auth_required: false,
+        }
     }
 }
 

@@ -113,7 +113,7 @@ use crate::pub_data::PubData;
                 data_dir: data_dir.to_string(),
                 admin_pwd: String::new(),
                 session_age_seconds: 60,
-                ..Settings::new().unwrap()
+                ..Settings::default()
             };
             //fs::create_dir_all(&settings.bin_path()).expect("Cannot create test bin directory.");
             let crate_storage = KellnrCrateStorage::new(&settings).await.unwrap();

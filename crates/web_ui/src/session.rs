@@ -149,7 +149,7 @@ mod session_tests {
     async fn any_endpoint(_user: MaybeUser) {}
 
     async fn app(db: Arc<dyn DbProvider>) -> Router {
-        let settings = Settings::new().unwrap();
+        let settings = Settings::default();
         Router::new()
             .route("/admin", get(admin_endpoint))
             .route("/normal", get(normal_endpoint))
@@ -428,7 +428,7 @@ mod auth_middleware_tests {
     }
 
     async fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
-        let settings = Settings::new().unwrap();
+        let settings = Settings::default();
         let state = AppStateData {
             db,
             signing_key: Key::from(crate::test_helper::TEST_KEY),
@@ -447,7 +447,7 @@ mod auth_middleware_tests {
     }
 
     async fn app_not_required_auth(db: Arc<dyn DbProvider>) -> Router {
-        let settings = Settings::new().unwrap();
+        let settings = Settings::default();
         let state = AppStateData {
             db,
             signing_key: Key::from(crate::test_helper::TEST_KEY),
