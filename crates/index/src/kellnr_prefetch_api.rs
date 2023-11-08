@@ -9,9 +9,7 @@ use common::{normalized_name::NormalizedName, original_name::OriginalName, prefe
 use db::DbProvider;
 use std::sync::Arc;
 
-pub async fn config_kellnr(
-    State(settings): SettingsState,
-) -> Json<ConfigJson> {
+pub async fn config_kellnr(State(settings): SettingsState) -> Json<ConfigJson> {
     Json(ConfigJson::from((&(*settings), "crates")))
 }
 

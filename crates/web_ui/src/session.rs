@@ -97,7 +97,7 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
 
 /// Middleware that checks if a user is logged in, when settings.auth_required is true.<br>
 /// If the user is not logged in, a 401 is returned.
-pub async fn auth_when_required<B>(
+pub async fn session_auth_when_required<B>(
     State(state): State<appstate::AppStateData>,
     jar: PrivateCookieJar,
     request: Request<B>,
@@ -420,7 +420,6 @@ mod auth_middleware_tests {
     use mockall::predicate::*;
     use settings::Settings;
     use std::sync::Arc;
-    use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tower::ServiceExt;
 
     async fn handler_return_200() -> StatusCode {
@@ -432,7 +431,6 @@ mod auth_middleware_tests {
         let state = AppStateData {
             db,
             signing_key: Key::from(crate::test_helper::TEST_KEY),
-            crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
             settings: Arc::new(Settings {
                 auth_required: true,
                 ..settings
@@ -441,7 +439,10 @@ mod auth_middleware_tests {
         };
         Router::new()
             .route("/guarded", get(handler_return_200))
-            .route_layer(from_fn_with_state(state.clone(), auth_when_required))
+            .route_layer(from_fn_with_state(
+                state.clone(),
+                session_auth_when_required,
+            ))
             .route("/not_guarded", get(handler_return_200))
             .with_state(state)
     }
@@ -451,13 +452,15 @@ mod auth_middleware_tests {
         let state = AppStateData {
             db,
             signing_key: Key::from(crate::test_helper::TEST_KEY),
-            crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
             settings: Arc::new(settings),
             ..appstate::test_state().await
         };
         Router::new()
             .route("/guarded", get(handler_return_200))
-            .route_layer(from_fn_with_state(state.clone(), auth_when_required))
+            .route_layer(from_fn_with_state(
+                state.clone(),
+                session_auth_when_required,
+            ))
             .with_state(state)
     }
 

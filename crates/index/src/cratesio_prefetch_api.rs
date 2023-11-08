@@ -21,9 +21,7 @@ use tracing::{error, trace, warn};
 static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
 
-pub async fn config_cratesio(
-    State(settings): SettingsState,
-) -> Json<ConfigJson> {
+pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson> {
     Json(ConfigJson::from((&(*settings), "cratesio")))
 }
 

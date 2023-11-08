@@ -17,6 +17,7 @@ entity.workspace = true
 pg_testcontainer.workspace = true
 appstate.workspace = true
 storage.workspace = true
+auth.workspace = true
 
 # External dependencies from crates.io
 sysinfo.workspace = true

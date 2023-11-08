@@ -102,7 +102,7 @@ async fn main() {
         .route("/:package/:version", put(docs::api::publish_docs));
 
     let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir))).route_layer(
-        middleware::from_fn_with_state(state.clone(), session::auth_when_required),
+        middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
     let static_files_service = get_service(
         ServeDir::new(PathBuf::from("static"))
@@ -127,7 +127,7 @@ async fn main() {
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
-            session::auth_when_required,
+            auth::auth_req_token::cargo_auth_when_required,
         ));
 
     let cratesio_api = Router::new()
@@ -144,7 +144,7 @@ async fn main() {
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
-            session::auth_when_required,
+            auth::auth_req_token::cargo_auth_when_required,
         ));
 
     let ui = Router::new()
@@ -158,7 +158,7 @@ async fn main() {
         .route("/settings", get(ui::settings))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
-            session::auth_when_required,
+            session::session_auth_when_required,
         ));
 
     let app = Router::new()

@@ -376,6 +376,7 @@ dependencies = [
  "axum-extra",
  "db",
  "error",
+ "hyper",
  "mockall",
  "rand",
  "serde",
@@ -383,6 +384,7 @@ dependencies = [
  "storage",
  "tokio",
  "tower",
+ "tracing",
 ]
 
 [[package]]
@@ -2984,6 +2986,7 @@ name = "kellnr"
 version = "0.1.0"
 dependencies = [
  "appstate",
+ "auth",
  "axum",
  "axum-extra",
  "common",

@@ -58,24 +58,15 @@ impl FromRequest<AppStateData, Body> for PubData {
             )));
         }
 
-        let metadata_length = match convert_length(&data_bytes[0..4]) {
-            Ok(l) => l,
-            Err(e) => return Err(ApiError::from(e)),
-        };
+        let metadata_length = convert_length(&data_bytes[0..4])?; 
         let metadata_end = 4 + (metadata_length as usize);
 
         if metadata_end >= data_bytes.len() {
             return Err(ApiError::from("Invalid metadata size."));
         }
 
-        let metadata: PublishMetadata = match deserialize_metadata(&data_bytes[4..metadata_end]) {
-            Ok(md) => md,
-            Err(e) => return Err(ApiError::from(e)),
-        };
-        let crate_length = match convert_length(&data_bytes[metadata_end..(metadata_end + 4)]) {
-            Ok(l) => l,
-            Err(e) => return Err(ApiError::from(e)),
-        };
+        let metadata: PublishMetadata = deserialize_metadata(&data_bytes[4..metadata_end])?;
+        let crate_length = convert_length(&data_bytes[metadata_end..(metadata_end + 4)])?;
         let crate_end = metadata_end + 4 + (crate_length as usize);
         let cratedata: Vec<u8> = data_bytes[metadata_end + 4..crate_end].to_vec();
 
@@ -92,15 +83,15 @@ impl FromRequest<AppStateData, Body> for PubData {
 
 #[cfg(test)]
 mod bin_tests {
-    use tokio::io::AsyncReadExt;
-use crate::pub_data::PubData;
+    use crate::pub_data::PubData;
     use common::original_name::OriginalName;
     use common::publish_metadata::PublishMetadata;
     use common::version::Version;
     use settings::Settings;
-    use tokio::fs::File;
     use std::{convert::TryFrom, path::Path};
     use storage::kellnr_crate_storage::KellnrCrateStorage;
+    use tokio::fs::File;
+    use tokio::io::AsyncReadExt;
 
     struct TestBin {
         settings: Settings,

@@ -17,6 +17,8 @@ appstate.workspace = true
 rand.workspace = true
 serde.workspace = true
 axum.workspace = true
+axum-extra.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
@@ -24,3 +26,4 @@ axum-extra.workspace = true
 tokio.workspace = true
 tower.workspace = true
 storage.workspace = true
+hyper.workspace = true

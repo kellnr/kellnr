@@ -112,7 +112,7 @@ pub async fn search(
                 .description
                 .unwrap_or_else(|| "No description set".to_string()),
         })
-        .take(params.per_page.0 as usize)
+        .take(params.per_page.0)
         .collect::<Vec<Crate>>();
 
     Ok(Json(SearchResult {
