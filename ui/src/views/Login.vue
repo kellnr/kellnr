@@ -52,11 +52,11 @@
 
 <script setup lang="ts">
 import StatusNotification from "../components/StatusNotification.vue";
-import {computed, onMounted, ref} from "vue";
+import {onMounted, ref} from "vue";
 import {MutationTypes} from "@/store/mutation-types";
 import axios from "axios";
 import {store} from "@/store/store"
-import {kellnr_url, LOGIN} from "@/remote-routes";
+import {LOGIN} from "@/remote-routes";
 import router from "@/router";
 
 const loginStatusMsg = ref("")
@@ -88,6 +88,9 @@ function submit() {
           } else {
             router.push("/usersettings")
           }
+        }
+        else {
+          router.push("/")
         }
       }
     })

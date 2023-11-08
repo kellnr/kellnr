@@ -24,7 +24,7 @@ import {MutationTypes} from "@/store/mutation-types";
 import axios from "axios";
 import {useRouter} from "vue-router";
 import {store} from "@/store/store"
-import {kellnr_url, LOGIN_STATE, LOGOUT} from "@/remote-routes";
+import {LOGIN_STATE, LOGOUT} from "@/remote-routes";
 
 const router = useRouter()
 
