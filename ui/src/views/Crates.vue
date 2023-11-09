@@ -38,12 +38,14 @@
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from "vue"
+import {onBeforeMount, onMounted, ref} from "vue"
 import axios from "axios"
 import CrateCard from "@/components/CrateCard.vue"
 import {CrateOverview} from "@/types/crate_overview";
 import Statistics from "@/components/Statistics.vue"
-import {CRATES, SEARCH} from "@/remote-routes";
+import {CRATES, SEARCH, VERSION} from "@/remote-routes";
+import {store} from "@/store/store";
+import {useRouter} from "vue-router";
 
 const crates = ref<Array<CrateOverview>>([])
 const emptyCrates = ref(false)
@@ -56,6 +58,26 @@ const page_size = ref(20)
 const searchText = ref("")
 const search_key_timeout = ref(500)
 const rtable = ref<HTMLDivElement | null>(null)
+const router = useRouter()
+
+onBeforeMount(() => {
+  login_required()
+})
+
+function login_required() {
+  if(store.state.loggedIn === false) {
+    // Check if authentication is required
+    // to view crates. -> "auth_required = true" in Kellnr settings.
+    
+    axios.get(VERSION).then((_response) => {
+      // do nothing -> no auth required
+    }).catch((error) => {
+      if(error.response.status === 401) {
+        router.push("/login")
+      }
+    })
+  } 
+}
 
 function scrollHandler() {
   let table = rtable.value;
