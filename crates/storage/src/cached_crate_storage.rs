@@ -26,8 +26,8 @@ impl CachedCrateStorage {
         let cs = Self {
             crate_folder: settings.bin_path(),
             doc_queue_path: settings.doc_queue_path(),
-            cache: if settings.cache_size > 0 {
-                Some(Cache::new(settings.cache_size))
+            cache: if settings.registry.cache_size > 0 {
+                Some(Cache::new(settings.registry.cache_size))
             } else {
                 None
             },
