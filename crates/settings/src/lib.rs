@@ -13,3 +13,13 @@ mod deserialize_with;
 
 pub use settings::Settings;
 pub use settings::get_settings;
+pub use protocol::Protocol;
+pub use postgresql::Postgresql;
+pub use log::LogFormat;
+pub use log::LogLevel;
+pub use docs::Docs;
+pub use local::Local;
+pub use origin::Origin;
+pub use proxy::Proxy;
+pub use registry::Registry;
+pub use startup::Startup;

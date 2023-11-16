@@ -148,7 +148,7 @@ pub async fn login(
     let jar = cookies.add(
         Cookie::build(COOKIE_SESSION_ID, session_token)
             .max_age(time::Duration::seconds(
-                state.settings.session_age_seconds as i64,
+                state.settings.registry.session_age_seconds as i64,
             ))
             .same_site(axum_extra::extract::cookie::SameSite::Strict)
             .path("/")

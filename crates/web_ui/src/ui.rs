@@ -1,5 +1,5 @@
 use crate::session::MaybeUser;
-use crate::{error::RouteError, settings::StartupSettings};
+use crate::error::RouteError;
 use appstate::{AppState, DbState, SettingsState};
 use axum::{
     extract::{Query, State},
@@ -12,15 +12,16 @@ use common::original_name::OriginalName;
 use common::version::Version;
 use db::error::DbError;
 use reqwest::StatusCode;
+use settings::Settings;
 use tracing::error;
 
 pub async fn settings(
     user: MaybeUser,
     State(settings): SettingsState,
-) -> Result<Json<StartupSettings>, RouteError> {
+) -> Result<Json<Settings>, RouteError> {
     user.assert_admin()?;
-    let settings_state = StartupSettings::from(&(*settings));
-    Ok(Json(settings_state))
+    let s: Settings = (*settings).to_owned();
+    Ok(Json(s))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -364,15 +365,15 @@ mod tests {
 
         let result_status = r.status();
         let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
-        let result_state = serde_json::from_slice::<StartupSettings>(&result_msg).unwrap();
+        let result_state = serde_json::from_slice::<Settings>(&result_msg).unwrap();
 
         // Set the password to empty string because it is not serialized
-        let tmp = StartupSettings::from(&Settings::default());
+        let tmp = Settings::default();
         let psq = Postgresql {
             pwd: String::default(),
             ..tmp.postgresql
         };
-        let expected_state = StartupSettings {
+        let expected_state = Settings {
             postgresql: psq,
             ..tmp
         };
@@ -1192,11 +1193,7 @@ mod tests {
     }
 
     fn test_settings() -> Settings {
-        let settings = Settings::default();
-        Settings {
-            data_dir: "/tmp/data".to_string(),
-            ..settings
-        }
+        Settings::default()
     }
 
     const TEST_KEY: &[u8] = &[1; 64];

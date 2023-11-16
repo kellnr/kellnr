@@ -58,7 +58,7 @@ impl FromRequest<AppStateData, Body> for PubData {
             )));
         }
 
-        let metadata_length = convert_length(&data_bytes[0..4])?; 
+        let metadata_length = convert_length(&data_bytes[0..4])?;
         let metadata_end = 4 + (metadata_length as usize);
 
         if metadata_end >= data_bytes.len() {
@@ -101,9 +101,15 @@ mod bin_tests {
     impl TestBin {
         async fn from(data_dir: &str) -> TestBin {
             let settings = Settings {
-                data_dir: data_dir.to_string(),
-                admin_pwd: String::new(),
-                session_age_seconds: 60,
+                registry: settings::Registry {
+                    data_dir: data_dir.to_owned(),
+                    session_age_seconds: 60,
+                    ..settings::Registry::default()
+                },
+                startup: settings::Startup {
+                    admin_pwd: String::new(),
+                    ..settings::Startup::default()
+                },
                 ..Settings::default()
             };
             //fs::create_dir_all(&settings.bin_path()).expect("Cannot create test bin directory.");
@@ -117,7 +123,8 @@ mod bin_tests {
 
     impl Drop for TestBin {
         fn drop(&mut self) {
-            rm_rf::remove(&self.settings.data_dir).expect("Cannot remove test bin directory.");
+            rm_rf::remove(&self.settings.registry.data_dir)
+                .expect("Cannot remove test bin directory.");
         }
     }
 

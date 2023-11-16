@@ -37,11 +37,11 @@ impl ConfigJson {
 impl From<(&Settings, &str)> for ConfigJson {
     fn from(value: (&Settings, &str)) -> Self {
         Self::new(
-            &value.0.api_protocol,
-            &value.0.api_address,
-            value.0.api_port_proxy,
+            &value.0.origin.protocol,
+            &value.0.origin.hostname,
+            value.0.origin.port,
             value.1,
-            value.0.auth_required,
+            value.0.registry.auth_required,
         )
     }
 }

@@ -188,7 +188,7 @@ pub async fn publish(
         .await?;
 
     // Add crate to queue for doc extraction if there is no documentation value set already
-    if settings.rustdoc_auto_gen && pub_data.metadata.documentation.is_none() {
+    if settings.docs.enabled && pub_data.metadata.documentation.is_none() {
         db.add_doc_queue(
             &normalized_name,
             &version,
@@ -768,9 +768,11 @@ mod reg_api_tests {
 
     fn get_settings() -> Settings {
         Settings {
-            admin_pwd: "admin".to_string(),
-            data_dir: "/tmp/".to_string() + &generate_rand_string(10),
-            session_age_seconds: 10,
+            registry: settings::Registry {
+                data_dir: "/tmp/".to_string() + &generate_rand_string(10),
+                session_age_seconds: 10,
+                ..settings::Registry::default()
+            },
             ..Settings::default()
         }
     }
@@ -786,23 +788,23 @@ mod reg_api_tests {
 
     impl TestKellnr {
         async fn new(settings: Settings) -> Self {
-            std::fs::create_dir_all(&settings.data_dir).unwrap();
+            std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             let db = Database::new(&con_string).await.unwrap();
             TestKellnr {
-                path: path::PathBuf::from(&settings.data_dir),
+                path: path::PathBuf::from(&settings.registry.data_dir),
                 db,
                 client: app(settings).await,
             }
         }
 
         async fn fake(settings: Settings) -> Self {
-            std::fs::create_dir_all(&settings.data_dir).unwrap();
+            std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             let db = Database::new(&con_string).await.unwrap();
 
             TestKellnr {
-                path: path::PathBuf::from(&settings.data_dir),
+                path: path::PathBuf::from(&settings.registry.data_dir),
                 db,
                 client: app(settings).await,
             }

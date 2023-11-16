@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 pub struct Docs {
     pub enabled: bool,
-    pub max_size: u64,
+    pub max_size: usize,
 }
 
 impl Default for Docs {

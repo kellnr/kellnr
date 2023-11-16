@@ -147,9 +147,11 @@ mod tests {
 
     async fn app() -> Router {
         let settings = Settings {
-            api_address: String::from("test.api.com"),
-            api_port: 8000,
-            api_port_proxy: 1234,
+            origin: settings::Origin {
+                protocol: Protocol::Http,
+                hostname: String::from("test.api.com"),
+                port: 1234,
+            },
             ..Settings::default()
         };
 

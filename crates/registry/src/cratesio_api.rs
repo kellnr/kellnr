@@ -51,7 +51,7 @@ pub async fn download(
     State(crate_storage): CrateIoStorageState,
 ) -> Result<Vec<u8>, StatusCode> {
     // Return None if the feature is disabled
-    match settings.crates_io_proxy {
+    match settings.proxy.enabled {
         true => (),
         _ => return Err(StatusCode::NOT_FOUND),
     };
@@ -223,19 +223,24 @@ mod tests {
 
     fn get_settings() -> Settings {
         Settings {
-            admin_pwd: "admin".to_string(),
-            data_dir: "/tmp/".to_string() + &generate_rand_string(10),
-            session_age_seconds: 10,
-            crates_io_proxy: true,
+            registry: settings::Registry {
+                data_dir: "/tmp/".to_string() + &generate_rand_string(10),
+                session_age_seconds: 10,
+                ..settings::Registry::default()
+            },
+            proxy: settings::Proxy {
+                enabled: true,
+                ..settings::Proxy::default()
+            },
             ..Settings::default()
         }
     }
 
     impl TestKellnr {
         async fn new(settings: Settings) -> Self {
-            std::fs::create_dir_all(&settings.data_dir).unwrap();
+            std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             TestKellnr {
-                path: path::PathBuf::from(&settings.data_dir),
+                path: path::PathBuf::from(&settings.registry.data_dir),
                 client: app(settings).await,
             }
         }

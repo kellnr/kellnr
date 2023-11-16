@@ -351,7 +351,7 @@ impl MigrationTrait for Migration {
 }
 
 pub fn index_path(settings: &Settings) -> std::path::PathBuf {
-    std::path::PathBuf::from(&settings.data_dir)
+    std::path::PathBuf::from(&settings.registry.data_dir)
         .join("git")
         .join("index")
 }

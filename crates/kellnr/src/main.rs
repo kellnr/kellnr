@@ -32,9 +32,9 @@ async fn main() {
     let settings: Arc<Settings> = Settings::try_from(Path::new("config"))
         .expect("Cannot read config")
         .into();
-    let addr = &format!("{}:{}", settings.web_address, settings.api_port)
+    let addr = &format!("{}:{}", settings.local.ip, settings.local.port)
         .parse()
-        .expect("Failed to parse address and port: {settings.web_address}:{settings.api_port}");
+        .expect("Failed to parse IP and port: {settings.local.ip}:{settings.local.port}");
 
     // Configure tracing subscriber
     init_tracing(&settings);
@@ -63,13 +63,13 @@ async fn main() {
         get_connect_string(&settings),
         cratesio_prefetch_sender.clone(),
         cratesio_prefetch_receiver,
-        settings.crates_io_num_threads,
+        settings.proxy.num_threads,
     )
     .await;
 
     // Docs hosting
     init_docs_hosting(&settings, &con_string).await;
-    let data_dir = settings.data_dir.clone();
+    let data_dir = settings.registry.data_dir.clone();
     let signing_key = Key::generate();
     let state = AppStateData {
         db,
@@ -210,10 +210,10 @@ async fn init_cratesio_prefetch_thread(
 }
 
 fn init_tracing(settings: &Settings) {
-    let ts = tracing_subscriber::fmt().with_max_level(settings.log_level)
-    .with_env_filter(format!("{},mio::poll=error,want=error,sqlx::query=error,sqlx::postgres=warn,sea_orm_migration=warn,cargo=error,globset=warn,hyper=warn,_=warn,reqwest=warn,tower_http={}", settings.log_level, settings.log_level_web_server));
+    let ts = tracing_subscriber::fmt().with_max_level(settings.log.level)
+    .with_env_filter(format!("{},mio::poll=error,want=error,sqlx::query=error,sqlx::postgres=warn,sea_orm_migration=warn,cargo=error,globset=warn,hyper=warn,_=warn,reqwest=warn,tower_http={}", settings.log.level, settings.log.level_web_server));
 
-    match settings.log_format {
+    match settings.log.format {
         LogFormat::Compact => ts.event_format(format().compact()).init(),
         LogFormat::Pretty => ts.event_format(format().pretty()).init(),
         LogFormat::Json => ts.event_format(format().json()).init(),
@@ -232,7 +232,7 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
     create_dir_all(settings.docs_path())
         .await
         .expect("Failed to create docs directory.");
-    if settings.rustdoc_auto_gen {
+    if settings.docs.enabled {
         docs::doc_queue::doc_extraction_queue(
             Database::new(con_string)
                 .await

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 pub struct Proxy {
     pub enabled: bool,
-    pub num_threads: u64,
+    pub num_threads: usize,
 }
 
 impl Default for Proxy {

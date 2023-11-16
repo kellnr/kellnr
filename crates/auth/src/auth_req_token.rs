@@ -21,7 +21,7 @@ impl FromRequestParts<AppStateData> for AuthReqToken {
         parts: &mut Parts,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        if state.settings.auth_required {
+        if state.settings.registry.auth_required {
             Token::from_request_parts(parts, state)
                 .await
                 .map(|t| Self(Some(t)))
@@ -31,14 +31,14 @@ impl FromRequestParts<AppStateData> for AuthReqToken {
     }
 }
 
-/// Middleware that checks if a cargo token is provided, when settings.auth_required is true.<br>
+/// Middleware that checks if a cargo token is provided, when settings.registry.auth_required is true.<br>
 /// If the user is not logged in, a 401 is returned.
 pub async fn cargo_auth_when_required<B>(
     State(state): State<appstate::AppStateData>,
     request: Request<B>,
     next: Next<B>,
 ) -> Result<Response, StatusCode> {
-    if !state.settings.auth_required {
+    if !state.settings.registry.auth_required {
         // If auth_required is not true, pass through.
         return Ok(next.run(request).await);
     }
@@ -72,7 +72,10 @@ mod test {
     #[tokio::test]
     async fn no_auth_required() {
         let settings = Settings {
-            auth_required: false,
+            registry: settings::Registry {
+                auth_required: false,
+                ..settings::Registry::default()
+            },
             ..Settings::default()
         };
 
@@ -88,7 +91,10 @@ mod test {
     #[tokio::test]
     async fn auth_required_but_not_provided() {
         let settings = Settings {
-            auth_required: true,
+            registry: settings::Registry {
+                auth_required: true,
+                ..settings::Registry::default()
+            },
             ..Settings::default()
         };
 
@@ -104,7 +110,10 @@ mod test {
     #[tokio::test]
     async fn auth_required_but_wrong_token_provided() {
         let settings = Settings {
-            auth_required: true,
+            registry: settings::Registry {
+                auth_required: true,
+                ..settings::Registry::default()
+            },
             ..Settings::default()
         };
 
@@ -125,7 +134,10 @@ mod test {
     #[tokio::test]
     async fn auth_required_and_right_token_provided() {
         let settings = Settings {
-            auth_required: true,
+            registry: settings::Registry {
+                auth_required: true,
+                ..settings::Registry::default()
+            },
             ..Settings::default()
         };
 
@@ -200,7 +212,10 @@ mod auth_middleware_tests {
         let state = AppStateData {
             db,
             settings: Arc::new(Settings {
-                auth_required: true,
+                registry: settings::Registry {
+                    auth_required: true,
+                    ..settings::Registry::default()
+                },
                 ..settings
             }),
             ..appstate::test_state().await

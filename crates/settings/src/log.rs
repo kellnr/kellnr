@@ -116,6 +116,24 @@ impl DeserializeWith for LogLevel {
     }
 }
 
+impl From<LogLevel> for tracing::Level {
+    fn from(value: LogLevel) -> Self {
+        match value {
+            LogLevel::Trace => tracing::Level::TRACE,
+            LogLevel::Debug => tracing::Level::DEBUG,
+            LogLevel::Info => tracing::Level::INFO,
+            LogLevel::Warn => tracing::Level::WARN,
+            LogLevel::Error => tracing::Level::ERROR,
+        }
+    }
+}
+
+impl From<LogLevel> for tracing::level_filters::LevelFilter {
+    fn from(value: LogLevel) -> Self {
+        Self::from_level(value.into())
+    }
+}
+ 
 #[cfg(test)]
 mod log_format_tests {
     use super::*;

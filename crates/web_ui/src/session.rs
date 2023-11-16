@@ -95,7 +95,7 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
     }
 }
 
-/// Middleware that checks if a user is logged in, when settings.auth_required is true.<br>
+/// Middleware that checks if a user is logged in, when settings.registry.auth_required is true.<br>
 /// If the user is not logged in, a 401 is returned.
 pub async fn session_auth_when_required<B>(
     State(state): State<appstate::AppStateData>,
@@ -103,7 +103,7 @@ pub async fn session_auth_when_required<B>(
     request: Request<B>,
     next: Next<B>,
 ) -> Result<Response, RouteError> {
-    if !state.settings.auth_required {
+    if !state.settings.registry.auth_required {
         // If auth_required is not true, pass through.
         return Ok(next.run(request).await);
     }
@@ -432,7 +432,10 @@ mod auth_middleware_tests {
             db,
             signing_key: Key::from(crate::test_helper::TEST_KEY),
             settings: Arc::new(Settings {
-                auth_required: true,
+                registry: settings::Registry {
+                    auth_required: true,
+                    ..settings::Registry::default()
+                },
                 ..settings
             }),
             ..appstate::test_state().await
