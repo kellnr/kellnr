@@ -7,7 +7,7 @@ pub mod protocol;
 pub mod proxy;
 pub mod registry;
 pub mod settings;
-pub mod startup;
+pub mod setup;
 pub mod constants;
 mod deserialize_with;
 
@@ -22,4 +22,4 @@ pub use local::Local;
 pub use origin::Origin;
 pub use proxy::Proxy;
 pub use registry::Registry;
-pub use startup::Startup;
+pub use setup::Setup;

@@ -14,11 +14,11 @@ use crate::origin::Origin;
 use crate::postgresql::Postgresql;
 use crate::proxy::Proxy;
 use crate::registry::Registry;
-use crate::startup::Startup;
+use crate::setup::Setup;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Default, Clone)]
 pub struct Settings {
-    pub startup: Startup,
+    pub startup: Setup,
     pub registry: Registry,
     pub docs: Docs,
     pub proxy: Proxy,

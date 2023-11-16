@@ -106,9 +106,9 @@ mod bin_tests {
                     session_age_seconds: 60,
                     ..settings::Registry::default()
                 },
-                startup: settings::Startup {
+                startup: settings::Setup {
                     admin_pwd: String::new(),
-                    ..settings::Startup::default()
+                    ..settings::Setup::default()
                 },
                 ..Settings::default()
             };
