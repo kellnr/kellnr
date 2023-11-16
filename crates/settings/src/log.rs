@@ -41,7 +41,7 @@ impl DeserializeWith for LogFormat {
             "pretty" => Ok(LogFormat::Pretty),
             "json" => Ok(LogFormat::Json),
             _ => Err(serde::de::Error::custom(
-                "error trying to deserialize log level config",
+                "error trying to deserialize log format: {s}",
             )),
         }
     }
@@ -110,7 +110,7 @@ impl DeserializeWith for LogLevel {
             "warn" => Ok(LogLevel::Warn),
             "error" => Ok(LogLevel::Error),
             _ => Err(serde::de::Error::custom(
-                "error trying to deserialize log level config",
+                "error trying to deserialize log level: {s}",
             )),
         }
     }
@@ -265,5 +265,33 @@ mod log_level_tests {
 
         let settings: Result<Settings, toml::de::Error> = toml::from_str(toml);
         assert!(settings.is_err());
+    }
+}
+
+#[cfg(test)]
+mod log_tests {
+    use super::*;
+
+    #[derive(Debug, Deserialize)]
+    struct Settings {
+       pub log: Log,
+    }
+
+    #[test]
+    fn test_deserialize_whole_log() {
+        let toml = r#"
+        [no_log]
+        foo = "bar"
+
+        [log]
+        level = "trace"
+        level_web_server = "debug"
+        format = "compact"
+        "#;
+
+        let settings: Settings = toml::from_str(toml).unwrap();
+        assert_eq!(settings.log.level, LogLevel::Trace);
+        assert_eq!(settings.log.level_web_server, LogLevel::Debug);
+        assert_eq!(settings.log.format, LogFormat::Compact);
     }
 }
