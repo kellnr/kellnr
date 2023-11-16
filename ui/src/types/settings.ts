@@ -1,53 +1,91 @@
 export type Settings = {
-    data_dir: string
-    session_age_seconds: number
-    api_address: string
-    api_port: number
-    api_port_proxy: number
-    api_protocol: string
-    web_address: string
-    crates_io_proxy: boolean
-    crates_io_num_threads: number
-    log_level: string
-    log_level_web_server: string
-    log_format: string
-    rustdoc_auto_gen: boolean
-    max_crate_size: number
-    max_docs_size: number
-    cache_size: number
-    auth_required: boolean
-    postgresql: {
-        enabled: boolean
-        address: string
-        port: number
-        db: string
-        user: string
-    }
+    docs: Docs
+    local: Local
+    log: Log
+    origin: Origin
+    postgresql: Postgresql
+    proxy: Proxy
+    registry: Registry
 }
 
-export const defaultSettings = {
-    data_dir: "",
-    session_age_seconds: 0,
-    api_address: "",
-    api_port: 0,
-    api_port_proxy: 0,
-    api_protocol: "",
-    web_address: "",
-    crates_io_proxy: false,
-    crates_io_num_threads: 0,
-    log_level: "",
-    log_level_web_server: "",
-    log_format: "",
-    rustdoc_auto_gen: false,
-    max_crate_size: 0,
-    max_docs_size: 0,
-    cache_size: 0,
-    auth_required: false,
+export type Docs = {
+    enabled: boolean
+    max_size: number
+}
+
+export type Local = {
+    ip: string
+    port: number
+}
+
+export type Log = {
+    level: string
+    format: string
+    level_web_server: string
+}
+
+export type Origin = {
+    hostname: string
+    port: number
+    protocol: string
+}
+
+export type Postgresql = {
+    enabled: boolean
+    address: string
+    port: number
+    db: string
+    user: string
+}
+
+export type Proxy = {
+    enabled: boolean
+    num_threads: number
+}
+
+export type Registry = {
+    data_dir: string
+    session_age_seconds: number
+    cache_size: number
+    max_crate_size: number
+    auth_required: boolean
+}
+
+export const emptySettings = {
+    docs: {
+        enabled: true,
+        max_size: 0
+    },
+    local: {
+        ip: "",
+        port: 0
+    },
+    log: {
+        level: "",
+        format: "",
+        level_web_server: ""
+    },
+    origin: {
+        hostname: "",
+        port: 0,
+        protocol: "0"
+    },
     postgresql: {
         enabled: false,
         address: "",
         port: 0,
         db: "",
-        user: "",
-    }
+        user: ""
+    },
+    proxy: {
+        enabled: false,
+        num_threads: 0
+    },
+    registry: {
+        data_dir: "",
+        session_age_seconds: 0,
+        cache_size: 0,
+        max_crate_size: 0,
+        auth_required: false,
+    },
 }
