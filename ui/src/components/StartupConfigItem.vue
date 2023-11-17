@@ -1,8 +1,10 @@
 <template>
 <div class="configItem">
+  <span class="headerTomlTable">table</span>
   <span class="headerToml">default.toml</span>
   <span class="headerEnv">env. var.</span>
   <span class="headerValue">value</span>
+  <span class="tomlTable">{{props.tomlTable}}</span>
   <span class="nameToml">{{props.toml}}</span>
   <span class="nameEnv">{{props.env}}</span>
   <span class="value">{{props.value}}</span>
@@ -11,6 +13,7 @@
 
 <script setup lang="ts">
 const props = defineProps<{
+  tomlTable: string
   toml: string
   env: string
   value: string | number | boolean
@@ -24,8 +27,14 @@ const props = defineProps<{
   margin: 0.5rem 0rem 0.5rem 0rem;
   padding: 0.5rem;
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-columns: 1fr 1fr 2fr 1fr;
   grid-template-rows: auto auto;
+}
+
+.headerTomlTable {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: smaller;
 }
 
 .headerToml {
@@ -44,6 +53,12 @@ const props = defineProps<{
   grid-column: 3;
   grid-row: 1;
   font-size: smaller;
+}
+
+.tomlTable {
+  grid-column: 1;
+  grid-row: 2;
+  font-weight: bolder;
 }
 
 .nameToml {
