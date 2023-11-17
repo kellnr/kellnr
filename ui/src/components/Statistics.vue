@@ -50,11 +50,11 @@
 </template>
 
 <script setup lang="ts">
-import StatisticsCard from "@/components/StatisticsCard.vue";
+import StatisticsCard from "../components/StatisticsCard.vue";
 import {onBeforeMount, ref} from "vue";
 import axios from "axios";
 import {useRouter} from "vue-router";
-import {STATISTICS} from "@/remote-routes";
+import {STATISTICS} from "../remote-routes";
 
 type Stat = {
   trunc_name: string

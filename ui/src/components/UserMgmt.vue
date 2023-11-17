@@ -76,9 +76,9 @@
 </template>
 
 <script setup lang="ts">
-import StatusNotification from "../components/StatusNotification.vue";
+import StatusNotification from "./StatusNotification.vue";
 import {onBeforeMount, ref} from 'vue'
-import {ADD_USER, DELETE_USER, kellnr_url, LIST_USERS, RESET_PWD} from "@/remote-routes";
+import {ADD_USER, DELETE_USER, kellnr_url, LIST_USERS, RESET_PWD} from "../remote-routes";
 import axios from "axios";
 import {useRouter} from "vue-router";
 

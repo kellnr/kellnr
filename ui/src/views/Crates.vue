@@ -40,11 +40,11 @@
 <script setup lang="ts">
 import {onBeforeMount, onMounted, ref} from "vue"
 import axios from "axios"
-import CrateCard from "@/components/CrateCard.vue"
-import {CrateOverview} from "@/types/crate_overview";
-import Statistics from "@/components/Statistics.vue"
-import {CRATES, SEARCH, VERSION} from "@/remote-routes";
-import {store} from "@/store/store";
+import CrateCard from "../components/CrateCard.vue"
+import {CrateOverview} from "../types/crate_overview";
+import Statistics from "../components/Statistics.vue"
+import {CRATES, SEARCH, VERSION} from "../remote-routes";
+import {store} from "../store/store";
 import {useRouter} from "vue-router";
 
 const crates = ref<Array<CrateOverview>>([])

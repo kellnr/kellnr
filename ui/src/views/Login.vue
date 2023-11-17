@@ -53,11 +53,11 @@
 <script setup lang="ts">
 import StatusNotification from "../components/StatusNotification.vue";
 import {onMounted, ref} from "vue";
-import {MutationTypes} from "@/store/mutation-types";
+import {MutationTypes} from "../store/mutation-types";
 import axios from "axios";
-import {store} from "@/store/store"
-import {LOGIN} from "@/remote-routes";
-import router from "@/router";
+import {store} from "../store/store"
+import {LOGIN} from "../remote-routes";
+import router from "../router";
 
 const loginStatusMsg = ref("")
 const loginStatus = ref("") // "", "Error", "Success"

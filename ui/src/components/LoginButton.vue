@@ -20,11 +20,11 @@
 
 <script setup lang="ts">
 import {onBeforeMount} from 'vue'
-import {MutationTypes} from "@/store/mutation-types";
+import {MutationTypes} from "../store/mutation-types";
 import axios from "axios";
 import {useRouter} from "vue-router";
-import {store} from "@/store/store"
-import {LOGIN_STATE, LOGOUT} from "@/remote-routes";
+import {store} from "../store/store"
+import {LOGIN_STATE, LOGOUT} from "../remote-routes";
 
 const router = useRouter()
 
