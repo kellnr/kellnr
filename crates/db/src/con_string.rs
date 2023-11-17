@@ -88,8 +88,8 @@ impl From<&Settings> for PgConString {
             user: s.postgresql.user.clone(),
             pwd: s.postgresql.pwd.clone(),
             admin: AdminUser {
-                pwd: s.startup.admin_pwd.clone(),
-                token: s.startup.admin_token.clone(),
+                pwd: s.setup.admin_pwd.clone(),
+                token: s.setup.admin_token.clone(),
                 salt: generate_salt(),
             },
         }
@@ -138,8 +138,8 @@ impl From<&Settings> for SqliteConString {
         Self {
             path: settings.sqlite_path(),
             salt: generate_salt(),
-            admin_pwd: settings.startup.admin_pwd.to_owned(),
-            admin_token: settings.startup.admin_token.to_owned(),
+            admin_pwd: settings.setup.admin_pwd.to_owned(),
+            admin_token: settings.setup.admin_token.to_owned(),
             session_age: Duration::from_secs(settings.registry.session_age_seconds),
         }
     }

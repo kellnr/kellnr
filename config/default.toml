@@ -12,7 +12,7 @@
 # Values used only on the first startup. Can be changed using the UI on runtime.   #
 #                                                                                  #
 ####################################################################################
-[startup]
+[setup]
 admin_pwd = "admin"
 admin_token = "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"
 

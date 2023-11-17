@@ -18,7 +18,7 @@ use crate::setup::Setup;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Default, Clone)]
 pub struct Settings {
-    pub startup: Setup,
+    pub setup: Setup,
     pub registry: Registry,
     pub docs: Docs,
     pub proxy: Proxy,
