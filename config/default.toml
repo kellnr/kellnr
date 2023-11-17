@@ -24,7 +24,7 @@ admin_token = "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"
 
 [registry]
 # Directory where Kellnr stores all its data, e.g. crates, incides etc.
-data_dir = "/tmp/kellnr"
+data_dir = "/opt/kdata"
 # Seconds until a user is logged out automatically after inactivity in the UI
 session_age_seconds = 28800
 # Enable or disable automatic rustdoc generation for uploaded crates
