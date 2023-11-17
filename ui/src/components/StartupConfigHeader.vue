@@ -1,6 +1,6 @@
 <template>
   <div class="configHeader">
-    <span class="headerToml">config.toml</span>
+    <span class="headerToml">default.toml</span>
     <span class="headerEnv">env. var.</span>
     <span class="headerValue">value</span>
   </div>
