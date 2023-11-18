@@ -160,7 +160,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/me", get(kellnr_api::me))
-        .nest("/", ui)
+        .nest("/api/v1/ui", ui)
         .nest("/api/v1/user", user)
         .nest("/api/v1/docs", docs)
         .nest("/api/v1/crates", kellnr_api)
