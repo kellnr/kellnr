@@ -6,10 +6,10 @@ import {
     CommitOptions,
     DispatchOptions
 } from "vuex";
-import { State, state} from "../store/state";
-import {Getters, getters} from "../store/getters";
-import { Mutations, mutations} from "../store/mutations";
-import {Actions, actions} from "../store/actions";
+import { State, state} from "@/store/state";
+import {Getters, getters} from "@/store/getters";
+import { Mutations, mutations} from "@/store/mutations";
+import {Actions, actions} from "@/store/actions";
 import createPersistedState from "vuex-persistedstate";
 
 export const store = createStore({
