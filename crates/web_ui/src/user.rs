@@ -25,8 +25,6 @@ pub async fn add_token(
     State(db): DbState,
     Json(auth_token): Json<token::NewTokenReqData>,
 ) -> Result<Json<NewTokenResponse>, RouteError> {
-    user.assert_normal()?;
-
     let token = token::generate_token();
     db.add_auth_token(&auth_token.name, &token, user.name())
         .await?;
@@ -38,35 +36,17 @@ pub async fn add_token(
     .into())
 }
 
-// TODO(ItsEthra): This should probably be inlined, i.e just return Json<Vec<AuthToken>> in list_tokens, but for now I'm not touching frontend
-#[derive(Serialize)]
-pub struct AuthTokenList {
-    tokens: Vec<AuthToken>,
-}
-
 pub async fn list_tokens(
     user: MaybeUser,
     State(db): DbState,
-) -> Result<Json<AuthTokenList>, RouteError> {
-    Ok(db
-        .get_auth_tokens(user.name())
-        .await
-        .map(|tokens| AuthTokenList { tokens }.into())?)
+) -> Result<Json<Vec<AuthToken>>, RouteError> {
+    Ok(Json(db.get_auth_tokens(user.name()).await?))
 }
 
-// TODO(ItsEthra): Same as AuthTokenList
-#[derive(Serialize)]
-pub struct UserList {
-    users: Vec<User>,
-}
-
-pub async fn list_users(user: MaybeUser, State(db): DbState) -> Result<Json<UserList>, RouteError> {
+pub async fn list_users(user: MaybeUser, State(db): DbState) -> Result<Json<Vec<User>>, RouteError> {
     user.assert_admin()?;
 
-    Ok(db
-        .get_users()
-        .await
-        .map(|users| UserList { users }.into())?)
+    Ok(Json(db.get_users().await?))
 }
 
 pub async fn delete_token(
@@ -74,9 +54,11 @@ pub async fn delete_token(
     Path(id): Path<i32>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_normal()?;
-
-    // TODO(ItsEthra): Should be checking if user owns the token i believe
+    db.get_auth_tokens(user.name())
+        .await?
+        .iter()
+        .find(|t| t.id == id)
+        .ok_or_else(|| RouteError::Status(StatusCode::BAD_REQUEST))?;
 
     Ok(db.delete_auth_token(id).await?)
 }
@@ -98,8 +80,6 @@ pub async fn reset_pwd(
     db.change_pwd(&name, &new_pwd).await?;
 
     Ok(ResetPwd {
-        // TODO(ItsEthra): I wasn't looking at frontend code at all, was using admin's name intended,
-        // or should it be target user's name?
         user: user.name().to_owned(),
         new_pwd,
     }
@@ -201,7 +181,6 @@ pub async fn logout(
 #[derive(Deserialize)]
 pub struct PwdChange {
     pub old_pwd: String,
-    // Maybe checking on client is enough?
     pub new_pwd1: String,
     pub new_pwd2: String,
 }
@@ -225,7 +204,6 @@ pub async fn change_pwd(
 
 #[derive(Deserialize)]
 pub struct NewUser {
-    // TODO(ItsEthra): Consider checking only on client
     pub pwd1: String,
     pub pwd2: String,
     pub name: String,

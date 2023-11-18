@@ -3,17 +3,17 @@ export function kellnr_url(path: string): string {
   return new URL(path, BASE_URL).toString();
 }
 
-export const ADD_TOKEN = kellnr_url("/user/add_token");
-export const DELETE_TOKEN = (id: number) => kellnr_url(`/user/delete_token/${id}`);
-export const LIST_TOKENS = kellnr_url("/user/list_tokens");
-export const CHANGE_PWD = kellnr_url("/user/changepwd");
-export const LOGIN_STATE = kellnr_url("/user/login_state");
-export const LOGOUT = kellnr_url("/user/logout");
-export const ADD_USER = kellnr_url("/user/add");
-export const DELETE_USER = (name: string) => kellnr_url(`/user/delete/${name}`);
-export const LIST_USERS = kellnr_url("/user/list_users");
-export const RESET_PWD = (name: string) => kellnr_url(`/user/resetpwd/${name}`);
-export const LOGIN = kellnr_url("/user/login");
+export const ADD_TOKEN = kellnr_url("/api/v1/user/add_token");
+export const DELETE_TOKEN = (id: number) => kellnr_url(`/api/v1/user/delete_token/${id}`);
+export const LIST_TOKENS = kellnr_url("/api/v1/user/list_tokens");
+export const CHANGE_PWD = kellnr_url("/api/v1/user/change_pwd");
+export const LOGIN_STATE = kellnr_url("/api/v1/user/login_state");
+export const LOGOUT = kellnr_url("/api/v1/user/logout");
+export const ADD_USER = kellnr_url("/api/v1/user/add");
+export const DELETE_USER = (name: string) => kellnr_url(`/api/v1/user/delete/${name}`);
+export const LIST_USERS = kellnr_url("/api/v1/user/list_users");
+export const RESET_PWD = (name: string) => kellnr_url(`/api/v1/user/reset_pwd/${name}`);
+export const LOGIN = kellnr_url("/api/v1/user/login");
 
 export const CRATE_DATA = kellnr_url("/crate_data");
 export const CRATESIO_DATA = kellnr_url("/cratesio_data");

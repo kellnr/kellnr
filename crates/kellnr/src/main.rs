@@ -83,15 +83,12 @@ async fn main() {
     let user = Router::new()
         .route("/login", post(user::login))
         .route("/logout", get(user::logout))
-        .route("/changepwd", post(user::change_pwd))
+        .route("/change_pwd", post(user::change_pwd))
         .route("/add", post(user::add))
         .route("/delete/:name", delete(user::delete))
-        // TODO(ItsEthra): Consider post?
-        .route("/resetpwd/:name", get(user::reset_pwd))
-        // TODO(ItsEthra): Consider put?
-        .route("/addtoken", post(user::add_token))
-        // TODO(ItsEthra): Consider delete?
-        .route("/delete_token/:id", get(user::delete_token))
+        .route("/reset_pwd/:name", post(user::reset_pwd))
+        .route("/add_token", post(user::add_token))
+        .route("/delete_token/:id", delete(user::delete_token))
         .route("/list_tokens", get(user::list_tokens))
         .route("/list_users", get(user::list_users))
         .route("/login_state", get(user::login_state));
@@ -164,7 +161,7 @@ async fn main() {
     let app = Router::new()
         .route("/me", get(kellnr_api::me))
         .nest("/", ui)
-        .nest("/user", user)
+        .nest("/api/v1/user", user)
         .nest("/api/v1/docs", docs)
         .nest("/api/v1/crates", kellnr_api)
         .nest("/api/v1/cratesio", cratesio_api)
