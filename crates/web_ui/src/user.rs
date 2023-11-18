@@ -146,20 +146,24 @@ pub async fn login(
     ))
 }
 
-pub async fn login_state(user: MaybeUser) -> Json<LoggedInUser> {
+pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
     match user {
-        MaybeUser::Normal(user) => LoggedInUser {
+        Some(MaybeUser::Normal(user)) => LoggedInUser {
             user,
             is_admin: false,
             is_logged_in: true,
         },
-        MaybeUser::Admin(user) => LoggedInUser {
+        Some(MaybeUser::Admin(user)) => LoggedInUser {
             user,
             is_admin: true,
             is_logged_in: true,
         },
-    }
-    .into()
+        None => LoggedInUser {
+            user: "".to_owned(),
+            is_admin: false,
+            is_logged_in: false,
+        }
+    }.into()
 }
 
 pub async fn logout(
