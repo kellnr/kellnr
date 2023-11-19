@@ -1,6 +1,6 @@
-use json_payload::json_payload;
+use serde::{Deserialize, Serialize};
 
-#[json_payload]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct YankSuccess {
     ok: bool,
 }

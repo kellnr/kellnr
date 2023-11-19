@@ -1,77 +1,66 @@
 use super::config_json::ConfigJson;
-use auth::auth_req_token::AuthReqToken;
-use cached::{Cached, TimedCache};
+use appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
+use axum::extract::{Path, State};
+use axum::http::HeaderMap;
+use axum::Json;
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use common::index_metadata::IndexMetadata;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
-use common::prefetch::{Headers, Prefetch};
+use common::prefetch::Prefetch;
 use db::provider::PrefetchState;
 use db::DbProvider;
+use moka::future::Cache;
 use reqwest::{Client, StatusCode, Url};
-use rocket::http::Status;
-use rocket::response::status;
-use rocket::{get, State};
 use serde::Deserialize;
-use settings::Settings;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{error, trace, warn};
-
-/// The API for the crates.io sparse index
-/// https://github.com/rust-lang/cargo/blob/c015bfd1efb04c0bf60df9bfef2b8b3b6633310b/src/doc/src/reference/registry-index.md#index-protocols
 
 static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
 
-#[get("/config.json")]
-pub async fn config_cratesio(
-    settings: &State<Settings>,
-    auth_req_token: AuthReqToken,
-) -> ConfigJson {
-    _ = auth_req_token;
-    ConfigJson::from((settings.inner(), "cratesio"))
+pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson> {
+    Json(ConfigJson::from((&(*settings), "cratesio")))
 }
 
-#[get("/<_>/<_>/<name>", rank = 1)]
 pub async fn prefetch_cratesio(
-    name: OriginalName,
-    headers: Headers,
-    auth_req_token: AuthReqToken,
-    db: &State<Box<dyn DbProvider>>,
-    sender: &State<Arc<flume::Sender<CratesioPrefetchMsg>>>,
-) -> Result<Prefetch, status::Custom<&'static str>> {
-    _ = auth_req_token;
-    internal_prefetch_cratesio(name, headers, db, sender).await
+    Path((_a, _b, name)): Path<(String, String, OriginalName)>,
+    headers: HeaderMap,
+    State(db): DbState,
+    State(sender): CratesIoPrefetchSenderState,
+) -> Result<Prefetch, StatusCode> {
+    internal_prefetch_cratesio(name, headers, &db, &sender).await
 }
 
-// Example: The package "h2" is under "/2/h2" in the index and thus no second path element exists.
-#[get("/<_>/<name>", rank = 1)]
 pub async fn prefetch_len2_cratesio(
-    name: OriginalName,
-    headers: Headers,
-    auth_req_token: AuthReqToken,
-    db: &State<Box<dyn DbProvider>>,
-    sender: &State<Arc<flume::Sender<CratesioPrefetchMsg>>>,
-) -> Result<Prefetch, status::Custom<&'static str>> {
-    _ = auth_req_token;
-    internal_prefetch_cratesio(name, headers, db, sender).await
+    Path((_a, name)): Path<(String, OriginalName)>,
+    headers: HeaderMap,
+    State(db): DbState,
+    State(sender): CratesIoPrefetchSenderState,
+) -> Result<Prefetch, StatusCode> {
+    internal_prefetch_cratesio(name, headers, &db, &sender).await
 }
 
 async fn internal_prefetch_cratesio(
     name: OriginalName,
-    headers: Headers,
-    db: &State<Box<dyn DbProvider>>,
-    sender: &State<Arc<flume::Sender<CratesioPrefetchMsg>>>,
-) -> Result<Prefetch, status::Custom<&'static str>> {
-    let if_modified_since = headers.if_modified_since;
-    let if_none_match = headers.if_none_match;
+    headers: HeaderMap,
+    db: &Arc<dyn DbProvider>,
+    sender: &Arc<flume::Sender<CratesioPrefetchMsg>>,
+) -> Result<Prefetch, StatusCode> {
+    let if_modified_since = headers
+        .get("if-modified-since")
+        .map(|h| h.to_str().unwrap_or_default().to_string());
+    let if_none_match = headers
+        .get("if-none-match")
+        .map(|h| h.to_str().unwrap_or_default().to_string());
 
     trace!(
-        "Prefetching {} from crates.io cache: Etag {} - LM {}",
+        "Prefetching {} from crates.io cache: Etag {:?} - LM {:?}",
         name,
-        if_none_match.clone().unwrap_or_default(),
-        if_modified_since.clone().unwrap_or_default()
+        if_none_match,
+        if_modified_since
     );
 
     match db
@@ -86,10 +75,7 @@ async fn internal_prefetch_cratesio(
                 "Could not check if cache is up to date for {}. Error {}",
                 name, e
             );
-            status::Custom(
-                Status::InternalServerError,
-                "Could not check if cache is up to date",
-            )
+            StatusCode::INTERNAL_SERVER_ERROR
         })? {
         PrefetchState::NeedsUpdate(p) => {
             background_update(name.clone(), sender, if_modified_since, if_none_match);
@@ -99,7 +85,7 @@ async fn internal_prefetch_cratesio(
         PrefetchState::UpToDate => {
             background_update(name.clone(), sender, if_modified_since, if_none_match);
             trace!("Prefetching {} from crates.io cache: Up to Date", name);
-            Err(status::Custom(Status::NotModified, "Index up-to-date"))
+            Err(StatusCode::NOT_MODIFIED)
         }
         PrefetchState::NotFound => Ok(fetch_cratesio_prefetch(name, sender).await?),
     }
@@ -107,7 +93,7 @@ async fn internal_prefetch_cratesio(
 
 fn background_update(
     name: OriginalName,
-    sender: &State<Arc<flume::Sender<CratesioPrefetchMsg>>>,
+    sender: &Arc<flume::Sender<CratesioPrefetchMsg>>,
     if_modified_since: Option<String>,
     if_none_match: Option<String>,
 ) {
@@ -139,16 +125,11 @@ pub async fn background_update_thread(
             }
         }
 
-        rocket::tokio::time::sleep(rocket::tokio::time::Duration::from_secs(
-            UPDATE_INTERVAL_SECS,
-        ))
-        .await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(UPDATE_INTERVAL_SECS)).await;
     }
 }
 
-async fn fetch_cratesio_description(
-    name: &str,
-) -> Result<Option<String>, status::Custom<&'static str>> {
+async fn fetch_cratesio_description(name: &str) -> Result<Option<String>, StatusCode> {
     #[derive(Deserialize)]
     struct Krate {
         description: Option<String>,
@@ -169,19 +150,12 @@ async fn fetch_cratesio_description(
         .header("User-Agent", "kellnr.io/kellnr")
         .send()
         .await
-        .map_err(|_| {
-            status::Custom(
-                Status::ServiceUnavailable,
-                "Could not fetch description from crates.io",
-            )
-        })?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let desc = response.json::<MinimalCrate>().await.map_err(|_| {
-        status::Custom(
-            Status::InternalServerError,
-            "Could not read description from crates.io",
-        )
-    })?;
+    let desc = response
+        .json::<MinimalCrate>()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(desc.krate.description)
 }
 
@@ -189,12 +163,13 @@ pub async fn cratesio_prefetch_thread(
     db: Arc<impl DbProvider>,
     channel: Arc<flume::Receiver<CratesioPrefetchMsg>>,
 ) {
-    let mut cache: TimedCache<String, String> =
-        TimedCache::with_lifespan(UPDATE_CACHE_TIMEOUT_SECS);
+    let cache: Cache<String, String> = Cache::builder()
+        .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
+        .build();
 
     loop {
         if let Some((name, metadata, desc, etag, last_modified)) =
-            get_insert_data(&mut cache, &channel).await
+            get_insert_data(&cache, &channel).await
         {
             trace!("Update crates.io prefetch data for {}", name);
             if let Err(e) = db
@@ -248,7 +223,7 @@ async fn convert_index_data(
 }
 
 async fn get_insert_data(
-    cache: &mut TimedCache<String, String>,
+    cache: &Cache<String, String>,
     channel: &Arc<flume::Receiver<CratesioPrefetchMsg>>,
 ) -> Option<(
     OriginalName,
@@ -261,18 +236,20 @@ async fn get_insert_data(
         Ok(CratesioPrefetchMsg::Insert(msg)) => {
             trace!("Inserting prefetch data from crates.io for {}", msg.name);
             let date = chrono::Utc::now().to_rfc3339();
-            cache.cache_set(msg.name.to_string(), date);
+            cache.insert(msg.name.to_string(), date).await;
             convert_index_data(&msg.name, msg.data)
                 .await
                 .map(|(m, d)| (msg.name.clone(), m, d, msg.etag, msg.last_modified))
         }
         Ok(CratesioPrefetchMsg::Update(msg)) => {
             trace!("Updating prefetch data for {}", msg.name);
-            if let Some(date) = cache.cache_get(msg.name.deref()) {
+            if let Some(date) = cache.get(msg.name.deref()).await {
                 trace!("No update needed for {}. Last update: {}", msg.name, date);
                 None
             } else {
-                cache.cache_set(msg.name.to_string(), chrono::Utc::now().to_rfc3339());
+                cache
+                    .insert(msg.name.to_string(), chrono::Utc::now().to_rfc3339())
+                    .await;
                 fetch_index_data(msg.name, msg.etag, msg.last_modified).await
             }
         }
@@ -383,12 +360,12 @@ async fn fetch_index_data(
 
 async fn fetch_cratesio_prefetch(
     name: OriginalName,
-    sender: &State<Arc<flume::Sender<CratesioPrefetchMsg>>>,
-) -> Result<Prefetch, status::Custom<&'static str>> {
+    sender: &Arc<flume::Sender<CratesioPrefetchMsg>>,
+) -> Result<Prefetch, StatusCode> {
     let url = Url::parse("https://index.crates.io/")
         .unwrap()
         .join(&crate_sub_path(&name.to_normalized()))
-        .map_err(|_| status::Custom(Status::InternalServerError, "Failed to parse URL"))?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let response = Client::new()
         .get(url)
@@ -406,9 +383,10 @@ async fn fetch_cratesio_prefetch(
                 .get("Last-Modified")
                 .map(|h| h.to_str().unwrap_or_default().to_string());
 
-            let data = r.text().await.map_err(|_| {
-                status::Custom(Status::InternalServerError, "Could not read response body")
-            })?;
+            let data = r
+                .text()
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
             let prefetch = Prefetch {
                 etag: etag.clone().unwrap_or_default(),
@@ -428,17 +406,14 @@ async fn fetch_cratesio_prefetch(
                 }))
                 .map_err(|e| {
                     error!("Could not send prefetch message: {}", e);
-                    status::Custom(
-                        Status::InternalServerError,
-                        "Could not send prefetch message",
-                    )
+                    StatusCode::INTERNAL_SERVER_ERROR
                 })?;
 
             Ok(prefetch)
         }
         Err(e) => {
             error!("Error fetching prefetch data from crates.io: {}", e);
-            Err(status::Custom(Status::NotFound, "Index not found"))
+            Err(StatusCode::NOT_FOUND)
         }
     }
 }
@@ -463,16 +438,15 @@ fn crate_sub_path(name: &NormalizedName) -> String {
 mod tests {
     use super::*;
     use crate::config_json::ConfigJson;
+    use appstate::AppStateData;
+    use axum::{body::Body, http::Request, routing::get, Router};
     use db::mock::MockDb;
-    use rocket::config::{Config, SecretKey};
-    use rocket::http::{Header, Status};
-    use rocket::local::blocking::Client;
-    use rocket::response::status::Custom;
-    use rocket::{async_test, routes};
+    use reqwest::header;
     use settings::{Protocol, Settings};
     use std::mem;
+    use tower::ServiceExt;
 
-    #[async_test]
+    #[tokio::test]
     async fn fetch_cratesio_description_works() {
         let desc = fetch_cratesio_description("rocket").await.unwrap();
         assert_eq!(
@@ -484,41 +458,46 @@ mod tests {
         );
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn fetch_cratesio_description_not_existent_crate() {
         let desc = fetch_cratesio_description("does_not_exists123").await;
-        assert_eq!(
-            Err(Custom(
-                Status { code: 500 },
-                "Could not read description from crates.io"
-            )),
-            desc
-        );
+        assert_eq!(Err(StatusCode::INTERNAL_SERVER_ERROR), desc);
     }
 
-    #[test]
-    fn fetch_cratesio_prefetch_works() {
-        let client = client();
-        let req = client
-            .get("/api/v1/cratesio/ro/ck/rocket")
-            .header(Header::new("If-Modified-Since", "date"))
-            .header(Header::new("ETag", "etag"));
+    #[tokio::test]
+    async fn fetch_cratesio_prefetch_works() {
+        let r = app()
+            .await
+            .oneshot(
+                Request::get("/api/v1/cratesio/ro/ck/rocket")
+                    .header(header::IF_MODIFIED_SINCE, "date")
+                    .header(header::ETAG, "etag")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = r.status();
+        let prefetch = hyper::body::to_bytes(r.into_body()).await.unwrap();
 
-        let result = req.dispatch();
-        let status = result.status();
-        let prefetch = result.into_bytes().unwrap();
-
-        assert_eq!(status, Status::Ok);
+        assert_eq!(status, StatusCode::OK);
         assert!(prefetch.len() > 500);
     }
 
-    #[test]
-    fn config_returns_config_json() {
-        let client = client();
-        let req = client.get("/api/v1/cratesio/config.json");
-        let result = req.dispatch();
-        let result_msg = result.into_string().unwrap();
-        let actual = serde_json::from_str::<ConfigJson>(&result_msg).unwrap();
+    #[tokio::test]
+    async fn config_returns_config_json() {
+        let r = app()
+            .await
+            .oneshot(
+                Request::get("/api/v1/cratesio/config.json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
 
         assert_eq!(
             ConfigJson::new(&Protocol::Http, "test.api.com", 1234, "cratesio", false),
@@ -526,12 +505,14 @@ mod tests {
         );
     }
 
-    fn client() -> Client {
+    async fn app() -> Router {
         let settings = Settings {
-            api_address: String::from("test.api.com"),
-            api_port: 8000,
-            api_port_proxy: 1234,
-            ..Settings::new().unwrap()
+            origin: settings::Origin {
+                protocol: Protocol::Http,
+                hostname: String::from("test.api.com"),
+                port: 1234,
+            },
+            ..Settings::default()
         };
 
         let mut mock_db = MockDb::new();
@@ -550,28 +531,26 @@ mod tests {
             .expect_is_cratesio_cache_up_to_date()
             .returning(move |_, _, _| Ok(PrefetchState::NotFound));
 
-        let db = Box::new(mock_db) as Box<dyn DbProvider>;
-
-        let rocket_conf = Config {
-            secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-            ..Config::default()
-        };
-
         let (sender, receiver) = flume::unbounded::<CratesioPrefetchMsg>();
         let sender = Arc::new(sender);
         // Make receiver undroppable, else the sender will fail, as the receiver is dropped when
         // this function goes out of scope
         mem::forget(receiver);
 
-        let rocket = rocket::custom(rocket_conf)
-            .mount(
-                "/api/v1/cratesio",
-                routes![config_cratesio, prefetch_cratesio, prefetch_len2_cratesio],
-            )
-            .manage(db)
-            .manage(sender)
-            .manage(settings);
+        let cratesio_prefetch = Router::new()
+            .route("/config.json", get(config_cratesio))
+            .route("/:_/:_/:name", get(prefetch_cratesio))
+            .route("/:_/:name", get(prefetch_len2_cratesio));
 
-        Client::tracked(rocket).unwrap()
+        let state = AppStateData {
+            db: Arc::new(mock_db),
+            settings: Arc::new(settings),
+            cratesio_prefetch_sender: sender,
+            ..appstate::test_state().await
+        };
+
+        Router::new()
+            .nest("/api/v1/cratesio", cratesio_prefetch)
+            .with_state(state)
     }
 }

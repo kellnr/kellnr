@@ -62,9 +62,9 @@
 <script setup lang="ts">
 import LoginButton from "./LoginButton.vue";
 import {onBeforeMount} from "vue";
-import {MutationTypes} from "@/store/mutation-types";
-import {store} from "@/store/store";
-import router from "@/router";
+import {MutationTypes} from "../store/mutation-types";
+import {store} from "../store/store";
+import router from "../router";
 
 onBeforeMount(() => {
   const theme = store.state.theme

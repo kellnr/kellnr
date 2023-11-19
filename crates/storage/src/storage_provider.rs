@@ -1,6 +1,7 @@
 use anyhow::{Error, Result};
-use rocket::{async_trait, tokio::fs::File};
+use axum::async_trait;
 use std::path::Path;
+use tokio::fs::File;
 
 #[async_trait]
 pub trait StorageProvider: Send + Sync {

@@ -1,129 +1,165 @@
 use crate::token::Token;
-use error::error::ApiError;
-use rocket::http::Status;
-use rocket::outcome::Outcome::*;
-use rocket::request::{self, FromRequest, Request};
-use rocket::State;
-use settings::Settings;
+use appstate::AppStateData;
+use axum::extract::{FromRequestParts, State};
+use axum::http::request::Parts;
+use axum::http::{Request, StatusCode};
+use axum::middleware::Next;
+use axum::response::Response;
+use tracing::warn;
 
 // This token checks if "auth_required = true" and if so, it requires a token.
 // Else, it does not require a token.
 // Returns None if "auth_required = false", else returns Some(Token) or an error.
-// Feature is only available in Enterprise version.
 #[derive(Debug)]
 pub struct AuthReqToken(Option<Token>);
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for AuthReqToken {
-    type Error = ApiError;
+#[axum::async_trait]
+impl FromRequestParts<AppStateData> for AuthReqToken {
+    type Rejection = StatusCode;
 
-    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let settings = match get_settings(request).await {
-            Ok(s) => s,
-            Err(e) => return Failure(e),
-        };
-
-        if settings.auth_required {
-            Token::from_request(request).await.map(|t| Self(Some(t)))
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
+        if state.settings.registry.auth_required {
+            Token::from_request_parts(parts, state)
+                .await
+                .map(|t| Self(Some(t)))
         } else {
-            Success(Self(None))
+            Ok(Self(None))
         }
     }
 }
 
-async fn get_settings<'r>(
-    request: &'r Request<'_>,
-) -> Result<&'r State<Settings>, (Status, ApiError)> {
-    match request.guard::<&State<Settings>>().await {
-        Success(s) => Ok(s),
-        Failure(e) => Err((Status::InternalServerError, ApiError::from(&e.0))),
-        Forward(_) => Err((
-            Status::InternalServerError,
-            ApiError::from("Forward instead of getting settings"),
-        )),
+/// Middleware that checks if a cargo token is provided, when settings.registry.auth_required is true.<br>
+/// If the user is not logged in, a 401 is returned.
+pub async fn cargo_auth_when_required<B>(
+    State(state): State<appstate::AppStateData>,
+    request: Request<B>,
+    next: Next<B>,
+) -> Result<Response, StatusCode> {
+    if !state.settings.registry.auth_required {
+        // If auth_required is not true, pass through.
+        return Ok(next.run(request).await);
+    }
+
+    let token = Token::from_header(request.headers(), &state.db).await;
+
+    match token {
+        Ok(_) => Ok(next.run(request).await),
+        Err(status) => {
+            warn!("Authentication required, but failed: {}", status);
+            Err(status)
+        }
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
+    use axum::body::Body;
+    use axum::http::{header, Request, StatusCode};
+    use axum::routing::get;
+    use axum::Router;
     use db::error::DbError;
     use db::mock::MockDb;
-    use db::{DbProvider, User};
+    use db::User;
     use mockall::predicate::*;
-    use rocket::config::{Config, SecretKey};
-    use rocket::get;
-    use rocket::http::{Header, Status};
-    use rocket::local::blocking::Client;
-    use rocket::routes;
     use settings::Settings;
+    use std::sync::Arc;
+    use tower::ServiceExt;
 
-    #[test]
-    fn no_auth_required() {
+    #[tokio::test]
+    async fn no_auth_required() {
         let settings = Settings {
-            auth_required: false,
-            ..Settings::new().unwrap()
+            registry: settings::Registry {
+                auth_required: false,
+                ..settings::Registry::default()
+            },
+            ..Settings::default()
         };
-        let client = client(settings);
-        let req = client.get("/api/v1/test");
 
-        let response = req.dispatch();
+        let r = app(settings)
+            .await
+            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
 
-        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(r.status(), StatusCode::OK);
     }
 
-    #[test]
-    fn auth_required_but_not_provided() {
+    #[tokio::test]
+    async fn auth_required_but_not_provided() {
         let settings = Settings {
-            auth_required: true,
-            ..Settings::new().unwrap()
+            registry: settings::Registry {
+                auth_required: true,
+                ..settings::Registry::default()
+            },
+            ..Settings::default()
         };
-        let client = client(settings);
-        let req = client.get("/api/v1/test");
 
-        let response = req.dispatch();
+        let r = app(settings)
+            .await
+            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
 
-        assert_eq!(response.status(), Status::Unauthorized);
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[test]
-    fn auth_required_but_wrong_token_provided() {
+    #[tokio::test]
+    async fn auth_required_but_wrong_token_provided() {
         let settings = Settings {
-            auth_required: true,
-            ..Settings::new().unwrap()
+            registry: settings::Registry {
+                auth_required: true,
+                ..settings::Registry::default()
+            },
+            ..Settings::default()
         };
-        let client = client(settings);
-        let req = client
-            .get("/api/v1/test")
-            .header(Header::new("Authorization", "wrong_token"));
 
-        let response = req.dispatch();
+        let r = app(settings)
+            .await
+            .oneshot(
+                Request::get("/test")
+                    .header(header::AUTHORIZATION, "wrong_token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        assert_eq!(response.status(), Status::Forbidden);
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
     }
 
-    #[test]
-    fn auth_required_and_right_token_provided() {
+    #[tokio::test]
+    async fn auth_required_and_right_token_provided() {
         let settings = Settings {
-            auth_required: true,
-            ..Settings::new().unwrap()
+            registry: settings::Registry {
+                auth_required: true,
+                ..settings::Registry::default()
+            },
+            ..Settings::default()
         };
-        let client = client(settings);
-        let req = client
-            .get("/api/v1/test")
-            .header(Header::new("Authorization", "token"));
 
-        let response = req.dispatch();
+        let r = app(settings)
+            .await
+            .oneshot(
+                Request::get("/test")
+                    .header(header::AUTHORIZATION, "token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
 
-        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(r.status(), StatusCode::OK);
     }
 
-    #[get("/test")]
     pub async fn test_auth_req_token(auth_req_token: AuthReqToken) {
         _ = auth_req_token;
     }
 
-    fn client(settings: Settings) -> Client {
+    async fn app(settings: Settings) -> Router {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
@@ -142,18 +178,127 @@ mod tests {
             .with(eq("wrong_token"))
             .returning(move |_| Err(DbError::UserNotFound("user".to_string())));
 
-        let db = Box::new(mock_db) as Box<dyn DbProvider>;
-
-        let rocket_conf = Config {
-            secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-            ..Config::default()
+        let state = AppStateData {
+            db: Arc::new(mock_db),
+            settings: Arc::new(settings),
+            ..appstate::test_state().await
         };
+        Router::new()
+            .route("/test", get(test_auth_req_token))
+            .with_state(state)
+    }
+}
 
-        let rocket = rocket::custom(rocket_conf)
-            .mount("/api/v1/", routes![test_auth_req_token])
-            .manage(db)
-            .manage(settings);
+#[cfg(test)]
+mod auth_middleware_tests {
+    use super::*;
+    use appstate::AppStateData;
+    use axum::middleware::from_fn_with_state;
+    use axum::{routing::get, Router};
+    use db::DbProvider;
+    use db::{error::DbError, mock::MockDb};
+    use hyper::{header, Body, Request, StatusCode};
+    use mockall::predicate::*;
+    use settings::Settings;
+    use std::sync::Arc;
+    use tower::ServiceExt;
 
-        Client::tracked(rocket).unwrap()
+    async fn handler_return_200() -> StatusCode {
+        StatusCode::OK
+    }
+
+    async fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
+        let settings = Settings::default();
+        let state = AppStateData {
+            db,
+            settings: Arc::new(Settings {
+                registry: settings::Registry {
+                    auth_required: true,
+                    ..settings::Registry::default()
+                },
+                ..settings
+            }),
+            ..appstate::test_state().await
+        };
+        Router::new()
+            .route("/guarded", get(handler_return_200))
+            .route_layer(from_fn_with_state(state.clone(), cargo_auth_when_required))
+            .route("/not_guarded", get(handler_return_200))
+            .with_state(state)
+    }
+
+    async fn app_not_required_auth(db: Arc<dyn DbProvider>) -> Router {
+        let settings = Settings::default();
+        let state = AppStateData {
+            db,
+            settings: Arc::new(settings),
+            ..appstate::test_state().await
+        };
+        Router::new()
+            .route("/guarded", get(handler_return_200))
+            .route_layer(from_fn_with_state(state.clone(), cargo_auth_when_required))
+            .with_state(state)
+    }
+
+    type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    #[tokio::test]
+    async fn guarded_route_with_invalid_token() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_user_from_token()
+            .with(eq("1234"))
+            .returning(|_st| Err(DbError::UserNotFound("1234".to_owned())));
+
+        let r = app_required_auth(Arc::new(mock_db))
+            .await
+            .oneshot(
+                Request::get("/guarded")
+                    .header(header::AUTHORIZATION, "1234")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn guarded_route_without_token() -> Result {
+        let mock_db = MockDb::new();
+
+        let r = app_required_auth(Arc::new(mock_db))
+            .await
+            .oneshot(Request::get("/guarded").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn not_guarded_route_without_token() -> Result {
+        let mock_db = MockDb::new();
+
+        let r = app_required_auth(Arc::new(mock_db))
+            .await
+            .oneshot(Request::get("/not_guarded").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::OK);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn app_not_required_auth_with_guarded_route() -> Result {
+        let mock_db = MockDb::new();
+
+        let r = app_not_required_auth(Arc::new(mock_db))
+            .await
+            .oneshot(Request::get("/guarded").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::OK);
+
+        Ok(())
     }
 }

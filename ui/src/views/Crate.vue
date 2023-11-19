@@ -250,11 +250,11 @@ import axios from "axios";
 import {useRoute, useRouter} from "vue-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import CrateSidebarElement from "@/components/CrateSidebarElement.vue";
-import {store} from "@/store/store";
-import {CrateData, CrateVersionData, defaultCrateData, defaultCrateVersionData, CrateRegistryDep} from "@/types/crate_data";
-import {CRATE_DATA, CRATE_DELETE, DOCS_BUILD, kellnr_url} from "@/remote-routes";
-import Readme from "@/components/Readme.vue";
+import CrateSidebarElement from "../components/CrateSidebarElement.vue";
+import {store} from "../store/store";
+import {CrateData, CrateVersionData, defaultCrateData, defaultCrateVersionData, CrateRegistryDep} from "../types/crate_data";
+import {CRATE_DATA, CRATE_DELETE, DOCS_BUILD, kellnr_url} from "../remote-routes";
+import Readme from "../components/Readme.vue";
 
 dayjs.extend(relativeTime);
 

@@ -55,7 +55,7 @@
 import StatusNotification from "../components/StatusNotification.vue";
 import {ref} from "vue";
 import axios from "axios";
-import {CHANGE_PWD, kellnr_url} from "@/remote-routes";
+import {CHANGE_PWD} from "../remote-routes";
 
 const pwdChangeStatus = ref("")
 const pwdChangeMsg = ref("")

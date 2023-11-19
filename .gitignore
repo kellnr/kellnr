@@ -8,6 +8,7 @@ target/
 
 # Don't check the local config in
 **/config/local.toml
+**/config/new.toml
 
 # VS Code
 .ionide/

@@ -10,7 +10,6 @@
       <div @click="clickShowStartupConfig" class="settingName clickable">
         Startup Config
       </div>
-      <div @click="clickShowRepair" class="settingName clickable">Repair</div>
     </div>
     <div id="settings" class="glass">
       <div v-if="showChangePwd" class="setting">
@@ -25,9 +24,6 @@
       <div v-if="showStartupConfig" class="setting">
         <startup-config></startup-config>
       </div>
-      <div v-if="showRepair" class="setting">
-        <repair></repair>
-      </div>
     </div>
   </div>
 </template>
@@ -37,21 +33,18 @@ import ChangePassword from "../components/ChangePassword.vue";
 import AuthToken from "../components/AuthToken.vue";
 import UserMgmt from "../components/UserMgmt.vue";
 import StartupConfig from "../components/StartupConfig.vue";
-import Repair from "../components/Repair.vue";
 import {ref} from "vue";
 
 const showChangePwd = ref(true)
 const showAuthToken = ref(false)
 const showUserMgmt = ref(false)
 const showStartupConfig = ref(false)
-const showRepair = ref(false)
 
 function showNothing() {
   showChangePwd.value = false;
   showAuthToken.value = false;
   showUserMgmt.value = false;
   showStartupConfig.value = false;
-  showRepair.value = false;
 }
 
 function clickShowChangePwd() {
@@ -72,11 +65,6 @@ function clickShowUserMgmt() {
 function clickShowStartupConfig() {
   showNothing();
   showStartupConfig.value = true;
-}
-
-function clickShowRepair() {
-  showNothing();
-  showRepair.value = true;
 }
 
 </script>

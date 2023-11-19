@@ -1,5 +1,5 @@
 use crate::index_metadata::IndexDep;
-use json_payload::json_payload;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
 // The Metadata struct defined here is the one send by Cargo to the registry.
@@ -7,8 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 // See: https://doc.rust-lang.org/cargo/reference/registries.html#publish
 // Crates.io implementation: https://github.com/rust-lang/crates.io/blob/5c7070829418f72639dd0b91993eaf91e516416b/src/views/krate_publish.rs
 
-#[json_payload]
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct PublishMetadata {
     // The name of the package.
     pub name: String,
@@ -74,7 +73,7 @@ impl PublishMetadata {
     }
 }
 
-#[json_payload]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct RegistryDep {
     // Name of the dependency.
     // If the dependency is renamed from the original package name,
