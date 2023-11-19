@@ -42,7 +42,7 @@
     "typescript": "~5.2.2",
     "vite": "5.0.0",
     "@vue/compiler-sfc": "^3.3.7",
-    "eslint": "^8.52.0",,
+    "eslint": "^8.52.0",
     "eslint-plugin-vue": "^9.18.1",
     "vue-tsc": "^1.8.22"
   }
