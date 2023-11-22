@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: NPM Install
         uses: bahmutov/npm-install@v1
@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: NPM Install
         uses: bahmutov/npm-install@v1
@@ -103,7 +103,7 @@ jobs:
           args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/release/kellnr
 
       - name: Upload Kellner
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v3
         with:
           name: kellnr
           path: ${{ github.workspace }}/${{ env.KELLNR_PACKAGE }}
@@ -137,7 +137,7 @@ jobs:
         run: echo "KELLNR_ASSET=kellnr-${{ matrix.target }}.zip" >> $GITHUB_ENV
 
       - name: Download Kellnr
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v3
         with:
           name: kellnr
 
@@ -164,7 +164,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Extract Version
         run: |
