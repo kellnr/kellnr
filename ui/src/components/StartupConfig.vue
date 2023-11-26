@@ -67,7 +67,7 @@
     <startup-config-header></startup-config-header>
     <startup-config-item tomlTable="docs" toml="enabled" env="KELLNR_DOCS__ENABLED"
       :value="settings.docs.enabled"></startup-config-item>
-    <startup-config-item tomlTable="docs" toml="max_size" env="KELLNR_DOCS__max_size"
+    <startup-config-item tomlTable="docs" toml="max_size" env="KELLNR_DOCS__MAX_SIZE"
       :value="settings.docs.max_size"></startup-config-item>
   </div>
 
