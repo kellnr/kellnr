@@ -4,7 +4,7 @@ ARG ADMINPWD=kellnr
 ENV INSTALLDIR=/opt
 ENV DATADIR=/opt/kdata
 ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
-ARG API_ADDRESS=localhost
+ARG HOSTNAME=localhost
 ARG VERSION
 
 RUN apt update
@@ -18,6 +18,6 @@ COPY start.sh ${INSTALLDIR}
 RUN chmod u+x ${INSTALLDIR}/start.sh
 
 WORKDIR ${INSTALLDIR}
-RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh | bash -s -- -d ${DATADIR} -a ${API_ADDRESS} -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh | bash -s -- -d ${DATADIR} -a ${HOSTNAME} -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
 
 ENTRYPOINT ["/opt/start.sh"]
