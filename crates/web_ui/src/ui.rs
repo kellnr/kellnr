@@ -1,50 +1,58 @@
-use crate::session::{AdminUser, AnyUser};
+use crate::session::MaybeUser;
+use crate::error::RouteError;
+use appstate::{AppState, DbState, SettingsState};
+use axum::{
+    extract::{Query, State},
+    Json,
+};
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
 use common::version::Version;
 use db::error::DbError;
-use db::DbProvider;
-use index::rwindex::RwIndex;
-use json_payload::json_payload;
-use registry::kellnr_crate_storage::KellnrCrateStorage;
 use reqwest::StatusCode;
-use rocket::serde::json::Json;
-use rocket::tokio::sync::{Mutex, RwLock};
-use rocket::{catch, delete, get, http, post, Request, State};
 use settings::Settings;
 use tracing::error;
 
-#[json_payload]
+pub async fn settings(
+    user: MaybeUser,
+    State(settings): SettingsState,
+) -> Result<Json<Settings>, RouteError> {
+    user.assert_admin()?;
+    let s: Settings = (*settings).to_owned();
+    Ok(Json(s))
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct KellnrVersion {
     pub version: String,
 }
 
-#[json_payload]
+pub async fn kellnr_version() -> Json<KellnrVersion> {
+    Json(KellnrVersion {
+        // Replaced automatically by the version from the build job,
+        // if a new release is built.
+        version: "0.0.0-debug".to_string(),
+    })
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CratesParams {
+    page: Option<usize>,
+    page_size: Option<usize>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Pagination {
     crates: Vec<CrateOverview>,
     current_num: usize,
     total_num: usize,
 }
 
-#[get("/version")]
-pub async fn kellnr_version() -> Json<KellnrVersion> {
-    Json(KellnrVersion {
-        // Replaced automatically by the version from the build job,
-        // if a new release is built.
-        version: "0.0.0-debug".to_string(),
-
-    })
-}
-
-#[get("/crates?<page>&<page_size>")]
-pub async fn crates(
-    page: Option<usize>,
-    page_size: Option<usize>,
-    db: &State<Box<dyn DbProvider>>,
-) -> Pagination {
-    let page_size = page_size.unwrap_or(10);
+pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> Json<Pagination> {
+    let page_size = params.page_size.unwrap_or(10);
+    let page = params.page;
     let crates = db.get_crate_overview_list().await.unwrap_or_default();
     let total = crates.len();
 
@@ -73,31 +81,56 @@ pub async fn crates(
         None => (total, crates),
     };
 
-    Pagination {
+    Json(Pagination {
         crates,
         current_num: end,
         total_num: total,
-    }
+    })
 }
 
-#[get("/crate_data?<name>")]
-pub async fn crate_data(
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct SearchParams {
     name: OriginalName,
-    db: &State<Box<dyn DbProvider>>,
-) -> Result<Json<CrateData>, http::Status> {
-    let index_name = NormalizedName::from(name);
+}
+
+pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
+    let crates = db
+        .search_in_crate_name(&params.name)
+        .await
+        .unwrap_or_default();
+    Json(Pagination {
+        current_num: crates.len(),
+        total_num: crates.len(),
+        crates,
+    })
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CrateDataParams {
+    name: OriginalName,
+}
+
+pub async fn crate_data(
+    Query(params): Query<CrateDataParams>,
+    State(db): DbState,
+) -> Result<Json<CrateData>, StatusCode> {
+    let index_name = NormalizedName::from(params.name);
     match db.get_crate_data(&index_name).await {
         Ok(cd) => Ok(Json(cd)),
         Err(e) => match e {
-            DbError::CrateNotFound(_) => Err(http::Status::NotFound),
-            _ => Err(http::Status::InternalServerError),
+            DbError::CrateNotFound(_) => Err(StatusCode::NOT_FOUND),
+            _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
         },
     }
 }
 
-#[get("/cratesio_data?<name>")]
-pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
-    let url = format!("https://crates.io/api/v1/crates/{}", name);
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CratesIoDataParams {
+    name: OriginalName,
+}
+
+pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<String, StatusCode> {
+    let url = format!("https://crates.io/api/v1/crates/{}", params.name);
 
     let client = reqwest::Client::new();
     let req = client
@@ -114,69 +147,57 @@ pub async fn cratesio_data(name: OriginalName) -> Result<String, http::Status> {
                     Ok(data) => Ok(data),
                     Err(e) => {
                         error!("Failed to parse crates.io data: {}", e);
-                        Err(http::Status::InternalServerError)
+                        Err(StatusCode::INTERNAL_SERVER_ERROR)
                     }
                 }
             }
-            StatusCode::NOT_FOUND => Err(http::Status::NotFound),
+            StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
             _ => {
                 error!("Failed to get crates.io data: {}", resp.status());
-                Err(http::Status::NotFound)
+                Err(StatusCode::NOT_FOUND)
             }
         },
         Err(e) => {
             error!("Failed to get crates.io data: {}", e);
-            Err(http::Status::InternalServerError)
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }
 
-#[get("/search?<name>")]
-pub async fn search(name: OriginalName, db: &State<Box<dyn DbProvider>>) -> Pagination {
-    let crates = db.search_in_crate_name(&name).await.unwrap_or_default();
-    Pagination {
-        current_num: crates.len(),
-        total_num: crates.len(),
-        crates,
-    }
-}
-
-#[delete("/crate?<name>&<version>")]
-pub async fn delete(
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct DeleteCrateParams {
     name: OriginalName,
     version: Version,
-    _user: AdminUser,
-    db: &State<Box<dyn DbProvider>>,
-    idx: &State<Mutex<Box<dyn RwIndex>>>,
-    storage: &State<RwLock<KellnrCrateStorage>>,
-    settings: &State<Settings>,
-) -> http::Status {
-    if settings.git_index {
-        if let Err(e) = idx.lock().await.delete(&name, &version).await {
-            error!("Failed to delete crate from index: {}", e);
-            return http::Status::InternalServerError;
-        }
-    }
-
-    if let Err(e) = db.delete_crate(&name.to_normalized(), &version).await {
-        error!("Failed to delete crate from database: {:?}", e);
-        return http::Status::InternalServerError;
-    }
-
-    if let Err(e) = storage.write().await.delete(&name, &version).await {
-        error!("Failed to delete crate from storage: {}", e);
-        return http::Status::InternalServerError;
-    }
-
-    if let Err(e) = docs::delete(&name, &version, settings).await {
-        error!("Failed to delete crate from docs: {}", e);
-        return http::Status::InternalServerError;
-    }
-
-    http::Status::Ok
 }
 
-#[json_payload]
+pub async fn delete(
+    Query(params): Query<DeleteCrateParams>,
+    user: MaybeUser,
+    State(state): AppState,
+) -> Result<(), RouteError> {
+    user.assert_admin()?;
+    let version = params.version;
+    let name = params.name;
+
+    if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
+        error!("Failed to delete crate from database: {:?}", e);
+        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+    }
+
+    if let Err(e) = state.crate_storage.delete(&name, &version).await {
+        error!("Failed to delete crate from storage: {}", e);
+        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+    }
+
+    if let Err(e) = docs::delete(&name, &version, &state.settings).await {
+        error!("Failed to delete crate from docs: {}", e);
+        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+    }
+
+    Ok(())
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Statistic {
     unique_crates: u32,
     crate_versions: u32,
@@ -186,8 +207,7 @@ pub struct Statistic {
     top3: (String, u32),
 }
 
-#[get("/statistic")]
-pub async fn statistic(db: &State<Box<dyn DbProvider>>) -> Statistic {
+pub async fn statistic(State(db): DbState) -> Json<Statistic> {
     let unique_crates = db.get_total_unique_crates().await.unwrap_or_default();
     let crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
     let downloads = db.get_total_downloads().await.unwrap_or_default();
@@ -201,104 +221,168 @@ pub async fn statistic(db: &State<Box<dyn DbProvider>>) -> Statistic {
         }
     }
 
-    Statistic {
+    Json(Statistic {
         unique_crates,
         crate_versions,
         downloads,
         top1: extract(&tops, 0),
         top2: extract(&tops, 1),
         top3: extract(&tops, 2),
-    }
+    })
 }
 
-#[post("/build?<package>&<version>")]
-pub async fn build_rustdoc(
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct BuildParams {
     package: OriginalName,
     version: Version,
-    db: &State<Box<dyn DbProvider>>,
-    cs: &State<RwLock<KellnrCrateStorage>>,
-    user: AnyUser,
-) -> Result<rocket::http::Status, http::Status> {
-    let normalized_name = NormalizedName::from(package);
+}
+
+pub async fn build_rustdoc(
+    Query(params): Query<BuildParams>,
+    State(state): AppState,
+    user: MaybeUser,
+) -> Result<(), StatusCode> {
+    let normalized_name = NormalizedName::from(params.package);
+    let db = state.db;
+    let version = params.version;
+
     // Check if crate with the version exists.
     if let Some(id) = db
         .get_crate_id(&normalized_name)
         .await
-        .map_err(|_| http::Status::InternalServerError)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     {
         if !db
             .crate_version_exists(id, &version)
             .await
-            .map_err(|_| http::Status::InternalServerError)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         {
-            return Err(http::Status::BadRequest);
+            return Err(StatusCode::BAD_REQUEST);
         }
     } else {
-        return Err(http::Status::BadRequest);
+        return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Check if the current user is the owner of the crate
-    use crate::session::Name;
-    if !db
-        .is_owner(&normalized_name, &user.name())
-        .await
-        .map_err(|_| http::Status::InternalServerError)?
-        && !db
-            .get_user(&user.name())
+    // If the user is the owner of the crate or any admin user,
+    // the build operation is allowed.
+    let is_allowed = match user {
+        MaybeUser::Normal(user) => db
+            .is_owner(&normalized_name, &user)
             .await
-            .map_err(|_| http::Status::InternalServerError)?
-            .is_admin
-    {
-        return Err(http::Status::Unauthorized);
+            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+        MaybeUser::Admin(_) => true,
+    };
+
+    if !is_allowed {
+        return Err(StatusCode::UNAUTHORIZED);
     }
 
     // Add to build queue
     db.add_doc_queue(
         &normalized_name,
         &version,
-        &cs.read()
-            .await
+        &state
+            .crate_storage
             .create_rand_doc_queue_path()
             .await
-            .map_err(|_| http::Status::InternalServerError)?,
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     )
     .await
-    .map_err(|_| http::Status::InternalServerError)?;
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(http::Status::Ok)
-}
-
-#[delete("/index")]
-pub async fn delete_cratesio_index(settings: &State<Settings>, _user: AdminUser) -> http::Status {
-    index::cratesio_idx::remove_cratesio_index(settings.crates_io_index_path()).await;
-    http::Status::Ok
-}
-
-/*
-   Catch all 404 for SPA (Vue) as SPAs use their own routing in the browser. This is needed to
-   support direct links to pages and page refreshes.
-   See: https://router.vuejs.org/guide/essentials/history-mode.html
-*/
-#[catch(404)]
-pub async fn not_found(_req: &Request<'_>) -> Option<rocket::fs::NamedFile> {
-    let result = rocket::fs::NamedFile::open("static/index.html").await;
-    result.ok()
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_helper::encode_cookies;
+    use appstate::AppStateData;
+    use axum::routing::{get, post};
+    use axum::Router;
+    use axum_extra::extract::cookie::Key;
     use common::crate_data::{CrateRegistryDep, CrateVersionData};
     use db::error::DbError;
     use db::mock::MockDb;
     use db::User;
+    use hyper::body::HttpBody;
+    use hyper::{header, Body, Request};
     use mockall::predicate::*;
-    use rocket::http::{ContentType, Cookie, Header, Status};
-    use rocket::local::asynchronous::Client;
-    use rocket::{routes, Build, Rocket};
-    use settings::constants;
+    use settings::Settings;
+    use settings::{constants, Postgresql};
+    use std::sync::Arc;
+    use storage::kellnr_crate_storage::KellnrCrateStorage;
+    use tower::ServiceExt;
 
-    #[rocket::async_test]
+    #[tokio::test]
+    async fn settings_no_admin_returns_unauthorized() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .returning(|_| Ok(("admin".to_string(), true)));
+
+        let settings = Settings::default();
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings).await.unwrap(),
+            settings,
+        )
+        .await
+        .oneshot(Request::get("/settings").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn settings_returns_from_settings() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .returning(|_| Ok(("admin".to_string(), true)));
+
+        let settings = Settings::default();
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings).await.unwrap(),
+            settings,
+        )
+        .await
+        .oneshot(
+            Request::get("/settings")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let result_status = r.status();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_state = serde_json::from_slice::<Settings>(&result_msg).unwrap();
+
+        // Set the password to empty string because it is not serialized
+        let tmp = Settings::default();
+        let psq = Postgresql {
+            pwd: String::default(),
+            ..tmp.postgresql
+        };
+        let expected_state = Settings {
+            postgresql: psq,
+            ..tmp
+        };
+
+        assert_eq!(result_status, StatusCode::OK);
+        assert_eq!(result_state, expected_state);
+    }
+
+    #[tokio::test]
     async fn build_rust_doc_crate_not_found() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -310,26 +394,30 @@ mod tests {
             .with(eq("cookie"))
             .returning(move |_| Ok(("user".to_string(), false)));
         let settings = test_settings();
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .await
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::BadRequest, result.status());
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn build_rust_doc_version_not_found() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -345,26 +433,30 @@ mod tests {
             .with(eq(1), eq("1.0.0"))
             .returning(move |_, _| Ok(false));
         let settings = test_settings();
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .await
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::BadRequest, result.status());
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn build_rust_doc_not_owner() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -399,26 +491,30 @@ mod tests {
                 })
             });
         let settings = test_settings();
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .await
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::Unauthorized, result.status());
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn build_rust_doc_is_owner() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -463,26 +559,30 @@ mod tests {
             .returning(move |_, _, _| Ok(()));
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .await
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::Ok, result.status());
+        assert_eq!(r.status(), StatusCode::OK);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn build_rust_doc_not_owner_but_admin() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -492,7 +592,7 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("cookie"))
-            .returning(move |_| Ok(("user".to_string(), false)));
+            .returning(move |_| Ok(("user".to_string(), true)));
         mock_db
             .expect_crate_version_exists()
             .with(eq(1), eq("1.0.0"))
@@ -527,26 +627,30 @@ mod tests {
             .returning(move |_, _, _| Ok(()));
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client
-            .post("/build?package=foobar&version=1.0.0")
-            .private_cookie(Cookie::new(constants::COOKIE_SESSION_ID, "cookie"))
-            .header(ContentType::JSON)
-            .header(Header::new("Authorization", "token"));
+        )
+        .await
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-
-        assert_eq!(rocket::http::Status::Ok, result.status());
+        assert_eq!(r.status(), StatusCode::OK);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn statistic_returns_sparse_statistics() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -564,19 +668,18 @@ mod tests {
             .returning(move |_| Ok(vec![("top1".to_string(), 1000)]));
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/statistic");
+        )
+        .await
+        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_stat = serde_json::from_str::<Statistic>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
             unique_crates: 0,
@@ -589,7 +692,7 @@ mod tests {
         assert_eq!(expect, result_stat);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn statistic_returns_empty_statistics() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -607,19 +710,18 @@ mod tests {
             .returning(move |_| Err(DbError::FailedToCountTotalDownloads));
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/statistic");
+        )
+        .await
+        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_stat = serde_json::from_str::<Statistic>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
             unique_crates: 0,
@@ -632,7 +734,7 @@ mod tests {
         assert_eq!(expect, result_stat);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn statistic_returns_crate_statistics() {
         let mut mock_db = MockDb::new();
         mock_db
@@ -656,19 +758,18 @@ mod tests {
             });
 
         let settings = test_settings();
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/statistic");
+        )
+        .await
+        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_stat = serde_json::from_str::<Statistic>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
             unique_crates: 1000,
@@ -681,29 +782,28 @@ mod tests {
         assert_eq!(expect, result_stat);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn kellnr_version_returns_version() {
         let settings = test_settings();
         let mock_db = MockDb::new();
 
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/version");
+        )
+        .await
+        .oneshot(Request::get("/version").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_version = serde_json::from_str::<KellnrVersion>(&result_msg).unwrap();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_version = serde_json::from_slice::<KellnrVersion>(&result_msg).unwrap();
 
         assert_eq!("0.0.0-debug", result_version.version);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn search_not_hits_returns_nothing() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -713,28 +813,31 @@ mod tests {
             .with(eq("doesnotexist"))
             .returning(move |_name| Ok(vec![]));
 
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/search?name=doesnotexist");
+        )
+        .await
+        .oneshot(
+            Request::get("/search?name=doesnotexist")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_crates = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_status = r.status();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(0, result_crates.crates.len());
         assert_eq!(0, result_crates.total_num);
         assert_eq!(0, result_crates.current_num);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn search_returns_only_searched_results() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -753,29 +856,32 @@ mod tests {
             .with(eq("hello"))
             .returning(move |_| Ok(vec![tc.clone()]));
 
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/search?name=hello");
+        )
+        .await
+        .oneshot(
+            Request::get("/search?name=hello")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_crates = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_status = r.status();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(1, result_crates.crates.len());
         assert_eq!(1, result_crates.total_num);
         assert_eq!(1, result_crates.current_num);
         assert_eq!(test_crate_summary, result_crates.crates[0]);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn crate_get_crate_information() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -825,26 +931,29 @@ mod tests {
             .expect_get_crate_data()
             .returning(move |_| Ok(ecd.clone()));
 
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/crate_data?name=c1&version=1.0.0");
+        )
+        .await
+        .oneshot(
+            Request::get("/crate_data?name=crate1&version=1.0.0")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_crate_data = serde_json::from_str::<CrateData>(&result_msg).unwrap();
+        let result_status = r.status();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_crate_data = serde_json::from_slice::<CrateData>(&result_msg).unwrap();
 
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(expected_crate_data, result_crate_data);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn crates_get_page() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -890,30 +999,29 @@ mod tests {
             .expect_get_crate_overview_list()
             .returning(move || Ok(tc.clone()));
 
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/crates?page=1");
+        )
+        .await
+        .oneshot(Request::get("/crates?page=1").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_pagination = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_status = r.status();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         let expected = test_crates[0..10].to_vec();
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(24, result_pagination.total_num);
         assert_eq!(20, result_pagination.current_num);
         assert_eq!(10, result_pagination.crates.len());
         assert_eq!(expected, result_pagination.crates);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn crates_get_page_out_of_bounds() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -959,30 +1067,29 @@ mod tests {
             .expect_get_crate_overview_list()
             .returning(move || Ok(tc.clone()));
 
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/crates?page=2");
+        )
+        .await
+        .oneshot(Request::get("/crates?page=2").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let result_status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_pagination = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_status = r.status();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         let expected = test_crates[0..4].to_vec();
-        assert_eq!(Status::Ok, result_status);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(4, result_pagination.crates.len());
         assert_eq!(24, result_pagination.total_num);
         assert_eq!(24, result_pagination.current_num);
         assert_eq!(expected, result_pagination.crates);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn crates_get_all_crates() {
         let mut mock_db = MockDb::new();
         let settings = test_settings();
@@ -1019,103 +1126,93 @@ mod tests {
             .expect_get_crate_overview_list()
             .returning(move || Ok(crate_overview.clone()));
 
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
-        let req = client.get("/crates");
+        )
+        .await
+        .oneshot(Request::get("/crates").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-        let result = req.dispatch().await;
-        let status = result.status();
-        let result_msg = result.into_string().await.expect("Missing body message");
-        let result_pagination = serde_json::from_str::<Pagination>(&result_msg).unwrap();
+        let result_status = r.status();
+        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
-        assert_eq!(Status::Ok, status);
+        assert_eq!(StatusCode::OK, result_status);
         assert_eq!(3, result_pagination.crates.len());
         assert_eq!(3, result_pagination.total_num);
         assert_eq!(3, result_pagination.current_num);
         assert_eq!(expected_crate_overview, result_pagination.crates);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn cratesio_data_returns_data() {
         let mock_db = MockDb::new();
         let settings = test_settings();
-        let rocket = create_rocket(
+        let mut r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
+        )
+        .await
+        .oneshot(
+            Request::get("/cratesio_data?name=quote")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let req = client.get("/cratesio_data?name=quote");
-        let result = req.dispatch().await;
-        let status = result.status();
-        let body = result.into_string().await.expect("Missing body message");
-
-        assert_eq!(Status::Ok, status);
+        let result_status = r.status();
+        let body = String::from_utf8(r.data().await.unwrap().unwrap().to_vec()).unwrap();
         assert!(body.contains("quote"));
+        assert_eq!(StatusCode::OK, result_status);
     }
 
-    #[rocket::async_test]
+    #[tokio::test]
     async fn cratesio_data_not_found() {
         let mock_db = MockDb::new();
         let settings = test_settings();
-        let rocket = create_rocket(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
-        );
-        let client = Client::tracked(rocket)
-            .await
-            .expect("Unable to create rocket client");
+        )
+        .await
+        .oneshot(
+            Request::get("/cratesio_data?name=thisdoesnotevenexist")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-        let req = client.get("/cratesio_data?name=thisdoesnotevenexist");
-        let result = req.dispatch().await;
-
-        assert_eq!(Status::NotFound, result.status());
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
     fn test_settings() -> Settings {
-        let settings = Settings::new().unwrap();
-        Settings {
-            data_dir: "/tmp/data".to_string(),
-            ..settings
-        }
+        Settings::default()
     }
 
-    fn create_rocket(
-        mock_db: MockDb,
-        crate_storage: KellnrCrateStorage,
-        settings: Settings,
-    ) -> Rocket<Build> {
-        use rocket::config::{Config, SecretKey};
-        let rocket_conf = Config {
-            secret_key: SecretKey::generate().expect("Unable to create a secret key."),
-            ..Config::default()
-        };
-
-        rocket::custom(rocket_conf)
-            .mount(
-                "/",
-                routes![
-                    search,
-                    crates,
-                    kellnr_version,
-                    statistic,
-                    crate_data,
-                    build_rustdoc,
-                    cratesio_data,
-                ],
-            )
-            .manage(RwLock::new(crate_storage))
-            .manage(Box::new(mock_db) as Box<dyn DbProvider>)
-            .manage(settings)
+    const TEST_KEY: &[u8] = &[1; 64];
+    async fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
+        Router::new()
+            .route("/search", get(search))
+            .route("/crates", get(crates))
+            .route("/crate_data", get(crate_data))
+            .route("/version", get(kellnr_version))
+            .route("/statistic", get(statistic))
+            .route("/build", post(build_rustdoc))
+            .route("/cratesio_data", get(cratesio_data))
+            .route("/settings", get(crate::ui::settings))
+            .with_state(AppStateData {
+                db: Arc::new(mock_db),
+                signing_key: Key::from(TEST_KEY),
+                settings: Arc::new(settings),
+                crate_storage: Arc::new(crate_storage),
+                ..appstate::test_state().await
+            })
     }
 }

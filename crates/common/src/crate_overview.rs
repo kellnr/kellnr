@@ -1,5 +1,5 @@
-use rocket::serde::{Deserialize, Serialize};
 use sea_orm::FromQueryResult;
+use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromQueryResult)]
 pub struct CrateOverview {

@@ -13,7 +13,6 @@ migration.workspace = true
 
 # External dependencies from crates.io
 serde.workspace = true
-rocket.workspace = true
 anyhow.workspace = true
 rand.workspace = true
 chrono.workspace = true
@@ -23,8 +22,9 @@ sha2.workspace = true
 thiserror.workspace = true
 sea-orm.workspace = true
 sea-orm-migration.workspace = true
-
+serde_json.workspace = true
 
 [dev-dependencies]
 rm_rf.workspace = true
 testcontainers.workspace = true
+tokio.workspace = true

@@ -76,9 +76,9 @@
 </template>
 
 <script setup lang="ts">
-import StatusNotification from "../components/StatusNotification.vue";
+import StatusNotification from "./StatusNotification.vue";
 import {onBeforeMount, ref} from 'vue'
-import {ADD_USER, DELETE_USER, kellnr_url, LIST_USERS, RESET_PWD} from "@/remote-routes";
+import {ADD_USER, DELETE_USER, kellnr_url, LIST_USERS, RESET_PWD} from "../remote-routes";
 import axios from "axios";
 import {useRouter} from "vue-router";
 
@@ -140,7 +140,7 @@ function getUsers() {
       .get(LIST_USERS, {cache: false}) // disable caching to get updated token list (TS doesn't recognize cache option)
       .then((res) => {
         if (res.status == 200) {
-          items.value = res.data["users"];
+          items.value = res.data;
         }
       })
       .catch((error) => {
@@ -151,7 +151,7 @@ function getUsers() {
 function deleteUser(name: string) {
   if (confirm('Delete user "' + name + '"?')) {
     axios
-        .get(DELETE_USER(name))
+        .delete(DELETE_USER(name))
         .then((res) => {
           if (res.status == 200) {
             changeUserStatus.value = "Success";
@@ -176,7 +176,7 @@ function deleteUser(name: string) {
 function resetPwd(name: string) {
   if (confirm('Reset password for "' + name + '"?')) {
     axios
-        .get(RESET_PWD(name))
+        .post(RESET_PWD(name))
         .then((res) => {
           if (res.status == 200) {
             changeUserStatus.value = "Success";

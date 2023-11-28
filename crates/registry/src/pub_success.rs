@@ -1,12 +1,11 @@
-use json_payload::json_payload;
+use serde::{Deserialize, Serialize};
 
-#[json_payload]
-#[derive(Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct PubDataSuccess {
     pub warnings: Option<Warnings>,
 }
 
-#[json_payload]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Warnings {
     pub invalid_categories: Option<Vec<String>>,
     pub invalid_badges: Option<Vec<String>>,

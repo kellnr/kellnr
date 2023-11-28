@@ -27,10 +27,10 @@
 <script setup lang="ts">
 import {onBeforeMount, ref, watch} from "vue";
 import axios from "axios";
-import {store} from "@/store/store"
+import {store} from "../store/store"
 import {useRoute, useRouter} from "vue-router";
-import {CrateData} from "@/types/crate_data";
-import {CRATE_DATA, CRATESIO_DATA, CRATESIO_LINK} from "@/remote-routes";
+import {CrateData} from "../types/crate_data";
+import {CRATE_DATA, CRATESIO_DATA, CRATESIO_LINK} from "../remote-routes";
 
 const props = defineProps<{
   name: string

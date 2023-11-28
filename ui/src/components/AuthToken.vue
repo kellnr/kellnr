@@ -38,7 +38,7 @@ import {onBeforeMount, ref} from 'vue'
 import StatusNotification from "../components/StatusNotification.vue";
 import axios from "axios";
 import {useRouter} from "vue-router";
-import {ADD_TOKEN, DELETE_TOKEN, kellnr_url, LIST_TOKENS} from "@/remote-routes";
+import {ADD_TOKEN, DELETE_TOKEN, kellnr_url, LIST_TOKENS} from "../remote-routes";
 
 const addTokenStatus = ref("")
 const addTokenMsg = ref("")
@@ -88,7 +88,7 @@ function getTokens() {
       .get(LIST_TOKENS, { cache: false }) // disable caching to get updated token list (TS doesn't recognize cache option)
       .then((res) => {
         if (res.status == 200) {
-          items.value = res.data["tokens"];
+          items.value = res.data;
         }
       })
       .catch((error) => {
@@ -99,7 +99,7 @@ function getTokens() {
 function deleteToken(name: String, id: number) {
   if (confirm('Delete token "' + name + '"?')) {
     axios
-        .get(DELETE_TOKEN(id))
+        .delete(DELETE_TOKEN(id))
         .then(() => {
           // Update shown token list
           getTokens();

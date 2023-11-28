@@ -350,11 +350,17 @@ impl MigrationTrait for Migration {
     }
 }
 
+pub fn index_path(settings: &Settings) -> std::path::PathBuf {
+    std::path::PathBuf::from(&settings.registry.data_dir)
+        .join("git")
+        .join("index")
+}
+
 async fn fill_new_columns(
     db: &SchemaManagerConnection<'_>,
     settings: &Settings,
 ) -> Result<(), DbErr> {
-    let crate_path = settings.index_path();
+    let crate_path = index_path(settings);
     let crates = crate_meta::Entity::find()
         .find_also_related(krate::Entity)
         .all(db)

@@ -1,0 +1,26 @@
+[package]
+name = "storage"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Internal dependencies
+settings.workspace = true
+common.workspace = true
+
+# External dependencies
+anyhow.workspace = true
+mockall.workspace = true
+tokio.workspace = true
+sha2.workspace = true
+tracing.workspace = true
+hex.workspace = true
+moka.workspace = true
+rm_rf.workspace = true
+axum.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

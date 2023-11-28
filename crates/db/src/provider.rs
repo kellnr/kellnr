@@ -10,7 +10,7 @@ use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
 use crate_meta::CrateMeta;
-use rocket::async_trait;
+use sea_orm::prelude::async_trait::async_trait;
 use std::path::Path;
 
 pub type DbResult<T> = Result<T, DbError>;

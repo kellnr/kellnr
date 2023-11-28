@@ -7,16 +7,14 @@ edition.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
-json_payload.workspace = true
-derive_jsonresponder.workspace = true
 settings.workspace = true
 common.workspace = true
 db.workspace = true
 auth.workspace = true
+appstate.workspace = true
 
 # External dependencies from crates.io
 anyhow.workspace = true
-rocket.workspace = true
 wax.workspace = true
 serde_json.workspace = true
 hex.workspace = true
@@ -27,5 +25,12 @@ rm_rf.workspace = true
 tracing.workspace = true
 reqwest.workspace = true
 chrono.workspace = true
-cached.workspace = true
+moka.workspace = true
 flume.workspace = true
+axum.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tower.workspace = true
+hyper.workspace = true

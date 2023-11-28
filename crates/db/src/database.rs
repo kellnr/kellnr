@@ -20,12 +20,11 @@ use entity::{
 };
 use hex::ToHex;
 use migration::iden::{AuthTokenIden, CrateIden, CrateMetaIden};
-use rocket::async_trait;
-use rocket::serde::json::serde_json;
 use sea_orm::sea_query::{Alias, Expr, Query, *};
 use sea_orm::{
-    query::*, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
+    prelude::async_trait::async_trait, query::*, ActiveModelTrait, ColumnTrait, ConnectionTrait,
+    DatabaseConnection, EntityTrait, FromQueryResult, InsertResult, ModelTrait, QueryFilter,
+    RelationTrait, Set,
 };
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;

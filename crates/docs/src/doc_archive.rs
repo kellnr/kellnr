@@ -1,8 +1,8 @@
+use appstate::AppStateData;
+use axum::body::{Body, Bytes};
+use axum::extract::FromRequest;
+use axum::http::Request;
 use error::error::{ApiError, ApiResult};
-use rocket::data::{FromData, Outcome, ToByteUnit};
-use rocket::http::Status;
-use rocket::outcome::Outcome::{Failure, Success};
-use rocket::{Data, Request};
 use std::io::Cursor;
 use std::path::Path;
 use zip::ZipArchive;
@@ -20,38 +20,33 @@ impl DocArchive {
     }
 }
 
-#[rocket::async_trait]
-impl<'r> FromData<'r> for DocArchive {
-    type Error = ApiError;
+#[axum::async_trait]
+impl FromRequest<AppStateData, Body> for DocArchive {
+    type Rejection = ApiError;
 
-    async fn from_data(_: &'r Request<'_>, data: Data<'r>) -> Outcome<'r, Self> {
-        let settings = match settings::get_settings() {
-            Ok(s) => s,
-            Err(e) => {
-                return Failure((Status::InternalServerError, ApiError::from(&e.to_string())))
-            }
+    async fn from_request(
+        req: Request<Body>,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
+        let data_bytes: Vec<u8> = match Bytes::from_request(req, state).await {
+            Ok(b) => b.to_vec(),
+            Err(e) => return Err(ApiError::from(&e.to_string())),
         };
 
-        let stream = match data
-            .open(settings.max_docs_size.megabytes())
-            .into_bytes()
-            .await
-        {
-            Ok(v) => {
-                if v.is_complete() {
-                    v.into_inner()
-                } else {
-                    return Failure((Status::Ok, ApiError::from("Unable to read full data.")));
-                }
-            }
-            Err(e) => return Failure((Status::Ok, ApiError::from(e))),
-        };
+        let max_docs_size = state.settings.docs.max_size / 1_000_000;
+        if data_bytes.len() > max_docs_size {
+            return Err(ApiError::from(&format!(
+                "Invalid max. length. {}/{} bytes.",
+                data_bytes.len(),
+                max_docs_size
+            )));
+        }
 
-        let reader = Cursor::new(stream);
+        let reader = Cursor::new(data_bytes);
 
         match ZipArchive::new(reader) {
-            Ok(zip) => Success(DocArchive(zip)),
-            Err(e) => Failure((Status::Ok, ApiError::from(e))),
+            Ok(zip) => Ok(DocArchive(zip)),
+            Err(e) => Err(ApiError::from(e)),
         }
     }
 }

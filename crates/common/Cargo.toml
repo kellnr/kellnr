@@ -7,12 +7,9 @@ edition.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
-derive_jsonresponder.workspace = true
-json_payload.workspace = true
 
 # External dependencies from crates.io
 anyhow.workspace = true
-rocket.workspace = true
 serde.workspace = true
 semver.workspace = true
 regex.workspace = true
@@ -22,4 +19,5 @@ rand.workspace = true
 sea-orm.workspace = true
 sea-query-derive.workspace = true
 tracing.workspace = true
-
+axum.workspace = true
+tokio.workspace = true

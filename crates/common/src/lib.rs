@@ -7,7 +7,5 @@ pub mod original_name;
 pub mod prefetch;
 pub mod publish_metadata;
 pub mod search_result;
-pub mod storage;
-pub mod storage_provider;
 pub mod util;
 pub mod version;

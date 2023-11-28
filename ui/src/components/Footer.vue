@@ -8,8 +8,8 @@
 <script setup lang="ts">
 import {onBeforeMount, ref} from "vue";
 import axios from "axios";
-import {defaultVersionInfo, VersionInfo} from "@/types/version_info";
-import {kellnr_url, VERSION} from "@/remote-routes";
+import {defaultVersionInfo, VersionInfo} from "../types/version_info";
+import {VERSION} from "../remote-routes";
 
 const versionInfo = ref(defaultVersionInfo())
 

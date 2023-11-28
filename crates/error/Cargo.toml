@@ -9,13 +9,11 @@ version.workspace = true
 [dependencies]
 # Internal dependencies
 common.workspace = true
-json_payload.workspace = true
 db.workspace = true
-derive_jsonresponder.workspace = true
 
 # External dependencies
 zip.workspace = true
-rocket.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
+axum.workspace = true

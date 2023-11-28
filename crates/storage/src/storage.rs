@@ -1,13 +1,11 @@
 use crate::storage_provider::StorageProvider;
 use anyhow::{bail, Context, Error, Result};
-use rocket::{
-    async_trait,
-    tokio::{
-        fs::{read, File, OpenOptions},
-        io::AsyncReadExt,
-    },
-};
+use axum::async_trait;
 use std::path::Path;
+use tokio::{
+    fs::{read, File, OpenOptions},
+    io::AsyncReadExt,
+};
 
 #[derive(Clone)]
 pub struct Storage {}
@@ -73,12 +71,10 @@ impl StorageProvider for Storage {
 
 #[cfg(test)]
 mod tests {
-    use rocket::async_test;
-
     use super::*;
     use std::path::PathBuf;
 
-    #[async_test]
+    #[tokio::test]
     async fn read_returns_byte_vec() {
         let storage = Storage::new();
 
@@ -92,7 +88,7 @@ mod tests {
         assert_eq!(1786, bytes.unwrap().len())
     }
 
-    #[async_test]
+    #[tokio::test]
     async fn read_not_found() {
         let storage = Storage::new();
 
