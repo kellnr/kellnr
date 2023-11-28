@@ -25,3 +25,6 @@ sea-query.workspace = true
 sea-query-derive.workspace = true
 sha2.workspace = true
 hex.workspace = true
+
+[lints.rust]
+unused_imports = "allow"

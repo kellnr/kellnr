@@ -236,6 +236,7 @@ mod reg_api_tests {
     use axum::Router;
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString};
+    use futures::StreamExt;
     use hyper::header;
     use mockall::predicate::*;
     use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -749,7 +750,7 @@ mod reg_api_tests {
             .unwrap();
         let response_status = r.status();
 
-        let msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let msg = to_bytes(r.into_body()).await;
         let error: ApiError =
             serde_json::from_slice(&msg).expect("Cannot deserialize error message");
 
@@ -852,5 +853,19 @@ mod reg_api_tests {
                 db,
                 ..appstate::test_state().await
             })
+    }
+
+    // Shouldn't axum provide something like this?
+    async fn to_bytes(body: Body) -> Vec<u8> {
+        body.into_data_stream()
+            .map(Result::ok)
+            .flat_map(|mut x| {
+                futures::stream::poll_fn(move |_cx| match x.take() {
+                    Some(ref bytes) => std::task::Poll::Ready(Some(bytes.to_vec())),
+                    None => std::task::Poll::Ready(None),
+                })
+            })
+            .concat()
+            .await
     }
 }

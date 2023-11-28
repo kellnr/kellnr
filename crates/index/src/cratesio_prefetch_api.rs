@@ -478,7 +478,7 @@ mod tests {
             .await
             .unwrap();
         let status = r.status();
-        let prefetch = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let prefetch = to_bytes(r.into_body()).await.unwrap();
 
         assert_eq!(status, StatusCode::OK);
         assert!(prefetch.len() > 500);

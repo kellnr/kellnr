@@ -143,4 +143,18 @@ mod tests {
                 ..appstate::test_state().await
             })
     }
+
+    // Shouldn't axum provide something like this?
+    async fn to_bytes(body: Body) -> Vec<u8> {
+        body.into_data_stream()
+            .map(Result::ok)
+            .flat_map(|mut x| {
+                futures::stream::poll_fn(move |_cx| match x.take() {
+                    Some(ref bytes) => std::task::Poll::Ready(Some(bytes.to_vec())),
+                    None => std::task::Poll::Ready(None),
+                })
+            })
+            .concat()
+            .await
+    }
 }
