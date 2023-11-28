@@ -10,8 +10,9 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use db::provider::PrefetchState;
 use db::DbProvider;
+use hyper::StatusCode;
 use moka::future::Cache;
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{Client, Url};
 use serde::Deserialize;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -319,15 +320,15 @@ async fn fetch_index_data(
 
     if let Some(r) = r {
         match r.status() {
-            StatusCode::NOT_MODIFIED => {
+            reqwest::StatusCode::NOT_MODIFIED => {
                 trace!("Index not-modified for {}", name);
                 None
             }
-            StatusCode::NOT_FOUND => {
+            reqwest::StatusCode::NOT_FOUND => {
                 trace!("Index not found for {}", name);
                 None
             }
-            StatusCode::OK => {
+            reqwest::StatusCode::OK => {
                 let headers = r.headers();
                 let etag = headers
                     .get("ETag")
@@ -439,9 +440,14 @@ mod tests {
     use super::*;
     use crate::config_json::ConfigJson;
     use appstate::AppStateData;
-    use axum::{body::Body, http::Request, routing::get, Router};
+    use axum::{
+        body::Body,
+        http::{header, Request},
+        routing::get,
+        Router,
+    };
     use db::mock::MockDb;
-    use reqwest::header;
+    use http_body_util::BodyExt;
     use settings::{Protocol, Settings};
     use std::mem;
     use tower::ServiceExt;
@@ -478,7 +484,7 @@ mod tests {
             .await
             .unwrap();
         let status = r.status();
-        let prefetch = to_bytes(r.into_body()).await.unwrap();
+        let prefetch = r.into_body().collect().await.unwrap().to_bytes();
 
         assert_eq!(status, StatusCode::OK);
         assert!(prefetch.len() > 500);
@@ -496,7 +502,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
 
         assert_eq!(

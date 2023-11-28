@@ -87,6 +87,7 @@ mod tests {
     use common::normalized_name::NormalizedName;
     use db::mock::MockDb;
     use db::{DbProvider, DocQueueEntry};
+    use http_body_util::BodyExt;
     use std::sync::Arc;
     use tower::ServiceExt;
 
@@ -116,7 +117,7 @@ mod tests {
             .await
             .unwrap();
 
-        let actual = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let actual = r.into_body().collect().await.unwrap().to_bytes();
         let actual = serde_json::from_slice::<DocQueueResponse>(&actual).unwrap();
         assert_eq!(
             DocQueueResponse {
@@ -142,19 +143,5 @@ mod tests {
                 db,
                 ..appstate::test_state().await
             })
-    }
-
-    // Shouldn't axum provide something like this?
-    async fn to_bytes(body: Body) -> Vec<u8> {
-        body.into_data_stream()
-            .map(Result::ok)
-            .flat_map(|mut x| {
-                futures::stream::poll_fn(move |_cx| match x.take() {
-                    Some(ref bytes) => std::task::Poll::Ready(Some(bytes.to_vec())),
-                    None => std::task::Poll::Ready(None),
-                })
-            })
-            .concat()
-            .await
     }
 }

@@ -1,8 +1,9 @@
-use crate::session::MaybeUser;
 use crate::error::RouteError;
+use crate::session::MaybeUser;
 use appstate::{AppState, DbState, SettingsState};
 use axum::{
     extract::{Query, State},
+    http::StatusCode,
     Json,
 };
 use common::crate_data::CrateData;
@@ -11,7 +12,6 @@ use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
 use common::version::Version;
 use db::error::DbError;
-use reqwest::StatusCode;
 use settings::Settings;
 use tracing::error;
 
@@ -141,7 +141,7 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
 
     match resp {
         Ok(resp) => match resp.status() {
-            StatusCode::OK => {
+            reqwest::StatusCode::OK => {
                 let data = resp.text().await;
                 match data {
                     Ok(data) => Ok(data),
@@ -151,7 +151,7 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
                     }
                 }
             }
-            StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
+            reqwest::StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
             _ => {
                 error!("Failed to get crates.io data: {}", resp.status());
                 Err(StatusCode::NOT_FOUND)
@@ -298,6 +298,7 @@ mod tests {
     use super::*;
     use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
+    use axum::body::Body;
     use axum::routing::{get, post};
     use axum::Router;
     use axum_extra::extract::cookie::Key;
@@ -305,8 +306,8 @@ mod tests {
     use db::error::DbError;
     use db::mock::MockDb;
     use db::User;
-    use hyper::body::HttpBody;
-    use hyper::{header, Body, Request};
+    use http_body_util::BodyExt;
+    use hyper::{header, Request};
     use mockall::predicate::*;
     use settings::Settings;
     use settings::{constants, Postgresql};
@@ -364,7 +365,7 @@ mod tests {
         .unwrap();
 
         let result_status = r.status();
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_state = serde_json::from_slice::<Settings>(&result_msg).unwrap();
 
         // Set the password to empty string because it is not serialized
@@ -678,7 +679,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
@@ -720,7 +721,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
@@ -768,7 +769,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
@@ -797,7 +798,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_version = serde_json::from_slice::<KellnrVersion>(&result_msg).unwrap();
 
         assert_eq!("0.0.0-debug", result_version.version);
@@ -828,7 +829,7 @@ mod tests {
         .unwrap();
 
         let result_status = r.status();
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         assert_eq!(StatusCode::OK, result_status);
@@ -871,7 +872,7 @@ mod tests {
         .unwrap();
 
         let result_status = r.status();
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         assert_eq!(StatusCode::OK, result_status);
@@ -946,7 +947,7 @@ mod tests {
         .unwrap();
 
         let result_status = r.status();
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_crate_data = serde_json::from_slice::<CrateData>(&result_msg).unwrap();
 
         assert_eq!(StatusCode::OK, result_status);
@@ -967,32 +968,9 @@ mod tests {
             documentation: None,
         };
 
-        let test_crates = vec![
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-            test_crate_overview.clone(),
-        ];
+        let test_crates = std::iter::repeat_with(|| test_crate_overview.clone())
+            .take(25)
+            .collect::<Vec<_>>();
 
         let tc = test_crates.clone();
         mock_db
@@ -1010,7 +988,7 @@ mod tests {
         .unwrap();
 
         let result_status = r.status();
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         let expected = test_crates[0..10].to_vec();
@@ -1078,7 +1056,7 @@ mod tests {
         .unwrap();
 
         let result_status = r.status();
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         let expected = test_crates[0..4].to_vec();
@@ -1137,7 +1115,7 @@ mod tests {
         .unwrap();
 
         let result_status = r.status();
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
 
         assert_eq!(StatusCode::OK, result_status);
@@ -1151,7 +1129,7 @@ mod tests {
     async fn cratesio_data_returns_data() {
         let mock_db = MockDb::new();
         let settings = test_settings();
-        let mut r = app(
+        let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings).await.unwrap(),
             settings,
@@ -1166,7 +1144,8 @@ mod tests {
         .unwrap();
 
         let result_status = r.status();
-        let body = String::from_utf8(r.data().await.unwrap().unwrap().to_vec()).unwrap();
+        let body =
+            String::from_utf8(r.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
         assert!(body.contains("quote"));
         assert_eq!(StatusCode::OK, result_status);
     }

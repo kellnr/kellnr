@@ -15,13 +15,14 @@ use registry::{cratesio_api, kellnr_api};
 use settings::{LogFormat, Settings};
 use std::{
     convert::TryFrom,
+    net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
 };
 use storage::{
     cratesio_crate_storage::CratesIoCrateStorage, kellnr_crate_storage::KellnrCrateStorage,
 };
-use tokio::fs::create_dir_all;
+use tokio::{fs::create_dir_all, net::TcpListener};
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::info;
 use tracing_subscriber::fmt::format;
@@ -32,7 +33,7 @@ async fn main() {
     let settings: Arc<Settings> = Settings::try_from(Path::new("config"))
         .expect("Cannot read config")
         .into();
-    let addr = &format!("{}:{}", settings.local.ip, settings.local.port)
+    let addr: SocketAddr = format!("{}:{}", settings.local.ip, settings.local.port)
         .parse()
         .expect("Failed to parse IP and port: {settings.local.ip}:{settings.local.port}");
 
@@ -170,10 +171,10 @@ async fn main() {
         .with_state(state)
         .layer(tower_http::trace::TraceLayer::new_for_http());
 
-    axum::Server::bind(addr)
-        .serve(app.into_make_service())
+    let listener = TcpListener::bind(addr)
         .await
-        .unwrap();
+        .unwrap_or_else(|_| panic!("Failed to bind to {addr}"));
+    axum::serve(listener, app).await.unwrap();
 }
 
 async fn init_cratesio_prefetch_thread(

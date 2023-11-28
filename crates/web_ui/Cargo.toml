@@ -25,6 +25,7 @@ reqwest.workspace = true
 axum.workspace = true
 axum-extra.workspace = true
 cookie.workspace = true
+http-body-util.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

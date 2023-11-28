@@ -9,6 +9,7 @@ use appstate::DbState;
 use auth::token;
 use axum::extract::Path;
 use axum::extract::State;
+use axum::http::StatusCode;
 use axum::response::Redirect;
 use axum::Json;
 use chrono::Utc;
@@ -19,7 +20,6 @@ use common::search_result::{Crate, SearchResult};
 use common::version::Version;
 use db::DbProvider;
 use error::error::{ApiError, ApiResult};
-use reqwest::StatusCode;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tracing::warn;
@@ -236,7 +236,7 @@ mod reg_api_tests {
     use axum::Router;
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString};
-    use futures::StreamExt;
+    use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
     use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -287,7 +287,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
 
         assert_eq!(
             0,
@@ -344,7 +344,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let owners = serde_json::from_slice::<owner::OwnerResponse>(&result_msg).unwrap();
         assert!(owners.ok);
     }
@@ -383,7 +383,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
 
         let owners = serde_json::from_slice::<owner::OwnerList>(&result_msg).unwrap();
         assert_eq!(1, owners.users.len());
@@ -411,7 +411,7 @@ mod reg_api_tests {
 
         let response_status = r.status();
         let error: ApiError =
-            serde_json::from_slice(hyper::body::to_bytes(r.into_body()).await.unwrap().as_ref())
+            serde_json::from_slice(r.into_body().collect().await.unwrap().to_bytes().as_ref())
                 .expect("Cannot deserialize error message");
 
         assert_eq!(StatusCode::OK, response_status);
@@ -511,7 +511,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_ok());
     }
 
@@ -533,7 +533,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_ok());
     }
 
@@ -552,7 +552,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         assert!(serde_json::from_slice::<search_result::SearchResult>(&result_msg).is_err());
     }
 
@@ -589,7 +589,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         assert!(serde_json::from_slice::<YankSuccess>(&result_msg).is_ok());
     }
 
@@ -610,7 +610,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         assert!(serde_json::from_slice::<ApiError>(&result_msg).is_ok());
     }
 
@@ -647,7 +647,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         assert!(serde_json::from_slice::<YankSuccess>(&result_msg).is_ok());
     }
 
@@ -668,7 +668,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         assert!(serde_json::from_slice::<ApiError>(&result_msg).is_ok());
     }
 
@@ -695,7 +695,7 @@ mod reg_api_tests {
 
         // Get the empty success results message.
         let response_status = r.status();
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let success: PubDataSuccess =
             serde_json::from_slice(&result_msg).expect("Cannot deserialize success message");
 
@@ -750,7 +750,7 @@ mod reg_api_tests {
             .unwrap();
         let response_status = r.status();
 
-        let msg = to_bytes(r.into_body()).await;
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
         let error: ApiError =
             serde_json::from_slice(&msg).expect("Cannot deserialize error message");
 
@@ -853,19 +853,5 @@ mod reg_api_tests {
                 db,
                 ..appstate::test_state().await
             })
-    }
-
-    // Shouldn't axum provide something like this?
-    async fn to_bytes(body: Body) -> Vec<u8> {
-        body.into_data_stream()
-            .map(Result::ok)
-            .flat_map(|mut x| {
-                futures::stream::poll_fn(move |_cx| match x.take() {
-                    Some(ref bytes) => std::task::Poll::Ready(Some(bytes.to_vec())),
-                    None => std::task::Poll::Ready(None),
-                })
-            })
-            .concat()
-            .await
     }
 }
