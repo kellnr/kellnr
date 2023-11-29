@@ -418,10 +418,6 @@ mod auth_middleware_tests {
     use std::sync::Arc;
     use tower::ServiceExt;
 
-    async fn handler_return_200() -> StatusCode {
-        StatusCode::OK
-    }
-
     async fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
         let state = AppStateData {
@@ -437,12 +433,12 @@ mod auth_middleware_tests {
             ..appstate::test_state().await
         };
         Router::new()
-            .route("/guarded", get(handler_return_200))
+            .route("/guarded", get(StatusCode::OK))
             .route_layer(from_fn_with_state(
                 state.clone(),
                 session_auth_when_required,
             ))
-            .route("/not_guarded", get(handler_return_200))
+            .route("/not_guarded", get(StatusCode::OK))
             .with_state(state)
     }
 
@@ -455,7 +451,7 @@ mod auth_middleware_tests {
             ..appstate::test_state().await
         };
         Router::new()
-            .route("/guarded", get(handler_return_200))
+            .route("/guarded", get(StatusCode::OK))
             .route_layer(from_fn_with_state(
                 state.clone(),
                 session_auth_when_required,
