@@ -969,7 +969,7 @@ mod tests {
         };
 
         let test_crates = std::iter::repeat_with(|| test_crate_overview.clone())
-            .take(25)
+            .take(24)
             .collect::<Vec<_>>();
 
         let tc = test_crates.clone();
