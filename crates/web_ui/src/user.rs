@@ -178,7 +178,7 @@ pub async fn logout(
         None => return Ok(jar), // Already logged out as no cookie can be found
     };
 
-    jar = jar.remove(Cookie::build(COOKIE_SESSION_ID));
+    jar = jar.remove(COOKIE_SESSION_ID);
     jar = jar.remove(Cookie::build((COOKIE_SESSION_USER, "")).path("/"));
 
     state.db.delete_session_token(&session_id).await?;
