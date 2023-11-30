@@ -33,8 +33,6 @@ cache_size = 1000
 max_crate_size = 10
 # Enable required authentication for crate pulls.
 # If set to "false", anyone can download crates from Kellnr. Upload always requires authentication.
-# This feature is currently a nightly only feature in cargo and might break in the future,
-# as the RFC is not fully done yet.
 auth_required = false
 
 [docs]

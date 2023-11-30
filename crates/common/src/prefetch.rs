@@ -1,5 +1,5 @@
 use axum::{
-    body::Full,
+    body::Body,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -19,7 +19,7 @@ impl IntoResponse for Prefetch {
             .header("ETag", self.etag)
             .header("Last-Modified", self.last_modified)
             .status(StatusCode::OK)
-            .body(Full::from(self.data))
+            .body(Body::from(self.data))
             .unwrap()
             .into_response()
     }

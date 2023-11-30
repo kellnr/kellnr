@@ -10,7 +10,7 @@ mod test_helper {
 
     pub(crate) const TEST_KEY: &[u8] = &[1; 64];
 
-    // there has to be a better way to set cookies, i really don't like improrting cookie crate just to do this
+    // there has to be a better way to set cookies, i really don't like importing cookie crate just to do this
     pub(crate) fn encode_cookies<
         const N: usize,
         K: Into<Cow<'static, str>>,

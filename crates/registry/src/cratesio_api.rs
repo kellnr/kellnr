@@ -118,6 +118,7 @@ mod tests {
     use axum::routing::get;
     use axum::Router;
     use common::util::generate_rand_string;
+    use http_body_util::BodyExt;
     use settings::Settings;
     use std::path;
     use std::path::PathBuf;
@@ -212,7 +213,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(r.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let body = r.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(12778, body.len());
     }
 

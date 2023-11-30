@@ -1,8 +1,8 @@
 use crate::token::Token;
 use appstate::AppStateData;
-use axum::extract::{FromRequestParts, State};
+use axum::extract::{FromRequestParts, Request, State};
 use axum::http::request::Parts;
-use axum::http::{Request, StatusCode};
+use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 use tracing::warn;
@@ -33,10 +33,10 @@ impl FromRequestParts<AppStateData> for AuthReqToken {
 
 /// Middleware that checks if a cargo token is provided, when settings.registry.auth_required is true.<br>
 /// If the user is not logged in, a 401 is returned.
-pub async fn cargo_auth_when_required<B>(
+pub async fn cargo_auth_when_required(
     State(state): State<appstate::AppStateData>,
-    request: Request<B>,
-    next: Next<B>,
+    request: Request,
+    next: Next,
 ) -> Result<Response, StatusCode> {
     if !state.settings.registry.auth_required {
         // If auth_required is not true, pass through.
@@ -193,19 +193,16 @@ mod test {
 mod auth_middleware_tests {
     use super::*;
     use appstate::AppStateData;
+    use axum::body::Body;
     use axum::middleware::from_fn_with_state;
     use axum::{routing::get, Router};
     use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
-    use hyper::{header, Body, Request, StatusCode};
+    use hyper::{header, Request};
     use mockall::predicate::*;
     use settings::Settings;
     use std::sync::Arc;
     use tower::ServiceExt;
-
-    async fn handler_return_200() -> StatusCode {
-        StatusCode::OK
-    }
 
     async fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
@@ -220,10 +217,11 @@ mod auth_middleware_tests {
             }),
             ..appstate::test_state().await
         };
+
         Router::new()
-            .route("/guarded", get(handler_return_200))
+            .route("/guarded", get(StatusCode::OK))
             .route_layer(from_fn_with_state(state.clone(), cargo_auth_when_required))
-            .route("/not_guarded", get(handler_return_200))
+            .route("/not_guarded", get(StatusCode::OK))
             .with_state(state)
     }
 
@@ -235,7 +233,7 @@ mod auth_middleware_tests {
             ..appstate::test_state().await
         };
         Router::new()
-            .route("/guarded", get(handler_return_200))
+            .route("/guarded", get(StatusCode::OK))
             .route_layer(from_fn_with_state(state.clone(), cargo_auth_when_required))
             .with_state(state)
     }

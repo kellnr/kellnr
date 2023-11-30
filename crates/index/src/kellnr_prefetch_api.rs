@@ -57,11 +57,16 @@ mod tests {
     use super::*;
     use crate::config_json::ConfigJson;
     use appstate::AppStateData;
-    use axum::{body::Body, http::Request, routing::get, Router};
+    use axum::{
+        body::Body,
+        http::{header, Request},
+        routing::get,
+        Router,
+    };
     use db::error::DbError;
     use db::mock::MockDb;
+    use http_body_util::BodyExt;
     use mockall::predicate::*;
-    use reqwest::header;
     use settings::{Protocol, Settings};
     use tower::ServiceExt;
 
@@ -77,7 +82,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result_msg = hyper::body::to_bytes(r.into_body()).await.unwrap();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
 
         assert_eq!(
@@ -107,7 +112,7 @@ mod tests {
         assert_eq!("date", r.headers().get(header::LAST_MODIFIED).unwrap());
         assert_eq!(
             vec![0x1, 0x2, 0x3],
-            hyper::body::to_bytes(r.into_body()).await.unwrap()
+            r.into_body().collect().await.unwrap().to_bytes()
         );
     }
 
