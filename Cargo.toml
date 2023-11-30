@@ -83,3 +83,16 @@ http-body-util = "0.1.0"
 [profile.release]
 lto = "thin"
 strip = true
+
+# Profile for the CI build in "release"
+# to build as fast as possible
+[profile.ci-release]
+inherits = "release"
+incremental = false
+
+# Profile for the CI build in "debug"
+# to build as fast as possible
+[profile.ci-dev]
+inherits = "dev"
+incremental = false
+lto = "off"

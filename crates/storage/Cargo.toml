@@ -19,7 +19,6 @@ sha2.workspace = true
 tracing.workspace = true
 hex.workspace = true
 moka.workspace = true
-rm_rf.workspace = true
 axum.workspace = true
 
 [dev-dependencies]

@@ -17,7 +17,6 @@ appstate.workspace = true
 rand.workspace = true
 serde.workspace = true
 axum.workspace = true
-axum-extra.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
