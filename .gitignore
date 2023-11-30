@@ -34,3 +34,6 @@ nohup.out
 ui.rs-e
 kellnr-dev.yaml-e
 .DS_Store
+
+Cargo.lock
+package-lock.json

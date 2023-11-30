@@ -22,6 +22,5 @@ serde.workspace = true
 serde_json.workspace = true
 sea-orm.workspace = true
 sea-query.workspace = true
-sea-query-derive.workspace = true
 sha2.workspace = true
 hex.workspace = true
