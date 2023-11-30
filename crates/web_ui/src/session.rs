@@ -1,10 +1,6 @@
 use crate::error::RouteError;
+use axum::{extract::Request, http::request::Parts, middleware::Next, response::Response};
 use axum::{extract::State, RequestPartsExt};
-use axum::{
-    http::request::{Parts, Request},
-    middleware::Next,
-    response::Response,
-};
 use axum_extra::extract::PrivateCookieJar;
 use settings::constants;
 
@@ -97,11 +93,11 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
 
 /// Middleware that checks if a user is logged in, when settings.registry.auth_required is true.<br>
 /// If the user is not logged in, a 401 is returned.
-pub async fn session_auth_when_required<B>(
+pub async fn session_auth_when_required(
     State(state): State<appstate::AppStateData>,
     jar: PrivateCookieJar,
-    request: Request<B>,
-    next: Next<B>,
+    request: Request,
+    next: Next,
 ) -> Result<Response, RouteError> {
     if !state.settings.registry.auth_required {
         // If auth_required is not true, pass through.
@@ -125,11 +121,11 @@ mod session_tests {
     use super::*;
     use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
-    use axum::{routing::get, Router};
+    use axum::{body::Body, routing::get, Router};
     use axum_extra::extract::cookie::Key;
     use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
-    use hyper::{header, Body, Request, StatusCode};
+    use hyper::{header, Request, StatusCode};
     use mockall::predicate::*;
     use settings::Settings;
     use std::{result, sync::Arc};
@@ -412,19 +408,15 @@ mod auth_middleware_tests {
     use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
     use axum::middleware::from_fn_with_state;
-    use axum::{routing::get, Router};
+    use axum::{body::Body, routing::get, Router};
     use axum_extra::extract::cookie::Key;
     use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
-    use hyper::{header, Body, Request, StatusCode};
+    use hyper::{header, Request, StatusCode};
     use mockall::predicate::*;
     use settings::Settings;
     use std::sync::Arc;
     use tower::ServiceExt;
-
-    async fn handler_return_200() -> StatusCode {
-        StatusCode::OK
-    }
 
     async fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
@@ -441,12 +433,12 @@ mod auth_middleware_tests {
             ..appstate::test_state().await
         };
         Router::new()
-            .route("/guarded", get(handler_return_200))
+            .route("/guarded", get(StatusCode::OK))
             .route_layer(from_fn_with_state(
                 state.clone(),
                 session_auth_when_required,
             ))
-            .route("/not_guarded", get(handler_return_200))
+            .route("/not_guarded", get(StatusCode::OK))
             .with_state(state)
     }
 
@@ -459,7 +451,7 @@ mod auth_middleware_tests {
             ..appstate::test_state().await
         };
         Router::new()
-            .route("/guarded", get(handler_return_200))
+            .route("/guarded", get(StatusCode::OK))
             .route_layer(from_fn_with_state(
                 state.clone(),
                 session_auth_when_required,

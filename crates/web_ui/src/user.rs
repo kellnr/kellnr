@@ -43,7 +43,10 @@ pub async fn list_tokens(
     Ok(Json(db.get_auth_tokens(user.name()).await?))
 }
 
-pub async fn list_users(user: MaybeUser, State(db): DbState) -> Result<Json<Vec<User>>, RouteError> {
+pub async fn list_users(
+    user: MaybeUser,
+    State(db): DbState,
+) -> Result<Json<Vec<User>>, RouteError> {
     user.assert_admin()?;
 
     Ok(Json(db.get_users().await?))
@@ -126,13 +129,12 @@ pub async fn login(
         .await?;
 
     let jar = cookies.add(
-        Cookie::build(COOKIE_SESSION_ID, session_token)
+        Cookie::build((COOKIE_SESSION_ID, session_token))
             .max_age(time::Duration::seconds(
                 state.settings.registry.session_age_seconds as i64,
             ))
             .same_site(axum_extra::extract::cookie::SameSite::Strict)
-            .path("/")
-            .finish(),
+            .path("/"),
     );
 
     Ok((
@@ -162,8 +164,9 @@ pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
             user: "".to_owned(),
             is_admin: false,
             is_logged_in: false,
-        }
-    }.into()
+        },
+    }
+    .into()
 }
 
 pub async fn logout(
@@ -175,8 +178,8 @@ pub async fn logout(
         None => return Ok(jar), // Already logged out as no cookie can be found
     };
 
-    jar = jar.remove(Cookie::named(COOKIE_SESSION_ID));
-    jar = jar.remove(Cookie::build(COOKIE_SESSION_USER, "").path("/").finish());
+    jar = jar.remove(COOKIE_SESSION_ID);
+    jar = jar.remove(Cookie::build((COOKIE_SESSION_USER, "")).path("/"));
 
     state.db.delete_session_token(&session_id).await?;
     Ok(jar)

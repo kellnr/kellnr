@@ -27,6 +27,7 @@ moka.workspace = true
 tracing.workspace = true
 axum.workspace = true
 hyper.workspace = true
+http-body-util.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
