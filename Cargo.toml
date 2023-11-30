@@ -34,7 +34,7 @@ storage = { path = "./crates/storage" }
 
 # External dependencies from crates.io
 anyhow = "1.0.75"
-jsonwebtoken = "8.3.0"
+jsonwebtoken = "9.1.0"
 reqwest = {version = "0.11.22", features = ["json", "blocking"]}
 serde = {version = "1.0.193", features = ["derive"]}
 sysinfo = "0.29.11"
@@ -46,20 +46,20 @@ rand = "0.8.5"
 chrono = "0.4.31"
 hex = "0.4.3"
 sha2 = "0.10.8"
-sea-orm = { version = "0.11.3", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] } # Must not upgrade sea-orm to 0.12.3 as that breaks migrations for sqlite
+sea-orm = { version = "0.12.7", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] } # Must not upgrade sea-orm to 0.12.3 as that breaks migrations for sqlite
 thiserror = "1.0.50"
-sea-query = "0.28.5"
-sea-query-derive = "0.3.0"
-sea-orm-migration = { version = "0.11.3", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
+sea-query = "0.30.3"
+sea-query-derive = "0.4.1"
+sea-orm-migration = { version = "0.12.6", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
 rm_rf = "0.6.2"
-testcontainers = "0.14.0"
+testcontainers = "0.15.0"
 quote = "1.0.33"
 syn = {version = "2.0.39", features = ["full"]}
 trybuild = {version = "1.0.85", features = ["diff"]}
 zip = "0.6.6"
 flate2 = "1.0.28"
 tar = "0.4.40"
-cargo = "0.71.0" # Must not be upgrade to 0.73.1 as that breaks compilation on MacOS Sonoma due to a bug in libcurl. See: https://github.com/rust-lang/cargo/issues/12670
+cargo = "0.75.1"
 fs_extra = "1.3.0"
 wax = "0.6.0"
 proc-macro2 = "1.0.70"
@@ -76,7 +76,7 @@ tokio = { version = "1.32.0", features = ["macros"] }
 tower = { version = "0.4.13", features = ["util"] }
 hyper = "1.0.1"
 tower-http = { version = "0.5.0", features = ["fs", "trace"] }
-cookie = { version = "0.17.0", features = ["private", "percent-encode"] }
+cookie = { version = "0.18.0", features = ["private", "percent-encode"] }
 futures = "0.3.29"
 http-body-util = "0.1.0"
 
