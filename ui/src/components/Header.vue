@@ -9,7 +9,7 @@
 
       <div class="k-header-links">
         <div class="k-header-element k-mlr">
-          <router-link class="k-header-element-link" to="/">
+          <router-link class="k-header-element-link" to="/crates">
             <div class="k-header-element-icon"><i class="fas fa-magnifying-glass"></i></div>
             <div class="k-header-element-text">Search</div>
           </router-link>
