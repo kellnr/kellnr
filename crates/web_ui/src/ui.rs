@@ -199,21 +199,30 @@ pub async fn delete(
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Statistic {
-    unique_crates: u32,
-    crate_versions: u32,
-    downloads: i64,
-    top1: (String, u32),
-    top2: (String, u32),
-    top3: (String, u32),
+    pub num_crates: u32,
+    pub num_crate_versions: u32,
+    pub num_crate_downloads: u64,
+    pub num_proxy_crates: u32,
+    pub num_proxy_crate_versions: u32,
+    pub num_proxy_crate_downloads: u64,
+    pub top_crates: TopCrates,
+    pub last_updated_crate: (String, Version),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub struct TopCrates {
+    pub first: (String, u64),
+    pub second: (String, u64),
+    pub third: (String, u64),
 }
 
 pub async fn statistic(State(db): DbState) -> Json<Statistic> {
-    let unique_crates = db.get_total_unique_crates().await.unwrap_or_default();
-    let crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
-    let downloads = db.get_total_downloads().await.unwrap_or_default();
+    let num_crates = db.get_total_unique_crates().await.unwrap_or_default();
+    let num_crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
+    let num_crate_downloads = db.get_total_downloads().await.unwrap_or_default();
     let tops = db.get_top_crates_downloads(3).await.unwrap_or_default();
 
-    fn extract(tops: &[(String, u32)], i: usize) -> (String, u32) {
+    fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
         if tops.len() > i {
             tops[i].clone()
         } else {
@@ -222,13 +231,19 @@ pub async fn statistic(State(db): DbState) -> Json<Statistic> {
     }
 
     Json(Statistic {
-        unique_crates,
-        crate_versions,
-        downloads,
-        top1: extract(&tops, 0),
-        top2: extract(&tops, 1),
-        top3: extract(&tops, 2),
-    })
+            num_crates,
+            num_crate_versions,
+            num_crate_downloads,
+            num_proxy_crates: 1,
+            num_proxy_crate_versions: 2,
+            num_proxy_crate_downloads: 3,
+            top_crates: TopCrates {
+                first: extract(&tops, 0),
+                second: extract(&tops, 1),
+                third: extract(&tops, 2),
+            },
+        last_updated_crate: (String::from("todo"), Version::try_from("1.0.0").unwrap()),
+        })
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

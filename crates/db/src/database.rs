@@ -958,7 +958,7 @@ impl DbProvider for Database {
         Ok(result as u32)
     }
 
-    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u32)>> {
+    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>> {
         let stmt = Query::select()
             .columns(vec![CrateIden::OriginalName, CrateIden::TotalDownloads])
             .from(CrateIden::Table)
@@ -979,7 +979,7 @@ impl DbProvider for Database {
 
         Ok(result
             .iter()
-            .map(|x| (x.original_name.clone(), x.total_downloads as u32))
+            .map(|x| (x.original_name.clone(), x.total_downloads as u64))
             .collect())
     }
 
@@ -1091,7 +1091,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn get_total_downloads(&self) -> DbResult<i64> {
+    async fn get_total_downloads(&self) -> DbResult<u64> {
         #[derive(FromQueryResult)]
         struct Model {
             total_downloads: i64,
@@ -1104,7 +1104,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(total_downloads.iter().map(|m| m.total_downloads).sum())
+        Ok(total_downloads.iter().map(|m| m.total_downloads as u64).sum())
     }
 
     async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>> {

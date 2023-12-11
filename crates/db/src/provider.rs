@@ -52,7 +52,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_users(&self) -> DbResult<Vec<User>>;
     async fn get_total_unique_crates(&self) -> DbResult<u32>;
     async fn get_total_crate_versions(&self) -> DbResult<u32>;
-    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u32)>>;
+    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>>;
     async fn get_crate_summaries(&self) -> DbResult<Vec<CrateSummary>>;
     async fn add_doc_queue(
         &self,
@@ -63,7 +63,7 @@ pub trait DbProvider: Send + Sync {
     async fn delete_doc_queue(&self, id: i64) -> DbResult<()>;
     async fn get_doc_queue(&self) -> DbResult<Vec<DocQueueEntry>>;
     async fn delete_crate(&self, krate: &NormalizedName, version: &Version) -> DbResult<()>;
-    async fn get_total_downloads(&self) -> DbResult<i64>;
+    async fn get_total_downloads(&self) -> DbResult<u64>;
     async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>>;
     async fn update_last_updated(&self, id: i64, last_updated: &DateTime<Utc>) -> DbResult<()>;
     async fn search_in_crate_name(&self, contains: &str) -> DbResult<Vec<CrateOverview>>;
@@ -223,7 +223,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_top_crates_downloads(&self, _top: u32) -> DbResult<Vec<(String, u32)>> {
+            async fn get_top_crates_downloads(&self, _top: u32) -> DbResult<Vec<(String, u64)>> {
                 unimplemented!()
             }
 
@@ -247,7 +247,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_total_downloads(&self) -> DbResult<i64>{
+            async fn get_total_downloads(&self) -> DbResult<u64>{
                 unimplemented!()
             }
 
