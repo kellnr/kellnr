@@ -554,6 +554,19 @@ impl Database {
 
 #[async_trait]
 impl DbProvider for Database {
+
+    async fn get_total_unique_cached_crates(&self) -> DbResult<u64> {
+        todo!()
+    }
+
+    async fn get_total_cached_crate_versions(&self) -> DbResult<u64> {
+        todo!()
+    }
+
+    async fn get_total_cached_downloads(&self) -> DbResult<u64> {
+        todo!()
+    }
+
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User> {
         let user = self.get_user(name).await?;
 
@@ -958,6 +971,22 @@ impl DbProvider for Database {
         Ok(result as u32)
     }
 
+    async fn get_total_downloads(&self) -> DbResult<u64> {
+        #[derive(FromQueryResult)]
+        struct Model {
+            total_downloads: i64,
+        }
+
+        let total_downloads = krate::Entity::find()
+            .select_only()
+            .column(krate::Column::TotalDownloads)
+            .into_model::<Model>()
+            .all(&self.db_con)
+            .await?;
+
+        Ok(total_downloads.iter().map(|m| m.total_downloads as u64).sum())
+    }
+
     async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>> {
         let stmt = Query::select()
             .columns(vec![CrateIden::OriginalName, CrateIden::TotalDownloads])
@@ -1089,22 +1118,6 @@ impl DbProvider for Database {
         }
 
         Ok(())
-    }
-
-    async fn get_total_downloads(&self) -> DbResult<u64> {
-        #[derive(FromQueryResult)]
-        struct Model {
-            total_downloads: i64,
-        }
-
-        let total_downloads = krate::Entity::find()
-            .select_only()
-            .column(krate::Column::TotalDownloads)
-            .into_model::<Model>()
-            .all(&self.db_con)
-            .await?;
-
-        Ok(total_downloads.iter().map(|m| m.total_downloads as u64).sum())
     }
 
     async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>> {
@@ -1402,29 +1415,6 @@ impl DbProvider for Database {
         Ok(crate_id)
     }
 
-    async fn add_crate_metadata(
-        &self,
-        pub_metadata: &PublishMetadata,
-        created: &str,
-        crate_id: i64,
-    ) -> DbResult<()> {
-        let cm = crate_meta::ActiveModel {
-            id: Default::default(),
-            version: Set(pub_metadata.vers.to_string()),
-            created: Set(created.to_string()),
-            downloads: Set(0),
-            crate_fk: Set(crate_id),
-            readme: Set(pub_metadata.readme.clone()),
-            license: Set(pub_metadata.license.clone()),
-            license_file: Set(pub_metadata.license_file.clone()),
-            documentation: Set(pub_metadata.documentation.clone()),
-        };
-
-        cm.insert(&self.db_con).await?;
-
-        Ok(())
-    }
-
     async fn update_docs_link(
         &self,
         crate_name: &NormalizedName,
@@ -1445,6 +1435,29 @@ impl DbProvider for Database {
         let mut cm: crate_meta::ActiveModel = cm.into();
         cm.documentation = Set(Some(docs_link.to_string()));
         cm.update(&self.db_con).await?;
+        Ok(())
+    }
+
+    async fn add_crate_metadata(
+        &self,
+        pub_metadata: &PublishMetadata,
+        created: &str,
+        crate_id: i64,
+    ) -> DbResult<()> {
+        let cm = crate_meta::ActiveModel {
+            id: Default::default(),
+            version: Set(pub_metadata.vers.to_string()),
+            created: Set(created.to_string()),
+            downloads: Set(0),
+            crate_fk: Set(crate_id),
+            readme: Set(pub_metadata.readme.clone()),
+            license: Set(pub_metadata.license.clone()),
+            license_file: Set(pub_metadata.license_file.clone()),
+            documentation: Set(pub_metadata.documentation.clone()),
+        };
+
+        cm.insert(&self.db_con).await?;
+
         Ok(())
     }
 
@@ -1542,6 +1555,7 @@ impl DbProvider for Database {
                     description: Set(description),
                     e_tag: Set(etag.to_string()),
                     last_modified: Set(last_modified.to_string()),
+                    total_downloads: Set(0),
                 };
                 krate.insert(&self.db_con).await?
             }
