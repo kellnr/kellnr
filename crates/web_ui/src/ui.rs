@@ -747,6 +747,18 @@ mod tests {
             .expect_get_top_crates_downloads()
             .with(eq(3))
             .returning(move |_| Err(DbError::FailedToCountTotalDownloads));
+        mock_db
+            .expect_get_last_updated_crate()
+            .returning(move || Ok(None));
+        mock_db
+            .expect_get_total_unique_cached_crates()
+            .returning(move || Err(DbError::FailedToCountCrates));
+        mock_db
+            .expect_get_total_cached_crate_versions()
+            .returning(move || Err(DbError::FailedToCountCrateVersions));
+        mock_db
+            .expect_get_total_cached_downloads()
+            .returning(move || Err(DbError::FailedToCountTotalDownloads));
 
         let settings = test_settings();
         let r = app(
