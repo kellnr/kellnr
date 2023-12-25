@@ -14,6 +14,7 @@ resolver = "2"
 authors = ["kellnr.io"]
 edition = "2021"
 version = "0.1.0"
+license-file = "LICENSE"
 
 [workspace.dependencies]
 # Internal dependencies from Kellnr
