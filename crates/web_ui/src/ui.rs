@@ -825,7 +825,7 @@ mod tests {
             .returning(move || Ok(999999));
         mock_db
             .expect_get_last_updated_crate()
-            .returning(move || Ok(Some((OriginalName::unchecked("foobar".to_string()), Version::try_from("1.0.0").unwrap()))));
+            .returning(move || Ok(Some((OriginalName::from_unchecked_str("foobar".to_string()), Version::try_from("1.0.0").unwrap()))));
 
         let settings = test_settings();
         let r = app(
@@ -853,7 +853,7 @@ mod tests {
                 second: (String::from("top2"), 500),
                 third: (String::from("top3"), 100),
             },
-            last_updated_crate: Some((OriginalName::unchecked("foobar".to_string()), Version::try_from("1.0.0").unwrap()))
+            last_updated_crate: Some((OriginalName::from_unchecked_str("foobar".to_string()), Version::try_from("1.0.0").unwrap()))
         };
         assert_eq!(expect, result_stat);
     }

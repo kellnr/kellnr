@@ -9,7 +9,7 @@ use common::crate_overview::CrateOverview;
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
 use common::index_metadata::{IndexDep, IndexMetadata};
 use common::normalized_name::NormalizedName;
-use common::original_name::OriginalName;
+use common::original_name::{OriginalName, self};
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
@@ -177,6 +177,13 @@ impl Database {
             o.insert(&self.db_con).await?;
         }
         Ok(())
+    }
+
+    pub async fn test_add_cached_crate(&self,
+    name: &str,
+    version: &str) {
+        todo!()
+        // self.add_cratesio_prefetch_data(crate_name, etag, last_modified, description, indices)
     }
 
     pub async fn test_add_crate(
@@ -644,7 +651,20 @@ impl DbProvider for Database {
     }
 
     async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>> {
-        todo!()
+        let krate = krate::Entity::find()
+            .order_by_desc(krate::Column::LastUpdated)
+            .one(&self.db_con)
+            .await?;
+
+        if let Some(krate) = krate {
+            // SAFETY: Unchecked is ok, as only valid crate names are inserted into the database
+            let name = OriginalName::from_unchecked_str(krate.original_name);
+            // SAFETY: Unchecked is ok, as only valid versions are inserted into the database
+            let version = Version::from_unchecked_str(&krate.max_version);
+            Ok(Some((name, version)))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn validate_session(&self, session_token: &str) -> DbResult<(String, bool)> {
@@ -1596,8 +1616,6 @@ impl DbProvider for Database {
             }
         };
 
-        // i love you
-
         let current_indices = cratesio_index::Entity::find()
             .filter(cratesio_index::Column::CratesIoFk.eq(krate.id))
             .all(&self.db_con)
@@ -1641,6 +1659,16 @@ impl DbProvider for Database {
                 };
 
                 new_index.insert(&self.db_con).await?;
+
+                // Add the meta data for the crate version.
+                let meta = cratesio_meta::ActiveModel {
+                    id: Default::default(),
+                    version: Set(index.vers.clone()),
+                    downloads: Set(0),
+                    crates_io_fk: Set(krate.id),
+                };
+
+                meta.insert(&self.db_con).await?;
             }
         }
 
@@ -1657,7 +1685,7 @@ impl DbProvider for Database {
             .into_iter()
             .map(|krate| {
                 CratesioPrefetchMsg::Update(UpdateData {
-                    name: OriginalName::unchecked(krate.original_name),
+                    name: OriginalName::from_unchecked_str(krate.original_name),
                     etag: Some(krate.e_tag),
                     last_modified: Some(krate.last_modified),
                 })

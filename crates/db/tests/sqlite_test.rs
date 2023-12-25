@@ -2260,7 +2260,7 @@ async fn is_cratesio_cache_up_to_date_up_to_date() {
     test_db
         .db
         .add_cratesio_prefetch_data(
-            &OriginalName::unchecked("crate".to_string()),
+            &OriginalName::from_unchecked_str("crate".to_string()),
             "etag",
             "last_modified",
             None,
@@ -2299,7 +2299,7 @@ async fn is_cratesio_cache_up_to_date_needs_update() {
     test_db
         .db
         .add_cratesio_prefetch_data(
-            &OriginalName::unchecked("crate".to_string()),
+            &OriginalName::from_unchecked_str("crate".to_string()),
             "etag",
             "last_modified",
             None,
@@ -2334,7 +2334,7 @@ async fn is_cratesio_cache_up_to_date_needs_update() {
     test_db
         .db
         .add_cratesio_prefetch_data(
-            &OriginalName::unchecked("crate".to_string()),
+            &OriginalName::from_unchecked_str("crate".to_string()),
             "etag2",
             "last_modified2",
             None,
@@ -2460,4 +2460,10 @@ async fn un_yank_crate() {
             .unwrap()
             .yanked
     );
+}
+
+#[tokio::test]
+async fn test_get_last_updated_crate() {
+    let test_db = TestDB::new().await;
+    
 }

@@ -14,7 +14,7 @@ impl From<entity::doc_queue::Model> for DocQueueEntry {
     fn from(dqm: entity::doc_queue::Model) -> Self {
         Self {
             id: dqm.id,
-            krate: OriginalName::unchecked(dqm.krate).to_normalized(),
+            krate: OriginalName::from_unchecked_str(dqm.krate).to_normalized(),
             version: dqm.version,
             path: PathBuf::from(dqm.path),
         }

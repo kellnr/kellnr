@@ -2202,7 +2202,7 @@ async fn is_cratesio_cache_up_to_date_not_found() {
 async fn is_cratesio_cache_up_to_date_up_to_date() {
     test_db
         .add_cratesio_prefetch_data(
-            &OriginalName::unchecked("crate".to_string()),
+            &OriginalName::from_unchecked_str("crate".to_string()),
             "etag",
             "last_modified",
             None,
@@ -2239,7 +2239,7 @@ async fn is_cratesio_cache_up_to_date_needs_update() {
     }];
     test_db
         .add_cratesio_prefetch_data(
-            &OriginalName::unchecked("crate".to_string()),
+            &OriginalName::from_unchecked_str("crate".to_string()),
             "etag",
             "last_modified",
             None,
@@ -2273,7 +2273,7 @@ async fn is_cratesio_cache_up_to_date_needs_update() {
     ];
     test_db
         .add_cratesio_prefetch_data(
-            &OriginalName::unchecked("crate".to_string()),
+            &OriginalName::from_unchecked_str("crate".to_string()),
             "etag2",
             "last_modified2",
             None,
