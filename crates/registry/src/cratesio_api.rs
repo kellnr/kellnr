@@ -125,6 +125,7 @@ mod tests {
     use axum::routing::get;
     use axum::Router;
     use common::util::generate_rand_string;
+    use db::mock::MockDb;
     use http_body_util::BodyExt;
     use settings::Settings;
     use std::path;
@@ -262,9 +263,14 @@ mod tests {
 
     async fn app(settings: Settings) -> Router {
         let cs = CratesIoCrateStorage::new(&settings).await.unwrap();
+        let mut db = MockDb::new();
+        db.expect_increase_cached_download_counter()
+            .returning(|_, _| Ok(()));
+
         let state = AppStateData {
             settings: settings.into(),
             cratesio_storage: cs.into(),
+            db: std::sync::Arc::<MockDb>::new(db),
             ..appstate::test_state().await
         };
 
