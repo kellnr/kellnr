@@ -16,7 +16,7 @@ use common::version::Version;
 use entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, cratesio_crate, cratesio_index,
-    doc_queue, krate, owner, prelude::*, session, user,
+    doc_queue, krate, owner, prelude::*, session, user, cratesio_meta,
 };
 use hex::ToHex;
 use migration::iden::{AuthTokenIden, CrateIden, CrateMetaIden};
@@ -610,6 +610,41 @@ impl DbProvider for Database {
             .await?;
 
         Ok(())
+    }
+
+    async fn increase_cached_download_counter(&self, crate_name: &NormalizedName, crate_version: &Version) -> DbResult<()> {
+        let krate: cratesio_crate::Model = cratesio_crate::Entity::find()
+            .filter(cratesio_crate::Column::Name.eq(crate_name.to_string()))
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+        let crate_id = krate.id;
+        let crate_total_downloads = krate.total_downloads;
+
+        // Update the total downloads for the whole crate (all versions)
+        let mut k: cratesio_crate::ActiveModel = krate.into();
+        k.total_downloads = Set(crate_total_downloads + 1);
+        k.update(&self.db_con).await?;
+
+        // Update the downloads for the specific version
+        cratesio_meta::Entity::update_many()
+            .col_expr(
+                cratesio_meta::Column::Downloads,
+                Expr::col(cratesio_meta::Column::Downloads).add(1),
+            )
+            .filter(
+                Cond::all()
+                    .add(cratesio_meta::Column::Version.eq(crate_version.to_string()))
+                    .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
+            )
+            .exec(&self.db_con)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>> {
+        todo!()
     }
 
     async fn validate_session(&self, session_token: &str) -> DbResult<(String, bool)> {

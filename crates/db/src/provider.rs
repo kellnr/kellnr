@@ -23,8 +23,14 @@ pub enum PrefetchState {
 
 #[async_trait]
 pub trait DbProvider: Send + Sync {
+    async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>>; 
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User>;
     async fn increase_download_counter(
+        &self,
+        crate_name: &NormalizedName,
+        crate_version: &Version,
+    ) -> DbResult<()>;
+    async fn increase_cached_download_counter(
         &self,
         crate_name: &NormalizedName,
         crate_version: &Version,
@@ -122,11 +128,24 @@ pub mod mock {
 
         #[async_trait]
         impl DbProvider for Db {
+
+            async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>> {
+                unimplemented!()
+            }
+
             async fn authenticate_user(&self, _name: &str, _pwd: &str) -> DbResult<User> {
                 unimplemented!()
             }
 
             async fn increase_download_counter(
+                &self,
+                _crate_name: &NormalizedName,
+                _crate_version: &Version,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+            
+            async fn increase_cached_download_counter(
                 &self,
                 _crate_name: &NormalizedName,
                 _crate_version: &Version,
