@@ -6,13 +6,13 @@ import UserSettings from "../views/UserSettings.vue";
 import PublishDocs from "../views/PublishDocs.vue";
 import Crate from "../views/Crate.vue";
 import DocQueue from "../views/DocQueue.vue";
-import Statistics from "../views/Statistics.vue";
+import Landing from "../views/Landing.vue";
 
 const routes = [
   {
     path: '/',
-    name: 'Statistics',
-    component: Statistics
+    name: 'Landing',
+    component: Landing
   },
   {
     path: '/crates',
