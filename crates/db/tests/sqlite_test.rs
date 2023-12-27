@@ -2514,3 +2514,93 @@ async fn test_get_last_updated_crate_empty() {
 
     assert_eq!(None, last_updated);
 }
+
+#[tokio::test]
+async fn test_get_total_unique_cached_crates_works() {
+    let test_db = TestDB::new().await;
+
+    test_db.db.test_add_cached_crate(
+        "my_crate",
+        "1.0.0"
+    )
+    .await
+    .unwrap();
+
+    test_db.db.test_add_cached_crate(
+        "my_crate",
+        "2.0.0"
+    )
+    .await
+    .unwrap();
+
+    test_db.db.test_add_cached_crate(
+        "my_crate2",
+        "1.0.0",
+    ).await.unwrap();
+    
+
+    let unique_cached_crates = test_db.db.get_total_unique_cached_crates().await.unwrap();
+
+    assert_eq!(2, unique_cached_crates);
+}
+
+#[tokio::test]
+async fn test_get_total_cached_crate_versions_works() {
+    let test_db = TestDB::new().await;
+
+    test_db.db.test_add_cached_crate(
+        "my_crate",
+        "1.0.0"
+    )
+    .await
+    .unwrap();
+
+    test_db.db.test_add_cached_crate(
+        "my_crate",
+        "2.0.0"
+    )
+    .await
+    .unwrap();
+
+    test_db.db.test_add_cached_crate(
+        "my_crate2",
+        "1.0.0",
+    ).await.unwrap();
+    
+
+    let unique_cached_versions = test_db.db.get_total_cached_crate_versions().await.unwrap();
+
+    assert_eq!(3, unique_cached_versions);
+}
+
+#[tokio::test]
+async fn test_get_total_cached_downloads_works() {
+    let test_db = TestDB::new().await;
+
+    test_db.db.test_add_cached_crate_with_downloads(
+        "my_crate",
+        "1.0.0",
+        10
+    )
+    .await
+    .unwrap();
+
+    test_db.db.test_add_cached_crate_with_downloads(
+        "my_crate",
+        "2.0.0",
+        20
+    )
+    .await
+    .unwrap();
+
+    test_db.db.test_add_cached_crate_with_downloads(
+        "my_crate2",
+        "1.0.0",
+        30,
+    ).await.unwrap();
+    
+
+    let total_downloads = test_db.db.get_total_cached_downloads().await.unwrap();
+
+    assert_eq!(60, total_downloads);
+}

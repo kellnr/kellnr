@@ -16,10 +16,10 @@ use common::version::Version;
 use entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, cratesio_crate, cratesio_index,
-    doc_queue, krate, owner, prelude::*, session, user, cratesio_meta,
+    cratesio_meta, doc_queue, krate, owner, prelude::*, session, user,
 };
 use hex::ToHex;
-use migration::iden::{AuthTokenIden, CrateIden, CrateMetaIden};
+use migration::iden::{AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden};
 use sea_orm::sea_query::{Alias, Expr, Query, *};
 use sea_orm::{
     prelude::async_trait::async_trait, query::*, ActiveModelTrait, ColumnTrait, ConnectionTrait,
@@ -179,10 +179,30 @@ impl Database {
         Ok(())
     }
 
-    pub async fn test_add_cached_crate(&self,
-    name: &OriginalName,
-    version: &str) -> DbResult<Prefetch>{
+    pub async fn test_add_cached_crate_with_downloads(
+        &self,
+        name: &str,
+        version: &str,
+        downloads: u64,
+    ) -> DbResult<()> {
+        let _ = self.test_add_cached_crate(name, version).await?;
 
+        let krate = cratesio_crate::Entity::find()
+            .filter(cratesio_crate::Column::Name.eq(name))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::CrateNotFound(name.to_string()))?;
+
+        let total_downloads = krate.total_downloads as u64;
+
+        let mut krate: cratesio_crate::ActiveModel = krate.into();
+        krate.total_downloads = Set((total_downloads + downloads) as i64);
+        krate.update(&self.db_con).await?;
+
+        Ok(())
+    }
+
+    pub async fn test_add_cached_crate(&self, name: &str, version: &str) -> DbResult<Prefetch> {
         let etag = "etag";
         let last_modified = "last_modified";
         let description = Some(String::from("description"));
@@ -198,7 +218,14 @@ impl Database {
             v: Some(1),
         }];
 
-        self.add_cratesio_prefetch_data(name, etag, last_modified, description, &indices).await
+        self.add_cratesio_prefetch_data(
+            &OriginalName::from_unchecked_str(name.to_string()),
+            etag,
+            last_modified,
+            description,
+            &indices,
+        )
+        .await
     }
 
     pub async fn test_add_crate(
@@ -576,17 +603,73 @@ impl Database {
 
 #[async_trait]
 impl DbProvider for Database {
-
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64> {
-        todo!()
+        let stmt = Query::select()
+            .expr_as(
+                Expr::col((CratesIoIden::Table, CratesIoIden::Id)).count(),
+                Alias::new("count"),
+            )
+            .from(CratesIoIden::Table)
+            .to_owned();
+
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
+        let builder = self.db_con.get_database_backend();
+        let result = SelectResult::find_by_statement(builder.build(&stmt))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::FailedToCountCrates)?
+            .count
+            .ok_or(DbError::FailedToCountCrates)?;
+
+        Ok(result as u64)
     }
 
     async fn get_total_cached_crate_versions(&self) -> DbResult<u64> {
-        todo!()
+        let stmt = Query::select()
+            .expr_as(
+                Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Id)).count(),
+                Alias::new("count"),
+            )
+            .from(CratesIoMetaIden::Table)
+            .to_owned();
+
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
+        let builder = self.db_con.get_database_backend();
+        let result = SelectResult::find_by_statement(builder.build(&stmt))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::FailedToCountCrateVersions)?
+            .count
+            .ok_or(DbError::FailedToCountCrateVersions)?;
+
+        Ok(result as u64)
     }
 
     async fn get_total_cached_downloads(&self) -> DbResult<u64> {
-        todo!()
+        #[derive(FromQueryResult)]
+        struct Model {
+            total_downloads: i64,
+        }
+
+        let total_downloads = cratesio_crate::Entity::find()
+            .select_only()
+            .column(cratesio_crate::Column::TotalDownloads)
+            .into_model::<Model>()
+            .all(&self.db_con)
+            .await?;
+
+        Ok(total_downloads
+            .iter()
+            .map(|m| m.total_downloads as u64)
+            .sum())
     }
 
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User> {
@@ -634,7 +717,11 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn increase_cached_download_counter(&self, crate_name: &NormalizedName, crate_version: &Version) -> DbResult<()> {
+    async fn increase_cached_download_counter(
+        &self,
+        crate_name: &NormalizedName,
+        crate_version: &Version,
+    ) -> DbResult<()> {
         let krate: cratesio_crate::Model = cratesio_crate::Entity::find()
             .filter(cratesio_crate::Column::Name.eq(crate_name.to_string()))
             .one(&self.db_con)
@@ -1054,7 +1141,10 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(total_downloads.iter().map(|m| m.total_downloads as u64).sum())
+        Ok(total_downloads
+            .iter()
+            .map(|m| m.total_downloads as u64)
+            .sum())
     }
 
     async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>> {
