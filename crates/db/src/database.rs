@@ -9,7 +9,7 @@ use common::crate_overview::CrateOverview;
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
 use common::index_metadata::{IndexDep, IndexMetadata};
 use common::normalized_name::NormalizedName;
-use common::original_name::{OriginalName, self};
+use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
@@ -180,10 +180,25 @@ impl Database {
     }
 
     pub async fn test_add_cached_crate(&self,
-    name: &str,
-    version: &str) {
-        todo!()
-        // self.add_cratesio_prefetch_data(crate_name, etag, last_modified, description, indices)
+    name: &OriginalName,
+    version: &str) -> DbResult<Prefetch>{
+
+        let etag = "etag";
+        let last_modified = "last_modified";
+        let description = Some(String::from("description"));
+        let indices = vec![IndexMetadata {
+            name: name.to_string(),
+            vers: version.to_string(),
+            deps: vec![],
+            cksum: "cksum".to_string(),
+            features: BTreeMap::new(),
+            features2: None,
+            yanked: false,
+            links: None,
+            v: Some(1),
+        }];
+
+        self.add_cratesio_prefetch_data(name, etag, last_modified, description, &indices).await
     }
 
     pub async fn test_add_crate(

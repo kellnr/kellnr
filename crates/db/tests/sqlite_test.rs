@@ -2463,7 +2463,54 @@ async fn un_yank_crate() {
 }
 
 #[tokio::test]
-async fn test_get_last_updated_crate() {
+async fn test_get_last_updated_crate_works() {
     let test_db = TestDB::new().await;
+
+    let created1 = DateTime::parse_from_rfc3339("2021-01-01T00:00:00Z").unwrap();
+    let created1 = DateTime::<Utc>::from(created1);
+
+    test_db.db.test_add_crate(
+        "my_crate",
+        "admin",
+        &Version::from_unchecked_str("1.0.0"),
+        &created1,
+    )
+    .await
+    .unwrap();
     
+    let created2 = DateTime::parse_from_rfc3339("2021-02-01T00:00:00Z").unwrap();
+    let created2 = DateTime::<Utc>::from(created2);
+
+    test_db.db.test_add_crate(
+        "my_crate",
+        "admin",
+        &Version::from_unchecked_str("2.0.0"),
+        &created2,
+    )
+    .await
+    .unwrap();
+
+    let created3 = DateTime::parse_from_rfc3339("2021-03-01T00:00:00Z").unwrap();
+    let created3 = DateTime::<Utc>::from(created3);
+
+    test_db.db.test_add_crate(
+        "my_crate2",
+        "admin",
+        &Version::from_unchecked_str("1.0.0"),
+        &created3,
+    ).await.unwrap();
+    
+
+    let last_updated = test_db.db.get_last_updated_crate().await.unwrap().unwrap();
+
+    assert_eq!(String::from("my_crate2"), last_updated.0.to_string());
+}
+
+#[tokio::test]
+async fn test_get_last_updated_crate_empty() {
+    let test_db = TestDB::new().await;
+
+    let last_updated = test_db.db.get_last_updated_crate().await.unwrap();
+
+    assert_eq!(None, last_updated);
 }
