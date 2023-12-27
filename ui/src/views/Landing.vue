@@ -21,7 +21,7 @@
 import axios from 'axios';
 import { onBeforeMount, ref } from "vue";
 import { STATISTICS } from '../remote-routes';
-import StatisticsCard2 from '../components/StatisticsCard2.vue';
+import StatisticsCard2 from '../components/StatisticsCard.vue';
 import { Statistics } from '../types/statistics';
 
 const statistics = ref<Statistics>();

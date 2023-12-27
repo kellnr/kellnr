@@ -14,7 +14,6 @@
             </div>
           </div>
         </div>
-        <Statistics></Statistics>
       </div>
 
       <div id="table" v-on:scroll="scrollHandler" ref="rtable">
@@ -42,7 +41,6 @@ import {onBeforeMount, onMounted, ref} from "vue"
 import axios from "axios"
 import CrateCard from "../components/CrateCard.vue"
 import {CrateOverview} from "../types/crate_overview";
-import Statistics from "../components/Statistics.vue"
 import {CRATES, SEARCH, VERSION} from "../remote-routes";
 import {store} from "../store/store";
 import {useRouter} from "vue-router";
@@ -162,20 +160,9 @@ onMounted(() => {
 
 <style scoped>
 
-#searchTable {
-  height: 87vh;
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
-}
-
 #searchTable > #statSearch {
   grid-row: 1;
-  padding-bottom: 1rem;
-}
-
-#searchTable > #statSearch > #search {
-  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
 }
 
 #searchTable > #table {
