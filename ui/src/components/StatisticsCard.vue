@@ -43,10 +43,11 @@ body[color-theme="dark"] .card {
 .left {
   grid-column: 1;
   grid-row: 1;
-  font-size: 3rem;
+  font-size: 2.5rem;
   display: flex;
   justify-content: center;
   align-items: center;
+  min-width: 5rem;
 }
 
 .right {
@@ -58,10 +59,10 @@ body[color-theme="dark"] .card {
   align-items: center;
 }
 
-
 .bottom {
   grid-column: 1;
   grid-row: 2;
+  text-align: center;
 }
 </style>
 
