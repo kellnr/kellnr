@@ -159,6 +159,12 @@ onMounted(() => {
 </script>
 
 <style scoped>
+#searchTable {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  height: 87vh;
+}
 
 #searchTable > #statSearch {
   grid-row: 1;

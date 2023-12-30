@@ -207,6 +207,7 @@ pub struct Statistic {
     pub num_proxy_crate_downloads: u64,
     pub top_crates: TopCrates,
     pub last_updated_crate: Option<(OriginalName, Version)>,
+    pub proxy_enabled: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
@@ -216,7 +217,7 @@ pub struct TopCrates {
     pub third: (String, u64),
 }
 
-pub async fn statistic(State(db): DbState) -> Json<Statistic> {
+pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Json<Statistic> {
     let num_crates = db.get_total_unique_crates().await.unwrap_or_default();
     let num_crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
     let num_crate_downloads = db.get_total_downloads().await.unwrap_or_default();
@@ -246,7 +247,8 @@ pub async fn statistic(State(db): DbState) -> Json<Statistic> {
                 second: extract(&tops, 1),
                 third: extract(&tops, 2),
             },
-        last_updated_crate, 
+        last_updated_crate,
+        proxy_enabled: settings.proxy.enabled,
         })
 }
 

@@ -14,9 +14,9 @@
 
 <script setup lang="ts">
 const props = defineProps<{
-  num: number
+  num: number | string
   icon: string
-  text: string
+  text: number | string 
 }>()
 </script>
 
