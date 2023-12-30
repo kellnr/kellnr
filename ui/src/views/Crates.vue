@@ -43,7 +43,7 @@ import CrateCard from "../components/CrateCard.vue"
 import {CrateOverview} from "../types/crate_overview";
 import {CRATES, SEARCH, VERSION} from "../remote-routes";
 import {store} from "../store/store";
-import {useRouter} from "vue-router";
+import {useRouter, useRoute} from "vue-router";
 
 const crates = ref<Array<CrateOverview>>([])
 const emptyCrates = ref(false)
@@ -60,6 +60,11 @@ const router = useRouter()
 
 onBeforeMount(() => {
   login_required()
+
+  if(router.currentRoute.value.query.search) {
+    searchText.value = router.currentRoute.value.query.search as string
+    searchCrates()
+  }
 })
 
 function login_required() {
@@ -152,7 +157,10 @@ onMounted(() => {
     const height = table.offsetHeight;
     const num_crates = Math.ceil(height / cardHeight);
     init_page_size.value = num_crates * 2;
-    getCrates(init_page_size.value);
+
+    if (searchText.value === "") {
+      getCrates(init_page_size.value);
+    }
   }
 })
 

@@ -1,4 +1,14 @@
 <template>
+  <div id="searchBar" class="glass">
+    <input
+      class="input is-info"
+      v-model="searchText"
+      v-on:keyup.enter="searchCrates()"
+      placeholder="Search for crates"
+      type="text"/>
+  </div>
+
+
   <div id="statistics">
     <div class="statisticsCards" v-if="statistics">
       <!-- Hosted crates statistics -->
@@ -36,15 +46,22 @@ import { onBeforeMount, ref } from "vue";
 import { STATISTICS } from '../remote-routes';
 import StatisticsCard from '../components/StatisticsCard.vue';
 import { Statistics } from '../types/statistics';
+import router from '../router';
 
 const statistics = ref<Statistics>();
-
+const searchText = ref("");
 
 onBeforeMount(() => {
   axios.get(STATISTICS).then((response) => {
     statistics.value = response.data;
   });
 });
+
+function searchCrates() {
+  if (searchText.value.length > 0) {
+    router.push({ path: '/crates', query: { search: searchText.value } });
+  }
+}
 </script>
 
 <style scoped>
@@ -53,5 +70,9 @@ onBeforeMount(() => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
+}
+
+#searchBar {
+  margin-bottom: 2rem;
 }
 </style>
