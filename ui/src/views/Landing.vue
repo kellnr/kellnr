@@ -1,13 +1,18 @@
 <template>
   <div id="searchBar" class="glass">
-    <input
-      class="input is-info"
-      v-model="searchText"
-      v-on:keyup.enter="searchCrates()"
-      placeholder="Search for crates"
-      type="text"/>
+    <input class="input is-info" v-model="searchText" v-on:keyup.enter="searchCrates()" placeholder="Search for crates"
+      type="text" />
   </div>
 
+  <div id="center">
+
+    <p id="welcome-text">
+      Welcome to Kellnr, your private crate registry. To get started, have a look at the <a
+        href="https://kellnr.io/documentation">documentation</a>.
+    </p>
+
+    <h1 id="overview" class="k-h1">Overview</h1>
+  </div>
 
   <div id="statistics">
     <div class="statisticsCards" v-if="statistics">
@@ -20,8 +25,8 @@
       <!-- Top three crates -->
       <statistics-card v-if="statistics.top_crates.first[1] > 0" :num="statistics.top_crates.first[1]" :icon="'fa-medal'"
         :text="statistics.top_crates.first[0]"></statistics-card>
-      <statistics-card v-if="statistics.top_crates.second[1] > 0" :num="statistics.top_crates.second[1]" :icon="'fa-medal'"
-        :text="statistics.top_crates.second[0]"></statistics-card>
+      <statistics-card v-if="statistics.top_crates.second[1] > 0" :num="statistics.top_crates.second[1]"
+        :icon="'fa-medal'" :text="statistics.top_crates.second[0]"></statistics-card>
       <statistics-card v-if="statistics.top_crates.third[1] > 0" :num="statistics.top_crates.third[1]" :icon="'fa-medal'"
         :text="statistics.top_crates.third[0]"></statistics-card>
 
@@ -74,5 +79,13 @@ function searchCrates() {
 
 #searchBar {
   margin-bottom: 2rem;
+}
+
+#center {
+  text-align: center;
+}
+
+#welcome-text {
+  margin-bottom: 1.5rem;
 }
 </style>
