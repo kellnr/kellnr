@@ -23,8 +23,14 @@ pub enum PrefetchState {
 
 #[async_trait]
 pub trait DbProvider: Send + Sync {
+    async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>>; 
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User>;
     async fn increase_download_counter(
+        &self,
+        crate_name: &NormalizedName,
+        crate_version: &Version,
+    ) -> DbResult<()>;
+    async fn increase_cached_download_counter(
         &self,
         crate_name: &NormalizedName,
         crate_version: &Version,
@@ -52,7 +58,11 @@ pub trait DbProvider: Send + Sync {
     async fn get_users(&self) -> DbResult<Vec<User>>;
     async fn get_total_unique_crates(&self) -> DbResult<u32>;
     async fn get_total_crate_versions(&self) -> DbResult<u32>;
-    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u32)>>;
+    async fn get_total_downloads(&self) -> DbResult<u64>;
+    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>>;
+    async fn get_total_unique_cached_crates(&self) -> DbResult<u64>;
+    async fn get_total_cached_crate_versions(&self) -> DbResult<u64>;
+    async fn get_total_cached_downloads(&self) -> DbResult<u64>;
     async fn get_crate_summaries(&self) -> DbResult<Vec<CrateSummary>>;
     async fn add_doc_queue(
         &self,
@@ -63,7 +73,6 @@ pub trait DbProvider: Send + Sync {
     async fn delete_doc_queue(&self, id: i64) -> DbResult<()>;
     async fn get_doc_queue(&self) -> DbResult<Vec<DocQueueEntry>>;
     async fn delete_crate(&self, krate: &NormalizedName, version: &Version) -> DbResult<()>;
-    async fn get_total_downloads(&self) -> DbResult<i64>;
     async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>>;
     async fn update_last_updated(&self, id: i64, last_updated: &DateTime<Utc>) -> DbResult<()>;
     async fn search_in_crate_name(&self, contains: &str) -> DbResult<Vec<CrateOverview>>;
@@ -119,11 +128,24 @@ pub mod mock {
 
         #[async_trait]
         impl DbProvider for Db {
+
+            async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>> {
+                unimplemented!()
+            }
+
             async fn authenticate_user(&self, _name: &str, _pwd: &str) -> DbResult<User> {
                 unimplemented!()
             }
 
             async fn increase_download_counter(
+                &self,
+                _crate_name: &NormalizedName,
+                _crate_version: &Version,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+            
+            async fn increase_cached_download_counter(
                 &self,
                 _crate_name: &NormalizedName,
                 _crate_version: &Version,
@@ -223,7 +245,19 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_top_crates_downloads(&self, _top: u32) -> DbResult<Vec<(String, u32)>> {
+            async fn get_top_crates_downloads(&self, _top: u32) -> DbResult<Vec<(String, u64)>> {
+                unimplemented!()
+            }
+
+            async fn get_total_unique_cached_crates(&self) -> DbResult<u64> {
+                unimplemented!()
+            }
+
+            async fn get_total_cached_crate_versions(&self) -> DbResult<u64> {
+                unimplemented!()
+            }
+
+            async fn get_total_cached_downloads(&self) -> DbResult<u64> {
                 unimplemented!()
             }
 
@@ -247,7 +281,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_total_downloads(&self) -> DbResult<i64>{
+            async fn get_total_downloads(&self) -> DbResult<u64>{
                 unimplemented!()
             }
 

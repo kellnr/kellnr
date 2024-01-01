@@ -1,4 +1,4 @@
-use appstate::{CrateIoStorageState, SettingsState};
+use appstate::{CrateIoStorageState, DbState, SettingsState};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -49,8 +49,9 @@ pub async fn download(
     Path((package, version)): Path<(OriginalName, Version)>,
     State(settings): SettingsState,
     State(crate_storage): CrateIoStorageState,
+    State(db): DbState,
 ) -> Result<Vec<u8>, StatusCode> {
-    // Return None if the feature is disabled
+    // Return NotFound if the feature is disabled
     match settings.proxy.enabled {
         true => (),
         _ => return Err(StatusCode::NOT_FOUND),
@@ -104,7 +105,13 @@ pub async fn download(
     }
 
     match crate_storage.get_file(file_path).await {
-        Some(file) => Ok(file),
+        Some(file) => {
+            let normalized_name = package.to_normalized();
+            db.increase_cached_download_counter(&normalized_name, &version)
+                .await
+                .unwrap_or_else(|e| error!("Failed to increase download counter: {}", e));
+            Ok(file)
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -118,6 +125,7 @@ mod tests {
     use axum::routing::get;
     use axum::Router;
     use common::util::generate_rand_string;
+    use db::mock::MockDb;
     use http_body_util::BodyExt;
     use settings::Settings;
     use std::path;
@@ -255,9 +263,14 @@ mod tests {
 
     async fn app(settings: Settings) -> Router {
         let cs = CratesIoCrateStorage::new(&settings).await.unwrap();
+        let mut db = MockDb::new();
+        db.expect_increase_cached_download_counter()
+            .returning(|_, _| Ok(()));
+
         let state = AppStateData {
             settings: settings.into(),
             cratesio_storage: cs.into(),
+            db: std::sync::Arc::<MockDb>::new(db),
             ..appstate::test_state().await
         };
 

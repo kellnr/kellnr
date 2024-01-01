@@ -1,68 +1,68 @@
 <template>
-  <div class="statCard">
-    <div class="left">
-      <span v-bind:style="{color: iconColor}" class="icon">
-        <i :class="'fas ' + icon"></i>
-      </span>
+  <div class="glass card">
+    <div class="top">
+      <div class="left">{{ num }}</div>
+      <div class="right">
+        <span class="icon">
+          <i :class="'fas ' + icon"></i>
+        </span>
+      </div>
     </div>
-    <div class="right">
-      <span class="text"><slot></slot></span>
-      <span class="num">{{ num }}</span>
-    </div>
+    <div class="bottom">{{ text }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
 const props = defineProps<{
-  num: number
+  num: number | string
   icon: string
-  iconColor?: string
+  text: number | string 
 }>()
 </script>
 
 <style scoped>
-.statCard {
-  color: black;
-  margin: 0 0 0.3em 0;
-  width: 60%;
-
+.card {
   display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto;
+  grid-template-columns: 1fr;
+  grid-template-rows: 3fr 1fr;
+  margin: 0.3rem 0.3rem 0.3rem 0.3rem;
 }
 
-.statCard .left {
-  grid-column: 1;
-  grid-row: 1;
-  display: grid;
-  grid-template-rows: auto;
-  place-items: center;
-}
-
-.statCard .icon {
-  grid-column: 1;
-  grid-row: 1;
-  margin-right: 0.3em;
-  margin-left: 0.5em;
-}
-
-.statCard .right {
-  grid-column: 2;
-  grid-row: 1;
-  display: grid;
-  grid-template-columns: 3fr 1fr;
-}
-
-.statCard .right .num {
-  grid-column: 2;
-  text-align: right;
-}
-
-.statCard .right .text {
-  grid-column: 1;
-}
-
-body[color-theme="dark"] .statCard {
+body[color-theme="dark"] .card {
   color: var(--dark-color-white);
 }
+
+.top {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr;
+}
+
+.left {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 2.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 5rem;
+}
+
+.right {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 1.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.bottom {
+  grid-column: 1;
+  grid-row: 2;
+  text-align: center;
+}
 </style>
+

@@ -16,10 +16,10 @@ use common::version::Version;
 use entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, cratesio_crate, cratesio_index,
-    doc_queue, krate, owner, prelude::*, session, user,
+    cratesio_meta, doc_queue, krate, owner, prelude::*, session, user,
 };
 use hex::ToHex;
-use migration::iden::{AuthTokenIden, CrateIden, CrateMetaIden};
+use migration::iden::{AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden};
 use sea_orm::sea_query::{Alias, Expr, Query, *};
 use sea_orm::{
     prelude::async_trait::async_trait, query::*, ActiveModelTrait, ColumnTrait, ConnectionTrait,
@@ -177,6 +177,55 @@ impl Database {
             o.insert(&self.db_con).await?;
         }
         Ok(())
+    }
+
+    pub async fn test_add_cached_crate_with_downloads(
+        &self,
+        name: &str,
+        version: &str,
+        downloads: u64,
+    ) -> DbResult<()> {
+        let _ = self.test_add_cached_crate(name, version).await?;
+
+        let krate = cratesio_crate::Entity::find()
+            .filter(cratesio_crate::Column::Name.eq(name))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::CrateNotFound(name.to_string()))?;
+
+        let total_downloads = krate.total_downloads as u64;
+
+        let mut krate: cratesio_crate::ActiveModel = krate.into();
+        krate.total_downloads = Set((total_downloads + downloads) as i64);
+        krate.update(&self.db_con).await?;
+
+        Ok(())
+    }
+
+    pub async fn test_add_cached_crate(&self, name: &str, version: &str) -> DbResult<Prefetch> {
+        let etag = "etag";
+        let last_modified = "last_modified";
+        let description = Some(String::from("description"));
+        let indices = vec![IndexMetadata {
+            name: name.to_string(),
+            vers: version.to_string(),
+            deps: vec![],
+            cksum: "cksum".to_string(),
+            features: BTreeMap::new(),
+            features2: None,
+            yanked: false,
+            links: None,
+            v: Some(1),
+        }];
+
+        self.add_cratesio_prefetch_data(
+            &OriginalName::from_unchecked_str(name.to_string()),
+            etag,
+            last_modified,
+            description,
+            &indices,
+        )
+        .await
     }
 
     pub async fn test_add_crate(
@@ -554,6 +603,75 @@ impl Database {
 
 #[async_trait]
 impl DbProvider for Database {
+    async fn get_total_unique_cached_crates(&self) -> DbResult<u64> {
+        let stmt = Query::select()
+            .expr_as(
+                Expr::col((CratesIoIden::Table, CratesIoIden::Id)).count(),
+                Alias::new("count"),
+            )
+            .from(CratesIoIden::Table)
+            .to_owned();
+
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
+        let builder = self.db_con.get_database_backend();
+        let result = SelectResult::find_by_statement(builder.build(&stmt))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::FailedToCountCrates)?
+            .count
+            .ok_or(DbError::FailedToCountCrates)?;
+
+        Ok(result as u64)
+    }
+
+    async fn get_total_cached_crate_versions(&self) -> DbResult<u64> {
+        let stmt = Query::select()
+            .expr_as(
+                Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Id)).count(),
+                Alias::new("count"),
+            )
+            .from(CratesIoMetaIden::Table)
+            .to_owned();
+
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
+        let builder = self.db_con.get_database_backend();
+        let result = SelectResult::find_by_statement(builder.build(&stmt))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::FailedToCountCrateVersions)?
+            .count
+            .ok_or(DbError::FailedToCountCrateVersions)?;
+
+        Ok(result as u64)
+    }
+
+    async fn get_total_cached_downloads(&self) -> DbResult<u64> {
+        #[derive(FromQueryResult)]
+        struct Model {
+            total_downloads: i64,
+        }
+
+        let total_downloads = cratesio_crate::Entity::find()
+            .select_only()
+            .column(cratesio_crate::Column::TotalDownloads)
+            .into_model::<Model>()
+            .all(&self.db_con)
+            .await?;
+
+        Ok(total_downloads
+            .iter()
+            .map(|m| m.total_downloads as u64)
+            .sum())
+    }
+
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User> {
         let user = self.get_user(name).await?;
 
@@ -597,6 +715,58 @@ impl DbProvider for Database {
             .await?;
 
         Ok(())
+    }
+
+    async fn increase_cached_download_counter(
+        &self,
+        crate_name: &NormalizedName,
+        crate_version: &Version,
+    ) -> DbResult<()> {
+        let krate: cratesio_crate::Model = cratesio_crate::Entity::find()
+            .filter(cratesio_crate::Column::Name.eq(crate_name.to_string()))
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+        let crate_id = krate.id;
+        let crate_total_downloads = krate.total_downloads;
+
+        // Update the total downloads for the whole crate (all versions)
+        let mut k: cratesio_crate::ActiveModel = krate.into();
+        k.total_downloads = Set(crate_total_downloads + 1);
+        k.update(&self.db_con).await?;
+
+        // Update the downloads for the specific version
+        cratesio_meta::Entity::update_many()
+            .col_expr(
+                cratesio_meta::Column::Downloads,
+                Expr::col(cratesio_meta::Column::Downloads).add(1),
+            )
+            .filter(
+                Cond::all()
+                    .add(cratesio_meta::Column::Version.eq(crate_version.to_string()))
+                    .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
+            )
+            .exec(&self.db_con)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>> {
+        let krate = krate::Entity::find()
+            .order_by_desc(krate::Column::LastUpdated)
+            .one(&self.db_con)
+            .await?;
+
+        if let Some(krate) = krate {
+            // SAFETY: Unchecked is ok, as only valid crate names are inserted into the database
+            let name = OriginalName::from_unchecked_str(krate.original_name);
+            // SAFETY: Unchecked is ok, as only valid versions are inserted into the database
+            let version = Version::from_unchecked_str(&krate.max_version);
+            Ok(Some((name, version)))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn validate_session(&self, session_token: &str) -> DbResult<(String, bool)> {
@@ -958,7 +1128,26 @@ impl DbProvider for Database {
         Ok(result as u32)
     }
 
-    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u32)>> {
+    async fn get_total_downloads(&self) -> DbResult<u64> {
+        #[derive(FromQueryResult)]
+        struct Model {
+            total_downloads: i64,
+        }
+
+        let total_downloads = krate::Entity::find()
+            .select_only()
+            .column(krate::Column::TotalDownloads)
+            .into_model::<Model>()
+            .all(&self.db_con)
+            .await?;
+
+        Ok(total_downloads
+            .iter()
+            .map(|m| m.total_downloads as u64)
+            .sum())
+    }
+
+    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>> {
         let stmt = Query::select()
             .columns(vec![CrateIden::OriginalName, CrateIden::TotalDownloads])
             .from(CrateIden::Table)
@@ -979,7 +1168,7 @@ impl DbProvider for Database {
 
         Ok(result
             .iter()
-            .map(|x| (x.original_name.clone(), x.total_downloads as u32))
+            .map(|x| (x.original_name.clone(), x.total_downloads as u64))
             .collect())
     }
 
@@ -1089,22 +1278,6 @@ impl DbProvider for Database {
         }
 
         Ok(())
-    }
-
-    async fn get_total_downloads(&self) -> DbResult<i64> {
-        #[derive(FromQueryResult)]
-        struct Model {
-            total_downloads: i64,
-        }
-
-        let total_downloads = krate::Entity::find()
-            .select_only()
-            .column(krate::Column::TotalDownloads)
-            .into_model::<Model>()
-            .all(&self.db_con)
-            .await?;
-
-        Ok(total_downloads.iter().map(|m| m.total_downloads).sum())
     }
 
     async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>> {
@@ -1402,29 +1575,6 @@ impl DbProvider for Database {
         Ok(crate_id)
     }
 
-    async fn add_crate_metadata(
-        &self,
-        pub_metadata: &PublishMetadata,
-        created: &str,
-        crate_id: i64,
-    ) -> DbResult<()> {
-        let cm = crate_meta::ActiveModel {
-            id: Default::default(),
-            version: Set(pub_metadata.vers.to_string()),
-            created: Set(created.to_string()),
-            downloads: Set(0),
-            crate_fk: Set(crate_id),
-            readme: Set(pub_metadata.readme.clone()),
-            license: Set(pub_metadata.license.clone()),
-            license_file: Set(pub_metadata.license_file.clone()),
-            documentation: Set(pub_metadata.documentation.clone()),
-        };
-
-        cm.insert(&self.db_con).await?;
-
-        Ok(())
-    }
-
     async fn update_docs_link(
         &self,
         crate_name: &NormalizedName,
@@ -1445,6 +1595,29 @@ impl DbProvider for Database {
         let mut cm: crate_meta::ActiveModel = cm.into();
         cm.documentation = Set(Some(docs_link.to_string()));
         cm.update(&self.db_con).await?;
+        Ok(())
+    }
+
+    async fn add_crate_metadata(
+        &self,
+        pub_metadata: &PublishMetadata,
+        created: &str,
+        crate_id: i64,
+    ) -> DbResult<()> {
+        let cm = crate_meta::ActiveModel {
+            id: Default::default(),
+            version: Set(pub_metadata.vers.to_string()),
+            created: Set(created.to_string()),
+            downloads: Set(0),
+            crate_fk: Set(crate_id),
+            readme: Set(pub_metadata.readme.clone()),
+            license: Set(pub_metadata.license.clone()),
+            license_file: Set(pub_metadata.license_file.clone()),
+            documentation: Set(pub_metadata.documentation.clone()),
+        };
+
+        cm.insert(&self.db_con).await?;
+
         Ok(())
     }
 
@@ -1542,12 +1715,11 @@ impl DbProvider for Database {
                     description: Set(description),
                     e_tag: Set(etag.to_string()),
                     last_modified: Set(last_modified.to_string()),
+                    total_downloads: Set(0),
                 };
                 krate.insert(&self.db_con).await?
             }
         };
-
-        // i love you
 
         let current_indices = cratesio_index::Entity::find()
             .filter(cratesio_index::Column::CratesIoFk.eq(krate.id))
@@ -1592,6 +1764,16 @@ impl DbProvider for Database {
                 };
 
                 new_index.insert(&self.db_con).await?;
+
+                // Add the meta data for the crate version.
+                let meta = cratesio_meta::ActiveModel {
+                    id: Default::default(),
+                    version: Set(index.vers.clone()),
+                    downloads: Set(0),
+                    crates_io_fk: Set(krate.id),
+                };
+
+                meta.insert(&self.db_con).await?;
             }
         }
 
@@ -1608,7 +1790,7 @@ impl DbProvider for Database {
             .into_iter()
             .map(|krate| {
                 CratesioPrefetchMsg::Update(UpdateData {
-                    name: OriginalName::unchecked(krate.original_name),
+                    name: OriginalName::from_unchecked_str(krate.original_name),
                     etag: Some(krate.e_tag),
                     last_modified: Some(krate.last_modified),
                 })

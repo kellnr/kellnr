@@ -199,21 +199,35 @@ pub async fn delete(
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Statistic {
-    unique_crates: u32,
-    crate_versions: u32,
-    downloads: i64,
-    top1: (String, u32),
-    top2: (String, u32),
-    top3: (String, u32),
+    pub num_crates: u32,
+    pub num_crate_versions: u32,
+    pub num_crate_downloads: u64,
+    pub num_proxy_crates: u64,
+    pub num_proxy_crate_versions: u64,
+    pub num_proxy_crate_downloads: u64,
+    pub top_crates: TopCrates,
+    pub last_updated_crate: Option<(OriginalName, Version)>,
+    pub proxy_enabled: bool,
 }
 
-pub async fn statistic(State(db): DbState) -> Json<Statistic> {
-    let unique_crates = db.get_total_unique_crates().await.unwrap_or_default();
-    let crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
-    let downloads = db.get_total_downloads().await.unwrap_or_default();
-    let tops = db.get_top_crates_downloads(3).await.unwrap_or_default();
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub struct TopCrates {
+    pub first: (String, u64),
+    pub second: (String, u64),
+    pub third: (String, u64),
+}
 
-    fn extract(tops: &[(String, u32)], i: usize) -> (String, u32) {
+pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Json<Statistic> {
+    let num_crates = db.get_total_unique_crates().await.unwrap_or_default();
+    let num_crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
+    let num_crate_downloads = db.get_total_downloads().await.unwrap_or_default();
+    let tops = db.get_top_crates_downloads(3).await.unwrap_or_default();
+    let num_proxy_crates = db.get_total_unique_cached_crates().await.unwrap_or_default();
+    let num_proxy_crate_versions = db.get_total_cached_crate_versions().await.unwrap_or_default();
+    let num_proxy_crate_downloads = db.get_total_cached_downloads().await.unwrap_or_default();
+    let last_updated_crate = db.get_last_updated_crate().await.unwrap_or_default();
+
+    fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
         if tops.len() > i {
             tops[i].clone()
         } else {
@@ -222,13 +236,20 @@ pub async fn statistic(State(db): DbState) -> Json<Statistic> {
     }
 
     Json(Statistic {
-        unique_crates,
-        crate_versions,
-        downloads,
-        top1: extract(&tops, 0),
-        top2: extract(&tops, 1),
-        top3: extract(&tops, 2),
-    })
+            num_crates,
+            num_crate_versions,
+            num_crate_downloads,
+            num_proxy_crates,
+            num_proxy_crate_versions,
+            num_proxy_crate_downloads,
+            top_crates: TopCrates {
+                first: extract(&tops, 0),
+                second: extract(&tops, 1),
+                third: extract(&tops, 2),
+            },
+        last_updated_crate,
+        proxy_enabled: settings.proxy.enabled,
+        })
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -667,6 +688,18 @@ mod tests {
             .expect_get_top_crates_downloads()
             .with(eq(3))
             .returning(move |_| Ok(vec![("top1".to_string(), 1000)]));
+        mock_db
+            .expect_get_last_updated_crate()
+            .returning(move || Ok(None));
+        mock_db
+            .expect_get_total_unique_cached_crates()
+            .returning(move || Err(DbError::FailedToCountCrates));
+        mock_db
+            .expect_get_total_cached_crate_versions()
+            .returning(move || Err(DbError::FailedToCountCrateVersions));
+        mock_db
+            .expect_get_total_cached_downloads()
+            .returning(move || Err(DbError::FailedToCountTotalDownloads));
 
         let settings = test_settings();
         let r = app(
@@ -683,13 +716,21 @@ mod tests {
         let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
-            unique_crates: 0,
-            crate_versions: 0,
-            downloads: 0,
-            top1: (String::from("top1"), 1000),
-            top2: (String::new(), 0),
-            top3: (String::new(), 0),
+            num_crates: 0,
+            num_crate_versions: 0,
+            num_crate_downloads: 0,
+            num_proxy_crates: 0,
+            num_proxy_crate_versions: 0,
+            num_proxy_crate_downloads: 0,
+            top_crates: TopCrates {
+                first: (String::from("top1"), 1000),
+                second: (String::new(), 0),
+                third: (String::new(), 0),
+            },
+            last_updated_crate: None,
+            proxy_enabled: false,
         };
+
         assert_eq!(expect, result_stat);
     }
 
@@ -709,6 +750,18 @@ mod tests {
             .expect_get_top_crates_downloads()
             .with(eq(3))
             .returning(move |_| Err(DbError::FailedToCountTotalDownloads));
+        mock_db
+            .expect_get_last_updated_crate()
+            .returning(move || Ok(None));
+        mock_db
+            .expect_get_total_unique_cached_crates()
+            .returning(move || Err(DbError::FailedToCountCrates));
+        mock_db
+            .expect_get_total_cached_crate_versions()
+            .returning(move || Err(DbError::FailedToCountCrateVersions));
+        mock_db
+            .expect_get_total_cached_downloads()
+            .returning(move || Err(DbError::FailedToCountTotalDownloads));
 
         let settings = test_settings();
         let r = app(
@@ -725,13 +778,21 @@ mod tests {
         let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
-            unique_crates: 0,
-            crate_versions: 0,
-            downloads: 0,
-            top1: (String::new(), 0),
-            top2: (String::new(), 0),
-            top3: (String::new(), 0),
+            num_crates: 0,
+            num_crate_versions: 0,
+            num_crate_downloads: 0,
+            num_proxy_crates: 0,
+            num_proxy_crate_versions: 0,
+            num_proxy_crate_downloads: 0,
+            top_crates: TopCrates {
+                first: (String::new(), 0),
+                second: (String::new(), 0),
+                third: (String::new(), 0),
+            },
+            last_updated_crate: None, 
+            proxy_enabled: false,
         };
+
         assert_eq!(expect, result_stat);
     }
 
@@ -757,6 +818,18 @@ mod tests {
                     ("top3".to_string(), 100),
                 ])
             });
+        mock_db
+            .expect_get_total_unique_cached_crates()
+            .returning(move || Ok(9999));
+        mock_db
+            .expect_get_total_cached_crate_versions()
+            .returning(move || Ok(99999));
+        mock_db
+            .expect_get_total_cached_downloads()
+            .returning(move || Ok(999999));
+        mock_db
+            .expect_get_last_updated_crate()
+            .returning(move || Ok(Some((OriginalName::from_unchecked_str("foobar".to_string()), Version::try_from("1.0.0").unwrap()))));
 
         let settings = test_settings();
         let r = app(
@@ -773,12 +846,19 @@ mod tests {
         let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
 
         let expect = Statistic {
-            unique_crates: 1000,
-            crate_versions: 10000,
-            downloads: 100000,
-            top1: ("top1".to_string(), 1000),
-            top2: ("top2".to_string(), 500),
-            top3: ("top3".to_string(), 100),
+            num_crates: 1000,
+            num_crate_versions: 10000,
+            num_crate_downloads: 100000,
+            num_proxy_crates: 9999,
+            num_proxy_crate_versions: 99999,
+            num_proxy_crate_downloads: 999999,
+            top_crates: TopCrates {
+                first: (String::from("top1"), 1000),
+                second: (String::from("top2"), 500),
+                third: (String::from("top3"), 100),
+            },
+            last_updated_crate: Some((OriginalName::from_unchecked_str("foobar".to_string()), Version::try_from("1.0.0").unwrap())),
+            proxy_enabled: false,
         };
         assert_eq!(expect, result_stat);
     }

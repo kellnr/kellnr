@@ -176,3 +176,13 @@ pub enum CratesIoIndexIden {
     V,
     CratesIoFk,
 }
+
+#[derive(Iden)]
+pub enum CratesIoMetaIden {
+    #[iden = "cratesio_meta"]
+    Table,
+    Id,
+    Version,
+    Downloads,
+    CratesIoFk,
+}
