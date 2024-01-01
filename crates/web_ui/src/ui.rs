@@ -727,7 +727,8 @@ mod tests {
                 second: (String::new(), 0),
                 third: (String::new(), 0),
             },
-            last_updated_crate: None, 
+            last_updated_crate: None,
+            proxy_enabled: false,
         };
 
         assert_eq!(expect, result_stat);
@@ -789,6 +790,7 @@ mod tests {
                 third: (String::new(), 0),
             },
             last_updated_crate: None, 
+            proxy_enabled: false,
         };
 
         assert_eq!(expect, result_stat);
@@ -855,7 +857,8 @@ mod tests {
                 second: (String::from("top2"), 500),
                 third: (String::from("top3"), 100),
             },
-            last_updated_crate: Some((OriginalName::from_unchecked_str("foobar".to_string()), Version::try_from("1.0.0").unwrap()))
+            last_updated_crate: Some((OriginalName::from_unchecked_str("foobar".to_string()), Version::try_from("1.0.0").unwrap())),
+            proxy_enabled: false,
         };
         assert_eq!(expect, result_stat);
     }
