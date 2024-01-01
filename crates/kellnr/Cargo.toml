@@ -3,6 +3,7 @@ authors.workspace = true
 edition.workspace = true
 name = "kellnr"
 version = "0.1.0"
+license-file = "../../LICENSE"
 
 [dependencies]
 # Internal dependencies from Kellnr
@@ -25,7 +26,7 @@ axum.workspace = true
 axum-extra.workspace = true
 tower-http.workspace = true
 tokio.workspace = true
-openssl = {version = "*", optional = true} # Not needed directly but for cross-compilation with the vendored-openssl feature
+openssl = { version = "*", optional = true } # Not needed directly but for cross-compilation with the vendored-openssl feature
 
 [features]
 vendored-openssl = ["openssl/vendored"]
