@@ -8,6 +8,6 @@ pub struct Docs {
 
 impl Default for Docs {
     fn default() -> Self {
-        Self { enabled: false, max_size: 100*1000 }
+        Self { enabled: false, max_size: 100 }
     }
 }
