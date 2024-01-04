@@ -1,5 +1,6 @@
 use appstate::AppStateData;
 use axum::{
+    extract::DefaultBodyLimit,
     middleware,
     routing::{delete, get, get_service, post, put},
     Router,
@@ -72,6 +73,7 @@ async fn main() {
     init_docs_hosting(&settings, &con_string).await;
     let data_dir = settings.registry.data_dir.clone();
     let signing_key = Key::generate();
+    let max_docs_size = settings.docs.max_size;
     let state = AppStateData {
         db,
         signing_key,
@@ -97,7 +99,10 @@ async fn main() {
     let docs = Router::new()
         .route("/build", post(ui::build_rustdoc))
         .route("/queue", get(docs::api::docs_in_queue))
-        .route("/:package/:version", put(docs::api::publish_docs));
+        .route(
+            "/:package/:version",
+            put(docs::api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000))
+        );
 
     let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir))).route_layer(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),

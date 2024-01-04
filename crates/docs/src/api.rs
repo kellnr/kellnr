@@ -21,8 +21,7 @@ pub async fn docs_in_queue(State(db): DbState) -> ApiResult<Json<DocQueueRespons
 
 // #[put("/<package>/<version>", data = "<docs>")]
 pub async fn publish_docs(
-    Path(package): Path<OriginalName>,
-    Path(version): Path<Version>,
+    Path((package, version)): Path<(OriginalName, Version)>,
     token: Token,
     State(state): AppState,
     mut docs: DocArchive,
