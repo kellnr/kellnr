@@ -33,7 +33,7 @@ impl FromRequest<AppStateData, Body> for DocArchive {
             Err(e) => return Err(ApiError::from(&e.to_string())),
         };
 
-        let max_docs_size = state.settings.docs.max_size / 1_000_000;
+        let max_docs_size = state.settings.docs.max_size * 1_000_000;
         if data_bytes.len() > max_docs_size {
             return Err(ApiError::from(&format!(
                 "Invalid max. length. {}/{} bytes.",
