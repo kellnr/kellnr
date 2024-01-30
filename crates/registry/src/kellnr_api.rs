@@ -36,10 +36,6 @@ pub async fn check_ownership(
     }
 }
 
-pub fn crate_path(bin_path: &std::path::Path, name: &str, version: &str) -> std::path::PathBuf {
-    bin_path.join(format!("{}-{}.crate", name, version))
-}
-
 pub async fn me() -> Redirect {
     Redirect::to("/login")
 }
@@ -127,15 +123,10 @@ pub async fn download(
     State(state): AppState,
     Path((package, version)): Path<(OriginalName, Version)>,
 ) -> Result<Vec<u8>, StatusCode> {
-    let settings = state.settings;
     let db = state.db;
     let cs = state.crate_storage;
 
-    let file_path = crate_path(
-        &settings.bin_path(),
-        &package.to_string(),
-        &version.to_string(),
-    );
+    let file_path = cs.crate_path(&package.to_string(), &version.to_string());
 
     if let Err(e) = db
         .increase_download_counter(&package.to_normalized(), &version)
