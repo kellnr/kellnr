@@ -6,7 +6,9 @@ pub struct CratesIoCrateStorage(CachedCrateStorage);
 
 impl CratesIoCrateStorage {
     pub async fn new(settings: &Settings) -> Result<Self, anyhow::Error> {
-        Ok(Self(CachedCrateStorage::new(settings).await?))
+        Ok(Self(
+            CachedCrateStorage::new(settings.crates_io_bin_path(), settings).await?,
+        ))
     }
 }
 

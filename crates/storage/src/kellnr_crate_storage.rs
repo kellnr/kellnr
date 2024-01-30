@@ -6,7 +6,9 @@ pub struct KellnrCrateStorage(CachedCrateStorage);
 
 impl KellnrCrateStorage {
     pub async fn new(settings: &Settings) -> Result<Self, anyhow::Error> {
-        Ok(Self(CachedCrateStorage::new(settings).await?))
+        Ok(Self(
+            CachedCrateStorage::new(settings.bin_path(), settings).await?,
+        ))
     }
 
     pub async fn delete(&self, crate_name: &str, crate_version: &str) -> Result<(), anyhow::Error> {

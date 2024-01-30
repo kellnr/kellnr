@@ -22,9 +22,9 @@ pub struct CachedCrateStorage {
 }
 
 impl CachedCrateStorage {
-    pub async fn new(settings: &Settings) -> Result<Self, anyhow::Error> {
+    pub async fn new(crate_folder: PathBuf, settings: &Settings) -> Result<Self, anyhow::Error> {
         let cs = Self {
-            crate_folder: settings.bin_path(),
+            crate_folder,
             doc_queue_path: settings.doc_queue_path(),
             cache: if settings.registry.cache_size > 0 {
                 Some(Cache::new(settings.registry.cache_size))
