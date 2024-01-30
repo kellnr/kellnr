@@ -74,6 +74,7 @@ async fn main() {
     let data_dir = settings.registry.data_dir.clone();
     let signing_key = Key::generate();
     let max_docs_size = settings.docs.max_size;
+    let max_crate_size = settings.registry.max_crate_size as usize;
     let state = AppStateData {
         db,
         signing_key,
@@ -117,7 +118,10 @@ async fn main() {
         .route("/:crate_name/owners", delete(kellnr_api::remove_owner))
         .route("/:crate_name/owners", put(kellnr_api::add_owner))
         .route("/:crate_name/owners", get(kellnr_api::list_owners))
-        .route("/", get(kellnr_api::search))
+        .route(
+            "/", 
+            get(kellnr_api::search).layer(DefaultBodyLimit::max(max_crate_size * 1_000_000))
+        )
         .route("/:package/:version/download", get(kellnr_api::download))
         .route("/new", put(kellnr_api::publish))
         .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
