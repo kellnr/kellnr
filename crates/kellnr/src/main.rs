@@ -102,7 +102,7 @@ async fn main() {
         .route("/queue", get(docs::api::docs_in_queue))
         .route(
             "/:package/:version",
-            put(docs::api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000))
+            put(docs::api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000)),
         );
 
     let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir))).route_layer(
@@ -118,12 +118,12 @@ async fn main() {
         .route("/:crate_name/owners", delete(kellnr_api::remove_owner))
         .route("/:crate_name/owners", put(kellnr_api::add_owner))
         .route("/:crate_name/owners", get(kellnr_api::list_owners))
-        .route(
-            "/", 
-            get(kellnr_api::search).layer(DefaultBodyLimit::max(max_crate_size * 1_000_000))
-        )
+        .route("/", get(kellnr_api::search))
         .route("/:package/:version/download", get(kellnr_api::download))
-        .route("/new", put(kellnr_api::publish))
+        .route(
+            "/new",
+            put(kellnr_api::publish).layer(DefaultBodyLimit::max(max_crate_size * 1_000_000)),
+        )
         .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
         .route("/:crate_name/:version/unyank", put(kellnr_api::unyank))
         .route("/config.json", get(kellnr_prefetch_api::config_kellnr))
