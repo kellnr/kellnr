@@ -1,12 +1,11 @@
-use crate::compute_doc_url;
+use crate::{compute_doc_url, get_latest_version_with_doc};
 use crate::doc_archive::DocArchive;
 use crate::doc_queue_response::DocQueueResponse;
 use crate::upload_response::DocUploadResponse;
-use appstate::{AppState, DbState};
+use appstate::{AppState, DbState, SettingsState};
 use auth::token::Token;
 use axum::{
-    extract::{Path, State},
-    Json,
+    extract::{Path, State}, response::Redirect, Json
 };
 use common::original_name::OriginalName;
 use common::version::Version;
@@ -17,6 +16,27 @@ use registry::kellnr_api::check_ownership;
 pub async fn docs_in_queue(State(db): DbState) -> ApiResult<Json<DocQueueResponse>> {
     let doc = db.get_doc_queue().await?;
     Ok(Json(DocQueueResponse::from(doc)))
+}
+
+// #[get("/<package>/latest")]
+pub async fn latest_docs(
+    Path(package): Path<OriginalName>,
+    State(settings): SettingsState,
+    State(db): DbState,
+) -> Redirect {
+    let name = package.to_normalized();
+    let opt_doc_version = get_latest_version_with_doc(&name, &settings);
+    let res_db_version = db.get_max_version_from_name(&name).await;
+
+    if let Some(doc_version) = opt_doc_version {
+        if let Ok(db_version) = res_db_version {
+            if doc_version == db_version {
+                return Redirect::temporary(&compute_doc_url(&name, &db_version));
+            }
+        }
+    }
+
+    Redirect::temporary("/")
 }
 
 // #[put("/<package>/<version>", data = "<docs>")]

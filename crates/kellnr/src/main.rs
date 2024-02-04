@@ -103,7 +103,8 @@ async fn main() {
         .route(
             "/:package/:version",
             put(docs::api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000))
-        );
+        )
+        .route("/:package/latest", get(docs::api::latest_docs));
 
     let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir))).route_layer(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
