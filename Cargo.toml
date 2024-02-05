@@ -38,7 +38,7 @@ anyhow = "1.0.75"
 jsonwebtoken = "9.1.0"
 reqwest = {version = "0.11.22", features = ["json", "blocking"]}
 serde = {version = "1.0.193", features = ["derive"]}
-sysinfo = "0.29.11"
+sysinfo = "0.30.5"
 semver = "1.0.19"
 regex = "1.8.3"
 serde_json = "1.0.108"
@@ -60,12 +60,12 @@ trybuild = {version = "1.0.85", features = ["diff"]}
 zip = "0.6.6"
 flate2 = "1.0.28"
 tar = "0.4.40"
-cargo = "0.75.1"
+cargo = "0.76.0"
 fs_extra = "1.3.0"
 wax = "0.6.0"
 proc-macro2 = "1.0.70"
 moka = {version = "0.12.1", features = ["future"]}
-config = "0.13.4"
+config = "0.14.0"
 toml = "0.8.1"
 time = "0.3.29"
 tracing = "0.1.40"
