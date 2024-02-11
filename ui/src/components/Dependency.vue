@@ -29,7 +29,7 @@ import {onBeforeMount, ref, watch} from "vue";
 import axios from "axios";
 import {store} from "../store/store"
 import {useRoute, useRouter} from "vue-router";
-import {CrateData} from "../types/crate_data";
+import type {CrateData} from "../types/crate_data";
 import {CRATE_DATA, CRATESIO_DATA, CRATESIO_LINK} from "../remote-routes";
 
 const props = defineProps<{
