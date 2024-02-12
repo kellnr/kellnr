@@ -2,15 +2,17 @@ use crate::normalized_name::NormalizedName;
 use regex::Regex;
 use std::convert::TryFrom;
 use std::fmt;
-use std::fmt::{Display, Formatter};
 use std::ops::Deref;
+use thiserror::Error;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct OriginalName(String);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum NameError {
+    #[error("Invalid character in name")]
     InvalidCharacter,
+    #[error("Invalid length for name")]
     InvalidLength,
 }
 
@@ -35,19 +37,6 @@ impl TryFrom<String> for OriginalName {
             Err(NameError::InvalidLength)
         } else {
             Ok(OriginalName(package_name))
-        }
-    }
-}
-
-impl Display for NameError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            NameError::InvalidCharacter => {
-                write!(f, "Invalid character in name")
-            }
-            NameError::InvalidLength => {
-                write!(f, "Invalid length for name")
-            }
         }
     }
 }

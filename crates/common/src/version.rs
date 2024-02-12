@@ -1,26 +1,21 @@
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
-use std::fmt::{Display, Formatter};
 use std::ops::Deref;
+use thiserror::Error;
 
 #[derive(Debug, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Version(String);
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Error)]
 pub enum VersionError {
+    #[error("Invalid SemVer")]
     InvalidSemVer,
 }
 
 impl Version {
     pub fn from_unchecked_str(version: &str) -> Self {
         Self(version.to_string())
-    }
-}
-
-impl Display for VersionError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Invalid SemVer")
     }
 }
 

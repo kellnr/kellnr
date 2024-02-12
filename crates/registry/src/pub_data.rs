@@ -3,8 +3,9 @@ use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
 use axum::http::Request;
 use common::publish_metadata::PublishMetadata;
-use error::error::ApiError;
+use error::api_error::ApiError;
 use settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
+use crate::registry_error::RegistryError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PubData {
@@ -14,26 +15,19 @@ pub struct PubData {
     pub cratedata: Vec<u8>,
 }
 
-fn convert_raw_metadata_to_string(raw_data: &[u8]) -> Result<String, ApiError> {
-    match String::from_utf8((raw_data).to_vec()) {
-        Ok(s) => Ok(s),
-        Err(e) => Err(ApiError::new("Invalid raw metadata.", &e.to_string())),
-    }
+fn convert_raw_metadata_to_string(raw_data: &[u8]) -> Result<String, RegistryError> {
+    Ok(String::from_utf8((raw_data).to_vec())?)
 }
 
-fn deserialize_metadata(raw_data: &[u8]) -> Result<PublishMetadata, ApiError> {
+fn deserialize_metadata(raw_data: &[u8]) -> Result<PublishMetadata, RegistryError> {
     let metadata_string = convert_raw_metadata_to_string(raw_data)?;
-
-    match serde_json::from_str(&metadata_string) {
-        Ok(md) => Ok(md),
-        Err(e) => Err(ApiError::new("Invalid metadata string.", &e.to_string())),
-    }
+    Ok(serde_json::from_str(&metadata_string)?)
 }
 
-fn convert_length(raw_data: &[u8]) -> Result<u32, ApiError> {
+fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
     match std::convert::TryInto::try_into(raw_data) {
         Ok(i) => Ok(u32::from_le_bytes(i)),
-        Err(e) => Err(ApiError::new("Invalid metadata length.", &e.to_string())),
+        Err(e) => Err(RegistryError::InvalidMetadataLength(e)), 
     }
 }
 
@@ -45,24 +39,22 @@ impl FromRequest<AppStateData, Body> for PubData {
         req: Request<Body>,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        let data_bytes: Vec<u8> = match Bytes::from_request(req, state).await {
-            Ok(b) => b.to_vec(),
-            Err(e) => return Err(ApiError::from(&e.to_string())),
-        };
+        let data_bytes: Vec<u8> = Bytes::from_request(req, state).await
+            .map_err(|e| RegistryError::ExtractBytesFailed(e))?
+            .to_vec(); 
 
         if data_bytes.len() < MIN_BODY_CRATE_AND_DOC_BYTES {
-            return Err(ApiError::from(&format!(
-                "Invalid min. length. {}/{} bytes.",
+            return Err(RegistryError::InvalidMinLength(
                 data_bytes.len(),
-                MIN_BODY_CRATE_AND_DOC_BYTES
-            )));
+                MIN_BODY_CRATE_AND_DOC_BYTES,
+            ).into());
         }
 
         let metadata_length = convert_length(&data_bytes[0..4])?;
         let metadata_end = 4 + (metadata_length as usize);
 
         if metadata_end >= data_bytes.len() {
-            return Err(ApiError::from("Invalid metadata size."));
+            return Err(RegistryError::InvalidMetadataSize.into());
         }
 
         let metadata: PublishMetadata = deserialize_metadata(&data_bytes[4..metadata_end])?;

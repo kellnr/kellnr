@@ -1,5 +1,4 @@
-use crate::storage_provider::StorageProvider;
-use anyhow::{bail, Context, Error, Result};
+use crate::{storage_error::StorageError, storage_provider::StorageProvider};
 use axum::async_trait;
 use std::path::Path;
 use tokio::{
@@ -24,21 +23,21 @@ impl Default for Storage {
 
 #[async_trait]
 impl StorageProvider for Storage {
-    async fn open_file(&self, file_path: &Path) -> Result<File, Error> {
+    async fn open_file(&self, file_path: &Path) -> Result<File, StorageError> {
         if file_path.exists() {
             let file = OpenOptions::new()
                 .read(true)
                 .append(true)
                 .open(&file_path)
                 .await
-                .with_context(|| format!("Unable to open file on index: {:?}", &file_path))?;
+                .map_err(|e| StorageError::OpenFileOnStorage(file_path.to_path_buf(), e))?;
             Ok(file)
         } else {
-            bail!("File does not exist: {:?}", &file_path)
+            Err(StorageError::FileDoesNotExist(file_path.to_path_buf()))
         }
     }
 
-    async fn open_or_create_file(&self, file_path: &Path) -> Result<File> {
+    async fn open_or_create_file(&self, file_path: &Path) -> Result<File, StorageError> {
         if file_path.exists() {
             self.open_file(file_path).await
         } else {
@@ -48,24 +47,24 @@ impl StorageProvider for Storage {
                 .create(true)
                 .open(&file_path)
                 .await
-                .with_context(|| format!("Unable to create file on index: {:?}", &file_path))?;
+                .map_err(|e| StorageError::CreateFile(e, file_path.to_path_buf()))?;
             Ok(file)
         }
     }
 
-    async fn read_file(&self, file: &mut File) -> Result<String> {
+    async fn read_file(&self, file: &mut File) -> Result<String, StorageError> {
         let mut content = String::new();
         file.read_to_string(&mut content)
             .await
-            .with_context(|| "Unable to read existing file")?;
+            .map_err(|e| StorageError::ReadFileHandle(e))?;
 
         Ok(content)
     }
 
-    async fn read(&self, path: &Path) -> Result<Vec<u8>> {
+    async fn read(&self, path: &Path) -> Result<Vec<u8>, StorageError> {
         read(&path)
             .await
-            .with_context(|| format!("Unable to read raw file: {:?}", &path.to_string_lossy()))
+            .map_err(|e| StorageError::ReadFile(path.to_path_buf(), e))
     }
 }
 
