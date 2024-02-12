@@ -50,7 +50,7 @@ import axios from 'axios';
 import { onBeforeMount, ref } from "vue";
 import { STATISTICS } from '../remote-routes';
 import StatisticsCard from '../components/StatisticsCard.vue';
-import { Statistics } from '../types/statistics';
+import type { Statistics } from '../types/statistics';
 import router from '../router';
 
 const statistics = ref<Statistics>();
