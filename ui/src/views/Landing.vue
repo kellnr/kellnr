@@ -52,11 +52,13 @@ import { STATISTICS } from '../remote-routes';
 import StatisticsCard from '../components/StatisticsCard.vue';
 import { Statistics } from '../types/statistics';
 import router from '../router';
+import { login_required } from '../common/auth';
 
 const statistics = ref<Statistics>();
 const searchText = ref("");
 
 onBeforeMount(() => {
+  login_required();
   axios.get(STATISTICS).then((response) => {
     statistics.value = response.data;
   });

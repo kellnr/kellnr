@@ -18,8 +18,11 @@ import axios from "axios"
 import {onMounted, ref} from "vue"
 import {DocQueueItem} from "../types/doc_queue_item"
 import DocQueueItemCard from "../components/DocQueueItemCard.vue"
-import {DOCS_QUEUE, kellnr_url} from "../remote-routes";
+import {DOCS_QUEUE} from "../remote-routes";
+import { useRouter } from "vue-router";
+import { login_required } from "../common/auth";
 
+const router = useRouter()
 const queue = ref<Array<DocQueueItem>>()
 const emptyQueue = ref(false)
 
@@ -36,6 +39,7 @@ function getQueueItems() {
 }
 
 onMounted(() => {
+  login_required()
   getQueueItems()
 })
 
