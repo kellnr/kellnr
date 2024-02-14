@@ -90,7 +90,8 @@
 <script setup lang="ts">
 import { onBeforeMount, ref } from "vue";
 import axios from "axios";
-import { emptySettings, Settings } from "../types/settings";
+import { emptySettings } from "../types/settings";
+import type { Settings } from "../types/settings";
 import StartupConfigItem from "./StartupConfigItem.vue";
 import StartupConfigHeader from "./StartupConfigHeader.vue";
 import { SETTINGS } from "../remote-routes";

@@ -40,7 +40,7 @@
 import {onBeforeMount, onMounted, ref} from "vue"
 import axios from "axios"
 import CrateCard from "../components/CrateCard.vue"
-import {CrateOverview} from "../types/crate_overview";
+import type {CrateOverview} from "../types/crate_overview";
 import {CRATES, SEARCH} from "../remote-routes";
 import {useRouter} from "vue-router";
 import {login_required} from "../common/auth";
