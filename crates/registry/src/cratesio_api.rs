@@ -4,43 +4,33 @@ use axum::{
     http::StatusCode,
 };
 use common::{original_name::OriginalName, version::Version};
-use error::error::{ApiError, ApiResult};
+use error::api_error::ApiResult;
 use reqwest::Url;
 use tracing::{debug, error, trace};
 
-use crate::search_params::SearchParams;
+use crate::{registry_error::RegistryError, search_params::SearchParams};
 
 pub async fn search(params: SearchParams) -> ApiResult<String> {
-    let url = match Url::parse(&format!(
+    let url = Url::parse(&format!(
         "https://crates.io/api/v1/crates?q={}&per_page={}",
         params.q, params.per_page.0
-    )) {
-        Ok(url) => url,
-        Err(e) => {
-            return Err(ApiError::from(&e.to_string()));
-        }
-    };
+    )).map_err(|e| RegistryError::UrlParseError(e))?;
 
-    let client = match reqwest::Client::builder().user_agent("kellnr").build() {
-        Ok(client) => client,
-        Err(e) => {
-            return Err(ApiError::from(&e.to_string()));
-        }
-    };
+    let client = reqwest::Client::builder()
+        .user_agent("kellnr")
+        .build()
+        .map_err(|e| RegistryError::RequestError(e))?;
 
-    let response = match client.get(url).send().await {
-        Ok(response) => response,
-        Err(e) => {
-            return Err(ApiError::from(&e.to_string()));
-        }
-    };
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| RegistryError::RequestError(e))?;
 
-    let body = match response.text().await {
-        Ok(body) => body,
-        Err(e) => {
-            return Err(ApiError::from(&e.to_string()));
-        }
-    };
+    let body = response
+        .text()
+        .await
+        .map_err(|e| RegistryError::RequestError(e))?;
 
     Ok(body)
 }

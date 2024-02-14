@@ -1,19 +1,21 @@
-use crate::cached_crate_storage::CachedCrateStorage;
+use crate::{cached_crate_storage::CachedCrateStorage, storage_error::StorageError};
 use settings::Settings;
 use std::ops::{Deref, DerefMut};
 
 pub struct KellnrCrateStorage(CachedCrateStorage);
 
 impl KellnrCrateStorage {
-    pub async fn new(settings: &Settings) -> Result<Self, anyhow::Error> {
+    pub async fn new(settings: &Settings) -> Result<Self, StorageError> {
         Ok(Self(
             CachedCrateStorage::new(settings.bin_path(), settings).await?,
         ))
     }
 
-    pub async fn delete(&self, crate_name: &str, crate_version: &str) -> Result<(), anyhow::Error> {
+    pub async fn delete(&self, crate_name: &str, crate_version: &str) -> Result<(), StorageError> {
         let path = self.0.crate_path(crate_name, crate_version);
-        tokio::fs::remove_file(path).await?;
+        tokio::fs::remove_file(path.clone())
+            .await
+            .map_err(|e| StorageError::RemoveFile(path, e))?;
         Ok(())
     }
 }

@@ -41,9 +41,9 @@ import {onBeforeMount, onMounted, ref} from "vue"
 import axios from "axios"
 import CrateCard from "../components/CrateCard.vue"
 import type {CrateOverview} from "../types/crate_overview";
-import {CRATES, SEARCH, VERSION} from "../remote-routes";
-import {store} from "../store/store";
+import {CRATES, SEARCH} from "../remote-routes";
 import {useRouter} from "vue-router";
+import {login_required} from "../common/auth";
 
 const crates = ref<Array<CrateOverview>>([])
 const emptyCrates = ref(false)
@@ -67,20 +67,6 @@ onBeforeMount(() => {
   }
 })
 
-function login_required() {
-  if(store.state.loggedIn === false) {
-    // Check if authentication is required
-    // to view crates. -> "auth_required = true" in Kellnr settings.
-    
-    axios.get(VERSION).then((_response) => {
-      // do nothing -> no auth required
-    }).catch((error) => {
-      if(error.response.status === 401) {
-        router.push("/login")
-      }
-    })
-  } 
-}
 
 function scrollHandler() {
   let table = rtable.value;

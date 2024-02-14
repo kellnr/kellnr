@@ -28,6 +28,8 @@ tracing.workspace = true
 axum.workspace = true
 tokio.workspace = true
 http-body-util.workspace = true
+thiserror.workspace = true
+hyper.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

@@ -10,9 +10,9 @@ settings.workspace = true
 common.workspace = true
 db.workspace = true
 auth.workspace = true
-error.workspace = true
 appstate.workspace = true
 storage.workspace = true
+error.workspace = true
 
 # External dependencies from crates.io
 anyhow.workspace = true
@@ -24,6 +24,8 @@ tracing.workspace = true
 axum.workspace = true
 hyper.workspace = true
 http-body-util.workspace = true
+thiserror.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

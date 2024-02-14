@@ -1,6 +1,7 @@
 use crate::owner;
 use crate::pub_data::PubData;
 use crate::pub_success::PubDataSuccess;
+use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
 use anyhow::Result;
@@ -19,7 +20,7 @@ use common::search_result;
 use common::search_result::{Crate, SearchResult};
 use common::version::Version;
 use db::DbProvider;
-use error::error::{ApiError, ApiResult};
+use error::api_error::{ApiError, ApiResult};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tracing::warn;
@@ -32,7 +33,7 @@ pub async fn check_ownership(
     if token.is_admin || db.is_owner(crate_name, &token.user).await? {
         Ok(())
     } else {
-        Err(ApiError::not_owner())
+        Err(RegistryError::NotOwner.into())
     }
 }
 
@@ -159,10 +160,9 @@ pub async fn publish(
     if let Some(id) = id {
         check_ownership(&normalized_name, &token, &db).await?;
         if db.crate_version_exists(id, &pub_data.metadata.vers).await? {
-            return Err(ApiError::from(&format!(
-                "Crate with version already exists: {}-{}",
-                &pub_data.metadata.name, &pub_data.metadata.vers
-            )));
+            return Err(
+                RegistryError::CrateExists(pub_data.metadata.name, pub_data.metadata.vers).into()
+            );
         }
     }
 
@@ -227,6 +227,7 @@ mod reg_api_tests {
     use axum::Router;
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString};
+    use error::api_error::ErrorDetails;
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
@@ -401,13 +402,13 @@ mod reg_api_tests {
             .unwrap();
 
         let response_status = r.status();
-        let error: ApiError =
+        let error: ErrorDetails =
             serde_json::from_slice(r.into_body().collect().await.unwrap().to_bytes().as_ref())
                 .expect("Cannot deserialize error message");
 
-        assert_eq!(StatusCode::OK, response_status);
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
         assert_eq!(
-            "ERROR: Invalid min. length. 4/10 bytes.",
+            "ERROR: Invalid min. length 4/10 bytes",
             error.errors[0].detail
         );
     }
@@ -602,7 +603,7 @@ mod reg_api_tests {
             .unwrap();
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        assert!(serde_json::from_slice::<ApiError>(&result_msg).is_ok());
+        assert!(serde_json::from_slice::<ErrorDetails>(&result_msg).is_ok());
     }
 
     #[tokio::test]
@@ -660,7 +661,7 @@ mod reg_api_tests {
             .unwrap();
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        assert!(serde_json::from_slice::<ApiError>(&result_msg).is_ok());
+        assert!(serde_json::from_slice::<ErrorDetails>(&result_msg).is_ok());
     }
 
     #[tokio::test]
@@ -695,7 +696,7 @@ mod reg_api_tests {
         // As the success message is empty in the normal case, the deserialization works even
         // if an error message was returned. That's why we need to test for an error message, too.
         assert!(
-            serde_json::from_slice::<ApiError>(&result_msg).is_err(),
+            serde_json::from_slice::<ErrorDetails>(&result_msg).is_err(),
             "An error message instead of a success message was returned"
         );
         assert_eq!(1, kellnr.db.get_crate_meta_list(1).await.unwrap().len());
@@ -742,10 +743,10 @@ mod reg_api_tests {
         let response_status = r.status();
 
         let msg = r.into_body().collect().await.unwrap().to_bytes();
-        let error: ApiError =
+        let error: ErrorDetails =
             serde_json::from_slice(&msg).expect("Cannot deserialize error message");
 
-        assert_eq!(StatusCode::OK, response_status);
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
         assert_eq!(
             "ERROR: Crate with version already exists: test_lib-0.2.0",
             error.errors[0].detail

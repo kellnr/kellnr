@@ -11,9 +11,9 @@ license-file = "../../LICENSE"
 # Internal dependencies
 common.workspace = true
 db.workspace = true
+storage.workspace = true
 
 # External dependencies
 zip.workspace = true
 serde.workspace = true
-anyhow.workspace = true
 axum.workspace = true

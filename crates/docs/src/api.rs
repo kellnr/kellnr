@@ -1,3 +1,4 @@
+use crate::docs_error::DocsError;
 use crate::{compute_doc_url, get_latest_version_with_doc};
 use crate::doc_archive::DocArchive;
 use crate::doc_queue_response::DocQueueResponse;
@@ -9,16 +10,14 @@ use axum::{
 };
 use common::original_name::OriginalName;
 use common::version::Version;
-use error::error::{ApiError, ApiResult};
+use error::api_error::ApiResult;
 use registry::kellnr_api::check_ownership;
 
-// #[get("/queue")]
 pub async fn docs_in_queue(State(db): DbState) -> ApiResult<Json<DocQueueResponse>> {
     let doc = db.get_doc_queue().await?;
     Ok(Json(DocQueueResponse::from(doc)))
 }
 
-// #[get("/<package>/latest")]
 pub async fn latest_docs(
     Path(package): Path<OriginalName>,
     State(settings): SettingsState,
@@ -39,7 +38,6 @@ pub async fn latest_docs(
     Redirect::temporary("/")
 }
 
-// #[put("/<package>/<version>", data = "<docs>")]
 pub async fn publish_docs(
     Path((package, version)): Path<(OriginalName, Version)>,
     token: Token,
@@ -68,7 +66,7 @@ pub async fn publish_docs(
 
     let _ = tokio::task::spawn_blocking(move || docs.extract(&doc_path))
         .await
-        .map_err(|_| ApiError::from("Failed to extract docs."))?;
+        .map_err(|_| DocsError::ExtractFailed)?;
 
     db.update_docs_link(
         &normalized_name,
@@ -88,10 +86,7 @@ fn crate_does_not_exist(
     crate_name: &str,
     crate_version: &str,
 ) -> ApiResult<Json<DocUploadResponse>> {
-    Err(ApiError::from(&format!(
-        "No Crate with version exists: {}-{}",
-        crate_name, crate_version
-    )))
+    Err(DocsError::CrateDoesNotExist(crate_name.to_string(), crate_version.to_string()).into())
 }
 
 #[cfg(test)]

@@ -19,6 +19,7 @@ import {onMounted, ref} from "vue"
 import type {DocQueueItem} from "../types/doc_queue_item"
 import DocQueueItemCard from "../components/DocQueueItemCard.vue"
 import {DOCS_QUEUE} from "../remote-routes";
+import { login_required } from "../common/auth";
 
 const queue = ref<Array<DocQueueItem>>()
 const emptyQueue = ref(false)
@@ -36,6 +37,7 @@ function getQueueItems() {
 }
 
 onMounted(() => {
+  login_required()
   getQueueItems()
 })
 

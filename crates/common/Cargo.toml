@@ -19,3 +19,4 @@ rand.workspace = true
 sea-orm.workspace = true
 axum.workspace = true
 tokio.workspace = true
+thiserror.workspace = true

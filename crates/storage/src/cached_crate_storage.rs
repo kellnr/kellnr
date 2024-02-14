@@ -1,4 +1,3 @@
-use anyhow::{bail, Context, Result};
 use common::original_name::OriginalName;
 use common::util::generate_rand_string;
 use common::version::Version;
@@ -13,6 +12,8 @@ use tokio::{
 };
 use tracing::{error, warn};
 
+use crate::storage_error::StorageError;
+
 pub type CrateCache = Cache<PathBuf, Vec<u8>>;
 
 pub struct CachedCrateStorage {
@@ -22,7 +23,7 @@ pub struct CachedCrateStorage {
 }
 
 impl CachedCrateStorage {
-    pub async fn new(crate_folder: PathBuf, settings: &Settings) -> Result<Self, anyhow::Error> {
+    pub async fn new(crate_folder: PathBuf, settings: &Settings) -> Result<Self, StorageError> {
         let cs = Self {
             crate_folder,
             doc_queue_path: settings.doc_queue_path(),
@@ -41,31 +42,28 @@ impl CachedCrateStorage {
         name: &OriginalName,
         version: &Version,
         crate_data: &[u8],
-    ) -> Result<String> {
+    ) -> Result<String, StorageError> {
         if !self.crate_folder.exists() {
             create_dir_all(&self.crate_folder)
                 .await
-                .with_context(|| "Failed to create crate_folder")?
+                .map_err(StorageError::CreateCrateFolder)?;
         }
 
         let file_path = self.crate_path(name, version);
         if Path::new(&file_path).exists() {
-            bail!("Crate with version already exists: {}-{}", &name, &version)
+            return Err(StorageError::CrateExists(
+                name.to_string(),
+                version.to_string(),
+            ));
         }
 
-        let mut file = File::create(&file_path).await.with_context(|| {
-            format!(
-                "Unable to create file on storage: {}",
-                file_path.to_string_lossy()
-            )
-        })?;
+        let mut file = File::create(&file_path)
+            .await
+            .map_err(|e| StorageError::CreateFile(e, file_path.clone()))?;
 
-        file.write_all(crate_data).await.with_context(|| {
-            format!(
-                "Unable to write crate to file: {}",
-                file_path.to_string_lossy()
-            )
-        })?;
+        file.write_all(crate_data)
+            .await
+            .map_err(|e| StorageError::WriteCrateFile(file_path.clone(), e))?;
 
         let sha256 = match self.calc_sha256(&file_path).await {
             Ok(s) => s,
@@ -80,23 +78,27 @@ impl CachedCrateStorage {
             .join(format!("{}-{}.crate", name, version))
     }
 
-    async fn calc_sha256(&self, file_path: &Path) -> Result<String> {
+    async fn calc_sha256(&self, file_path: &Path) -> Result<String, StorageError> {
         let mut tries = 0;
         let max_tries = 5;
 
         while tries < max_tries {
             let mut file = File::open(&file_path)
                 .await
-                .with_context(|| "Unable to open crate file to calc cksum")?;
+                .map_err(|e| StorageError::OpenCrateFileToCalckCksum(file_path.to_path_buf(), e))?;
 
             let mut buf: Vec<u8> = vec![];
 
             let bytes_read = file
                 .read_to_end(&mut buf)
                 .await
-                .with_context(|| "Unable to read crate file to calc cksum")?;
+                .map_err(|e| StorageError::ReadCrateFileToCalcCksum(file_path.to_path_buf(), e))?;
 
-            let real_length = file.metadata().await?.len();
+            let real_length = file
+                .metadata()
+                .await
+                .map_err(|e| StorageError::ReadCrateMetadata(file_path.to_path_buf(), e))?
+                .len();
             if bytes_read != real_length as usize {
                 let error_msg = format!(
                     "Try {} - Unable to read crate file {} to calc cksum. Read {} bytes, but file length is {}",
@@ -113,22 +115,18 @@ impl CachedCrateStorage {
             }
         }
 
-        let error_msg = format!(
-            "Unable to read crate file {} to calc cksum after {} tries",
-            file_path.display(),
-            max_tries
-        );
-        error!(error_msg);
-        bail!(error_msg)
+        let err = StorageError::ReadCrateFileTries(file_path.to_path_buf(), max_tries);
+        error!("{}", err);
+        Err(err)
     }
 
-    async fn create_bin_path(crate_path: &Path) -> Result<()> {
+    async fn create_bin_path(crate_path: &Path) -> Result<(), StorageError> {
         if !crate_path.exists() {
             DirBuilder::new()
                 .recursive(true)
                 .create(&crate_path)
                 .await
-                .with_context(|| format!("Unable to create bin path: {crate_path:?}"))?;
+                .map_err(|e| StorageError::CreateBinPath(crate_path.to_path_buf(), e))?;
         }
         Ok(())
     }
@@ -158,7 +156,7 @@ impl CachedCrateStorage {
         }
     }
 
-    pub async fn create_rand_doc_queue_path(&self) -> Result<PathBuf> {
+    pub async fn create_rand_doc_queue_path(&self) -> Result<PathBuf, StorageError> {
         let rand = generate_rand_string(10);
         let dir = self.doc_queue_path.join(rand);
         Self::create_recursive_path(&dir).await?;
@@ -166,13 +164,13 @@ impl CachedCrateStorage {
         Ok(dir)
     }
 
-    async fn create_recursive_path(path: &Path) -> Result<()> {
+    async fn create_recursive_path(path: &Path) -> Result<(), StorageError> {
         if !path.exists() {
             DirBuilder::new()
                 .recursive(true)
                 .create(path)
                 .await
-                .with_context(|| "Unable to create doc queue sub-path.")?;
+                .map_err(|e| StorageError::CreateDocQueuePath(path.to_path_buf(), e))?;
         }
         Ok(())
     }

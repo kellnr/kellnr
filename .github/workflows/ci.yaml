@@ -24,7 +24,7 @@ jobs:
         run: cd ui && npm install
 
       - name: Install Rust
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@v2
 
       - uses: Swatinem/rust-cache@v2
 
@@ -58,7 +58,7 @@ jobs:
         run: sudo apt install -y build-essential gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu sed
 
       - name: Setup Rust
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@v2
 
       - name: Add Rust Targets
         run: rustup target add ${{ matrix.target }}
