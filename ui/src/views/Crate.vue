@@ -254,7 +254,7 @@ import CrateSidebarElement from "../components/CrateSidebarElement.vue";
 import {store} from "../store/store";
 import {defaultCrateData, defaultCrateVersionData} from "../types/crate_data";
 import type {CrateData, CrateVersionData, CrateRegistryDep} from "../types/crate_data";
-import {CRATE_DATA, CRATE_DELETE, DOCS_BUILD, kellnr_url} from "../remote-routes";
+import {CRATE_DATA, CRATE_DELETE, DOCS_BUILD} from "../remote-routes";
 import Readme from "../components/Readme.vue";
 
 dayjs.extend(relativeTime);
@@ -394,8 +394,7 @@ function copyTomlToClipboard() {
 
 function openDocsPage() {
   if (selected_version.value.documentation) {
-    let url = selected_version.value.documentation.startsWith("/docs") ?
-        kellnr_url(selected_version.value.documentation) : selected_version.value.documentation;
+    let url = selected_version.value.documentation;
     window.open(url, "_blank");
   } else {
     router.push({name: "PublishDocs"})

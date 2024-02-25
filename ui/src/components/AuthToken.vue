@@ -38,7 +38,7 @@ import {onBeforeMount, ref} from 'vue'
 import StatusNotification from "../components/StatusNotification.vue";
 import axios from "axios";
 import {useRouter} from "vue-router";
-import {ADD_TOKEN, DELETE_TOKEN, kellnr_url, LIST_TOKENS} from "../remote-routes";
+import {ADD_TOKEN, DELETE_TOKEN, LIST_TOKENS} from "../remote-routes";
 
 const addTokenStatus = ref("")
 const addTokenMsg = ref("")
