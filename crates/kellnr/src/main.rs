@@ -166,7 +166,8 @@ async fn main() {
         .route("/statistic", get(ui::statistic))
         .route("/crate_data", get(ui::crate_data))
         .route("/cratesio_data", get(ui::cratesio_data))
-        .route("/delete_crate", delete(ui::delete))
+        .route("/delete_version", delete(ui::delete_version))
+        .route("/delete_crate", delete(ui::delete_crate))
         .route("/settings", get(ui::settings))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),

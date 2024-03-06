@@ -165,13 +165,13 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct DeleteCrateParams {
+pub struct DeleteCrateVersionParams {
     name: OriginalName,
     version: Version,
 }
 
-pub async fn delete(
-    Query(params): Query<DeleteCrateParams>,
+pub async fn delete_version(
+    Query(params): Query<DeleteCrateVersionParams>,
     user: MaybeUser,
     State(state): AppState,
 ) -> Result<(), RouteError> {
@@ -192,6 +192,42 @@ pub async fn delete(
     if let Err(e) = docs::delete(&name, &version, &state.settings).await {
         error!("Failed to delete crate from docs: {}", e);
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+    }
+
+    Ok(())
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct DeleteCrateParams {
+    name: OriginalName,
+}
+
+pub async fn delete_crate(
+    Query(params): Query<DeleteCrateParams>,
+    user: MaybeUser,
+    State(state): AppState,
+) -> Result<(), RouteError> {
+    user.assert_admin()?;
+    let name = params.name;
+
+    let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
+
+    for cm in crate_meta.iter() {
+        let version = Version::from_unchecked_str(&cm.version);        
+        if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
+            error!("Failed to delete crate from database: {:?}", e);
+            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        }
+
+        if let Err(e) = state.crate_storage.delete(&name, &cm.version).await {
+            error!("Failed to delete crate from storage: {}", e);
+            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        }
+
+        if let Err(e) = docs::delete(&name, &cm.version, &state.settings).await {
+            error!("Failed to delete crate from docs: {}", e);
+            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        }
     }
 
     Ok(())
