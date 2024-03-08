@@ -120,7 +120,8 @@ pub async fn login(
     let user = state
         .db
         .authenticate_user(&credentials.user, &credentials.pwd)
-        .await?;
+        .await
+        .map_err(|_| RouteError::AuthenticationFailure)?;
 
     let session_token = generate_rand_string(12);
     state
