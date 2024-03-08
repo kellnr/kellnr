@@ -8,13 +8,13 @@ pub enum RouteError {
     DbError(db::error::DbError),
     InsufficientPrivileges,
     Status(StatusCode),
-    PasswordMissmatch,
+    AuthenticationFailure,
 }
 
 impl From<db::error::DbError> for RouteError {
     fn from(err: db::error::DbError) -> Self {
         match err {
-            db::error::DbError::PasswordMismatch => Self::PasswordMissmatch,
+            db::error::DbError::PasswordMismatch => Self::AuthenticationFailure,
             _ => Self::DbError(err),
         }
     }
@@ -23,10 +23,10 @@ impl From<db::error::DbError> for RouteError {
 impl IntoResponse for RouteError {
     fn into_response(self) -> Response {
         match self {
-            Self::PasswordMissmatch => { 
+            Self::AuthenticationFailure => {
                 tracing::warn!("Login with wrong username or password");
                 StatusCode::UNAUTHORIZED.into_response()
-                },
+            }
             RouteError::DbError(err) => {
                 tracing::error!("Db: {err:?}");
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
