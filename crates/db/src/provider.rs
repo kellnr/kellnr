@@ -76,7 +76,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>>;
     async fn update_last_updated(&self, id: i64, last_updated: &DateTime<Utc>) -> DbResult<()>;
     async fn search_in_crate_name(&self, contains: &str) -> DbResult<Vec<CrateOverview>>;
-    async fn get_crate_overview_list(&self) -> DbResult<Vec<CrateOverview>>;
+    async fn get_crate_overview_list(&self, limit: u64, offset: u64) -> DbResult<Vec<CrateOverview>>;
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData>;
     async fn add_crate(
         &self,
@@ -297,7 +297,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_crate_overview_list(&self) -> DbResult<Vec<CrateOverview >> {
+            async fn get_crate_overview_list(&self, limit: u64, offset: u64) -> DbResult<Vec<CrateOverview >> {
                 unimplemented!()
             }
 

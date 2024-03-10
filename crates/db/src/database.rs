@@ -1351,7 +1351,7 @@ impl DbProvider for Database {
         Ok(result)
     }
 
-    async fn get_crate_overview_list(&self) -> DbResult<Vec<CrateOverview>> {
+    async fn get_crate_overview_list(&self, limit: u64, offset: u64) -> DbResult<Vec<CrateOverview>> {
         let stmt = Query::select()
             .columns(vec![
                 CrateIden::OriginalName,
@@ -1372,6 +1372,8 @@ impl DbProvider for Database {
                     .equals((CrateIden::Table, CrateIden::MaxVersion)),
             )
             .order_by(CrateIden::OriginalName, Order::Asc)
+            .limit(limit)
+            .offset(offset)
             .to_owned();
 
         let builder = self.db_con.get_database_backend();

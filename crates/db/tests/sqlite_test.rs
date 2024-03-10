@@ -1499,7 +1499,7 @@ async fn get_crate_overview_list() {
         },
     ];
 
-    let overview_list = test_db.db.get_crate_overview_list().await.unwrap();
+    let overview_list = test_db.db.get_crate_overview_list(10, 0).await.unwrap();
 
     assert_eq!(expected, overview_list);
 }

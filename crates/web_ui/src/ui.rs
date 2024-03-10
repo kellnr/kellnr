@@ -39,52 +39,29 @@ pub async fn kellnr_version() -> Json<KellnrVersion> {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CratesParams {
-    page: Option<usize>,
-    page_size: Option<usize>,
+    page: Option<u64>,
+    page_size: Option<u64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Pagination {
     crates: Vec<CrateOverview>,
-    current_num: usize,
-    total_num: usize,
+    page_size: u64,
+    page: u64,
 }
 
 pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
-    let page = params.page;
-    let crates = db.get_crate_overview_list().await.unwrap_or_default();
-    let total = crates.len();
-
-    let comp_start = |page: usize| {
-        if page * page_size < crates.len() {
-            page * page_size
-        } else {
-            0
-        }
-    };
-
-    let comp_end = |start: usize| {
-        if start + page_size < crates.len() {
-            start + page_size
-        } else {
-            crates.len()
-        }
-    };
-
-    let (end, crates) = match page {
-        Some(p) => {
-            let start = comp_start(p);
-            let end = comp_end(start);
-            (end, crates[start..end].to_vec())
-        }
-        None => (total, crates),
-    };
+    let page = params.page.unwrap_or(0);
+    let crates = db
+        .get_crate_overview_list(page_size, page_size * page)
+        .await
+        .unwrap_or_default();
 
     Json(Pagination {
         crates,
-        current_num: end,
-        total_num: total,
+        page_size,
+        page,
     })
 }
 
@@ -99,8 +76,8 @@ pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> J
         .await
         .unwrap_or_default();
     Json(Pagination {
-        current_num: crates.len(),
-        total_num: crates.len(),
+        page_size: crates.len() as u64,
+        page: 0, // Return everything as one page
         crates,
     })
 }
@@ -213,7 +190,7 @@ pub async fn delete_crate(
     let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
 
     for cm in crate_meta.iter() {
-        let version = Version::from_unchecked_str(&cm.version);        
+        let version = Version::from_unchecked_str(&cm.version);
         if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
             error!("Failed to delete crate from database: {:?}", e);
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
@@ -258,8 +235,14 @@ pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Js
     let num_crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
     let num_crate_downloads = db.get_total_downloads().await.unwrap_or_default();
     let tops = db.get_top_crates_downloads(3).await.unwrap_or_default();
-    let num_proxy_crates = db.get_total_unique_cached_crates().await.unwrap_or_default();
-    let num_proxy_crate_versions = db.get_total_cached_crate_versions().await.unwrap_or_default();
+    let num_proxy_crates = db
+        .get_total_unique_cached_crates()
+        .await
+        .unwrap_or_default();
+    let num_proxy_crate_versions = db
+        .get_total_cached_crate_versions()
+        .await
+        .unwrap_or_default();
     let num_proxy_crate_downloads = db.get_total_cached_downloads().await.unwrap_or_default();
     let last_updated_crate = db.get_last_updated_crate().await.unwrap_or_default();
 
@@ -272,20 +255,20 @@ pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Js
     }
 
     Json(Statistic {
-            num_crates,
-            num_crate_versions,
-            num_crate_downloads,
-            num_proxy_crates,
-            num_proxy_crate_versions,
-            num_proxy_crate_downloads,
-            top_crates: TopCrates {
-                first: extract(&tops, 0),
-                second: extract(&tops, 1),
-                third: extract(&tops, 2),
-            },
+        num_crates,
+        num_crate_versions,
+        num_crate_downloads,
+        num_proxy_crates,
+        num_proxy_crate_versions,
+        num_proxy_crate_downloads,
+        top_crates: TopCrates {
+            first: extract(&tops, 0),
+            second: extract(&tops, 1),
+            third: extract(&tops, 2),
+        },
         last_updated_crate,
         proxy_enabled: settings.proxy.enabled,
-        })
+    })
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -825,7 +808,7 @@ mod tests {
                 second: (String::new(), 0),
                 third: (String::new(), 0),
             },
-            last_updated_crate: None, 
+            last_updated_crate: None,
             proxy_enabled: false,
         };
 
@@ -863,9 +846,12 @@ mod tests {
         mock_db
             .expect_get_total_cached_downloads()
             .returning(move || Ok(999999));
-        mock_db
-            .expect_get_last_updated_crate()
-            .returning(move || Ok(Some((OriginalName::from_unchecked_str("foobar".to_string()), Version::try_from("1.0.0").unwrap()))));
+        mock_db.expect_get_last_updated_crate().returning(move || {
+            Ok(Some((
+                OriginalName::from_unchecked_str("foobar".to_string()),
+                Version::try_from("1.0.0").unwrap(),
+            )))
+        });
 
         let settings = test_settings();
         let r = app(
@@ -893,7 +879,10 @@ mod tests {
                 second: (String::from("top2"), 500),
                 third: (String::from("top3"), 100),
             },
-            last_updated_crate: Some((OriginalName::from_unchecked_str("foobar".to_string()), Version::try_from("1.0.0").unwrap())),
+            last_updated_crate: Some((
+                OriginalName::from_unchecked_str("foobar".to_string()),
+                Version::try_from("1.0.0").unwrap(),
+            )),
             proxy_enabled: false,
         };
         assert_eq!(expect, result_stat);
@@ -950,8 +939,8 @@ mod tests {
 
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!(0, result_crates.crates.len());
-        assert_eq!(0, result_crates.total_num);
-        assert_eq!(0, result_crates.current_num);
+        assert_eq!(0, result_crates.page);
+        assert_eq!(0, result_crates.page_size);
     }
 
     #[tokio::test]
@@ -993,8 +982,8 @@ mod tests {
 
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!(1, result_crates.crates.len());
-        assert_eq!(1, result_crates.total_num);
-        assert_eq!(1, result_crates.current_num);
+        assert_eq!(0, result_crates.page);
+        assert_eq!(0, result_crates.page_size);
         assert_eq!(test_crate_summary, result_crates.crates[0]);
     }
 
@@ -1085,13 +1074,14 @@ mod tests {
         };
 
         let test_crates = std::iter::repeat_with(|| test_crate_overview.clone())
-            .take(24)
+            .take(10)
             .collect::<Vec<_>>();
 
         let tc = test_crates.clone();
         mock_db
             .expect_get_crate_overview_list()
-            .returning(move || Ok(tc.clone()));
+            .with(eq(10), eq(0))
+            .returning(move |_, _| Ok(tc.clone()));
 
         let r = app(
             mock_db,
@@ -1099,7 +1089,7 @@ mod tests {
             settings,
         )
         .await
-        .oneshot(Request::get("/crates?page=1").body(Body::empty()).unwrap())
+        .oneshot(Request::get("/crates?page=0").body(Body::empty()).unwrap())
         .await
         .unwrap();
 
@@ -1109,77 +1099,9 @@ mod tests {
 
         let expected = test_crates[0..10].to_vec();
         assert_eq!(StatusCode::OK, result_status);
-        assert_eq!(24, result_pagination.total_num);
-        assert_eq!(20, result_pagination.current_num);
+        assert_eq!(0, result_pagination.page);
+        assert_eq!(10, result_pagination.page_size);
         assert_eq!(10, result_pagination.crates.len());
-        assert_eq!(expected, result_pagination.crates);
-    }
-
-    #[tokio::test]
-    async fn crates_get_page_out_of_bounds() {
-        let mut mock_db = MockDb::new();
-        let settings = test_settings();
-
-        let test_crate_summary = CrateOverview {
-            original_name: "c1".to_string(),
-            max_version: "1.0.0".to_string(),
-            last_updated: "12-10-2021 05:41:00".to_string(),
-            total_downloads: 2,
-            description: None,
-            documentation: None,
-        };
-
-        let test_crates = vec![
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-            test_crate_summary.clone(),
-        ];
-
-        let tc = test_crates.clone();
-        mock_db
-            .expect_get_crate_overview_list()
-            .returning(move || Ok(tc.clone()));
-
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
-            settings,
-        )
-        .await
-        .oneshot(Request::get("/crates?page=2").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
-
-        let expected = test_crates[0..4].to_vec();
-        assert_eq!(StatusCode::OK, result_status);
-        assert_eq!(4, result_pagination.crates.len());
-        assert_eq!(24, result_pagination.total_num);
-        assert_eq!(24, result_pagination.current_num);
         assert_eq!(expected, result_pagination.crates);
     }
 
@@ -1218,7 +1140,8 @@ mod tests {
         let crate_overview = expected_crate_overview.clone();
         mock_db
             .expect_get_crate_overview_list()
-            .returning(move || Ok(crate_overview.clone()));
+            .with(eq(10), eq(0))
+            .returning(move |_, _| Ok(crate_overview.clone()));
 
         let r = app(
             mock_db,
@@ -1236,8 +1159,8 @@ mod tests {
 
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!(3, result_pagination.crates.len());
-        assert_eq!(3, result_pagination.total_num);
-        assert_eq!(3, result_pagination.current_num);
+        assert_eq!(0, result_pagination.page);
+        assert_eq!(10, result_pagination.page_size);
         assert_eq!(expected_crate_overview, result_pagination.crates);
     }
 
