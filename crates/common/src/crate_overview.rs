@@ -9,4 +9,5 @@ pub struct CrateOverview {
     pub total_downloads: i64,
     pub description: Option<String>,
     pub documentation: Option<String>,
+    pub is_cache: bool,
 }

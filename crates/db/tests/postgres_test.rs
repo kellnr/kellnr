@@ -1374,7 +1374,7 @@ async fn search_in_crate_name_found_match() {
         },
     ];
 
-    let search_results = test_db.search_in_crate_name("crate").await.unwrap();
+    let search_results = test_db.search_in_crate_name("crate", false).await.unwrap();
 
     assert_eq!(expected, search_results);
 }
@@ -1468,7 +1468,7 @@ async fn get_crate_overview_list() {
         },
     ];
 
-    let overview_list = test_db.get_crate_overview_list(10, 0).await.unwrap();
+    let overview_list = test_db.get_crate_overview_list(10, 0, false).await.unwrap();
 
     assert_eq!(expected, overview_list);
 }

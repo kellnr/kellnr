@@ -157,9 +157,11 @@ pub enum CratesIoIden {
     Table,
     Id,
     Name,
+    OriginalName,
     Description,
     ETag,
     LastModified,
+    TotalDownloads,
 }
 
 #[derive(Iden)]

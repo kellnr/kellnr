@@ -99,7 +99,7 @@ pub async fn search(
     params: SearchParams,
 ) -> ApiResult<Json<search_result::SearchResult>> {
     let crates = db
-        .search_in_crate_name(&params.q)
+        .search_in_crate_name(&params.q, false)
         .await?
         .into_iter()
         .map(|c| search_result::Crate {
@@ -490,8 +490,8 @@ mod reg_api_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_search_in_crate_name()
-            .with(eq("foo"))
-            .returning(|_| Ok(vec![]));
+            .with(eq("foo"), eq(false))
+            .returning(|_,_| Ok(vec![]));
 
         let kellnr = app_search(Arc::new(mock_db)).await;
         let r = kellnr
@@ -512,8 +512,8 @@ mod reg_api_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_search_in_crate_name()
-            .with(eq("foo"))
-            .returning(|_| Ok(vec![]));
+            .with(eq("foo"), eq(false))
+            .returning(|_,_| Ok(vec![]));
 
         let kellnr = app_search(Arc::new(mock_db)).await;
         let r = kellnr

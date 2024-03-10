@@ -41,6 +41,7 @@ pub async fn kellnr_version() -> Json<KellnrVersion> {
 pub struct CratesParams {
     page: Option<u64>,
     page_size: Option<u64>,
+    cache: Option<bool>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -53,8 +54,9 @@ pub struct Pagination {
 pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
     let page = params.page.unwrap_or(0);
+    let cache = params.cache.unwrap_or(false);
     let crates = db
-        .get_crate_overview_list(page_size, page_size * page)
+        .get_crate_overview_list(page_size, page_size * page, cache)
         .await
         .unwrap_or_default();
 
@@ -68,11 +70,12 @@ pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> J
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct SearchParams {
     name: OriginalName,
+    cache: Option<bool>,
 }
 
 pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
     let crates = db
-        .search_in_crate_name(&params.name)
+        .search_in_crate_name(&params.name, params.cache.unwrap_or(false))
         .await
         .unwrap_or_default();
     Json(Pagination {
@@ -916,8 +919,8 @@ mod tests {
 
         mock_db
             .expect_search_in_crate_name()
-            .with(eq("doesnotexist"))
-            .returning(move |_name| Ok(vec![]));
+            .with(eq("doesnotexist"), eq(false))
+            .returning(move |_name, _| Ok(vec![]));
 
         let r = app(
             mock_db,
@@ -959,8 +962,8 @@ mod tests {
         let tc = test_crate_summary.clone();
         mock_db
             .expect_search_in_crate_name()
-            .with(eq("hello"))
-            .returning(move |_| Ok(vec![tc.clone()]));
+            .with(eq("hello"), eq(false))
+            .returning(move |_,_| Ok(vec![tc.clone()]));
 
         let r = app(
             mock_db,
@@ -983,7 +986,7 @@ mod tests {
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!(1, result_crates.crates.len());
         assert_eq!(0, result_crates.page);
-        assert_eq!(0, result_crates.page_size);
+        assert_eq!(1, result_crates.page_size);
         assert_eq!(test_crate_summary, result_crates.crates[0]);
     }
 
@@ -1071,6 +1074,7 @@ mod tests {
             total_downloads: 2,
             date: "12-10-2021 05:41:00".to_string(),
             documentation: None,
+            is_cache: false,
         };
 
         let test_crates = std::iter::repeat_with(|| test_crate_overview.clone())
@@ -1080,8 +1084,8 @@ mod tests {
         let tc = test_crates.clone();
         mock_db
             .expect_get_crate_overview_list()
-            .with(eq(10), eq(0))
-            .returning(move |_, _| Ok(tc.clone()));
+            .with(eq(10), eq(0), eq(false))
+            .returning(move |_, _, _| Ok(tc.clone()));
 
         let r = app(
             mock_db,
@@ -1118,6 +1122,7 @@ mod tests {
                 total_downloads: 1,
                 description: Some("Desc".to_string()),
                 documentation: Some("Docs".to_string()),
+                is_cache: true,
             },
             CrateOverview {
                 name: "c2".to_string(),
@@ -1126,6 +1131,7 @@ mod tests {
                 total_downloads: 2,
                 description: Some("Desc".to_string()),
                 documentation: Some("Docs".to_string()),
+                is_cache: true,
             },
             CrateOverview {
                 name: "c3".to_string(),
@@ -1134,14 +1140,15 @@ mod tests {
                 total_downloads: 3,
                 description: None,
                 documentation: None,
+                is_cache: true,
             },
         ];
 
         let crate_overview = expected_crate_overview.clone();
         mock_db
             .expect_get_crate_overview_list()
-            .with(eq(10), eq(0))
-            .returning(move |_, _| Ok(crate_overview.clone()));
+            .with(eq(10), eq(0), eq(false))
+            .returning(move |_, _, _| Ok(crate_overview.clone()));
 
         let r = app(
             mock_db,

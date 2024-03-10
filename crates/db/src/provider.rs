@@ -23,7 +23,7 @@ pub enum PrefetchState {
 
 #[async_trait]
 pub trait DbProvider: Send + Sync {
-    async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>>; 
+    async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>>;
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User>;
     async fn increase_download_counter(
         &self,
@@ -75,8 +75,13 @@ pub trait DbProvider: Send + Sync {
     async fn delete_crate(&self, krate: &NormalizedName, version: &Version) -> DbResult<()>;
     async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>>;
     async fn update_last_updated(&self, id: i64, last_updated: &DateTime<Utc>) -> DbResult<()>;
-    async fn search_in_crate_name(&self, contains: &str) -> DbResult<Vec<CrateOverview>>;
-    async fn get_crate_overview_list(&self, limit: u64, offset: u64) -> DbResult<Vec<CrateOverview>>;
+    async fn search_in_crate_name(&self, contains: &str, cache: bool) -> DbResult<Vec<CrateOverview>>;
+    async fn get_crate_overview_list(
+        &self,
+        limit: u64,
+        offset: u64,
+        cache: bool,
+    ) -> DbResult<Vec<CrateOverview>>;
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData>;
     async fn add_crate(
         &self,
@@ -144,7 +149,7 @@ pub mod mock {
             ) -> DbResult<()> {
                 unimplemented!()
             }
-            
+
             async fn increase_cached_download_counter(
                 &self,
                 _crate_name: &NormalizedName,
@@ -293,11 +298,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn search_in_crate_name(&self, contains: &str) -> DbResult<Vec<CrateOverview>> {
+            async fn search_in_crate_name(&self, contains: &str, cache: bool) -> DbResult<Vec<CrateOverview>> {
                 unimplemented!()
             }
 
-            async fn get_crate_overview_list(&self, limit: u64, offset: u64) -> DbResult<Vec<CrateOverview >> {
+            async fn get_crate_overview_list(&self, limit: u64, offset: u64, cache: bool) -> DbResult<Vec<CrateOverview >> {
                 unimplemented!()
             }
 

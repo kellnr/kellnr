@@ -5,4 +5,5 @@ export type CrateOverview = {
     total_downloads: number
     description?: string
     documentation?: string
+    is_kellnr: boolean
 }

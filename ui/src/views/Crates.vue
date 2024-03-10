@@ -3,7 +3,16 @@
     <div id="statSearch" class="glass">
       <div id="search">
         <input class="input is-info" v-model="searchText" v-on:keyup.enter="searchCrates(searchText)"
-          placeholder="Search for crates" type="text" />
+          placeholder="Search for crates" type="text"></input>
+        <div id="cacheSwitch">
+          <label class="inline-block-child switch">
+            <input type="checkbox" v-model="cache" v-on:change="getCrates(0, page_size, true)" >
+            <span class="slider round"></span>
+          </label>
+          <span id="cacheSwitchLabel" class="inline-block-child">
+            Cache
+          </span>
+        </div>
       </div>
     </div>
 
@@ -14,9 +23,8 @@
           target="_blank">documentation</a>.
       </div>
       <template v-for="crate in crates" :key="crate">
-        <crate-card class="cardview" :crate="crate.name" :version="crate.version"
-          :updated="crate.date" :downloads="crate.total_downloads" :desc="crate.description"
-          :doc-link="crate.documentation"></crate-card>
+        <crate-card class="cardview" :crate="crate.name" :version="crate.version" :updated="crate.date"
+          :downloads="crate.total_downloads" :desc="crate.description" :doc-link="crate.documentation"></crate-card>
       </template>
     </div>
   </div>
@@ -39,6 +47,7 @@ const page_size = ref(20)
 const searchText = ref("")
 const rtable = ref<HTMLDivElement | null>(null)
 const router = useRouter()
+const cache = ref(false)
 
 onBeforeMount(() => {
   login_required()
@@ -58,7 +67,7 @@ onMounted(() => {
     page_size.value = num_crates * 2;
 
     if (searchText.value === "") {
-      getCrates(page.value, page_size.value);
+      getCrates(page.value, page_size.value, true);
     }
   }
 })
@@ -77,16 +86,20 @@ function scrollHandler() {
   }
 }
 
-function getCrates(next_page: number, page_size: number) {
+function getCrates(next_page: number, page_size: number, clean: boolean = false) {
   if (current_num.value != 0 && total_num.value != null) {
     if (current_num.value >= total_num.value) {
       return;
     }
   }
 
+  if (clean) {
+    clearTable();
+  }
+
   axios
     .get(CRATES, {
-      params: { page: next_page, page_size: page_size },
+      params: { page: next_page, page_size: page_size, cache: cache.value },
     })
     .then((response) => {
       crates.value = crates.value.concat(response.data.crates);
@@ -111,7 +124,7 @@ function searchCrates(searchText: string) {
   }
 
   axios
-    .get(SEARCH, { params: { name: searchQuery } })
+    .get(SEARCH, { params: { name: searchQuery, cache: cache.value } })
     .then((res) => {
       clearTable();
       crates.value = res.data.crates;
@@ -152,4 +165,15 @@ function searchCrates(searchText: string) {
   margin-bottom: 1rem;
 }
 
+.inline-block-child {
+  display: inline-block;
+}
+
+#cacheSwitch {
+  margin-top: 0.5rem;
+}
+
+#cacheSwitchLabel {
+  margin-left: 0.5rem;
+}
 </style>
