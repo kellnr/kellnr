@@ -949,9 +949,9 @@ mod tests {
         let settings = test_settings();
 
         let test_crate_summary = CrateOverview {
-            original_name: "hello".to_string(),
-            max_version: "1.0.0".to_string(),
-            last_updated: "12-10-2021 05:41:00".to_string(),
+            name: "hello".to_string(),
+            version: "1.0.0".to_string(),
+            date: "12-10-2021 05:41:00".to_string(),
             total_downloads: 2,
             ..Default::default()
         };
@@ -1065,11 +1065,11 @@ mod tests {
         let settings = test_settings();
 
         let test_crate_overview = CrateOverview {
-            original_name: "c1".to_string(),
-            max_version: "1.0.0".to_string(),
+            name: "c1".to_string(),
+            version: "1.0.0".to_string(),
             description: None,
             total_downloads: 2,
-            last_updated: "12-10-2021 05:41:00".to_string(),
+            date: "12-10-2021 05:41:00".to_string(),
             documentation: None,
         };
 
@@ -1112,25 +1112,25 @@ mod tests {
 
         let expected_crate_overview = vec![
             CrateOverview {
-                original_name: "c1".to_string(),
-                max_version: "1.0.0".to_string(),
-                last_updated: "12-11-2021 05:41:00".to_string(),
+                name: "c1".to_string(),
+                version: "1.0.0".to_string(),
+                date: "12-11-2021 05:41:00".to_string(),
                 total_downloads: 1,
                 description: Some("Desc".to_string()),
                 documentation: Some("Docs".to_string()),
             },
             CrateOverview {
-                original_name: "c2".to_string(),
-                max_version: "2.0.0".to_string(),
-                last_updated: "12-12-2021 05:41:00".to_string(),
+                name: "c2".to_string(),
+                version: "2.0.0".to_string(),
+                date: "12-12-2021 05:41:00".to_string(),
                 total_downloads: 2,
                 description: Some("Desc".to_string()),
                 documentation: Some("Docs".to_string()),
             },
             CrateOverview {
-                original_name: "c3".to_string(),
-                max_version: "3.0.0".to_string(),
-                last_updated: "12-09-2021 05:41:00".to_string(),
+                name: "c3".to_string(),
+                version: "3.0.0".to_string(),
+                date: "12-09-2021 05:41:00".to_string(),
                 total_downloads: 3,
                 description: None,
                 documentation: None,

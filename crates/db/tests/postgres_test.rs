@@ -1352,23 +1352,23 @@ async fn search_in_crate_name_found_match() {
         .unwrap();
     let expected = vec![
         CrateOverview {
-            original_name: "crate".to_string(),
-            max_version: "2.2.0".to_string(),
-            last_updated: created_string.clone(),
+            name: "crate".to_string(),
+            version: "2.2.0".to_string(),
+            date: created_string.clone(),
             total_downloads: 8,
             ..CrateOverview::default()
         },
         CrateOverview {
-            original_name: "crate_foo".to_string(),
-            max_version: "3.0.0".to_string(),
-            last_updated: created_string.clone(),
+            name: "crate_foo".to_string(),
+            version: "3.0.0".to_string(),
+            date: created_string.clone(),
             total_downloads: 10,
             ..CrateOverview::default()
         },
         CrateOverview {
-            original_name: "foo_crate".to_string(),
-            max_version: "2.0.0".to_string(),
-            last_updated: created_string.clone(),
+            name: "foo_crate".to_string(),
+            version: "2.0.0".to_string(),
+            date: created_string.clone(),
             total_downloads: 6,
             ..CrateOverview::default()
         },
@@ -1446,23 +1446,23 @@ async fn get_crate_overview_list() {
         .unwrap();
     let expected = vec![
         CrateOverview {
-            original_name: "crate".to_string(),
-            max_version: "2.2.0".to_string(),
-            last_updated: created_string.clone(),
+            name: "crate".to_string(),
+            version: "2.2.0".to_string(),
+            date: created_string.clone(),
             total_downloads: 8,
             ..CrateOverview::default()
         },
         CrateOverview {
-            original_name: "crate_foo".to_string(),
-            max_version: "3.0.0".to_string(),
-            last_updated: created_string.clone(),
+            name: "crate_foo".to_string(),
+            version: "3.0.0".to_string(),
+            date: created_string.clone(),
             total_downloads: 10,
             ..CrateOverview::default()
         },
         CrateOverview {
-            original_name: "foo_crate".to_string(),
-            max_version: "2.0.0".to_string(),
-            last_updated: created_string.clone(),
+            name: "foo_crate".to_string(),
+            version: "2.0.0".to_string(),
+            date: created_string.clone(),
             total_downloads: 6,
             ..CrateOverview::default()
         },

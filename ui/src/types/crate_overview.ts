@@ -1,7 +1,7 @@
 export type CrateOverview = {
-    original_name: string
-    max_version: string
-    last_updated: string
+    name: string
+    version: string
+    date: string
     total_downloads: number
     description?: string
     documentation?: string

@@ -1351,7 +1351,11 @@ impl DbProvider for Database {
         Ok(result)
     }
 
-    async fn get_crate_overview_list(&self, limit: u64, offset: u64) -> DbResult<Vec<CrateOverview>> {
+    async fn get_crate_overview_list(
+        &self,
+        limit: u64,
+        offset: u64,
+    ) -> DbResult<Vec<CrateOverview>> {
         let stmt = Query::select()
             .columns(vec![
                 CrateIden::OriginalName,
@@ -1361,6 +1365,35 @@ impl DbProvider for Database {
                 CrateIden::Description,
             ])
             .column(CrateMetaIden::Documentation)
+            .from(CrateMetaIden::Table)
+            .inner_join(
+                CrateIden::Table,
+                Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
+                    .equals((CrateIden::Table, CrateIden::Id)),
+            )
+            .and_where(
+                Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
+                    .equals((CrateIden::Table, CrateIden::MaxVersion)),
+            )
+            .order_by(CrateIden::OriginalName, Order::Asc)
+            .limit(limit)
+            .offset(offset)
+            .to_owned();
+
+        let stmt = Query::select()
+            .columns(vec![
+                CrateIden::OriginalName,
+                CrateIden::MaxVersion,
+                CrateIden::LastUpdated,
+                CrateIden::TotalDownloads,
+                CrateIden::Description,
+            ])
+            .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
+            .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
+            .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
+            .expr_as(Expr::col(CrateIden::TotalDownloads), Alias::new("total_downloads"))
+            .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
+            .expr_as(Expr::col(CrateMetaIden::Documentation), Alias::new("documentation"))
             .from(CrateMetaIden::Table)
             .inner_join(
                 CrateIden::Table,

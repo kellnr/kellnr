@@ -14,8 +14,8 @@
           target="_blank">documentation</a>.
       </div>
       <template v-for="crate in crates" :key="crate">
-        <crate-card class="cardview" :crate="crate.original_name" :version="crate.max_version"
-          :updated="crate.last_updated" :downloads="crate.total_downloads" :desc="crate.description"
+        <crate-card class="cardview" :crate="crate.name" :version="crate.version"
+          :updated="crate.date" :downloads="crate.total_downloads" :desc="crate.description"
           :doc-link="crate.documentation"></crate-card>
       </template>
     </div>

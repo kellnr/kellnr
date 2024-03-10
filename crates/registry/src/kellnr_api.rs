@@ -103,8 +103,8 @@ pub async fn search(
         .await?
         .into_iter()
         .map(|c| search_result::Crate {
-            name: c.original_name,
-            max_version: c.max_version,
+            name: c.name,
+            max_version: c.version,
             description: c
                 .description
                 .unwrap_or_else(|| "No description set".to_string()),
