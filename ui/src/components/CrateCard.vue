@@ -1,18 +1,19 @@
 <template>
   <div class="crateCard glass">
-<!--    <div class="firstColumn">-->
-<!--      <span class="boxIcon"><i class="fas fa-box"></i></span>-->
-<!--    </div>-->
+    <!--    <div class="firstColumn">-->
+    <!--      <span class="boxIcon"><i class="fas fa-box"></i></span>-->
+    <!--    </div>-->
     <div class="secondColumn">
       <div>
-        <router-link class="crateName" :to="{name: 'Crate', query: {name: crate, version: version}}">{{crate}}</router-link>
+        <router-link class="crateName"
+          :to="{ name: 'Crate', query: { name: crate, version: version } }">{{ crate }}</router-link>
         <span class="crateVersion">v{{ version }}</span>
       </div>
       <div class="secondRow">
         <span class="docs" v-if="docLink">
           <a v-bind:href="docLink" class="clickable" target="_blank">Documentation</a>
         </span>
-          <span class="docs" v-else>
+        <span class="docs" v-else>
           <router-link class="clickable" to="/publishdocs">Add Documentation</router-link>
         </span>
       </div>
@@ -26,13 +27,15 @@
       </span>
     </div>
     <div class="fourthColumn">
-      <div class="crateIconInfo">
+      <div class="crateIconInfo tooltip">
         <span class="crateIcon"><i class="fas fa-cloud-download-alt"></i></span>
-        <span>Downloads: {{ downloads }}</span>
+        <span>{{ downloads }}</span>
+        <span class="tooltiptext">downloads</span>
       </div>
-      <div class="crateIconInfo">
+      <div class="crateIconInfo tooltip">
         <span class="crateIcon"><i class="fas fa-calendar-alt"></i></span>
-        <span>Updated: {{ humanizedLastUpdated }}</span>
+        <span>{{ humanizedLastUpdated }}</span>
+        <span class="tooltiptext">last updated</span>
       </div>
     </div>
   </div>
@@ -41,7 +44,7 @@
 <script setup lang="ts">
 //"copyToCb(crate + ' = &quot;' + version + '&quot;')
 
-import {computed} from "vue";
+import { computed } from "vue";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 
@@ -137,7 +140,7 @@ body[color-theme="dark"] .crateName:hover {
   margin-left: 1rem;
 }
 
-.boxIcon > i {
+.boxIcon>i {
   color: var(--color-darkest);
 }
 </style>
