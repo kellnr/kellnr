@@ -2206,7 +2206,17 @@ async fn is_cratesio_cache_up_to_date_up_to_date() {
             "etag",
             "last_modified",
             None,
-            &[],
+            &[IndexMetadata {
+                name: "crate".to_string(),
+                vers: "1.0.0".to_string(),
+                deps: vec![],
+                cksum: "cksum".to_string(),
+                features: Default::default(),
+                yanked: false,
+                links: None,
+                v: Some(1),
+                features2: None,
+            }],
         )
         .await
         .unwrap();

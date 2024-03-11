@@ -1317,7 +1317,11 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn search_in_crate_name(&self, contains: &str, cache: bool) -> DbResult<Vec<CrateOverview>> {
+    async fn search_in_crate_name(
+        &self,
+        contains: &str,
+        cache: bool,
+    ) -> DbResult<Vec<CrateOverview>> {
         let stmt = if cache == false {
             Query::select()
                 .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
@@ -1416,65 +1420,45 @@ impl DbProvider for Database {
         offset: u64,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
+        let mut stmt_kellnr = Query::select()
+            .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
+            .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
+            .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
+            .expr_as(
+                Expr::col(CrateIden::TotalDownloads),
+                Alias::new("total_downloads"),
+            )
+            .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
+            .expr_as(
+                Expr::col(CrateMetaIden::Documentation),
+                Alias::new("documentation"),
+            )
+            .expr_as(Expr::cust("false"), Alias::new("is_cache"))
+            .from(CrateMetaIden::Table)
+            .inner_join(
+                CrateIden::Table,
+                Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
+                    .equals((CrateIden::Table, CrateIden::Id)),
+            )
+            .and_where(
+                Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
+                    .equals((CrateIden::Table, CrateIden::MaxVersion)),
+            )
+            .to_owned();
+
         let stmt = if cache == false {
-            Query::select()
-                .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
-                .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
-                .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
-                .expr_as(
-                    Expr::col(CrateIden::TotalDownloads),
-                    Alias::new("total_downloads"),
-                )
-                .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
-                .expr_as(
-                    Expr::col(CrateMetaIden::Documentation),
-                    Alias::new("documentation"),
-                )
-                .expr_as(Expr::cust("false"), Alias::new("is_cache"))
-                .from(CrateMetaIden::Table)
-                .inner_join(
-                    CrateIden::Table,
-                    Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
-                        .equals((CrateIden::Table, CrateIden::Id)),
-                )
-                .and_where(
-                    Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
-                        .equals((CrateIden::Table, CrateIden::MaxVersion)),
-                )
+            stmt_kellnr
                 .order_by(CrateIden::OriginalName, Order::Asc)
                 .limit(limit)
                 .offset(offset)
                 .to_owned()
         } else {
-            Query::select()
-                .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
-                .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
-                .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
-                .expr_as(
-                    Expr::col(CrateIden::TotalDownloads),
-                    Alias::new("total_downloads"),
-                )
-                .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
-                .expr_as(
-                    Expr::col(CrateMetaIden::Documentation),
-                    Alias::new("documentation"),
-                )
-                .expr_as(Expr::cust("false"), Alias::new("is_cache"))
-                .from(CrateMetaIden::Table)
-                .inner_join(
-                    CrateIden::Table,
-                    Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
-                        .equals((CrateIden::Table, CrateIden::Id)),
-                )
-                .and_where(
-                    Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
-                        .equals((CrateIden::Table, CrateIden::MaxVersion)),
-                )
+            stmt_kellnr
                 .union(
                     UnionType::All,
                     Query::select()
                         .expr_as(Expr::col(CratesIoIden::OriginalName), Alias::new("name"))
-                        .expr_as(Expr::cust("'none'"), Alias::new("version"))
+                        .expr_as(Expr::col(CratesIoIden::MaxVersion), Alias::new("version"))
                         .expr_as(Expr::col(CratesIoIden::LastModified), Alias::new("date"))
                         .expr_as(
                             Expr::col(CratesIoIden::TotalDownloads),
@@ -1484,9 +1468,21 @@ impl DbProvider for Database {
                             Expr::col(CratesIoIden::Description),
                             Alias::new("description"),
                         )
-                        .expr_as(Expr::cust("null"), Alias::new("documentation"))
+                        .expr_as(
+                            Expr::col(CratesIoMetaIden::Documentation),
+                            Alias::new("documentation"),
+                        )
                         .expr_as(Expr::cust("true"), Alias::new("is_cache"))
-                        .from(CratesIoIden::Table)
+                        .from(CratesIoMetaIden::Table)
+                        .inner_join(
+                            CratesIoIden::Table,
+                            Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::CratesIoFk))
+                                .equals((CratesIoIden::Table, CratesIoIden::Id)),
+                        )
+                        .and_where(
+                            Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Version))
+                                .equals((CratesIoIden::Table, CratesIoIden::MaxVersion)),
+                        )
                         .to_owned(),
                 )
                 .order_by(Alias::new("name"), Order::Asc)
@@ -1494,6 +1490,9 @@ impl DbProvider for Database {
                 .offset(offset)
                 .to_owned()
         };
+
+        let stmt_str = self.db_con.get_database_backend().build(&stmt);
+        println!("stmt_str: {}", stmt_str);
 
         let builder = self.db_con.get_database_backend();
         let result = CrateOverview::find_by_statement(builder.build(&stmt))
@@ -1817,6 +1816,13 @@ impl DbProvider for Database {
         indices: &[IndexMetadata],
     ) -> DbResult<Prefetch> {
         let normalized_name = crate_name.to_normalized();
+
+        let max_version = indices
+            .iter()
+            .map(|i| Version::from_unchecked_str(&i.vers))
+            .max()
+            .ok_or(DbError::FailedToGetMaxVersionByName(crate_name.to_string()))?;
+
         let krate = match cratesio_crate::Entity::find()
             .filter(cratesio_crate::Column::Name.eq(normalized_name.to_string()))
             .one(&self.db_con)
@@ -1826,6 +1832,7 @@ impl DbProvider for Database {
                 let mut krate: cratesio_crate::ActiveModel = krate.into();
                 krate.e_tag = Set(etag.to_string());
                 krate.last_modified = Set(last_modified.to_string());
+                krate.max_version = Set(max_version.to_string());
                 krate.update(&self.db_con).await?
             }
             None => {
@@ -1837,6 +1844,7 @@ impl DbProvider for Database {
                     e_tag: Set(etag.to_string()),
                     last_modified: Set(last_modified.to_string()),
                     total_downloads: Set(0),
+                    max_version: Set(max_version.to_string()),
                 };
                 krate.insert(&self.db_con).await?
             }
@@ -1892,6 +1900,11 @@ impl DbProvider for Database {
                     version: Set(index.vers.clone()),
                     downloads: Set(0),
                     crates_io_fk: Set(krate.id),
+                    documentation: Set(Some(format!(
+                        "https://docs.rs/{}/{}",
+                        normalized_name.to_string(),
+                        index.vers,
+                    ))),
                 };
 
                 meta.insert(&self.db_con).await?;
