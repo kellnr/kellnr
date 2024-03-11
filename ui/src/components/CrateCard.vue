@@ -1,12 +1,13 @@
 <template>
   <div class="crateCard glass">
-    <!--    <div class="firstColumn">-->
-    <!--      <span class="boxIcon"><i class="fas fa-box"></i></span>-->
-    <!--    </div>-->
+    <div class="firstColumn">
+      <img v-if="props.isCache" v-bind:src="store.state.cargoSmallLogo" class="degLogoImg" alt="Crates.io logo" />
+      <img v-else v-bind:src="store.state.kellnrSmallLogo" class="degLogoImg" alt="Kellnr logo" />
+    </div>
     <div class="secondColumn">
       <div>
-        <router-link class="crateName"
-          :to="{ name: 'Crate', query: { name: crate, version: version } }">{{ crate }}</router-link>
+        <router-link class="crateName" :to="{ name: 'Crate', query: { name: crate, version: version } }">{{ crate
+          }}</router-link>
         <span class="crateVersion">v{{ version }}</span>
       </div>
       <div class="secondRow">
@@ -42,11 +43,10 @@
 </template>
 
 <script setup lang="ts">
-//"copyToCb(crate + ' = &quot;' + version + '&quot;')
-
 import { computed } from "vue";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { store } from "../store/store"
 
 dayjs.extend(relativeTime);
 
@@ -57,6 +57,7 @@ const props = defineProps<{
   version: string
   updated: string
   docLink?: string
+  isCache: boolean
 }>()
 
 const humanizedLastUpdated = computed(() => {
@@ -75,6 +76,15 @@ function copyToCb(text: string) {
   text-align: left;
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
+}
+
+.firstColumn {
+  grid-column: 1;
+  display: grid;
+  align-items: center;
+  padding-right: 0.5rem;
+  margin-right: 0.5rem;
+  border-right: 1px solid var(--color-darkest);
 }
 
 .secondColumn {

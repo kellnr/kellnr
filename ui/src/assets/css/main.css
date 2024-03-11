@@ -18,7 +18,6 @@
     --color-lightest: #CAF0F8;
 }
 
-
 body {
     font-family: "Nunito", sans-serif;
 }
@@ -131,8 +130,8 @@ body[color-theme="light"] .glass {
   content: "";
   height: 20px;
   width: 20px;
-  left: 2.5px;
-  bottom: 2.5px;
+  left: 3px;
+  bottom: 2px;
   background-color: white;
   -webkit-transition: .4s;
   transition: .4s;
@@ -143,9 +142,9 @@ input:checked + .slider {
 }
 
 input:checked + .slider:before {
-  -webkit-transform: translateX(26px);
-  -ms-transform: translateX(26px);
-  transform: translateX(26px);
+  -webkit-transform: translateX(25px);
+  -ms-transform: translateX(25px);
+  transform: translateX(25px);
 }
 
 /* Rounded sliders */

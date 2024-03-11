@@ -24,7 +24,7 @@
       </div>
       <template v-for="crate in crates" :key="crate">
         <crate-card class="cardview" :crate="crate.name" :version="crate.version" :updated="crate.date"
-          :downloads="crate.total_downloads" :desc="crate.description" :doc-link="crate.documentation"></crate-card>
+          :downloads="crate.total_downloads" :desc="crate.description" :doc-link="crate.documentation" :is-cache="crate.is_cache"></crate-card>
       </template>
     </div>
   </div>
