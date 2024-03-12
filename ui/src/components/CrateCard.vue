@@ -6,7 +6,8 @@
     </div>
     <div class="secondColumn">
       <div>
-        <router-link class="crateName" :to="{ name: 'Crate', query: { name: crate, version: version } }">{{ crate
+        <a v-if="props.isCache" :href="`https://crates.io/crates/${crate}`" class="crateName" target="_blank">{{ crate }}</a>
+        <router-link v-else class="crateName" :to="{ name: 'Crate', query: { name: crate, version: version } }">{{ crate
           }}</router-link>
         <span class="crateVersion">v{{ version }}</span>
       </div>

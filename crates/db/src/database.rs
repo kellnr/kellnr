@@ -1491,9 +1491,6 @@ impl DbProvider for Database {
                 .to_owned()
         };
 
-        let stmt_str = self.db_con.get_database_backend().build(&stmt);
-        println!("stmt_str: {}", stmt_str);
-
         let builder = self.db_con.get_database_backend();
         let result = CrateOverview::find_by_statement(builder.build(&stmt))
             .all(&self.db_con)
