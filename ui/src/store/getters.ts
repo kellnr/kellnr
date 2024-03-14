@@ -1,5 +1,5 @@
-import {GetterTree} from "vuex";
-import {State} from "@/store/state";
+import { type GetterTree } from "vuex";
+import { type State } from "./state";
 
 export type Getters = {
     theme(state: State): string

@@ -1,15 +1,15 @@
-import { MutationTypes} from "@/store/mutation-types";
-import { State } from "@/store/state";
-import { MutationTree} from "vuex";
+import { MutationTypes } from "./mutation-types";
+import { type State } from "./state";
+import { type MutationTree } from "vuex";
 
 export type Mutations<S = State> = {
-    [MutationTypes.LOGIN](state: S, payload: {"user": string, "is_admin": boolean}): void,
+    [MutationTypes.LOGIN](state: S, payload: { "user": string, "is_admin": boolean }): void,
     [MutationTypes.LOGOUT](state: S, payload: any): void,
     [MutationTypes.TOGGLE_THEME](state: S, payload: any): void,
 }
 
 export const mutations: MutationTree<State> & Mutations = {
-    [MutationTypes.LOGIN](state, payload: {"user": string, "is_admin": boolean}) {
+    [MutationTypes.LOGIN](state, payload: { "user": string, "is_admin": boolean }) {
         state.loggedIn = true
         state.loggedInUser = payload["user"]
         state.loggedInUserIsAdmin = payload["is_admin"]
