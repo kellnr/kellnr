@@ -3,16 +3,24 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "cratesio_meta")]
+#[sea_orm(table_name = "cratesio_index")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     #[sea_orm(column_type = "Text")]
-    pub version: String,
-    pub downloads: i64,
-    pub crates_io_fk: i64,
+    pub name: String,
+    #[sea_orm(column_type = "Text")]
+    pub vers: String,
+    pub deps: Option<Json>,
+    #[sea_orm(column_type = "Text")]
+    pub cksum: String,
+    pub features: Option<Json>,
+    pub features2: Option<Json>,
+    pub yanked: bool,
     #[sea_orm(column_type = "Text", nullable)]
-    pub documentation: Option<String>,
+    pub links: Option<String>,
+    pub v: i32,
+    pub crates_io_fk: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

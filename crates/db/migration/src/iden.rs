@@ -157,9 +157,12 @@ pub enum CratesIoIden {
     Table,
     Id,
     Name,
+    OriginalName,
     Description,
     ETag,
     LastModified,
+    TotalDownloads,
+    MaxVersion,
 }
 
 #[derive(Iden)]
@@ -185,4 +188,5 @@ pub enum CratesIoMetaIden {
     Version,
     Downloads,
     CratesIoFk,
+    Documentation,
 }

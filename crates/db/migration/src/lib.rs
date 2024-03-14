@@ -18,6 +18,8 @@ mod m20220101_000008_create_table;
 mod m20220101_000008_create_table_entities;
 mod m20220101_000009_create_table;
 mod m20220101_000009_create_table_entities;
+mod m20220101_0000010_create_table;
+mod m20220101_0000010_create_table_entities;
 mod old_index_metadata;
 
 pub struct Migrator;
@@ -35,6 +37,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20220101_000007_create_table::Migration),
             Box::new(m20220101_000008_create_table::Migration),
             Box::new(m20220101_000009_create_table::Migration),
+            Box::new(m20220101_0000010_create_table::Migration),
         ]
     }
 }

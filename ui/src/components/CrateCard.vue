@@ -1,18 +1,21 @@
 <template>
   <div class="crateCard glass">
-<!--    <div class="firstColumn">-->
-<!--      <span class="boxIcon"><i class="fas fa-box"></i></span>-->
-<!--    </div>-->
+    <div class="firstColumn">
+      <img v-if="props.isCache" v-bind:src="store.state.cargoSmallLogo" class="degLogoImg" alt="Crates.io logo" />
+      <img v-else v-bind:src="store.state.kellnrSmallLogo" class="degLogoImg" alt="Kellnr logo" />
+    </div>
     <div class="secondColumn">
       <div>
-        <router-link class="crateName" :to="{name: 'Crate', query: {name: crate, version: version}}">{{crate}}</router-link>
+        <a v-if="props.isCache" :href="`https://crates.io/crates/${crate}`" class="crateName" target="_blank">{{ crate }}</a>
+        <router-link v-else class="crateName" :to="{ name: 'Crate', query: { name: crate, version: version } }">{{ crate
+          }}</router-link>
         <span class="crateVersion">v{{ version }}</span>
       </div>
       <div class="secondRow">
         <span class="docs" v-if="docLink">
           <a v-bind:href="docLink" class="clickable" target="_blank">Documentation</a>
         </span>
-          <span class="docs" v-else>
+        <span class="docs" v-else>
           <router-link class="clickable" to="/publishdocs">Add Documentation</router-link>
         </span>
       </div>
@@ -26,24 +29,25 @@
       </span>
     </div>
     <div class="fourthColumn">
-      <div class="crateIconInfo">
+      <div class="crateIconInfo tooltip">
         <span class="crateIcon"><i class="fas fa-cloud-download-alt"></i></span>
-        <span>Downloads: {{ downloads }}</span>
+        <span>{{ downloads }}</span>
+        <span class="tooltiptext">downloads</span>
       </div>
-      <div class="crateIconInfo">
+      <div class="crateIconInfo tooltip">
         <span class="crateIcon"><i class="fas fa-calendar-alt"></i></span>
-        <span>Updated: {{ humanizedLastUpdated }}</span>
+        <span>{{ humanizedLastUpdated }}</span>
+        <span class="tooltiptext">last updated</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-//"copyToCb(crate + ' = &quot;' + version + '&quot;')
-
-import {computed} from "vue";
+import { computed } from "vue";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { store } from "../store/store"
 
 dayjs.extend(relativeTime);
 
@@ -54,6 +58,7 @@ const props = defineProps<{
   version: string
   updated: string
   docLink?: string
+  isCache: boolean
 }>()
 
 const humanizedLastUpdated = computed(() => {
@@ -72,6 +77,15 @@ function copyToCb(text: string) {
   text-align: left;
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
+}
+
+.firstColumn {
+  grid-column: 1;
+  display: grid;
+  align-items: center;
+  padding-right: 0.5rem;
+  margin-right: 0.5rem;
+  border-right: 1px solid var(--color-darkest);
 }
 
 .secondColumn {
@@ -137,7 +151,7 @@ body[color-theme="dark"] .crateName:hover {
   margin-left: 1rem;
 }
 
-.boxIcon > i {
+.boxIcon>i {
   color: var(--color-darkest);
 }
 </style>

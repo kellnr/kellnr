@@ -3,13 +3,13 @@
 import {
     createStore,
     Store as VuexStore,
-    CommitOptions,
-    DispatchOptions
+    type CommitOptions,
+    type DispatchOptions
 } from "vuex";
-import { State, state} from "@/store/state";
-import {Getters, getters} from "@/store/getters";
-import { Mutations, mutations} from "@/store/mutations";
-import {Actions, actions} from "@/store/actions";
+import { type State, state } from "./state";
+import { type Getters, getters } from "./getters";
+import { type Mutations, mutations } from "./mutations";
+import { type Actions, actions } from "./actions";
 import createPersistedState from "vuex-persistedstate";
 
 export const store = createStore({
@@ -23,7 +23,7 @@ export const store = createStore({
 export type Store = Omit<
     VuexStore<State>,
     'getters' | 'commit' | 'dispatch'
-    > & {
+> & {
     commit<K extends keyof Mutations, P extends Parameters<Mutations[K]>[1]>(
         key: K,
         payload: P,

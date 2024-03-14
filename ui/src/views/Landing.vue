@@ -36,11 +36,11 @@
 
       <!-- Proxy statistics - displayed only if proxy is enabled -->
       <statistics-card v-if="statistics.proxy_enabled" :num="statistics.num_proxy_crates" :icon="'fa-boxes'"
-        :text="'Proxy Crates'"></statistics-card>
+        :text="'Cached Crates'"></statistics-card>
       <statistics-card v-if="statistics.proxy_enabled" :num="statistics.num_proxy_crate_versions" :icon="'fa-code-branch'"
-        :text="'Proxy Versions'"></statistics-card>
+        :text="'Cached Versions'"></statistics-card>
       <statistics-card v-if="statistics.proxy_enabled" :num="statistics.num_proxy_crate_downloads"
-        :icon="'fa-cloud-download-alt'" :text="'Proxy Downloads'"></statistics-card>
+        :icon="'fa-cloud-download-alt'" :text="'Cached Downloads'"></statistics-card>
     </div>
   </div>
 </template>

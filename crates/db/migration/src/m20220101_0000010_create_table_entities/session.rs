@@ -3,33 +3,32 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "cratesio_meta")]
+#[sea_orm(table_name = "session")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
+    #[sea_orm(column_type = "Text", unique)]
+    pub token: String,
     #[sea_orm(column_type = "Text")]
-    pub version: String,
-    pub downloads: i64,
-    pub crates_io_fk: i64,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub documentation: Option<String>,
+    pub created: String,
+    pub user_fk: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::cratesio_crate::Entity",
-        from = "Column::CratesIoFk",
-        to = "super::cratesio_crate::Column::Id",
+        belongs_to = "super::user::Entity",
+        from = "Column::UserFk",
+        to = "super::user::Column::Id",
         on_update = "NoAction",
         on_delete = "Cascade"
     )]
-    CratesioCrate,
+    User,
 }
 
-impl Related<super::cratesio_crate::Entity> for Entity {
+impl Related<super::user::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::CratesioCrate.def()
+        Relation::User.def()
     }
 }
 
