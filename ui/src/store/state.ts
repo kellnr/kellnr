@@ -7,6 +7,7 @@ export const state = {
     kellnrSmallLogo: "img/kellnr-logo-small-light.png",
     rememberMe: false,
     rememberMeUser: "",
+    searchCache: false,
 }
 
 export type State = typeof state

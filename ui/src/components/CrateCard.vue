@@ -1,36 +1,43 @@
 <template>
   <div class="crateCard glass">
+      <div class="crateOrigin">
+        <img v-if="props.isCache" v-bind:src="store.state.cargoSmallLogo" class="degLogoImg" alt="Crates.io logo" />
+        <img v-else v-bind:src="store.state.kellnrSmallLogo" class="degLogoImg" alt="Kellnr logo" />
+      </div>
       <div class="crateTitle">
-        <router-link class="crateName" :to="{name: 'Crate', query: {name: crate, version: version}}">{{crate}}</router-link>
-        <div class="crateVersion">v{{ version }}</div>
+        <a v-if="props.isCache" :href="`https://crates.io/crates/${crate}`" class="crateName" target="_blank">{{ crate }}</a>
+        <router-link v-else class="crateName" :to="{ name: 'Crate', query: { name: crate, version: version } }">
+          {{ crate}}
+        </router-link>        <div class="crateVersion">v{{ version }}</div>        <div class="crateVersion">v{{ version }}</div>
       </div>
       <div class="crateDesc">
         {{ desc || "no description available" }}
       </div>
     <div class="crateStatistics">
-      <div class="crateIconInfo">
+      <div class="crateIconInfo tooltip">
         <span class="crateIcon"><i class="fas fa-cloud-download-alt"></i></span>
-        <span><span class="mobile-invisible">Downloads: </span>{{ downloads }}</span>
+        <span>{{ downloads }}</span>
+        <span class="tooltiptext">downloads</span>
       </div>
-      <div class="crateIconInfo">
+      <div class="crateIconInfo tooltip">
         <span class="crateIcon"><i class="fas fa-calendar-alt"></i></span>
-        <span><span class="mobile-invisible">Updated: </span>{{ humanizedLastUpdated }}</span>
+        <span>{{ humanizedLastUpdated }}</span>
+        <span class="tooltiptext">last updated</span>
       </div>
       <div class="crateIconInfo">
         <span class="crateIcon"><i class="fa-solid fa-book"></i></span>
         <a v-if="docLink" v-bind:href="docLink" class="clickable" target="_blank">Documentation</a>
-        <router-link v-if="!docLink" class="clickable" to="/publishdocs">Add Documentation</router-link>
+        <router-link v-if="!docLink" class="clickable" to="/publishdocs">Documentation</router-link>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-//"copyToCb(crate + ' = &quot;' + version + '&quot;')
-
-import {computed} from "vue";
+import { computed } from "vue";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { store } from "../store/store"
 
 dayjs.extend(relativeTime);
 
@@ -41,6 +48,7 @@ const props = defineProps<{
   version: string
   updated: string
   docLink?: string
+  isCache: boolean
 }>()
 
 const humanizedLastUpdated = computed(() => {
@@ -57,6 +65,16 @@ function copyToCb(text: string) {
   display: grid;
   text-align: left;
   margin-bottom: 1rem;
+}
+
+.crateOrigin {
+  grid-area: origin;
+  grid-column: 1;
+  display: grid;
+  align-items: center;
+  padding-right: 0.5rem;
+  margin-right: 0.5rem;
+  border-right: 1px solid var(--color-darkest);
 }
 
 .crateTitle {
@@ -119,17 +137,18 @@ body[color-theme="dark"] .crateName:hover {
   margin-left: 1rem;
 }
 
-.boxIcon > i {
+.boxIcon>i {
   color: var(--color-darkest);
 }
 
 @media only screen and (max-width: 768px) {
   .crateCard {
+    grid-template-columns: auto auto;
     grid-template-rows: auto auto auto;
     grid-template-areas: 
-      "title"
-      "description"
-      "crateStatistics";
+      "origin title"
+      "origin description"
+      "origin crateStatistics";
   }
   .crateDesc {
     -webkit-line-clamp: 3;
@@ -139,19 +158,15 @@ body[color-theme="dark"] .crateName:hover {
     flex-direction: row;
     flex-wrap: wrap;
   }
-
-  .mobile-invisible {
-    display: none;
-  }
 }
 
 @media only screen and (min-width: 768px) {
   .crateCard {
     grid-template-rows: auto auto;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     grid-template-areas: 
-      "title crateStatistics"
-      "description crateStatistics";
+      "origin title crateStatistics"
+      "origin description crateStatistics";
   }
 
   .crateDesc {

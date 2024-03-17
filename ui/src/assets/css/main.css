@@ -18,7 +18,6 @@
     --color-lightest: #CAF0F8;
 }
 
-
 body {
     font-family: "Nunito", sans-serif;
 }
@@ -98,6 +97,65 @@ body[color-theme="light"] .glass {
     color: var(--color-dark);
 }
 
+/* The switch - the box around the slider */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--color-lightest);
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 2px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2f55d3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(25px);
+  -ms-transform: translateX(25px);
+  transform: translateX(25px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
 body[color-theme="light"] {
     /*generate with https://app.haikei.app/*/
     background-image: url("blob-scene-haikei3.svg");
@@ -135,6 +193,18 @@ body[color-theme="light"] ::-webkit-scrollbar-thumb {
     --dark-color-dark: #8338EC;
     --dark-color-darkest: #3A86FF;
     --dark-color-white: #e8e8e8;
+}
+
+body[color-theme="dark"] input:checked + .slider {
+  background-color: var(--dark-color-dark);
+}
+
+body[color-theme="dark"] input:focus + .slider {
+  box-shadow: 0 0 1px var(--dark-color-dark);
+}
+
+body[color-theme="dark"] .slider {
+    background-color: var(--dark-color-white);
 }
 
 body[color-theme="dark"] {

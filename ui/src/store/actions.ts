@@ -1,6 +1,5 @@
-import { ActionTypes } from './action-types'
-import {State} from "@/store/state";
-import {ActionTree} from "vuex";
+import { type State} from "./state";
+import { type ActionTree} from "vuex";
 
 export interface Actions {
 }

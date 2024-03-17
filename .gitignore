@@ -35,5 +35,4 @@ ui.rs-e
 kellnr-dev.yaml-e
 .DS_Store
 node_modules/
-Cargo.lock
 package-lock.json

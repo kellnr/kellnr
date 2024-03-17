@@ -9,40 +9,21 @@
     </p>
 
     <div class="tabSwitch paragraph">
-      <div v-if="selected_version.readme"
-        class="tab clickable"
-        :class="tab === 'readme' ? 'activeTab' : ''"
-        @click="changeTab('readme')"
-      >
+      <div v-if="selected_version.readme" class="tab clickable" :class="tab === 'readme' ? 'activeTab' : ''"
+        @click="changeTab('readme')">
         Readme
       </div>
-      <div
-          class="tab clickable"
-          :class="tab === 'meta' ? 'activeTab' : ''"
-          @click="changeTab('meta')"
-      >
+      <div class="tab clickable" :class="tab === 'meta' ? 'activeTab' : ''" @click="changeTab('meta')">
         About
       </div>
-      <div
-          class="tab clickable"
-          :class="tab === 'deps' ? 'activeTab' : ''"
-          @click="changeTab('deps')"
-      >
+      <div class="tab clickable" :class="tab === 'deps' ? 'activeTab' : ''" @click="changeTab('deps')">
         Dependencies
       </div>
-      <div
-          class="tab clickable"
-          :class="tab === 'versions' ? 'activeTab' : ''"
-          @click="changeTab('versions')"
-      >
+      <div class="tab clickable" :class="tab === 'versions' ? 'activeTab' : ''" @click="changeTab('versions')">
         Versions
       </div>
-      <div
-          v-if="store.state.loggedInUserIsAdmin"
-          class="tab clickable"
-        :class="tab === 'administrate' ? 'activeTab' : ''"
-          @click="changeTab('administrate')"
-      >
+      <div v-if="store.state.loggedInUserIsAdmin" class="tab clickable" :class="tab === 'administrate' ? 'activeTab' : ''"
+        @click="changeTab('administrate')">
         Admin
       </div>
     </div>
@@ -50,58 +31,34 @@
     <div id="infoGrid">
       <div id="tabs" class="">
         <div v-if="tab === 'readme'">
-          <Readme
-              :readme="selected_version.readme"
-          ></Readme>
+          <Readme :readme="selected_version.readme"></Readme>
         </div>
 
         <div v-if="tab === 'versions'">
           <div class="">
-            <Version
-                v-for="version in crate.versions"
-                :key="version.version"
-                :name="crate.name"
-              :version="version.version"
-                :last_updated="version.created"
-                :downloads="version.downloads.toString()"
-            />
+            <Version v-for="version in crate.versions" :key="version.version" :name="crate.name"
+              :version="version.version" :last_updated="version.created" :downloads="version.downloads.toString()" />
           </div>
         </div>
 
         <div v-if="tab === 'deps'">
           <div class="" v-if="sortedDeps.length > 0">
-            <Dependency
-                v-for="dep in sortedDeps"
-                :key="dep.name"
-                :name="dep.name"
-                :version="dep.version_req"
-              :registry="dep.registry"
-            >
+            <Dependency v-for="dep in sortedDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
+              :registry="dep.registry">
             </Dependency>
           </div>
 
           <div class="" v-if="sortedDevDeps.length > 0">
             <h2 class="k-h3">Development Dependencies</h2>
-            <Dependency
-                v-for="dep in sortedDevDeps"
-                :key="dep.name"
-                :name="dep.name"
-                :version="dep.version_req"
-              :registry="dep.registry"
-            >
+            <Dependency v-for="dep in sortedDevDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
+              :registry="dep.registry">
             </Dependency>
           </div>
 
           <div class="" v-if="sortedDevDeps.length > 0">
             <h2 class="k-h3">Build Dependencies</h2>
-            <Dependency
-                v-for="dep in sortedBuildDeps"
-                :key="dep.name"
-                :name="dep.name"
-                :version="dep.version_req"
-              :registry="dep.registry"
-                :desc="dep.description"
-            >
+            <Dependency v-for="dep in sortedBuildDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
+              :registry="dep.registry" :desc="dep.description">
             </Dependency>
           </div>
         </div>
@@ -109,65 +66,29 @@
         <div v-if="tab === 'meta'" class="metaTab">
           <div class="glass">
             <div class="iconElements">
-              <IconElement
-                  icon="fas fa-link"
-                  title="Homepage"
-                  v-if="crate.homepage != null"
-              >
+              <IconElement icon="fas fa-link" title="Homepage" v-if="crate.homepage != null">
                 <a :href="crate.homepage" class="link" target="_blank">{{
-    crate.homepage
-  }}</a>
+                  crate.homepage
+                }}</a>
               </IconElement>
-              <IconElement
-                  icon="fas fa-balance-scale"
-                  title="License"
-                  v-if="selected_version.license != null"
-              >
+              <IconElement icon="fas fa-balance-scale" title="License" v-if="selected_version.license != null">
                 {{ selected_version.license }}
               </IconElement>
-              <IconElement
-                  icon="fab fa-github"
-                  title="Repository"
-                  v-if="crate.repository != null"
-              >
+              <IconElement icon="fab fa-github" title="Repository" v-if="crate.repository != null">
                 <a :href="crate.repository" class="link" target="_blank">{{
-    crate.repository
-  }}</a>
+                  crate.repository
+                }}</a>
               </IconElement>
-              <IconElement
-                  icon="fas fa-trash-alt"
-                  title="Yanked"
-                  v-if="selected_version.yanked === true"
-              >
+              <IconElement icon="fas fa-trash-alt" title="Yanked" v-if="selected_version.yanked === true">
                 Yes
               </IconElement>
             </div>
             <div class="iconLists">
-              <IconList
-                  :list="crate.authors"
-                  :icon="'fas fa-user'"
-                  :title="'Authors'"
-              />
-              <IconList
-                  :list="crate.categories"
-                  :icon="'fas fa-cubes'"
-                  :title="'Categories'"
-              />
-              <IconList
-                  :list="flattenedFeatures"
-                  :icon="'fas fa-cog'"
-                  :title="'Features'"
-              />
-              <IconList
-                  :list="crate.keywords"
-                  :icon="'fas fa-key'"
-                  :title="'Keywords'"
-              />
-              <IconList
-                  :list="sortedOwners"
-                  :icon="'fas fa-user'"
-                  :title="'Owners'"
-              />
+              <IconList :list="crate.authors" :icon="'fas fa-user'" :title="'Authors'" />
+              <IconList :list="crate.categories" :icon="'fas fa-cubes'" :title="'Categories'" />
+              <IconList :list="flattenedFeatures" :icon="'fas fa-cog'" :title="'Features'" />
+              <IconList :list="crate.keywords" :icon="'fas fa-key'" :title="'Keywords'" />
+              <IconList :list="sortedOwners" :icon="'fas fa-user'" :title="'Owners'" />
             </div>
           </div>
         </div>
@@ -179,11 +100,19 @@
               <strong>Warning:</strong> Deleting a crate version breaks all crates that depend on it!
             </div>
             <div class="paragraph">
-              Instead of deleting the crate, think about <a href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" class="link">yanking</a> it instead, which does not break crates that depend on it.
+              Instead of deleting the crate, think about <a
+                href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" class="link">yanking</a> it instead, which
+              does not break crates that depend on it.
             </div>
-            <br/>
-            <div class="control">
-              <button class="button is-danger" @click="deleteVersion(crate.name, selected_version.version)">Delete</button>
+            <br />
+            <div>
+              <span class="control">
+                <button class="button is-danger" @click="deleteVersion(crate.name, selected_version.version)">Delete
+                  Version</button>
+              </span>
+              <span id="deleteCrate" class="control">
+                <button class="button is-danger" @click="deleteCrate(crate.name)">Delete Crate</button>
+              </span>
             </div>
           </div>
         </div>
@@ -191,16 +120,13 @@
 
       <div id="infos" class="glass">
         <crate-sidebar-element icon="fa-code" header="Install" class="bottomBorder">
-          <div
-              class="clickable tooltip"
-              @click="copyTomlToClipboard()"
-          >
+          <div class="clickable tooltip" @click="copyTomlToClipboard()">
             {{ crate.name }} = "{{ selected_version.version }}"
             <span class="tooltiptext">Copy to clipboard</span>
           </div>
         </crate-sidebar-element>
-        
-        <crate-sidebar-element icon="fa-calendar-alt" header="Uploaded"  class="bottomBorder">
+
+        <crate-sidebar-element icon="fa-calendar-alt" header="Uploaded" class="bottomBorder">
           <div class="tooltip">
             {{ humanizedLastUpdated }}
             <span class="tooltiptext">{{ crate.last_updated }}</span>
@@ -210,13 +136,14 @@
         <crate-sidebar-element icon="fa-book" header="Documentation" class="bottomBorder">
           <div class="docs" @click="openDocsPage()">
             <div v-if="docLink">
-              <div class="clickable">{{ crate.name }} ({{selected_version.version}})</div>
+              <div class="clickable">{{ crate.name }} ({{ selected_version.version }})</div>
             </div>
             <div v-else>
               <router-link class="clickable" to="/publishdocs">Add</router-link>
             </div>
           </div>
-          <div class="buildDocs clickable" v-if="showBuildRustdoc()" @click="buildDoc(crate.name, selected_version.version)">
+          <div class="buildDocs clickable" v-if="showBuildRustdoc()"
+            @click="buildDoc(crate.name, selected_version.version)">
             <span v-if="docLink">
               re-build
             </span>
@@ -240,16 +167,16 @@ import Dependency from "../components/Dependency.vue";
 import Version from "../components/Version.vue";
 import IconList from "../components/IconList.vue";
 import IconElement from "../components/IconElement.vue";
-import {computed, onBeforeMount, ref, watch} from "vue";
+import { computed, onBeforeMount, ref, watch } from "vue";
 import axios from "axios";
-import {useRoute, useRouter} from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import CrateSidebarElement from "../components/CrateSidebarElement.vue";
-import {store} from "../store/store";
-import {defaultCrateData, defaultCrateVersionData} from "../types/crate_data";
-import type {CrateData, CrateVersionData, CrateRegistryDep} from "../types/crate_data";
-import {CRATE_DATA, CRATE_DELETE, DOCS_BUILD} from "../remote-routes";
+import { store } from "../store/store";
+import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
+import type { CrateData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
+import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD } from "../remote-routes";
 import Readme from "../components/Readme.vue";
 
 dayjs.extend(relativeTime);
@@ -311,8 +238,8 @@ const sortedOwners = computed(() => {
 });
 
 function deleteVersion(crate: string, version: string) {
-  if(confirm('Delete "' + crate + '" version "' + version + '"?')) {
-    axios.delete(CRATE_DELETE,
+  if (confirm('Delete "' + crate + '" version "' + version + '"?')) {
+    axios.delete(CRATE_DELETE_VERSION,
       {
         params: {
           name: crate,
@@ -320,16 +247,32 @@ function deleteVersion(crate: string, version: string) {
         }
       }
     ).then((_response) => {
-      router.push({name: "Crates"})
+      router.push({ name: "Crates" })
     }).catch((error) => {
       console.log(error);
     });
   }
 }
 
-function showBuildRustdoc() : boolean {
+function deleteCrate(crate: string) {
+  if (confirm('Delete all versions of "' + crate + '"?')) {
+    axios.delete(CRATE_DELETE_ALL,
+      {
+        params: {
+          name: crate,
+        }
+      }
+    ).then((_response) => {
+      router.push({ name: "Crates" })
+    }).catch((error) => {
+      console.log(error);
+    });
+  }
+}
+
+function showBuildRustdoc(): boolean {
   // Show the option to build the docs, if the current logged-in user is and admin
-  if(store.state.loggedInUserIsAdmin) {
+  if (store.state.loggedInUserIsAdmin) {
     return true
   }
 
@@ -338,9 +281,9 @@ function showBuildRustdoc() : boolean {
 }
 
 function buildDoc(crate: string, version: string) {
-  axios.post(DOCS_BUILD, null, { params: { package: crate, version: version}})
+  axios.post(DOCS_BUILD, null, { params: { package: crate, version: version } })
     .then((_res) => {
-      router.push({name: "DocQueue"})
+      router.push({ name: "DocQueue" })
     })
     .catch((error) => {
       console.log(error)
@@ -365,12 +308,12 @@ function sortByName(deps: Array<CrateRegistryDep>) {
 
 function getCrateData(name: string, version?: string) {
   axios
-    .get(CRATE_DATA, {params: {name: name}})
+    .get(CRATE_DATA, { params: { name: name } })
     .then((response) => {
       crate.value = response.data;
       version = version ?? crate.value.max_version;
       selected_version.value = crate.value.versions.find((cvd: CrateVersionData) => {
-        return cvd.version ==  version;
+        return cvd.version == version;
       }) ?? defaultCrateVersionData;
 
       // Set the default tab to "readme" if a readme is available, else "meta"
@@ -392,7 +335,7 @@ function openDocsPage() {
     let url = selected_version.value.documentation;
     window.open(url, "_blank");
   } else {
-    router.push({name: "PublishDocs"})
+    router.push({ name: "PublishDocs" })
   }
 }
 
@@ -473,6 +416,15 @@ body[color-theme="light"] .activeTab {
 
 body[color-theme="dark"] .activeTab {
   color: var(--dark-color-middle) !important;
+}
+
+#deleteCrate {
+  margin-left: 1rem;
+}
+
+#crateVersion {
+  font-size: x-large;
+  margin-left: 1rem;
 }
 
 #infoGrid {
