@@ -6,8 +6,8 @@
       <div @click="clickShowAuthToken" class="settingName clickable">
         Authentication Tokens
       </div>
-      <div @click="clickShowUserMgmt" class="settingName clickable">User Management</div>
-      <div @click="clickShowStartupConfig" class="settingName clickable">
+      <div v-if="store.state.loggedInUserIsAdmin" @click="clickShowUserMgmt" class="settingName clickable">User Management</div>
+      <div v-if="store.state.loggedInUserIsAdmin" @click="clickShowStartupConfig" class="settingName clickable">
         Startup Config
       </div>
     </div>
@@ -33,6 +33,7 @@ import ChangePassword from "../components/ChangePassword.vue";
 import AuthToken from "../components/AuthToken.vue";
 import UserMgmt from "../components/UserMgmt.vue";
 import StartupConfig from "../components/StartupConfig.vue";
+import {store} from "../store/store";
 import {ref} from "vue";
 
 const showChangePwd = ref(true)
@@ -72,13 +73,13 @@ function clickShowStartupConfig() {
 <style scoped>
 #settingsContainer {
   display: grid;
-  grid-template-columns: max-content auto;
 }
 
 #settingsNames {
   display: grid;
   grid-template-rows: max-content max-content max-content max-content max-content max-content;
   margin-right: 3em;
+  margin-bottom: 1em;
   height: fit-content;
 }
 
@@ -88,5 +89,21 @@ function clickShowStartupConfig() {
 
 .settingName {
   padding-bottom: 0.5em;
+}
+
+@media only screen and (max-width: 992px) {
+  #settingsContainer {
+    grid-template-rows: max-content auto;
+  }
+
+  #settingsNames {
+    width: 100%;
+  }
+}
+
+@media only screen and (min-width: 992px) {
+  #settingsContainer {
+    grid-template-columns: max-content auto;
+  }
 }
 </style>

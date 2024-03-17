@@ -83,11 +83,7 @@ function submit() {
           store.state.rememberMeUser = user.value;
         }
         if(router.currentRoute.value.query["redirect"] === "settings") {
-          if(store.state.loggedInUserIsAdmin) {
-            router.push("/adminsettings")
-          } else {
-            router.push("/usersettings")
-          }
+            router.push("/settings")
         }
         else {
           router.push("/")

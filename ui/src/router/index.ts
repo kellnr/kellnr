@@ -1,8 +1,7 @@
 import {createRouter, createWebHistory} from 'vue-router'
 import Crates from "../views/Crates.vue";
 import Login from "../views/Login.vue";
-import AdminSettings from "../views/AdminSettings.vue";
-import UserSettings from "../views/UserSettings.vue";
+import Settings from "../views/Settings.vue";
 import PublishDocs from "../views/PublishDocs.vue";
 import Crate from "../views/Crate.vue";
 import DocQueue from "../views/DocQueue.vue";
@@ -25,14 +24,9 @@ const routes = [
     component: Login,
   },
   {
-    path: '/adminsettings',
-    name: 'AdminSettings',
-    component: AdminSettings
-  },
-  {
-    path: '/usersettings',
-    name: 'UserSettings',
-    component: UserSettings
+    path: '/settings',
+    name: 'Settings',
+    component: Settings
   },
   {
     path: '/publishdocs',

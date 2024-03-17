@@ -1,11 +1,7 @@
 <template>
-  <div id="header">
-    <Header id="header-pane"/>
-  </div>
+  <Header id="header"/>
   <main id="main">
-    <section id="main-pane">
       <router-view></router-view>
-    </section>
   </main>
   <Footer id="footer"/>
 </template>
@@ -16,8 +12,11 @@ import Header from "./components/Header.vue";
 </script>
 
 <style>
+html,
 body {
   margin: 0;
+  width: 100%;
+  height: 100%;
 }
 
 p {
@@ -26,36 +25,38 @@ p {
 }
 
 #app {
-  height: 100vh;
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  height: 100%;
+  width: 100%;
 }
 
 #header {
-  grid-row: 1;
-  display: grid;
-  grid-template-columns: 1fr 3fr 1fr;
-}
-
-#header > #header-pane {
-  grid-column: 2;
+  margin: 1rem 0;
 }
 
 #main {
-  grid-row: 2;
+  height: 100%;
   overflow: auto;
-  display: grid;
-  grid-template-rows: 1fr;
-  grid-template-columns: 1fr 3fr 1fr;
 }
 
-#main > #main-pane {
-  grid-column: 2;
+@media only screen and (max-width: 768px) {
+  #main {
+    padding: 0 1rem;
+  }
 }
 
-#footer {
-  grid-row: 3;
+@media only screen and (min-width: 768px) {
+  #main {
+    padding: 0 15%;
+  }
 }
+
+@media only screen and (min-width: 992px) {
+  #main {
+    padding: 0 20%;
+  }
+}
+
 </style>
-
