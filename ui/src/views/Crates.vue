@@ -142,7 +142,7 @@ function searchCrates(searchText: string) {
   display: grid;
   grid-template-columns: 1fr;
   grid-template-rows: auto 1fr;
-  height: 87vh;
+  height: 100%;
 }
 
 #searchTable>#statSearch {
