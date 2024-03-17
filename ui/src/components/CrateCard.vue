@@ -1,34 +1,19 @@
 <template>
   <div class="crateCard glass">
-    <div class="firstColumn">
-      <img v-if="props.isCache" v-bind:src="store.state.cargoSmallLogo" class="degLogoImg" alt="Crates.io logo" />
-      <img v-else v-bind:src="store.state.kellnrSmallLogo" class="degLogoImg" alt="Kellnr logo" />
-    </div>
-    <div class="secondColumn">
-      <div>
+      <div class="crateOrigin">
+        <img v-if="props.isCache" v-bind:src="store.state.cargoSmallLogo" class="degLogoImg" alt="Crates.io logo" />
+        <img v-else v-bind:src="store.state.kellnrSmallLogo" class="degLogoImg" alt="Kellnr logo" />
+      </div>
+      <div class="crateTitle">
         <a v-if="props.isCache" :href="`https://crates.io/crates/${crate}`" class="crateName" target="_blank">{{ crate }}</a>
-        <router-link v-else class="crateName" :to="{ name: 'Crate', query: { name: crate, version: version } }">{{ crate
-          }}</router-link>
-        <span class="crateVersion">v{{ version }}</span>
+        <router-link v-else class="crateName" :to="{ name: 'Crate', query: { name: crate, version: version } }">
+          {{ crate}}
+        </router-link>        <div class="crateVersion">v{{ version }}</div>        <div class="crateVersion">v{{ version }}</div>
       </div>
-      <div class="secondRow">
-        <span class="docs" v-if="docLink">
-          <a v-bind:href="docLink" class="clickable" target="_blank">Documentation</a>
-        </span>
-        <span class="docs" v-else>
-          <router-link class="clickable" to="/publishdocs">Add Documentation</router-link>
-        </span>
+      <div class="crateDesc">
+        {{ desc || "no description available" }}
       </div>
-    </div>
-    <div class="thirdColumn">
-      <span v-if="desc" class="crateDesc">
-        {{ desc }}
-      </span>
-      <span v-else>
-        <i>no description available</i>
-      </span>
-    </div>
-    <div class="fourthColumn">
+    <div class="crateStatistics">
       <div class="crateIconInfo tooltip">
         <span class="crateIcon"><i class="fas fa-cloud-download-alt"></i></span>
         <span>{{ downloads }}</span>
@@ -38,6 +23,11 @@
         <span class="crateIcon"><i class="fas fa-calendar-alt"></i></span>
         <span>{{ humanizedLastUpdated }}</span>
         <span class="tooltiptext">last updated</span>
+      </div>
+      <div class="crateIconInfo">
+        <span class="crateIcon"><i class="fa-solid fa-book"></i></span>
+        <a v-if="docLink" v-bind:href="docLink" class="clickable" target="_blank">Documentation</a>
+        <router-link v-if="!docLink" class="clickable" to="/publishdocs">Documentation</router-link>
       </div>
     </div>
   </div>
@@ -73,13 +63,12 @@ function copyToCb(text: string) {
 <style scoped>
 .crateCard {
   display: grid;
-  grid-template-columns: auto 2fr 3fr 1fr;
   text-align: left;
   margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
 }
 
-.firstColumn {
+.crateOrigin {
+  grid-area: origin;
   grid-column: 1;
   display: grid;
   align-items: center;
@@ -88,34 +77,14 @@ function copyToCb(text: string) {
   border-right: 1px solid var(--color-darkest);
 }
 
-.secondColumn {
-  grid-column: 2;
-  display: grid;
-  grid-template-rows: auto auto;
-}
-
-.thirdColumn {
-  grid-column: 3;
-  grid-row: 1;
-  display: grid;
-}
-
-.fourthColumn {
-  grid-column: 4;
-  display: grid;
-  grid-template-rows: auto auto;
-}
-
-.secondRow {
-  grid-row: 2;
-  padding-top: 0.5rem;
-  font-size: smaller;
+.crateTitle {
+  grid-area: title;
+  display: inline-flex;
 }
 
 .crateName {
   font-weight: bolder;
   font-size: larger;
-  padding-right: 0.5rem;
   color: var(--color-darkest);
 }
 
@@ -133,6 +102,23 @@ body[color-theme="dark"] .crateName:hover {
 
 .crateVersion {
   font-size: medium;
+  padding-top: 0.188rem;
+  margin-left: 0.5rem;
+}
+
+.crateDesc {
+  grid-area: description;
+  /* autoprefixer: off */
+  -webkit-box-orient: vertical;
+  /* autoprefixer: on */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+}
+
+.crateStatistics {
+  grid-area: crateStatistics;
+  display: flex;
 }
 
 .crateIconInfo {
@@ -153,5 +139,48 @@ body[color-theme="dark"] .crateName:hover {
 
 .boxIcon>i {
   color: var(--color-darkest);
+}
+
+@media only screen and (max-width: 768px) {
+  .crateCard {
+    grid-template-columns: auto auto;
+    grid-template-rows: auto auto auto;
+    grid-template-areas: 
+      "origin title"
+      "origin description"
+      "origin crateStatistics";
+  }
+  .crateDesc {
+    -webkit-line-clamp: 3;
+  }
+
+  .crateStatistics {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+@media only screen and (min-width: 768px) {
+  .crateCard {
+    grid-template-rows: auto auto;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 
+      "origin title crateStatistics"
+      "origin description crateStatistics";
+  }
+
+  .crateDesc {
+    -webkit-line-clamp: 3;
+  }
+
+  .crateStatistics {
+    flex-direction: column;
+  }
+}
+
+@media only screen and (min-width: 992px) {
+  .crateDesc {
+    -webkit-line-clamp: 2;
+  }
 }
 </style>

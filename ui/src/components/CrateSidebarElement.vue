@@ -19,10 +19,6 @@ const props = defineProps<{
 </script>
 
 <style>
-.sidebarElement {
-  padding: 1rem 0 1rem 0
-}
-
 .sidebarHeader {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -37,5 +33,17 @@ const props = defineProps<{
 
 .sidebarContent {
   font-size: larger;
+}
+
+@media only screen and (max-width: 768px) {
+  .sidebarElement {
+    padding: 0.5rem 0 0.5rem 0
+  }
+}
+
+@media only screen and (min-width: 768px) {
+  .sidebarElement {
+    padding: 1rem 0 1rem 0
+  }
 }
 </style>

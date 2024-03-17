@@ -1,35 +1,34 @@
 <template>
-  <header>
-    <div class="k-header">
-      <div class="k-header-element">
+  <header class="k-header">
+      <div id="k-logo" class="k-header-element">
         <router-link class="k-header-element-link" to="/">
           <span id="kellnrLogo">&lt;'kellnr&gt;</span>
         </router-link>
       </div>
 
-      <div class="k-header-links">
-        <div class="k-header-element k-mlr">
+      <div id="k-link" class="k-header-links">
+        <div class="k-header-element">
           <router-link class="k-header-element-link" to="/crates">
             <div class="k-header-element-icon"><i class="fas fa-magnifying-glass"></i></div>
             <div class="k-header-element-text">Search</div>
           </router-link>
         </div>
 
-        <div class="k-header-element k-mlr" v-on:click="login()">
+        <div class="k-header-element" v-on:click="login()">
           <div class="k-header-element-link">
             <div class="k-header-element-icon"><i class="fas fa-gear"></i></div>
             <div class="k-header-element-text">Settings</div>
           </div>
         </div>
 
-        <div class="k-header-element k-mlr">
+        <div class="k-header-element">
           <router-link to="/docqueue" class="k-header-element-link">
             <div class="k-header-element-icon"><i class="fas fa-layer-group"></i></div>
             <div class="k-header-element-text">Doc Queue</div>
           </router-link>
         </div>
 
-        <div class="k-header-element k-mlr">
+        <div class="k-header-element">
           <a
               href="https://kellnr.io/documentation"
               target="_blank"
@@ -41,8 +40,8 @@
         </div>
       </div>
 
-      <div class="k-header-buttons">
-        <div class="k-header-element k-mlr">
+      <div id="k-button" class="k-header-buttons">
+        <div class="k-header-element">
           <div class="k-button" id="toggleTheme" v-on:click="toggleTheme">
           <span class="icon">
             <i class="fas fa-adjust"></i>
@@ -54,8 +53,6 @@
           <login-button></login-button>
         </div>
       </div>
-    </div>
-
   </header>
 </template>
 
@@ -74,10 +71,8 @@ onBeforeMount(() => {
 function login() {
   if(store.state.loggedIn === false) {
     router.push("/login?redirect=settings")
-  } else if(store.state.loggedInUserIsAdmin === true) {
-    router.push("/adminsettings")
   } else {
-    router.push("/usersettings")
+    router.push("/settings")
   }
 }
 
@@ -94,12 +89,26 @@ function setTheme(theme: string) {
 </script>
 
 <style scoped>
-
 .k-header {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  margin-bottom: 3rem;
-  padding-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+#k-logo {
+  grid-area: logo;
+}
+
+#k-link {
+  grid-area: link;
+  display: flex;
+}
+
+#k-button {
+  grid-area: button;
+}
+
+#toggleTheme {
+  margin-right: 0.5rem;
 }
 
 body[color-theme="dark"] .k-header {
@@ -107,7 +116,6 @@ body[color-theme="dark"] .k-header {
 }
 
 #kellnrLogo {
-  font-size: 2rem;
   color: var(--color-dark);
 }
 
@@ -115,11 +123,6 @@ body[color-theme="dark"] #kellnrLogo {
   background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-}
-
-.k-mlr {
-  margin-left: 1rem;
-  margin-right: 1rem;
 }
 
 .k-header-links {
@@ -137,7 +140,6 @@ body[color-theme="dark"] #kellnrLogo {
 .k-header-element {
   cursor: pointer;
   font-weight: bolder;
-  margin-top: 1rem;
 }
 
 .k-header-element-link {
@@ -152,7 +154,6 @@ body[color-theme="dark"] #kellnrLogo {
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 1.2rem;
   margin-bottom: 0.2rem;
 }
 
@@ -169,4 +170,57 @@ body[color-theme="dark"] .k-header-element-link:hover {
   color: var(--dark-color-dark);
 }
 
+@media (max-width: 768px) {
+  .k-header {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    grid-template-areas: "logo button" "link link";
+    row-gap: 1rem;;
+    /* padding-bottom: 1rem; */
+  }
+  
+  #kellnrLogo {
+    font-size: 2.125rem;
+  }
+
+  #k-link {
+    gap: 1rem;
+  }
+
+  .k-header-element-icon {
+    font-size: 0.8rem;
+  }
+
+  .k-header-element-text {
+    font-size: 0.8rem;
+  }
+
+  .k-header-buttons{
+    margin-top: 0.625rem;
+    height: 2rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .k-header {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "logo link button"
+    /* padding-bottom: 1rem; */
+  }
+
+  #kellnrLogo {
+    font-size: 2.125rem;
+  }
+
+  #k-link {
+    gap: 2rem;
+  }
+
+  .k-header-element-icon {
+    font-size: 1.2rem;
+  }
+  .k-header-element-text {
+    font-size: 1rem;
+  }
+}
 </style>
