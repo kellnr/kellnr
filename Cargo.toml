@@ -36,7 +36,7 @@ storage = { path = "./crates/storage" }
 # External dependencies from crates.io
 anyhow = "1.0.80"
 jsonwebtoken = "9.1.0"
-reqwest = {version = "0.11.25", features = ["json", "blocking"]}
+reqwest = {version = "0.11.26", features = ["json", "blocking"]}
 serde = {version = "1.0.193", features = ["derive"]}
 sysinfo = "0.30.5"
 semver = "1.0.19"
