@@ -80,6 +80,7 @@
           BINDGEN_EXTRA_CLANG_ARGS = commonArgs.BINDGEN_EXTRA_CLANG_ARGS;
           shellHook = ''
             alias c=cargo
+	    alias cta="cargo test --workspace"
           '';
         };
 
