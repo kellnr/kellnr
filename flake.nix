@@ -36,6 +36,7 @@
 
           buildInputs = [
 	    pkgs.nodejs_21
+            pkgs.cargo-nextest
           ] ++ lib.optional pkgs.stdenv.isDarwin [
             pkgs.darwin.apple_sdk.frameworks.Cocoa
             pkgs.libiconv
@@ -53,6 +54,9 @@
           (fenix.packages.${system}.complete.withComponents [
             "cargo"
             "rustc"
+            "clippy"
+            "rustfmt"
+            "rust-analyzer"
           ]);
 
         # Build *just* the cargo dependencies, so we can reuse
@@ -80,7 +84,7 @@
           BINDGEN_EXTRA_CLANG_ARGS = commonArgs.BINDGEN_EXTRA_CLANG_ARGS;
           shellHook = ''
             alias c=cargo
-	    alias cta="cargo test --workspace"
+	    alias cta="cargo nextest run --workspace"
           '';
         };
 
