@@ -7,7 +7,7 @@ ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
 ARG VERSION
 
 RUN apt update
-RUN apt install -y curl sed git zip apt-utils build-essential
+RUN apt install -y curl sed git zip apt-utils build-essential llvm-dev libclang-dev clang cmake
 
 # Install rust for the automatic rustdoc generation
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
