@@ -11,6 +11,10 @@ CERT_FILE="$data_path/cert/kellnr-cert.crt"
 if test -f "$CERT_FILE"; then
   echo "Copy Kellnr certificate to certificate storage"
   cp $CERT_FILE /usr/local/share/ca-certificates/
+fi
+# Same reason, but if the users CA needs to be injected (eg. reverse proxy usage)
+# update-ca-certificates if any custom certs in /usr/local/share/ca-certificates/
+if [ $(ls -f /usr/local/share/ca-certificates/ | wc -l) -gt 0 ]; then
   echo "Update certificate storage"
   update-ca-certificates
 fi
