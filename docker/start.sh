@@ -8,9 +8,12 @@ data_path="$DATADIR"
 # has a dependency to another crate from Kellnr, it needs to trust the Kellnr certificate to download
 # the dependency.
 CERT_FILE="$data_path/cert/kellnr-cert.crt"
-if test -f "$CERT_FILE"; then
+if [ -e "$CERT_FILE" ]; then
   echo "Copy Kellnr certificate to certificate storage"
   cp $CERT_FILE /usr/local/share/ca-certificates/
+fi
+# Same reason, but if the users CA needs to be injected (eg. reverse proxy usage)
+if [ -e "/usr/local/share/ca-certificates/kellnr-cert.crt" ] || [ -e "/usr/local/share/ca-certificates/user-ca.crt" ]; then
   echo "Update certificate storage"
   update-ca-certificates
 fi
