@@ -34,13 +34,13 @@ appstate = { path = "./crates/appstate" }
 storage = { path = "./crates/storage" }
 
 # External dependencies from crates.io
-anyhow = "1.0.80"
+anyhow = "1.0.81"
 jsonwebtoken = "9.1.0"
-reqwest = {version = "0.11.25", features = ["json", "blocking"]}
+reqwest = {version = "0.11.27", features = ["json", "blocking"]}
 serde = {version = "1.0.193", features = ["derive"]}
 sysinfo = "0.30.5"
-semver = "1.0.19"
-regex = "1.8.3"
+semver = "1.0.22"
+regex = "1.10.3"
 serde_json = "1.0.108"
 mockall = "0.12.0"
 rand = "0.8.5"
@@ -48,13 +48,13 @@ chrono = "0.4.31"
 hex = "0.4.3"
 sha2 = "0.10.8"
 sea-orm = { version = "0.12.14", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] } # Must not upgrade sea-orm to 0.12.3 as that breaks migrations for sqlite
-thiserror = "1.0.50"
+thiserror = "1.0.58"
 sea-query = "0.30.7"
 sea-query-derive = "0.4.1"
 sea-orm-migration = { version = "0.12.6", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
 rm_rf = "0.6.2"
 testcontainers = "0.15.0"
-quote = "1.0.33"
+quote = "1.0.35"
 syn = {version = "2.0.45", features = ["full"]}
 trybuild = {version = "1.0.85", features = ["diff"]}
 zip = "0.6.6"
@@ -66,8 +66,8 @@ wax = "0.6.0"
 proc-macro2 = "1.0.70"
 moka = {version = "0.12.5", features = ["future"]}
 config = "0.14.0"
-toml = "0.8.10"
-time = "0.3.29"
+toml = "0.8.12"
+time = "0.3.34"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.17", features = ["json", "fmt"]}
 flume = "0.11.0"
@@ -79,7 +79,7 @@ hyper = "1.0.1"
 tower-http = { version = "0.5.0", features = ["fs", "trace"] }
 cookie = { version = "0.18.0", features = ["private", "percent-encode"] }
 futures = "0.3.29"
-http-body-util = "0.1.0"
+http-body-util = "0.1.1"
 url = "2.5.0"
 
 [profile.release]

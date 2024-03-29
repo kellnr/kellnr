@@ -1322,69 +1322,46 @@ impl DbProvider for Database {
         contains: &str,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
+        let mut stmt_kellnr = Query::select()
+            .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
+            .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
+            .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
+            .expr_as(
+                Expr::col(CrateIden::TotalDownloads),
+                Alias::new("total_downloads"),
+            )
+            .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
+            .expr_as(
+                Expr::col(CrateMetaIden::Documentation),
+                Alias::new("documentation"),
+            )
+            .expr_as(Expr::cust("false"), Alias::new("is_cache"))
+            .from(CrateMetaIden::Table)
+            .inner_join(
+                CrateIden::Table,
+                Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
+                    .equals((CrateIden::Table, CrateIden::Id)),
+            )
+            .and_where(
+                Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{}%", contains)),
+            )
+            .and_where(
+                Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
+                    .equals((CrateIden::Table, CrateIden::MaxVersion)),
+            )
+            .to_owned();
+
         let stmt = if cache == false {
-            Query::select()
-                .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
-                .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
-                .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
-                .expr_as(
-                    Expr::col(CrateIden::TotalDownloads),
-                    Alias::new("total_downloads"),
-                )
-                .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
-                .expr_as(
-                    Expr::col(CrateMetaIden::Documentation),
-                    Alias::new("documentation"),
-                )
-                .expr_as(Expr::cust("false"), Alias::new("is_cache"))
-                .from(CrateMetaIden::Table)
-                .inner_join(
-                    CrateIden::Table,
-                    Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
-                        .equals((CrateIden::Table, CrateIden::Id)),
-                )
-                .and_where(
-                    Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{}%", contains)),
-                )
-                .and_where(
-                    Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
-                        .equals((CrateIden::Table, CrateIden::MaxVersion)),
-                )
+            stmt_kellnr
                 .order_by(CrateIden::OriginalName, Order::Asc)
                 .to_owned()
         } else {
-            Query::select()
-                .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
-                .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
-                .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
-                .expr_as(
-                    Expr::col(CrateIden::TotalDownloads),
-                    Alias::new("total_downloads"),
-                )
-                .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
-                .expr_as(
-                    Expr::col(CrateMetaIden::Documentation),
-                    Alias::new("documentation"),
-                )
-                .expr_as(Expr::cust("false"), Alias::new("is_cache"))
-                .from(CrateMetaIden::Table)
-                .inner_join(
-                    CrateIden::Table,
-                    Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
-                        .equals((CrateIden::Table, CrateIden::Id)),
-                )
-                .and_where(
-                    Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{}%", contains)),
-                )
-                .and_where(
-                    Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
-                        .equals((CrateIden::Table, CrateIden::MaxVersion)),
-                )
+            stmt_kellnr
                 .union(
                     UnionType::All,
                     Query::select()
                         .expr_as(Expr::col(CratesIoIden::OriginalName), Alias::new("name"))
-                        .expr_as(Expr::cust("'none'"), Alias::new("version"))
+                        .expr_as(Expr::col(CratesIoIden::MaxVersion), Alias::new("version"))
                         .expr_as(Expr::col(CratesIoIden::LastModified), Alias::new("date"))
                         .expr_as(
                             Expr::col(CratesIoIden::TotalDownloads),
@@ -1394,9 +1371,18 @@ impl DbProvider for Database {
                             Expr::col(CratesIoIden::Description),
                             Alias::new("description"),
                         )
-                        .expr_as(Expr::cust("null"), Alias::new("documentation"))
+                        .expr_as(Expr::col(CratesIoMetaIden::Documentation), Alias::new("documentation"))
                         .expr_as(Expr::cust("true"), Alias::new("is_cache"))
-                        .from(CratesIoIden::Table)
+                        .from(CratesIoMetaIden::Table)
+                        .inner_join(
+                            CratesIoIden::Table,
+                            Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::CratesIoFk))
+                                .equals((CratesIoIden::Table, CratesIoIden::Id)),
+                        )
+                        .and_where(
+                            Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Version))
+                                .equals((CratesIoIden::Table, CratesIoIden::MaxVersion)),
+                        )
                         .and_where(
                             Expr::col((CratesIoIden::Table, CrateIden::OriginalName))
                                 .like(format!("%{}%", contains)),

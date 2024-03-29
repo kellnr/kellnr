@@ -182,6 +182,24 @@ body[color-theme="light"] ::-webkit-scrollbar-thumb {
     border-radius: var(--border-radius);
 }
 
+body[color-theme="light"] input {
+    background-color: transparent !important;
+    border-color: var(--color-middle) !important;
+    color: var(--color-darkest);
+}
+
+body[color-theme="light"] input:focus {
+    color: var(--color-middle);
+}
+
+body[color-theme="light"] input:focus + .icon {
+    color: var(--color-middle);
+}
+
+body[color-theme="light"] ::placeholder {
+    color: var(--color-middle);
+}
+
 /*
     Dark theme support
 */
@@ -261,6 +279,7 @@ body[color-theme="dark"] .k-h1, body[color-theme="dark"] .k-h2, body[color-theme
 body[color-theme="dark"] input {
     background-color: transparent !important;
     border-color: var(--dark-color-middle) !important;
+    color: var(--dark-color-white);
 }
 
 body[color-theme="dark"] .control > .icon {
@@ -269,10 +288,6 @@ body[color-theme="dark"] .control > .icon {
 
 body[color-theme="dark"] ::placeholder {
     color: var(--dark-color-dark);
-}
-
-body[color-theme="dark"] input {
-    color: var(--dark-color-white);
 }
 
 body[color-theme="dark"] input:focus {

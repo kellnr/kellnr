@@ -1,35 +1,9 @@
 use crate::token::Token;
-use appstate::AppStateData;
-use axum::extract::{FromRequestParts, Request, State};
-use axum::http::request::Parts;
+use axum::extract::{Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 use tracing::warn;
-
-// This token checks if "auth_required = true" and if so, it requires a token.
-// Else, it does not require a token.
-// Returns None if "auth_required = false", else returns Some(Token) or an error.
-#[derive(Debug)]
-pub struct AuthReqToken(Option<Token>);
-
-#[axum::async_trait]
-impl FromRequestParts<AppStateData> for AuthReqToken {
-    type Rejection = StatusCode;
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppStateData,
-    ) -> Result<Self, Self::Rejection> {
-        if state.settings.registry.auth_required {
-            Token::from_request_parts(parts, state)
-                .await
-                .map(|t| Self(Some(t)))
-        } else {
-            Ok(Self(None))
-        }
-    }
-}
 
 /// Middleware that checks if a cargo token is provided, when settings.registry.auth_required is true.<br>
 /// If the user is not logged in, a 401 is returned.
@@ -57,10 +31,11 @@ pub async fn cargo_auth_when_required(
 #[cfg(test)]
 mod test {
     use super::*;
+    use appstate::AppStateData;
     use axum::body::Body;
     use axum::http::{header, Request, StatusCode};
     use axum::routing::get;
-    use axum::Router;
+    use axum::{middleware, Router};
     use db::error::DbError;
     use db::mock::MockDb;
     use db::User;
@@ -155,8 +130,8 @@ mod test {
         assert_eq!(r.status(), StatusCode::OK);
     }
 
-    pub async fn test_auth_req_token(auth_req_token: AuthReqToken) {
-        _ = auth_req_token;
+    pub async fn test_auth_req_token() -> StatusCode {
+        StatusCode::OK
     }
 
     async fn app(settings: Settings) -> Router {
@@ -185,6 +160,10 @@ mod test {
         };
         Router::new()
             .route("/test", get(test_auth_req_token))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                cargo_auth_when_required,
+            ))
             .with_state(state)
     }
 }
