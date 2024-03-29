@@ -31,6 +31,7 @@ pub async fn cargo_auth_when_required(
 #[cfg(test)]
 mod test {
     use super::*;
+    use appstate::AppStateData;
     use axum::body::Body;
     use axum::http::{header, Request, StatusCode};
     use axum::routing::get;

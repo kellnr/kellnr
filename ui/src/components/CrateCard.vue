@@ -1,18 +1,20 @@
 <template>
   <div class="crateCard glass">
-      <div class="crateOrigin">
-        <img v-if="props.isCache" v-bind:src="store.state.cargoSmallLogo" class="degLogoImg" alt="Crates.io logo" />
-        <img v-else v-bind:src="store.state.kellnrSmallLogo" class="degLogoImg" alt="Kellnr logo" />
-      </div>
-      <div class="crateTitle">
-        <a v-if="props.isCache" :href="`https://crates.io/crates/${crate}`" class="crateName" target="_blank">{{ crate }}</a>
-        <router-link v-else class="crateName" :to="{ name: 'Crate', query: { name: crate, version: version } }">
-          {{ crate}}
-        </router-link>        <div class="crateVersion">v{{ version }}</div>        <div class="crateVersion">v{{ version }}</div>
-      </div>
-      <div class="crateDesc">
-        {{ desc || "no description available" }}
-      </div>
+    <div class="crateOrigin">
+      <img v-if="props.isCache" v-bind:src="store.state.cargoSmallLogo" class="degLogoImg" alt="Crates.io logo" />
+      <img v-else v-bind:src="store.state.kellnrSmallLogo" class="degLogoImg" alt="Kellnr logo" />
+    </div>
+    <div class="crateTitle">
+      <a v-if="props.isCache" :href="`https://crates.io/crates/${crate}`" class="crateName" target="_blank">{{ crate
+        }}</a>
+      <router-link v-else class="crateName" :to="{ name: 'Crate', query: { name: crate, version: version } }">
+        {{ crate }}
+      </router-link>
+      <div class="crateVersion">v{{ version }}</div>
+    </div>
+    <div class="crateDesc">
+      {{ desc || "no description available" }}
+    </div>
     <div class="crateStatistics">
       <div class="crateIconInfo tooltip">
         <span class="crateIcon"><i class="fas fa-cloud-download-alt"></i></span>
@@ -145,11 +147,12 @@ body[color-theme="dark"] .crateName:hover {
   .crateCard {
     grid-template-columns: auto auto;
     grid-template-rows: auto auto auto;
-    grid-template-areas: 
+    grid-template-areas:
       "origin title"
       "origin description"
       "origin crateStatistics";
   }
+
   .crateDesc {
     -webkit-line-clamp: 3;
   }
@@ -164,7 +167,7 @@ body[color-theme="dark"] .crateName:hover {
   .crateCard {
     grid-template-rows: auto auto;
     grid-template-columns: auto 1fr auto;
-    grid-template-areas: 
+    grid-template-areas:
       "origin title crateStatistics"
       "origin description crateStatistics";
   }
