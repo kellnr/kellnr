@@ -59,7 +59,7 @@ pub async fn download(
     if !std::path::Path::exists(&file_path) {
         debug!("Crate not found on disk, downloading from crates.io");
         let target = format!(
-            "https://crates.io/api/v1/crates/{}/{}/download",
+            "https://static.crates.io/crates/{}/{}/download",
             package, version
         );
         match reqwest::get(target).await {
