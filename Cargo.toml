@@ -47,7 +47,7 @@ rand = "0.8.5"
 chrono = "0.4.31"
 hex = "0.4.3"
 sha2 = "0.10.8"
-sea-orm = { version = "0.12.14", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] } # Must not upgrade sea-orm to 0.12.3 as that breaks migrations for sqlite
+sea-orm = { version = "0.12.15", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] } # Must not upgrade sea-orm to 0.12.3 as that breaks migrations for sqlite
 thiserror = "1.0.58"
 sea-query = "0.30.7"
 sea-query-derive = "0.4.1"
