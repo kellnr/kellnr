@@ -39,7 +39,7 @@
     "@vue/tsconfig": "^0.5.1",
     "babel-eslint": "^10.1.0",
     "typescript": "~5.4.2",
-    "vite": "5.2.6",
+    "vite": "5.2.7",
     "eslint": "^8.52.0",
     "eslint-plugin-vue": "^9.18.1",
     "vue-tsc": "^2.0.4",
