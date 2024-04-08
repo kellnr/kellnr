@@ -284,8 +284,8 @@ async fn fetch_index_data(
     };
 
     let max_retries = 3;
+    let mut i = 0;
     let r = loop {
-        let mut i = 0;
         match Client::new()
             .get(url.clone())
             .header("User-Agent", "kellnr.io/kellnr")
@@ -309,7 +309,7 @@ async fn fetch_index_data(
                 i += 1;
             }
         };
-        if i > max_retries {
+        if i >= max_retries {
             error!(
                 "Could not fetch index from crates.io for {} after 3 tries",
                 name
