@@ -51,7 +51,7 @@ sea-orm = { version = "0.12.15", features = [ "sqlx-postgres", "sqlx-sqlite", "r
 thiserror = "1.0.58"
 sea-query = "0.30.7"
 sea-query-derive = "0.4.1"
-sea-orm-migration = { version = "0.12.6", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
+sea-orm-migration = { version = "0.12.15", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
 rm_rf = "0.6.2"
 testcontainers = "0.15.0"
 quote = "1.0.35"
