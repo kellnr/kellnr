@@ -40,7 +40,7 @@
     "babel-eslint": "^10.1.0",
     "typescript": "~5.4.2",
     "vite": "5.2.8",
-    "eslint": "^8.52.0",
+    "eslint": "^9.0.0",
     "eslint-plugin-vue": "^9.18.1",
     "vue-tsc": "^2.0.4",
     "@vitejs/plugin-vue": "5.0.4"
