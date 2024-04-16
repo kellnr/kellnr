@@ -48,7 +48,7 @@ async fn internal_prefetch_cratesio(
     name: OriginalName,
     headers: HeaderMap,
     db: &Arc<dyn DbProvider>,
-    sender: &Arc<flume::Sender<CratesioPrefetchMsg>>,
+    sender: &flume::Sender<CratesioPrefetchMsg>,
 ) -> Result<Prefetch, StatusCode> {
     let if_modified_since = headers
         .get("if-modified-since")
@@ -94,7 +94,7 @@ async fn internal_prefetch_cratesio(
 
 fn background_update(
     name: OriginalName,
-    sender: &Arc<flume::Sender<CratesioPrefetchMsg>>,
+    sender: &flume::Sender<CratesioPrefetchMsg>,
     if_modified_since: Option<String>,
     if_none_match: Option<String>,
 ) {
@@ -109,7 +109,7 @@ fn background_update(
 
 pub async fn background_update_thread(
     db: impl DbProvider,
-    sender: Arc<flume::Sender<CratesioPrefetchMsg>>,
+    sender: flume::Sender<CratesioPrefetchMsg>,
 ) {
     loop {
         let crates = match db.get_cratesio_index_update_list().await {
@@ -162,7 +162,7 @@ async fn fetch_cratesio_description(name: &str) -> Result<Option<String>, Status
 
 pub async fn cratesio_prefetch_thread(
     db: Arc<impl DbProvider>,
-    channel: Arc<flume::Receiver<CratesioPrefetchMsg>>,
+    channel: flume::Receiver<CratesioPrefetchMsg>,
 ) {
     let cache: Cache<String, String> = Cache::builder()
         .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
@@ -225,7 +225,7 @@ async fn convert_index_data(
 
 async fn get_insert_data(
     cache: &Cache<String, String>,
-    channel: &Arc<flume::Receiver<CratesioPrefetchMsg>>,
+    channel: &flume::Receiver<CratesioPrefetchMsg>,
 ) -> Option<(
     OriginalName,
     Vec<IndexMetadata>,
@@ -361,7 +361,7 @@ async fn fetch_index_data(
 
 async fn fetch_cratesio_prefetch(
     name: OriginalName,
-    sender: &Arc<flume::Sender<CratesioPrefetchMsg>>,
+    sender: &flume::Sender<CratesioPrefetchMsg>,
 ) -> Result<Prefetch, StatusCode> {
     let url = Url::parse("https://index.crates.io/")
         .unwrap()
@@ -538,7 +538,6 @@ mod tests {
             .returning(move |_, _, _| Ok(PrefetchState::NotFound));
 
         let (sender, receiver) = flume::unbounded::<CratesioPrefetchMsg>();
-        let sender = Arc::new(sender);
         // Make receiver undroppable, else the sender will fail, as the receiver is dropped when
         // this function goes out of scope
         mem::forget(receiver);

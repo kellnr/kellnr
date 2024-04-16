@@ -58,8 +58,6 @@ async fn main() {
     let cratesio_storage: Arc<CratesIoCrateStorage> = init_cratesio_proxy(&settings).await.into();
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
-    let cratesio_prefetch_sender = Arc::new(cratesio_prefetch_sender);
-    let cratesio_prefetch_receiver = Arc::new(cratesio_prefetch_receiver);
 
     init_cratesio_prefetch_thread(
         get_connect_string(&settings),
@@ -194,8 +192,8 @@ async fn main() {
 
 async fn init_cratesio_prefetch_thread(
     con_string: ConString,
-    sender: Arc<flume::Sender<CratesioPrefetchMsg>>,
-    recv: Arc<flume::Receiver<CratesioPrefetchMsg>>,
+    sender: flume::Sender<CratesioPrefetchMsg>,
+    recv: flume::Receiver<CratesioPrefetchMsg>,
     num_threads: usize,
 ) {
     // Threads that takes messages to update the crates.io index
