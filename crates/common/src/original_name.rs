@@ -5,7 +5,7 @@ use std::fmt;
 use std::ops::Deref;
 use thiserror::Error;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Hash)]
 pub struct OriginalName(String);
 
 #[derive(Debug, PartialEq, Eq, Error)]

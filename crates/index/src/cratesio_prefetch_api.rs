@@ -9,12 +9,11 @@ use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use db::provider::PrefetchState;
-use db::DbProvider;
+use db::{ConString, Database, DbProvider};
 use hyper::StatusCode;
 use moka::future::Cache;
 use reqwest::{Client, Url};
 use serde::Deserialize;
-use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, trace, warn};
@@ -42,6 +41,40 @@ pub async fn prefetch_len2_cratesio(
     State(sender): CratesIoPrefetchSenderState,
 ) -> Result<Prefetch, StatusCode> {
     internal_prefetch_cratesio(name, headers, &db, &sender).await
+}
+
+pub async fn init_cratesio_prefetch_thread(
+    con_string: ConString,
+    sender: flume::Sender<CratesioPrefetchMsg>,
+    recv: flume::Receiver<CratesioPrefetchMsg>,
+    num_threads: usize,
+) {
+    // Threads that takes messages to update the crates.io index
+    let db = Arc::new(
+        Database::new(&con_string)
+            .await
+            .expect("Failed to create database connection for crates.io prefetch thread"),
+    );
+    for _ in 0..num_threads {
+        let recv2 = recv.clone();
+        let db2 = db.clone();
+
+        let cache = Cache::builder()
+            .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
+            .build();
+        tokio::spawn(async move {
+            cratesio_prefetch_thread(db2, cache.clone(), recv2).await;
+        });
+    }
+
+    // Thread that periodically checks if the crates.io index needs to be updated.
+    // It sends an update message to the thread above which then updates the index.
+    tokio::spawn(async move {
+        let db = Database::new(&con_string)
+            .await
+            .expect("Failed to create database connection for crates.io update thread");
+        background_update_thread(db, sender).await;
+    });
 }
 
 async fn internal_prefetch_cratesio(
@@ -107,10 +140,7 @@ fn background_update(
     }
 }
 
-pub async fn background_update_thread(
-    db: impl DbProvider,
-    sender: flume::Sender<CratesioPrefetchMsg>,
-) {
+async fn background_update_thread(db: impl DbProvider, sender: flume::Sender<CratesioPrefetchMsg>) {
     loop {
         let crates = match db.get_cratesio_index_update_list().await {
             Ok(crates) => crates,
@@ -160,14 +190,11 @@ async fn fetch_cratesio_description(name: &str) -> Result<Option<String>, Status
     Ok(desc.krate.description)
 }
 
-pub async fn cratesio_prefetch_thread(
+async fn cratesio_prefetch_thread(
     db: Arc<impl DbProvider>,
+    cache: Cache<OriginalName, String>,
     channel: flume::Receiver<CratesioPrefetchMsg>,
 ) {
-    let cache: Cache<String, String> = Cache::builder()
-        .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
-        .build();
-
     loop {
         if let Some((name, metadata, desc, etag, last_modified)) =
             get_insert_data(&cache, &channel).await
@@ -224,7 +251,7 @@ async fn convert_index_data(
 }
 
 async fn get_insert_data(
-    cache: &Cache<String, String>,
+    cache: &Cache<OriginalName, String>,
     channel: &flume::Receiver<CratesioPrefetchMsg>,
 ) -> Option<(
     OriginalName,
@@ -237,19 +264,19 @@ async fn get_insert_data(
         Ok(CratesioPrefetchMsg::Insert(msg)) => {
             trace!("Inserting prefetch data from crates.io for {}", msg.name);
             let date = chrono::Utc::now().to_rfc3339();
-            cache.insert(msg.name.to_string(), date).await;
+            cache.insert(msg.name.clone(), date).await;
             convert_index_data(&msg.name, msg.data)
                 .await
                 .map(|(m, d)| (msg.name.clone(), m, d, msg.etag, msg.last_modified))
         }
         Ok(CratesioPrefetchMsg::Update(msg)) => {
             trace!("Updating prefetch data for {}", msg.name);
-            if let Some(date) = cache.get(msg.name.deref()).await {
+            if let Some(date) = cache.get(&msg.name).await {
                 trace!("No update needed for {}. Last update: {}", msg.name, date);
                 None
             } else {
                 cache
-                    .insert(msg.name.to_string(), chrono::Utc::now().to_rfc3339())
+                    .insert(msg.name.clone(), chrono::Utc::now().to_rfc3339())
                     .await;
                 fetch_index_data(msg.name, msg.etag, msg.last_modified).await
             }
