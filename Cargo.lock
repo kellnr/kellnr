@@ -3302,6 +3302,7 @@ dependencies = [
  "docs",
  "flume",
  "index",
+ "moka",
  "openssl",
  "registry",
  "settings",

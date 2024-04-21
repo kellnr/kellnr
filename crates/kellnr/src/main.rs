@@ -9,7 +9,7 @@ use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use index::{
-    cratesio_prefetch_api::{self, background_update_thread, cratesio_prefetch_thread},
+    cratesio_prefetch_api::{self, init_cratesio_prefetch_thread},
     kellnr_prefetch_api,
 };
 use registry::{cratesio_api, kellnr_api};
@@ -58,8 +58,6 @@ async fn main() {
     let cratesio_storage: Arc<CratesIoCrateStorage> = init_cratesio_proxy(&settings).await.into();
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
-    let cratesio_prefetch_sender = Arc::new(cratesio_prefetch_sender);
-    let cratesio_prefetch_receiver = Arc::new(cratesio_prefetch_receiver);
 
     init_cratesio_prefetch_thread(
         get_connect_string(&settings),
@@ -190,36 +188,6 @@ async fn main() {
         .await
         .unwrap_or_else(|_| panic!("Failed to bind to {addr}"));
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn init_cratesio_prefetch_thread(
-    con_string: ConString,
-    sender: Arc<flume::Sender<CratesioPrefetchMsg>>,
-    recv: Arc<flume::Receiver<CratesioPrefetchMsg>>,
-    num_threads: usize,
-) {
-    // Threads that takes messages to update the crates.io index
-    let db = Arc::new(
-        Database::new(&con_string)
-            .await
-            .expect("Failed to create database connection for crates.io prefetch thread"),
-    );
-    for _ in 0..num_threads {
-        let recv2 = recv.clone();
-        let db2 = db.clone();
-        tokio::spawn(async move {
-            cratesio_prefetch_thread(db2, recv2).await;
-        });
-    }
-
-    // Thread that periodically checks if the crates.io index needs to be updated.
-    // It sends an update message to the thread above which then updates the index.
-    tokio::spawn(async move {
-        let db = Database::new(&con_string)
-            .await
-            .expect("Failed to create database connection for crates.io update thread");
-        background_update_thread(db, sender).await;
-    });
 }
 
 fn init_tracing(settings: &Settings) {
