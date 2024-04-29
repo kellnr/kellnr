@@ -48,7 +48,7 @@ chrono = "0.4.38"
 hex = "0.4.3"
 sha2 = "0.10.8"
 sea-orm = { version = "0.12.15", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] } # Must not upgrade sea-orm to 0.12.3 as that breaks migrations for sqlite
-thiserror = "1.0.58"
+thiserror = "1.0.59"
 sea-query = "0.30.7"
 sea-query-derive = "0.4.1"
 sea-orm-migration = { version = "0.12.15", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
