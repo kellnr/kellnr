@@ -55,15 +55,18 @@ pub async fn init_cratesio_prefetch_thread(
             .await
             .expect("Failed to create database connection for crates.io prefetch thread"),
     );
+
+    let cache = Cache::builder()
+        .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
+        .build();
+
     for _ in 0..num_threads {
         let recv2 = recv.clone();
         let db2 = db.clone();
+        let cache2 = cache.clone();
 
-        let cache = Cache::builder()
-            .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
-            .build();
         tokio::spawn(async move {
-            cratesio_prefetch_thread(db2, cache.clone(), recv2).await;
+            cratesio_prefetch_thread(db2, cache2, recv2).await;
         });
     }
 
