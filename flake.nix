@@ -35,7 +35,7 @@
           ];
 
           buildInputs = [
-	    pkgs.nodejs_21
+	    pkgs.nodejs_22
             pkgs.cargo-nextest
           ] ++ lib.optional pkgs.stdenv.isDarwin [
             pkgs.darwin.apple_sdk.frameworks.Cocoa
