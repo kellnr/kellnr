@@ -17,7 +17,7 @@ pub type SettingsState = axum::extract::State<Arc<Settings>>;
 pub type CrateStorageState = axum::extract::State<Arc<KellnrCrateStorage>>;
 pub type CrateIoStorageState = axum::extract::State<Arc<CratesIoCrateStorage>>;
 pub type SigningKeyState = axum::extract::State<Key>;
-pub type CratesIoPrefetchSenderState = axum::extract::State<Arc<Sender<CratesioPrefetchMsg>>>;
+pub type CratesIoPrefetchSenderState = axum::extract::State<Sender<CratesioPrefetchMsg>>;
 
 #[derive(Clone, FromRef)]
 pub struct AppStateData {
@@ -27,7 +27,7 @@ pub struct AppStateData {
     pub settings: Arc<Settings>,
     pub crate_storage: Arc<KellnrCrateStorage>,
     pub cratesio_storage: Arc<CratesIoCrateStorage>,
-    pub cratesio_prefetch_sender: Arc<Sender<CratesioPrefetchMsg>>,
+    pub cratesio_prefetch_sender: Sender<CratesioPrefetchMsg>,
 }
 
 pub async fn test_state() -> AppStateData {
@@ -43,6 +43,6 @@ pub async fn test_state() -> AppStateData {
         settings,
         crate_storage,
         cratesio_storage: crateio_storage,
-        cratesio_prefetch_sender: Arc::new(cratesio_prefetch_sender),
+        cratesio_prefetch_sender,
     }
 }
