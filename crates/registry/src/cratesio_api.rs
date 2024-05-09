@@ -1,7 +1,9 @@
 use appstate::{CrateIoStorageState, DbState, SettingsState};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Request, State},
     http::StatusCode,
+    middleware::Next,
+    response::Response,
 };
 use common::{original_name::OriginalName, version::Version};
 use error::api_error::ApiResult;
@@ -10,11 +12,25 @@ use tracing::{debug, error, trace};
 
 use crate::{registry_error::RegistryError, search_params::SearchParams};
 
+/// Middleware that checks if the crates.io proxy is enabled.
+/// If not, a 404 is returned.
+pub async fn cratesio_enabled(
+    State(settings): SettingsState,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    match settings.proxy.enabled {
+        true => Ok(next.run(request).await),
+        _ => Err(StatusCode::NOT_FOUND),
+    }
+}
+
 pub async fn search(params: SearchParams) -> ApiResult<String> {
     let url = Url::parse(&format!(
         "https://crates.io/api/v1/crates?q={}&per_page={}",
         params.q, params.per_page.0
-    )).map_err(|e| RegistryError::UrlParseError(e))?;
+    ))
+    .map_err(|e| RegistryError::UrlParseError(e))?;
 
     let client = reqwest::Client::builder()
         .user_agent("kellnr")
@@ -37,16 +53,9 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
 
 pub async fn download(
     Path((package, version)): Path<(OriginalName, Version)>,
-    State(settings): SettingsState,
     State(crate_storage): CrateIoStorageState,
     State(db): DbState,
 ) -> Result<Vec<u8>, StatusCode> {
-    // Return NotFound if the feature is disabled
-    match settings.proxy.enabled {
-        true => (),
-        _ => return Err(StatusCode::NOT_FOUND),
-    };
-
     let file_path = crate_storage.crate_path(&package.to_string(), &version.to_string());
 
     trace!(
@@ -113,7 +122,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::Request;
     use axum::routing::get;
-    use axum::Router;
+    use axum::{middleware, Router};
     use common::util::generate_rand_string;
     use db::mock::MockDb;
     use http_body_util::BodyExt;
@@ -214,6 +223,25 @@ mod tests {
         let body = r.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(12778, body.len());
     }
+    
+    #[tokio::test]
+    async fn cratesio_disabled_returns_404() {
+        let mut settings = get_settings();
+        settings.proxy.enabled = false;
+        let kellnr = TestKellnr::new(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/cratesio/adler/1.0.2/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
+    }
 
     struct TestKellnr {
         path: PathBuf,
@@ -266,7 +294,11 @@ mod tests {
 
         let routes = Router::new()
             .route("/", get(search))
-            .route("/:package/:version/download", get(download));
+            .route("/:package/:version/download", get(download))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                cratesio_enabled,
+            ));
 
         Router::new()
             .nest("/api/v1/cratesio", routes)
