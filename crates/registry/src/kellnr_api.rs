@@ -21,6 +21,7 @@ use common::search_result::{Crate, SearchResult};
 use common::version::Version;
 use db::DbProvider;
 use error::api_error::{ApiError, ApiResult};
+use tracing::debug;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tracing::warn;
@@ -168,9 +169,16 @@ pub async fn publish(
 
     // Set SHA256 from crate file
     let version = Version::try_from(&pub_data.metadata.vers)?;
+    debug!("#311 - /publish crate: {} ({})", normalized_name, version);
+    debug!("#311 - /publish crate data size: {}", &pub_data.cratedata.len());
     let cksum = cs
         .add_bin_package(&orig_name, &version, &pub_data.cratedata)
         .await?;
+
+
+    let alt_sha256 = sha256::digest(&pub_data.cratedata);
+    debug!("#311 - /publish crate SHA256: {}", cksum);
+    debug!("#311 - /publish crate SHA256 (alt): {}", alt_sha256);
 
     let created = Utc::now();
 

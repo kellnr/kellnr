@@ -10,7 +10,7 @@ use tokio::{
     fs::{create_dir_all, DirBuilder, File},
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use crate::storage_error::StorageError;
 
@@ -65,11 +65,13 @@ impl CachedCrateStorage {
             .await
             .map_err(|e| StorageError::WriteCrateFile(file_path.clone(), e))?;
 
-        let sha256 = match self.calc_sha256(&file_path).await {
-            Ok(s) => s,
-            Err(e) => return Err(e),
-        };
+        debug!(
+            "#311- add_bin_package crate saved to disk: {}",
+            file_path.display()
+        );
 
+        let sha256 = self.calc_sha256(&file_path).await?;
+        debug!("#311- add_bin_package crate sha256: {}", sha256);
         Ok(sha256)
     }
 
@@ -99,6 +101,15 @@ impl CachedCrateStorage {
                 .await
                 .map_err(|e| StorageError::ReadCrateMetadata(file_path.to_path_buf(), e))?
                 .len();
+
+            debug!(
+                "#311 - calc_sha256 read bytes from file {}: {}",
+                file_path.display(),
+                bytes_read,
+            );
+            debug!("#311 - calc_sha256 real length of file {}: {}", file_path.display(), real_length);
+            debug!("#311 - calc_sha256 buf length: {}", buf.len());
+
             if bytes_read != real_length as usize {
                 let error_msg = format!(
                     "Try {} - Unable to read crate file {} to calc cksum. Read {} bytes, but file length is {}",

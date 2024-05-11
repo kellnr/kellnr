@@ -26,6 +26,7 @@ hyper.workspace = true
 http-body-util.workspace = true
 thiserror.workspace = true
 url.workspace = true
+sha256.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

@@ -21,6 +21,7 @@ hex.workspace = true
 moka.workspace = true
 axum.workspace = true
 thiserror.workspace = true
+sha256.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
