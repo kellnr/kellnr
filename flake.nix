@@ -78,15 +78,21 @@
       in
       with pkgs;
       {
-        devShells.default = craneLib.devShell {
-          packages = commonArgs.buildInputs ++ commonArgs.nativeBuildInputs;
-          LIBCLANG_PATH = commonArgs.LIBCLANG_PATH;
-          BINDGEN_EXTRA_CLANG_ARGS = commonArgs.BINDGEN_EXTRA_CLANG_ARGS;
+        devShells.default = craneLib.devShell (commonArgs // {
+          inputsFrom = [ kellnr-crate ];
+
           shellHook = ''
             alias c=cargo
 	    alias cta="cargo nextest run --workspace"
+            alias ctaf="cargo nextest run --workspace --features pg-test"
           '';
-        };
+
+          packages = [
+            pkgs.rust-analyzer
+            pkgs.cargo-nextest
+            pkgs.lazygit
+          ];
+        });
 
         packages = {
           default = kellnr-crate;
