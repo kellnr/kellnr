@@ -17,9 +17,9 @@ pub fn pg_testcontainer(_attr: TokenStream, stream: TokenStream) -> TokenStream 
 
     let output = quote! {
         #(#attrs)* #vis #sig {
-            let docker = testcontainers::clients::Cli::default();
-            let pg_container = docker.run(image::Postgres::default());
-            let port = pg_container.get_host_port_ipv4(image::Postgres::PG_PORT);
+            use testcontainers::runners::AsyncRunner;
+            let pg_container = image::Postgres::default().start().await;
+            let port = pg_container.get_host_port_ipv4(image::Postgres::PG_PORT).await;
             let admin = db::AdminUser::new("123".to_string(), "token".to_string(), "salt".to_string());
             let pg_db = db::PgConString::new("localhost", port, "kellnr", "admin", "admin", admin);
             let pg_db = db::ConString::Postgres(pg_db);
