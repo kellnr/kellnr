@@ -35,7 +35,7 @@
           ];
 
           buildInputs = [
-	    pkgs.nodejs_22
+            pkgs.nodejs_22
             pkgs.cargo-nextest
           ] ++ lib.optional pkgs.stdenv.isDarwin [
             pkgs.darwin.apple_sdk.frameworks.Cocoa
@@ -85,7 +85,11 @@
             alias c=cargo
 	    alias cta="cargo nextest run --workspace -E 'not binary_id(db::postgres_test)'"
             alias ctai="cargo nextest run --workspace"
+          '' + lib.optionalString stdenv.isDarwin ''
+          export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
+          export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
           '';
+
 
           packages = [
             pkgs.rust-analyzer
