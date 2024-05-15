@@ -22,8 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 sea-orm.workspace = true
 sea-query.workspace = true
-sha2.workspace = true
-hex.workspace = true
+sha256.workspace = true
 
 [lints.rust]
 unused_imports = "allow"

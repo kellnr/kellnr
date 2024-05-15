@@ -15,12 +15,11 @@ migration.workspace = true
 # External dependencies from crates.io
 serde.workspace = true
 chrono.workspace = true
-hex.workspace = true
 mockall.workspace = true
-sha2.workspace = true
 thiserror.workspace = true
 sea-orm.workspace = true
 serde_json.workspace = true
+sha256.workspace = true
 
 [dev-dependencies]
 rm_rf.workspace = true

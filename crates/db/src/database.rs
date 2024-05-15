@@ -18,7 +18,6 @@ use entity::{
     crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, cratesio_crate, cratesio_index,
     cratesio_meta, doc_queue, krate, owner, prelude::*, session, user,
 };
-use hex::ToHex;
 use migration::iden::{AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden};
 use sea_orm::sea_query::{Alias, Expr, Query, *};
 use sea_orm::{
@@ -26,7 +25,6 @@ use sea_orm::{
     DatabaseConnection, EntityTrait, FromQueryResult, InsertResult, ModelTrait, QueryFilter,
     RelationTrait, Set,
 };
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::path::Path;
@@ -497,7 +495,7 @@ impl Database {
         let index_metadata = Self::crate_index_model_to_index_metadata(crate_name, crate_indices)?;
         let data = Self::index_metadata_to_bytes(&index_metadata)?;
 
-        Ok(Sha256::digest(data).encode_hex())
+        Ok(sha256::digest(data))
     }
 
     fn index_metadata_to_bytes(index_metadata: &[IndexMetadata]) -> DbResult<Vec<u8>> {
