@@ -27,7 +27,6 @@ use sea_orm::{
     RelationTrait, Set,
 };
 use sha2::{Digest, Sha256};
-use tracing::debug;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::path::Path;
@@ -334,7 +333,6 @@ impl Database {
         let features = serde_json::to_value(&index_data.features)
             .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
 
-        debug!("#311 - add_crate_index to db: {} {} {}", index_data.name, index_data.vers, cksum);
         let ci = crate_index::ActiveModel {
             id: Default::default(),
             name: Set(index_data.name),

@@ -21,7 +21,6 @@ use common::search_result::{Crate, SearchResult};
 use common::version::Version;
 use db::DbProvider;
 use error::api_error::{ApiError, ApiResult};
-use tracing::debug;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tracing::warn;
@@ -162,23 +161,15 @@ pub async fn publish(
         check_ownership(&normalized_name, &token, &db).await?;
         if db.crate_version_exists(id, &pub_data.metadata.vers).await? {
             return Err(
-                RegistryError::CrateExists(pub_data.metadata.name, pub_data.metadata.vers).into()
+                RegistryError::CrateExists(pub_data.metadata.name, pub_data.metadata.vers).into(),
             );
         }
     }
 
     // Set SHA256 from crate file
     let version = Version::try_from(&pub_data.metadata.vers)?;
-    debug!("#311 - /publish crate: {} ({})", normalized_name, version);
-    debug!("#311 - /publish crate data size: {}", &pub_data.cratedata.len());
-    let cksum = cs
-        .add_bin_package(&orig_name, &version, &pub_data.cratedata)
+    let cksum = cs.add_bin_package(&orig_name, &version, &pub_data.cratedata)
         .await?;
-
-
-    let alt_sha256 = sha256::digest(&pub_data.cratedata);
-    debug!("#311 - /publish crate SHA256: {}", cksum);
-    debug!("#311 - /publish crate SHA256 (alt): {}", alt_sha256);
 
     let created = Utc::now();
 
@@ -499,7 +490,7 @@ mod reg_api_tests {
         mock_db
             .expect_search_in_crate_name()
             .with(eq("foo"), eq(false))
-            .returning(|_,_| Ok(vec![]));
+            .returning(|_, _| Ok(vec![]));
 
         let kellnr = app_search(Arc::new(mock_db)).await;
         let r = kellnr
@@ -521,7 +512,7 @@ mod reg_api_tests {
         mock_db
             .expect_search_in_crate_name()
             .with(eq("foo"), eq(false))
-            .returning(|_,_| Ok(vec![]));
+            .returning(|_, _| Ok(vec![]));
 
         let kellnr = app_search(Arc::new(mock_db)).await;
         let r = kellnr

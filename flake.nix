@@ -94,6 +94,7 @@
           packages = [
             pkgs.rust-analyzer
             pkgs.cargo-nextest
+            pkgs.cargo-machete
             pkgs.lazygit
           ];
         });

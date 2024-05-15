@@ -15,9 +15,6 @@ common.workspace = true
 # External dependencies
 mockall.workspace = true
 tokio.workspace = true
-sha2.workspace = true
-tracing.workspace = true
-hex.workspace = true
 moka.workspace = true
 axum.workspace = true
 thiserror.workspace = true

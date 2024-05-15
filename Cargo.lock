@@ -1403,7 +1403,6 @@ dependencies = [
  "testcontainers",
  "thiserror",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -3288,7 +3287,6 @@ dependencies = [
  "docs",
  "flume",
  "index",
- "moka",
  "openssl",
  "registry",
  "settings",
@@ -4509,7 +4507,6 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
- "sha256",
  "storage",
  "thiserror",
  "tokio",
@@ -5584,15 +5581,12 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "common",
- "hex",
  "mockall",
  "moka",
  "settings",
- "sha2",
  "sha256",
  "thiserror",
  "tokio",
- "tracing",
 ]
 
 [[package]]

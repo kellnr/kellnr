@@ -1,17 +1,13 @@
 use common::original_name::OriginalName;
 use common::util::generate_rand_string;
 use common::version::Version;
-use hex::ToHex;
 use moka::future::Cache;
 use settings::Settings;
-use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use tokio::{
     fs::{create_dir_all, DirBuilder, File},
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use tracing::{debug, error, warn};
-
 use crate::storage_error::StorageError;
 
 pub type CrateCache = Cache<PathBuf, Vec<u8>>;
@@ -65,70 +61,12 @@ impl CachedCrateStorage {
             .await
             .map_err(|e| StorageError::WriteCrateFile(file_path.clone(), e))?;
 
-        debug!(
-            "#311- add_bin_package crate saved to disk: {}",
-            file_path.display()
-        );
-
-        let sha256 = self.calc_sha256(&file_path).await?;
-        debug!("#311- add_bin_package crate sha256: {}", sha256);
-        Ok(sha256)
+        Ok(sha256::digest(crate_data))
     }
 
     pub fn crate_path(&self, name: &str, version: &str) -> PathBuf {
         self.crate_folder
             .join(format!("{}-{}.crate", name, version))
-    }
-
-    async fn calc_sha256(&self, file_path: &Path) -> Result<String, StorageError> {
-        let mut tries = 0;
-        let max_tries = 5;
-
-        while tries < max_tries {
-            let mut file = File::open(&file_path)
-                .await
-                .map_err(|e| StorageError::OpenCrateFileToCalckCksum(file_path.to_path_buf(), e))?;
-
-            let mut buf: Vec<u8> = vec![];
-
-            let bytes_read = file
-                .read_to_end(&mut buf)
-                .await
-                .map_err(|e| StorageError::ReadCrateFileToCalcCksum(file_path.to_path_buf(), e))?;
-
-            let real_length = file
-                .metadata()
-                .await
-                .map_err(|e| StorageError::ReadCrateMetadata(file_path.to_path_buf(), e))?
-                .len();
-
-            debug!(
-                "#311 - calc_sha256 read bytes from file {}: {}",
-                file_path.display(),
-                bytes_read,
-            );
-            debug!("#311 - calc_sha256 real length of file {}: {}", file_path.display(), real_length);
-            debug!("#311 - calc_sha256 buf length: {}", buf.len());
-
-            if bytes_read != real_length as usize {
-                let error_msg = format!(
-                    "Try {} - Unable to read crate file {} to calc cksum. Read {} bytes, but file length is {}",
-                    tries + 1,
-                    file_path.display(),
-                    bytes_read,
-                    real_length
-                );
-                warn!(error_msg);
-                tries += 1;
-            } else {
-                let sha256: String = Sha256::digest(&buf).encode_hex();
-                return Ok(sha256);
-            }
-        }
-
-        let err = StorageError::ReadCrateFileTries(file_path.to_path_buf(), max_tries);
-        error!("{}", err);
-        Err(err)
     }
 
     async fn create_bin_path(crate_path: &Path) -> Result<(), StorageError> {
