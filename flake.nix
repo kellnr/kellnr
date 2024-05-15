@@ -83,8 +83,8 @@
 
           shellHook = ''
             alias c=cargo
-	    alias cta="cargo nextest run --workspace"
-            alias ctaf="cargo nextest run --workspace --features pg-test"
+	    alias cta="cargo nextest run --workspace -E 'not binary_id(db::postgres_test)'"
+            alias ctai="cargo nextest run --workspace"
           '';
 
           packages = [
