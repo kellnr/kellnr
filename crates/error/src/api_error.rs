@@ -104,6 +104,7 @@ impl From<zip::result::ZipError> for ApiError {
                 &String::from("Zip archive not found"),
                 StatusCode::NOT_FOUND,
             ),
+            _ => ApiError::from_dyn_str(&String::from("Unknown zip error"), StatusCode::INTERNAL_SERVER_ERROR),
         }
     }
 }
