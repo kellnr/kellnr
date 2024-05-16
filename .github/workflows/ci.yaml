@@ -14,7 +14,7 @@ on:
 jobs:
   test-kellnr:
     name: Kellnr Test x64
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -34,7 +34,7 @@ jobs:
   build-kellnr:
     name: Kellnr Build
     if: github.event_name == 'release'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         target:
@@ -101,7 +101,7 @@ jobs:
   deploy-kellnr:
     name: Kellnr Deploy
     if: github.event_name == 'release'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - test-kellnr
       - build-kellnr
@@ -147,7 +147,7 @@ jobs:
   deploy-container:
     name: Deploy Container Image X-Plat
     if: github.event_name == 'release'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - deploy-kellnr
     permissions:

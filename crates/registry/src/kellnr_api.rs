@@ -161,15 +161,14 @@ pub async fn publish(
         check_ownership(&normalized_name, &token, &db).await?;
         if db.crate_version_exists(id, &pub_data.metadata.vers).await? {
             return Err(
-                RegistryError::CrateExists(pub_data.metadata.name, pub_data.metadata.vers).into()
+                RegistryError::CrateExists(pub_data.metadata.name, pub_data.metadata.vers).into(),
             );
         }
     }
 
     // Set SHA256 from crate file
     let version = Version::try_from(&pub_data.metadata.vers)?;
-    let cksum = cs
-        .add_bin_package(&orig_name, &version, &pub_data.cratedata)
+    let cksum = cs.add_bin_package(&orig_name, &version, &pub_data.cratedata)
         .await?;
 
     let created = Utc::now();
@@ -491,7 +490,7 @@ mod reg_api_tests {
         mock_db
             .expect_search_in_crate_name()
             .with(eq("foo"), eq(false))
-            .returning(|_,_| Ok(vec![]));
+            .returning(|_, _| Ok(vec![]));
 
         let kellnr = app_search(Arc::new(mock_db)).await;
         let r = kellnr
@@ -513,7 +512,7 @@ mod reg_api_tests {
         mock_db
             .expect_search_in_crate_name()
             .with(eq("foo"), eq(false))
-            .returning(|_,_| Ok(vec![]));
+            .returning(|_, _| Ok(vec![]));
 
         let kellnr = app_search(Arc::new(mock_db)).await;
         let r = kellnr

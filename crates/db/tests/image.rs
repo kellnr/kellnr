@@ -8,7 +8,7 @@ const POSTGRES_PASSWORD: &str = "admin";
 const POSTGRES_USER: &str = "admin";
 const POSTGRES_DB: &str = "kellnr";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Postgres {
     env_vars: HashMap<String, String>,
 }

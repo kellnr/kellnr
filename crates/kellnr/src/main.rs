@@ -154,6 +154,10 @@ async fn main() {
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
+            cratesio_api::cratesio_enabled,
+        ))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
             auth::auth_req_token::cargo_auth_when_required,
         ));
 

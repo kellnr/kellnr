@@ -13,7 +13,6 @@ use db::{DbProvider, DocQueueEntry, User};
 use pg_testcontainer::*;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-
 mod image;
 
 #[pg_testcontainer]

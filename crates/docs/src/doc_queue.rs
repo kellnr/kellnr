@@ -1,7 +1,7 @@
 use crate::compute_doc_url;
 use cargo::{
     core::{resolver::CliFeatures, Workspace},
-    ops::{self, CompileOptions, DocOptions},
+    ops::{self, CompileOptions, DocOptions, OutputFormat},
     util::command_prelude::CompileMode,
     CargoResult, Config,
 };
@@ -106,11 +106,12 @@ fn generate_docs(crate_path: impl AsRef<Path>) -> CargoResult<()> {
     let workspace = Workspace::new(&manifest_path, &config)?;
     let compile_opts = CompileOptions {
         cli_features: CliFeatures::new_all(true),
-        ..CompileOptions::new(&config, CompileMode::Doc { deps: false })?
+        ..CompileOptions::new(&config, CompileMode::Doc { deps: false, json: false })?
     };
     let options = DocOptions {
         open_result: false,
         compile_opts,
+        output_format: OutputFormat::Html,
     };
     ops::doc(&workspace, &options)?;
     Ok(())

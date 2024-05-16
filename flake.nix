@@ -29,13 +29,15 @@
           strictDeps = true;
           pname = "kellnr";
 
-          nativeBuildInputs = lib.optionals pkgs.stdenv.isLinux [
+          nativeBuildInputs = [
+            pkgs.cmake
+          ] ++ lib.optionals pkgs.stdenv.isLinux [
             pkgs.pkg-config
             pkgs.rustPlatform.bindgenHook
           ];
 
           buildInputs = [
-	    pkgs.nodejs_22
+            pkgs.nodejs_22
             pkgs.cargo-nextest
           ] ++ lib.optional pkgs.stdenv.isDarwin [
             pkgs.darwin.apple_sdk.frameworks.Cocoa
@@ -78,15 +80,26 @@
       in
       with pkgs;
       {
-        devShells.default = craneLib.devShell {
-          packages = commonArgs.buildInputs ++ commonArgs.nativeBuildInputs;
-          LIBCLANG_PATH = commonArgs.LIBCLANG_PATH;
-          BINDGEN_EXTRA_CLANG_ARGS = commonArgs.BINDGEN_EXTRA_CLANG_ARGS;
+        devShells.default = craneLib.devShell (commonArgs // {
+          inputsFrom = [ kellnr-crate ];
+
           shellHook = ''
             alias c=cargo
-	    alias cta="cargo nextest run --workspace"
+	    alias cta="cargo nextest run --workspace -E 'not binary_id(db::postgres_test)'"
+            alias ctai="cargo nextest run --workspace"
+            alias lg=lazygit
+          '' + lib.optionalString stdenv.isDarwin ''
+          export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
+          export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
           '';
-        };
+
+          packages = [
+            pkgs.rust-analyzer
+            pkgs.cargo-nextest
+            pkgs.cargo-machete
+            pkgs.lazygit
+          ];
+        });
 
         packages = {
           default = kellnr-crate;

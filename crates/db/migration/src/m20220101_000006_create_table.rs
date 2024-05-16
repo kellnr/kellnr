@@ -1,9 +1,7 @@
 use crate::m20220101_000006_create_table_entities::{crate_index, krate};
 use common::index_metadata::IndexMetadata;
-use hex::ToHex;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use sea_orm_migration::prelude::*;
-use sha2::{Digest, Sha256};
 use tracing::debug;
 
 #[derive(DeriveMigrationName)]
@@ -112,7 +110,7 @@ async fn compute_etag(
             ))
         })?;
 
-    Ok(Sha256::digest(data).encode_hex())
+    Ok(sha256::digest(data))
 }
 
 #[derive(Iden)]

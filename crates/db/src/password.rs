@@ -1,13 +1,10 @@
 use common::util::generate_rand_string;
-use hex::ToHex;
-use sha2::{Digest, Sha256};
 
 const SALT_LENGTH: usize = 10;
 
 pub fn hash_pwd(pwd: &str, salt: &str) -> String {
     let concat = format!("{}{}", pwd, salt);
-    let result = Sha256::digest(concat.as_bytes());
-    (&result[..]).encode_hex::<String>()
+    sha256::digest(concat)
 }
 
 pub fn generate_salt() -> String {
