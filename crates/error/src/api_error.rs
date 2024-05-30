@@ -58,7 +58,7 @@ impl ApiError {
     }
 
     pub fn from_err(e: &dyn std::error::Error, status: StatusCode) -> Self {
-        let e = format!("ERROR: {}", e.to_string());
+        let e = format!("ERROR: {}", e);
         Self {
             status,
             details: ErrorDetails::from(e),
@@ -74,7 +74,7 @@ impl IntoResponse for ApiError {
 
 impl From<NameError> for ApiError {
     fn from(e: NameError) -> Self {
-       ApiError::from_err(&e, StatusCode::BAD_REQUEST) 
+        ApiError::from_err(&e, StatusCode::BAD_REQUEST)
     }
 }
 
@@ -104,7 +104,10 @@ impl From<zip::result::ZipError> for ApiError {
                 &String::from("Zip archive not found"),
                 StatusCode::NOT_FOUND,
             ),
-            _ => ApiError::from_dyn_str(&String::from("Unknown zip error"), StatusCode::INTERNAL_SERVER_ERROR),
+            _ => ApiError::from_dyn_str(
+                &String::from("Unknown zip error"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ),
         }
     }
 }

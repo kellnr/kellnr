@@ -1349,7 +1349,7 @@ impl DbProvider for Database {
             )
             .to_owned();
 
-        let stmt = if cache == false {
+        let stmt = if !cache {
             stmt_kellnr
                 .order_by(CrateIden::OriginalName, Order::Asc)
                 .to_owned()
@@ -1430,7 +1430,7 @@ impl DbProvider for Database {
             )
             .to_owned();
 
-        let stmt = if cache == false {
+        let stmt = if !cache {
             stmt_kellnr
                 .order_by(CrateIden::OriginalName, Order::Asc)
                 .limit(limit)
@@ -1883,7 +1883,7 @@ impl DbProvider for Database {
                     crates_io_fk: Set(krate.id),
                     documentation: Set(Some(format!(
                         "https://docs.rs/{}/{}",
-                        normalized_name.to_string(),
+                        normalized_name,
                         index.vers,
                     ))),
                 };

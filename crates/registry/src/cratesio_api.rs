@@ -30,23 +30,23 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
         "https://crates.io/api/v1/crates?q={}&per_page={}",
         params.q, params.per_page.0
     ))
-    .map_err(|e| RegistryError::UrlParseError(e))?;
+    .map_err(RegistryError::UrlParseError)?;
 
     let client = reqwest::Client::builder()
         .user_agent("kellnr")
         .build()
-        .map_err(|e| RegistryError::RequestError(e))?;
+        .map_err(RegistryError::RequestError)?;
 
     let response = client
         .get(url)
         .send()
         .await
-        .map_err(|e| RegistryError::RequestError(e))?;
+        .map_err(RegistryError::RequestError)?;
 
     let body = response
         .text()
         .await
-        .map_err(|e| RegistryError::RequestError(e))?;
+        .map_err(RegistryError::RequestError)?;
 
     Ok(body)
 }

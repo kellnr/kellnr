@@ -1,3 +1,4 @@
+use crate::storage_error::StorageError;
 use common::original_name::OriginalName;
 use common::util::generate_rand_string;
 use common::version::Version;
@@ -8,7 +9,6 @@ use tokio::{
     fs::{create_dir_all, DirBuilder, File},
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use crate::storage_error::StorageError;
 
 pub type CrateCache = Cache<PathBuf, Vec<u8>>;
 
@@ -60,6 +60,11 @@ impl CachedCrateStorage {
         file.write_all(crate_data)
             .await
             .map_err(|e| StorageError::WriteCrateFile(file_path.clone(), e))?;
+
+        // Need to flush after write_all. See https://github.com/kellnr/kellnr/issues/311#issuecomment-2138296102
+        file.flush()
+            .await
+            .map_err(|e| StorageError::FlushCrateFile(file_path.clone(), e))?;
 
         Ok(sha256::digest(crate_data))
     }
