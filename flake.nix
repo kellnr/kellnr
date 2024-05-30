@@ -86,6 +86,7 @@
 
           shellHook = ''
             alias c=cargo
+            alias j=just
             alias lg=lazygit
           '' + lib.optionalString stdenv.isDarwin ''
             export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
