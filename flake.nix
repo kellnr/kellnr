@@ -21,7 +21,7 @@
         pkgs = import nixpkgs { inherit system; };
         inherit (pkgs) lib;
 
-        craneLib = crane.lib.${system};
+        craneLib = crane.mkLib nixpkgs.legacyPackages.${system};
         src = craneLib.cleanCargoSource (craneLib.path ./.);
 
         commonArgs = {
