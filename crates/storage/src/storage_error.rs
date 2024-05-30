@@ -34,4 +34,6 @@ pub enum StorageError {
     ReadFile(PathBuf, std::io::Error),
     #[error("Failed to read from file handle: {0}")]
     ReadFileHandle(std::io::Error),
+    #[error("Failed to flush file {0:?}: {1}")]
+    FlushCrateFile(PathBuf, std::io::Error),
 }
