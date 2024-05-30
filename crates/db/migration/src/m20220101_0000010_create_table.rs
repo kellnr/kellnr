@@ -27,7 +27,7 @@ impl MigrationTrait for Migration {
                 )
                 .await?;
 
-            fill_max_version(&manager.get_connection()).await?;
+            fill_max_version(manager.get_connection()).await?;
         }
 
         if !manager.has_column("cratesio_meta", "documentation").await? {
@@ -43,7 +43,7 @@ impl MigrationTrait for Migration {
                 )
                 .await?;
 
-            fill_documentation(&manager.get_connection()).await?;
+            fill_documentation(manager.get_connection()).await?;
         }
         Ok(())
     }

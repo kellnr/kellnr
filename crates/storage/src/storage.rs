@@ -56,7 +56,7 @@ impl StorageProvider for Storage {
         let mut content = String::new();
         file.read_to_string(&mut content)
             .await
-            .map_err(|e| StorageError::ReadFileHandle(e))?;
+            .map_err(StorageError::ReadFileHandle)?;
 
         Ok(content)
     }

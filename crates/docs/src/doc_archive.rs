@@ -30,7 +30,7 @@ impl FromRequest<AppStateData, Body> for DocArchive {
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
         let data_bytes: Vec<u8> =  Bytes::from_request(req, state).await 
-            .map_err(|e| RegistryError::ExtractBytesFailed(e))?
+            .map_err(RegistryError::ExtractBytesFailed)?
             .to_vec();
 
         let max_docs_size = state.settings.docs.max_size * 1_000_000;

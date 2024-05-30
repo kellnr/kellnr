@@ -100,7 +100,7 @@ async fn internal_prefetch_cratesio(
         if_modified_since
     );
 
-    match db
+    let prefetch_state = db
         .is_cratesio_cache_up_to_date(
             &name.to_normalized(),
             if_none_match.clone(),
@@ -113,7 +113,9 @@ async fn internal_prefetch_cratesio(
                 name, e
             );
             StatusCode::INTERNAL_SERVER_ERROR
-        })? {
+        })?;
+
+    match prefetch_state {
         PrefetchState::NeedsUpdate(p) => {
             background_update(name.clone(), sender, if_modified_since, if_none_match);
             trace!("Prefetching {} from crates.io cache: Needs Update", name);

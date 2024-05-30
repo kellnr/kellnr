@@ -58,7 +58,7 @@ impl ApiError {
     }
 
     pub fn from_err(e: &dyn std::error::Error, status: StatusCode) -> Self {
-        let e = format!("ERROR: {}", e.to_string());
+        let e = format!("ERROR: {}", e);
         Self {
             status,
             details: ErrorDetails::from(e),

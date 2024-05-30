@@ -40,7 +40,7 @@ impl FromRequest<AppStateData, Body> for PubData {
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
         let data_bytes: Vec<u8> = Bytes::from_request(req, state).await
-            .map_err(|e| RegistryError::ExtractBytesFailed(e))?
+            .map_err(RegistryError::ExtractBytesFailed)?
             .to_vec(); 
 
         if data_bytes.len() < MIN_BODY_CRATE_AND_DOC_BYTES {
