@@ -44,6 +44,7 @@
             pkgs.libiconv
             pkgs.iconv
             pkgs.cacert
+            pkgs.curl
           ] ++ lib.optional pkgs.stdenv.isLinux [
             pkgs.openssl.dev
           ];
@@ -98,6 +99,7 @@
             pkgs.cargo-nextest
             pkgs.cargo-machete
             pkgs.lazygit
+            pkgs.just
           ];
         });
 
