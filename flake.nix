@@ -22,21 +22,18 @@
         inherit (pkgs) lib;
 
         craneLib = crane.mkLib nixpkgs.legacyPackages.${system};
-        
+
+        # Set a filter of files that are included in the build source directory.
+        # This is used to filter out files that are not needed for the build to
+        # not rebuild on every file change, e.g. in a Reamde.md file.
         webuiFilter = path: _type: builtins.match ".*.(js|json|ts|vue|html|png|css|svg)$" path != null;
         webuiOrCargo = path: type:
           (webuiFilter path type) || (craneLib.filterCargoSources path type);
-
-        # src = lib.cleanSourceWith {
-        #   src = craneLib.path ./.;
-        #   filter = webuiOrCargo;
-        # };
-        #
-        
-        # src = craneLib.cleanCargoSource ./.;
-
-        src = ./.;
-
+        # Inlcude all Rust and WebUI files in the source directory.
+        src = lib.cleanSourceWith {
+          src = craneLib.path ./.;
+          filter = webuiOrCargo;
+        };
 
         commonArgs = {
           inherit src;
@@ -66,8 +63,6 @@
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
           BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.getVersion pkgs.clang}/include";
 
-          # Skip test as we run them with cargo-nextest
-          doCheck = false;
         };
 
         craneLibLLvmTools = craneLib.overrideToolchain
@@ -86,7 +81,6 @@
         # Install the NPM dependencies
         nodejs = pkgs.nodejs_22;
         node2nixOutput = import ui/nix { inherit pkgs nodejs system; };
-        # nodeDeps = (pkgs.callPackage ./ui/nix/default.nix { }).nodeDependencies;
         nodeDeps = node2nixOutput.nodeDependencies;
 
         # Build the actual crate itself, reusing the dependency
@@ -94,8 +88,11 @@
         kellnr-crate = craneLib.buildPackage (commonArgs // {
           inherit cargoArtifacts nodeDeps;
 
+          # Skip test as we run them with cargo-nextest
+          doCheck = false;
+
           preConfigurePhases = [
-            "npmInstall"
+            "npmBuild"
             "debug"
           ];
 
@@ -108,7 +105,7 @@
             ls -la ui
           '';
 
-          npmInstall = ''
+          npmBuild = ''
             cd ui;
             ln -s ${nodeDeps}/lib/node_modules ./node_modules;
             export PATH="${nodeDeps}/bin:$PATH";
@@ -142,6 +139,28 @@
       in
       with pkgs;
       {
+        checks = {
+          inherit kellnr-crate;
+
+          # Run all test with nextest, except Postgresql intergration tests,
+          # as they require Docker to run, which may not be available.
+          nextest = craneLib.cargoNextest (commonArgs // {
+            inherit cargoArtifacts;
+            cargoNextestExtraArgs = "--workspace -E 'not binary_id(db::postgres_test) + not binary_id(db::sqlite_test)'";
+          });
+
+          # Check formatting with rustfmt.
+          fmt = craneLib.cargoFmt (commonArgs // {
+            inherit src;
+          });
+
+          # Check for clippy warnings.
+          clippy = craneLib.cargoClippy (commonArgs // {
+            inherit cargoArtifacts;
+            cargoClippyExtraArgs = "--workspace --all-targets -- --deny warnings";
+          });
+        };
+
         devShells.default = craneLib.devShell (commonArgs // {
           inputsFrom = [ kellnr-crate ];
 
