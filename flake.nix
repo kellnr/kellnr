@@ -22,7 +22,21 @@
         inherit (pkgs) lib;
 
         craneLib = crane.mkLib nixpkgs.legacyPackages.${system};
-        src = craneLib.cleanCargoSource (craneLib.path ./.);
+        
+        webuiFilter = path: _type: builtins.match ".*.(js|json|ts|vue|html|png|css|svg)$" path != null;
+        webuiOrCargo = path: type:
+          (webuiFilter path type) || (craneLib.filterCargoSources path type);
+
+        # src = lib.cleanSourceWith {
+        #   src = craneLib.path ./.;
+        #   filter = webuiOrCargo;
+        # };
+        #
+        
+        # src = craneLib.cleanCargoSource ./.;
+
+        src = ./.;
+
 
         commonArgs = {
           inherit src;
@@ -31,13 +45,13 @@
 
           nativeBuildInputs = [
             pkgs.cmake
+            pkgs.nodejs_22
           ] ++ lib.optionals pkgs.stdenv.isLinux [
             pkgs.pkg-config
             pkgs.rustPlatform.bindgenHook
           ];
 
           buildInputs = [
-            pkgs.nodejs_22
             pkgs.cargo-nextest
           ] ++ lib.optional pkgs.stdenv.isDarwin [
             pkgs.darwin.apple_sdk.frameworks.Cocoa
@@ -51,6 +65,9 @@
 
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
           BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.getVersion pkgs.clang}/include";
+
+          # Skip test as we run them with cargo-nextest
+          doCheck = false;
         };
 
         craneLibLLvmTools = craneLib.overrideToolchain
@@ -66,16 +83,60 @@
         # all of that work (e.g. via cachix) when running in CI
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
+        # Install the NPM dependencies
+        nodejs = pkgs.nodejs_22;
+        node2nixOutput = import ui/nix { inherit pkgs nodejs system; };
+        # nodeDeps = (pkgs.callPackage ./ui/nix/default.nix { }).nodeDependencies;
+        nodeDeps = node2nixOutput.nodeDependencies;
+
         # Build the actual crate itself, reusing the dependency
         # artifacts from above.
         kellnr-crate = craneLib.buildPackage (commonArgs // {
-          inherit cargoArtifacts;
+          inherit cargoArtifacts nodeDeps;
+
+          preConfigurePhases = [
+            "npmInstall"
+            "debug"
+          ];
+
+          debug = ''
+            echo "---- DEBUG ----"
+            echo "Path: "
+            pwd
+            echo "Directory: "
+            ls -la
+            ls -la ui
+          '';
+
+          npmInstall = ''
+            cd ui;
+            ln -s ${nodeDeps}/lib/node_modules ./node_modules;
+            export PATH="${nodeDeps}/bin:$PATH";
+            npm run build --verbose;
+            cd ..;
+          '';
 
           installPhase = ''
+            # Copy kellnr binary into bin directory
+            mkdir -p $out/bin;
+            cp target/release/kellnr $out/bin;
+
+            # Copy default config into bin directory
+            mkdir -p $out/bin/config;
+            cp config/default.toml $out/bin/config;
+
+            # Copy the built UI into the bin directory
+            mkdir -p $out/bin/static;
+            cp -r ui/dist/* $out/bin/static;
+
+            # Debug output
+            ls -la $out/bin;
+            ls -la $out/bin/static;
+            ls -la $out/bin/config;
           '';
 
-          fixupPhase = ''
-          '';
+          # fixupPhase = ''
+          # '';
 
         });
       in
@@ -99,6 +160,7 @@
             pkgs.cargo-machete
             pkgs.lazygit
             pkgs.just
+            pkgs.node2nix
           ];
         });
 
