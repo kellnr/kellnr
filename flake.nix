@@ -142,12 +142,13 @@
         checks = {
           inherit kellnr-crate;
 
-          # Run all test with nextest, except Postgresql intergration tests,
-          # as they require Docker to run, which may not be available.
-          nextest = craneLib.cargoNextest (commonArgs // {
-            inherit cargoArtifacts;
-            cargoNextestExtraArgs = "--workspace -E 'not binary_id(db::postgres_test) + not binary_id(db::sqlite_test)'";
-          });
+          # Run the tests with cargo-nextest,
+          # excluding the database tests and other tests that do not run
+          # well with the nix sandbox.
+          # nextest = craneLib.cargoNextest (commonArgs // {
+          #   inherit cargoArtifacts;
+          #   cargoNextestExtraArgs = "--workspace -E 'not (binary_id(db::postgres_test) or binary_id(db::sqlite_test) or test(cratesio_prefetch_api::tests::fetch_cratesio_description_works) or test(cratesio_prefetch_api::tests::fetch_cratesio_prefetch_works))'";
+          # });
 
           # Check formatting with rustfmt.
           fmt = craneLib.cargoFmt (commonArgs // {
