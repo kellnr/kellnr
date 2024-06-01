@@ -65,15 +65,6 @@
 
         };
 
-        craneLibLLvmTools = craneLib.overrideToolchain
-          (fenix.packages.${system}.complete.withComponents [
-            "cargo"
-            "rustc"
-            "clippy"
-            "rustfmt"
-            "rust-analyzer"
-          ]);
-
         # Build *just* the cargo dependencies, so we can reuse
         # all of that work (e.g. via cachix) when running in CI
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
