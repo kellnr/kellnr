@@ -30,11 +30,19 @@ clean:
 
 clean-node:
 	rm -rf ui/node_modules
+	rm -rf ui/package-lock.json
 
 clean-all: clean clean-node
 
 npm-install:
 	cd ui && npm install
+
+node2nix: clean-node 
+	node2nix --development \
+		--input ui/package.json \
+		--node-env ui/nix/node-env.nix \
+		--composition ui/nix/default.nix \
+		--output ui/nix/node-package.nix
 
 # Aliases
 alias b := build

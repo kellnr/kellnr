@@ -130,6 +130,15 @@ let
         sha512 = "WaMsgi6Q8zMgMth93GvWPXkhAIEobfsIkLTacoVZoK1J0CevIPGYY2Vo5YvJGqyHqXM6P4ppOYGsIRU8MM9pFQ==";
       };
     };
+    "@esbuild/darwin-arm64-0.20.2" = {
+      name = "_at_esbuild_slash_darwin-arm64";
+      packageName = "@esbuild/darwin-arm64";
+      version = "0.20.2";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.20.2.tgz";
+        sha512 = "4J6IRT+10J3aJH3l1yzEg9y3wkTDgDk7TSDFX+wKFiWjqWp/iCfLIYzGyasx9l0SAFPT1HwSCR+0w/h1ES/MjA==";
+      };
+    };
     "@esbuild/linux-arm64-0.20.2" = {
       name = "_at_esbuild_slash_linux-arm64";
       packageName = "@esbuild/linux-arm64";
@@ -290,6 +299,15 @@ let
       src = fetchurl {
         url = "https://registry.npmjs.org/@nodelib/fs.walk/-/fs.walk-1.2.8.tgz";
         sha512 = "oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==";
+      };
+    };
+    "@rollup/rollup-darwin-arm64-4.18.0" = {
+      name = "_at_rollup_slash_rollup-darwin-arm64";
+      packageName = "@rollup/rollup-darwin-arm64";
+      version = "4.18.0";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/@rollup/rollup-darwin-arm64/-/rollup-darwin-arm64-4.18.0.tgz";
+        sha512 = "IWfdwU7KDSm07Ty0PuA/W2JYoZ4iTj3TUQjkVsO/6U+4I1jN5lcR71ZEvRh52sDOERdnNhhHU57UITXz5jC1/w==";
       };
     };
     "@rollup/rollup-linux-arm64-gnu-4.18.0" = {
@@ -2626,6 +2644,7 @@ let
       sources."@babel/template-7.24.6"
       sources."@babel/traverse-7.24.6"
       sources."@babel/types-7.24.6"
+      sources."@esbuild/darwin-arm64-0.20.2"
       sources."@esbuild/linux-arm64-0.20.2"
       sources."@eslint-community/eslint-utils-4.4.0"
       sources."@eslint-community/regexpp-4.10.0"
@@ -2655,6 +2674,7 @@ let
       sources."@nodelib/fs.scandir-2.1.5"
       sources."@nodelib/fs.stat-2.0.5"
       sources."@nodelib/fs.walk-1.2.8"
+      sources."@rollup/rollup-darwin-arm64-4.18.0"
       sources."@rollup/rollup-linux-arm64-gnu-4.18.0"
       sources."@types/dompurify-3.0.5"
       sources."@types/estree-1.0.5"

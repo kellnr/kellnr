@@ -56,8 +56,8 @@
             pkgs.iconv
             pkgs.cacert
             pkgs.curl
-          ] ++ lib.optional pkgs.stdenv.isLinux [
             pkgs.openssl.dev
+          ] ++ lib.optional pkgs.stdenv.isLinux [
           ];
 
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
