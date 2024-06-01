@@ -1,8 +1,8 @@
 pub mod api;
-pub mod docs_error;
 mod doc_archive;
 pub mod doc_queue;
 pub mod doc_queue_response;
+pub mod docs_error;
 pub mod upload_response;
 
 use common::version::Version;

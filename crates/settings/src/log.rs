@@ -133,7 +133,7 @@ impl From<LogLevel> for tracing::level_filters::LevelFilter {
         Self::from_level(value.into())
     }
 }
- 
+
 #[cfg(test)]
 mod log_format_tests {
     use super::*;
@@ -274,7 +274,7 @@ mod log_tests {
 
     #[derive(Debug, Deserialize)]
     struct Settings {
-       pub log: Log,
+        pub log: Log,
     }
 
     #[test]

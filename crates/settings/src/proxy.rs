@@ -8,6 +8,9 @@ pub struct Proxy {
 
 impl Default for Proxy {
     fn default() -> Self {
-        Self { enabled: false, num_threads: 10 }
+        Self {
+            enabled: false,
+            num_threads: 10,
+        }
     }
 }

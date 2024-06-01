@@ -43,10 +43,7 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
         .await
         .map_err(RegistryError::RequestError)?;
 
-    let body = response
-        .text()
-        .await
-        .map_err(RegistryError::RequestError)?;
+    let body = response.text().await.map_err(RegistryError::RequestError)?;
 
     Ok(body)
 }
@@ -223,7 +220,7 @@ mod tests {
         let body = r.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(12778, body.len());
     }
-    
+
     #[tokio::test]
     async fn cratesio_disabled_returns_404() {
         let mut settings = get_settings();
