@@ -75,7 +75,11 @@ pub trait DbProvider: Send + Sync {
     async fn delete_crate(&self, krate: &NormalizedName, version: &Version) -> DbResult<()>;
     async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>>;
     async fn update_last_updated(&self, id: i64, last_updated: &DateTime<Utc>) -> DbResult<()>;
-    async fn search_in_crate_name(&self, contains: &str, cache: bool) -> DbResult<Vec<CrateOverview>>;
+    async fn search_in_crate_name(
+        &self,
+        contains: &str,
+        cache: bool,
+    ) -> DbResult<Vec<CrateOverview>>;
     async fn get_crate_overview_list(
         &self,
         limit: u64,

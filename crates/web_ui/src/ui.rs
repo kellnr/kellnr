@@ -963,7 +963,7 @@ mod tests {
         mock_db
             .expect_search_in_crate_name()
             .with(eq("hello"), eq(false))
-            .returning(move |_,_| Ok(vec![tc.clone()]));
+            .returning(move |_, _| Ok(vec![tc.clone()]));
 
         let r = app(
             mock_db,

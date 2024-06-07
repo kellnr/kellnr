@@ -1,12 +1,14 @@
-use crate::docs_error::DocsError;
-use crate::{compute_doc_url, get_latest_version_with_doc};
 use crate::doc_archive::DocArchive;
 use crate::doc_queue_response::DocQueueResponse;
+use crate::docs_error::DocsError;
 use crate::upload_response::DocUploadResponse;
+use crate::{compute_doc_url, get_latest_version_with_doc};
 use appstate::{AppState, DbState, SettingsState};
 use auth::token::Token;
 use axum::{
-    extract::{Path, State}, response::Redirect, Json
+    extract::{Path, State},
+    response::Redirect,
+    Json,
 };
 use common::original_name::OriginalName;
 use common::version::Version;

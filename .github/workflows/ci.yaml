@@ -20,8 +20,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: NPM Install
-        run: cd ui && npm install
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
       - name: Install Rust
         uses: hecrj/setup-rust-action@v2
@@ -29,7 +31,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Test
-        run: cargo test --workspace --profile ci-dev
+        run: just ci-test 
 
   build-kellnr:
     name: Kellnr Build
@@ -48,14 +50,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: NPM Install
-        run: cd ui && npm install
-
       - name: Update APT Repositories
         run: sudo apt update
 
       - name: Install dependencies
         run: sudo apt install -y build-essential gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu sed
+
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
       - name: Setup Rust
         uses: hecrj/setup-rust-action@v2
@@ -74,7 +78,7 @@ jobs:
         run: sed -i 's/0.0.0-debug/'"$KELLNR_VERSION"'/' crates/web_ui/src/ui.rs
 
       - name: Build Release {{ matrix.target }}
-        run: cargo build --profile ci-release --target ${{ matrix.target }} --features vendored-openssl
+        run: just target=${{ matrix.target }} ci-release
 
       - name: Set Packagename
         run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_VERSION.zip" >> $GITHUB_ENV
