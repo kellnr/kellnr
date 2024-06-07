@@ -37,6 +37,7 @@ clean-all: clean clean-node
 
 npm-build: npm-install
 	cd ui && npm run build
+	mkdir -p static
 	cp -r ui/dist/* static/
 
 npm-install:
