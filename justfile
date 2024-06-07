@@ -8,6 +8,11 @@ test_all := if has_docker == "true" { "cargo nextest run --workspace" } else { "
 docker:
 	echo "{{has_docker}}"
 
+# Set the target for the ci-release command.
+# The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", or "armv7-unknown-linux-gnueabihf".
+# It's used by the Github Actions CI to build the release binary for the specified target.
+target := "x86_64-unknown-linux-gnu"
+
 # Commands
 build:
 	cargo build
@@ -37,12 +42,23 @@ clean-all: clean clean-node
 npm-install:
 	cd ui && npm install
 
-node2nix: clean-node 
+patch-package: 
+	jd -o ui/nix/package.json \
+	-p \
+	-f patch ui/nix/package-patch.json ui/package.json || true 
+
+node2nix: clean-node patch-package
 	node2nix --development \
-		--input ui/package.json \
+		--input ui/nix/package.json \
 		--node-env ui/nix/node-env.nix \
 		--composition ui/nix/default.nix \
 		--output ui/nix/node-package.nix
+
+ci-test: npm-install
+	cargo test --workspace --profile ci-dev
+
+ci-release: npm-install
+        cargo build --profile ci-release --target {{target}} --features vendored-openssl
 
 # Aliases
 alias b := build

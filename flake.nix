@@ -8,14 +8,9 @@
       url = "github:ipetkov/crane";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    fenix = {
-      url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.rust-analyzer-src.follows = "";
-    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, crane, fenix, ... }:
+  outputs = { nixpkgs, flake-utils, crane, ... }:
     flake-utils.lib.eachSystem [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -165,13 +160,14 @@
             export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
           '';
 
-          packages = [
-            pkgs.rust-analyzer
-            pkgs.cargo-nextest
-            pkgs.cargo-machete
-            pkgs.lazygit
-            pkgs.just
-            pkgs.node2nix
+          packages = with pkgs; [
+            rust-analyzer
+            cargo-nextest
+            cargo-machete
+            lazygit
+            just
+            node2nix
+            jd-diff-patch
           ];
         });
 
