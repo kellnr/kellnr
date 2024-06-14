@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{net::IpAddr, str::FromStr};
+use std::net::{IpAddr, Ipv4Addr};
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 pub struct Local {
@@ -10,7 +10,7 @@ pub struct Local {
 impl Default for Local {
     fn default() -> Self {
         Self {
-            ip: IpAddr::from_str("0.0.0.0").unwrap(), // Unwrap is safe because the string is hardcoded
+            ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 8000,
         }
     }

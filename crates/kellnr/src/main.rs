@@ -34,9 +34,7 @@ async fn main() {
     let settings: Arc<Settings> = Settings::try_from(Path::new("config"))
         .expect("Cannot read config")
         .into();
-    let addr: SocketAddr = format!("{}:{}", settings.local.ip, settings.local.port)
-        .parse()
-        .expect("Failed to parse IP and port: {settings.local.ip}:{settings.local.port}");
+    let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber
     init_tracing(&settings);
