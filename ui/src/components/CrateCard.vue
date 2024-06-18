@@ -39,9 +39,11 @@
 import { computed } from "vue";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import utc from "dayjs/plugin/UTC";
 import { store } from "../store/store"
 
 dayjs.extend(relativeTime);
+dayjs.extend(utc);
 
 const props = defineProps<{
   crate: string
@@ -54,7 +56,7 @@ const props = defineProps<{
 }>()
 
 const humanizedLastUpdated = computed(() => {
-  return dayjs(props.updated).fromNow();
+  return dayjs.utc(props.updated).fromNow();
 })
 
 function copyToCb(text: string) {
