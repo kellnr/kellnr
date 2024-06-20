@@ -1,22 +1,46 @@
-FROM ubuntu:24.04
+FROM rust:1.79.0-bookworm as rust_builder
 
-ARG ADMINPWD=admin
-ENV INSTALLDIR=/opt
-ENV DATADIR=/opt/kdata
-ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
-ARG VERSION
 
-RUN apt update
-RUN apt install -y curl sed git zip apt-utils build-essential llvm-dev libclang-dev clang cmake
+RUN apt update && \
+    apt install -y \
+      apt-utils \
+      build-essential \
+      clang \
+      cmake \
+      curl \
+      git \
+      libclang-dev \
+      llvm-dev \
+      nodejs \
+      npm \
+      sed \
+      zip
 
-# Install rust for the automatic rustdoc generation
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-ENV PATH="/root/.cargo/bin:${PATH}"
+COPY . /sources
+WORKDIR /sources/crates/kellnr
 
-COPY start.sh ${INSTALLDIR}
-RUN chmod u+x ${INSTALLDIR}/start.sh
+RUN cargo build --release
 
-WORKDIR ${INSTALLDIR}
-RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh | bash -s -- -d ${DATADIR} -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+FROM rust:1.79.0-bookworm
 
-ENTRYPOINT ["/opt/start.sh"]
+RUN apt update && \
+    apt install -y \
+      apt-utils \
+      build-essential \
+      clang \
+      cmake \
+      curl \
+      git \
+      libclang-dev \
+      llvm-dev \
+      sed \
+      zip
+
+COPY --from=rust_builder /sources/target/release/kellnr /usr/bin
+COPY --from=rust_builder /sources/config/default.toml /config/default.toml
+COPY --from=rust_builder /sources/static /static
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/ui/version || exit 1
+CMD kellnr
