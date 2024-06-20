@@ -146,7 +146,7 @@ jobs:
 
   deploy-container:
     name: Deploy Container Image X-Plat
-    if: github.event_name == 'release'
+    # if: github.event_name == 'release'
     runs-on: ubuntu-24.04
     needs:
       - deploy-kellnr
@@ -160,21 +160,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract Version
-        run: |
-          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-          echo $RELEASE_VERSION
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
 
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v1
-      
+
       - name: Log in to registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
 
-      - name: Docker Build & Push
-        run: chmod u+x build_and_push.sh && ./build_and_push.sh $IMAGE $RELEASE_VERSION
-        working-directory: docker
+      - name: Docker Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: $IMAGE:latest
