@@ -129,6 +129,12 @@ async fn main() {
         )
         .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
         .route("/:crate_name/:version/unyank", put(kellnr_api::unyank))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::auth_req_token::cargo_auth_when_required,
+        ));
+    
+    let kellnr_index_api = Router::new()
         .route("/config.json", get(kellnr_prefetch_api::config_kellnr))
         .route("/:a/:b/:package", get(kellnr_prefetch_api::prefetch_kellnr))
         .route(
@@ -143,6 +149,16 @@ async fn main() {
     let cratesio_api = Router::new()
         .route("/", get(cratesio_api::search))
         .route("/:package/:version/download", get(cratesio_api::download))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            cratesio_api::cratesio_enabled,
+        ))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::auth_req_token::cargo_auth_when_required,
+        ));
+
+    let cratesio_index_api = Router::new()
         .route("/config.json", get(cratesio_prefetch_api::config_cratesio))
         .route(
             "/:a/:b/:name",
@@ -183,6 +199,8 @@ async fn main() {
         .nest("/api/v1/docs", docs)
         .nest("/api/v1/crates", kellnr_api)
         .nest("/api/v1/cratesio", cratesio_api)
+        .nest("/api/v1/crates/index", kellnr_index_api)
+        .nest("/api/v1/cratesio/index", cratesio_index_api)
         .nest_service("/docs", docs_service)
         .fallback(static_files_service)
         .with_state(state)
