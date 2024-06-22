@@ -25,8 +25,11 @@
 import dayjs from 'dayjs'
 import {computed} from "vue";
 import relativeTime from "dayjs/plugin/relativeTime";
+import utc from "dayjs/plugin/UTC";
 import {useRouter} from "vue-router";
+
 dayjs.extend(relativeTime);
+dayjs.extend(utc);
 
 const props = defineProps<{
   name: string,
@@ -37,7 +40,7 @@ const props = defineProps<{
 const router = useRouter()
 
 const humanizedLastUpdated = computed(() => {
-  return dayjs(props.last_updated).fromNow();
+  return dayjs.utc(props.last_updated).fromNow();
 })
 
 function openCrateVersionPage() {
