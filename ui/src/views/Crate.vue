@@ -172,6 +172,7 @@ import axios from "axios";
 import { useRoute, useRouter } from "vue-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import utc from "dayjs/plugin/UTC";
 import CrateSidebarElement from "../components/CrateSidebarElement.vue";
 import { store } from "../store/store";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
@@ -180,6 +181,7 @@ import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD } from "
 import Readme from "../components/Readme.vue";
 
 dayjs.extend(relativeTime);
+dayjs.extend(utc);
 
 const crate = ref<CrateData>(defaultCrateData);
 const router = useRouter()
@@ -193,7 +195,7 @@ const docLink = computed(() => {
 })
 
 const humanizedLastUpdated = computed(() => {
-  return dayjs(crate.value.last_updated).fromNow();
+  return dayjs.utc(crate.value.last_updated).fromNow();
 })
 
 const sortedDeps = computed(() => {
