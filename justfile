@@ -11,6 +11,9 @@
 # Common commands
 ##########################################
 
+check:
+	cargo check
+
 build:
 	cargo build
 
@@ -88,7 +91,7 @@ alias br := build-release
 alias r := run
 alias t := test
 alias ta := test-all
-alias c := clean
+alias c := check
 
 # "true" if docker is installed, "false" otherwise
 # Docker is needed for the Postgresql integration tests
