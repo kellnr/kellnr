@@ -18,8 +18,8 @@ pub fn pg_testcontainer(_attr: TokenStream, stream: TokenStream) -> TokenStream 
     let output = quote! {
         #(#attrs)* #vis #sig {
             use testcontainers::runners::AsyncRunner;
-            let pg_container = image::Postgres::default().start().await;
-            let port = pg_container.get_host_port_ipv4(image::Postgres::PG_PORT).await;
+            let pg_container = image::Postgres::default().start().await.expect("Failed to start postgres container");
+            let port = pg_container.get_host_port_ipv4(image::Postgres::PG_PORT).await.expect("Failed to get port");
             let admin = db::AdminUser::new("123".to_string(), "token".to_string(), "salt".to_string());
             let pg_db = db::PgConString::new("localhost", port, "kellnr", "admin", "admin", admin);
             let pg_db = db::ConString::Postgres(pg_db);
