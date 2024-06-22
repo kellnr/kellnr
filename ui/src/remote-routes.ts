@@ -20,7 +20,6 @@ export const SETTINGS = "/api/v1/ui/settings";
 export const STATISTICS = "/api/v1/ui/statistic";
 export const SEARCH = "/api/v1/ui/search";
 
-export const CRATES_IO_INDEX = "/api/v1/cratesio/index";
 export const DOCS_BUILD = "/api/v1/docs/build";
 export const DOCS_QUEUE = "/api/v1/docs/queue";
 
