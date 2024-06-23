@@ -22,7 +22,7 @@ static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
 
 pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson> {
-    Json(ConfigJson::from((&(*settings), "cratesio")))
+    Json(ConfigJson::from((&(*settings), "cratesio", false)))
 }
 
 pub async fn prefetch_cratesio(
@@ -538,7 +538,7 @@ mod tests {
         let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
 
         assert_eq!(
-            ConfigJson::new(&Protocol::Http, "test.api.com", 1234, "cratesio", false),
+            ConfigJson::new(&Protocol::Http, "test.api.com", 1234, "cratesio", false, false),
             actual
         );
     }

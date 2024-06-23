@@ -10,7 +10,7 @@ use db::DbProvider;
 use std::sync::Arc;
 
 pub async fn config_kellnr(State(settings): SettingsState) -> Json<ConfigJson> {
-    Json(ConfigJson::from((&(*settings), "crates")))
+    Json(ConfigJson::from((&(*settings), "crates", true)))
 }
 
 pub async fn prefetch_kellnr(
@@ -86,7 +86,7 @@ mod tests {
         let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
 
         assert_eq!(
-            ConfigJson::new(&Protocol::Http, "test.api.com", 1234, "crates", false),
+            ConfigJson::new(&Protocol::Http, "test.api.com", 1234, "crates", true, false),
             actual
         );
     }
