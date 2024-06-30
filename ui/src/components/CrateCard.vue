@@ -1,8 +1,8 @@
 <template>
   <div class="crateCard glass">
     <div class="crateOrigin">
-      <img v-if="props.isCache" v-bind:src="store.state.cargoSmallLogo" class="degLogoImg" alt="Crates.io logo" />
-      <img v-else v-bind:src="store.state.kellnrSmallLogo" class="degLogoImg" alt="Kellnr logo" />
+      <img v-if="props.isCache" v-bind:src="store.cargoSmallLogo" class="degLogoImg" alt="Crates.io logo" />
+      <img v-else v-bind:src="store.kellnrSmallLogo" class="degLogoImg" alt="Kellnr logo" />
     </div>
     <div class="crateTitle">
       <a v-if="props.isCache" :href="`https://crates.io/crates/${crate}`" class="crateName" target="_blank">{{ crate
@@ -40,10 +40,11 @@ import { computed } from "vue";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/UTC";
-import { store } from "../store/store"
+import { useStore } from "../store/store"
 
 dayjs.extend(relativeTime);
 dayjs.extend(utc);
+const store = useStore();
 
 const props = defineProps<{
   crate: string

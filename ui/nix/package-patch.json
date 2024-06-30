@@ -2,12 +2,12 @@
     {
         "op": "add",
         "path": "/devDependencies/@esbuild~1linux-arm64",
-        "value": "^0.20.2"
+        "value": "^0.21.5"
     },
     {
         "op": "add",
         "path": "/devDependencies/@esbuild~1darwin-arm64",
-        "value": "^0.20.2"
+        "value": "^0.21.5"
     },
     {
         "op": "add",

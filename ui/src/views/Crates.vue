@@ -6,7 +6,7 @@
           placeholder="Search for crates" type="text"></input>
         <div id="cacheSwitch">
           <label class="inline-block-child switch">
-            <input type="checkbox" v-model="store.state.searchCache" v-on:change="getCrates(0, page_size, true)" >
+            <input type="checkbox" v-model="store.searchCache" v-on:change="getCrates(0, page_size, true)" >
             <span class="slider round"></span>
           </label>
           <span id="cacheSwitchLabel" class="inline-block-child">
@@ -38,7 +38,7 @@ import type { CrateOverview } from "../types/crate_overview";
 import { CRATES, SEARCH } from "../remote-routes";
 import { useRouter } from "vue-router";
 import { login_required } from "../common/auth";
-import { store } from "../store/store";
+import { useStore } from "../store/store";
 
 const crates = ref<Array<CrateOverview>>([])
 const page = ref(0)
@@ -48,6 +48,7 @@ const page_size = ref(20)
 const searchText = ref("")
 const rtable = ref<HTMLDivElement | null>(null)
 const router = useRouter()
+const store = useStore()
 
 onBeforeMount(() => {
   login_required()
@@ -99,7 +100,7 @@ function getCrates(next_page: number, page_size: number, clean: boolean = false)
 
   axios
     .get(CRATES, {
-      params: { page: next_page, page_size: page_size, cache: store.state.searchCache },
+      params: { page: next_page, page_size: page_size, cache: store.searchCache },
     })
     .then((response) => {
       crates.value = crates.value.concat(response.data.crates);
@@ -124,7 +125,7 @@ function searchCrates(searchText: string) {
   }
 
   axios
-    .get(SEARCH, { params: { name: searchQuery, cache: store.state.searchCache } })
+    .get(SEARCH, { params: { name: searchQuery, cache: store.searchCache } })
     .then((res) => {
       clearTable();
       crates.value = res.data.crates;
