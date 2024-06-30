@@ -172,7 +172,7 @@ import axios from "axios";
 import { useRoute, useRouter } from "vue-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import utc from "dayjs/plugin/UTC";
+import utc from "dayjs/plugin/utc";
 import CrateSidebarElement from "../components/CrateSidebarElement.vue";
 import { useStore } from "../store/store";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";

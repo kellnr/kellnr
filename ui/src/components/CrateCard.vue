@@ -39,7 +39,7 @@
 import { computed } from "vue";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import utc from "dayjs/plugin/UTC";
+import utc from "dayjs/plugin/utc";
 import { useStore } from "../store/store"
 
 dayjs.extend(relativeTime);

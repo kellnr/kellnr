@@ -25,7 +25,7 @@
 import dayjs from 'dayjs'
 import {computed} from "vue";
 import relativeTime from "dayjs/plugin/relativeTime";
-import utc from "dayjs/plugin/UTC";
+import utc from "dayjs/plugin/utc";
 import {useRouter} from "vue-router";
 
 dayjs.extend(relativeTime);
