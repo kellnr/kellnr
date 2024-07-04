@@ -24,17 +24,23 @@ The following tools are needed to build **kellnr**: [Rust](https://www.rust-lang
 
 ### Build Kellnr
 
-The [build.rs](crates/kellnr/build.rs) installs all **node.js** dependencies, builds the UI and **kellnr**. Simply run one of the commands below:
+The project uses [just](https://github.com/casey/just) as a task runner. Check the [justfile](./justfile) for all available tasks, or run `just -l` to see all available tasks.
 
 ```bash
-# Build Kellnr
-cargo build
+# Build the project (debug)
+just build
 
-# Run Kellnr
-cargo run
+# Build the project (release)
+just build-release
 
-# Test Kellnr
-cargo test --all
+# Test the project (without Docker integration tests)
+just test
+
+# Test the project (with Docker integration tests)
+just test-all
+
+# Run the project
+just run
 ```
 
 ### Sea ORM & PostgreSQL
