@@ -97,7 +97,7 @@ jobs:
           args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/ci-release/kellnr
 
       - name: Upload Kellner
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kellnr
           path: ${{ github.workspace }}/${{ env.KELLNR_PACKAGE }}
