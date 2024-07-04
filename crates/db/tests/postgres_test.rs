@@ -1,4 +1,4 @@
-use chrono::{TimeZone, Utc, DateTime};
+use chrono::{DateTime, TimeZone, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use common::crate_overview::CrateOverview;
 use common::index_metadata::IndexMetadata;
@@ -2408,43 +2408,46 @@ async fn test_get_last_updated_crate_works() {
     let created1 = DateTime::parse_from_rfc3339("2021-01-01T00:00:00Z").unwrap();
     let created1 = DateTime::<Utc>::from(created1);
 
-    test_db.test_add_crate(
-        "my_crate",
-        "admin",
-        &Version::from_unchecked_str("1.0.0"),
-        &created1,
-    )
-    .await
-    .unwrap();
-    
+    test_db
+        .test_add_crate(
+            "my_crate",
+            "admin",
+            &Version::from_unchecked_str("1.0.0"),
+            &created1,
+        )
+        .await
+        .unwrap();
+
     let created2 = DateTime::parse_from_rfc3339("2021-02-01T00:00:00Z").unwrap();
     let created2 = DateTime::<Utc>::from(created2);
 
-    test_db.test_add_crate(
-        "my_crate",
-        "admin",
-        &Version::from_unchecked_str("2.0.0"),
-        &created2,
-    )
-    .await
-    .unwrap();
+    test_db
+        .test_add_crate(
+            "my_crate",
+            "admin",
+            &Version::from_unchecked_str("2.0.0"),
+            &created2,
+        )
+        .await
+        .unwrap();
 
     let created3 = DateTime::parse_from_rfc3339("2021-03-01T00:00:00Z").unwrap();
     let created3 = DateTime::<Utc>::from(created3);
 
-    test_db.test_add_crate(
-        "my_crate2",
-        "admin",
-        &Version::from_unchecked_str("1.0.0"),
-        &created3,
-    ).await.unwrap();
-    
+    test_db
+        .test_add_crate(
+            "my_crate2",
+            "admin",
+            &Version::from_unchecked_str("1.0.0"),
+            &created3,
+        )
+        .await
+        .unwrap();
 
     let last_updated = test_db.get_last_updated_crate().await.unwrap().unwrap();
 
     assert_eq!(String::from("my_crate2"), last_updated.0.to_string());
 }
-
 
 #[pg_testcontainer]
 #[tokio::test]
@@ -2457,25 +2460,20 @@ async fn test_get_last_updated_crate_empty() {
 #[pg_testcontainer]
 #[tokio::test]
 async fn test_get_total_unique_cached_crates_works() {
-    test_db.test_add_cached_crate(
-        "my_crate",
-        "1.0.0"
-    )
-    .await
-    .unwrap();
+    test_db
+        .test_add_cached_crate("my_crate", "1.0.0")
+        .await
+        .unwrap();
 
-    test_db.test_add_cached_crate(
-        "my_crate",
-        "2.0.0"
-    )
-    .await
-    .unwrap();
+    test_db
+        .test_add_cached_crate("my_crate", "2.0.0")
+        .await
+        .unwrap();
 
-    test_db.test_add_cached_crate(
-        "my_crate2",
-        "1.0.0",
-    ).await.unwrap();
-    
+    test_db
+        .test_add_cached_crate("my_crate2", "1.0.0")
+        .await
+        .unwrap();
 
     let unique_cached_crates = test_db.get_total_unique_cached_crates().await.unwrap();
 
@@ -2485,25 +2483,20 @@ async fn test_get_total_unique_cached_crates_works() {
 #[pg_testcontainer]
 #[tokio::test]
 async fn test_get_total_cached_crate_versions_works() {
-    test_db.test_add_cached_crate(
-        "my_crate",
-        "1.0.0"
-    )
-    .await
-    .unwrap();
+    test_db
+        .test_add_cached_crate("my_crate", "1.0.0")
+        .await
+        .unwrap();
 
-    test_db.test_add_cached_crate(
-        "my_crate",
-        "2.0.0"
-    )
-    .await
-    .unwrap();
+    test_db
+        .test_add_cached_crate("my_crate", "2.0.0")
+        .await
+        .unwrap();
 
-    test_db.test_add_cached_crate(
-        "my_crate2",
-        "1.0.0",
-    ).await.unwrap();
-    
+    test_db
+        .test_add_cached_crate("my_crate2", "1.0.0")
+        .await
+        .unwrap();
 
     let unique_cached_versions = test_db.get_total_cached_crate_versions().await.unwrap();
 
@@ -2513,28 +2506,20 @@ async fn test_get_total_cached_crate_versions_works() {
 #[pg_testcontainer]
 #[tokio::test]
 async fn test_get_total_cached_downloads_works() {
-    test_db.test_add_cached_crate_with_downloads(
-        "my_crate",
-        "1.0.0",
-        10
-    )
-    .await
-    .unwrap();
+    test_db
+        .test_add_cached_crate_with_downloads("my_crate", "1.0.0", 10)
+        .await
+        .unwrap();
 
-    test_db.test_add_cached_crate_with_downloads(
-        "my_crate",
-        "2.0.0",
-        20
-    )
-    .await
-    .unwrap();
+    test_db
+        .test_add_cached_crate_with_downloads("my_crate", "2.0.0", 20)
+        .await
+        .unwrap();
 
-    test_db.test_add_cached_crate_with_downloads(
-        "my_crate2",
-        "1.0.0",
-        30,
-    ).await.unwrap();
-    
+    test_db
+        .test_add_cached_crate_with_downloads("my_crate2", "1.0.0", 30)
+        .await
+        .unwrap();
 
     let total_downloads = test_db.get_total_cached_downloads().await.unwrap();
 

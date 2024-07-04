@@ -1,3 +1,4 @@
+use crate::registry_error::RegistryError;
 use appstate::AppStateData;
 use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
@@ -5,7 +6,6 @@ use axum::http::Request;
 use common::publish_metadata::PublishMetadata;
 use error::api_error::ApiError;
 use settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
-use crate::registry_error::RegistryError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PubData {
@@ -27,7 +27,7 @@ fn deserialize_metadata(raw_data: &[u8]) -> Result<PublishMetadata, RegistryErro
 fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
     match std::convert::TryInto::try_into(raw_data) {
         Ok(i) => Ok(u32::from_le_bytes(i)),
-        Err(e) => Err(RegistryError::InvalidMetadataLength(e)), 
+        Err(e) => Err(RegistryError::InvalidMetadataLength(e)),
     }
 }
 
@@ -39,15 +39,17 @@ impl FromRequest<AppStateData, Body> for PubData {
         req: Request<Body>,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        let data_bytes: Vec<u8> = Bytes::from_request(req, state).await
+        let data_bytes: Vec<u8> = Bytes::from_request(req, state)
+            .await
             .map_err(RegistryError::ExtractBytesFailed)?
-            .to_vec(); 
+            .to_vec();
 
         if data_bytes.len() < MIN_BODY_CRATE_AND_DOC_BYTES {
             return Err(RegistryError::InvalidMinLength(
                 data_bytes.len(),
                 MIN_BODY_CRATE_AND_DOC_BYTES,
-            ).into());
+            )
+            .into());
         }
 
         let metadata_length = convert_length(&data_bytes[0..4])?;

@@ -95,22 +95,22 @@ async fn main() {
         .route("/list_users", get(user::list_users))
         .route("/login_state", get(user::login_state));
 
-    let docs = Router::new()
+    let docs_ui = Router::new()
         .route("/build", post(ui::build_rustdoc))
         .route("/queue", get(docs::api::docs_in_queue))
-        .route(
-            "/:package/:version",
-            put(docs::api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000)),
-        )
         .route("/:package/latest", get(docs::api::latest_docs))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
-            auth::auth_req_token::cargo_auth_when_required,
+            session::session_auth_when_required,
         ));
-
+    let docs_manual = Router::new().route(
+        "/:package/:version",
+        put(docs::api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000)),
+    );
     let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir))).route_layer(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
+
     let static_files_service = get_service(
         ServeDir::new(PathBuf::from("static"))
             .append_index_html_on_directories(true)
@@ -118,31 +118,29 @@ async fn main() {
     );
 
     let kellnr_api = Router::new()
-        .route("/:crate_name/owners", delete(kellnr_api::remove_owner))
-        .route("/:crate_name/owners", put(kellnr_api::add_owner))
-        .route("/:crate_name/owners", get(kellnr_api::list_owners))
-        .route("/", get(kellnr_api::search))
-        .route("/:package/:version/download", get(kellnr_api::download))
-        .route(
-            "/new",
-            put(kellnr_api::publish).layer(DefaultBodyLimit::max(max_crate_size * 1_000_000)),
-        )
-        .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
-        .route("/:crate_name/:version/unyank", put(kellnr_api::unyank))
         .route("/config.json", get(kellnr_prefetch_api::config_kellnr))
         .route("/:a/:b/:package", get(kellnr_prefetch_api::prefetch_kellnr))
         .route(
             "/:a/:package",
             get(kellnr_prefetch_api::prefetch_len2_kellnr),
         )
+        .route("/:crate_name/owners", delete(kellnr_api::remove_owner))
+        .route("/:crate_name/owners", put(kellnr_api::add_owner))
+        .route("/:crate_name/owners", get(kellnr_api::list_owners))
+        .route("/", get(kellnr_api::search))
+        .route("/dl/:package/:version/download", get(kellnr_api::download))
+        .route(
+            "/new",
+            put(kellnr_api::publish).layer(DefaultBodyLimit::max(max_crate_size * 1_000_000)),
+        )
+        .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
+        .route("/:crate_name/:version/unyank", put(kellnr_api::unyank))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_req_token::cargo_auth_when_required,
         ));
 
     let cratesio_api = Router::new()
-        .route("/", get(cratesio_api::search))
-        .route("/:package/:version/download", get(cratesio_api::download))
         .route("/config.json", get(cratesio_prefetch_api::config_cratesio))
         .route(
             "/:a/:b/:name",
@@ -151,6 +149,11 @@ async fn main() {
         .route(
             "/:a/:name",
             get(cratesio_prefetch_api::prefetch_len2_cratesio),
+        )
+        .route("/", get(cratesio_api::search))
+        .route(
+            "/dl/:package/:version/download",
+            get(cratesio_api::download),
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -180,7 +183,8 @@ async fn main() {
         .route("/me", get(kellnr_api::me))
         .nest("/api/v1/ui", ui)
         .nest("/api/v1/user", user)
-        .nest("/api/v1/docs", docs)
+        .nest("/api/v1/docs", docs_ui)
+        .nest("/api/v1/docs", docs_manual)
         .nest("/api/v1/crates", kellnr_api)
         .nest("/api/v1/cratesio", cratesio_api)
         .nest_service("/docs", docs_service)

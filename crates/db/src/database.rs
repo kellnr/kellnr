@@ -1369,7 +1369,10 @@ impl DbProvider for Database {
                             Expr::col(CratesIoIden::Description),
                             Alias::new("description"),
                         )
-                        .expr_as(Expr::col(CratesIoMetaIden::Documentation), Alias::new("documentation"))
+                        .expr_as(
+                            Expr::col(CratesIoMetaIden::Documentation),
+                            Alias::new("documentation"),
+                        )
                         .expr_as(Expr::cust("true"), Alias::new("is_cache"))
                         .from(CratesIoMetaIden::Table)
                         .inner_join(
@@ -1883,8 +1886,7 @@ impl DbProvider for Database {
                     crates_io_fk: Set(krate.id),
                     documentation: Set(Some(format!(
                         "https://docs.rs/{}/{}",
-                        normalized_name,
-                        index.vers,
+                        normalized_name, index.vers,
                     ))),
                 };
 

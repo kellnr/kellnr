@@ -33,7 +33,7 @@
       </div>
 
       <div id="remember">
-        <input type="checkbox" id="remember-box" v-model="store.state.rememberMe" name="remember">
+        <input type="checkbox" id="remember-box" v-model="store.rememberMe" name="remember">
         <label for="remember" id="remember-label">Remember me</label>
       </div>
 
@@ -53,9 +53,8 @@
 <script setup lang="ts">
 import StatusNotification from "../components/StatusNotification.vue";
 import {onMounted, ref} from "vue";
-import {MutationTypes} from "../store/mutation-types";
 import axios from "axios";
-import {store} from "../store/store"
+import {useStore} from "../store/store"
 import {LOGIN} from "../remote-routes";
 import router from "../router";
 
@@ -63,10 +62,11 @@ const loginStatusMsg = ref("")
 const loginStatus = ref("") // "", "Error", "Success"
 const user = ref("")
 const pwd = ref("")
+const store = useStore();
 
 onMounted(() => {
-  if(store.state.rememberMe && store.state.rememberMeUser != "") {
-    user.value = store.state.rememberMeUser;
+  if(store.rememberMe && store.rememberMeUser !== null) {
+    user.value = store.rememberMeUser;
   }
 })
 
@@ -78,9 +78,9 @@ function submit() {
       if (res.status == 200) {
         loginStatusMsg.value = "Login successfull";
         loginStatus.value = "Success";
-        store.commit(MutationTypes.LOGIN, res.data);
-        if(store.state.rememberMe) {
-          store.state.rememberMeUser = user.value;
+        store.login(res.data);
+        if(store.rememberMe) {
+          store.rememberMeUser = user.value;
         }
         if(router.currentRoute.value.query["redirect"] === "settings") {
             router.push("/settings")

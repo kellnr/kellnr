@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 pub struct Docs {
@@ -8,6 +8,9 @@ pub struct Docs {
 
 impl Default for Docs {
     fn default() -> Self {
-        Self { enabled: false, max_size: 100 }
+        Self {
+            enabled: false,
+            max_size: 100,
+        }
     }
 }

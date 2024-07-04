@@ -10,14 +10,11 @@ pub enum DocsError {
     CrateDoesNotExist(String, String),
 }
 
-
 impl From<DocsError> for ApiError {
     fn from(e: DocsError) -> Self {
         match e {
-            DocsError::ExtractFailed =>
-                ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR),
-            DocsError::CrateDoesNotExist(_, _) =>
-                ApiError::from_err(&e, StatusCode::NOT_FOUND),
+            DocsError::ExtractFailed => ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR),
+            DocsError::CrateDoesNotExist(_, _) => ApiError::from_err(&e, StatusCode::NOT_FOUND),
         }
     }
 }

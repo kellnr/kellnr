@@ -5,13 +5,13 @@
       <div class="depLogo">
         <img
             v-if="isCratesIoDep(registry)"
-            v-bind:src="store.state.cargoSmallLogo"
+            v-bind:src="store.cargoSmallLogo"
             class="degLogoImg"
             alt="Crates.io logo"
         />
         <img
             v-else
-            v-bind:src="store.state.kellnrSmallLogo"
+            v-bind:src="store.kellnrSmallLogo"
             class="degLogoImg"
             alt="Kellnr logo"
         />
@@ -27,7 +27,7 @@
 <script setup lang="ts">
 import {onBeforeMount, ref, watch} from "vue";
 import axios from "axios";
-import {store} from "../store/store"
+import {useStore} from "../store/store"
 import {useRoute, useRouter} from "vue-router";
 import type {CrateData} from "../types/crate_data";
 import {CRATE_DATA, CRATESIO_DATA, CRATESIO_LINK} from "../remote-routes";
@@ -42,6 +42,7 @@ const props = defineProps<{
 const fetched_desc = ref("")
 const route = useRoute()
 const router = useRouter()
+const store = useStore()
 
 onBeforeMount(() => {
   if (!props.desc) {

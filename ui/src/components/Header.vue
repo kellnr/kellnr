@@ -59,17 +59,17 @@
 <script setup lang="ts">
 import LoginButton from "./LoginButton.vue";
 import {onBeforeMount} from "vue";
-import {MutationTypes} from "../store/mutation-types";
-import {store} from "../store/store";
+import {useStore} from "../store/store";
 import router from "../router";
 
+const store = useStore();
+
 onBeforeMount(() => {
-  const theme = store.state.theme
-  setTheme(theme)
+  setTheme(store.theme)
 })
 
 function login() {
-  if(store.state.loggedIn === false) {
+  if(store.loggedIn === false) {
     router.push("/login?redirect=settings")
   } else {
     router.push("/settings")
@@ -77,9 +77,8 @@ function login() {
 }
 
 function toggleTheme() {
-  store.commit(MutationTypes.TOGGLE_THEME, null);
-  const theme = store.state.theme;
-  setTheme(theme);
+  store.toggleTheme();
+  setTheme(store.theme);
 }
 
 function setTheme(theme: string) {

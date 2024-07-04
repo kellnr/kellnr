@@ -1,7 +1,7 @@
 use axum::{extract::Query, http::request::Parts, RequestPartsExt};
 use common::original_name::OriginalName;
 use hyper::StatusCode;
-use std::{collections::HashMap, convert::TryFrom, usize};
+use std::{collections::HashMap, convert::TryFrom};
 
 pub struct SearchParams {
     pub q: OriginalName,

@@ -74,7 +74,10 @@ impl MigrationTrait for Migration {
 async fn fill_max_version(db: &SchemaManagerConnection<'_>) -> Result<(), DbErr> {
     use crate::m20220101_0000010_create_table_entities::{cratesio_crate, cratesio_index};
 
-    let crates = cratesio_index::Entity::find().find_also_related(cratesio_crate::Entity).all(db).await?;
+    let crates = cratesio_index::Entity::find()
+        .find_also_related(cratesio_crate::Entity)
+        .all(db)
+        .await?;
 
     for (ci, c) in crates {
         if c.is_none() {
@@ -94,7 +97,10 @@ async fn fill_max_version(db: &SchemaManagerConnection<'_>) -> Result<(), DbErr>
 async fn fill_documentation(db: &SchemaManagerConnection<'_>) -> Result<(), DbErr> {
     use crate::m20220101_0000010_create_table_entities::{cratesio_crate, cratesio_meta};
 
-    let crates = cratesio_meta::Entity::find().find_also_related(cratesio_crate::Entity).all(db).await?;
+    let crates = cratesio_meta::Entity::find()
+        .find_also_related(cratesio_crate::Entity)
+        .all(db)
+        .await?;
 
     for (cm, c) in crates {
         if c.is_none() {
@@ -105,11 +111,7 @@ async fn fill_documentation(db: &SchemaManagerConnection<'_>) -> Result<(), DbEr
         let name = c.unwrap().name;
         let version = cm.version.clone();
         let mut m: cratesio_meta::ActiveModel = cm.into();
-        m.documentation = Set(Some(format!(
-            "https://docs.rs/{}/{}",
-            name,
-            version,
-        )));
+        m.documentation = Set(Some(format!("https://docs.rs/{}/{}", name, version,)));
         m.update(db).await?;
     }
     Ok(())

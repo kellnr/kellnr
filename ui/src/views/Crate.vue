@@ -22,7 +22,7 @@
       <div class="tab clickable" :class="tab === 'versions' ? 'activeTab' : ''" @click="changeTab('versions')">
         Versions
       </div>
-      <div v-if="store.state.loggedInUserIsAdmin" class="tab clickable" :class="tab === 'administrate' ? 'activeTab' : ''"
+      <div v-if="store.loggedInUserIsAdmin" class="tab clickable" :class="tab === 'administrate' ? 'activeTab' : ''"
         @click="changeTab('administrate')">
         Admin
       </div>
@@ -172,14 +172,16 @@ import axios from "axios";
 import { useRoute, useRouter } from "vue-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import utc from "dayjs/plugin/utc";
 import CrateSidebarElement from "../components/CrateSidebarElement.vue";
-import { store } from "../store/store";
+import { useStore } from "../store/store";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
 import type { CrateData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
 import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD } from "../remote-routes";
 import Readme from "../components/Readme.vue";
 
 dayjs.extend(relativeTime);
+dayjs.extend(utc);
 
 const crate = ref<CrateData>(defaultCrateData);
 const router = useRouter()
@@ -187,13 +189,14 @@ const route = useRoute()
 const selected_version = ref<CrateVersionData>(defaultCrateVersionData)
 const defaultTab = ref<string>("meta")
 const tab = ref(defaultTab);
+const store = useStore();
 
 const docLink = computed(() => {
   return selected_version.value.documentation;
 })
 
 const humanizedLastUpdated = computed(() => {
-  return dayjs(crate.value.last_updated).fromNow();
+  return dayjs.utc(crate.value.last_updated).fromNow();
 })
 
 const sortedDeps = computed(() => {
@@ -272,12 +275,12 @@ function deleteCrate(crate: string) {
 
 function showBuildRustdoc(): boolean {
   // Show the option to build the docs, if the current logged-in user is and admin
-  if (store.state.loggedInUserIsAdmin) {
+  if (store.loggedInUserIsAdmin) {
     return true
   }
 
   // Show the option to build the docs, if the current logged-in user owns the crate
-  return crate.value.owners.includes(store.state.loggedInUser);
+  return crate.value.owners.includes(store.loggedInUser);
 }
 
 function buildDoc(crate: string, version: string) {

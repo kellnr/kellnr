@@ -1,6 +1,6 @@
-use sea_orm_migration::prelude::*;
 use crate::sea_orm::ActiveValue::Set;
 use crate::sea_orm::{ActiveModelTrait, EntityTrait};
+use sea_orm_migration::prelude::*;
 use tracing::debug;
 
 #[derive(DeriveMigrationName)]
@@ -86,7 +86,6 @@ impl MigrationTrait for Migration {
             .await
     }
 }
-
 
 async fn fill_new_columns(db: &SchemaManagerConnection<'_>) -> Result<(), DbErr> {
     use crate::m20220101_000008_create_table_entities::{cratesio_index, cratesio_meta};

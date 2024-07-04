@@ -26,10 +26,8 @@ pub enum RegistryError {
     NotOwner,
 }
 
-
 impl From<RegistryError> for ApiError {
     fn from(e: RegistryError) -> Self {
         ApiError::from_err(&e, StatusCode::BAD_REQUEST)
     }
 }
-

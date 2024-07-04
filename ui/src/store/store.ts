@@ -1,42 +1,49 @@
-// See https://dev.to/3vilarthas/vuex-typescript-m4j for the tutorial used to create this store
+import { defineStore } from 'pinia'
 
-import {
-    createStore,
-    Store as VuexStore,
-    type CommitOptions,
-    type DispatchOptions
-} from "vuex";
-import { type State, state } from "./state";
-import { type Getters, getters } from "./getters";
-import { type Mutations, mutations } from "./mutations";
-import { type Actions, actions } from "./actions";
-import createPersistedState from "vuex-persistedstate";
-
-export const store = createStore({
-    state,
-    getters,
-    mutations,
-    actions,
-    plugins: [createPersistedState()]
-})
-
-export type Store = Omit<
-    VuexStore<State>,
-    'getters' | 'commit' | 'dispatch'
-> & {
-    commit<K extends keyof Mutations, P extends Parameters<Mutations[K]>[1]>(
-        key: K,
-        payload: P,
-        options?: CommitOptions
-    ): ReturnType<Mutations[K]>
-} & {
-    dispatch<K extends keyof Actions>(
-        key: K,
-        payload: Parameters<Actions[K]>[1],
-        options?: DispatchOptions
-    ): ReturnType<Actions[K]>
-} & {
-    getters: {
-        [K in keyof Getters]: ReturnType<Getters[K]>
-    }
+export interface State {
+    loggedInUser: string | null 
+    loggedInUserIsAdmin: boolean
+    theme: string
+    cargoSmallLogo: string
+    kellnrSmallLogo: string
+    rememberMe: boolean
+    rememberMeUser: string | null
+    searchCache: boolean
 }
+
+export const useStore = defineStore('store', {
+    state: (): State => ({
+        loggedInUser: null,
+        loggedInUserIsAdmin: false,
+        theme: 'light',
+        cargoSmallLogo: 'img/cargo-logo-small-light.png',
+        kellnrSmallLogo: 'img/kellnr-logo-small-light.png',
+        rememberMe: false,
+        rememberMeUser: null,
+        searchCache: false
+    }),
+    getters: {
+        loggedIn: (state) => state.loggedInUser !== null
+    },
+    actions: {
+        login(payload: { "user": string, "is_admin": boolean }) {
+            this.loggedInUser = payload.user
+            this.loggedInUserIsAdmin = payload.is_admin
+        },
+        logout() {
+            this.loggedInUser = null
+            this.loggedInUserIsAdmin = false
+        },
+        toggleTheme() {
+            if (this.theme === 'light') {
+                this.theme = 'dark'
+                this.kellnrSmallLogo = 'img/kellnr-logo-small-dark.png'
+            } else {
+                this.theme = 'light'
+                this.cargoSmallLogo = 'img/cargo-logo-small-light.png'
+                this.kellnrSmallLogo = 'img/kellnr-logo-small-light.png'
+            }
+        }
+    },
+    persist: true
+})

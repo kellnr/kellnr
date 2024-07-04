@@ -1,5 +1,5 @@
+use serde::{Deserialize, Serialize};
 use std::{net::IpAddr, str::FromStr};
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 pub struct Local {
