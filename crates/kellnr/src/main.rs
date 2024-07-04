@@ -103,11 +103,10 @@ async fn main() {
             state.clone(),
             session::session_auth_when_required,
         ));
-    let docs_manual = Router::new()
-        .route(
-            "/:package/:version",
-            put(docs::api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000)),
-        );
+    let docs_manual = Router::new().route(
+        "/:package/:version",
+        put(docs::api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000)),
+    );
     let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir))).route_layer(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
@@ -140,7 +139,7 @@ async fn main() {
             state.clone(),
             auth::auth_req_token::cargo_auth_when_required,
         ));
-    
+
     let cratesio_api = Router::new()
         .route("/config.json", get(cratesio_prefetch_api::config_cratesio))
         .route(
@@ -152,7 +151,10 @@ async fn main() {
             get(cratesio_prefetch_api::prefetch_len2_cratesio),
         )
         .route("/", get(cratesio_api::search))
-        .route("/dl/:package/:version/download", get(cratesio_api::download))
+        .route(
+            "/dl/:package/:version/download",
+            get(cratesio_api::download),
+        )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             cratesio_api::cratesio_enabled,
