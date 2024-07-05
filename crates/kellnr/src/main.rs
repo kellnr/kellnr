@@ -27,7 +27,7 @@ use tokio::{fs::create_dir_all, net::TcpListener};
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::info;
 use tracing_subscriber::fmt::format;
-use web_ui::{session, ui, user};
+use web_ui::{crate_access, session, ui, user};
 
 #[tokio::main]
 async fn main() {
@@ -95,6 +95,22 @@ async fn main() {
         .route("/list_users", get(user::list_users))
         .route("/login_state", get(user::login_state));
 
+    let crate_access = Router::new()
+        .route("/:crate_name/users", get(crate_access::list_users))
+        .route("/:crate_name/users/:name", put(crate_access::add_user))
+        .route(
+            "/:crate_name/users/:name",
+            delete(crate_access::delete_user),
+        )
+        .route(
+            "/:crate_name/access_data",
+            get(crate_access::get_access_data),
+        )
+        .route(
+            "/:crate_name/access_data",
+            put(crate_access::set_access_data),
+        );
+
     let docs_ui = Router::new()
         .route("/build", post(ui::build_rustdoc))
         .route("/queue", get(docs::api::docs_in_queue))
@@ -127,6 +143,18 @@ async fn main() {
         .route("/:crate_name/owners", delete(kellnr_api::remove_owner))
         .route("/:crate_name/owners", put(kellnr_api::add_owner))
         .route("/:crate_name/owners", get(kellnr_api::list_owners))
+        .route(
+            "/:crate_name/crate_users/:user",
+            delete(kellnr_api::remove_crate_user),
+        )
+        .route(
+            "/:crate_name/crate_users/:user",
+            put(kellnr_api::add_crate_user),
+        )
+        .route(
+            "/:crate_name/crate_users",
+            get(kellnr_api::list_crate_users),
+        )
         .route("/", get(kellnr_api::search))
         .route("/dl/:package/:version/download", get(kellnr_api::download))
         .route(
@@ -183,6 +211,7 @@ async fn main() {
         .route("/me", get(kellnr_api::me))
         .nest("/api/v1/ui", ui)
         .nest("/api/v1/user", user)
+        .nest("/api/v1/crate_access", crate_access)
         .nest("/api/v1/docs", docs_ui)
         .nest("/api/v1/docs", docs_manual)
         .nest("/api/v1/crates", kellnr_api)

@@ -1,4 +1,4 @@
-use crate::owner;
+use crate::crate_user;
 use crate::pub_data::PubData;
 use crate::pub_success::PubDataSuccess;
 use crate::registry_error::RegistryError;
@@ -10,7 +10,6 @@ use appstate::DbState;
 use auth::token;
 use axum::extract::Path;
 use axum::extract::State;
-use axum::http::StatusCode;
 use axum::response::Redirect;
 use axum::Json;
 use chrono::Utc;
@@ -37,6 +36,30 @@ pub async fn check_ownership(
     }
 }
 
+pub async fn check_download_auth(
+    crate_name: &NormalizedName,
+    token: &token::OptionToken,
+    db: &Arc<dyn DbProvider>,
+) -> ApiResult<()> {
+    if !db.is_download_restricted(crate_name).await? {
+        return Ok(());
+    }
+
+    let token = match token {
+        token::OptionToken::Some(token) => token,
+        token::OptionToken::None => return Err(RegistryError::DownloadUnauthorized.into()),
+    };
+
+    if token.is_admin
+        || db.is_crate_user(crate_name, &token.user).await?
+        || db.is_owner(crate_name, &token.user).await?
+    {
+        Ok(())
+    } else {
+        Err(RegistryError::NotCrateUser.into())
+    }
+}
+
 pub async fn me() -> Redirect {
     Redirect::to("/login")
 }
@@ -45,8 +68,8 @@ pub async fn remove_owner(
     token: token::Token,
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
-    Json(input): Json<owner::OwnerRequest>,
-) -> ApiResult<Json<owner::OwnerResponse>> {
+    Json(input): Json<crate_user::CrateUserRequest>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
 
@@ -54,8 +77,22 @@ pub async fn remove_owner(
         db.delete_owner(&crate_name, user).await?;
     }
 
-    Ok(Json(owner::OwnerResponse::from(
+    Ok(Json(crate_user::CrateUserResponse::from(
         "Removed owners from crate.",
+    )))
+}
+
+pub async fn remove_crate_user(
+    token: token::Token,
+    State(db): DbState,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    db.delete_crate_user(&crate_name, &name).await?;
+    Ok(Json(crate_user::CrateUserResponse::from(
+        "Removed users from crate.",
     )))
 }
 
@@ -63,35 +100,76 @@ pub async fn add_owner(
     token: token::Token,
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
-    Json(input): Json<owner::OwnerRequest>,
-) -> ApiResult<Json<owner::OwnerResponse>> {
+    Json(input): Json<crate_user::CrateUserRequest>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
     for user in input.users.iter() {
         db.add_owner(&crate_name, user).await?;
     }
 
-    Ok(Json(owner::OwnerResponse::from("Added owners to crate.")))
+    Ok(Json(crate_user::CrateUserResponse::from(
+        "Added owners to crate.",
+    )))
 }
 
 pub async fn list_owners(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
-) -> ApiResult<Json<owner::OwnerList>> {
+) -> ApiResult<Json<crate_user::CrateUserList>> {
     let crate_name = crate_name.to_normalized();
 
-    let owners: Vec<owner::Owner> = db
+    let owners: Vec<crate_user::CrateUser> = db
         .get_crate_owners(&crate_name)
         .await?
         .iter()
-        .map(|u| owner::Owner {
+        .map(|u| crate_user::CrateUser {
             id: u.id,
             login: u.name.to_owned(),
             name: None,
         })
         .collect();
 
-    Ok(Json(owner::OwnerList::from(owners)))
+    Ok(Json(crate_user::CrateUserList::from(owners)))
+}
+
+pub async fn add_crate_user(
+    token: token::Token,
+    State(db): DbState,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    if !db.is_crate_user(&crate_name, &name).await? {
+        db.add_crate_user(&crate_name, &name).await?;
+    }
+
+    Ok(Json(crate_user::CrateUserResponse::from(
+        "Added users to crate.",
+    )))
+}
+
+pub async fn list_crate_users(
+    token: token::Token,
+    Path(crate_name): Path<OriginalName>,
+    State(db): DbState,
+) -> ApiResult<Json<crate_user::CrateUserList>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    let users: Vec<crate_user::CrateUser> = db
+        .get_crate_users(&crate_name)
+        .await?
+        .iter()
+        .map(|u| crate_user::CrateUser {
+            id: u.id,
+            login: u.name.to_owned(),
+            name: None,
+        })
+        .collect();
+
+    Ok(Json(crate_user::CrateUserList::from(users)))
 }
 
 pub async fn search(
@@ -122,10 +200,12 @@ pub async fn search(
 
 pub async fn download(
     State(state): AppState,
+    token: token::OptionToken,
     Path((package, version)): Path<(OriginalName, Version)>,
-) -> Result<Vec<u8>, StatusCode> {
+) -> ApiResult<Vec<u8>> {
     let db = state.db;
     let cs = state.crate_storage;
+    check_download_auth(&package.to_normalized(), &token, &db).await?;
 
     let file_path = cs.crate_path(&package.to_string(), &version.to_string());
 
@@ -138,7 +218,7 @@ pub async fn download(
 
     match cs.get_file(file_path).await {
         Some(file) => Ok(file),
-        None => Err(StatusCode::NOT_FOUND),
+        None => Err(RegistryError::CrateNotFound.into()),
     }
 }
 
@@ -223,6 +303,7 @@ mod reg_api_tests {
     use appstate::AppStateData;
     use axum::body::Body;
     use axum::http::Request;
+    use axum::http::StatusCode;
     use axum::routing::{delete, get, put};
     use axum::Router;
     use db::mock::MockDb;
@@ -250,7 +331,7 @@ mod reg_api_tests {
         let valid_pub_package = read("../test_data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
-        let del_owner = owner::OwnerRequest {
+        let del_owner = crate_user::CrateUserRequest {
             users: vec![String::from("admin")],
         };
         let _ = kellnr
@@ -290,7 +371,7 @@ mod reg_api_tests {
                 .unwrap()
                 .len()
         );
-        let owners = serde_json::from_slice::<owner::OwnerResponse>(&result_msg).unwrap();
+        let owners = serde_json::from_slice::<crate_user::CrateUserResponse>(&result_msg).unwrap();
         assert!(owners.ok);
     }
 
@@ -319,7 +400,7 @@ mod reg_api_tests {
             .add_user("user", "123", "123", false)
             .await
             .unwrap();
-        let add_owner = owner::OwnerRequest {
+        let add_owner = crate_user::CrateUserRequest {
             users: vec![String::from("user")],
         };
 
@@ -337,7 +418,7 @@ mod reg_api_tests {
             .unwrap();
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let owners = serde_json::from_slice::<owner::OwnerResponse>(&result_msg).unwrap();
+        let owners = serde_json::from_slice::<crate_user::CrateUserResponse>(&result_msg).unwrap();
         assert!(owners.ok);
     }
 
@@ -377,7 +458,7 @@ mod reg_api_tests {
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
 
-        let owners = serde_json::from_slice::<owner::OwnerList>(&result_msg).unwrap();
+        let owners = serde_json::from_slice::<crate_user::CrateUserList>(&result_msg).unwrap();
         assert_eq!(1, owners.users.len());
         assert_eq!("admin", owners.users[0].login);
     }
