@@ -10,6 +10,10 @@ export const LIST_USERS = "/api/v1/user/list_users";
 export const RESET_PWD = (name: string) => `/api/v1/user/reset_pwd/${name}`;
 export const LOGIN = "/api/v1/user/login";
 
+export const CRATE_USERS = (crate_name: string) => `/api/v1/crate_access/${crate_name}/users`;
+export const CRATE_USER = (crate_name: string, name:string) => `/api/v1/crate_access/${crate_name}/users/${name}`;
+export const CRATE_ACCESS_DATA = (crate_name: string) => `/api/v1/crate_access/${crate_name}/access_data`;
+
 export const CRATE_DATA = "/api/v1/ui/crate_data";
 export const CRATESIO_DATA = "/api/v1/ui/cratesio_data";
 export const CRATES = "/api/v1/ui/crates";
