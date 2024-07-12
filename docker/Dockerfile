@@ -1,22 +1,71 @@
-FROM ubuntu:24.04
+#################
+#  Build image  #
+#################
 
-ARG ADMINPWD=admin
-ENV INSTALLDIR=/opt
-ENV DATADIR=/opt/kdata
-ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
-ARG VERSION
+FROM rust:slim-bookworm as builder
+
+ARG VERSION # Set with --build-arg VERSION="x.y.z"
+ARG DEBIAN_FRONTEND=noninteractive
+ARG UI_FILE="/sources/crates/web_ui/src/ui.rs"
+ENV TZ=Europe/Berlin
 
 RUN apt update
-RUN apt install -y curl sed git zip apt-utils build-essential llvm-dev libclang-dev clang cmake
+RUN apt install -y \
+    git \
+    curl \
+    sed \
+    build-essential \
+    pkg-config \
+    openssl \
+    libssl-dev \
+    nodejs \
+    npm \
+    gcc 
 
-# Install rust for the automatic rustdoc generation
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-ENV PATH="/root/.cargo/bin:${PATH}"
+COPY . /sources
 
-COPY start.sh ${INSTALLDIR}
-RUN chmod u+x ${INSTALLDIR}/start.sh
+# Build the UI
+WORKDIR /sources/ui
+RUN npm install -g npm@latest
+RUN npm install
+RUN npm run build
 
-WORKDIR ${INSTALLDIR}
-RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh | bash -s -- -d ${DATADIR} -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+# Build kellnr
+WORKDIR /sources
+RUN pwd
+RUN ls -lah
+RUN sed -i -e 's/0.0.0-debug/'"$VERSION"'/g' "$UI_FILE"
+RUN cargo build --release --features "vendored-openssl"
 
-ENTRYPOINT ["/opt/start.sh"]
+
+##################
+# Runtime image  #
+##################
+
+FROM rust:slim-bookworm
+
+RUN apt update
+RUN apt install -y \ 
+	curl \
+	sed \
+	git \
+	zip \
+	apt-utils \
+	build-essential \
+	llvm-dev \
+	libclang-dev \
+	clang \
+	cmake
+
+RUN mkdir -p /opt/kellnr
+RUN mkdir -p /opt/kdata
+WORKDIR /opt/kellnr
+COPY --from=builder /sources/target/release/kellnr ./kellnr
+COPY --from=builder /sources/config/default.toml ./config/default.toml
+COPY --from=builder /sources/ui/dist ./static
+
+HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/ui/version || exit 1
+
+EXPOSE 8000
+
+ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && ./kellnr"]
