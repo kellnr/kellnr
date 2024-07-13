@@ -37,11 +37,14 @@ function get_tags {
 
 function build_and_push {
   echo "STEP: Build and push"
+  cd .. || exit
   # shellcheck disable=SC2086
   docker buildx build . --build-arg VERSION="$VERSION" \
     --push \
     --platform linux/arm/v7,linux/arm64/v8,linux/amd64 \
+    -f "./docker/Dockerfile" \
     $TAGS
+  cd - || exit
 }
 
 parse_args "$@"

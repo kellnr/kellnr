@@ -2,7 +2,7 @@
 #  Build image  #
 #################
 
-FROM rust:slim-bookworm as builder
+FROM rust:slim-bookworm AS builder
 
 ARG VERSION # Set with --build-arg VERSION="x.y.z"
 ARG DEBIAN_FRONTEND=noninteractive
@@ -35,7 +35,7 @@ WORKDIR /sources
 RUN pwd
 RUN ls -lah
 RUN sed -i -e 's/0.0.0-debug/'"$VERSION"'/g' "$UI_FILE"
-RUN cargo build --release --features "vendored-openssl"
+RUN cargo build --release
 
 
 ##################
