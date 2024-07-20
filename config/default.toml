@@ -23,7 +23,7 @@ admin_token = "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"
 ####################################################################################
 
 [registry]
-# Directory where Kellnr stores all its data, e.g. crates, incides etc.
+# Directory where Kellnr stores all its data, e.g. crates, indices etc.
 data_dir = "/opt/kdata"
 # Seconds until a user is logged out automatically after inactivity in the UI
 session_age_seconds = 28800
@@ -54,7 +54,7 @@ num_threads = 20
 level = "info"
 # Set the log format to "compact", "pretty" or "json".
 format = "compact"
-# Set the log level for the underlaying web framework to "trace", "debug", "info", "warn", or "error".
+# Set the log level for the underlying web framework to "trace", "debug", "info", "warn", or "error".
 level_web_server = "warn"
 
 [local]

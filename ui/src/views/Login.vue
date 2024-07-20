@@ -76,7 +76,7 @@ function submit() {
     .post(LOGIN, postData)
     .then((res) => {
       if (res.status == 200) {
-        loginStatusMsg.value = "Login successfull";
+        loginStatusMsg.value = "Login successful";
         loginStatus.value = "Success";
         store.login(res.data);
         if(store.rememberMe) {
