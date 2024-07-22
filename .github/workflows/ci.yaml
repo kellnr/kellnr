@@ -105,9 +105,8 @@ jobs:
       - name: Upload Kellner
         uses: actions/upload-artifact@v4
         with:
-          name: kellnr
+          name: kellnr-${{ matrix.target }}
           path: ${{ github.workspace }}/${{ env.KELLNR_PACKAGE }}
-          overwrite: true
 
   deploy-kellnr:
     name: Kellnr Deploy
@@ -143,7 +142,7 @@ jobs:
       - name: Download Kellnr
         uses: actions/download-artifact@v3
         with:
-          name: kellnr
+          name: kellnr-${{ matrix.target }}
 
       - name: List Artifacts
         run: |
