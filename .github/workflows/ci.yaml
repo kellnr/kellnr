@@ -102,51 +102,8 @@ jobs:
         with:
           args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/ci-release/kellnr
 
-      - name: Upload Kellner
-        uses: actions/upload-artifact@v4
-        with:
-          name: kellnr
-          path: ${{ github.workspace }}/${{ env.KELLNR_PACKAGE }}
-
-  deploy-kellnr:
-    name: Kellnr Deploy
-    if: github.event_name == 'release'
-    runs-on: ubuntu-24.04
-    needs:
-      - test-kellnr
-      - build-kellnr
-    strategy:
-      matrix:
-        target:
-          [
-            "x86_64-unknown-linux-gnu",
-            "aarch64-unknown-linux-gnu",
-            "armv7-unknown-linux-gnueabihf",
-            "aarch64-unknown-linux-musl",
-            "x86_64-unknown-linux-musl",
-            "armv7-unknown-linux-musleabihf",
-          ]
-
-    steps:
-      - name: Extract Version
-        run: |
-          echo "KELLNR_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-          echo $KELLNR_VERSION
-
-      - name: Set Package Name
-        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_VERSION.zip" >> $GITHUB_ENV
-
       - name: Set Asset Name
         run: echo "KELLNR_ASSET=kellnr-${{ matrix.target }}.zip" >> $GITHUB_ENV
-
-      - name: Download Kellnr
-        uses: actions/download-artifact@v3
-        with:
-          name: kellnr
-
-      - name: List Artifacts
-        run: |
-          ls -lah .
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
