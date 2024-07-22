@@ -101,6 +101,7 @@ jobs:
         with:
           name: kellnr
           path: ${{ github.workspace }}/${{ env.KELLNR_PACKAGE }}
+          overwrite: true
 
   deploy-kellnr:
     name: Kellnr Deploy
@@ -146,10 +147,9 @@ jobs:
           file: ${{ env.KELLNR_PACKAGE }}
           asset_name: ${{ env.KELLNR_ASSET }}
           tag: ${{ github.ref }}
-          overwrite: true
 
-  deploy-container:
-    name: Deploy Container Image X-Plat
+  build-and-push-image:
+    name: Build and Push Image
     if: github.event_name == 'release'
     runs-on: ubuntu-24.04
     needs:
