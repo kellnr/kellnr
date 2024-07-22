@@ -105,7 +105,7 @@ x-armv7-musl:
 x-armv7-gnu:
 	cross build --target armv7-unknown-linux-gnueabihf --features vendored-openssl
 
-x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu x-armv7-musleabihf x-armv7-gnu
+x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu x-armv7-musl x-armv7-gnu
 
 ##########################################
 # Aliases
