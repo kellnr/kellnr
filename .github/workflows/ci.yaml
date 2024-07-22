@@ -119,6 +119,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - build-kellnr
+      - test-kellnr
     permissions:
       packages: write
       contents: read
