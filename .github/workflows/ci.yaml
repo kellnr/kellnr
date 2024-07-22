@@ -107,6 +107,7 @@ jobs:
         with:
           name: kellnr
           path: ${{ github.workspace }}/${{ env.KELLNR_PACKAGE }}
+          overwrite: true
 
   deploy-kellnr:
     name: Kellnr Deploy
