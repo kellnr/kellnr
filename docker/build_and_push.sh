@@ -13,7 +13,6 @@ function parse_args {
     fi
 }
 
-
 function get_tags {
     echo "STEP: Get tags"
     # Split the version into an array
