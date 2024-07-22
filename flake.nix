@@ -20,11 +20,11 @@
 
         # Set a filter of files that are included in the build source directory.
         # This is used to filter out files that are not needed for the build to
-        # not rebuild on every file change, e.g. in a Reamde.md file.
+        # not rebuild on every file change, e.g. in a Readme.md file.
         webuiFilter = path: _type: builtins.match ".*.(js|json|ts|vue|html|png|css|svg)$" path != null;
         webuiOrCargo = path: type:
           (webuiFilter path type) || (craneLib.filterCargoSources path type);
-        # Inlcude all Rust and WebUI files in the source directory.
+        # Include all Rust and WebUI files in the source directory.
         src = lib.cleanSourceWith {
           src = craneLib.path ./.;
           filter = webuiOrCargo;
