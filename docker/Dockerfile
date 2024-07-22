@@ -1,48 +1,14 @@
-#################
-#  Build image  #
-#################
-
-FROM rust:slim-bookworm AS builder
-
-ARG VERSION # Set with --build-arg VERSION="x.y.z"
-ARG DEBIAN_FRONTEND=noninteractive
-ARG UI_FILE="/sources/crates/web_ui/src/ui.rs"
-ENV TZ=Europe/Berlin
-
-RUN apt update
-RUN apt install -y \
-    git \
-    curl \
-    sed \
-    build-essential \
-    pkg-config \
-    openssl \
-    libssl-dev \
-    nodejs \
-    npm \
-    gcc 
-
-COPY . /sources
-
-# Build the UI
-WORKDIR /sources/ui
-RUN npm install -g npm@latest
-RUN npm install
-RUN npm run build
-
-# Build kellnr
-WORKDIR /sources
-RUN pwd
-RUN ls -lah
-RUN sed -i -e 's/0.0.0-debug/'"$VERSION"'/g' "$UI_FILE"
-RUN cargo build --release
-
-
 ##################
 # Runtime image  #
 ##################
 
 FROM rust:slim-bookworm
+
+ARG ADMINPWD=admin
+ENV INSTALLDIR=/opt
+ENV DATADIR=/opt/kdata
+ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
+ARG VERSION
 
 RUN apt update
 RUN apt install -y \ 
@@ -57,15 +23,13 @@ RUN apt install -y \
 	clang \
 	cmake
 
-RUN mkdir -p /opt/kellnr
-RUN mkdir -p /opt/kdata
-WORKDIR /opt/kellnr
-COPY --from=builder /sources/target/release/kellnr ./kellnr
-COPY --from=builder /sources/config/default.toml ./config/default.toml
-COPY --from=builder /sources/ui/dist ./static
+WORKDIR ${INSTALLDIR}
+RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh | bash -s -- -d ${DATADIR} -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+RUN rm *.zip
 
 HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/ui/version || exit 1
 
 EXPOSE 8000
 
+WORKDIR ${INSTALLDIR}/kellnr
 ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && ./kellnr"]

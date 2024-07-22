@@ -44,6 +44,9 @@ jobs:
             "x86_64-unknown-linux-gnu",
             "aarch64-unknown-linux-gnu",
             "armv7-unknown-linux-gnueabihf",
+            "aarch64-unknown-linux-musl",
+            "x86_64-unknown-linux-musl",
+            "armv7-unknown-linux-musleabihf",
           ]
 
     steps:
@@ -54,7 +57,7 @@ jobs:
         run: sudo apt update
 
       - name: Install dependencies
-        run: sudo apt install -y build-essential gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu sed
+        run: sudo apt install -y sed zip
 
       - name: Install Just
         uses: taiki-e/install-action@v2
@@ -68,6 +71,9 @@ jobs:
         run: rustup target add ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: Install cross-rs
+        run: cargo install cross
 
       - name: Extract Version
         run: |
@@ -101,7 +107,6 @@ jobs:
         with:
           name: kellnr
           path: ${{ github.workspace }}/${{ env.KELLNR_PACKAGE }}
-          overwrite: true
 
   deploy-kellnr:
     name: Kellnr Deploy
@@ -117,6 +122,9 @@ jobs:
             "x86_64-unknown-linux-gnu",
             "aarch64-unknown-linux-gnu",
             "armv7-unknown-linux-gnueabihf",
+            "aarch64-unknown-linux-musl",
+            "x86_64-unknown-linux-musl",
+            "armv7-unknown-linux-musleabihf",
           ]
 
     steps:
@@ -153,7 +161,7 @@ jobs:
     if: github.event_name == 'release'
     runs-on: ubuntu-24.04
     needs:
-      - test-kellnr
+      - deploy-kellnr
     permissions:
       packages: write
       contents: read
