@@ -1018,7 +1018,7 @@ async fn crate_version_exists_with_no_existing_version() {
 
 #[pg_testcontainer]
 #[tokio::test]
-async fn get_total_unique_crates_returns_correct_numer() {
+async fn get_total_unique_crates_returns_correct_number() {
     let _ = test_db
         .test_add_crate(
             "foobar",

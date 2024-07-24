@@ -87,7 +87,7 @@ function changePwd() {
         } else if (error.response.status == 500) {
           pwdChangeMsg.value = "Internal server error";
         } else {
-          pwdChangeMsg.value = "Unkown error";
+          pwdChangeMsg.value = "Unknown error";
         }
       }
     });

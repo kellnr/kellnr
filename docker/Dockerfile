@@ -1,4 +1,8 @@
-FROM ubuntu:24.04
+##################
+# Runtime image  #
+##################
+
+FROM rust:slim-bookworm
 
 ARG ADMINPWD=admin
 ENV INSTALLDIR=/opt
@@ -7,16 +11,25 @@ ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
 ARG VERSION
 
 RUN apt update
-RUN apt install -y curl sed git zip apt-utils build-essential llvm-dev libclang-dev clang cmake
-
-# Install rust for the automatic rustdoc generation
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-COPY start.sh ${INSTALLDIR}
-RUN chmod u+x ${INSTALLDIR}/start.sh
+RUN apt install -y \ 
+	curl \
+	sed \
+	git \
+	zip \
+	apt-utils \
+	build-essential \
+	llvm-dev \
+	libclang-dev \
+	clang \
+	cmake
 
 WORKDIR ${INSTALLDIR}
 RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh | bash -s -- -d ${DATADIR} -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+RUN rm *.zip
 
-ENTRYPOINT ["/opt/start.sh"]
+HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/ui/version || exit 1
+
+EXPOSE 8000
+
+WORKDIR ${INSTALLDIR}/kellnr
+ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && ./kellnr"]

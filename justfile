@@ -15,10 +15,10 @@ check:
 	cargo check
 
 build:
-	cargo build
+	cargo build --features vendored-openssl
 
 build-release:
-	cargo build --release
+	cargo build --release --features vendored-openssl
 
 run: npm-build build
 	cargo run
@@ -71,7 +71,8 @@ patch-package:
 
 # Set the target for the ci-release command.
 # The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", 
-# or "armv7-unknown-linux-gnueabihf".
+# "armv7-unknown-linux-gnueabihf", "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl",
+# "armv7-unknown-linux-musleabihf".
 # It's used by the Github Actions CI to build the release binary for the specified target.
 target := "x86_64-unknown-linux-gnu"
 
@@ -79,8 +80,32 @@ ci-test: npm-build
 	cargo test --workspace --profile ci-dev
 
 ci-release: npm-build
-        cargo build --profile ci-release --target {{target}} --features vendored-openssl
+        cross build --profile ci-release --target {{target}} --features vendored-openssl
 
+##########################################
+# Commands for cross-rs to build the
+# release binary for different targets
+##########################################
+
+x-aarch64-musl: 
+	cross build --target aarch64-unknown-linux-musl --features vendored-openssl
+
+x-aarch64-gnu: 
+	cross build --target aarch64-unknown-linux-gnu --features vendored-openssl
+
+x-x86_64-musl: 
+	cross build --target x86_64-unknown-linux-musl --features vendored-openssl
+
+x-x86_64-gnu: 
+	cross build --target x86_64-unknown-linux-gnu --features vendored-openssl
+
+x-armv7-musl: 
+	cross build --target armv7-unknown-linux-musleabihf --features vendored-openssl
+
+x-armv7-gnu:
+	cross build --target armv7-unknown-linux-gnueabihf --features vendored-openssl
+
+x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu x-armv7-musl x-armv7-gnu
 
 ##########################################
 # Aliases

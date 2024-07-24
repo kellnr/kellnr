@@ -27,6 +27,9 @@ The following tools are needed to build **kellnr**: [Rust](https://www.rust-lang
 The project uses [just](https://github.com/casey/just) as a task runner. Check the [justfile](./justfile) for all available tasks, or run `just -l` to see all available tasks.
 
 ```bash
+# For all available tasks 
+just -l
+
 # Build the project (debug)
 just build
 
