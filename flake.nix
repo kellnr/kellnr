@@ -45,13 +45,13 @@
 
           buildInputs = [
             pkgs.cargo-nextest
+            pkgs.openssl.dev
           ] ++ lib.optional pkgs.stdenv.isDarwin [
             pkgs.darwin.apple_sdk.frameworks.Cocoa
             pkgs.libiconv
             pkgs.iconv
             pkgs.cacert
             pkgs.curl
-            pkgs.openssl.dev
           ] ++ lib.optional pkgs.stdenv.isLinux [
           ];
 
