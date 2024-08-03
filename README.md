@@ -8,6 +8,7 @@
 
 Kellnr is an open-source [Rust](https://www.rust-lang.org) registry for crates. Think of [crates.io](https://crates.io) but on your own hardware.
 
+ > [!NOTE]  
  > Find out more on: [kellnr.io](https://kellnr.io)
 
 ## Quickstart
@@ -35,6 +36,7 @@ The latest Kubernetes Helm chart can be found here: [Kellnr Helm Chart](https://
 - **Docs-rs support**: Kellnr supports the [docs.rs](https://docs.rs) documentation service. This means that you can host your own documentation for your crates with Kellnr.
 - **Crates.io proxy**: Kellnr can act as a proxy for [crates.io](https://crates.io). This means that you can use Kellnr as a cache for crates.io to speed up the download of crates.
 - **Build in Rust**: Kellnr is written in Rust. This means that you can easily extend Kellnr with your own features or fix bugs. No other dependencies are needed.
+- **Multi-Db support**: Kellnr supports multiple databases. You can use Sqlite or PostgreSQL as the storage backend for Kellnr.
 
 ## Differences to crates.io
 
