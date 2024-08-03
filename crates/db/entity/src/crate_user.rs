@@ -3,24 +3,16 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "crate_category_to_crate")]
+#[sea_orm(table_name = "crate_user")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     pub crate_fk: i64,
-    pub category_fk: i64,
+    pub user_fk: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::crate_category::Entity",
-        from = "Column::CategoryFk",
-        to = "super::crate_category::Column::Id",
-        on_update = "NoAction",
-        on_delete = "Cascade"
-    )]
-    CrateCategory,
     #[sea_orm(
         belongs_to = "super::krate::Entity",
         from = "Column::CrateFk",
@@ -29,17 +21,25 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Krate,
-}
-
-impl Related<super::crate_category::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::CrateCategory.def()
-    }
+    #[sea_orm(
+        belongs_to = "super::user::Entity",
+        from = "Column::UserFk",
+        to = "super::user::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    User,
 }
 
 impl Related<super::krate::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Krate.def()
+    }
+}
+
+impl Related<super::user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::User.def()
     }
 }
 

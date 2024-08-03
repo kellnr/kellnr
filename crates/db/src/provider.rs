@@ -37,10 +37,19 @@ pub trait DbProvider: Send + Sync {
     ) -> DbResult<()>;
     async fn validate_session(&self, session_token: &str) -> DbResult<(String, bool)>;
     async fn add_session_token(&self, name: &str, session_token: &str) -> DbResult<()>;
+    async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
     async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()>;
+    async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool>;
+    async fn change_download_restricted(
+        &self,
+        crate_name: &NormalizedName,
+        restricted: bool,
+    ) -> DbResult<()>;
+    async fn is_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>;
     async fn is_owner(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>;
     async fn get_crate_id(&self, crate_name: &NormalizedName) -> DbResult<Option<i64>>;
     async fn get_crate_owners(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>>;
+    async fn get_crate_users(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>>;
     async fn delete_session_token(&self, session_token: &str) -> DbResult<()>;
     async fn delete_user(&self, user_name: &str) -> DbResult<()>;
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()>;
@@ -54,6 +63,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>>;
     async fn delete_auth_token(&self, id: i32) -> DbResult<()>;
     async fn delete_owner(&self, crate_name: &str, owner: &str) -> DbResult<()>;
+    async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()>;
     async fn add_user(&self, name: &str, pwd: &str, salt: &str, is_admin: bool) -> DbResult<()>;
     async fn get_users(&self) -> DbResult<Vec<User>>;
     async fn get_total_unique_crates(&self) -> DbResult<u32>;
@@ -170,7 +180,27 @@ pub mod mock {
                 unimplemented!()
             }
 
+            async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
             async fn add_owner(&self, _crate_name: &NormalizedName, _owner: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool> {
+                unimplemented!()
+            }
+
+            async fn change_download_restricted(
+                &self,
+                crate_name: &NormalizedName,
+                restricted: bool,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn is_crate_user(&self, _crate_name: &NormalizedName, _user: &str) -> DbResult<bool> {
                 unimplemented!()
             }
 
@@ -183,6 +213,10 @@ pub mod mock {
             }
 
             async fn get_crate_owners(&self, _crate_name: &NormalizedName) -> DbResult<Vec<User>> {
+                unimplemented!()
+            }
+
+            async fn get_crate_users(&self, _crate_name: &NormalizedName) -> DbResult<Vec<User>> {
                 unimplemented!()
             }
 
@@ -235,6 +269,10 @@ pub mod mock {
             }
 
             async fn delete_owner(&self, _crate_name: &str, _owner: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()>{
                 unimplemented!()
             }
 

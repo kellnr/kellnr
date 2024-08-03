@@ -16,6 +16,13 @@ pub struct Token {
     pub is_admin: bool,
 }
 
+// See https://github.com/tokio-rs/axum/discussions/2281
+#[derive(Debug)]
+pub enum OptionToken {
+    None,
+    Some(Token),
+}
+
 pub fn generate_token() -> String {
     let mut rng = thread_rng();
     iter::repeat(())
@@ -37,6 +44,7 @@ impl Token {
         headers: &HeaderMap,
         db: &Arc<dyn DbProvider>,
     ) -> Result<Token, StatusCode> {
+        // OptionToken code expects UNAUTHORIZED when no token is found
         let token = headers
             .get("Authorization")
             .ok_or(StatusCode::UNAUTHORIZED)?
@@ -66,6 +74,22 @@ impl FromRequestParts<AppStateData> for Token {
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
         Self::extract_token(&parts.headers, &state.db).await
+    }
+}
+
+#[axum::async_trait]
+impl FromRequestParts<AppStateData> for OptionToken {
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
+        match Token::extract_token(&parts.headers, &state.db).await {
+            Ok(token) => Ok(OptionToken::Some(token)),
+            Err(StatusCode::UNAUTHORIZED) => Ok(OptionToken::None),
+            Err(status_code) => Err(status_code),
+        }
     }
 }
 
