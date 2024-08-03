@@ -8,7 +8,43 @@
 
 Kellnr is an open-source [Rust](https://www.rust-lang.org) registry for crates. Think of [crates.io](https://crates.io) but on your own hardware.
 
-Find out more on: [kellnr.io](https://kellnr.io)
+ > Find out more on: [kellnr.io](https://kellnr.io)
+
+## Quickstart
+
+The easiest way to get started is to use the Docker image. You can start **kellnr** with the following command:
+
+```bash
+docker run \
+    -p 8000:8000 \
+    -e "KELLNR_ORIGIN__HOSTNAME=localhost" ghcr.io/kellnr/kellnr:5.2.4
+```
+
+Fore more information about how to configure and run **kellnr**, check out the [documentation](https://kellnr.io/documentation).
+
+You can find the latest binary releases here: [Kellnr Binary Releases](https://github.com/kellnr/kellnr/releases). 
+
+For the latest Docker images, check here: [Kellnr Docker Images](https://github.com/kellnr/kellnr/pkgs/container/kellnr). 
+
+The latest Kubernetes Helm chart can be found here: [Kellnr Helm Chart](https://github.com/kellnr/helm/releases)
+
+## Features
+
+- **Host crates**: Kellnr can host crates. This means that you can upload your own crates to Kellnr and use them in your projects. No extra tooling required, `cargo` works out of the box.
+- **Web UI**: Kellnr comes with a web UI to manage the crates. This makes it easy to upload new crates, manage the versions and see the documentation of the crates.
+- **Docs-rs support**: Kellnr supports the [docs.rs](https://docs.rs) documentation service. This means that you can host your own documentation for your crates with Kellnr.
+- **Crates.io proxy**: Kellnr can act as a proxy for [crates.io](https://crates.io). This means that you can use Kellnr as a cache for crates.io to speed up the download of crates.
+- **Build in Rust**: Kellnr is written in Rust. This means that you can easily extend Kellnr with your own features or fix bugs. No other dependencies are needed.
+
+## Differences to crates.io
+
+- **Private**: Kellnr is designed to be used in a corporate environment or home-labs. It is possible to host Kellnr on your own hardware, such that you can control the access to the crates.
+- **Easy to host**: Kellnr is designed to be easy to host. It is possible to run Kellnr on a single machine, without the need for a complex setup. Stand-alone, Docker and Kubernetes deployments are supported.
+- **User management**: Kellnr supports user management. This means that you can create users and assign them to own crates. This is useful in a corporate environment, where you want to control the access to the crates.
+
+## Why I created Kellnr
+
+As a security engineer and researcher I fight vulnerabilities in software for a living. With [Rust](https://www.rust-lang.org) becoming more and more popular, I see a lot of potential in the language to write secure software. However, to adapt Rust in a corporate environment, I need to be able to control the dependencies of the software I write. This is where **kellnr** comes into play. I hope that **kellnr** can accelerate the adoption of Rust in corporate environments, by providing a secure and private registry for Rust crates. In the end, I want to make the world a little bit more secure by promoting the use of Rust.
 
 ## Contribute
 
@@ -44,6 +80,16 @@ just test-all
 
 # Run the project
 just run
+```
+
+If you use [Nix](https://nixos.org/), you can use the provided `flake.nix` to build the project and start a development shell.
+
+```bash
+# Start a development shell
+nix develop
+
+# Build the project
+nix build
 ```
 
 ### Sea ORM & PostgreSQL
