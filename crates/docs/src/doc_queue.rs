@@ -3,7 +3,7 @@ use cargo::{
     core::{resolver::CliFeatures, Workspace},
     ops::{self, CompileOptions, DocOptions, OutputFormat},
     util::command_prelude::CompileMode,
-    CargoResult, Config,
+    CargoResult, GlobalContext,
 };
 use common::version::Version;
 use db::{Database, DbProvider, DocQueueEntry};
@@ -102,12 +102,12 @@ async fn copy_dir(from: &Path, to: &Path) -> anyhow::Result<()> {
 
 fn generate_docs(crate_path: impl AsRef<Path>) -> CargoResult<()> {
     let manifest_path = crate_path.as_ref().join("Cargo.toml").canonicalize()?;
-    let config = Config::default()?;
-    let workspace = Workspace::new(&manifest_path, &config)?;
+    let ctx = GlobalContext::default()?;
+    let workspace = Workspace::new(&manifest_path, &ctx)?;
     let compile_opts = CompileOptions {
         cli_features: CliFeatures::new_all(true),
         ..CompileOptions::new(
-            &config,
+            &ctx,
             CompileMode::Doc {
                 deps: false,
                 json: false,
