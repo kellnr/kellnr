@@ -1,3 +1,4 @@
+use crate::{registry_error::RegistryError, search_params::SearchParams};
 use appstate::{CrateIoStorageState, DbState, SettingsState};
 use axum::{
     extract::{Path, Request, State},
@@ -7,10 +8,21 @@ use axum::{
 };
 use common::{original_name::OriginalName, version::Version};
 use error::api_error::ApiResult;
-use reqwest::Url;
-use tracing::{debug, error, trace};
+use reqwest::{Client, ClientBuilder, Url};
+use tracing::{error, trace};
 
-use crate::{registry_error::RegistryError, search_params::SearchParams};
+static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::USER_AGENT,
+        reqwest::header::HeaderValue::from_static("kellnr.io/kellnr"),
+    );
+    ClientBuilder::new()
+        .gzip(true)
+        .default_headers(headers)
+        .build()
+        .unwrap()
+});
 
 /// Middleware that checks if the crates.io proxy is enabled.
 /// If not, a 404 is returned.
@@ -32,12 +44,7 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
     ))
     .map_err(RegistryError::UrlParseError)?;
 
-    let client = reqwest::Client::builder()
-        .user_agent("kellnr")
-        .build()
-        .map_err(RegistryError::RequestError)?;
-
-    let response = client
+    let response = CLIENT
         .get(url)
         .send()
         .await
@@ -63,12 +70,15 @@ pub async fn download(
     );
 
     if !std::path::Path::exists(&file_path) {
-        debug!("Crate not found on disk, downloading from crates.io");
         let target = format!(
             "https://static.crates.io/crates/{}/{}/download",
             package, version
         );
-        match reqwest::get(target).await {
+        trace!(
+            "Crate not found on disk, downloading from crates.io: {}",
+            target
+        );
+        match CLIENT.get(target).send().await {
             Ok(response) => match response.status() == 200 {
                 true => match response.bytes().await {
                     Ok(crate_data) => {

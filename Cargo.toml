@@ -36,7 +36,7 @@ storage = { path = "./crates/storage" }
 # External dependencies from crates.io
 anyhow = "1.0.86"
 jsonwebtoken = "9.3.0"
-reqwest = {version = "0.12.5", features = ["json", "blocking"]}
+reqwest = {version = "0.12.5", features = ["json", "blocking", "gzip", "http2"]}
 serde = {version = "1.0.205", features = ["derive"]}
 sysinfo = "0.31.2"
 semver = "1.0.23"
@@ -82,12 +82,13 @@ http-body-util = "0.1.2"
 sha256 = "1.5.0"
 
 [profile.release]
-lto = "on"
+lto = "off"
 strip = true
 
 # Profile for the CI build in "release"
 # to build as fast as possible
 [profile.ci-release]
+lto = "on"
 inherits = "release"
 incremental = false
 
