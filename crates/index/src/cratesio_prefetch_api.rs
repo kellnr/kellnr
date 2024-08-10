@@ -415,7 +415,7 @@ async fn fetch_cratesio_prefetch(
     let response = CLIENT.get(url).send().await;
 
     debug!(
-        "-- Fetching prefetch data from crates.io for {} took {:?}",
+        "Fetching prefetch data from crates.io for {} took {:?}",
         name,
         time.elapsed()
     );
