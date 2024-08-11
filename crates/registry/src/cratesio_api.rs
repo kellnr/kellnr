@@ -9,7 +9,7 @@ use axum::{
 use common::{original_name::OriginalName, version::Version};
 use error::api_error::ApiResult;
 use reqwest::{Client, ClientBuilder, Url};
-use tracing::{error, trace};
+use tracing::{error, trace, warn};
 
 static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
     let mut headers = reqwest::header::HeaderMap::new();
@@ -115,7 +115,7 @@ pub async fn download(
             let normalized_name = package.to_normalized();
             db.increase_cached_download_counter(&normalized_name, &version)
                 .await
-                .unwrap_or_else(|e| error!("Failed to increase download counter: {}", e));
+                .unwrap_or_else(|e| warn!("Failed to increase download counter: {}", e));
             Ok(file)
         }
         None => Err(StatusCode::NOT_FOUND),

@@ -60,10 +60,11 @@ pub async fn init_cratesio_prefetch_thread(
     sender: flume::Sender<CratesioPrefetchMsg>,
     recv: flume::Receiver<CratesioPrefetchMsg>,
     num_threads: usize,
+    max_con: u32,
 ) {
     // Threads that takes messages to update the crates.io index
     let db = Arc::new(
-        Database::new(&con_string)
+        Database::new(&con_string, max_con)
             .await
             .expect("Failed to create database connection for crates.io prefetch thread"),
     );
@@ -85,7 +86,7 @@ pub async fn init_cratesio_prefetch_thread(
     // Thread that periodically checks if the crates.io index needs to be updated.
     // It sends an update message to the thread above which then updates the index.
     tokio::spawn(async move {
-        let db = Database::new(&con_string)
+        let db = Database::new(&con_string, max_con)
             .await
             .expect("Failed to create database connection for crates.io update thread");
         background_update_thread(db, sender).await;

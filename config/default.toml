@@ -31,6 +31,8 @@ session_age_seconds = 28800
 cache_size = 1000
 # Max size of a crate that can be uploaded to Kellnr in MB
 max_crate_size = 10
+# Max number of internal database connections for Kellnr.
+max_db_connections = 10
 # Enable required authentication for crate pulls.
 # If set to "false", anyone can download crates from Kellnr. Upload always requires authentication.
 auth_required = false

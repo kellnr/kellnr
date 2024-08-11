@@ -17,6 +17,8 @@
       :value="settings.registry.cache_size"></startup-config-item>
     <startup-config-item tomlTable="registry" toml="max_crate_size" env="KELLNR_REGISTRY__MAX_CRATE_SIZE"
       :value="settings.registry.max_crate_size"></startup-config-item>
+    <startup-config-item tomlTable="registry" toml="max_db_connections" env="KELLNR_REGISTRY__MAX_DB_CONNECTIONS"
+      :value="settings.registry.max_db_connections"></startup-config-item>
     <startup-config-item tomlTable="registry" toml="auth_required" env="KELLNR_REGISTRY__AUTH_REQUIRED"
       :value="settings.registry.auth_required"></startup-config-item>
   </div>

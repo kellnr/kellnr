@@ -36,7 +36,7 @@ storage = { path = "./crates/storage" }
 # External dependencies from crates.io
 anyhow = "1.0.86"
 jsonwebtoken = "9.3.0"
-reqwest = {version = "0.12.5", features = ["json", "blocking", "gzip", "http2"]}
+reqwest = {version = "0.12.5", features = ["json", "blocking", "gzip", "http2", "deflate"]}
 serde = {version = "1.0.205", features = ["derive"]}
 sysinfo = "0.31.2"
 semver = "1.0.23"
@@ -69,7 +69,7 @@ time = "0.3.36"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["json", "fmt"]}
 flume = "0.11.0"
-axum = { version = "0.7.5", features = ["macros"] }
+axum = { version = "0.7.5", features = ["macros", "http2"] }
 axum-extra = { version = "0.9.3", features = ["cookie", "cookie-private", "typed-header"] }
 tokio = { version = "1.39.2", features = ["macros"] }
 tower = { version = "0.4.13", features = ["util"] }
