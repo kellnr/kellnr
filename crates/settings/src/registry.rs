@@ -17,7 +17,7 @@ impl Default for Registry {
             session_age_seconds: 60 * 60 * 8,
             cache_size: 1000,
             max_crate_size: 10 * 1000,
-            max_db_connections: 100,
+            max_db_connections: 0,
             auth_required: false,
         }
     }
