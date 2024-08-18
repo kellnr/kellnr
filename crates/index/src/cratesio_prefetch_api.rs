@@ -12,14 +12,26 @@ use db::provider::PrefetchState;
 use db::{ConString, Database, DbProvider};
 use hyper::StatusCode;
 use moka::future::Cache;
-use reqwest::{Client, Url};
+use reqwest::{Client, ClientBuilder, Url};
 use serde::Deserialize;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{error, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
+static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::USER_AGENT,
+        reqwest::header::HeaderValue::from_static("kellnr.io/kellnr"),
+    );
+    ClientBuilder::new()
+        .gzip(true)
+        .default_headers(headers)
+        .build()
+        .unwrap()
+});
 
 pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson> {
     Json(ConfigJson::from((&(*settings), "cratesio", false)))
@@ -48,10 +60,11 @@ pub async fn init_cratesio_prefetch_thread(
     sender: flume::Sender<CratesioPrefetchMsg>,
     recv: flume::Receiver<CratesioPrefetchMsg>,
     num_threads: usize,
+    max_con: u32,
 ) {
     // Threads that takes messages to update the crates.io index
     let db = Arc::new(
-        Database::new(&con_string)
+        Database::new(&con_string, max_con)
             .await
             .expect("Failed to create database connection for crates.io prefetch thread"),
     );
@@ -73,7 +86,7 @@ pub async fn init_cratesio_prefetch_thread(
     // Thread that periodically checks if the crates.io index needs to be updated.
     // It sends an update message to the thread above which then updates the index.
     tokio::spawn(async move {
-        let db = Database::new(&con_string)
+        let db = Database::new(&con_string, max_con)
             .await
             .expect("Failed to create database connection for crates.io update thread");
         background_update_thread(db, sender).await;
@@ -181,9 +194,8 @@ async fn fetch_cratesio_description(name: &str) -> Result<Option<String>, Status
         .join(name)
         .unwrap();
 
-    let response = Client::new()
+    let response = CLIENT
         .get(url)
-        .header("User-Agent", "kellnr.io/kellnr")
         .send()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -318,9 +330,8 @@ async fn fetch_index_data(
     let max_retries = 3;
     let mut i = 0;
     let r = loop {
-        match Client::new()
+        match CLIENT
             .get(url.clone())
-            .header("User-Agent", "kellnr.io/kellnr")
             .header("If-None-Match", etag.clone().unwrap_or_default())
             .header(
                 "If-Modified-Since",
@@ -395,16 +406,20 @@ async fn fetch_cratesio_prefetch(
     name: OriginalName,
     sender: &flume::Sender<CratesioPrefetchMsg>,
 ) -> Result<Prefetch, StatusCode> {
+    let time = std::time::Instant::now();
+
     let url = Url::parse("https://index.crates.io/")
         .unwrap()
         .join(&crate_sub_path(&name.to_normalized()))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let response = Client::new()
-        .get(url)
-        .header("User-Agent", "kellnr.io/kellnr")
-        .send()
-        .await;
+    let response = CLIENT.get(url).send().await;
+
+    debug!(
+        "Fetching prefetch data from crates.io for {} took {:?}",
+        name,
+        time.elapsed()
+    );
 
     match response {
         Ok(r) => {
@@ -432,7 +447,7 @@ async fn fetch_cratesio_prefetch(
             // which would take a long time.
             sender
                 .send(CratesioPrefetchMsg::Insert(InsertData {
-                    name,
+                    name: name.clone(),
                     etag,
                     last_modified,
                     data,

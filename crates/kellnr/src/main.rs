@@ -49,7 +49,7 @@ async fn main() {
     // Create the database connection. Has to be done after the index and storage
     // as the needed folders for the sqlite database my not been created before that.
     let con_string = get_connect_string(&settings);
-    let db = Database::new(&con_string)
+    let db = Database::new(&con_string, settings.registry.max_db_connections)
         .await
         .expect("Failed to create database");
     let db = Arc::new(db) as Arc<dyn DbProvider>;
@@ -64,6 +64,7 @@ async fn main() {
         cratesio_prefetch_sender.clone(),
         cratesio_prefetch_receiver,
         settings.proxy.num_threads,
+        settings.registry.max_db_connections,
     )
     .await;
 
@@ -223,7 +224,7 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
         .expect("Failed to create docs directory.");
     if settings.docs.enabled {
         docs::doc_queue::doc_extraction_queue(
-            Database::new(con_string)
+            Database::new(con_string, settings.registry.max_db_connections)
                 .await
                 .expect("Failed to create database"),
             KellnrCrateStorage::new(settings)

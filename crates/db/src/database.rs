@@ -41,8 +41,8 @@ impl Database {
         Self { db_con }
     }
 
-    pub async fn new(con: &ConString) -> Result<Self, DbError> {
-        let db_con = init_database(con)
+    pub async fn new(con: &ConString, max_con: u32) -> Result<Self, DbError> {
+        let db_con = init_database(con, max_con)
             .await
             .map_err(|e| DbError::InitializationError(e.to_string()))?;
 
@@ -1769,7 +1769,7 @@ impl DbProvider for Database {
             }
             (Some(etag), None) => krate.e_tag != etag,
             (None, Some(last_modified)) => krate.last_modified != last_modified,
-            (_, _) => true,
+            (None, None) => true,
         };
 
         if !needs_update {

@@ -35,59 +35,60 @@ storage = { path = "./crates/storage" }
 
 # External dependencies from crates.io
 anyhow = "1.0.86"
-jsonwebtoken = "9.1.0"
-reqwest = {version = "0.12.4", features = ["json", "blocking"]}
-serde = {version = "1.0.204", features = ["derive"]}
-sysinfo = "0.30.5"
+jsonwebtoken = "9.3.0"
+reqwest = {version = "0.12.5", features = ["json", "blocking", "gzip", "http2", "deflate"]}
+serde = {version = "1.0.206", features = ["derive"]}
+sysinfo = "0.31.2"
 semver = "1.0.23"
-regex = "1.10.5"
-serde_json = "1.0.121"
-mockall = "0.12.0"
+regex = "1.10.6"
+serde_json = "1.0.124"
+mockall = "0.13.0"
 rand = "0.8.5"
 chrono = "0.4.38"
-sea-orm = { version = "0.12.15", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
 thiserror = "1.0.63"
-sea-query = "0.30.7"
+sea-orm = { version = "1.1.0-rc.1", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
+sea-query = "0.31.0"
 sea-query-derive = "0.4.1"
-sea-orm-migration = { version = "0.12.15", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
+sea-orm-migration = { version = "1.1.0-rc.1", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
 rm_rf = "0.6.2"
-testcontainers = "0.18.0"
+testcontainers = "0.21.1"
 quote = "1.0.36"
-syn = {version = "2.0.72", features = ["full"]}
-trybuild = {version = "1.0.85", features = ["diff"]}
-zip = "2.1.5"
-flate2 = "1.0.30"
+syn = {version = "2.0.74", features = ["full"]}
+trybuild = {version = "1.0.99", features = ["diff"]}
+zip = "2.1.6"
+flate2 = "1.0.31"
 tar = "0.4.41"
-cargo = "0.78.0"
+cargo = "0.81.0"
 fs_extra = "1.3.0"
 wax = "0.6.0"
-proc-macro2 = "1.0.85"
+proc-macro2 = "1.0.86"
 moka = {version = "0.12.8", features = ["future"]}
 config = "0.14.0"
-toml = "0.8.16"
+toml = "0.8.19"
 time = "0.3.36"
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.17", features = ["json", "fmt"]}
+tracing-subscriber = { version = "0.3.18", features = ["json", "fmt"]}
 flume = "0.11.0"
-axum = { version = "0.7.5", features = ["macros"] }
+axum = { version = "0.7.5", features = ["macros", "http2"] }
 axum-extra = { version = "0.9.3", features = ["cookie", "cookie-private", "typed-header"] }
 tokio = { version = "1.39.2", features = ["macros"] }
 tower = { version = "0.4.13", features = ["util"] }
 hyper = "1.4.1"
 tower-http = { version = "0.5.2", features = ["fs", "trace"] }
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
-futures = "0.3.29"
-url = "2.5.1"
+futures = "0.3.30"
+url = "2.5.2"
 http-body-util = "0.1.2"
 sha256 = "1.5.0"
 
 [profile.release]
-lto = "on"
+lto = "off"
 strip = true
 
 # Profile for the CI build in "release"
 # to build as fast as possible
 [profile.ci-release]
+lto = "on"
 inherits = "release"
 incremental = false
 

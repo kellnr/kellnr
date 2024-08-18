@@ -783,7 +783,7 @@ mod reg_api_tests {
         async fn new(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
-            let db = Database::new(&con_string).await.unwrap();
+            let db = Database::new(&con_string, 10).await.unwrap();
             TestKellnr {
                 path: path::PathBuf::from(&settings.registry.data_dir),
                 db,
@@ -794,7 +794,7 @@ mod reg_api_tests {
         async fn fake(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
-            let db = Database::new(&con_string).await.unwrap();
+            let db = Database::new(&con_string, 10).await.unwrap();
 
             TestKellnr {
                 path: path::PathBuf::from(&settings.registry.data_dir),
@@ -812,7 +812,7 @@ mod reg_api_tests {
 
     async fn app(settings: Settings) -> Router {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
-        let db = Database::new(&con_string).await.unwrap();
+        let db = Database::new(&con_string, 10).await.unwrap();
         let cs = KellnrCrateStorage::new(&settings).await.unwrap();
         db.add_auth_token("test", TOKEN, "admin").await.unwrap();
 

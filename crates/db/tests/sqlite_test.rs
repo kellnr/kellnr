@@ -36,7 +36,7 @@ impl TestDB {
 
         let con_string = ConString::Sqlite(con_string);
 
-        let db: Database = Database::new(&con_string).await.unwrap();
+        let db: Database = Database::new(&con_string, 10).await.unwrap();
 
         Self { path, db }
     }

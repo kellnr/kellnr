@@ -48,6 +48,7 @@ export type Registry = {
     session_age_seconds: number
     cache_size: number
     max_crate_size: number
+    max_db_connections: number
     auth_required: boolean
 }
 
@@ -86,6 +87,7 @@ export const emptySettings = {
         session_age_seconds: 0,
         cache_size: 0,
         max_crate_size: 0,
+        max_db_connections: 0,
         auth_required: false,
     },
 }

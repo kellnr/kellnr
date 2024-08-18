@@ -24,7 +24,7 @@ pub fn pg_testcontainer(_attr: TokenStream, stream: TokenStream) -> TokenStream 
             let pg_db = db::PgConString::new("localhost", port, "kellnr", "admin", "admin", admin);
             let pg_db = db::ConString::Postgres(pg_db);
             //let pg_db = db::ConString::new("localhost", 5432, "postgres", "admin", "admin", "admin", "token", "salt");
-            let test_db = db::Database::new(&pg_db).await.unwrap();
+            let test_db = db::Database::new(&pg_db, 10).await.unwrap();
             #(#stmts)*
         }
     };
