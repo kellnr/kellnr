@@ -52,7 +52,7 @@ sea-query-derive = "0.4.1"
 sea-orm-migration = { version = "1.1.0-rc.1", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
 rm_rf = "0.6.2"
 testcontainers = "0.21.1"
-quote = "1.0.36"
+quote = "1.0.37"
 syn = {version = "2.0.75", features = ["full"]}
 trybuild = {version = "1.0.99", features = ["diff"]}
 zip = "2.1.6"
