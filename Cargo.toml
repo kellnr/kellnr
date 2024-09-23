@@ -45,7 +45,7 @@ serde_json = "1.0.128"
 mockall = "0.13.0"
 rand = "0.8.5"
 chrono = "0.4.38"
-thiserror = "1.0.63"
+thiserror = "1.0.64"
 sea-orm = { version = "1.1.0-rc.1", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
 sea-query = "0.31.0"
 sea-query-derive = "0.4.1"
