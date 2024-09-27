@@ -13,9 +13,10 @@ impl KellnrCrateStorage {
 
     pub async fn delete(&self, crate_name: &str, crate_version: &str) -> Result<(), StorageError> {
         let path = self.0.crate_path(crate_name, crate_version);
-        tokio::fs::remove_file(path.clone())
+        tokio::fs::remove_file(&path)
             .await
-            .map_err(|e| StorageError::RemoveFile(path, e))?;
+            .map_err(|e| StorageError::RemoveFile(path.clone(), e))?;
+        self.0.invalidate_path(&path).await;
         Ok(())
     }
 }

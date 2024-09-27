@@ -235,7 +235,7 @@ mod bin_tests {
     }
 
     #[tokio::test]
-    async fn delete_crate() {
+    async fn deleting_crate() {
         let pub_data = PubData {
             crate_length: 5,
             cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44],
@@ -258,6 +258,41 @@ mod bin_tests {
             .await
             .unwrap();
 
+        assert!(!crate_path.exists());
+    }
+
+    #[tokio::test]
+    async fn delete_crate_invalidates_cache() {
+        let pub_data = PubData {
+            crate_length: 5,
+            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44],
+            metadata_length: 0,
+            metadata: PublishMetadata::minimal("test", "0.1.0"),
+        };
+
+		let test_storage = TestBin::from("test_delete").await;
+        let name = OriginalName::try_from("test").unwrap();
+        let version = Version::try_from("0.1.0").unwrap();
+
+		test_storage
+            .crate_storage
+            .add_bin_package(&name, &version, &pub_data.cratedata)
+            .await
+            .unwrap();
+
+        let crate_path = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
+
+		assert!(test_storage.crate_storage.get_file(crate_path.clone()).await.is_some());
+		assert!(test_storage.crate_storage.cache_has_path(&crate_path));
+
+        test_storage
+            .crate_storage
+            .delete(&name, &version)
+            .await
+            .unwrap();
+
+		assert!(!test_storage.crate_storage.cache_has_path(&crate_path));
+		assert!(test_storage.crate_storage.get_file(crate_path.clone()).await.is_none());
         assert!(!crate_path.exists());
     }
 }
