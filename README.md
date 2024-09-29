@@ -74,10 +74,10 @@ just build
 # Build the project (release)
 just build-release
 
-# Test the project (without Docker integration tests)
+# Test the project (without Docker integration tests, requires cargo-nextest)
 just test
 
-# Test the project (with Docker integration tests)
+# Test the project (with Docker integration tests, requires cargo-nextest)
 just test-all
 
 # Run the project
