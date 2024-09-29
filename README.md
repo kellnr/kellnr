@@ -18,7 +18,7 @@ The easiest way to get started is to use the Docker image. You can start **kelln
 ```bash
 docker run \
     -p 8000:8000 \
-    -e "KELLNR_ORIGIN__HOSTNAME=localhost" ghcr.io/kellnr/kellnr:5.2.4
+    -e "KELLNR_ORIGIN__HOSTNAME=localhost" ghcr.io/kellnr/kellnr:5.2.5
 ```
 
 Fore more information about how to configure and run **kellnr**, check out the [documentation](https://kellnr.io/documentation).
@@ -74,10 +74,10 @@ just build
 # Build the project (release)
 just build-release
 
-# Test the project (without Docker integration tests)
+# Test the project (without Docker integration tests, requires cargo-nextest)
 just test
 
-# Test the project (with Docker integration tests)
+# Test the project (with Docker integration tests, requires cargo-nextest)
 just test-all
 
 # Run the project

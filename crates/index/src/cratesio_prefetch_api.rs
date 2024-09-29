@@ -423,41 +423,56 @@ async fn fetch_cratesio_prefetch(
 
     match response {
         Ok(r) => {
-            let headers = r.headers();
-            let etag = headers
-                .get("ETag")
-                .map(|h| h.to_str().unwrap_or_default().to_string());
-            let last_modified = headers
-                .get("Last-Modified")
-                .map(|h| h.to_str().unwrap_or_default().to_string());
+            match r.status() {
+                status @ (reqwest::StatusCode::NOT_FOUND
+                | reqwest::StatusCode::GONE
+                | reqwest::StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS) => {
+                    debug!("Crate: '{name}' not available on crates.io ({status})");
+                    Err(status)
+                }
 
-            let data = r
-                .text()
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                reqwest::StatusCode::OK => {
+                    let headers = r.headers();
+                    let etag = headers
+                        .get("ETag")
+                        .map(|h| h.to_str().unwrap_or_default().to_string());
+                    let last_modified = headers
+                        .get("Last-Modified")
+                        .map(|h| h.to_str().unwrap_or_default().to_string());
 
-            let prefetch = Prefetch {
-                etag: etag.clone().unwrap_or_default(),
-                last_modified: last_modified.clone().unwrap_or_default(),
-                data: data.clone().into_bytes(),
-            };
+                    let data = r
+                        .text()
+                        .await
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-            // Send a message to the prefetch thread to asynchronously update the database.
-            // Else we need to wait for the database to update before we can return the response,
-            // which would take a long time.
-            sender
-                .send(CratesioPrefetchMsg::Insert(InsertData {
-                    name: name.clone(),
-                    etag,
-                    last_modified,
-                    data,
-                }))
-                .map_err(|e| {
-                    error!("Could not send prefetch message: {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
+                    let prefetch = Prefetch {
+                        etag: etag.clone().unwrap_or_default(),
+                        last_modified: last_modified.clone().unwrap_or_default(),
+                        data: data.clone().into_bytes(),
+                    };
 
-            Ok(prefetch)
+                    // Send a message to the prefetch thread to asynchronously update the database.
+                    // Else we need to wait for the database to update before we can return the response,
+                    // which would take a long time.
+                    sender
+                        .send(CratesioPrefetchMsg::Insert(InsertData {
+                            name,
+                            etag,
+                            last_modified,
+                            data,
+                        }))
+                        .map_err(|e| {
+                            error!("Could not send prefetch message: {}", e);
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        })?;
+
+                    Ok(prefetch)
+                }
+                s => {
+                    error!("Unexpected status code from crates.io for {}: {}", name, s);
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
         }
         Err(e) => {
             error!("Error fetching prefetch data from crates.io: {}", e);
@@ -535,6 +550,24 @@ mod tests {
 
         assert_eq!(status, StatusCode::OK);
         assert!(prefetch.len() > 500);
+    }
+
+    #[tokio::test]
+    async fn fetch_cratesio_prefetch_404() {
+        let r = app()
+            .await
+            .oneshot(
+                // URL points to crate that does not exist
+                Request::get("/api/v1/cratesio/ro/ck/rock123456789")
+                    .header(header::IF_MODIFIED_SINCE, "date")
+                    .header(header::ETAG, "etag")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = r.status();
+        assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
