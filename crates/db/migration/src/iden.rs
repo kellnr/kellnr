@@ -36,6 +36,7 @@ pub enum CrateIden {
     Homepage,
     Repository,
     ETag,
+    RestrictedDownload,
 }
 
 #[derive(Iden)]
@@ -57,6 +58,17 @@ pub enum CrateMetaIden {
 #[derive(Iden)]
 pub enum OwnerIden {
     #[iden = "owner"]
+    Table,
+    Id,
+    #[iden = "crate_fk"]
+    CrateFk,
+    #[iden = "user_fk"]
+    UserFk,
+}
+
+#[derive(Iden)]
+pub enum CrateUserIden {
+    #[iden = "crate_user"]
     Table,
     Id,
     #[iden = "crate_fk"]
