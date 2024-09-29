@@ -30,21 +30,21 @@
     "vue-router": "^4.2.5",
     "vue3-highlightjs": "^1.0.5",
     "pinia": "^2.1.7",
-    "pinia-plugin-persistedstate": "^3.2.1"
+    "pinia-plugin-persistedstate": "^4.0.0"
   },
   "devDependencies": {
     "@types/dompurify": "^3.0.4",
     "@types/node": "^22.0.0",
-    "@vitejs/plugin-vue": "5.1.2",
+    "@vitejs/plugin-vue": "5.1.4",
     "@vue/eslint-config-typescript": "^13.0.0",
     "@vue/tsconfig": "^0.5.1",
     "@babel/eslint-parser": "^7.24.7",
     "eslint": "^8.56.0",
     "eslint-plugin-vue": "^9.18.1",
     "typescript": "~5.5.2",
-    "vite": "5.4.6",
+    "vite": "5.4.7",
     "vue-tsc": "^2.0.4",
-    "esbuild": "^0.23.0"
+    "esbuild": "^0.24.0"
   },
   "overrides": {
     "vite": {
