@@ -72,7 +72,7 @@ flume = "0.11.0"
 axum = { version = "0.7.7", features = ["macros", "http2"] }
 axum-extra = { version = "0.9.3", features = ["cookie", "cookie-private", "typed-header"] }
 tokio = { version = "1.40.0", features = ["macros"] }
-tower = { version = "0.4.13", features = ["util"] }
+tower = { version = "0.5.1", features = ["util"] }
 hyper = "1.4.1"
 tower-http = { version = "0.5.2", features = ["fs", "trace"] }
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
