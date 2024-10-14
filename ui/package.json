@@ -41,7 +41,7 @@
     "@babel/eslint-parser": "^7.24.7",
     "eslint": "^8.56.0",
     "eslint-plugin-vue": "^9.18.1",
-    "typescript": "~5.5.2",
+    "typescript": "~5.6.3",
     "vite": "5.4.8",
     "vue-tsc": "^2.0.4",
     "esbuild": "^0.24.0"
