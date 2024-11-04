@@ -63,7 +63,7 @@ fs_extra = "1.3.0"
 wax = "0.6.0"
 proc-macro2 = "1.0.87"
 moka = {version = "0.12.8", features = ["future"]}
-config = "0.14.0"
+config = "0.14.1"
 toml = "0.8.19"
 time = "0.3.36"
 tracing = "0.1.40"
