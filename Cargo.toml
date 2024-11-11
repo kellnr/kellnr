@@ -77,7 +77,7 @@ hyper = "1.4.1"
 tower-http = { version = "0.6.1", features = ["fs", "trace"] }
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
 futures = "0.3.30"
-url = "2.5.2"
+url = "2.5.3"
 http-body-util = "0.1.2"
 sha256 = "1.5.0"
 
