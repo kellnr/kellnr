@@ -46,7 +46,7 @@ mockall = "0.13.0"
 rand = "0.8.5"
 chrono = "0.4.38"
 thiserror = "1.0.68"
-sea-orm = { version = "1.1.0", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
+sea-orm = { version = "1.1.1", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
 sea-query = "0.32.0"
 sea-query-derive = "0.4.2"
 sea-orm-migration = { version = "1.1.0-rc.1", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
