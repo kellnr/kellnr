@@ -56,7 +56,7 @@ quote = "1.0.37"
 syn = {version = "2.0.87", features = ["full"]}
 trybuild = {version = "1.0.99", features = ["diff"]}
 zip = "2.2.0"
-flate2 = "1.0.34"
+flate2 = "1.0.35"
 tar = "0.4.43"
 cargo = "0.83.0"
 fs_extra = "1.3.0"
