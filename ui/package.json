@@ -35,7 +35,7 @@
   "devDependencies": {
     "@types/dompurify": "^3.0.4",
     "@types/node": "^22.0.0",
-    "@vitejs/plugin-vue": "5.1.5",
+    "@vitejs/plugin-vue": "5.2.0",
     "@vue/eslint-config-typescript": "^13.0.0",
     "@vue/tsconfig": "^0.6.0",
     "@babel/eslint-parser": "^7.24.7",
