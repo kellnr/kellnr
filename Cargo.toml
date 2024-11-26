@@ -70,7 +70,7 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["json", "fmt"]}
 flume = "0.11.1"
 axum = { version = "0.7.9", features = ["macros", "http2"] }
-axum-extra = { version = "0.9.4", features = ["cookie", "cookie-private", "typed-header"] }
+axum-extra = { version = "0.9.6", features = ["cookie", "cookie-private", "typed-header"] }
 tokio = { version = "1.41.0", features = ["macros"] }
 tower = { version = "0.5.1", features = ["util"] }
 hyper = "1.5.1"
