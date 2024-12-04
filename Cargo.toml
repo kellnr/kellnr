@@ -66,7 +66,7 @@ moka = {version = "0.12.8", features = ["future"]}
 config = "0.14.1"
 toml = "0.8.19"
 time = "0.3.36"
-tracing = "0.1.40"
+tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.18", features = ["json", "fmt"]}
 flume = "0.11.1"
 axum = { version = "0.7.9", features = ["macros", "http2"] }
