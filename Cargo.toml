@@ -74,7 +74,7 @@ axum-extra = { version = "0.9.6", features = ["cookie", "cookie-private", "typed
 tokio = { version = "1.42.0", features = ["macros"] }
 tower = { version = "0.5.1", features = ["util"] }
 hyper = "1.5.1"
-tower-http = { version = "0.6.1", features = ["fs", "trace"] }
+tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
 futures = "0.3.30"
 url = "2.5.4"
