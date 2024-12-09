@@ -26,7 +26,6 @@ use sea_orm::{
     RelationTrait, Set,
 };
 use std::collections::BTreeMap;
-use std::ops::Add;
 use std::path::Path;
 use std::vec;
 
@@ -138,8 +137,7 @@ impl Database {
 
     pub async fn clean_db(&self, session_age: std::time::Duration) -> DbResult<()> {
         let session_age = chrono::Duration::from_std(session_age).unwrap();
-        let now = Utc::now()
-            .add(session_age)
+        let now = std::ops::Add::add(Utc::now(), session_age)
             .format(DB_DATE_FORMAT)
             .to_string();
 

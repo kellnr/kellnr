@@ -113,11 +113,8 @@ mod bin_tests {
                 crate_storage,
             }
         }
-    }
-
-    impl Drop for TestBin {
-        fn drop(&mut self) {
-            rm_rf::remove(&self.settings.registry.data_dir)
+        fn clean(&self) {
+            rm_rf::ensure_removed(&self.settings.registry.data_dir)
                 .expect("Cannot remove test bin directory.");
         }
     }
@@ -151,6 +148,8 @@ mod bin_tests {
         assert!(result.is_ok());
         assert!(result_crate.exists());
         assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], data);
+
+        test_storage.clean();
     }
 
     #[tokio::test]
@@ -183,6 +182,7 @@ mod bin_tests {
         assert!(result.is_ok());
         assert!(result_crate.exists());
         assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], data);
+        test_storage.clean();
     }
 
     #[tokio::test]
@@ -212,6 +212,7 @@ mod bin_tests {
             "Crate with version already exists: test-0.1.0",
             result.unwrap_err().to_string()
         );
+        test_bin.clean();
     }
 
     #[tokio::test]
@@ -232,6 +233,7 @@ mod bin_tests {
                 .to_string_lossy()
                 .to_string()
         ));
+        test_bin.clean();
     }
 
     #[tokio::test]
@@ -259,6 +261,7 @@ mod bin_tests {
             .unwrap();
 
         assert!(!crate_path.exists());
+        test_storage.clean();
     }
 
     #[tokio::test]
@@ -267,23 +270,27 @@ mod bin_tests {
             crate_length: 5,
             cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44],
             metadata_length: 0,
-            metadata: PublishMetadata::minimal("test", "0.1.0"),
+            metadata: PublishMetadata::minimal("test", "0.2.0"),
         };
 
-		let test_storage = TestBin::from("test_delete").await;
+        let test_storage = TestBin::from("test_delete").await;
         let name = OriginalName::try_from("test").unwrap();
-        let version = Version::try_from("0.1.0").unwrap();
+        let version = Version::try_from("0.2.0").unwrap();
 
-		test_storage
+        test_storage
             .crate_storage
             .add_bin_package(&name, &version, &pub_data.cratedata)
             .await
             .unwrap();
 
-        let crate_path = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
+        let crate_path = Path::new(&test_storage.settings.bin_path()).join("test-0.2.0.crate");
 
-		assert!(test_storage.crate_storage.get_file(crate_path.clone()).await.is_some());
-		assert!(test_storage.crate_storage.cache_has_path(&crate_path));
+        assert!(test_storage
+            .crate_storage
+            .get_file(crate_path.clone())
+            .await
+            .is_some());
+        assert!(test_storage.crate_storage.cache_has_path(&crate_path));
 
         test_storage
             .crate_storage
@@ -291,8 +298,13 @@ mod bin_tests {
             .await
             .unwrap();
 
-		assert!(!test_storage.crate_storage.cache_has_path(&crate_path));
-		assert!(test_storage.crate_storage.get_file(crate_path.clone()).await.is_none());
+        assert!(!test_storage.crate_storage.cache_has_path(&crate_path));
+        assert!(test_storage
+            .crate_storage
+            .get_file(crate_path.clone())
+            .await
+            .is_none());
         assert!(!crate_path.exists());
+        test_storage.clean();
     }
 }
