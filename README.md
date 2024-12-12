@@ -99,9 +99,9 @@ nix build
 
 #### Build options
 
-The following environment variables can be set at compile time to tell kellnr where it can find some
-relevant files.
+The following environment variables can be set at compile time:
 
+- `KELLNR_VERSION`: The version of kellnr currently being compiled (default: `0.0.0-unknown`).
 - `KELLNR_CONFIG_DIR`: The configuration directory (default: `./config`, `../config`, or `../../config`).
 - `KELLNR_STATIC_DIR`: The static html directory (default: `./static`).
 
