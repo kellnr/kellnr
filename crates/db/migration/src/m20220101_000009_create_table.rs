@@ -32,14 +32,14 @@ async fn move_cached_crates(db: &SchemaManagerConnection<'_>) -> Result<(), DbEr
     }
 
     // Get all cached crate versions
-    let cached_indicies = cratesio_index::Entity::find()
+    let cached_indices = cratesio_index::Entity::find()
         .all(db)
         .await?
         .into_iter()
         .collect::<Vec<_>>();
 
     // Move each crate to the new location
-    for cached_index in cached_indicies {
+    for cached_index in cached_indices {
         let cached_crate = cached_index
             .find_related(cratesio_crate::Entity)
             .one(db)
