@@ -74,6 +74,9 @@ just build
 # Build the project (release)
 just build-release
 
+# Build the frontend (result is placed in ./static)
+just npm-build
+
 # Test the project (without Docker integration tests, requires cargo-nextest)
 just test
 
@@ -93,6 +96,14 @@ nix develop
 # Build the project
 nix build
 ```
+
+#### Build options
+
+The following environment variables can be set at compile time:
+
+- `KELLNR_VERSION`: The version of kellnr currently being compiled (default: `0.0.0-unknown`).
+- `KELLNR_CONFIG_DIR`: The configuration directory (default: `./config`, `../config`, or `../../config`).
+- `KELLNR_STATIC_DIR`: The static html directory (default: `./static`).
 
 ### Sea ORM & PostgreSQL
 

@@ -31,9 +31,9 @@ pub struct KellnrVersion {
 
 pub async fn kellnr_version() -> Json<KellnrVersion> {
     Json(KellnrVersion {
-        // Replaced automatically by the version from the build job,
-        // if a new release is built.
-        version: "0.0.0-debug".to_string(),
+        version: option_env!("KELLNR_VERSION")
+            .unwrap_or("0.0.0-unknown")
+            .to_string(),
     })
 }
 
@@ -909,7 +909,7 @@ mod tests {
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let result_version = serde_json::from_slice::<KellnrVersion>(&result_msg).unwrap();
 
-        assert_eq!("0.0.0-debug", result_version.version);
+        assert_eq!("0.0.0-unknown", result_version.version);
     }
 
     #[tokio::test]
