@@ -15,8 +15,8 @@ use common::publish_metadata::PublishMetadata;
 use common::version::Version;
 use entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
-    crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, cratesio_crate, cratesio_index,
-    cratesio_meta, doc_queue, krate, owner, prelude::*, session, user,
+    crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user, cratesio_crate,
+    cratesio_index, cratesio_meta, doc_queue, krate, owner, prelude::*, session, user,
 };
 use migration::iden::{AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden};
 use sea_orm::sea_query::{Alias, Expr, Query, *};
@@ -791,6 +791,31 @@ impl DbProvider for Database {
         Ok(())
     }
 
+    async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
+        let user_fk = user::Entity::find()
+            .filter(user::Column::Name.eq(user))
+            .one(&self.db_con)
+            .await?
+            .map(|model| model.id)
+            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?;
+
+        let crate_fk: i64 = krate::Entity::find()
+            .filter(krate::Column::Name.eq(crate_name.to_string()))
+            .one(&self.db_con)
+            .await?
+            .map(|model| model.id)
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+
+        let u = crate_user::ActiveModel {
+            user_fk: Set(user_fk),
+            crate_fk: Set(crate_fk),
+            ..Default::default()
+        };
+
+        CrateUser::insert(u).exec(&self.db_con).await?;
+        Ok(())
+    }
+
     async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()> {
         let user_fk = user::Entity::find()
             .filter(user::Column::Name.eq(owner))
@@ -814,6 +839,51 @@ impl DbProvider for Database {
 
         Owner::insert(o).exec(&self.db_con).await?;
         Ok(())
+    }
+
+    async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool> {
+        let restricted_download = krate::Entity::find()
+            .filter(krate::Column::Name.eq(crate_name.to_string()))
+            .one(&self.db_con)
+            .await?
+            .map(|model| model.restricted_download);
+
+        match restricted_download {
+            Some(restricted) => Ok(restricted),
+            None => Ok(false),
+        }
+    }
+
+    async fn change_download_restricted(
+        &self,
+        crate_name: &NormalizedName,
+        restricted: bool,
+    ) -> DbResult<()> {
+        let mut krate: krate::ActiveModel = krate::Entity::find()
+            .filter(krate::Column::Name.eq(crate_name.to_string()))
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+            .into();
+
+        krate.restricted_download = Set(restricted);
+        krate.update(&self.db_con).await?;
+        Ok(())
+    }
+
+    async fn is_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool> {
+        let user = crate_user::Entity::find()
+            .join(JoinType::InnerJoin, crate_user::Relation::Krate.def())
+            .join(JoinType::InnerJoin, crate_user::Relation::User.def())
+            .filter(
+                Cond::all()
+                    .add(krate::Column::Name.eq(crate_name.to_string()))
+                    .add(user::Column::Name.eq(user)),
+            )
+            .one(&self.db_con)
+            .await?;
+
+        Ok(user.is_some())
     }
 
     async fn is_owner(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool> {
@@ -845,6 +915,25 @@ impl DbProvider for Database {
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::Owner.def())
             .join(JoinType::InnerJoin, owner::Relation::Krate.def())
+            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name.to_string()))
+            .all(&self.db_con)
+            .await?;
+
+        Ok(u.into_iter()
+            .map(|u| User {
+                id: u.id as i32,
+                name: u.name,
+                pwd: u.pwd,
+                salt: u.salt,
+                is_admin: u.is_admin,
+            })
+            .collect())
+    }
+
+    async fn get_crate_users(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>> {
+        let u = user::Entity::find()
+            .join(JoinType::InnerJoin, user::Relation::CrateUser.def())
+            .join(JoinType::InnerJoin, crate_user::Relation::Krate.def())
             .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name.to_string()))
             .all(&self.db_con)
             .await?;
@@ -1037,6 +1126,24 @@ impl DbProvider for Database {
             .ok_or_else(|| DbError::OwnerNotFound(owner.to_string()))?;
 
         owner.delete(&self.db_con).await?;
+
+        Ok(())
+    }
+
+    async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()> {
+        let user = crate_user::Entity::find()
+            .join(JoinType::InnerJoin, crate_user::Relation::Krate.def())
+            .join(JoinType::InnerJoin, crate_user::Relation::User.def())
+            .filter(
+                Cond::all()
+                    .add(krate::Column::Name.eq(crate_name))
+                    .add(user::Column::Name.eq(user)),
+            )
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?;
+
+        user.delete(&self.db_con).await?;
 
         Ok(())
     }
@@ -1660,6 +1767,7 @@ impl DbProvider for Database {
                     description: Set(pub_metadata.description.clone()),
                     repository: Set(pub_metadata.repository.clone()),
                     e_tag: Set("".to_string()), // Set to empty string, as it can be computed, when the crate index is inserted
+                    restricted_download: Set(false),
                 };
                 let krate = krate.insert(&self.db_con).await?;
                 krate.id

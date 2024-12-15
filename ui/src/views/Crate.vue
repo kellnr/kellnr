@@ -22,6 +22,11 @@
       <div class="tab clickable" :class="tab === 'versions' ? 'activeTab' : ''" @click="changeTab('versions')">
         Versions
       </div>
+      <div v-if="store.state.loggedInUserIsAdmin"
+        class="tab clickable" :class="tab === 'crateSettings' ? 'activeTab' : ''"
+        @click="changeTab('crateSettings')">
+        Settings
+      </div>
       <div v-if="store.loggedInUserIsAdmin" class="tab clickable" :class="tab === 'administrate' ? 'activeTab' : ''"
         @click="changeTab('administrate')">
         Admin
@@ -93,6 +98,61 @@
           </div>
         </div>
 
+        <div v-if="tab === 'crateSettings'" class="crateSettingsTab">
+          <div class="glass">
+          <h2 class="k-h2">Crate access</h2>
+            <form>
+              <div class="field">
+                <label class="checkbox">
+                  <input type="checkbox" v-model="is_download_restricted"/> Crate users only are allowed to download
+                </label>
+              </div>
+              <status-notification :status="changeCrateAccessStatus" @update:clear="changeCrateAccessStatus = $event">
+                {{ changeCrateAccessMsg }}
+              </status-notification>
+              <div class="control">
+                <button class="button is-info" @click.prevent="setCrateAccessData">Change crate access rules</button>
+              </div>
+            </form>
+          </div>
+          <div class="glass">
+            <h2 class="k-h2">Crate users</h2>
+            <template v-for="user in crateUsers" :key="user.login">
+              <div class="glass">
+                <span class="userName">{{ user.login }}</span>
+                <span class="tag is-danger is-light">
+                  <a @click="deleteCrateUser(user.login)">Delete</a>
+                </span>
+              </div>
+            </template>
+            <status-notification :status="deleteUserStatus" @update:clear="deleteUserStatus = $event">
+              {{ deleteUserMsg }}
+            </status-notification>
+            <h3 class="k-h3">Add crate user</h3>
+            <form>
+              <div class="field">
+                <div class="control is-expanded has-icons-left">
+                  <input
+                    class="input is-info"
+                    v-model="crateUserName"
+                    placeholder="Username"
+                    type="text"
+                    />
+                  <span class="icon is-small is-left">
+                    <i class="fas fa-user"></i>
+                  </span>
+                </div>
+              </div>
+              <status-notification :status="addCrateUserStatus" @update:clear="addCrateUserStatus = $event">
+                {{ addCrateUserMsg }}
+              </status-notification>
+              <div class="control">
+                <button class="button is-info" @click.prevent="addCrateUser">Add</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
         <div v-if="tab === 'administrate'" class="administrateTab">
           <div class="glass">
             <h2 class="k-h2">Delete Crate Version</h2>
@@ -132,7 +192,7 @@
             <span class="tooltiptext">{{ crate.last_updated }}</span>
           </div>
         </crate-sidebar-element>
-        
+
         <crate-sidebar-element icon="fa-book" header="Documentation" class="bottomBorder">
           <div class="docs" @click="openDocsPage()">
             <div v-if="docLink">
@@ -152,7 +212,7 @@
             </span>
           </div>
         </crate-sidebar-element>
-        
+
         <crate-sidebar-element header="Downloads" icon="fa-cloud-download-alt">
           <div>Version: {{ selected_version.downloads }}</div>
           <div>Total: {{ crate.total_downloads }}</div>
@@ -175,9 +235,9 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import CrateSidebarElement from "../components/CrateSidebarElement.vue";
 import { useStore } from "../store/store";
-import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
-import type { CrateData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
-import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD } from "../remote-routes";
+import { defaultCrateData, defaultCrateAccessData, defaultCrateVersionData } from "../types/crate_data";
+import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
+import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_ACCESS_DATA } from "../remote-routes";
 import Readme from "../components/Readme.vue";
 
 dayjs.extend(relativeTime);
@@ -190,6 +250,15 @@ const selected_version = ref<CrateVersionData>(defaultCrateVersionData)
 const defaultTab = ref<string>("meta")
 const tab = ref(defaultTab);
 const store = useStore();
+
+const crate_access = ref<CrateAccessData>(defaultCrateAccessData);
+const is_download_restricted = ref(false);
+const crateUsers = ref([])
+const crateUserName = ref("")
+const addCrateUserStatus = ref("")
+const addCrateUserMsg = ref("")
+const deleteCrateUserStatus = ref("")
+const deleteCrateUserMsg = ref("")
 
 const docLink = computed(() => {
   return selected_version.value.documentation;
@@ -239,6 +308,79 @@ const sortedOwners = computed(() => {
   const users = crate.value.owners ?? [];
   return users.sort();
 });
+
+function addCrateUser() {
+  axios
+      .put(CRATE_USER(crate.value.name, crateUserName.value))
+      .then((res) => {
+        if (res.status == 200) {
+          addCrateUserStatus.value = "Success";
+          addCrateUserMsg.value = "Crate user successfully added.";
+          // Update user list
+          getCrateUsers();
+        }
+      })
+      .catch((error) => {
+        if (error.response) {
+          addCrateUserStatus.value = "Error";
+          addCrateUserMsg.value = "Crate user could not be added.";
+
+          if (error.response.status == 404) {
+            // "Unauthorized. Login first."
+            router.push("/login");
+          } else if (error.response.status == 500) {
+            addCrateUserMsg.value = "Crate user could not be added";
+          } else {
+            addCrateUserMsg.value = "Unknown error";
+          }
+        }
+      });
+}
+
+function deleteCrateUser(name: string) {
+  if (confirm('Delete crate user "' + name + '"?')) {
+    axios
+        .delete(CRATE_USER(crate.value.name, name))
+        .then((res) => {
+          if (res.status == 200) {
+            deleteCrateUserStatus.value = "Success";
+            deleteCrateUserMsg.value = "Crate user successfully deleted.";
+            // Update user list
+            getCrateUsers();
+          }
+        })
+        .catch((error) => {
+          if (error.response) {
+            deleteCrateUserStatus.value = "Error";
+            deleteCrateUserMsg.value = "Crate user could not be deleted.";
+
+            if (error.response.status == 404) {
+              // "Unauthorized. Login first."
+              router.push("/login");
+            } else if (error.response.status == 500) {
+              deleteCrateUserMsg.value = "Crate user could not be deleted";
+            } else {
+              deleteCrateUserMsg.value = "Unknown error";
+            }
+          }
+        });
+  }
+}
+
+function getCrateUsers() {
+  axios
+      // disable caching to get updated token list (TS doesn't recognize cache option)
+      // @ts-ignore
+      .get(CRATE_USERS(crate.value.name), {cache: false})
+      .then((res) => {
+        if (res.status == 200) {
+          crateUsers.value = res.data.users;
+        }
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+};
 
 function deleteVersion(crate: string, version: string) {
   if (confirm('Delete "' + crate + '" version "' + version + '"?')) {
@@ -294,6 +436,10 @@ function buildDoc(crate: string, version: string) {
 }
 
 function changeTab(newTab: string) {
+  if (newTab === "crateSettings") {
+    getCrateAccessData();
+    getCrateUsers();
+  }
   tab.value = newTab;
 }
 
@@ -325,6 +471,52 @@ function getCrateData(name: string, version?: string) {
     .catch((error) => {
       console.log(error);
     });
+}
+
+function getCrateAccessData() {
+  axios
+     // disable caching to get updated token list (TS doesn't recognize cache option)
+     // @ts-ignore
+    .get(CRATE_ACCESS_DATA(crate.value.name), {cache: false})
+    .then((response) => {
+      crate_access.value = response.data;
+      is_download_restricted.value = crate_access.value.download_restricted;
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
+
+function setCrateAccessData() {
+  const putData = {
+    download_restricted: is_download_restricted.value,
+  }
+
+  axios
+      .put(CRATE_ACCESS_DATA(crate.value.name), putData)
+      .then((res) => {
+        if (res.status == 200) {
+          changeCrateAccessStatus.value = "Success";
+          changeCrateAccessMsg.value = "Crate access data successfully changed.";
+          // Update user list
+          getCrateAccessData();
+        }
+      })
+      .catch((error) => {
+        if (error.response) {
+          changeCrateAccessStatus.value = "Error";
+          changeCrateAccessMsg.value = "Crate access data could not be changed.";
+
+          if (error.response.status == 404) {
+            // "Unauthorized. Login first."
+            router.push("/login");
+          } else if (error.response.status == 500) {
+            changeCrateAccessMsg.value = "Crate access data could not be changed";
+          } else {
+            changeCrateAccessMsg.value = "Unknown error";
+          }
+        }
+      });
 }
 
 function copyTomlToClipboard() {
