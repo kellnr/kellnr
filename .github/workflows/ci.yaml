@@ -80,9 +80,6 @@ jobs:
           echo "KELLNR_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
           echo $KELLNR_VERSION
 
-      - name: Replace Version in web_ui/ui
-        run: sed -i 's/0.0.0-debug/'"$KELLNR_VERSION"'/' crates/web_ui/src/ui.rs
-
       - name: Build Release {{ matrix.target }}
         run: just target=${{ matrix.target }} ci-release
 

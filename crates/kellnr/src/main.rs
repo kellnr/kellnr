@@ -14,12 +14,7 @@ use index::{
 };
 use registry::{cratesio_api, kellnr_api};
 use settings::{LogFormat, Settings};
-use std::{
-    convert::TryFrom,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{net::SocketAddr, path::Path, sync::Arc};
 use storage::{
     cratesio_crate_storage::CratesIoCrateStorage, kellnr_crate_storage::KellnrCrateStorage,
 };
@@ -31,9 +26,7 @@ use web_ui::{session, ui, user};
 
 #[tokio::main]
 async fn main() {
-    let settings: Arc<Settings> = Settings::try_from(Path::new("config"))
-        .expect("Cannot read config")
-        .into();
+    let settings: Arc<Settings> = settings::get_settings().expect("Cannot read config").into();
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber
@@ -110,10 +103,11 @@ async fn main() {
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
 
+    let static_path = Path::new(option_env!("KELLNR_STATIC_DIR").unwrap_or("./static"));
     let static_files_service = get_service(
-        ServeDir::new(PathBuf::from("static"))
+        ServeDir::new(&static_path)
             .append_index_html_on_directories(true)
-            .fallback(ServeFile::new(PathBuf::from("static/index.html"))),
+            .fallback(ServeFile::new(static_path.join("index.html"))),
     );
 
     let kellnr_api = Router::new()

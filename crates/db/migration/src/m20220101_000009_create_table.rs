@@ -25,21 +25,27 @@ async fn move_cached_crates(db: &SchemaManagerConnection<'_>) -> Result<(), DbEr
     debug!("Moving cached crates...");
     let settings = get_settings().map_err(|e| DbErr::Custom(e.to_string()))?;
 
+    // Get all cached crate versions
+    let cached_indices = cratesio_index::Entity::find()
+        .all(db)
+        .await?
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    if cached_indices.is_empty() {
+        // There is nothing to do
+        debug!("No cached crates to move...");
+        return Ok(());
+    }
+
     // Make sure the cratesio bin path exists
     if !settings.crates_io_bin_path().exists() {
         std::fs::create_dir_all(settings.crates_io_bin_path())
             .map_err(|e| DbErr::Custom(e.to_string()))?;
     }
 
-    // Get all cached crate versions
-    let cached_indicies = cratesio_index::Entity::find()
-        .all(db)
-        .await?
-        .into_iter()
-        .collect::<Vec<_>>();
-
     // Move each crate to the new location
-    for cached_index in cached_indicies {
+    for cached_index in cached_indices {
         let cached_crate = cached_index
             .find_related(cratesio_crate::Entity)
             .one(db)

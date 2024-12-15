@@ -96,7 +96,9 @@ impl Settings {
 }
 
 pub fn get_settings() -> Result<Settings, ConfigError> {
-    let path = if Path::new("./config").exists() {
+    let path = if let Some(path) = option_env!("KELLNR_CONFIG_DIR") {
+        Path::new(path)
+    } else if Path::new("./config").exists() {
         Path::new("./config")
     } else if Path::new("../config").exists() {
         Path::new("../config")
