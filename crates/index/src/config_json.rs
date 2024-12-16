@@ -21,17 +21,18 @@ impl ConfigJson {
         protocol: &Protocol,
         api_address: &str,
         api_port: u16,
+        path_prefix: Option<&str>,
         api_path: &str,
         api_available: bool,
         auth_required: bool,
     ) -> Self {
         Self {
             dl: format!(
-                "{}://{}:{}/api/v1/{}/dl",
-                protocol, api_address, api_port, api_path
+                "{}://{}:{}{}/api/v1/{}/dl",
+                protocol, api_address, api_port, path_prefix.unwrap_or_default(), api_path
             ),
             api: if api_available {
-                Some(format!("{}://{}:{}", protocol, api_address, api_port))
+                Some(format!("{}://{}:{}{}", protocol, api_address, api_port, path_prefix.unwrap_or_default()))
             } else {
                 None
             },
@@ -46,6 +47,7 @@ impl From<(&Settings, &str, bool)> for ConfigJson {
             &value.0.origin.protocol,
             &value.0.origin.hostname,
             value.0.origin.port,
+            value.0.origin.path_prefix.as_deref(),
             value.1,
             value.2,
             value.0.registry.auth_required,
@@ -60,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_config_json_to_json_http() {
-        let config = ConfigJson::new(&Protocol::Http, "localhost", 8080, "path", true, false);
+        let config = ConfigJson::new(&Protocol::Http, "localhost", 8080, "", "path", true, false);
         let json = config.to_json().unwrap();
 
         assert_eq!(
@@ -71,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_config_json_to_json_https() {
-        let config = ConfigJson::new(&Protocol::Https, "localhost", 8081, "path", true, true);
+        let config = ConfigJson::new(&Protocol::Https, "localhost", 8081, "", "path", true, true);
         let json = config.to_json().unwrap();
 
         assert_eq!(
@@ -82,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_config_json_no_api() {
-        let config = ConfigJson::new(&Protocol::Https, "localhost", 8081, "path", false, true);
+        let config = ConfigJson::new(&Protocol::Https, "localhost", 8081, "", "path", false, true);
         let json = config.to_json().unwrap();
 
         assert_eq!(

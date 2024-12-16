@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
+import { BACKEND_URL_PATH_PREFIX } from '../remote-routes'
 
 export interface State {
-    loggedInUser: string | null 
+    loggedInUser: string | null
     loggedInUserIsAdmin: boolean
     theme: string
     cargoSmallLogo: string
@@ -16,8 +17,8 @@ export const useStore = defineStore('store', {
         loggedInUser: null,
         loggedInUserIsAdmin: false,
         theme: 'light',
-        cargoSmallLogo: 'img/cargo-logo-small-light.png',
-        kellnrSmallLogo: 'img/kellnr-logo-small-light.png',
+        cargoSmallLogo: `${BACKEND_URL_PATH_PREFIX}/img/cargo-logo-small-light.png`,
+          kellnrSmallLogo: `${BACKEND_URL_PATH_PREFIX}/img/kellnr-logo-small-light.png`,
         rememberMe: false,
         rememberMeUser: null,
         searchCache: false
@@ -37,11 +38,11 @@ export const useStore = defineStore('store', {
         toggleTheme() {
             if (this.theme === 'light') {
                 this.theme = 'dark'
-                this.kellnrSmallLogo = 'img/kellnr-logo-small-dark.png'
+                this.kellnrSmallLogo = `${BACKEND_URL_PATH_PREFIX}/img/kellnr-logo-small-dark.png`
             } else {
                 this.theme = 'light'
-                this.cargoSmallLogo = 'img/cargo-logo-small-light.png'
-                this.kellnrSmallLogo = 'img/kellnr-logo-small-light.png'
+                this.cargoSmallLogo = `${BACKEND_URL_PATH_PREFIX}/img/cargo-logo-small-light.png`,
+            this.kellnrSmallLogo = `${BACKEND_URL_PATH_PREFIX}/img/kellnr-logo-small-light.png`
             }
         }
     },

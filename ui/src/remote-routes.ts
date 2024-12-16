@@ -1,27 +1,29 @@
-export const ADD_TOKEN = "/api/v1/user/add_token";
-export const DELETE_TOKEN = (id: number) => `/api/v1/user/delete_token/${id}`;
-export const LIST_TOKENS = "/api/v1/user/list_tokens";
-export const CHANGE_PWD = "/api/v1/user/change_pwd";
-export const LOGIN_STATE = "/api/v1/user/login_state";
-export const LOGOUT = "/api/v1/user/logout";
-export const ADD_USER = "/api/v1/user/add";
-export const DELETE_USER = (name: string) => `/api/v1/user/delete/${name}`;
-export const LIST_USERS = "/api/v1/user/list_users";
-export const RESET_PWD = (name: string) => `/api/v1/user/reset_pwd/${name}`;
-export const LOGIN = "/api/v1/user/login";
+export const BACKEND_URL_PATH_PREFIX = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-export const CRATE_DATA = "/api/v1/ui/crate_data";
-export const CRATESIO_DATA = "/api/v1/ui/cratesio_data";
-export const CRATES = "/api/v1/ui/crates";
-export const CRATE_DELETE_VERSION = "/api/v1/ui/delete_version";
-export const CRATE_DELETE_ALL = "/api/v1/ui/delete_crate";
-export const VERSION = "/api/v1/ui/version";
-export const SETTINGS = "/api/v1/ui/settings";
-export const STATISTICS = "/api/v1/ui/statistic";
-export const SEARCH = "/api/v1/ui/search";
+export const ADD_TOKEN = `${BACKEND_URL_PATH_PREFIX}/api/v1/user/add_token`;
+export const DELETE_TOKEN = (id: number) => `${BACKEND_URL_PATH_PREFIX}/api/v1/user/delete_token/${id}`;
+export const LIST_TOKENS = `${BACKEND_URL_PATH_PREFIX}/api/v1/user/list_tokens`;
+export const CHANGE_PWD = `${BACKEND_URL_PATH_PREFIX}/api/v1/user/change_pwd`;
+export const LOGIN_STATE = `${BACKEND_URL_PATH_PREFIX}/api/v1/user/login_state`;
+export const LOGOUT = `${BACKEND_URL_PATH_PREFIX}/api/v1/user/logout`;
+export const ADD_USER = `${BACKEND_URL_PATH_PREFIX}/api/v1/user/add`;
+export const DELETE_USER = (name: string) => `${BACKEND_URL_PATH_PREFIX}/api/v1/user/delete/${name}`;
+export const LIST_USERS = `${BACKEND_URL_PATH_PREFIX}/api/v1/user/list_users`;
+export const RESET_PWD = (name: string) => `${BACKEND_URL_PATH_PREFIX}/api/v1/user/reset_pwd/${name}`;
+export const LOGIN = `${BACKEND_URL_PATH_PREFIX}/api/v1/user/login`;
 
-export const DOCS_BUILD = "/api/v1/docs/build";
-export const DOCS_QUEUE = "/api/v1/docs/queue";
+export const CRATE_DATA = `${BACKEND_URL_PATH_PREFIX}/api/v1/ui/crate_data`;
+export const CRATESIO_DATA = `${BACKEND_URL_PATH_PREFIX}/api/v1/ui/cratesio_data`;
+export const CRATES = `${BACKEND_URL_PATH_PREFIX}/api/v1/ui/crates`;
+export const CRATE_DELETE_VERSION = `${BACKEND_URL_PATH_PREFIX}/api/v1/ui/delete_version`;
+export const CRATE_DELETE_ALL = `${BACKEND_URL_PATH_PREFIX}/api/v1/ui/delete_crate`;
+export const VERSION = `${BACKEND_URL_PATH_PREFIX}/api/v1/ui/version`;
+export const SETTINGS = `${BACKEND_URL_PATH_PREFIX}/api/v1/ui/settings`;
+export const STATISTICS = `${BACKEND_URL_PATH_PREFIX}/api/v1/ui/statistic`;
+export const SEARCH = `${BACKEND_URL_PATH_PREFIX}/api/v1/ui/search`;
+
+export const DOCS_BUILD = `${BACKEND_URL_PATH_PREFIX}/api/v1/docs/build`;
+export const DOCS_QUEUE = `${BACKEND_URL_PATH_PREFIX}/api/v1/docs/queue`;
 
 // External URL
 export const CRATESIO_LINK = (name: string) => `https://crates.io/crates/${name}`;

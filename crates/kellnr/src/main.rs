@@ -75,7 +75,7 @@ async fn main() {
     let state = AppStateData {
         db,
         signing_key,
-        settings,
+        settings: Arc::clone(&settings),
         crate_storage,
         cratesio_storage,
         cratesio_prefetch_sender,
@@ -178,7 +178,7 @@ async fn main() {
             session::session_auth_when_required,
         ));
 
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/me", get(kellnr_api::me))
         .nest("/api/v1/ui", ui)
         .nest("/api/v1/user", user)
@@ -190,6 +190,9 @@ async fn main() {
         .fallback(static_files_service)
         .with_state(state)
         .layer(tower_http::trace::TraceLayer::new_for_http());
+    if let Some(path_prefix) = settings.origin.path_prefix.as_deref() {
+        app = Router::new().nest(path_prefix, app);
+    }
 
     let listener = TcpListener::bind(addr)
         .await

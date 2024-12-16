@@ -27,7 +27,7 @@ admin_token = "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"
 data_dir = "/opt/kdata"
 # Seconds until a user is logged out automatically after inactivity in the UI
 session_age_seconds = 28800
-# Number of crates to cache in-memory. If set to 0, the cache is disabled. 
+# Number of crates to cache in-memory. If set to 0, the cache is disabled.
 cache_size = 1000
 # Max size of a crate that can be uploaded to Kellnr in MB
 max_crate_size = 10
@@ -71,13 +71,15 @@ port = 8000
 # This setting is important as the cargo protocol needs Kellnr
 # to know, where it is reachable from the outside, e.g. behind a reverse proxy.
 [origin]
+# Either "https" or "http". Use in combination with a reverse proxy that provides HTTPS.
+protocol = "http"
 # The hostname where Kellnr is reachable from the outside
 hostname = "127.0.0.1"
 # If a proxy is used in front of Kellnr, the port of the proxy can be specified here
 # If no proxy is used, it is the same as the "api_port"
 port = 8000
-# Either "https" or "http". Use in combination with a reverse proxy that provides HTTPS.
-protocol = "http"
+# URL path prefix if the Kellnr must be accessible from location other then root.
+# path_prefix = "/"
 
 # Configure Postgresql as the database backend instead of Sqlite
 [postgresql]
