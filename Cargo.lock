@@ -1171,7 +1171,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
 ]
 
@@ -1492,7 +1492,7 @@ dependencies = [
  "settings",
  "sha256",
  "testcontainers",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
 ]
 
@@ -1610,7 +1610,7 @@ dependencies = [
  "settings",
  "storage",
  "tar",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
  "tower 0.5.2",
  "tracing",
@@ -4825,7 +4825,7 @@ dependencies = [
  "serde_json",
  "settings",
  "storage",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
  "tower 0.5.2",
  "tracing",
@@ -5925,7 +5925,7 @@ dependencies = [
  "moka",
  "settings",
  "sha256",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
 ]
 
