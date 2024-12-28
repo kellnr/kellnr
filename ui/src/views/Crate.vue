@@ -73,7 +73,7 @@
               <IconElement icon="fas fa-link" title="Homepage" v-if="crate.homepage != null">
                 <a :href="crate.homepage" class="link" target="_blank">{{
                   crate.homepage
-                  }}</a>
+                }}</a>
               </IconElement>
               <IconElement icon="fas fa-balance-scale" title="License" v-if="selected_version.license != null">
                 {{ selected_version.license }}
@@ -81,7 +81,7 @@
               <IconElement icon="fab fa-github" title="Repository" v-if="crate.repository != null">
                 <a :href="crate.repository" class="link" target="_blank">{{
                   crate.repository
-                  }}</a>
+                }}</a>
               </IconElement>
               <IconElement icon="fas fa-trash-alt" title="Yanked" v-if="selected_version.yanked === true">
                 Yes
@@ -254,11 +254,6 @@ const addCrateUserStatus = ref("")
 const addCrateUserMsg = ref("")
 const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
-
-onBeforeMount(() => {
-  console.log("STORE CONTENT")
-  console.log(store)
-})
 
 const docLink = computed(() => {
   return selected_version.value.documentation;
