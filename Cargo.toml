@@ -34,18 +34,18 @@ appstate = { path = "./crates/appstate" }
 storage = { path = "./crates/storage" }
 
 # External dependencies from crates.io
-anyhow = "1.0.93"
+anyhow = "1.0.94"
 jsonwebtoken = "9.3.0"
 reqwest = {version = "0.12.9", features = ["json", "blocking", "gzip", "http2", "deflate"]}
-serde = {version = "1.0.215", features = ["derive"]}
+serde = {version = "1.0.216", features = ["derive"]}
 sysinfo = "0.32.0"
-semver = "1.0.23"
+semver = "1.0.24"
 regex = "1.11.1"
 serde_json = "1.0.133"
 mockall = "0.13.1"
 rand = "0.8.5"
-chrono = "0.4.38"
-thiserror = "1.0.69"
+chrono = "0.4.39"
+thiserror = "2.0.9"
 sea-orm = { version = "1.1.1", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
 sea-query = "0.32.1"
 sea-query-derive = "0.4.2"
@@ -53,9 +53,9 @@ sea-orm-migration = { version = "1.1.1", features = [ "sqlx-postgres", "sqlx-sql
 rm_rf = "0.6.2"
 testcontainers = "0.23.1"
 quote = "1.0.37"
-syn = {version = "2.0.90", features = ["full"]}
+syn = {version = "2.0.93", features = ["full"]}
 trybuild = {version = "1.0.99", features = ["diff"]}
-zip = "2.2.1"
+zip = "2.2.2"
 flate2 = "1.0.35"
 tar = "0.4.43"
 cargo = "0.83.0"
@@ -67,12 +67,12 @@ config = "0.14.1"
 toml = "0.8.19"
 time = "0.3.37"
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.18", features = ["json", "fmt"]}
+tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"]}
 flume = "0.11.1"
 axum = { version = "0.7.9", features = ["macros", "http2"] }
 axum-extra = { version = "0.9.6", features = ["cookie", "cookie-private", "typed-header"] }
 tokio = { version = "1.42.0", features = ["macros"] }
-tower = { version = "0.5.1", features = ["util"] }
+tower = { version = "0.5.2", features = ["util"] }
 hyper = "1.5.1"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
