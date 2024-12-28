@@ -22,8 +22,7 @@
       <div class="tab clickable" :class="tab === 'versions' ? 'activeTab' : ''" @click="changeTab('versions')">
         Versions
       </div>
-      <div v-if="store.state.loggedInUserIsAdmin"
-        class="tab clickable" :class="tab === 'crateSettings' ? 'activeTab' : ''"
+      <div v-if="store.loggedInUserIsAdmin" class="tab clickable" :class="tab === 'crateSettings' ? 'activeTab' : ''"
         @click="changeTab('crateSettings')">
         Settings
       </div>
@@ -74,7 +73,7 @@
               <IconElement icon="fas fa-link" title="Homepage" v-if="crate.homepage != null">
                 <a :href="crate.homepage" class="link" target="_blank">{{
                   crate.homepage
-                }}</a>
+                  }}</a>
               </IconElement>
               <IconElement icon="fas fa-balance-scale" title="License" v-if="selected_version.license != null">
                 {{ selected_version.license }}
@@ -82,7 +81,7 @@
               <IconElement icon="fab fa-github" title="Repository" v-if="crate.repository != null">
                 <a :href="crate.repository" class="link" target="_blank">{{
                   crate.repository
-                }}</a>
+                  }}</a>
               </IconElement>
               <IconElement icon="fas fa-trash-alt" title="Yanked" v-if="selected_version.yanked === true">
                 Yes
@@ -100,11 +99,11 @@
 
         <div v-if="tab === 'crateSettings'" class="crateSettingsTab">
           <div class="glass">
-          <h2 class="k-h2">Crate access</h2>
+            <h2 class="k-h2">Crate access</h2>
             <form>
               <div class="field">
                 <label class="checkbox">
-                  <input type="checkbox" v-model="is_download_restricted"/> Crate users only are allowed to download
+                  <input type="checkbox" v-model="is_download_restricted" /> Crate users only are allowed to download
                 </label>
               </div>
               <status-notification :status="changeCrateAccessStatus" @update:clear="changeCrateAccessStatus = $event">
@@ -132,12 +131,7 @@
             <form>
               <div class="field">
                 <div class="control is-expanded has-icons-left">
-                  <input
-                    class="input is-info"
-                    v-model="crateUserName"
-                    placeholder="Username"
-                    type="text"
-                    />
+                  <input class="input is-info" v-model="crateUserName" placeholder="Username" type="text" />
                   <span class="icon is-small is-left">
                     <i class="fas fa-user"></i>
                   </span>
@@ -161,7 +155,8 @@
             </div>
             <div class="paragraph">
               Instead of deleting the crate, think about <a
-                href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" class="link">yanking</a> it instead, which
+                href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" class="link">yanking</a> it instead,
+              which
               does not break crates that depend on it.
             </div>
             <br />
@@ -234,11 +229,11 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import CrateSidebarElement from "../components/CrateSidebarElement.vue";
-import { useStore } from "../store/store";
 import { defaultCrateData, defaultCrateAccessData, defaultCrateVersionData } from "../types/crate_data";
 import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
 import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_ACCESS_DATA } from "../remote-routes";
 import Readme from "../components/Readme.vue";
+import { useStore } from "../store/store";
 
 dayjs.extend(relativeTime);
 dayjs.extend(utc);
@@ -259,6 +254,11 @@ const addCrateUserStatus = ref("")
 const addCrateUserMsg = ref("")
 const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
+
+onBeforeMount(() => {
+  console.log("STORE CONTENT")
+  console.log(store)
+})
 
 const docLink = computed(() => {
   return selected_version.value.documentation;
@@ -311,75 +311,75 @@ const sortedOwners = computed(() => {
 
 function addCrateUser() {
   axios
-      .put(CRATE_USER(crate.value.name, crateUserName.value))
+    .put(CRATE_USER(crate.value.name, crateUserName.value))
+    .then((res) => {
+      if (res.status == 200) {
+        addCrateUserStatus.value = "Success";
+        addCrateUserMsg.value = "Crate user successfully added.";
+        // Update user list
+        getCrateUsers();
+      }
+    })
+    .catch((error) => {
+      if (error.response) {
+        addCrateUserStatus.value = "Error";
+        addCrateUserMsg.value = "Crate user could not be added.";
+
+        if (error.response.status == 404) {
+          // "Unauthorized. Login first."
+          router.push("/login");
+        } else if (error.response.status == 500) {
+          addCrateUserMsg.value = "Crate user could not be added";
+        } else {
+          addCrateUserMsg.value = "Unknown error";
+        }
+      }
+    });
+}
+
+function deleteCrateUser(name: string) {
+  if (confirm('Delete crate user "' + name + '"?')) {
+    axios
+      .delete(CRATE_USER(crate.value.name, name))
       .then((res) => {
         if (res.status == 200) {
-          addCrateUserStatus.value = "Success";
-          addCrateUserMsg.value = "Crate user successfully added.";
+          deleteCrateUserStatus.value = "Success";
+          deleteCrateUserMsg.value = "Crate user successfully deleted.";
           // Update user list
           getCrateUsers();
         }
       })
       .catch((error) => {
         if (error.response) {
-          addCrateUserStatus.value = "Error";
-          addCrateUserMsg.value = "Crate user could not be added.";
+          deleteCrateUserStatus.value = "Error";
+          deleteCrateUserMsg.value = "Crate user could not be deleted.";
 
           if (error.response.status == 404) {
             // "Unauthorized. Login first."
             router.push("/login");
           } else if (error.response.status == 500) {
-            addCrateUserMsg.value = "Crate user could not be added";
+            deleteCrateUserMsg.value = "Crate user could not be deleted";
           } else {
-            addCrateUserMsg.value = "Unknown error";
+            deleteCrateUserMsg.value = "Unknown error";
           }
         }
       });
-}
-
-function deleteCrateUser(name: string) {
-  if (confirm('Delete crate user "' + name + '"?')) {
-    axios
-        .delete(CRATE_USER(crate.value.name, name))
-        .then((res) => {
-          if (res.status == 200) {
-            deleteCrateUserStatus.value = "Success";
-            deleteCrateUserMsg.value = "Crate user successfully deleted.";
-            // Update user list
-            getCrateUsers();
-          }
-        })
-        .catch((error) => {
-          if (error.response) {
-            deleteCrateUserStatus.value = "Error";
-            deleteCrateUserMsg.value = "Crate user could not be deleted.";
-
-            if (error.response.status == 404) {
-              // "Unauthorized. Login first."
-              router.push("/login");
-            } else if (error.response.status == 500) {
-              deleteCrateUserMsg.value = "Crate user could not be deleted";
-            } else {
-              deleteCrateUserMsg.value = "Unknown error";
-            }
-          }
-        });
   }
 }
 
 function getCrateUsers() {
   axios
-      // disable caching to get updated token list (TS doesn't recognize cache option)
-      // @ts-ignore
-      .get(CRATE_USERS(crate.value.name), {cache: false})
-      .then((res) => {
-        if (res.status == 200) {
-          crateUsers.value = res.data.users;
-        }
-      })
-      .catch((error) => {
-        console.log(error);
-      });
+    // disable caching to get updated token list (TS doesn't recognize cache option)
+    // @ts-ignore
+    .get(CRATE_USERS(crate.value.name), { cache: false })
+    .then((res) => {
+      if (res.status == 200) {
+        crateUsers.value = res.data.users;
+      }
+    })
+    .catch((error) => {
+      console.log(error);
+    });
 };
 
 function deleteVersion(crate: string, version: string) {
@@ -475,9 +475,9 @@ function getCrateData(name: string, version?: string) {
 
 function getCrateAccessData() {
   axios
-     // disable caching to get updated token list (TS doesn't recognize cache option)
-     // @ts-ignore
-    .get(CRATE_ACCESS_DATA(crate.value.name), {cache: false})
+    // disable caching to get updated token list (TS doesn't recognize cache option)
+    // @ts-ignore
+    .get(CRATE_ACCESS_DATA(crate.value.name), { cache: false })
     .then((response) => {
       crate_access.value = response.data;
       is_download_restricted.value = crate_access.value.download_restricted;
@@ -493,30 +493,30 @@ function setCrateAccessData() {
   }
 
   axios
-      .put(CRATE_ACCESS_DATA(crate.value.name), putData)
-      .then((res) => {
-        if (res.status == 200) {
-          changeCrateAccessStatus.value = "Success";
-          changeCrateAccessMsg.value = "Crate access data successfully changed.";
-          // Update user list
-          getCrateAccessData();
-        }
-      })
-      .catch((error) => {
-        if (error.response) {
-          changeCrateAccessStatus.value = "Error";
-          changeCrateAccessMsg.value = "Crate access data could not be changed.";
+    .put(CRATE_ACCESS_DATA(crate.value.name), putData)
+    .then((res) => {
+      if (res.status == 200) {
+        changeCrateAccessStatus.value = "Success";
+        changeCrateAccessMsg.value = "Crate access data successfully changed.";
+        // Update user list
+        getCrateAccessData();
+      }
+    })
+    .catch((error) => {
+      if (error.response) {
+        changeCrateAccessStatus.value = "Error";
+        changeCrateAccessMsg.value = "Crate access data could not be changed.";
 
-          if (error.response.status == 404) {
-            // "Unauthorized. Login first."
-            router.push("/login");
-          } else if (error.response.status == 500) {
-            changeCrateAccessMsg.value = "Crate access data could not be changed";
-          } else {
-            changeCrateAccessMsg.value = "Unknown error";
-          }
+        if (error.response.status == 404) {
+          // "Unauthorized. Login first."
+          router.push("/login");
+        } else if (error.response.status == 500) {
+          changeCrateAccessMsg.value = "Crate access data could not be changed";
+        } else {
+          changeCrateAccessMsg.value = "Unknown error";
         }
-      });
+      }
+    });
 }
 
 function copyTomlToClipboard() {
@@ -567,7 +567,7 @@ watch(route, (_oldRoute, _newRoute) => {
   width: 100%;
 }
 
-.k-h1{
+.k-h1 {
   margin: 0 1rem 0 0;
   word-wrap: break-word;
   max-width: 100%;
@@ -578,8 +578,8 @@ watch(route, (_oldRoute, _newRoute) => {
 }
 
 .tabSwitch {
-  width:fit-content;
-  max-width:100%;
+  width: fit-content;
+  max-width: 100%;
   display: flex;
   flex-wrap: wrap;
   margin: 1rem 0 1rem 0;
@@ -638,9 +638,9 @@ body[color-theme="dark"] .activeTab {
 }
 
 .bottomBorder {
-    border-bottom: 0.05rem;
-    border-bottom-style: solid;
-  }
+  border-bottom: 0.05rem;
+  border-bottom-style: solid;
+}
 
 .buildDocs {
   font-size: smaller;
@@ -649,10 +649,10 @@ body[color-theme="dark"] .activeTab {
 @media only screen and (max-width: 768px) {
   #infoGrid {
     grid-template-rows: auto auto;
-    grid-template-areas: 
+    grid-template-areas:
       "infos"
       "tabs";
-      width: 100%;
+    width: 100%;
   }
 }
 
@@ -663,6 +663,5 @@ body[color-theme="dark"] .activeTab {
   }
 }
 
-@media only screen and (min-width: 992px) {
-}
+@media only screen and (min-width: 992px) {}
 </style>
