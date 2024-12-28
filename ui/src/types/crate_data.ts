@@ -74,3 +74,11 @@ export type CrateRegistryDep = {
     registry?: string,
     explicit_name_in_toml?: string,
 }
+
+export type CrateAccessData = {
+    is_download_restricted: Boolean,
+}
+
+export const defaultCrateAccessData : CrateAccessData = {
+    is_download_restricted: true,
+}
