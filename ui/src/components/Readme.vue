@@ -1,17 +1,15 @@
 <template>
-
   <div id="mdContainer" class="glass" v-html="markedReadme">
   </div>
-
 </template>
 
 <script setup lang="ts">
-import {Marked} from 'marked';
-import {mangle} from 'marked-mangle';
+import { Marked } from 'marked';
+import { mangle } from 'marked-mangle';
 import { gfmHeadingId } from "marked-gfm-heading-id";
-import {markedHighlight} from "marked-highlight";
+import { markedHighlight } from "marked-highlight";
 import DOMPurify from 'dompurify';
-import {computed} from "vue";
+import { computed } from "vue";
 import hljs from 'highlight.js';
 
 const marked = new Marked(
@@ -38,76 +36,77 @@ const markedReadme = computed(() => {
 </script>
 
 <style>
-#mdContainer > pre {
+#mdContainer>pre {
   /*
   Line break for code instead of re-size of the code block to fit all text
   which breaks the layout.
   Better would be a scroll bar, but that seems not possible
   */
   white-space: pre-wrap;
+  padding: 0rem;
 }
 
-#mdContainer > h1 {
+#mdContainer>h1 {
   font-size: 2rem !important;
   font-weight: 700;
   margin-bottom: 1rem;
 }
 
-#mdContainer > h2 {
+#mdContainer>h2 {
   font-size: 1.5rem;
   font-weight: 700;
   margin-bottom: 1rem;
 }
 
-#mdContainer > h3 {
+#mdContainer>h3 {
   font-size: 1.2rem;
   font-weight: 700;
   margin-bottom: 1rem;
 }
 
-#mdContainer > h4 {
+#mdContainer>h4 {
   font-size: 1.1rem;
   font-weight: 700;
   margin-bottom: 1rem;
 }
 
-#mdContainer > h5 {
+#mdContainer>h5 {
   font-size: 1.1rem;
   font-weight: 700;
   margin-bottom: 1rem;
 }
 
-#mdContainer > h6 {
+#mdContainer>h6 {
   font-size: 1.1rem;
   font-weight: 700;
   margin-bottom: 1rem;
 }
 
-#mdContainer > p {
+#mdContainer>p {
   margin-bottom: 0.7rem;
   margin-top: 0.5rem;
 }
 
-#mdContainer > * code {
+#mdContainer>* code {
   background-color: transparent;
-  padding: 0;
+  padding: 1rem;
   font-size: 1rem;
 }
 
 /*Dark theme*/
-body[color-theme="dark"] #mdContainer > * strong {
+body[color-theme="dark"] #mdContainer>* strong {
   color: var(--dark-color-white);
 }
 
-body[color-theme="dark"] #mdContainer > * code {
+body[color-theme="dark"] #mdContainer>* code {
   background-color: transparent;
-  padding: 0;
+  padding: 0.5rem;
   font-size: 1rem;
   color: var(--dark-color-white);
 }
 
 
-body[color-theme="dark"] #mdContainer > h1 {
+body[color-theme="dark"] #mdContainer>h1 {
   /*Gradient text*/
   background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
   -webkit-background-clip: text;
@@ -115,7 +114,7 @@ body[color-theme="dark"] #mdContainer > h1 {
 
 }
 
-body[color-theme="dark"] #mdContainer > h2 {
+body[color-theme="dark"] #mdContainer>h2 {
   /*Gradient text*/
   background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
   -webkit-background-clip: text;
@@ -123,7 +122,7 @@ body[color-theme="dark"] #mdContainer > h2 {
 
 }
 
-body[color-theme="dark"] #mdContainer > h3 {
+body[color-theme="dark"] #mdContainer>h3 {
   /*Gradient text*/
   background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
   -webkit-background-clip: text;
@@ -131,7 +130,7 @@ body[color-theme="dark"] #mdContainer > h3 {
 
 }
 
-body[color-theme="dark"] #mdContainer > h4 {
+body[color-theme="dark"] #mdContainer>h4 {
   /*Gradient text*/
   background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
   -webkit-background-clip: text;
@@ -139,7 +138,7 @@ body[color-theme="dark"] #mdContainer > h4 {
 
 }
 
-body[color-theme="dark"] #mdContainer > h5 {
+body[color-theme="dark"] #mdContainer>h5 {
   /*Gradient text*/
   background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
   -webkit-background-clip: text;
@@ -147,7 +146,7 @@ body[color-theme="dark"] #mdContainer > h5 {
 
 }
 
-body[color-theme="dark"] #mdContainer > h6 {
+body[color-theme="dark"] #mdContainer>h6 {
   /*Gradient text*/
   background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
   -webkit-background-clip: text;
