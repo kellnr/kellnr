@@ -112,11 +112,25 @@ pub struct Credentials {
     pub pwd: String,
 }
 
+impl Credentials {
+    pub fn validate(&self) -> Result<(), RouteError> {
+        if self.user.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.pwd.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        Ok(())
+    }
+}
+
 pub async fn login(
     cookies: PrivateCookieJar,
     State(state): appstate::AppState,
     Json(credentials): Json<Credentials>,
 ) -> Result<(PrivateCookieJar, Json<LoggedInUser>), RouteError> {
+    credentials.validate()?;
+
     let user = state
         .db
         .authenticate_user(&credentials.user, &credentials.pwd)
@@ -193,18 +207,31 @@ pub struct PwdChange {
     pub new_pwd2: String,
 }
 
+impl PwdChange {
+    pub fn validate(&self) -> Result<(), RouteError> {
+        if self.old_pwd.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.new_pwd1.is_empty() || self.new_pwd2.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.new_pwd1 != self.new_pwd2 {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        Ok(())
+    }
+}
+
 pub async fn change_pwd(
     user: MaybeUser,
     State(db): DbState,
     Json(pwd_change): Json<PwdChange>,
 ) -> Result<(), RouteError> {
+    pwd_change.validate()?;
+
     let Ok(user) = db.authenticate_user(user.name(), &pwd_change.old_pwd).await else {
         return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     };
-
-    if pwd_change.new_pwd1 != pwd_change.new_pwd2 {
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-    }
 
     db.change_pwd(&user.name, &pwd_change.new_pwd1).await?;
     Ok(())
@@ -219,6 +246,21 @@ pub struct NewUser {
     pub is_admin: bool,
 }
 
+impl NewUser {
+    pub fn validate(&self) -> Result<(), RouteError> {
+        if self.name.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.pwd1.is_empty() || self.pwd2.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.pwd1 != self.pwd2 {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        Ok(())
+    }
+}
+
 pub async fn add(
     user: MaybeUser,
     State(db): DbState,
@@ -226,9 +268,7 @@ pub async fn add(
 ) -> Result<(), RouteError> {
     user.assert_admin()?;
 
-    if new_user.pwd1 != new_user.pwd2 {
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-    }
+    new_user.validate()?;
 
     let salt = generate_salt();
     Ok(db
