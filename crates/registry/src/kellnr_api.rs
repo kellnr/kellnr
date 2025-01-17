@@ -1,9 +1,9 @@
-use crate::crate_user;
 use crate::pub_data::PubData;
 use crate::pub_success::PubDataSuccess;
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
+use crate::{crate_user, crate_version};
 use anyhow::Result;
 use appstate::AppState;
 use appstate::DbState;
@@ -170,6 +170,24 @@ pub async fn list_crate_users(
         .collect();
 
     Ok(Json(crate_user::CrateUserList::from(users)))
+}
+
+pub async fn list_crate_versions(
+    Path(crate_name): Path<OriginalName>,
+    State(db): DbState,
+) -> ApiResult<Json<crate_version::CrateVersionList>> {
+    let crate_name = crate_name.to_normalized();
+
+    let versions: Vec<crate_version::CrateVersion> = db
+        .get_crate_versions(&crate_name)
+        .await?
+        .into_iter()
+        .map(|v| crate_version::CrateVersion {
+            version: v.to_string(),
+        })
+        .collect();
+
+    Ok(Json(crate_version::CrateVersionList::from(versions)))
 }
 
 pub async fn search(

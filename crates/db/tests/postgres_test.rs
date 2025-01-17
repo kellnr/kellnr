@@ -559,6 +559,105 @@ async fn get_crate_summaries_works() {
 
 #[pg_testcontainer]
 #[tokio::test]
+async fn get_crate_versions_returns_all_versions() {
+    let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
+    test_db
+        .test_add_crate(
+            "crate1",
+            "admin",
+            &Version::try_from("1.0.0").unwrap(),
+            &created,
+        )
+        .await
+        .unwrap();
+    test_db
+        .test_add_crate(
+            "crate1",
+            "admin",
+            &Version::try_from("2.0.0").unwrap(),
+            &created,
+        )
+        .await
+        .unwrap();
+    test_db
+        .test_add_crate(
+            "crate2",
+            "admin",
+            &Version::try_from("1.0.0").unwrap(),
+            &created,
+        )
+        .await
+        .unwrap();
+
+    let versions = test_db
+        .get_crate_versions(&NormalizedName::from_unchecked_str("crate1"))
+        .await
+        .unwrap();
+
+    let expected = vec![
+        Version::try_from("1.0.0").unwrap(),
+        Version::try_from("2.0.0").unwrap(),
+    ];
+    assert_eq!(expected, versions);
+}
+
+#[pg_testcontainer]
+#[tokio::test]
+async fn get_crate_versions_with_yanked_version() {
+    let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
+    test_db
+        .test_add_crate(
+            "crate",
+            "admin",
+            &Version::try_from("1.0.0").unwrap(),
+            &created,
+        )
+        .await
+        .unwrap();
+    test_db
+        .test_add_crate(
+            "crate",
+            "admin",
+            &Version::try_from("2.0.0").unwrap(),
+            &created,
+        )
+        .await
+        .unwrap();
+
+    // Yank crate version 2.0.0
+    test_db
+        .yank_crate(
+            &NormalizedName::from_unchecked_str("crate"),
+            &Version::from_unchecked_str("2.0.0"),
+        )
+        .await
+        .unwrap();
+
+    let versions = test_db
+        .get_crate_versions(&NormalizedName::from_unchecked_str("crate"))
+        .await
+        .unwrap();
+
+    let expected = vec![
+        Version::try_from("1.0.0").unwrap(),
+        Version::try_from("2.0.0").unwrap(),
+    ];
+    assert_eq!(expected, versions);
+}
+
+#[pg_testcontainer]
+#[tokio::test]
+async fn get_crate_versions_for_nonexistant_crate() {
+    let outcome = test_db
+        .get_crate_versions(&NormalizedName::from_unchecked_str("crate1"))
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, vec![]);
+}
+
+#[pg_testcontainer]
+#[tokio::test]
 async fn test_add_crate_meta_and_read_meta() {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 11, 22, 12).unwrap();

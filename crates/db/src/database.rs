@@ -949,6 +949,18 @@ impl DbProvider for Database {
             .collect())
     }
 
+    async fn get_crate_versions(&self, crate_name: &NormalizedName) -> DbResult<Vec<Version>> {
+        let u = crate_meta::Entity::find()
+            .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
+            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name.to_string()))
+            .all(&self.db_con)
+            .await?;
+
+        Ok(u.into_iter()
+            .map(|meta| Version::from_unchecked_str(&meta.version))
+            .collect())
+    }
+
     async fn delete_session_token(&self, session_token: &str) -> DbResult<()> {
         if let Some(s) = session::Entity::find()
             .filter(session::Column::Token.eq(session_token))
