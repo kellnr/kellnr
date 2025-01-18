@@ -50,6 +50,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_crate_id(&self, crate_name: &NormalizedName) -> DbResult<Option<i64>>;
     async fn get_crate_owners(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>>;
     async fn get_crate_users(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>>;
+    async fn get_crate_versions(&self, crate_name: &NormalizedName) -> DbResult<Vec<Version>>;
     async fn delete_session_token(&self, session_token: &str) -> DbResult<()>;
     async fn delete_user(&self, user_name: &str) -> DbResult<()>;
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()>;
@@ -217,6 +218,10 @@ pub mod mock {
             }
 
             async fn get_crate_users(&self, _crate_name: &NormalizedName) -> DbResult<Vec<User>> {
+                unimplemented!()
+            }
+
+            async fn get_crate_versions(&self, _crate_name: &NormalizedName) -> DbResult<Vec<Version>> {
                 unimplemented!()
             }
 
