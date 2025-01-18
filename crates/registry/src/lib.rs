@@ -1,4 +1,5 @@
 pub mod crate_user;
+pub mod crate_version;
 pub mod cratesio_api;
 pub mod kellnr_api;
 pub mod pub_data;

@@ -148,6 +148,10 @@ async fn main() {
             "/:crate_name/crate_users",
             get(kellnr_api::list_crate_users),
         )
+        .route(
+            "/:crate_name/crate_versions",
+            get(kellnr_api::list_crate_versions),
+        )
         .route("/", get(kellnr_api::search))
         .route("/dl/:package/:version/download", get(kellnr_api::download))
         .route(
