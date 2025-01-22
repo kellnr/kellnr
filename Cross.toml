@@ -1,0 +1,7 @@
+[build.env]
+passthrough = [ 
+    # The version of kellnr need to be passed through 
+    # to cross in the github workflow to set the version
+    # correctly in the kellnr web ui.
+    "KELLNR_VERSION",
+]
