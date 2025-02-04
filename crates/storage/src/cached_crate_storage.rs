@@ -110,19 +110,19 @@ impl CachedCrateStorage {
         }
     }
 
-	pub async fn invalidate_path(&self, file_path: &PathBuf) {
-		if let Some(cache) = &self.cache {
-			cache.invalidate(file_path).await;
-		}
-	}
+    pub async fn invalidate_path(&self, file_path: &PathBuf) {
+        if let Some(cache) = &self.cache {
+            cache.invalidate(file_path).await;
+        }
+    }
 
-	pub fn cache_has_path(&self, file_path: &PathBuf) -> bool {
-		if let Some(cache) = &self.cache {
-			cache.contains_key(file_path)
-		} else {
-			false
-		}
-	}
+    pub fn cache_has_path(&self, file_path: &PathBuf) -> bool {
+        if let Some(cache) = &self.cache {
+            cache.contains_key(file_path)
+        } else {
+            false
+        }
+    }
 
     pub async fn create_rand_doc_queue_path(&self) -> Result<PathBuf, StorageError> {
         let rand = generate_rand_string(10);

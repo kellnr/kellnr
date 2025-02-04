@@ -13,12 +13,17 @@ settings.workspace = true
 common.workspace = true
 
 # External dependencies
+aws-sdk-s3.workspace = true
+aws-smithy-runtime-api.workspace = true
+bytes.workspace = true
+futures.workspace = true
 mockall.workspace = true
 tokio.workspace = true
 moka.workspace = true
 axum.workspace = true
 thiserror.workspace = true
 sha256.workspace = true
+
 
 [dev-dependencies]
 tokio.workspace = true

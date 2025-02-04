@@ -23,6 +23,8 @@ impl Default for Storage {
 
 #[async_trait]
 impl StorageProvider for Storage {
+    type Err = StorageError;
+    type StoredFile = File;
     async fn open_file(&self, file_path: &Path) -> Result<File, StorageError> {
         if file_path.exists() {
             let file = OpenOptions::new()

@@ -34,7 +34,10 @@ appstate = { path = "./crates/appstate" }
 storage = { path = "./crates/storage" }
 
 # External dependencies from crates.io
+aws-sdk-s3 = "1.72.0"
+aws-smithy-runtime-api = "1.7.3"
 anyhow = "1.0.95"
+bytes = "1.9.0"
 jsonwebtoken = "9.3.0"
 reqwest = {version = "0.12.12", features = ["json", "blocking", "gzip", "http2", "deflate"]}
 serde = {version = "1.0.217", features = ["derive"]}
