@@ -73,7 +73,7 @@
               <IconElement icon="fas fa-link" title="Homepage" v-if="crate.homepage != null">
                 <a :href="crate.homepage" class="link" target="_blank">{{
                   crate.homepage
-                }}</a>
+                  }}</a>
               </IconElement>
               <IconElement icon="fas fa-balance-scale" title="License" v-if="selected_version.license != null">
                 {{ selected_version.license }}
@@ -81,7 +81,7 @@
               <IconElement icon="fab fa-github" title="Repository" v-if="crate.repository != null">
                 <a :href="crate.repository" class="link" target="_blank">{{
                   crate.repository
-                }}</a>
+                  }}</a>
               </IconElement>
               <IconElement icon="fas fa-trash-alt" title="Yanked" v-if="selected_version.yanked === true">
                 Yes
@@ -254,6 +254,8 @@ const addCrateUserStatus = ref("")
 const addCrateUserMsg = ref("")
 const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
+const changeCrateAccessStatus = ref("")
+const changeCrateAccessMsg = ref("")
 
 const docLink = computed(() => {
   return selected_version.value.documentation;
@@ -320,9 +322,12 @@ function addCrateUser() {
         addCrateUserStatus.value = "Error";
         addCrateUserMsg.value = "Crate user could not be added.";
 
-        if (error.response.status == 404) {
+        if (error.response.status == 401 || error.response.status == 403) {
           // "Unauthorized. Login first."
           router.push("/login");
+        }
+        else if (error.response.status == 404) {
+          addCrateUserMsg.value = "User not found. Did you provide an existing user name?";
         } else if (error.response.status == 500) {
           addCrateUserMsg.value = "Crate user could not be added";
         } else {
@@ -492,7 +497,13 @@ function setCrateAccessData() {
     .then((res) => {
       if (res.status == 200) {
         changeCrateAccessStatus.value = "Success";
-        changeCrateAccessMsg.value = "Crate access data successfully changed.";
+
+        if (res.data.download_restricted) {
+          changeCrateAccessMsg.value = "Crate access restricted to crate users only.";
+        } else {
+          changeCrateAccessMsg.value = "Crate access open to all.";
+        }
+
         // Update user list
         getCrateAccessData();
       }
@@ -502,10 +513,12 @@ function setCrateAccessData() {
         changeCrateAccessStatus.value = "Error";
         changeCrateAccessMsg.value = "Crate access data could not be changed.";
 
-        if (error.response.status == 404) {
+        if (error.response.status == 403 || error.response.status == 401) {
+          console.log("Unauthorized. Login first.");
           // "Unauthorized. Login first."
           router.push("/login");
-        } else if (error.response.status == 500) {
+        }
+        else if (error.response.status == 500) {
           changeCrateAccessMsg.value = "Crate access data could not be changed";
         } else {
           changeCrateAccessMsg.value = "Unknown error";

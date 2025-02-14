@@ -9,6 +9,7 @@ pub enum RouteError {
     InsufficientPrivileges,
     Status(StatusCode),
     AuthenticationFailure,
+    UserNotFound(String),
 }
 
 impl From<db::error::DbError> for RouteError {
@@ -33,6 +34,10 @@ impl IntoResponse for RouteError {
             }
             RouteError::Status(status) => status.into_response(),
             RouteError::InsufficientPrivileges => StatusCode::FORBIDDEN.into_response(),
+            RouteError::UserNotFound(name) => {
+                tracing::warn!("User not found: {name}");
+                StatusCode::NOT_FOUND.into_response()
+            }
         }
     }
 }
