@@ -6,7 +6,6 @@
 ####################################################################################
 
 
-
 ####################################################################################
 #                                                                                  #
 # Values used only on the first startup. Can be changed using the UI on runtime.   #
@@ -87,3 +86,13 @@ port = 5432
 db = "kellnr"
 user = ""
 pwd = ""
+
+
+[s3]
+enabled = false
+access_key = "minioadmin"
+secret_key = "minioadmin"
+bucket = "rust-crates"
+region = "us-east-1"
+endpoint = "http://localhost:9000"
+allow_http = true

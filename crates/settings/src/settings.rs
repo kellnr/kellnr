@@ -14,6 +14,7 @@ use crate::origin::Origin;
 use crate::postgresql::Postgresql;
 use crate::proxy::Proxy;
 use crate::registry::Registry;
+use crate::s3::S3;
 use crate::setup::Setup;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Default, Clone)]
@@ -26,6 +27,7 @@ pub struct Settings {
     pub local: Local,
     pub origin: Origin,
     pub postgresql: Postgresql,
+    pub s3: S3,
 }
 
 impl TryFrom<&Path> for Settings {

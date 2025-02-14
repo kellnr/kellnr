@@ -19,6 +19,10 @@ moka.workspace = true
 axum.workspace = true
 thiserror.workspace = true
 sha256.workspace = true
+object_store.workspace = true
+bytes.workspace = true
+anyhow.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

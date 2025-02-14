@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{io::ErrorKind, path::PathBuf};
 
 use thiserror::Error;
 
@@ -36,4 +36,8 @@ pub enum StorageError {
     ReadFileHandle(std::io::Error),
     #[error("Failed to flush file {0:?}: {1}")]
     FlushCrateFile(PathBuf, std::io::Error),
+    #[error("Failed to init s3 storage. Reason: {0}")]
+    S3StorageInitError(String),
+    #[error("S3 Error... Reason: {0}")]
+    S3GenericError(String)
 }

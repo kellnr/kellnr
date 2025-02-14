@@ -1,4 +1,9 @@
-use crate::storage_error::StorageError;
+use crate::{
+    providers::{
+        self, CrateId, CrateObject, S3Storage, StorageProvider,
+    },
+    storage_error::StorageError,
+};
 use common::original_name::OriginalName;
 use common::util::generate_rand_string;
 use common::version::Version;
@@ -16,10 +21,26 @@ pub struct CachedCrateStorage {
     crate_folder: PathBuf,
     pub doc_queue_path: PathBuf,
     cache: Option<CrateCache>,
+    remote_storage: S3Storage,
 }
 
 impl CachedCrateStorage {
     pub async fn new(crate_folder: PathBuf, settings: &Settings) -> Result<Self, StorageError> {
+        let settings::s3::S3 {
+            enabled,
+            access_key,
+            secret_key,
+            bucket,
+            region,
+            endpoint,
+            allow_http: is_http,
+        } = settings.s3.clone();
+
+        let storage = S3Storage::new(
+            enabled, region, endpoint, bucket, access_key, secret_key, is_http,
+        )
+        .map_err(|e| StorageError::S3StorageInitError(e.to_string()))?;
+
         let cs = Self {
             crate_folder,
             doc_queue_path: settings.doc_queue_path(),
@@ -28,6 +49,7 @@ impl CachedCrateStorage {
             } else {
                 None
             },
+            remote_storage: storage,
         };
         Self::create_bin_path(&cs.crate_folder).await?;
         Ok(cs)
@@ -66,6 +88,17 @@ impl CachedCrateStorage {
             .await
             .map_err(|e| StorageError::FlushCrateFile(file_path.clone(), e))?;
 
+        let data = Vec::from(crate_data);
+        let kek = bytes::Bytes::from(data).into();
+        if self.remote_storage.enabled {
+            self.remote_storage
+                .put(
+                    Some(kek),
+                    CrateId::new(format!("{}-{}.crate", name, version)),
+                )
+                .await
+                .map_err(|e| StorageError::S3GenericError(e.to_string()))?;
+        }
         Ok(sha256::digest(crate_data))
     }
 
@@ -86,12 +119,50 @@ impl CachedCrateStorage {
     }
 
     pub async fn get_file(&self, file_path: PathBuf) -> Option<Vec<u8>> {
-        async fn from_cache(cache: &CrateCache, file_path: PathBuf) -> Option<Vec<u8>> {
+        async fn read_from_fs_or_s3(
+            file_path: &PathBuf,
+            storage: &impl providers::StorageProvider<Object = CrateObject, ObjectId = CrateId>,
+        ) -> Option<Vec<u8>> {
+            let mut file = File::open(&file_path).await.ok()?;
+            let mut krate = Vec::new();
+            file.read_to_end(&mut krate).await.ok()?;
+
+            if krate.is_empty() {
+                if let Some(path) = &file_path.to_str() {
+                    let got = read_from_s3(storage, path).await.ok()?;
+                    return got;
+                }
+            }
+
+            Some(krate)
+        }
+
+        async fn read_from_s3(
+            storage: &impl providers::StorageProvider<Object = CrateObject, ObjectId = CrateId>,
+            path: &str,
+        ) -> Result<Option<Vec<u8>>, StorageError> {
+            let search_param = CrateId::new(path.to_string());
+
+            let res = storage
+                .get(search_param)
+                .await
+                .map_err(|e| StorageError::S3GenericError(e.to_string()))?;
+
+            if res.0.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(res.0.into()))
+            }
+        }
+
+        async fn from_cache(
+            cache: &CrateCache,
+            file_path: PathBuf,
+            storage: &impl providers::StorageProvider<Object = CrateObject, ObjectId = CrateId>,
+        ) -> Option<Vec<u8>> {
             match cache.get(&file_path).await {
                 None => {
-                    let mut file = File::open(&file_path).await.ok()?;
-                    let mut krate = Vec::new();
-                    file.read_to_end(&mut krate).await.ok()?;
+                    let krate = read_from_fs_or_s3(&file_path, storage).await?;
                     cache.insert(file_path, krate.clone()).await;
                     Some(krate)
                 }
@@ -101,28 +172,26 @@ impl CachedCrateStorage {
 
         match &self.cache {
             None => {
-                let mut file = File::open(&file_path).await.ok()?;
-                let mut krate = Vec::new();
-                file.read_to_end(&mut krate).await.ok()?;
+                let krate = read_from_fs_or_s3(&file_path, &self.remote_storage).await?;
                 Some(krate)
             }
-            Some(c) => from_cache(c, file_path).await,
+            Some(c) => from_cache(c, file_path, &self.remote_storage).await,
         }
     }
 
-	pub async fn invalidate_path(&self, file_path: &PathBuf) {
-		if let Some(cache) = &self.cache {
-			cache.invalidate(file_path).await;
-		}
-	}
+    pub async fn invalidate_path(&self, file_path: &PathBuf) {
+        if let Some(cache) = &self.cache {
+            cache.invalidate(file_path).await;
+        }
+    }
 
-	pub fn cache_has_path(&self, file_path: &PathBuf) -> bool {
-		if let Some(cache) = &self.cache {
-			cache.contains_key(file_path)
-		} else {
-			false
-		}
-	}
+    pub fn cache_has_path(&self, file_path: &PathBuf) -> bool {
+        if let Some(cache) = &self.cache {
+            cache.contains_key(file_path)
+        } else {
+            false
+        }
+    }
 
     pub async fn create_rand_doc_queue_path(&self) -> Result<PathBuf, StorageError> {
         let rand = generate_rand_string(10);
