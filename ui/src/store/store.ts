@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 
 export interface State {
-    loggedInUser: string | null 
+    loggedInUser: string | null
     loggedInUserIsAdmin: boolean
     theme: string
     cargoSmallLogo: string
@@ -23,7 +23,7 @@ export const useStore = defineStore('store', {
         searchCache: false
     }),
     getters: {
-        loggedIn: (state) => state.loggedInUser !== null
+        loggedIn: (state) => state.loggedInUser !== null,
     },
     actions: {
         login(payload: { "user": string, "is_admin": boolean }) {
@@ -43,7 +43,7 @@ export const useStore = defineStore('store', {
                 this.cargoSmallLogo = 'img/cargo-logo-small-light.png'
                 this.kellnrSmallLogo = 'img/kellnr-logo-small-light.png'
             }
-        }
+        },
     },
     persist: true
 })

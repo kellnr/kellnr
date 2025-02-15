@@ -121,7 +121,7 @@ async fn main() {
 
     let static_path = Path::new(option_env!("KELLNR_STATIC_DIR").unwrap_or("./static"));
     let static_files_service = get_service(
-        ServeDir::new(&static_path)
+        ServeDir::new(static_path)
             .append_index_html_on_directories(true)
             .fallback(ServeFile::new(static_path.join("index.html"))),
     );

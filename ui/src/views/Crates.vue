@@ -41,7 +41,6 @@ import CrateCard from "../components/CrateCard.vue"
 import type { CrateOverview } from "../types/crate_overview";
 import { CRATES, SEARCH } from "../remote-routes";
 import { useRouter } from "vue-router";
-import { login_required } from "../common/auth";
 import { useStore } from "../store/store";
 
 const crates = ref<Array<CrateOverview>>([])
@@ -55,7 +54,6 @@ const router = useRouter()
 const store = useStore()
 
 onBeforeMount(() => {
-  login_required()
 
   if (router.currentRoute.value.query.search) {
     searchText.value = router.currentRoute.value.query.search as string
