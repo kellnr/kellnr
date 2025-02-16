@@ -110,6 +110,27 @@ impl StorageProvider for S3Storage {
     }
 }
 
+pub struct S3NoopStorage;
+
+impl StorageProvider for S3NoopStorage {
+    type Object = CrateObject;
+
+    type ObjectId = CrateId;
+
+    async fn get(&self, by: Self::ObjectId) -> Result<Self::Object, object_store::Error> {
+        Ok(bytes::Bytes::new().into())
+    }
+
+    async fn put(
+        &self,
+        object: Option<Self::Object>,
+        by: Self::ObjectId,
+    ) -> Result<(), object_store::Error> {
+        Ok(())
+    }
+}
+
+
 pub mod fs {
 
     use object_store::local::LocalFileSystem;

@@ -75,6 +75,7 @@ http-body-util = "0.1.2"
 sha256 = "1.5.0"
 object_store = {version = "0.11.2", features = ["aws"]}
 bytes = "1.10.0"
+futures = ""
 
 [profile.release]
 lto = "off"
