@@ -4,4 +4,4 @@ pub mod kellnr_crate_storage;
 pub mod storage;
 pub mod storage_error;
 pub mod storage_provider;
-pub mod providers;
+pub mod s3;

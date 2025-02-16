@@ -1,3 +1,5 @@
+use std::{error::Error, sync::Arc};
+
 use crate::{registry_error::RegistryError, search_params::SearchParams};
 use appstate::{CrateIoStorageState, DbState, SettingsState};
 use axum::{
@@ -9,6 +11,7 @@ use axum::{
 use common::{original_name::OriginalName, version::Version};
 use error::api_error::ApiResult;
 use reqwest::{Client, ClientBuilder, Url};
+use settings::log;
 use tracing::{error, trace, warn};
 
 static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
@@ -59,6 +62,7 @@ pub async fn download(
     Path((package, version)): Path<(OriginalName, Version)>,
     State(crate_storage): CrateIoStorageState,
     State(db): DbState,
+    State(settings): SettingsState,
 ) -> Result<Vec<u8>, StatusCode> {
     let file_path = crate_storage.crate_path(&package.to_string(), &version.to_string());
 
@@ -68,58 +72,97 @@ pub async fn download(
         version,
         file_path.display()
     );
+    if settings.s3.enabled {
+        match crate_storage.get_file(file_path.clone()).await {
+            Some(file) => {
+                let normalized_name = package.to_normalized();
+                db.increase_cached_download_counter(&normalized_name, &version)
+                    .await
+                    .unwrap_or_else(|e| warn!("Failed to increase download counter: {}", e));
+                Ok(file)
+            }
+            None => {
+                let target = format!(
+                    "https://static.crates.io/crates/{}/{}/download",
+                    package, version
+                );
 
-    if !std::path::Path::exists(&file_path) {
-        let target = format!(
-            "https://static.crates.io/crates/{}/{}/download",
-            package, version
-        );
-        trace!(
-            "Crate not found on disk, downloading from crates.io: {}",
-            target
-        );
-        match CLIENT.get(target).send().await {
-            Ok(response) => match response.status() == 200 {
-                true => match response.bytes().await {
-                    Ok(crate_data) => {
-                        // Check again after the download, as another thread maybe
-                        // added the crate already to disk and we can skip the step.
-                        if !std::path::Path::exists(&file_path) {
-                            if let Err(e) = crate_storage
-                                .add_bin_package(&package, &version, &crate_data)
-                                .await
-                            {
-                                error!("Failed to save crate to disk: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to get crate data from response: {}", e);
-                        return Err(StatusCode::NOT_FOUND);
-                    }
-                },
-                // crates.io returned a 404 or another error -> Return NotFound
-                false => return Err(StatusCode::NOT_FOUND),
-            },
-            Err(e) => {
-                error!("Failed to download crate from crates.io: {}", e);
-                return Err(StatusCode::NOT_FOUND);
+                let res = CLIENT.get(target).send().await.map_err(log_return_error)?;
+                let crate_data = res.bytes().await.map_err(log_return_error)?;
+                let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
+                let _save = crate_storage
+                    .add_bin_package(&package, &version, crate_data.clone())
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to save crate to disk: {}", e);
+                        StatusCode::UNPROCESSABLE_ENTITY
+                    })?;
+
+                crate_storage
+                    .get_file(file_path)
+                    .await
+                    .ok_or(StatusCode::NOT_FOUND)
             }
         }
     } else {
-        trace!("Crate found in cache, skipping download");
-    }
-
-    match crate_storage.get_file(file_path).await {
-        Some(file) => {
-            let normalized_name = package.to_normalized();
-            db.increase_cached_download_counter(&normalized_name, &version)
-                .await
-                .unwrap_or_else(|e| warn!("Failed to increase download counter: {}", e));
-            Ok(file)
+        if !std::path::Path::exists(&file_path) {
+            let target = format!(
+                "https://static.crates.io/crates/{}/{}/download",
+                package, version
+            );
+            trace!(
+                "Crate not found on disk, downloading from crates.io: {}",
+                target
+            );
+            match CLIENT.get(target).send().await {
+                Ok(response) => match response.status() == 200 {
+                    true => match response.bytes().await {
+                        Ok(crate_data) => {
+                            // Check again after the download, as another thread maybe
+                            // added the crate already to disk and we can skip the step.
+                            if !std::path::Path::exists(&file_path) {
+                                let arced: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
+                                if let Err(e) = crate_storage
+                                    .add_bin_package(&package, &version, arced.clone())
+                                    .await
+                                {
+                                    error!("Failed to save crate to disk: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to get crate data from response: {}", e);
+                            return Err(StatusCode::NOT_FOUND);
+                        }
+                    },
+                    // crates.io returned a 404 or another error -> Return NotFound
+                    false => return Err(StatusCode::NOT_FOUND),
+                },
+                Err(e) => {
+                    error!("Failed to download crate from crates.io: {}", e);
+                    return Err(StatusCode::NOT_FOUND);
+                }
+            }
+        } else {
+            trace!("Crate found in cache, skipping download");
         }
-        None => Err(StatusCode::NOT_FOUND),
+
+        match crate_storage.get_file(file_path).await {
+            Some(file) => {
+                let normalized_name = package.to_normalized();
+                db.increase_cached_download_counter(&normalized_name, &version)
+                    .await
+                    .unwrap_or_else(|e| warn!("Failed to increase download counter: {}", e));
+                Ok(file)
+            }
+            None => Err(StatusCode::NOT_FOUND),
+        }
     }
+}
+
+fn log_return_error<E: Error>(e: E) -> StatusCode {
+    error!("Failure while crate download...: {}", e);
+    return StatusCode::NOT_FOUND;
 }
 
 #[cfg(test)]

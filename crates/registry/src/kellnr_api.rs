@@ -267,7 +267,7 @@ pub async fn publish(
     // Set SHA256 from crate file
     let version = Version::try_from(&pub_data.metadata.vers)?;
     let cksum = cs
-        .add_bin_package(&orig_name, &version, &pub_data.cratedata)
+        .add_bin_package(&orig_name, &version, pub_data.cratedata.clone())
         .await?;
 
     let created = Utc::now();

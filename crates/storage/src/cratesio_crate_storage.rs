@@ -7,7 +7,12 @@ pub struct CratesIoCrateStorage(CachedCrateStorage);
 impl CratesIoCrateStorage {
     pub async fn new(settings: &Settings) -> Result<Self, StorageError> {
         Ok(Self(
-            CachedCrateStorage::new(settings.crates_io_bin_path(), settings).await?,
+            CachedCrateStorage::new(
+                settings.crates_io_bin_path(),
+                settings,
+                settings.s3.enabled.into(),
+            )
+            .await?,
         ))
     }
 }

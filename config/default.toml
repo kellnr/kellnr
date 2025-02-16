@@ -89,7 +89,7 @@ pwd = ""
 
 
 [s3]
-enabled = false
+enabled = true
 access_key = "minioadmin"
 secret_key = "minioadmin"
 bucket = "rust-crates"

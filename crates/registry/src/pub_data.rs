@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::registry_error::RegistryError;
 use appstate::AppStateData;
 use axum::body::{Body, Bytes};
@@ -12,7 +14,7 @@ pub struct PubData {
     pub metadata_length: u32,
     pub metadata: PublishMetadata,
     pub crate_length: u32,
-    pub cratedata: Vec<u8>,
+    pub cratedata: Arc<[u8]>,
 }
 
 fn convert_raw_metadata_to_string(raw_data: &[u8]) -> Result<String, RegistryError> {
@@ -62,7 +64,7 @@ impl FromRequest<AppStateData, Body> for PubData {
         let metadata: PublishMetadata = deserialize_metadata(&data_bytes[4..metadata_end])?;
         let crate_length = convert_length(&data_bytes[metadata_end..(metadata_end + 4)])?;
         let crate_end = metadata_end + 4 + (crate_length as usize);
-        let cratedata: Vec<u8> = data_bytes[metadata_end + 4..crate_end].to_vec();
+        let cratedata = Arc::from(data_bytes[metadata_end + 4..crate_end].to_vec());
 
         let pub_data = PubData {
             metadata_length,

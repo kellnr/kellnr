@@ -7,7 +7,8 @@ pub struct KellnrCrateStorage(CachedCrateStorage);
 impl KellnrCrateStorage {
     pub async fn new(settings: &Settings) -> Result<Self, StorageError> {
         Ok(Self(
-            CachedCrateStorage::new(settings.bin_path(), settings).await?,
+            CachedCrateStorage::new(settings.bin_path(), settings, settings.s3.enabled.into())
+                .await?,
         ))
     }
 
