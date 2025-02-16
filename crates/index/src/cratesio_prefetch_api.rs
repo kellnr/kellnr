@@ -214,7 +214,7 @@ async fn cratesio_prefetch_thread(
 ) {
     loop {
         if let Some((name, metadata, desc, etag, last_modified)) =
-            get_insert_data(&cache, &channel).await
+            handle_cratesio_prefetch_msg(&cache, &channel, &db).await
         {
             trace!("Update crates.io prefetch data for {}", name);
             if let Err(e) = db
@@ -267,9 +267,10 @@ async fn convert_index_data(
     }
 }
 
-async fn get_insert_data(
+async fn handle_cratesio_prefetch_msg(
     cache: &Cache<OriginalName, String>,
     channel: &flume::Receiver<CratesioPrefetchMsg>,
+    db: &Arc<impl DbProvider>,
 ) -> Option<(
     OriginalName,
     Vec<IndexMetadata>,
@@ -297,6 +298,17 @@ async fn get_insert_data(
                     .await;
                 fetch_index_data(msg.name, msg.etag, msg.last_modified).await
             }
+        }
+        Ok(CratesioPrefetchMsg::IncDownloadCnt(msg)) => {
+            trace!(
+                "Incrementing download count for {} {}",
+                msg.name,
+                msg.version
+            );
+            db.increase_cached_download_counter(&msg.name, &msg.version)
+                .await
+                .unwrap_or_else(|e| warn!("Failed to increase download counter: {}", e));
+            None
         }
         Err(e) => {
             error!("Could not receive prefetch message: {}", e);

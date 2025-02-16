@@ -1,4 +1,4 @@
-use crate::original_name::OriginalName;
+use crate::{normalized_name::NormalizedName, original_name::OriginalName, version::Version};
 
 pub struct InsertData {
     pub name: OriginalName,
@@ -13,7 +13,13 @@ pub struct UpdateData {
     pub last_modified: Option<String>,
 }
 
+pub struct DownloadData {
+    pub name: NormalizedName,
+    pub version: Version,
+}
+
 pub enum CratesioPrefetchMsg {
     Insert(InsertData),
     Update(UpdateData),
+    IncDownloadCnt(DownloadData),
 }
