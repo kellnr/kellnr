@@ -29,7 +29,7 @@
     "vue-class-component": "^8.0.0-0",
     "vue-router": "^4.2.5",
     "vue3-highlightjs": "^1.0.5",
-    "pinia": "^2.1.7",
+    "pinia": "^3.0.1",
     "pinia-plugin-persistedstate": "^4.0.0"
   },
   "devDependencies": {
