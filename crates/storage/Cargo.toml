@@ -26,3 +26,5 @@ url.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
+rm_rf.workspace = true
+testcontainers.workspace = true

@@ -234,7 +234,7 @@ pub async fn download(
         warn!("Failed to increase download counter: {}", e);
     }
 
-    match cs.get_file(file_path).await {
+    match cs.get_file(file_path.as_str()).await {
         Some(file) => Ok(file),
         None => Err(RegistryError::CrateNotFound.into()),
     }

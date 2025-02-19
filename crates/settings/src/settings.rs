@@ -95,6 +95,15 @@ impl Settings {
     pub fn crates_io_bin_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.registry.data_dir).join("cratesio")
     }
+    pub fn crates_io_path(&self) -> String {
+        format!("{}/cratesio", &self.registry.data_dir)
+    }
+
+    pub fn crates_path(&self) -> String {
+        format!("{}/cratesio", &self.registry.data_dir)
+    }
+
+
 }
 
 pub fn get_settings() -> Result<Settings, ConfigError> {

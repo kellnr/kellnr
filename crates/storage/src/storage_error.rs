@@ -1,4 +1,4 @@
-use std::{io::ErrorKind, path::PathBuf};
+use std::path::PathBuf;
 
 use thiserror::Error;
 
@@ -23,7 +23,7 @@ pub enum StorageError {
     #[error("Failed to create doc queue sub-path {0:?}: {1}")]
     CreateDocQueuePath(PathBuf, std::io::Error),
     #[error("Failed to remove file {0:?} from crate storage: {1}")]
-    RemoveFile(PathBuf, std::io::Error),
+    RemoveFile(String, std::io::Error),
     #[error("Failed to read crate metadata from file {0:?}: {1}")]
     ReadCrateMetadata(PathBuf, std::io::Error),
     #[error("File does not exist: {0:?}")]
@@ -37,7 +37,7 @@ pub enum StorageError {
     #[error("Failed to flush file {0:?}: {1}")]
     FlushCrateFile(PathBuf, std::io::Error),
     #[error("Failed to init s3 storage. Reason: {0}")]
-    S3StorageInitError(String),
+    StorageInitError(String),
     #[error("S3 Error... Reason: {0}")]
-    S3GenericError(String)
+    GenericError(String),
 }
