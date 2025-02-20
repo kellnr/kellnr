@@ -36,8 +36,8 @@ pub enum StorageError {
     ReadFileHandle(std::io::Error),
     #[error("Failed to flush file {0:?}: {1}")]
     FlushCrateFile(PathBuf, std::io::Error),
-    #[error("Failed to init s3 storage. Reason: {0}")]
+    #[error("Failed to init storage provider. Reason: {0}")]
     StorageInitError(String),
-    #[error("S3 Error... Reason: {0}")]
+    #[error("Error from storage provider. Reason: {0}")]
     GenericError(String),
 }

@@ -100,7 +100,7 @@ impl Settings {
     }
 
     pub fn crates_path(&self) -> String {
-        format!("{}/cratesio", &self.registry.data_dir)
+        format!("{}/crates", &self.registry.data_dir)
     }
 
 

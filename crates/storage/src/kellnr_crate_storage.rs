@@ -18,9 +18,9 @@ impl KellnrCrateStorage {
         crate_version: &Version,
     ) -> Result<(), StorageError> {
         let path = self.0.crate_path(crate_name, crate_version);
-        tokio::fs::remove_file(&path)
-            .await
-            .map_err(|e| StorageError::RemoveFile(path.clone(), e))?;
+
+        println!("PATH: {}", path);
+        println!("Name: {}", crate_name);
         self.remove_bin(crate_name, crate_version).await?;
         Ok(())
     }

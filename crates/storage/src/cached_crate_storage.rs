@@ -28,11 +28,12 @@ impl CachedCrateStorage {
                 enabled: _,
                 access_key,
                 secret_key,
-                bucket: _,
                 region,
                 endpoint,
                 allow_http,
             } = &settings.s3;
+
+            println!("CRATE FOLDER: {}", crate_folder);
             let mut bucket: Vec<&str> = crate_folder.split("/").collect();
             bucket.reverse();
             let bucket = bucket
@@ -71,7 +72,7 @@ impl CachedCrateStorage {
         name: &OriginalName,
         version: &Version,
     ) -> Result<(), StorageError> {
-        let crate_path = self.crate_path(name.as_str(), version.as_str());
+        let crate_path = self.crate_path(name, version);
         self.storage.put(&crate_path, None).await.map_err(|e| {
             StorageError::GenericError(format!(
                 "Error while removing bin from storage. Error: {}",
@@ -92,6 +93,9 @@ impl CachedCrateStorage {
             .put(&crate_path, Some(crate_data.clone().to_vec().into()))
             .await
             .map_err(|e| {
+                if let object_store::Error::AlreadyExists { path: _, source: _ } = e {
+                    return StorageError::CrateExists(name.to_string(), version.to_string());
+                }
                 StorageError::GenericError(format!("Error while adding bin package. Error: {}", e))
             })?;
 
