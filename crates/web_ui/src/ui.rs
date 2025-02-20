@@ -199,7 +199,7 @@ pub async fn delete_crate(
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
 
-        if let Err(e) = state.crate_storage.delete(&name, &cm.version).await {
+        if let Err(e) = state.crate_storage.delete(&name, &version).await {
             error!("Failed to delete crate from storage: {}", e);
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }

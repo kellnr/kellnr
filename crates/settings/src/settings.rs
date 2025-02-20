@@ -14,6 +14,7 @@ use crate::origin::Origin;
 use crate::postgresql::Postgresql;
 use crate::proxy::Proxy;
 use crate::registry::Registry;
+use crate::s3::S3;
 use crate::setup::Setup;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Default, Clone)]
@@ -26,6 +27,7 @@ pub struct Settings {
     pub local: Local,
     pub origin: Origin,
     pub postgresql: Postgresql,
+    pub s3: S3,
 }
 
 impl TryFrom<&Path> for Settings {
@@ -93,6 +95,15 @@ impl Settings {
     pub fn crates_io_bin_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.registry.data_dir).join("cratesio")
     }
+    pub fn crates_io_path(&self) -> String {
+        format!("{}/cratesio", &self.registry.data_dir)
+    }
+
+    pub fn crates_path(&self) -> String {
+        format!("{}/crates", &self.registry.data_dir)
+    }
+
+
 }
 
 pub fn get_settings() -> Result<Settings, ConfigError> {
