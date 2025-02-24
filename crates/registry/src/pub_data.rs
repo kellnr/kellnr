@@ -109,7 +109,6 @@ mod bin_tests {
                 },
                 ..Settings::default()
             };
-            //fs::create_dir_all(&settings.bin_path()).expect("Cannot create test bin directory.");
             let crate_storage = KellnrCrateStorage::new(&settings).await.unwrap();
             TestBin {
                 settings,
