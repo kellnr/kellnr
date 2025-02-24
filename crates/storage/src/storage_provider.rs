@@ -1,4 +1,4 @@
-use std::{fmt::format, path::PathBuf};
+use std::path::PathBuf;
 
 use bytes::Bytes;
 use moka::future::Cache;
@@ -154,25 +154,19 @@ impl S3Storage {
     async fn get(&self, key: &str) -> Result<Bytes, object_store::Error> {
         let path = Self::try_path_from(key)?;
         println!("SEARCHING BY: {}", &path);
-        let get_result = self.0.get(&path).await?;
+        let get_result = self.0.get(&path).await.expect("GOT ERROR!!!");
+        println!("FOUND {:?}", get_result);
         let res = get_result.bytes().await?;
 
         Ok(res)
     }
 
     async fn put(&self, key: &str, object: Option<Bytes>) -> Result<(), object_store::Error> {
-        
         let path = Self::try_path_from(key)?;
 
-        
         if let Some(object) = object {
             println!("Request to PUT... KEY: {}, object: {:?}", key, object);
             println!("Inserting by path: {}", &path);
-            // return self
-            //     .0
-            //     .put_opts(&path, object.clone().into(), PutMode::Create.into())
-            //     .await
-            //     .map(|_| ());
 
             if let Err(object_store::Error::NotFound { path: _, source: _ }) = self
                 .0
