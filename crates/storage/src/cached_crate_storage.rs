@@ -32,8 +32,6 @@ impl CachedCrateStorage {
                 endpoint,
                 allow_http,
             } = &settings.s3;
-
-            println!("CRATE FOLDER: {}", crate_folder);
             let mut bucket: Vec<&str> = crate_folder.split("/").collect();
             bucket.reverse();
             let bucket = bucket
@@ -54,6 +52,14 @@ impl CachedCrateStorage {
             .map_err(|e| StorageError::StorageInitError(e.to_string()))?
             .into()
         } else {
+            let path = std::path::Path::new(crate_folder);
+            if !path.exists() {
+                DirBuilder::new()
+                    .recursive(true)
+                    .create(&crate_folder)
+                    .await
+                    .map_err(|e| StorageError::CreateBinPath(path.to_path_buf(), e))?;
+            }
             FSStorage::new(crate_folder, settings.registry.cache_size)
                 .map_err(|e| StorageError::StorageInitError(e.to_string()))?
                 .into()

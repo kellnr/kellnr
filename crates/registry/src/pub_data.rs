@@ -84,7 +84,7 @@ mod bin_tests {
     use common::publish_metadata::PublishMetadata;
     use common::version::Version;
     use settings::Settings;
-    
+
     use std::{convert::TryFrom, path::Path};
     use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tokio::fs::File;
@@ -140,17 +140,14 @@ mod bin_tests {
             .await;
         let result_crate = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
 
-        let mut file = File::open(&result_crate)
+        let get_res = test_storage
+            .crate_storage
+            .get_file(result_crate.to_str().unwrap())
             .await
-            .expect("Cannot open written test crate");
-        let mut data: Vec<u8> = Vec::new();
-        file.read_to_end(&mut data)
-            .await
-            .expect("Cannot read written test crate.");
+            .expect("Couldn't find file...");
 
         assert!(result.is_ok());
-        assert!(result_crate.exists());
-        assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], data);
+        assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], get_res);
 
         test_storage.clean();
     }
@@ -174,17 +171,15 @@ mod bin_tests {
         let result_crate = Path::new(&test_storage.settings.bin_path())
             .join("Test_Add_crate_binary_Upper-Case-0.1.0.crate");
 
-        let mut file = File::open(&result_crate)
+        let get_res = test_storage
+            .crate_storage
+            .get_file(result_crate.to_str().unwrap())
             .await
-            .expect("Cannot open written test crate");
-        let mut data: Vec<u8> = Vec::new();
-        file.read_to_end(&mut data)
-            .await
-            .expect("Cannot read written test crate.");
+            .expect("Couldn't find file...");
 
         assert!(result.is_ok());
-        assert!(result_crate.exists());
-        assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], data);
+
+        assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], get_res);
         test_storage.clean();
     }
 

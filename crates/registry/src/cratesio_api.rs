@@ -86,7 +86,15 @@ pub async fn download(
                 package, version
             );
 
-            let res = CLIENT.get(target).send().await.map_err(log_return_error)?;
+            let res = match CLIENT.get(target).send().await {
+                Ok(resp) if resp.status() != 200 => Err(StatusCode::NOT_FOUND),
+                Ok(resp) => Ok(resp),
+                Err(e) => {
+                    error!("Encountered error... {}", e);
+                    Err(StatusCode::NOT_FOUND)
+                }
+            }?;
+
             let crate_data = res.bytes().await.map_err(log_return_error)?;
             let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
             let _save = crate_storage
@@ -107,7 +115,7 @@ pub async fn download(
 
 fn log_return_error<E: Error>(e: E) -> StatusCode {
     error!("Failure while crate download...: {}", e);
-    return StatusCode::NOT_FOUND;
+    StatusCode::NOT_FOUND
 }
 
 #[cfg(test)]

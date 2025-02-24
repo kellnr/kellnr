@@ -79,7 +79,6 @@ async fn add_remove_crate() {
         .to_string();
     let host = format!("http://{}:{}", host, port);
 
-    println!("HOST: {}", host);
     let cratedata = Arc::new([0x00, 0x11, 0x22, 0x33, 0x44]);
 
     let test_storage = TestBin::from("test_add_crate_binary", &host).await;

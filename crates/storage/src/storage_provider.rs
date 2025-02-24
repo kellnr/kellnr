@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 use bytes::Bytes;
 use moka::future::Cache;
@@ -34,8 +34,8 @@ impl Storage {
 
 pub struct FSStorage(LocalFileSystem, Option<CrateCache>);
 impl FSStorage {
-    pub fn new(prefix: &str, cache_size: u64) -> Result<Self, anyhow::Error> {
-        let client = LocalFileSystem::new_with_prefix(prefix)?;
+    pub fn new(path: &str, cache_size: u64) -> Result<Self, anyhow::Error> {
+        let client = LocalFileSystem::new_with_prefix(path)?;
         let cache = if cache_size > 0 {
             Some(Cache::new(cache_size))
         } else {
@@ -85,8 +85,17 @@ impl FSStorage {
 
         match object {
             Some(object) => {
-                self.storage().put(&Path::from(key), object.into()).await?;
-                self.invalidate_path(&path).await;
+                self.storage()
+                    .put_opts(
+                        &Path::from(key),
+                        object.clone().into(),
+                        PutMode::Create.into(),
+                    )
+                    .await?;
+
+                if let Some(cache) = self.cache() {
+                    cache.insert(path, object.to_vec()).await;
+                }
                 Ok(())
             }
             None => {
@@ -126,8 +135,6 @@ impl S3Storage {
         secret_access_key: &str,
         allow_http: bool,
     ) -> Result<Self, anyhow::Error> {
-        println!("created bucket name: {:?}", bucket_name);
-
         let client = AmazonS3Builder::new()
             .with_endpoint(url)
             .with_bucket_name(bucket_name)
@@ -153,9 +160,7 @@ impl S3Storage {
 
     async fn get(&self, key: &str) -> Result<Bytes, object_store::Error> {
         let path = Self::try_path_from(key)?;
-        println!("SEARCHING BY: {}", &path);
         let get_result = self.0.get(&path).await.expect("GOT ERROR!!!");
-        println!("FOUND {:?}", get_result);
         let res = get_result.bytes().await?;
 
         Ok(res)
@@ -165,27 +170,18 @@ impl S3Storage {
         let path = Self::try_path_from(key)?;
 
         if let Some(object) = object {
-            println!("Request to PUT... KEY: {}, object: {:?}", key, object);
-            println!("Inserting by path: {}", &path);
-
-            if let Err(object_store::Error::NotFound { path: _, source: _ }) = self
+            if let Err(object_store::Error::AlreadyExists { path: _, source: _ }) = self
                 .0
                 .put_opts(&path, object.clone().into(), PutMode::Create.into())
                 .await
             {
-                println!("Error encountered. try fallback");
                 self.0
-                    .put_opts(&path, object.into(), PutMode::Create.into())
-                    .await
-                    .map_err(|e| {
-                        println!("ERROR WHILE CREATE: {}", e);
-                        e
-                    })?;
+                    .put_opts(&path, object.into(), PutMode::Overwrite.into())
+                    .await?;
                 return Ok(());
             }
             return Ok(());
         }
-        println!("Request to DELETE... KEY: {}, object: {:?}", key, object);
         self.0.delete(&path).await?;
         Ok(())
     }
