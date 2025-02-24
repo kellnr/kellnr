@@ -82,16 +82,16 @@ router.beforeEach(async (to) => {
   if (await auth_required()) {
     if (to.matched.some(record => record.meta.requiresAuth)) {
       if (!store.loggedIn) {
-        console.log("Auth required. Redirecting to login page.");
+        console.debug("Auth required. Redirecting to login page.");
         return { name: 'Login' }
       }
       else {
-        console.log("Auth required. User is authenticated.");
+        console.debug("Auth required. User is authenticated.");
       }
     }
   }
   else {
-    console.log("Auth not required.");
+    console.debug("Auth not required.");
   }
 });
 
