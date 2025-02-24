@@ -41,7 +41,7 @@ serde = {version = "1.0.218", features = ["derive"]}
 sysinfo = "0.32.0"
 semver = "1.0.25"
 regex = "1.11.1"
-serde_json = "1.0.138"
+serde_json = "1.0.139"
 mockall = "0.13.1"
 rand = "0.8.5"
 chrono = "0.4.39"
