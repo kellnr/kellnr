@@ -1,7 +1,6 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
-// @ts-ignore
 import VueHighlightJS from 'vue3-highlightjs'; // https://www.npmjs.com/package/vue3-highlightjs
 import axios from 'axios';
 import VueAxios from 'vue-axios';

@@ -3,7 +3,7 @@
     <div id="statSearch" class="glass">
       <div id="search">
         <input class="input is-info" v-model="searchText" v-on:keyup.enter="searchCrates(searchText)"
-          placeholder="Search for crates" type="text"></input>
+          placeholder="Search for crates" type="text">
         <div id="cacheSwitch">
           <label class="inline-block-child switch">
             <input type="checkbox" v-model="store.searchCache" v-on:change="getCrates(0, page_size, true)" >
@@ -130,7 +130,7 @@ function searchCrates(searchText: string) {
       clearTable();
       crates.value = res.data.crates;
     })
-    .catch((_error) => {
+    .catch(() => {
       clearTable();
       getCrates(page.value, page_size.value);
     });

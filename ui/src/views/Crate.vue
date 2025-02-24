@@ -364,8 +364,6 @@ function deleteCrateUser(name: string) {
 
 function getCrateUsers() {
   axios
-    // disable caching to get updated token list (TS doesn't recognize cache option)
-    // @ts-ignore
     .get(CRATE_USERS(crate.value.name), { cache: false })
     .then((res) => {
       if (res.status == 200) {
@@ -386,7 +384,7 @@ function deleteVersion(crate: string, version: string) {
           version: version
         }
       }
-    ).then((_response) => {
+    ).then(() => {
       router.push({ name: "Crates" })
     }).catch((error) => {
       console.log(error);
@@ -402,7 +400,7 @@ function deleteCrate(crate: string) {
           name: crate,
         }
       }
-    ).then((_response) => {
+    ).then(() => {
       router.push({ name: "Crates" })
     }).catch((error) => {
       console.log(error);
@@ -422,7 +420,7 @@ function showBuildRustdoc(): boolean {
 
 function buildDoc(crate: string, version: string) {
   axios.post(DOCS_BUILD, null, { params: { package: crate, version: version } })
-    .then((_res) => {
+    .then(() => {
       router.push({ name: "DocQueue" })
     })
     .catch((error) => {
@@ -470,8 +468,6 @@ function getCrateData(name: string, version?: string) {
 
 function getCrateAccessData() {
   axios
-    // disable caching to get updated token list (TS doesn't recognize cache option)
-    // @ts-ignore
     .get(CRATE_ACCESS_DATA(crate.value.name), { cache: false })
     .then((response) => {
       crate_access.value = response.data;
@@ -491,24 +487,24 @@ function setCrateAccessData() {
     .put(CRATE_ACCESS_DATA(crate.value.name), putData)
     .then((res) => {
       if (res.status == 200) {
-        changeCrateAccessStatus.value = "Success";
-        changeCrateAccessMsg.value = "Crate access data successfully changed.";
+        changeCrateAccessStatus.value = "Success"; // eslint-disable-line no-undef
+        changeCrateAccessMsg.value = "Crate access data successfully changed."; // eslint-disable-line no-undef
         // Update user list
         getCrateAccessData();
       }
     })
     .catch((error) => {
       if (error.response) {
-        changeCrateAccessStatus.value = "Error";
-        changeCrateAccessMsg.value = "Crate access data could not be changed.";
+        changeCrateAccessStatus.value = "Error"; // eslint-disable-line no-undef
+        changeCrateAccessMsg.value = "Crate access data could not be changed."; // eslint-disable-line no-undef
 
         if (error.response.status == 404) {
           // "Unauthorized. Login first."
           router.push("/login");
         } else if (error.response.status == 500) {
-          changeCrateAccessMsg.value = "Crate access data could not be changed";
+          changeCrateAccessMsg.value = "Crate access data could not be changed"; // eslint-disable-line no-undef
         } else {
-          changeCrateAccessMsg.value = "Unknown error";
+          changeCrateAccessMsg.value = "Unknown error"; // eslint-disable-line no-undef
         }
       }
     });
@@ -544,7 +540,7 @@ onBeforeMount(() => {
 
 // Watches route changes and reloads the data.
 // Needed, if the query parameter "name=crate" changes.
-watch(route, (_oldRoute, _newRoute) => {
+watch(route, () => {
   getAllData()
   changeTab(defaultTab.value)
 })

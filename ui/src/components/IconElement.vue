@@ -11,7 +11,7 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{
+defineProps<{
   icon: string
   title: string
 }>()

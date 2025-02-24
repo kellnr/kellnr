@@ -2,7 +2,7 @@
   <div class="field has-addons">
     <div class="control">
       <input
-        v-model="props.content"
+        v-model="copyContent"
         ref="input"
         class="input is-info k-copy-input"
         type="text"
@@ -34,7 +34,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-const props = defineProps({ content: { type: String, required: true } });
+const copyContent = defineModel({ type: String });
 
 type CopyIcon = "copy" | "success" | "failed";
 const copyIcon = ref<CopyIcon>("copy");
@@ -48,7 +48,7 @@ function copyToClipboard() {
   };
 
   navigator.clipboard
-    .writeText(props.content)
+    .writeText(copyContent.value)
     .then(() => {
       updateIconCb("success");
     })

@@ -12,7 +12,7 @@ export function login_required() {
     // Check if authentication is required
     // to view crates. -> "auth_required = true" in Kellnr settings.
 
-    axios.get(VERSION).then((_response) => {
+    axios.get(VERSION).then(() => {
       // do nothing -> no auth required
     }).catch((error) => {
       if (error.response.status === 401) {

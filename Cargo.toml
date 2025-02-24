@@ -88,7 +88,7 @@ strip = true
 # Profile for the CI build in "release"
 # to build as fast as possible
 [profile.ci-release]
-lto = "on"
+lto = "thin"
 inherits = "release"
 incremental = false
 

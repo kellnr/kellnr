@@ -1,6 +1,5 @@
 import { createApp } from 'vue'
 import App from './App.vue'
-// @ts-ignore
 import VueHighlightJS from 'vue3-highlightjs' // https://www.npmjs.com/package/vue3-highlightjs
 import Axios from 'axios'
 import { setupCache } from 'axios-cache-interceptor';
@@ -23,6 +22,6 @@ createApp(App)
     .use(pinia)
     .use(router)
     .use(VueHighlightJS)
-    // @ts-ignore
+    // @ts-expect-error TS doesn't recognize cache option
     .use(VueAxios, axios)
     .mount('#app')

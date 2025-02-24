@@ -264,6 +264,34 @@ pub async fn publish(
         }
     }
 
+    // Skip serializing if no fields to check
+    if !settings.registry.required_crate_fields.is_empty() {
+        let pkg_metadata = match serde_json::to_value(&pub_data.metadata)
+            .map_err(|err| RegistryError::InvalidMetadataString(err))?
+        {
+            serde_json::Value::Object(map) => map,
+            _ => unreachable!(), // SAFETY: pub_data.metadata remains a struct
+        };
+
+        let mut missing_fields = Vec::new();
+
+        for field in &settings.registry.required_crate_fields {
+            // If field is null or not present, complain
+            if let Some(serde_json::Value::Null) | None = pkg_metadata.get(field) {
+                missing_fields.push(field.clone())
+            }
+        }
+
+        if !missing_fields.is_empty() {
+            return Err(RegistryError::MissingRequiredFields(
+                pub_data.metadata.name,
+                missing_fields,
+                settings.registry.required_crate_fields.clone(),
+            )
+            .into());
+        }
+    }
+
     // Set SHA256 from crate file
     let version = Version::try_from(&pub_data.metadata.vers)?;
     let cksum = cs
@@ -802,6 +830,117 @@ mod reg_api_tests {
         assert_eq!(
             "0.2.0",
             kellnr.db.get_crate_meta_list(1).await.unwrap()[0].version
+        );
+    }
+
+    #[tokio::test]
+    async fn publish_crate_with_missing_one_required_field() {
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let mut settings = get_settings();
+        settings.registry.required_crate_fields = vec!["repository".to_string()];
+
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get the empty success results message.
+        let response_status = r.status();
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(
+            r#"ERROR: Required field(s) not defined for crate test_lib, missing: ["repository"], requires: ["repository"]"#,
+            error.errors[0].detail
+        );
+    }
+
+    #[tokio::test]
+    async fn publish_crate_with_missing_multiple_required_fields() {
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let mut settings = get_settings();
+        settings.registry.required_crate_fields =
+            vec!["repository".to_string(), "license".to_string()];
+
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get the empty success results message.
+        let response_status = r.status();
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(
+            r#"ERROR: Required field(s) not defined for crate test_lib, missing: ["repository", "license"], requires: ["repository", "license"]"#,
+            error.errors[0].detail
+        );
+    }
+
+    // Missing some but not all required fields
+    #[tokio::test]
+    async fn publish_crate_with_some_required_fields() {
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let mut settings = get_settings();
+        settings.registry.required_crate_fields =
+            vec!["repository".to_string(), "authors".to_string()];
+
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get the empty success results message.
+        let response_status = r.status();
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(
+            r#"ERROR: Required field(s) not defined for crate test_lib, missing: ["repository"], requires: ["repository", "authors"]"#,
+            error.errors[0].detail
         );
     }
 

@@ -7,7 +7,7 @@
     </p>
   </div>
   <div id="docQueueItems">
-    <template v-for="(item, index) in queue" :key="name">
+    <template v-for="(item, index) in queue" :key="item">
       <doc-queue-item-card :index="index+1" :name="item.name" :version="item.version"></doc-queue-item-card>
     </template>
   </div>
