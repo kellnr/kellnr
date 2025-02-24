@@ -53,7 +53,6 @@
 import StatisticsCard from "../components/StatisticsCard.vue";
 import {onBeforeMount, ref} from "vue";
 import axios from "axios";
-import {useRouter} from "vue-router";
 import {STATISTICS} from "../remote-routes";
 
 type Stat = {
@@ -74,7 +73,6 @@ const downloads = ref(0)
 const top1 = ref<Stat>(emptyStat)
 const top2 = ref<Stat>(emptyStat)
 const top3 = ref<Stat>(emptyStat)
-const router = useRouter()
 
 onBeforeMount(() => {
   getStats()

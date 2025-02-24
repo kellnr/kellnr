@@ -73,7 +73,7 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach(async (to, _from) => {
+router.beforeEach(async (to) => {
   const store = useStore();
 
   // Check if the "auth_required" setting is enabled in Kellnr.
