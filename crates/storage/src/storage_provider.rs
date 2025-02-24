@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 use bytes::Bytes;
 use moka::future::Cache;

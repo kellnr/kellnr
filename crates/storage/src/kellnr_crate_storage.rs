@@ -17,7 +17,6 @@ impl KellnrCrateStorage {
         crate_name: &OriginalName,
         crate_version: &Version,
     ) -> Result<(), StorageError> {
-        let path = self.0.crate_path(crate_name, crate_version);
         self.remove_bin(crate_name, crate_version).await?;
         Ok(())
     }

@@ -11,7 +11,6 @@ use axum::{
 use common::{original_name::OriginalName, version::Version};
 use error::api_error::ApiResult;
 use reqwest::{Client, ClientBuilder, Url};
-use settings::log;
 use tracing::{error, trace, warn};
 
 static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
