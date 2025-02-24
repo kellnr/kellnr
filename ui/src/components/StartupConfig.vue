@@ -21,6 +21,8 @@
       :value="settings.registry.max_db_connections"></startup-config-item>
     <startup-config-item tomlTable="registry" toml="auth_required" env="KELLNR_REGISTRY__AUTH_REQUIRED"
       :value="settings.registry.auth_required"></startup-config-item>
+    <startup-config-item tomlTable="registry" toml="required_crate_fields" env="KELLNR_REGISTRY__REQUIRED_CRATE_FIELDS"
+      :value="settings.registry.required_crate_fields"></startup-config-item>
   </div>
 
   <div class="settingsSection">
