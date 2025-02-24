@@ -37,7 +37,7 @@ storage = { path = "./crates/storage" }
 anyhow = "1.0.95"
 jsonwebtoken = "9.3.0"
 reqwest = {version = "0.12.12", features = ["json", "blocking", "gzip", "http2", "deflate"]}
-serde = {version = "1.0.217", features = ["derive"]}
+serde = {version = "1.0.218", features = ["derive"]}
 sysinfo = "0.32.0"
 semver = "1.0.25"
 regex = "1.11.1"
