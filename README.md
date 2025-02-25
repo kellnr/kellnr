@@ -18,7 +18,7 @@ The easiest way to get started is to use the Docker image. You can start **kelln
 ```bash
 docker run \
     -p 8000:8000 \
-    -e "KELLNR_ORIGIN__HOSTNAME=localhost" ghcr.io/kellnr/kellnr:5.2.5
+    -e "KELLNR_ORIGIN__HOSTNAME=localhost" ghcr.io/kellnr/kellnr:5
 ```
 
 Fore more information about how to configure and run **kellnr**, check out the [documentation](https://kellnr.io/documentation).
