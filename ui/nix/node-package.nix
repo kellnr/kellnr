@@ -175,22 +175,22 @@ let
         sha512 = "tFQoXHJdkEOSwj5tRIZSPNUuXK3RaR7T1nUrPgbYX1pUbvqqaaZAsfo+NXBPsz5rZMSKVFrgK1WL8Q/MSLvprg==";
       };
     };
-    "@esbuild/darwin-arm64-0.21.5" = {
+    "@esbuild/darwin-arm64-0.25.0" = {
       name = "_at_esbuild_slash_darwin-arm64";
       packageName = "@esbuild/darwin-arm64";
-      version = "0.21.5";
+      version = "0.25.0";
       src = fetchurl {
-        url = "https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.21.5.tgz";
-        sha512 = "DwqXqZyuk5AiWWf3UfLiRDJ5EDd49zg6O9wclZ7kUMv2WRFr4HKjXp/5t8JZ11QbQfUS6/cRCKGwYhtNAY88kQ==";
+        url = "https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.25.0.tgz";
+        sha512 = "mVwdUb5SRkPayVadIOI78K7aAnPamoeFR2bT5nszFUZ9P8UpK4ratOdYbZZXYSqPKMHfS1wdHCJk1P1EZpRdvw==";
       };
     };
-    "@esbuild/linux-arm64-0.21.5" = {
+    "@esbuild/linux-arm64-0.25.0" = {
       name = "_at_esbuild_slash_linux-arm64";
       packageName = "@esbuild/linux-arm64";
-      version = "0.21.5";
+      version = "0.25.0";
       src = fetchurl {
-        url = "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.21.5.tgz";
-        sha512 = "ibKvmyYzKsBeX8d8I7MH/TMfWDXBF3db4qM6sy+7re0YXya+K1cem3on9XgdT2EQGMu4hQyZhan7TeQ8XkGp4Q==";
+        url = "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.25.0.tgz";
+        sha512 = "9QAQjTWNDM/Vk2bgBl17yWuZxZNQIF0OUUuPZRKoDtqF2k4EtYbpyiG5/Dk7nqeK6kIJWPYldkOcBqjXjrUlmg==";
       };
     };
     "@eslint-community/eslint-utils-4.4.1" = {
@@ -3583,8 +3583,8 @@ let
       })
       sources."@babel/types-7.26.9"
       sources."@bufbuild/protobuf-2.2.3"
-      sources."@esbuild/darwin-arm64-0.21.5"
-      sources."@esbuild/linux-arm64-0.21.5"
+      sources."@esbuild/darwin-arm64-0.25.0"
+      sources."@esbuild/linux-arm64-0.25.0"
       (sources."@eslint-community/eslint-utils-4.4.1" // {
         dependencies = [
           sources."eslint-visitor-keys-3.4.3"
