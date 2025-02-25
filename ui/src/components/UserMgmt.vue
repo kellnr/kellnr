@@ -136,8 +136,7 @@ function addUser() {
 
 function getUsers() {
   axios
-      // @ts-ignore
-      .get(LIST_USERS, {cache: false}) // disable caching to get updated token list (TS doesn't recognize cache option)
+      .get(LIST_USERS, {cache: false})
       .then((res) => {
         if (res.status == 200) {
           items.value = res.data;

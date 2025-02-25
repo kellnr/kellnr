@@ -87,7 +87,7 @@ function setDescFromKellnr(crate: string) {
           fetched_desc.value = "Cannot fetch description.";
         }
       })
-      .catch((_error) => {
+      .catch(() => {
         fetched_desc.value = "Cannot fetch description.";
       });
 }
@@ -118,7 +118,7 @@ function openCratePage() {
 
 // Watches route changes and reloads the data.
 // Needed, if the query parameter "name=crate" changes.
-watch(route, (_oldRoute, _newRoute) => {
+watch(route, () => {
   setDesc(props.name, props.version, props.registry)
 })
 

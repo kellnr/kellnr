@@ -59,10 +59,6 @@ const props = defineProps<{
 const humanizedLastUpdated = computed(() => {
   return dayjs.utc(props.updated).fromNow();
 })
-
-function copyToCb(text: string) {
-  navigator.clipboard.writeText(text);
-}
 </script>
 
 <style scoped>

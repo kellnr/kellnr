@@ -30,6 +30,8 @@ pub enum RegistryError {
     NotCrateUser,
     #[error("Crate not found")]
     CrateNotFound,
+    #[error("Required field(s) not defined for crate {0}, missing: {1:?}, requires: {2:?}")]
+    MissingRequiredFields(String, Vec<String>, Vec<String>),
 }
 
 impl From<RegistryError> for ApiError {
