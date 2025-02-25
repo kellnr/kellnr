@@ -38,6 +38,12 @@ impl TryFrom<&String> for Version {
     }
 }
 
+impl AsRef<Version> for Version {
+    fn as_ref(&self) -> &Version {
+        self
+    }
+}
+
 impl Deref for Version {
     type Target = String;
 
