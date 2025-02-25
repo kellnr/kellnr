@@ -1,14 +1,18 @@
 use std::{error::Error, path::PathBuf, sync::Arc};
 
 use crate::{registry_error::RegistryError, search_params::SearchParams};
-use appstate::{CrateIoStorageState, DbState, SettingsState};
+use appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
 use axum::{
     extract::{Path, Request, State},
     http::StatusCode,
     middleware::Next,
     response::Response,
 };
-use common::{original_name::OriginalName, version::Version};
+use common::{
+    cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData},
+    original_name::OriginalName,
+    version::Version,
+};
 use error::api_error::ApiResult;
 use reqwest::{Client, ClientBuilder, Url};
 use tracing::{error, trace, warn};
@@ -60,7 +64,7 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
 pub async fn download(
     Path((package, version)): Path<(OriginalName, Version)>,
     State(crate_storage): CrateIoStorageState,
-    State(db): DbState,
+    State(sender): CratesIoPrefetchSenderState,
 ) -> Result<Vec<u8>, StatusCode> {
     let file_path = crate_storage.crate_path(&package.to_string(), &version.to_string());
 
@@ -73,10 +77,14 @@ pub async fn download(
 
     match crate_storage.get_file(file_path.as_str()).await {
         Some(file) => {
-            let normalized_name = package.to_normalized();
-            db.increase_cached_download_counter(&normalized_name, &version)
-                .await
-                .unwrap_or_else(|e| warn!("Failed to increase download counter: {}", e));
+            let msg = DownloadData {
+                name: package.into(),
+                version,
+            };
+            if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
+                warn!("Failed to send IncDownloadCnt message: {}", e);
+            }
+
             Ok(file)
         }
         None => {

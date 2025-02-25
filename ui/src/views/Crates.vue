@@ -4,14 +4,17 @@
       <div id="search">
         <input class="input is-info" v-model="searchText" v-on:keyup.enter="searchCrates(searchText)"
           placeholder="Search for crates" type="text"></input>
-        <div id="cacheSwitch">
-          <label class="inline-block-child switch">
-            <input type="checkbox" v-model="store.searchCache" v-on:change="getCrates(0, page_size, true)" >
-            <span class="slider round"></span>
-          </label>
-          <span id="cacheSwitchLabel" class="inline-block-child">
-            Cache
-          </span>
+        <div class="crateIconInfo tooltip">
+          <div id="cacheSwitch">
+            <label class="inline-block-child switch">
+              <input type="checkbox" v-model="store.searchCache" v-on:change="getCrates(0, page_size, true)">
+              <span class="slider round"></span>
+            </label>
+            <span id="cacheSwitchLabel" class="inline-block-child">
+              Crates proxy
+            </span>
+            <span class="tooltiptext">Display crates from the crates.io proxy</span>
+          </div>
         </div>
       </div>
     </div>
@@ -24,7 +27,8 @@
       </div>
       <template v-for="crate in crates" :key="crate">
         <crate-card class="cardview" :crate="crate.name" :version="crate.version" :updated="crate.date"
-          :downloads="crate.total_downloads" :desc="crate.description" :doc-link="crate.documentation" :is-cache="crate.is_cache"></crate-card>
+          :downloads="crate.total_downloads" :desc="crate.description" :doc-link="crate.documentation"
+          :is-cache="crate.is_cache"></crate-card>
       </template>
     </div>
   </div>
@@ -37,7 +41,6 @@ import CrateCard from "../components/CrateCard.vue"
 import type { CrateOverview } from "../types/crate_overview";
 import { CRATES, SEARCH } from "../remote-routes";
 import { useRouter } from "vue-router";
-import { login_required } from "../common/auth";
 import { useStore } from "../store/store";
 
 const crates = ref<Array<CrateOverview>>([])
@@ -51,7 +54,6 @@ const router = useRouter()
 const store = useStore()
 
 onBeforeMount(() => {
-  login_required()
 
   if (router.currentRoute.value.query.search) {
     searchText.value = router.currentRoute.value.query.search as string
