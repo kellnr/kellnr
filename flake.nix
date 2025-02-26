@@ -7,15 +7,19 @@
     crane = {
       url = "github:ipetkov/crane";
     };
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { nixpkgs, flake-utils, crane, ... }:
+  outputs = { nixpkgs, flake-utils, crane, rust-overlay, ... }:
     flake-utils.lib.eachSystem [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ] (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs { inherit system; overlays = [ (import rust-overlay) ]; };
         inherit (pkgs) lib;
 
-        craneLib = crane.mkLib nixpkgs.legacyPackages.${system};
+        craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.stable.latest.default.override { });
 
         # Set a filter of files that are included in the build source directory.
         # This is used to filter out files that are not needed for the build to
