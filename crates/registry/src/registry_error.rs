@@ -32,6 +32,8 @@ pub enum RegistryError {
     CrateNotFound,
     #[error("Required field(s) not defined for crate {0}, missing: {1:?}, requires: {2:?}")]
     MissingRequiredFields(String, Vec<String>, Vec<String>),
+    #[error("Read-only users cannot modify the registry")]
+    ReadOnlyModify,
 }
 
 impl From<RegistryError> for ApiError {

@@ -9,6 +9,7 @@ pub enum UserIden {
     Pwd,
     Salt,
     IsAdmin,
+    IsReadOnly,
 }
 
 #[derive(Iden)]

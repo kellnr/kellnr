@@ -14,7 +14,7 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub salt: String,
     pub is_admin: bool,
-    pub is_read_only: bool,
+    pub is_readonly: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

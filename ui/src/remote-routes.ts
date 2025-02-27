@@ -5,13 +5,14 @@ export const CHANGE_PWD = "/api/v1/user/change_pwd";
 export const LOGIN_STATE = "/api/v1/user/login_state";
 export const LOGOUT = "/api/v1/user/logout";
 export const ADD_USER = "/api/v1/user/add";
-export const DELETE_USER = (name: string) => `/api/v1/user/delete/${name}`;
+export const DELETE_USER = (name: string) => `/api/v1/user/delete/${encodeURIComponent(name)}`;
 export const LIST_USERS = "/api/v1/user/list_users";
-export const RESET_PWD = (name: string) => `/api/v1/user/reset_pwd/${name}`;
+export const RESET_PWD = (name: string) => `/api/v1/user/reset_pwd/${encodeURIComponent(name)}`;
+export const USER_READ_ONLY = (name: string) => `/api/v1/user/read_only/${encodeURIComponent(name)}`;
 export const LOGIN = "/api/v1/user/login";
 
 export const CRATE_USERS = (crate_name: string) => `/api/v1/crate_access/${crate_name}/users`;
-export const CRATE_USER = (crate_name: string, name:string) => `/api/v1/crate_access/${crate_name}/users/${name}`;
+export const CRATE_USER = (crate_name: string, name:string) => `/api/v1/crate_access/${crate_name}/users/${encodeURIComponent(name)}`;
 export const CRATE_ACCESS_DATA = (crate_name: string) => `/api/v1/crate_access/${crate_name}/access_data`;
 
 export const CRATE_DATA = "/api/v1/ui/crate_data";

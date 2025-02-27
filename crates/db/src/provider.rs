@@ -1,4 +1,4 @@
-use crate::{crate_meta, error::DbError, AuthToken, CrateSummary, DocQueueEntry, User};
+use crate::{AuthToken, CrateSummary, DocQueueEntry, User, crate_meta, error::DbError};
 use chrono::{DateTime, Utc};
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
@@ -54,6 +54,7 @@ pub trait DbProvider: Send + Sync {
     async fn delete_session_token(&self, session_token: &str) -> DbResult<()>;
     async fn delete_user(&self, user_name: &str) -> DbResult<()>;
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()>;
+    async fn change_read_only_state(&self, user_name: &str, state: bool) -> DbResult<()>;
     async fn crate_version_exists(&self, crate_id: i64, version: &str) -> DbResult<bool>;
     async fn get_max_version_from_id(&self, crate_id: i64) -> DbResult<Version>;
     async fn get_max_version_from_name(&self, crate_name: &NormalizedName) -> DbResult<Version>;
@@ -65,7 +66,14 @@ pub trait DbProvider: Send + Sync {
     async fn delete_auth_token(&self, id: i32) -> DbResult<()>;
     async fn delete_owner(&self, crate_name: &str, owner: &str) -> DbResult<()>;
     async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()>;
-    async fn add_user(&self, name: &str, pwd: &str, salt: &str, is_admin: bool) -> DbResult<()>;
+    async fn add_user(
+        &self,
+        name: &str,
+        pwd: &str,
+        salt: &str,
+        is_admin: bool,
+        is_read_only: bool,
+    ) -> DbResult<()>;
     async fn get_users(&self) -> DbResult<Vec<User>>;
     async fn get_total_unique_crates(&self) -> DbResult<u32>;
     async fn get_total_crate_versions(&self) -> DbResult<u32>;
@@ -237,6 +245,10 @@ pub mod mock {
                 unimplemented!()
             }
 
+            async fn change_read_only_state(&self, _user_name: &str, _state: bool) -> DbResult<()> {
+                unimplemented!()
+            }
+
             async fn crate_version_exists(&self, _crate_id: i64, _version: &str) -> DbResult<bool> {
                 unimplemented!()
             }
@@ -281,7 +293,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_user(&self, _name: &str, _pwd: &str, _salt: &str, _is_admin: bool) -> DbResult<()> {
+            async fn add_user(&self, _name: &str, _pwd: &str, _salt: &str, _is_admin: bool, _is_read_only: bool) -> DbResult<()> {
                 unimplemented!()
             }
 
