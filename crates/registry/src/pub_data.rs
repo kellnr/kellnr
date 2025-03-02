@@ -226,13 +226,15 @@ mod bin_tests {
             .unwrap();
 
         assert!(rand_path.exists());
-        assert!(rand_path.starts_with(
-            test_bin
-                .crate_storage
-                .doc_queue_path
-                .to_string_lossy()
-                .to_string()
-        ));
+        assert!(
+            rand_path.starts_with(
+                test_bin
+                    .crate_storage
+                    .doc_queue_path
+                    .to_string_lossy()
+                    .to_string()
+            )
+        );
         test_bin.clean();
     }
 
@@ -285,11 +287,13 @@ mod bin_tests {
 
         let crate_path = Path::new(&test_storage.settings.bin_path()).join("test-0.2.0.crate");
 
-        assert!(test_storage
-            .crate_storage
-            .get_file(crate_path.clone())
-            .await
-            .is_some());
+        assert!(
+            test_storage
+                .crate_storage
+                .get_file(crate_path.clone())
+                .await
+                .is_some()
+        );
         assert!(test_storage.crate_storage.cache_has_path(&crate_path));
 
         test_storage
@@ -299,11 +303,13 @@ mod bin_tests {
             .unwrap();
 
         assert!(!test_storage.crate_storage.cache_has_path(&crate_path));
-        assert!(test_storage
-            .crate_storage
-            .get_file(crate_path.clone())
-            .await
-            .is_none());
+        assert!(
+            test_storage
+                .crate_storage
+                .get_file(crate_path.clone())
+                .await
+                .is_none()
+        );
         assert!(!crate_path.exists());
         test_storage.clean();
     }

@@ -33,12 +33,12 @@ mod test {
     use super::*;
     use appstate::AppStateData;
     use axum::body::Body;
-    use axum::http::{header, Request, StatusCode};
+    use axum::http::{Request, StatusCode, header};
     use axum::routing::get;
-    use axum::{middleware, Router};
+    use axum::{Router, middleware};
+    use db::User;
     use db::error::DbError;
     use db::mock::MockDb;
-    use db::User;
     use mockall::predicate::*;
     use settings::Settings;
     use std::sync::Arc;
@@ -146,6 +146,7 @@ mod test {
                     pwd: "".to_string(),
                     salt: "".to_string(),
                     is_admin: false,
+                    is_read_only: false,
                 })
             });
         mock_db
@@ -174,10 +175,10 @@ mod auth_middleware_tests {
     use appstate::AppStateData;
     use axum::body::Body;
     use axum::middleware::from_fn_with_state;
-    use axum::{routing::get, Router};
+    use axum::{Router, routing::get};
     use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
-    use hyper::{header, Request};
+    use hyper::{Request, header};
     use mockall::predicate::*;
     use settings::Settings;
     use std::sync::Arc;

@@ -1,9 +1,9 @@
 use appstate::AppStateData;
 use axum::{
+    Router,
     extract::DefaultBodyLimit,
     middleware,
     routing::{delete, get, get_service, post, put},
-    Router,
 };
 use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
@@ -81,6 +81,7 @@ async fn main() {
         .route("/add", post(user::add))
         .route("/delete/:name", delete(user::delete))
         .route("/reset_pwd/:name", post(user::reset_pwd))
+        .route("/read_only/:name", post(user::read_only))
         .route("/add_token", post(user::add_token))
         .route("/delete_token/:id", delete(user::delete_token))
         .route("/list_tokens", get(user::list_tokens))
