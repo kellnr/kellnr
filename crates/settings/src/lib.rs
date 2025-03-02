@@ -20,6 +20,6 @@ pub use postgresql::Postgresql;
 pub use protocol::Protocol;
 pub use proxy::Proxy;
 pub use registry::Registry;
-pub use settings::get_settings;
 pub use settings::Settings;
+pub use settings::get_settings;
 pub use setup::Setup;

@@ -4,7 +4,7 @@ use crate::sea_orm::{ActiveModelTrait, EntityTrait};
 use common::index_metadata::metadata_path;
 use common::version::Version;
 use sea_orm_migration::prelude::*;
-use settings::{get_settings, Settings};
+use settings::{Settings, get_settings};
 use tracing::{debug, error};
 
 #[derive(DeriveMigrationName)]

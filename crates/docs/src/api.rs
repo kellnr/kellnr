@@ -6,9 +6,9 @@ use crate::{compute_doc_url, get_latest_version_with_doc};
 use appstate::{AppState, DbState, SettingsState};
 use auth::token::Token;
 use axum::{
+    Json,
     extract::{Path, State},
     response::Redirect,
-    Json,
 };
 use common::original_name::OriginalName;
 use common::version::Version;
@@ -96,10 +96,10 @@ mod tests {
     use super::*;
     use crate::doc_queue_response::DocQueueEntryResponse;
     use appstate::AppStateData;
+    use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::routing::get;
-    use axum::Router;
     use common::normalized_name::NormalizedName;
     use db::mock::MockDb;
     use db::{DbProvider, DocQueueEntry};

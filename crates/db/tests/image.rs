@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use testcontainers::core::WaitFor;
 use testcontainers::Image;
+use testcontainers::core::WaitFor;
 
 const NAME: &str = "postgres";
 const TAG: &str = "14.3-alpine";

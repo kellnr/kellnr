@@ -6,7 +6,7 @@ use moka::future::Cache;
 use settings::Settings;
 use std::path::{Path, PathBuf};
 use tokio::{
-    fs::{create_dir_all, DirBuilder, File},
+    fs::{DirBuilder, File, create_dir_all},
     io::{AsyncReadExt, AsyncWriteExt},
 };
 
