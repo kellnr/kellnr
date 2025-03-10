@@ -65,7 +65,7 @@ proc-macro2 = "1.0.94"
 moka = {version = "0.12.10", features = ["future"]}
 config = "0.14.1"
 toml = "0.8.20"
-time = "0.3.37"
+time = "0.3.39"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"]}
 flume = "0.11.1"
