@@ -7,6 +7,7 @@
         Authentication Tokens
       </div>
       <div v-if="store.loggedInUserIsAdmin" @click="clickShowUserMgmt" class="settingName clickable">User Management</div>
+      <div v-if="store.loggedInUserIsAdmin" @click="clickShowGroupMgmt" class="settingName clickable">Group Management</div>
       <div v-if="store.loggedInUserIsAdmin" @click="clickShowStartupConfig" class="settingName clickable">
         Startup Config
       </div>
@@ -21,6 +22,9 @@
       <div v-if="showUserMgmt" class="setting">
         <user-mgmt></user-mgmt>
       </div>
+      <div v-if="showGroupMgmt" class="setting">
+        <group-mgmt></group-mgmt>
+      </div>
       <div v-if="showStartupConfig" class="setting">
         <startup-config></startup-config>
       </div>
@@ -32,6 +36,7 @@
 import ChangePassword from "../components/ChangePassword.vue";
 import AuthToken from "../components/AuthToken.vue";
 import UserMgmt from "../components/UserMgmt.vue";
+import GroupMgmt from "../components/GroupMgmt.vue";
 import StartupConfig from "../components/StartupConfig.vue";
 import {useStore} from "../store/store";
 import {ref} from "vue";
@@ -39,6 +44,7 @@ import {ref} from "vue";
 const showChangePwd = ref(true)
 const showAuthToken = ref(false)
 const showUserMgmt = ref(false)
+const showGroupMgmt = ref(false)
 const showStartupConfig = ref(false)
 const store = useStore()
 
@@ -46,6 +52,7 @@ function showNothing() {
   showChangePwd.value = false;
   showAuthToken.value = false;
   showUserMgmt.value = false;
+  showGroupMgmt.value = false;
   showStartupConfig.value = false;
 }
 
@@ -62,6 +69,11 @@ function clickShowAuthToken() {
 function clickShowUserMgmt() {
   showNothing();
   showUserMgmt.value = true;
+}
+
+function clickShowGroupMgmt() {
+  showNothing();
+  showGroupMgmt.value = true;
 }
 
 function clickShowStartupConfig() {

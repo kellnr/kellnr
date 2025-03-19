@@ -11,9 +11,17 @@ export const RESET_PWD = (name: string) => `/api/v1/user/reset_pwd/${encodeURICo
 export const USER_READ_ONLY = (name: string) => `/api/v1/user/read_only/${encodeURIComponent(name)}`;
 export const LOGIN = "/api/v1/user/login";
 
+export const ADD_GROUP = "/api/v1/group/add";
+export const DELETE_GROUP = (name: string) => `/api/v1/group/delete/${encodeURIComponent(name)}`;
+export const LIST_GROUPS = "/api/v1/group";
+export const GROUP_USERS = (group_name: string) => `/api/v1/group/${encodeURIComponent(group_name)}/users`;
+export const GROUP_USER = (group_name: string, name: string) => `/api/v1/group/${encodeURIComponent(group_name)}/users/${encodeURIComponent(name)}`;
+
 export const CRATE_USERS = (crate_name: string) => `/api/v1/crate_access/${crate_name}/users`;
 export const CRATE_USER = (crate_name: string, name:string) => `/api/v1/crate_access/${crate_name}/users/${encodeURIComponent(name)}`;
 export const CRATE_ACCESS_DATA = (crate_name: string) => `/api/v1/crate_access/${crate_name}/access_data`;
+export const CRATE_GROUPS = (crate_name: string) => `/api/v1/crate_access/${crate_name}/groups`;
+export const CRATE_GROUP = (crate_name: string, name: string) => `/api/v1/crate_access/${crate_name}/groups/${encodeURIComponent(name)}`;
 
 export const CRATE_DATA = "/api/v1/ui/crate_data";
 export const CRATESIO_DATA = "/api/v1/ui/cratesio_data";

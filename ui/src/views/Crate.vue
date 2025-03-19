@@ -117,15 +117,15 @@
           <div class="glass">
             <h2 class="k-h2">Crate users</h2>
             <template v-for="user in crateUsers" :key="user.login">
-              <div class="glass">
+              <div class="glass crateMember">
                 <span class="userName">{{ user.login }}</span>
                 <span class="tag is-danger is-light">
                   <a @click="deleteCrateUser(user.login)">Delete</a>
                 </span>
               </div>
             </template>
-            <status-notification :status="deleteUserStatus" @update:clear="deleteUserStatus = $event">
-              {{ deleteUserMsg }}
+            <status-notification :status="deleteCrateUserStatus" @update:clear="deleteCrateUserStatus = $event">
+              {{ deleteCrateUserMsg }}
             </status-notification>
             <h3 class="k-h3">Add crate user</h3>
             <form>
@@ -142,6 +142,37 @@
               </status-notification>
               <div class="control">
                 <button class="button is-info" @click.prevent="addCrateUser">Add</button>
+              </div>
+            </form>
+          </div>
+          <div class="glass">
+            <h2 class="k-h2">Crate groups</h2>
+            <template v-for="group in crateGroups" :key="group.login">
+              <div class="glass crateMember">
+                <span class="groupName">{{ group.name }}</span>
+                <span class="tag is-danger is-light">
+                  <a @click="deleteCrateGroup(group.name)">Delete</a>
+                </span>
+              </div>
+            </template>
+            <status-notification :status="deleteCrateGroupStatus" @update:clear="deleteCrateGroupStatus = $event">
+              {{ deleteCrateGroupMsg }}
+            </status-notification>
+            <h3 class="k-h3">Add crate group</h3>
+            <form>
+              <div class="field">
+                <div class="control is-expanded has-icons-left">
+                  <input class="input is-info" v-model="crateGroupName" placeholder="Groupname" type="text" />
+                  <span class="icon is-small is-left">
+                    <i class="fas fa-group"></i>
+                  </span>
+                </div>
+              </div>
+              <status-notification :status="addCrateGroupStatus" @update:clear="addCrateGroupStatus = $event">
+                {{ addCrateGroupMsg }}
+              </status-notification>
+              <div class="control">
+                <button class="button is-info" @click.prevent="addCrateGroup">Add</button>
               </div>
             </form>
           </div>
@@ -222,6 +253,7 @@ import Dependency from "../components/Dependency.vue";
 import Version from "../components/Version.vue";
 import IconList from "../components/IconList.vue";
 import IconElement from "../components/IconElement.vue";
+import StatusNotification from "../components/StatusNotification.vue";
 import { computed, onBeforeMount, ref, watch } from "vue";
 import axios from "axios";
 import { useRoute, useRouter } from "vue-router";
@@ -231,7 +263,7 @@ import utc from "dayjs/plugin/utc";
 import CrateSidebarElement from "../components/CrateSidebarElement.vue";
 import { defaultCrateData, defaultCrateAccessData, defaultCrateVersionData } from "../types/crate_data";
 import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
-import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_ACCESS_DATA } from "../remote-routes";
+import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_GROUPS, CRATE_GROUP, CRATE_ACCESS_DATA } from "../remote-routes";
 import Readme from "../components/Readme.vue";
 import { useStore } from "../store/store";
 
@@ -256,6 +288,12 @@ const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
 const changeCrateAccessStatus = ref("")
 const changeCrateAccessMsg = ref("")
+const crateGroups = ref([])
+const crateGroupName = ref("")
+const addCrateGroupStatus = ref("")
+const addCrateGroupMsg = ref("")
+const deleteCrateGroupStatus = ref("")
+const deleteCrateGroupMsg = ref("")
 
 const docLink = computed(() => {
   return selected_version.value.documentation;
@@ -383,6 +421,82 @@ function getCrateUsers() {
     });
 };
 
+function addCrateGroup() {
+  axios
+    .put(CRATE_GROUP(crate.value.name, crateGroupName.value))
+    .then((res) => {
+      if (res.status == 200) {
+        addCrateGroupStatus.value = "Success";
+        addCrateGroupMsg.value = "Crate group successfully added.";
+        // Update group list
+        getCrateGroups();
+      }
+    })
+    .catch((error) => {
+      if (error.response) {
+        addCrateGroupStatus.value = "Error";
+        addCrateGroupMsg.value = "Crate group could not be added.";
+
+        if (error.response.status == 401 || error.response.status == 403) {
+          // "Unauthorized. Login first."
+          router.push("/login");
+        }
+        else if (error.response.status == 404) {
+          addCrateGroupMsg.value = "Group not found. Did you provide an existing group name?";
+        } else if (error.response.status == 500) {
+          addCrateGroupMsg.value = "Crate group could not be added";
+        } else {
+          addCrateGroupMsg.value = "Unknown error";
+        }
+      }
+    });
+}
+
+function deleteCrateGroup(name: string) {
+  if (confirm('Delete crate group "' + name + '"?')) {
+    axios
+      .delete(CRATE_GROUP(crate.value.name, name))
+      .then((res) => {
+        if (res.status == 200) {
+          deleteCrateGroupStatus.value = "Success";
+          deleteCrateGroupMsg.value = "Crate group successfully deleted.";
+          // Update group list
+          getCrateGroups();
+        }
+      })
+      .catch((error) => {
+        if (error.response) {
+          deleteCrateGroupStatus.value = "Error";
+          deleteCrateGroupMsg.value = "Crate group could not be deleted.";
+
+          if (error.response.status == 404) {
+            // "Unauthorized. Login first."
+            router.push("/login");
+          } else if (error.response.status == 500) {
+            deleteCrateGroupMsg.value = "Crate group could not be deleted";
+          } else {
+            deleteCrateGroupMsg.value = "Unknown error";
+          }
+        }
+      });
+  }
+}
+
+function getCrateGroups() {
+  // disable caching to get updated token list
+  axios
+    // @ts-expect-error TS doesn't recognize cache option
+    .get(CRATE_GROUPS(crate.value.name), { cache: false })
+    .then((res) => {
+      if (res.status == 200) {
+        crateGroups.value = res.data.groups;
+      }
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+};
+
 function deleteVersion(crate: string, version: string) {
   if (confirm('Delete "' + crate + '" version "' + version + '"?')) {
     axios.delete(CRATE_DELETE_VERSION,
@@ -481,7 +595,7 @@ function getCrateAccessData() {
     .get(CRATE_ACCESS_DATA(crate.value.name), { cache: false })
     .then((response) => {
       crate_access.value = response.data;
-      is_download_restricted.value = crate_access.value.is_download_restricted;
+      is_download_restricted.value = crate_access.value.download_restricted;
     })
     .catch((error) => {
       console.log(error);
@@ -653,6 +767,11 @@ body[color-theme="dark"] .activeTab {
 
 .buildDocs {
   font-size: smaller;
+}
+
+.crateMember {
+  display: grid;
+  grid-template-columns: 1fr max-content;
 }
 
 @media only screen and (max-width: 768px) {

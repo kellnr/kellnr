@@ -1,5 +1,6 @@
 pub mod crate_access;
 pub mod error;
+pub mod group;
 pub mod session;
 pub mod ui;
 pub mod user;

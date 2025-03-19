@@ -3,23 +3,31 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "crate_keyword")]
+#[sea_orm(table_name = "group")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     #[sea_orm(column_type = "Text", unique)]
-    pub keyword: String,
+    pub name: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::crate_keyword_to_crate::Entity")]
-    CrateKeywordToCrate,
+    #[sea_orm(has_many = "super::crate_group::Entity")]
+    CrateGroup,
+    #[sea_orm(has_many = "super::group_user::Entity")]
+    GroupUser,
 }
 
-impl Related<super::crate_keyword_to_crate::Entity> for Entity {
+impl Related<super::crate_group::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::CrateKeywordToCrate.def()
+        Relation::CrateGroup.def()
+    }
+}
+
+impl Related<super::group_user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::GroupUser.def()
     }
 }
 
