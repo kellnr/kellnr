@@ -51,11 +51,11 @@
   <div v-else class="glass">
     <h3 class="k-h3">Edit Group {{ editingGroup }}</h3>
     <h2 class="k-h2">Group users</h2>
-    <template v-for="user in groupUsers" :key="user.login">
+    <template v-for="user in groupUsers" :key="user.name">
       <div class="glass groupUser">
-        <span class="userName">{{ user.login }}</span>
+        <span class="userName">{{ user.name }}</span>
         <span class="tag is-danger is-light">
-          <a @click="deleteGroupUser(user.login)">Remove</a>
+          <a @click="deleteGroupUser(user.name)">Remove</a>
         </span>
       </div>
     </template>
@@ -66,7 +66,7 @@
       {{ deleteUserMsg }}
     </status-notification>
     <h3 class="k-h3">Add group user</h3>
-    <form>
+    <form class="mb-3">
       <div class="field has-addons">
         <div class="control is-expanded">
           <div class="select is-fullwidth">

@@ -61,7 +61,7 @@ pub async fn add(
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GroupUser {
     pub id: i32,
-    pub login: String,
+    pub name: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,7 +88,7 @@ pub async fn list_users(
         .iter()
         .map(|u| GroupUser {
             id: u.id,
-            login: u.name.to_owned(),
+            name: u.name.to_owned(),
         })
         .collect();
 
