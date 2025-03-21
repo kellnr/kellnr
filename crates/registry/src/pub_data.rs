@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::registry_error::RegistryError;
 use appstate::AppStateData;
 use axum::body::{Body, Bytes};
@@ -12,7 +14,7 @@ pub struct PubData {
     pub metadata_length: u32,
     pub metadata: PublishMetadata,
     pub crate_length: u32,
-    pub cratedata: Vec<u8>,
+    pub cratedata: Arc<[u8]>,
 }
 
 fn convert_raw_metadata_to_string(raw_data: &[u8]) -> Result<String, RegistryError> {
@@ -62,7 +64,7 @@ impl FromRequest<AppStateData, Body> for PubData {
         let metadata: PublishMetadata = deserialize_metadata(&data_bytes[4..metadata_end])?;
         let crate_length = convert_length(&data_bytes[metadata_end..(metadata_end + 4)])?;
         let crate_end = metadata_end + 4 + (crate_length as usize);
-        let cratedata: Vec<u8> = data_bytes[metadata_end + 4..crate_end].to_vec();
+        let cratedata = Arc::from(data_bytes[metadata_end + 4..crate_end].to_vec());
 
         let pub_data = PubData {
             metadata_length,
@@ -82,6 +84,7 @@ mod bin_tests {
     use common::publish_metadata::PublishMetadata;
     use common::version::Version;
     use settings::Settings;
+
     use std::{convert::TryFrom, path::Path};
     use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tokio::fs::File;
@@ -106,7 +109,6 @@ mod bin_tests {
                 },
                 ..Settings::default()
             };
-            //fs::create_dir_all(&settings.bin_path()).expect("Cannot create test bin directory.");
             let crate_storage = KellnrCrateStorage::new(&settings).await.unwrap();
             TestBin {
                 settings,
@@ -123,7 +125,7 @@ mod bin_tests {
     async fn add_crate_binary() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44],
+            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
@@ -133,21 +135,18 @@ mod bin_tests {
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
             .crate_storage
-            .add_bin_package(&name, &version, &pub_data.cratedata)
+            .add_bin_package(&name, &version, pub_data.cratedata.clone())
             .await;
         let result_crate = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
 
-        let mut file = File::open(&result_crate)
+        let get_res = test_storage
+            .crate_storage
+            .get_file(result_crate.to_str().unwrap())
             .await
-            .expect("Cannot open written test crate");
-        let mut data: Vec<u8> = Vec::new();
-        file.read_to_end(&mut data)
-            .await
-            .expect("Cannot read written test crate.");
+            .expect("Couldn't find file...");
 
         assert!(result.is_ok());
-        assert!(result_crate.exists());
-        assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], data);
+        assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], get_res);
 
         test_storage.clean();
     }
@@ -156,7 +155,7 @@ mod bin_tests {
     async fn add_crate_binary_with_upper_case_name() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44],
+            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0"),
         };
@@ -166,22 +165,20 @@ mod bin_tests {
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
             .crate_storage
-            .add_bin_package(&name, &version, &pub_data.cratedata)
+            .add_bin_package(&name, &version, pub_data.cratedata.clone())
             .await;
         let result_crate = Path::new(&test_storage.settings.bin_path())
             .join("Test_Add_crate_binary_Upper-Case-0.1.0.crate");
 
-        let mut file = File::open(&result_crate)
+        let get_res = test_storage
+            .crate_storage
+            .get_file(result_crate.to_str().unwrap())
             .await
-            .expect("Cannot open written test crate");
-        let mut data: Vec<u8> = Vec::new();
-        file.read_to_end(&mut data)
-            .await
-            .expect("Cannot read written test crate.");
+            .expect("Couldn't find file...");
 
         assert!(result.is_ok());
-        assert!(result_crate.exists());
-        assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], data);
+
+        assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], get_res);
         test_storage.clean();
     }
 
@@ -189,7 +186,7 @@ mod bin_tests {
     async fn add_duplicate_crate_binary() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44],
+            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
@@ -200,11 +197,11 @@ mod bin_tests {
 
         let _ = test_bin
             .crate_storage
-            .add_bin_package(&name, &version, &pub_data.cratedata)
+            .add_bin_package(&name, &version, pub_data.cratedata.clone())
             .await;
         let result = test_bin
             .crate_storage
-            .add_bin_package(&name, &version, &pub_data.cratedata)
+            .add_bin_package(&name, &version, pub_data.cratedata.clone())
             .await;
 
         assert!(result.is_err());
@@ -242,7 +239,7 @@ mod bin_tests {
     async fn deleting_crate() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44],
+            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
@@ -251,7 +248,7 @@ mod bin_tests {
         let version = Version::try_from("0.1.0").unwrap();
         test_storage
             .crate_storage
-            .add_bin_package(&name, &version, &pub_data.cratedata)
+            .add_bin_package(&name, &version, pub_data.cratedata.clone())
             .await
             .unwrap();
         let crate_path = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
@@ -270,7 +267,7 @@ mod bin_tests {
     async fn delete_crate_invalidates_cache() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44],
+            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.2.0"),
         };
@@ -281,7 +278,7 @@ mod bin_tests {
 
         test_storage
             .crate_storage
-            .add_bin_package(&name, &version, &pub_data.cratedata)
+            .add_bin_package(&name, &version, pub_data.cratedata.clone())
             .await
             .unwrap();
 
@@ -303,6 +300,7 @@ mod bin_tests {
             .unwrap();
 
         assert!(!test_storage.crate_storage.cache_has_path(&crate_path));
+
         assert!(
             test_storage
                 .crate_storage
@@ -310,6 +308,7 @@ mod bin_tests {
                 .await
                 .is_none()
         );
+
         assert!(!crate_path.exists());
         test_storage.clean();
     }

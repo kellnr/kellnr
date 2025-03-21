@@ -23,7 +23,7 @@ pub enum StorageError {
     #[error("Failed to create doc queue sub-path {0:?}: {1}")]
     CreateDocQueuePath(PathBuf, std::io::Error),
     #[error("Failed to remove file {0:?} from crate storage: {1}")]
-    RemoveFile(PathBuf, std::io::Error),
+    RemoveFile(String, std::io::Error),
     #[error("Failed to read crate metadata from file {0:?}: {1}")]
     ReadCrateMetadata(PathBuf, std::io::Error),
     #[error("File does not exist: {0:?}")]
@@ -36,4 +36,8 @@ pub enum StorageError {
     ReadFileHandle(std::io::Error),
     #[error("Failed to flush file {0:?}: {1}")]
     FlushCrateFile(PathBuf, std::io::Error),
+    #[error("Failed to init storage provider. Reason: {0}")]
+    StorageInitError(String),
+    #[error("Error from storage provider. Reason: {0}")]
+    GenericError(String),
 }

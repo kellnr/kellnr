@@ -1525,6 +1525,15 @@ let
         sha512 = "kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==";
       };
     };
+    "execa-8.0.1" = {
+      name = "execa";
+      packageName = "execa";
+      version = "8.0.1";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/execa/-/execa-8.0.1.tgz";
+        sha512 = "VyhnebXciFV2DESc+p6B+y0LjSm0krU4OgJN44qFAhBY0TJ+1V61tYD2+wHusZ6F9n5K+vl8k0sTy7PEfV4qpg==";
+      };
+    };
     "fast-deep-equal-3.1.3" = {
       name = "fast-deep-equal";
       packageName = "fast-deep-equal";
@@ -1892,6 +1901,15 @@ let
       src = fetchurl {
         url = "https://registry.npmjs.org/hookable/-/hookable-5.5.3.tgz";
         sha512 = "Yc+BQe8SvoXH1643Qez1zqLRmbA5rCL+sSmk6TVos0LWVfNIB7PGncdlId77WzLGSIB5KaWgTaNTs2lNVEI6VQ==";
+      };
+    };
+    "human-signals-5.0.0" = {
+      name = "human-signals";
+      packageName = "human-signals";
+      version = "5.0.0";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/human-signals/-/human-signals-5.0.0.tgz";
+        sha512 = "AXcZb6vzzrFAUE61HnN4mpLqd/cSIwNQjtNWR0euPm6y0iqx3G4gOXaIDdtdDwZmhwe82LA6+zinmW4UBWVePQ==";
       };
     };
     "iconv-lite-0.6.3" = {
@@ -2342,6 +2360,15 @@ let
       src = fetchurl {
         url = "https://registry.npmjs.org/mime-types/-/mime-types-2.1.35.tgz";
         sha512 = "ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw==";
+      };
+    };
+    "mimic-fn-4.0.0" = {
+      name = "mimic-fn";
+      packageName = "mimic-fn";
+      version = "4.0.0";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/mimic-fn/-/mimic-fn-4.0.0.tgz";
+        sha512 = "vqiC06CuhBTUdZH+RYl8sFrL096vA45Ok5ISO6sE/Mr1jRbGH4Csnhi8f3wKVl7x8mO4Au7Ir9D3Oyv1VYMFJw==";
       };
     };
     "minimatch-3.1.2" = {
@@ -3770,6 +3797,7 @@ let
       sources."estraverse-5.3.0"
       sources."estree-walker-3.0.3"
       sources."esutils-2.0.3"
+      sources."execa-8.0.1"
       sources."fast-deep-equal-3.1.3"
       sources."fast-defer-1.1.8"
       sources."fast-glob-3.3.3"
@@ -3821,6 +3849,7 @@ let
       sources."he-1.2.0"
       sources."highlight.js-10.7.3"
       sources."hookable-5.5.3"
+      sources."human-signals-5.0.0"
       sources."iconv-lite-0.6.3"
       sources."ignore-7.0.3"
       sources."image-size-0.5.5"
@@ -3880,7 +3909,8 @@ let
       sources."mime-1.6.0"
       sources."mime-db-1.52.0"
       sources."mime-types-2.1.35"
-      sources."minimatch-3.1.2"
+      sources."mimic-fn-4.0.0"
+      sources."minimatch-9.0.5"
       sources."minipass-5.0.0"
       (sources."minizlib-2.1.2" // {
         dependencies = [

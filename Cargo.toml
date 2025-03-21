@@ -1,12 +1,6 @@
 [workspace]
-exclude = [
-  "crates/test_data",
-]
-members = [
-  "crates/*",
-  "crates/db/entity",
-  "crates/db/migration"
-]
+exclude = ["crates/test_data"]
+members = ["crates/*", "crates/db/entity", "crates/db/migration"]
 default-members = ["crates/kellnr"]
 resolver = "2"
 
@@ -18,15 +12,15 @@ license-file = "LICENSE"
 
 [workspace.dependencies]
 # Internal dependencies from Kellnr
-common = {path = "./crates/common"}
-db = {path = "./crates/db"}
+common = { path = "./crates/common" }
+db = { path = "./crates/db" }
 entity = { path = "./crates/db/entity" }
-migration = {path = "./crates/db/migration"}
-docs = {path = "./crates/docs"}
-index = {path = "./crates/index"}
-settings = {path = "./crates/settings"}
-web_ui = {path = "./crates/web_ui"}
-registry = {path = "./crates/registry"}
+migration = { path = "./crates/db/migration" }
+docs = { path = "./crates/docs" }
+index = { path = "./crates/index" }
+settings = { path = "./crates/settings" }
+web_ui = { path = "./crates/web_ui" }
+registry = { path = "./crates/registry" }
 pg_testcontainer = { path = "./crates/db/pg_testcontainer" }
 auth = { path = "./crates/auth" }
 error = { path = "./crates/error" }
@@ -67,7 +61,7 @@ config = "0.14.1"
 toml = "0.8.20"
 time = "0.3.39"
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"]}
+tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"] }
 flume = "0.11.1"
 axum = { version = "0.7.9", features = ["macros", "http2"] }
 axum-extra = { version = "0.9.6", features = ["cookie", "cookie-private", "typed-header"] }
@@ -76,10 +70,11 @@ tower = { version = "0.5.2", features = ["util"] }
 hyper = "1.6.0"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
-futures = "0.3.30"
 url = "2.5.4"
 http-body-util = "0.1.2"
 sha256 = "1.5.0"
+object_store = { version = "0.11.2", features = ["aws"] }
+bytes = "1.10.0"
 
 [profile.release]
 lto = "off"
@@ -98,5 +93,3 @@ incremental = false
 inherits = "dev"
 incremental = false
 lto = "off"
-
-
