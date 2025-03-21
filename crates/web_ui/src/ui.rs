@@ -2,9 +2,9 @@ use crate::error::RouteError;
 use crate::session::MaybeUser;
 use appstate::{AppState, DbState, SettingsState};
 use axum::{
+    Json,
     extract::{Query, State},
     http::StatusCode,
-    Json,
 };
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
@@ -341,19 +341,19 @@ mod tests {
     use super::*;
     use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
+    use axum::Router;
     use axum::body::Body;
     use axum::routing::{get, post};
-    use axum::Router;
     use axum_extra::extract::cookie::Key;
     use common::crate_data::{CrateRegistryDep, CrateVersionData};
+    use db::User;
     use db::error::DbError;
     use db::mock::MockDb;
-    use db::User;
     use http_body_util::BodyExt;
-    use hyper::{header, Request};
+    use hyper::{Request, header};
     use mockall::predicate::*;
     use settings::Settings;
-    use settings::{constants, Postgresql};
+    use settings::{Postgresql, constants};
     use std::sync::Arc;
     use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tower::ServiceExt;
@@ -532,6 +532,7 @@ mod tests {
                     pwd: "".to_string(),
                     salt: "".to_string(),
                     is_admin: false,
+                    is_read_only: false,
                 })
             });
         let settings = test_settings();
@@ -590,6 +591,7 @@ mod tests {
                     pwd: "".to_string(),
                     salt: "".to_string(),
                     is_admin: false,
+                    is_read_only: false,
                 })
             });
         mock_db
@@ -658,6 +660,7 @@ mod tests {
                     pwd: "".to_string(),
                     salt: "".to_string(),
                     is_admin: true,
+                    is_read_only: false,
                 })
             });
         mock_db

@@ -1,19 +1,19 @@
 use crate::compute_doc_url;
 use cargo::{
-    core::{resolver::CliFeatures, Workspace},
+    CargoResult, GlobalContext,
+    core::{Workspace, resolver::CliFeatures},
     ops::{self, CompileOptions, DocOptions, OutputFormat},
     util::command_prelude::CompileMode,
-    CargoResult, GlobalContext,
 };
 use common::version::Version;
 use db::{Database, DbProvider, DocQueueEntry};
 use flate2::read::GzDecoder;
-use fs_extra::dir::{copy, CopyOptions};
+use fs_extra::dir::{CopyOptions, copy};
 use std::path::{Path, PathBuf};
 use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tar::Archive;
 use tokio::{
-    fs::{create_dir_all, remove_dir_all, File},
+    fs::{File, create_dir_all, remove_dir_all},
     io::AsyncReadExt,
 };
 use tracing::error;

@@ -4,7 +4,7 @@ use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use db::DbProvider;
 use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use serde::Deserialize;
 use std::iter;
 use std::sync::Arc;
@@ -14,6 +14,7 @@ pub struct Token {
     pub token: String,
     pub user: String,
     pub is_admin: bool,
+    pub is_read_only: bool,
 }
 
 // See https://github.com/tokio-rs/axum/discussions/2281
@@ -61,6 +62,7 @@ impl Token {
             token,
             user: user.name,
             is_admin: user.is_admin,
+            is_read_only: user.is_read_only,
         })
     }
 }

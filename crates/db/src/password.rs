@@ -24,4 +24,16 @@ mod tests {
         assert_eq!(SALT_LENGTH, s2.len());
         assert_ne!(s1, s2);
     }
+
+    #[test]
+    fn hash_pwd_computes_correct_hash() {
+        let pwd = "admin";
+        let salt = "C6udtgbngX";
+        let hash = hash_pwd(pwd, salt);
+
+        assert_eq!(
+            hash,
+            "5dcec54caf0f55652766f71c32a0eac6538e7faeeab9301f956a58b7dbad02fb"
+        );
+    }
 }

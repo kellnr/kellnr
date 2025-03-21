@@ -600,14 +600,16 @@ async fn is_owner_true() {
         .await
         .unwrap();
 
-    assert!(test_db
-        .db
-        .is_owner(
-            &NormalizedName::from_unchecked("mycrate".to_string()),
-            "admin"
-        )
-        .await
-        .unwrap());
+    assert!(
+        test_db
+            .db
+            .is_owner(
+                &NormalizedName::from_unchecked("mycrate".to_string()),
+                "admin"
+            )
+            .await
+            .unwrap()
+    );
 }
 
 #[tokio::test]
@@ -625,14 +627,16 @@ async fn is_owner_false() {
         .await
         .unwrap();
 
-    assert!(!test_db
-        .db
-        .is_owner(
-            &NormalizedName::from_unchecked("mycrate".to_string()),
-            "user"
-        )
-        .await
-        .unwrap());
+    assert!(
+        !test_db
+            .db
+            .is_owner(
+                &NormalizedName::from_unchecked("mycrate".to_string()),
+                "user"
+            )
+            .await
+            .unwrap()
+    );
 }
 
 #[tokio::test]
@@ -651,11 +655,13 @@ async fn delete_owner_valid_owner() {
 
     test_db.db.delete_owner("mycrate", "admin").await.unwrap();
 
-    assert!(test_db
-        .db
-        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
-        .await
-        .is_ok());
+    assert!(
+        test_db
+            .db
+            .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+            .await
+            .is_ok()
+    );
 }
 
 #[tokio::test]
@@ -697,7 +703,7 @@ async fn add_crate_different_user() {
     let test_db = TestDB::new().await;
     test_db
         .db
-        .add_user("user", "123", "123", false)
+        .add_user("user", "123", "123", false, false)
         .await
         .unwrap();
 
@@ -813,11 +819,13 @@ async fn get_user_from_token_no_token() {
 async fn add_auth_token_no_user() {
     let test_db = TestDB::new().await;
 
-    assert!(test_db
-        .db
-        .add_auth_token("test", "mytoken", "nouser")
-        .await
-        .is_err());
+    assert!(
+        test_db
+            .db
+            .add_auth_token("test", "mytoken", "nouser")
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -825,7 +833,7 @@ async fn delete_user_with_sessions() {
     let test_db = TestDB::new().await;
     test_db
         .db
-        .add_user("user", "pwd", "salt", false)
+        .add_user("user", "pwd", "salt", false, false)
         .await
         .unwrap();
     test_db.db.add_session_token("user", "123").await.unwrap();
@@ -844,7 +852,7 @@ async fn add_user_works() {
 
     test_db
         .db
-        .add_user("user", "pwd", "salt", false)
+        .add_user("user", "pwd", "salt", false, true)
         .await
         .unwrap();
 
@@ -854,6 +862,7 @@ async fn add_user_works() {
         pwd: hash_pwd("pwd", "salt"),
         salt: "salt".to_owned(),
         is_admin: false,
+        is_read_only: true,
     };
     let user = test_db.db.get_user("user").await.unwrap();
     assert_eq!(expected, user);
@@ -865,15 +874,17 @@ async fn add_user_duplicate() {
 
     test_db
         .db
-        .add_user("user", "pwd", "salt", false)
+        .add_user("user", "pwd", "salt", false, false)
         .await
         .unwrap();
 
-    assert!(test_db
-        .db
-        .add_user("user", "pwd", "salt", false)
-        .await
-        .is_err())
+    assert!(
+        test_db
+            .db
+            .add_user("user", "pwd", "salt", false, false)
+            .await
+            .is_err()
+    )
 }
 
 #[tokio::test]
@@ -881,7 +892,7 @@ async fn get_users_works() {
     let test_db = TestDB::new().await;
     test_db
         .db
-        .add_user("user", "123", "abc", false)
+        .add_user("user", "123", "abc", false, false)
         .await
         .unwrap();
 
@@ -993,11 +1004,13 @@ async fn get_name_valid_user_and_token() {
 async fn get_session_no_session_in_db() {
     let test_db = TestDB::new().await;
 
-    assert!(test_db
-        .db
-        .validate_session("no_session_token")
-        .await
-        .is_err());
+    assert!(
+        test_db
+            .db
+            .validate_session("no_session_token")
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -1026,11 +1039,13 @@ async fn authenticate_user_valid() {
 async fn authenticate_user_unknown_user() {
     let test_db = TestDB::new().await;
 
-    assert!(test_db
-        .db
-        .authenticate_user("unknown", "123")
-        .await
-        .is_err());
+    assert!(
+        test_db
+            .db
+            .authenticate_user("unknown", "123")
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -1674,12 +1689,12 @@ async fn add_crate_and_get_crate_data() {
     };
     test_db
         .db
-        .add_user("owner1", "pwd1", "salt1", false)
+        .add_user("owner1", "pwd1", "salt1", false, false)
         .await
         .unwrap();
     test_db
         .db
-        .add_user("owner2", "pwd2", "salt2", false)
+        .add_user("owner2", "pwd2", "salt2", false, false)
         .await
         .unwrap();
 
@@ -1941,7 +1956,7 @@ async fn update_docs_link() {
     let pm = PublishMetadata::minimal("crate1", "1.0.0");
     test_db
         .db
-        .add_user("owner1", "pwd", "salt", false)
+        .add_user("owner1", "pwd", "salt", false, false)
         .await
         .unwrap();
     test_db

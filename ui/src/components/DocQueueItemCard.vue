@@ -14,7 +14,7 @@
 
 <script setup lang="ts">
 
-const props = defineProps<{
+defineProps<{
   index: number
   name: string
   version: string

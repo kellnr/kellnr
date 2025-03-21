@@ -2,11 +2,11 @@ use crate::error::RouteError;
 use crate::session::MaybeUser;
 use appstate::{AppState, DbState};
 use auth::token;
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
-use axum_extra::extract::cookie::Cookie;
 use axum_extra::extract::PrivateCookieJar;
+use axum_extra::extract::cookie::Cookie;
 use common::util::generate_rand_string;
 use cookie::time;
 use db::password::generate_salt;
@@ -87,6 +87,22 @@ pub async fn reset_pwd(
         new_pwd,
     }
     .into())
+}
+
+#[derive(Deserialize)]
+pub struct ReadOnlyState {
+    pub state: bool,
+}
+
+pub async fn read_only(
+    user: MaybeUser,
+    Path(name): Path<String>,
+    State(db): DbState,
+    Json(ro_state): Json<ReadOnlyState>,
+) -> Result<(), RouteError> {
+    user.assert_admin()?;
+
+    Ok(db.change_read_only_state(&name, ro_state.state).await?)
 }
 
 pub async fn delete(
@@ -242,8 +258,10 @@ pub struct NewUser {
     pub pwd1: String,
     pub pwd2: String,
     pub name: String,
-    #[serde(default)] // Set to false of not in message from client
+    #[serde(default)] // Set to false if not in message from client
     pub is_admin: bool,
+    #[serde(default)] // Set to false if not in message from client
+    pub is_read_only: bool,
 }
 
 impl NewUser {
@@ -272,6 +290,12 @@ pub async fn add(
 
     let salt = generate_salt();
     Ok(db
-        .add_user(&new_user.name, &new_user.pwd1, &salt, new_user.is_admin)
+        .add_user(
+            &new_user.name,
+            &new_user.pwd1,
+            &salt,
+            new_user.is_admin,
+            new_user.is_read_only,
+        )
         .await?)
 }

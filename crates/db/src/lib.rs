@@ -22,6 +22,6 @@ pub use crate_meta::CrateMeta;
 pub use crate_summary::CrateSummary;
 pub use doc_queue_entry::DocQueueEntry;
 pub use krate::Crate;
-pub use provider::mock;
 pub use provider::DbProvider;
+pub use provider::mock;
 pub use user::User;

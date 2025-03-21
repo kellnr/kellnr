@@ -132,7 +132,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::Request;
     use axum::routing::get;
-    use axum::{middleware, Router};
+    use axum::{Router, middleware};
     use common::util::generate_rand_string;
     use db::mock::MockDb;
     use http_body_util::BodyExt;

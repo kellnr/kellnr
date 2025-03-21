@@ -10,4 +10,5 @@ pub struct User {
     #[serde(skip_serializing)]
     pub salt: String,
     pub is_admin: bool,
+    pub is_read_only: bool,
 }

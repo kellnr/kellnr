@@ -1,9 +1,9 @@
 use super::config_json::ConfigJson;
 use appstate::{DbState, SettingsState};
 use axum::{
+    Json,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    Json,
 };
 use common::{normalized_name::NormalizedName, original_name::OriginalName, prefetch::Prefetch};
 use db::DbProvider;
@@ -58,10 +58,10 @@ mod tests {
     use crate::config_json::ConfigJson;
     use appstate::AppStateData;
     use axum::{
-        body::Body,
-        http::{header, Request},
-        routing::get,
         Router,
+        body::Body,
+        http::{Request, header},
+        routing::get,
     };
     use db::error::DbError;
     use db::mock::MockDb;

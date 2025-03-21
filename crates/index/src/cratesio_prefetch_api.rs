@@ -1,8 +1,8 @@
 use super::config_json::ConfigJson;
 use appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
-use axum::Json;
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use common::index_metadata::IndexMetadata;
 use common::normalized_name::NormalizedName;
@@ -108,9 +108,7 @@ async fn internal_prefetch_cratesio(
 
     trace!(
         "Prefetching {} from crates.io cache: Etag {:?} - LM {:?}",
-        name,
-        if_none_match,
-        if_modified_since
+        name, if_none_match, if_modified_since
     );
 
     let prefetch_state = db
@@ -302,8 +300,7 @@ async fn handle_cratesio_prefetch_msg(
         Ok(CratesioPrefetchMsg::IncDownloadCnt(msg)) => {
             trace!(
                 "Incrementing download count for {} {}",
-                msg.name,
-                msg.version
+                msg.name, msg.version
             );
             db.increase_cached_download_counter(&msg.name, &msg.version)
                 .await
@@ -515,10 +512,10 @@ mod tests {
     use crate::config_json::ConfigJson;
     use appstate::AppStateData;
     use axum::{
-        body::Body,
-        http::{header, Request},
-        routing::get,
         Router,
+        body::Body,
+        http::{Request, header},
+        routing::get,
     };
     use db::mock::MockDb;
     use http_body_util::BodyExt;

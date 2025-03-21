@@ -50,6 +50,7 @@ export type Registry = {
     max_crate_size: number
     max_db_connections: number
     auth_required: boolean
+    required_crate_fields: string[]
 }
 
 export const emptySettings = {
@@ -89,5 +90,6 @@ export const emptySettings = {
         max_crate_size: 0,
         max_db_connections: 0,
         auth_required: false,
+        required_crate_fields: []
     },
 }

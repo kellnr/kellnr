@@ -290,7 +290,7 @@ const sortedBuildDeps = computed(() => {
 
 const flattenedFeatures = computed(() => {
   const features = selected_version.value.features;
-  const flattened = [];
+  const flattened: string[] = [];
   for (let key in features) {
     if (features[key].length > 0) {
       flattened.push(key + ": " + features[key].join(", "));
@@ -298,7 +298,8 @@ const flattenedFeatures = computed(() => {
       flattened.push(key);
     }
   }
-  return flattened.sort();
+  flattened.sort();
+  return flattened;
 });
 
 const sortedOwners = computed(() => {
@@ -368,9 +369,9 @@ function deleteCrateUser(name: string) {
 }
 
 function getCrateUsers() {
+  // disable caching to get updated token list
   axios
-    // disable caching to get updated token list (TS doesn't recognize cache option)
-    // @ts-ignore
+    // @ts-expect-error TS doesn't recognize cache option
     .get(CRATE_USERS(crate.value.name), { cache: false })
     .then((res) => {
       if (res.status == 200) {
@@ -391,7 +392,7 @@ function deleteVersion(crate: string, version: string) {
           version: version
         }
       }
-    ).then((_response) => {
+    ).then(() => {
       router.push({ name: "Crates" })
     }).catch((error) => {
       console.log(error);
@@ -407,7 +408,7 @@ function deleteCrate(crate: string) {
           name: crate,
         }
       }
-    ).then((_response) => {
+    ).then(() => {
       router.push({ name: "Crates" })
     }).catch((error) => {
       console.log(error);
@@ -427,7 +428,7 @@ function showBuildRustdoc(): boolean {
 
 function buildDoc(crate: string, version: string) {
   axios.post(DOCS_BUILD, null, { params: { package: crate, version: version } })
-    .then((_res) => {
+    .then(() => {
       router.push({ name: "DocQueue" })
     })
     .catch((error) => {
@@ -474,13 +475,13 @@ function getCrateData(name: string, version?: string) {
 }
 
 function getCrateAccessData() {
+  // disable caching to get updated token list
   axios
-    // disable caching to get updated token list (TS doesn't recognize cache option)
-    // @ts-ignore
+    // @ts-expect-error TS doesn't recognize cache option
     .get(CRATE_ACCESS_DATA(crate.value.name), { cache: false })
     .then((response) => {
       crate_access.value = response.data;
-      is_download_restricted.value = crate_access.value.download_restricted;
+      is_download_restricted.value = crate_access.value.is_download_restricted;
     })
     .catch((error) => {
       console.log(error);
@@ -557,7 +558,7 @@ onBeforeMount(() => {
 
 // Watches route changes and reloads the data.
 // Needed, if the query parameter "name=crate" changes.
-watch(route, (_oldRoute, _newRoute) => {
+watch(route, () => {
   getAllData()
   changeTab(defaultTab.value)
 })

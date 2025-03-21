@@ -1,6 +1,6 @@
 use crate::error::RouteError;
+use axum::{RequestPartsExt, extract::State};
 use axum::{extract::Request, http::request::Parts, middleware::Next, response::Response};
-use axum::{extract::State, RequestPartsExt};
 use axum_extra::extract::PrivateCookieJar;
 use settings::constants;
 
@@ -121,11 +121,11 @@ mod session_tests {
     use super::*;
     use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
-    use axum::{body::Body, routing::get, Router};
+    use axum::{Router, body::Body, routing::get};
     use axum_extra::extract::cookie::Key;
     use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
-    use hyper::{header, Request, StatusCode};
+    use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
     use settings::Settings;
     use std::{result, sync::Arc};
@@ -408,11 +408,11 @@ mod auth_middleware_tests {
     use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
     use axum::middleware::from_fn_with_state;
-    use axum::{body::Body, routing::get, Router};
+    use axum::{Router, body::Body, routing::get};
     use axum_extra::extract::cookie::Key;
     use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
-    use hyper::{header, Request, StatusCode};
+    use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
     use settings::Settings;
     use std::sync::Arc;
