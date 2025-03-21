@@ -4,14 +4,14 @@ use testcontainers::{GenericImage, Image, ImageExt};
 use common::original_name::OriginalName;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
-use settings::s3::S3;
 use settings::Settings;
+use settings::s3::S3;
 use std::sync::Arc;
 use std::{convert::TryFrom, path::Path};
 use storage::kellnr_crate_storage::KellnrCrateStorage;
+use testcontainers::ContainerAsync;
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
-use testcontainers::ContainerAsync;
 
 struct TestBin {
     settings: Settings,

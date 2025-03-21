@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use bytes::Bytes;
 use moka::future::Cache;
 use object_store::{
+    ObjectStore, PutMode,
     aws::{AmazonS3, AmazonS3Builder},
     local::LocalFileSystem,
     path::{self, Path},
-    ObjectStore, PutMode,
 };
 
 pub enum Storage {

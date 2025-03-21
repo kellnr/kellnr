@@ -84,11 +84,8 @@ mod bin_tests {
     use common::publish_metadata::PublishMetadata;
     use common::version::Version;
     use settings::Settings;
-
     use std::{convert::TryFrom, path::Path};
     use storage::kellnr_crate_storage::KellnrCrateStorage;
-    use tokio::fs::File;
-    use tokio::io::AsyncReadExt;
 
     struct TestBin {
         settings: Settings,
@@ -287,7 +284,7 @@ mod bin_tests {
         assert!(
             test_storage
                 .crate_storage
-                .get_file(crate_path.clone())
+                .get_file(crate_path.to_str().unwrap())
                 .await
                 .is_some()
         );
@@ -304,7 +301,7 @@ mod bin_tests {
         assert!(
             test_storage
                 .crate_storage
-                .get_file(crate_path.clone())
+                .get_file(crate_path.to_str().unwrap())
                 .await
                 .is_none()
         );

@@ -102,8 +102,6 @@ impl Settings {
     pub fn crates_path(&self) -> String {
         format!("{}/crates", &self.registry.data_dir)
     }
-
-
 }
 
 pub fn get_settings() -> Result<Settings, ConfigError> {

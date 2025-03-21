@@ -6,15 +6,12 @@ use common::original_name::OriginalName;
 use common::util::generate_rand_string;
 use common::version::Version;
 use moka::future::Cache;
-use settings::{s3::S3, Settings};
+use settings::{Settings, s3::S3};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tokio::{
-    fs::{DirBuilder, File, create_dir_all},
-    io::{AsyncReadExt, AsyncWriteExt},
-};
+use tokio::fs::DirBuilder;
 
 pub type CrateCache = Cache<PathBuf, Vec<u8>>;
 
