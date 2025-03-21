@@ -413,7 +413,7 @@ dependencies = [
  "db",
  "hyper",
  "mockall",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "settings",
  "storage",
@@ -1102,9 +1102,8 @@ checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 name = "common"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "axum",
- "rand 0.8.5",
+ "rand 0.9.0",
  "regex",
  "sea-orm",
  "semver 1.0.26",
@@ -1589,7 +1588,6 @@ dependencies = [
 name = "docs"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "appstate",
  "auth",
  "axum",
@@ -3492,7 +3490,6 @@ dependencies = [
 name = "index"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "appstate",
  "axum",
  "chrono",
@@ -5201,7 +5198,6 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 name = "registry"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "appstate",
  "auth",
  "axum",
@@ -5212,7 +5208,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "mockall",
- "rand 0.8.5",
+ "rand 0.9.0",
  "reqwest",
  "rm_rf",
  "serde",
@@ -6398,7 +6394,6 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "storage"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "axum",
  "bytes 1.10.1",
  "common",

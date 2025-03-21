@@ -92,7 +92,7 @@ db = "kellnr"
 user = ""
 pwd = ""
 
-
+# Configure S3 as the storage backend instead of the local filesystem
 [s3]
 enabled = true
 access_key = "minioadmin"

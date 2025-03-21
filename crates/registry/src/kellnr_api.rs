@@ -4,7 +4,6 @@ use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
 use crate::{crate_user, crate_version};
-use anyhow::Result;
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
@@ -403,7 +402,9 @@ mod reg_api_tests {
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
-    use rand::{Rng, distributions::Alphanumeric, thread_rng};
+    use rand::Rng;
+    use rand::distr::Alphanumeric;
+    use rand::rng;
     use settings::Settings;
     use std::path::PathBuf;
     use std::{iter, path};
@@ -1132,7 +1133,7 @@ mod reg_api_tests {
     }
 
     fn generate_rand_string(length: usize) -> String {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         iter::repeat(())
             .map(|()| rng.sample(Alphanumeric))
             .map(char::from)

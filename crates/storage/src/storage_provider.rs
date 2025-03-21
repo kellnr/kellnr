@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use crate::storage_error::StorageError;
 use bytes::Bytes;
 use moka::future::Cache;
 use object_store::{
@@ -8,6 +7,7 @@ use object_store::{
     local::LocalFileSystem,
     path::{self, Path},
 };
+use std::path::PathBuf;
 
 pub enum Storage {
     S3(S3Storage),
@@ -17,14 +17,14 @@ pub enum Storage {
 pub type CrateCache = Cache<PathBuf, Vec<u8>>;
 
 impl Storage {
-    pub async fn get(&self, key: &str) -> Result<Bytes, object_store::Error> {
+    pub async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
         match self {
             Storage::S3(s3_storage) => s3_storage.get(key).await,
             Storage::FS(fsstorage) => fsstorage.get(key).await,
         }
     }
 
-    pub async fn put(&self, key: &str, object: Option<Bytes>) -> Result<(), object_store::Error> {
+    pub async fn put(&self, key: &str, object: Option<Bytes>) -> Result<(), StorageError> {
         match self {
             Storage::S3(s3_storage) => s3_storage.put(key, object).await,
             Storage::FS(fsstorage) => fsstorage.put(key, object).await,
@@ -34,7 +34,7 @@ impl Storage {
 
 pub struct FSStorage(LocalFileSystem, Option<CrateCache>);
 impl FSStorage {
-    pub fn new(path: &str, cache_size: u64) -> Result<Self, anyhow::Error> {
+    pub fn new(path: &str, cache_size: u64) -> Result<Self, StorageError> {
         let client = LocalFileSystem::new_with_prefix(path)?;
         let cache = if cache_size > 0 {
             Some(Cache::new(cache_size))
@@ -53,7 +53,7 @@ impl FSStorage {
         &self.0
     }
 
-    async fn with_cache(&self, key: &str) -> Result<Bytes, object_store::Error> {
+    async fn with_cache(&self, key: &str) -> Result<Bytes, StorageError> {
         let path = PathBuf::from(key);
 
         async fn fallback(
@@ -72,15 +72,17 @@ impl FSStorage {
                     Ok(data)
                 }
             }
-            None => fallback(self.storage(), key).await,
+            None => fallback(self.storage(), key)
+                .await
+                .map_err(StorageError::from),
         }
     }
 
-    async fn get(&self, key: &str) -> Result<Bytes, object_store::Error> {
+    async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
         self.with_cache(key).await
     }
 
-    async fn put(&self, key: &str, object: Option<Bytes>) -> Result<(), object_store::Error> {
+    async fn put(&self, key: &str, object: Option<Bytes>) -> Result<(), StorageError> {
         let path = PathBuf::from(key);
 
         match object {
@@ -134,7 +136,7 @@ impl S3Storage {
         access_key_id: &str,
         secret_access_key: &str,
         allow_http: bool,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Result<Self, StorageError> {
         let client = AmazonS3Builder::new()
             .with_endpoint(url)
             .with_bucket_name(bucket_name)
@@ -158,15 +160,15 @@ impl S3Storage {
         }
     }
 
-    async fn get(&self, key: &str) -> Result<Bytes, object_store::Error> {
+    async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
         let path = Self::try_path_from(key)?;
-        let get_result = self.0.get(&path).await.expect("GOT ERROR!!!");
+        let get_result = self.0.get(&path).await?;
         let res = get_result.bytes().await?;
 
         Ok(res)
     }
 
-    async fn put(&self, key: &str, object: Option<Bytes>) -> Result<(), object_store::Error> {
+    async fn put(&self, key: &str, object: Option<Bytes>) -> Result<(), StorageError> {
         let path = Self::try_path_from(key)?;
 
         if let Some(object) = object {

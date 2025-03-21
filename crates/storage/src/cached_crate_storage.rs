@@ -99,7 +99,11 @@ impl CachedCrateStorage {
             .put(&crate_path, Some(crate_data.clone().to_vec().into()))
             .await
             .map_err(|e| {
-                if let object_store::Error::AlreadyExists { path: _, source: _ } = e {
+                if let StorageError::S3Error(object_store::Error::AlreadyExists {
+                    path: _,
+                    source: _,
+                }) = e
+                {
                     return StorageError::CrateExists(name.to_string(), version.to_string());
                 }
                 StorageError::GenericError(format!("Error while adding bin package. Error: {}", e))

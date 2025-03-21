@@ -1,8 +1,8 @@
-use rand::{Rng, distributions::Alphanumeric, thread_rng};
+use rand::{Rng, distr::Alphanumeric, rng};
 use std::iter;
 
 pub fn generate_rand_string(length: usize) -> String {
-    let mut rng = thread_rng();
+    let mut rng = rng();
     iter::repeat(())
         .map(|()| rng.sample(Alphanumeric))
         .map(char::from)

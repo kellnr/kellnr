@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -40,4 +39,8 @@ pub enum StorageError {
     StorageInitError(String),
     #[error("Error from storage provider. Reason: {0}")]
     GenericError(String),
+    #[error("S3 error: {0}")]
+    S3Error(#[from] object_store::Error),
+    #[error("S3 path error: {0}")]
+    S3PathError(#[from] object_store::path::Error),
 }

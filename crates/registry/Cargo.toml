@@ -15,7 +15,6 @@ storage.workspace = true
 error.workspace = true
 
 # External dependencies from crates.io
-anyhow.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
