@@ -10,6 +10,7 @@ use settings::{s3::S3, Settings};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
+};
 use tokio::{
     fs::{DirBuilder, File, create_dir_all},
     io::{AsyncReadExt, AsyncWriteExt},
