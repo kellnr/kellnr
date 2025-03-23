@@ -9,6 +9,7 @@ use std::{convert::TryFrom, path::Path};
 use storage::cached_crate_storage::DynStorage;
 use storage::kellnr_crate_storage::KellnrCrateStorage;
 use storage::s3_storage::S3Storage;
+mod image;
 
 struct TestData {
     settings: Settings,
@@ -70,15 +71,10 @@ impl TestData {
 #[tokio::test]
 async fn add_and_get_crate() {
     let host = container.get_host().await.unwrap().to_string();
-    let port = container
-        .get_host_port_ipv4(9000)
-        .await
-        .unwrap()
-        .to_string();
-    let host = format!("http://{}:{}", host, port);
+    let url = format!("http://{}:{}", host, port);
     let cratedata = Arc::new([0x00, 0x11, 0x22, 0x33, 0x44]);
     let metadata = PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0");
-    let test_storage = TestData::from("Test_Add_crate_binary_Upper-Case", &host).await;
+    let test_storage = TestData::from("Test_Add_crate_binary_Upper-Case", &url).await;
     let name = OriginalName::try_from(metadata.name).unwrap();
     let version = Version::try_from("0.1.0").unwrap();
     let path = test_storage
@@ -97,65 +93,15 @@ async fn add_and_get_crate() {
     assert!(put_result.is_ok());
     assert!(result_crate.is_some());
     assert_eq!(Some(vec![0x00, 0x11, 0x22, 0x33, 0x44]), result_crate);
-
-    container.stop().await.expect("Failed to stop");
-    container.rm().await.expect("Failed to remove container");
 }
 
 #[minio_testcontainer]
 #[tokio::test]
-async fn add_remove_crate() {
+async fn remove_crate() {
     let host = container.get_host().await.unwrap().to_string();
-    let port = container
-        .get_host_port_ipv4(9000)
-        .await
-        .unwrap()
-        .to_string();
-    let host = format!("http://{}:{}", host, port);
-
+    let url = format!("http://{}:{}", host, port);
     let cratedata = Arc::new([0x00, 0x11, 0x22, 0x33, 0x44]);
-
-    let test_storage = TestData::from("test_add_crate_binary", &host).await;
-    let name = OriginalName::try_from("test").unwrap();
-    let version = Version::try_from("0.1.0").unwrap();
-    let result = test_storage
-        .crate_storage
-        .put(&name, &version, cratedata)
-        .await;
-
-    let path = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
-    let path = path.as_os_str().to_str().unwrap();
-
-    let result_crate = test_storage.crate_storage.get(path).await;
-
-    assert!(result.is_ok());
-    assert!(result_crate.is_some());
-    assert_eq!(Some(vec![0x00, 0x11, 0x22, 0x33, 0x44]), result_crate);
-
-    let cratedata = Arc::new([0x00, 0x11, 0x22, 0x33, 0x44]);
-
-    let metadata = PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0");
-
-    let test_storage = TestData::from("Test_Add_crate_binary_Upper-Case", &host).await;
-    let name = OriginalName::try_from(metadata.name).unwrap();
-    let version = Version::try_from("0.1.0").unwrap();
-    let put_result = test_storage
-        .crate_storage
-        .put(&name, &version, cratedata)
-        .await;
-    let path = test_storage
-        .crate_storage
-        .crate_path(&name.to_string(), &version.to_string());
-
-    let result_crate = test_storage.crate_storage.get(path.as_str()).await;
-
-    assert!(put_result.is_ok());
-    assert!(result_crate.is_some());
-    assert_eq!(Some(vec![0x00, 0x11, 0x22, 0x33, 0x44]), result_crate);
-
-    let cratedata = Arc::new([0x00, 0x11, 0x22, 0x33, 0x44]);
-
-    let test_storage = TestData::from("test_delete", &host).await;
+    let test_storage = TestData::from("test_delete", &url).await;
     let name = OriginalName::try_from("test").unwrap();
     let version = Version::try_from("0.1.0").unwrap();
     test_storage
@@ -167,7 +113,4 @@ async fn add_remove_crate() {
     let res = test_storage.crate_storage.delete(&name, &version).await;
 
     assert!(res.is_ok());
-
-    container.stop().await.expect("Failed to stop");
-    container.rm().await.expect("Failed to remove container");
 }

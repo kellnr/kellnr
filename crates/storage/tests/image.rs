@@ -5,8 +5,8 @@ use testcontainers::core::WaitFor;
 
 const NAME: &str = "minio/minio";
 const TAG: &str = "latest";
-const MINIO_ROOT_USER: &str = "admin";
-const MINIO_ROOT_PASSWORD: &str = "admin";
+const MINIO_ROOT_USER: &str = "minioadmin";
+const MINIO_ROOT_PASSWORD: &str = "minioadmin";
 const MINIO_CONSOLE_ADDRESS: &str = ":9001";
 
 #[derive(Debug, Clone)]
