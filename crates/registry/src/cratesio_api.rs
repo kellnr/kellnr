@@ -139,7 +139,9 @@ mod tests {
     use settings::Settings;
     use std::path;
     use std::path::PathBuf;
+    use storage::cached_crate_storage::DynStorage;
     use storage::cratesio_crate_storage::CratesIoCrateStorage;
+    use storage::fs_storage::FSStorage;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -290,7 +292,8 @@ mod tests {
     }
 
     async fn app(settings: Settings) -> Router {
-        let cs = CratesIoCrateStorage::new(&settings).await.unwrap();
+        let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
+        let cs = CratesIoCrateStorage::new(&settings, storage).await.unwrap();
         let mut db = MockDb::new();
         db.expect_increase_cached_download_counter()
             .returning(|_, _| Ok(()));

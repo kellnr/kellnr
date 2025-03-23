@@ -33,6 +33,7 @@ fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
     }
 }
 
+#[axum::async_trait]
 impl FromRequest<AppStateData, Body> for PubData {
     type Rejection = ApiError;
 
@@ -84,7 +85,10 @@ mod bin_tests {
     use common::version::Version;
     use settings::Settings;
     use std::{convert::TryFrom, path::Path};
-    use storage::kellnr_crate_storage::KellnrCrateStorage;
+    use storage::{
+        cached_crate_storage::DynStorage, fs_storage::FSStorage,
+        kellnr_crate_storage::KellnrCrateStorage,
+    };
 
     struct TestBin {
         settings: Settings,
@@ -105,7 +109,8 @@ mod bin_tests {
                 },
                 ..Settings::default()
             };
-            let crate_storage = KellnrCrateStorage::new(&settings).await.unwrap();
+            let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+            let crate_storage = KellnrCrateStorage::new(&settings, storage).await.unwrap();
             TestBin {
                 settings,
                 crate_storage,
@@ -279,14 +284,9 @@ mod bin_tests {
             .unwrap();
 
         let crate_path = Path::new(&test_storage.settings.bin_path()).join("test-0.2.0.crate");
+        let crate_path = crate_path.to_string_lossy().to_string();
 
-        assert!(
-            test_storage
-                .crate_storage
-                .get(crate_path.to_str().unwrap())
-                .await
-                .is_some()
-        );
+        assert!(test_storage.crate_storage.get(&crate_path).await.is_some());
         assert!(test_storage.crate_storage.cache_has_path(&crate_path));
 
         test_storage
@@ -297,15 +297,9 @@ mod bin_tests {
 
         assert!(!test_storage.crate_storage.cache_has_path(&crate_path));
 
-        assert!(
-            test_storage
-                .crate_storage
-                .get(crate_path.to_str().unwrap())
-                .await
-                .is_none()
-        );
+        assert!(test_storage.crate_storage.get(&crate_path).await.is_none());
 
-        assert!(!crate_path.exists());
+        assert!(!std::path::PathBuf::from(crate_path).exists());
         test_storage.clean();
     }
 }

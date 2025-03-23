@@ -16,7 +16,7 @@ pub struct CachedCrateStorage {
 }
 
 impl CachedCrateStorage {
-    pub async fn new(
+    pub fn new(
         crate_folder: &str,
         settings: &Settings,
         storage: DynStorage,
@@ -90,5 +90,12 @@ impl CachedCrateStorage {
         if let Some(cache) = &self.cache {
             cache.invalidate(file_path).await;
         }
+    }
+
+    pub fn cache_has_path(&self, file_path: &str) -> bool {
+        self.cache
+            .as_ref()
+            .map(|cache| cache.contains_key(file_path))
+            .unwrap_or(false)
     }
 }

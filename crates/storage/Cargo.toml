@@ -11,6 +11,7 @@ license-file = "../../LICENSE"
 # Internal dependencies
 settings.workspace = true
 common.workspace = true
+minio_testcontainer.workspace = true
 
 # External dependencies
 mockall.workspace = true

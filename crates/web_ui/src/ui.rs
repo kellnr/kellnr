@@ -355,6 +355,8 @@ mod tests {
     use settings::Settings;
     use settings::{Postgresql, constants};
     use std::sync::Arc;
+    use storage::cached_crate_storage::DynStorage;
+    use storage::fs_storage::FSStorage;
     use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tower::ServiceExt;
 
@@ -365,10 +367,10 @@ mod tests {
             .expect_validate_session()
             .returning(|_| Ok(("admin".to_string(), true)));
 
-        let settings = Settings::default();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -386,10 +388,10 @@ mod tests {
             .expect_validate_session()
             .returning(|_| Ok(("admin".to_string(), true)));
 
-        let settings = Settings::default();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -437,10 +439,10 @@ mod tests {
             .expect_validate_session()
             .with(eq("cookie"))
             .returning(move |_| Ok(("user".to_string(), false)));
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -476,10 +478,10 @@ mod tests {
             .expect_crate_version_exists()
             .with(eq(1), eq("1.0.0"))
             .returning(move |_, _| Ok(false));
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -535,10 +537,10 @@ mod tests {
                     is_read_only: false,
                 })
             });
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -604,10 +606,10 @@ mod tests {
             .times(1)
             .returning(move |_, _, _| Ok(()));
 
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -673,10 +675,10 @@ mod tests {
             .times(1)
             .returning(move |_, _, _| Ok(()));
 
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -726,10 +728,10 @@ mod tests {
             .expect_get_total_cached_downloads()
             .returning(move || Err(DbError::FailedToCountTotalDownloads));
 
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -788,10 +790,10 @@ mod tests {
             .expect_get_total_cached_downloads()
             .returning(move || Err(DbError::FailedToCountTotalDownloads));
 
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -859,10 +861,10 @@ mod tests {
             )))
         });
 
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -896,12 +898,12 @@ mod tests {
 
     #[tokio::test]
     async fn kellnr_version_returns_version() {
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let mock_db = MockDb::new();
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -918,7 +920,7 @@ mod tests {
     #[tokio::test]
     async fn search_not_hits_returns_nothing() {
         let mut mock_db = MockDb::new();
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
 
         mock_db
             .expect_search_in_crate_name()
@@ -927,7 +929,7 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -952,7 +954,7 @@ mod tests {
     #[tokio::test]
     async fn search_returns_only_searched_results() {
         let mut mock_db = MockDb::new();
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
 
         let test_crate_summary = CrateOverview {
             name: "hello".to_string(),
@@ -970,7 +972,7 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -996,7 +998,7 @@ mod tests {
     #[tokio::test]
     async fn crate_get_crate_information() {
         let mut mock_db = MockDb::new();
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
 
         let expected_crate_data = CrateData {
             name: "crate1".to_string(),
@@ -1045,7 +1047,7 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -1068,7 +1070,7 @@ mod tests {
     #[tokio::test]
     async fn crates_get_page() {
         let mut mock_db = MockDb::new();
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
 
         let test_crate_overview = CrateOverview {
             name: "c1".to_string(),
@@ -1085,6 +1087,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         let tc = test_crates.clone();
+
         mock_db
             .expect_get_crate_overview_list()
             .with(eq(10), eq(0), eq(false))
@@ -1092,7 +1095,7 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -1115,7 +1118,7 @@ mod tests {
     #[tokio::test]
     async fn crates_get_all_crates() {
         let mut mock_db = MockDb::new();
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
 
         let expected_crate_overview = vec![
             CrateOverview {
@@ -1155,7 +1158,7 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -1177,10 +1180,10 @@ mod tests {
     #[tokio::test]
     async fn cratesio_data_returns_data() {
         let mock_db = MockDb::new();
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -1202,10 +1205,10 @@ mod tests {
     #[tokio::test]
     async fn cratesio_data_not_found() {
         let mock_db = MockDb::new();
-        let settings = test_settings();
+        let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
             settings,
         )
         .await
@@ -1220,8 +1223,11 @@ mod tests {
         assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
-    fn test_settings() -> Settings {
-        Settings::default()
+    fn test_deps() -> (Settings, DynStorage) {
+        let settings = Settings::default();
+        let storage = FSStorage::new(&settings.crates_path()).unwrap();
+        let storage = Box::new(storage) as DynStorage;
+        (settings, storage)
     }
 
     const TEST_KEY: &[u8] = &[1; 64];

@@ -68,6 +68,7 @@ impl MaybeUser {
     }
 }
 
+#[axum::async_trait]
 impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
@@ -128,6 +129,8 @@ mod session_tests {
     use mockall::predicate::*;
     use settings::Settings;
     use std::{result, sync::Arc};
+    use storage::cached_crate_storage::DynStorage;
+    use storage::fs_storage::FSStorage;
     use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tower::ServiceExt;
 
@@ -145,6 +148,7 @@ mod session_tests {
 
     async fn app(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
+        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         Router::new()
             .route("/admin", get(admin_endpoint))
             .route("/normal", get(normal_endpoint))
@@ -152,7 +156,7 @@ mod session_tests {
             .with_state(AppStateData {
                 db,
                 signing_key: Key::from(crate::test_helper::TEST_KEY),
-                crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
+                crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage).await.unwrap()),
                 settings: Arc::new(settings),
                 ..appstate::test_state().await
             })

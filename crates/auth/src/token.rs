@@ -67,6 +67,7 @@ impl Token {
     }
 }
 
+#[axum::async_trait]
 impl FromRequestParts<AppStateData> for Token {
     type Rejection = StatusCode;
 
@@ -78,6 +79,7 @@ impl FromRequestParts<AppStateData> for Token {
     }
 }
 
+#[axum::async_trait]
 impl FromRequestParts<AppStateData> for OptionToken {
     type Rejection = StatusCode;
 

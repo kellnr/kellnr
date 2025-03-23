@@ -28,6 +28,7 @@ impl From<PerPage> for usize {
     }
 }
 
+#[axum::async_trait]
 impl<S> axum::extract::FromRequestParts<S> for SearchParams
 where
     S: Sync,

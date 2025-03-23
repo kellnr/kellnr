@@ -26,6 +26,7 @@ auth = { path = "./crates/auth" }
 error = { path = "./crates/error" }
 appstate = { path = "./crates/appstate" }
 storage = { path = "./crates/storage" }
+minio_testcontainer = { path = "./crates/storage/minio_testcontainer" }
 
 # External dependencies from crates.io
 jsonwebtoken = "9.3.0"
@@ -62,8 +63,8 @@ time = "0.3.39"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"] }
 flume = "0.11.1"
-axum = { version = "0.8.1", features = ["macros", "http2"] }
-axum-extra = { version = "0.10.0", features = ["cookie", "cookie-private", "typed-header"] }
+axum = { version = "0.7.9", features = ["macros", "http2"] }
+axum-extra = { version = "0.9.6", features = ["cookie", "cookie-private", "typed-header"] }
 tokio = { version = "1.44.0", features = ["macros"] }
 tower = { version = "0.5.2", features = ["util"] }
 hyper = "1.6.0"

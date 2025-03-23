@@ -408,6 +408,8 @@ mod reg_api_tests {
     use settings::Settings;
     use std::path::PathBuf;
     use std::{iter, path};
+    use storage::cached_crate_storage::DynStorage;
+    use storage::fs_storage::FSStorage;
     use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tokio::fs::read;
     use tower::ServiceExt;
@@ -1175,7 +1177,8 @@ mod reg_api_tests {
     async fn app(settings: Settings) -> Router {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
         let db = Database::new(&con_string, 10).await.unwrap();
-        let cs = KellnrCrateStorage::new(&settings).await.unwrap();
+        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+        let cs = KellnrCrateStorage::new(&settings, storage).await.unwrap();
         db.add_auth_token("test", TOKEN, "admin").await.unwrap();
         db.add_user("ro_dummy", "ro", "", false, true)
             .await

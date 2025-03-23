@@ -7,7 +7,7 @@ use settings::Settings;
 use std::sync::Arc;
 use storage::{
     cached_crate_storage::DynStorage, cratesio_crate_storage::CratesIoCrateStorage,
-    fs_storage::FSStorage, kellnr_crate_storage::KellnrCrateStorage, storage::Storage,
+    fs_storage::FSStorage, kellnr_crate_storage::KellnrCrateStorage,
 };
 
 pub type AppState = axum::extract::State<AppStateData>;
