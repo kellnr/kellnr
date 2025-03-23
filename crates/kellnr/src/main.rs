@@ -16,7 +16,11 @@ use registry::{cratesio_api, kellnr_api};
 use settings::{LogFormat, Settings};
 use std::{net::SocketAddr, path::Path, sync::Arc};
 use storage::{
-    cratesio_crate_storage::CratesIoCrateStorage, kellnr_crate_storage::KellnrCrateStorage,
+    cached_crate_storage::{self, CachedCrateStorage, DynStorage},
+    cratesio_crate_storage::CratesIoCrateStorage,
+    fs_storage::FSStorage,
+    kellnr_crate_storage::KellnrCrateStorage,
+    s3_storage::S3Storage,
 };
 use tokio::{fs::create_dir_all, net::TcpListener};
 use tower_http::services::{ServeDir, ServeFile};
@@ -253,7 +257,7 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
             Database::new(con_string, settings.registry.max_db_connections)
                 .await
                 .expect("Failed to create database"),
-            KellnrCrateStorage::new(settings)
+            KellnrCrateStorage::new(settings.crates_path(), settings)
                 .await
                 .expect("Failed to create crate storage."),
             settings.docs_path(),
@@ -263,13 +267,22 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
 }
 
 async fn init_cratesio_proxy(settings: &Settings) -> CratesIoCrateStorage {
-    CratesIoCrateStorage::new(settings)
+    let storage = if settings.s3.enabled {
+        let s = S3Storage::try_from((settings.crates_io_path(), settings))
+            .expect("Failed to create S3 storage.");
+        Box::new(s) as DynStorage
+    } else {
+        let s = FSStorage::new(&settings.crates_io_path()).expect("Failed to create FS storage.");
+        Box::new(s) as DynStorage
+    };
+
+    CratesIoCrateStorage::new(settings.crates_io_path(), settings)
         .await
         .expect("Failed to create crates.io crate storage.")
 }
 
 async fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
-    KellnrCrateStorage::new(settings)
+    KellnrCrateStorage::new(settings.crates_path(), settings)
         .await
         .expect("Failed to create crate storage.")
 }

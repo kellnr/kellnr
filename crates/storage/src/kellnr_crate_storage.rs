@@ -1,23 +1,40 @@
-use crate::{cached_crate_storage::CachedCrateStorage, storage_error::StorageError};
-use common::{original_name::OriginalName, version::Version};
+use crate::{
+    cached_crate_storage::{CachedCrateStorage, DynStorage},
+    storage_error::StorageError,
+};
+use common::util::generate_rand_string;
 use settings::Settings;
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    path::{Path, PathBuf},
+};
+use tokio::fs::DirBuilder;
 
 pub struct KellnrCrateStorage(CachedCrateStorage);
 
 impl KellnrCrateStorage {
-    pub async fn new(settings: &Settings) -> Result<Self, StorageError> {
+    pub async fn new(settings: &Settings, storage: DynStorage) -> Result<Self, StorageError> {
         Ok(Self(
-            CachedCrateStorage::new(settings.crates_path().as_str(), settings).await?,
+            CachedCrateStorage::new(settings.crates_path().as_str(), settings, storage).await?,
         ))
     }
 
-    pub async fn delete(
-        &self,
-        crate_name: &OriginalName,
-        crate_version: &Version,
-    ) -> Result<(), StorageError> {
-        self.remove_bin(crate_name, crate_version).await?;
+    pub async fn create_rand_doc_queue_path(&self) -> Result<PathBuf, StorageError> {
+        let rand = generate_rand_string(10);
+        let dir = self.doc_queue_path.join(rand);
+        Self::create_recursive_path(&dir).await?;
+
+        Ok(dir)
+    }
+
+    async fn create_recursive_path(path: &Path) -> Result<(), StorageError> {
+        if !path.exists() {
+            DirBuilder::new()
+                .recursive(true)
+                .create(path)
+                .await
+                .map_err(|e| StorageError::CreateDocQueuePath(path.to_path_buf(), e))?;
+        }
         Ok(())
     }
 }

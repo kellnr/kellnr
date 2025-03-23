@@ -1,13 +1,16 @@
-use crate::{cached_crate_storage::CachedCrateStorage, storage_error::StorageError};
+use crate::{
+    cached_crate_storage::{CachedCrateStorage, DynStorage},
+    storage_error::StorageError,
+};
 use settings::Settings;
 use std::ops::{Deref, DerefMut};
 
 pub struct CratesIoCrateStorage(CachedCrateStorage);
 
 impl CratesIoCrateStorage {
-    pub async fn new(settings: &Settings) -> Result<Self, StorageError> {
+    pub async fn new(settings: &Settings, storage: DynStorage) -> Result<Self, StorageError> {
         Ok(Self(
-            CachedCrateStorage::new(settings.crates_io_path().as_str(), settings).await?,
+            CachedCrateStorage::new(settings.crates_io_path().as_str(), settings, storage).await?,
         ))
     }
 }

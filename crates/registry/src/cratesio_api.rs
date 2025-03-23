@@ -75,7 +75,7 @@ pub async fn download(
         PathBuf::from(file_path.clone()).display()
     );
 
-    match crate_storage.get_file(file_path.as_str()).await {
+    match crate_storage.get(file_path.as_str()).await {
         Some(file) => {
             let msg = DownloadData {
                 name: package.into(),
@@ -105,7 +105,7 @@ pub async fn download(
             let crate_data = res.bytes().await.map_err(log_return_error)?;
             let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
             let _save = crate_storage
-                .add_bin_package(&package, &version, crate_data.clone())
+                .put(&package, &version, crate_data.clone())
                 .await
                 .map_err(|e| {
                     error!("Failed to save crate to disk: {}", e);
@@ -113,7 +113,7 @@ pub async fn download(
                 })?;
 
             crate_storage
-                .get_file(file_path.as_str())
+                .get(file_path.as_str())
                 .await
                 .ok_or(StatusCode::NOT_FOUND)
         }

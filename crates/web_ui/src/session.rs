@@ -68,7 +68,6 @@ impl MaybeUser {
     }
 }
 
-#[axum::async_trait]
 impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
     type Rejection = RouteError;
 

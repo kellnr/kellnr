@@ -22,6 +22,7 @@ sha256.workspace = true
 object_store.workspace = true
 bytes.workspace = true
 url.workspace = true
+async-trait.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

@@ -33,7 +33,6 @@ fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
     }
 }
 
-#[axum::async_trait]
 impl FromRequest<AppStateData, Body> for PubData {
     type Rejection = ApiError;
 
@@ -132,13 +131,13 @@ mod bin_tests {
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
             .crate_storage
-            .add_bin_package(&name, &version, pub_data.cratedata.clone())
+            .put(&name, &version, pub_data.cratedata.clone())
             .await;
         let result_crate = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
 
         let get_res = test_storage
             .crate_storage
-            .get_file(result_crate.to_str().unwrap())
+            .get(result_crate.to_str().unwrap())
             .await
             .expect("Couldn't find file...");
 
@@ -162,14 +161,14 @@ mod bin_tests {
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
             .crate_storage
-            .add_bin_package(&name, &version, pub_data.cratedata.clone())
+            .put(&name, &version, pub_data.cratedata.clone())
             .await;
         let result_crate = Path::new(&test_storage.settings.bin_path())
             .join("Test_Add_crate_binary_Upper-Case-0.1.0.crate");
 
         let get_res = test_storage
             .crate_storage
-            .get_file(result_crate.to_str().unwrap())
+            .get(result_crate.to_str().unwrap())
             .await
             .expect("Couldn't find file...");
 
@@ -194,11 +193,11 @@ mod bin_tests {
 
         let _ = test_bin
             .crate_storage
-            .add_bin_package(&name, &version, pub_data.cratedata.clone())
+            .put(&name, &version, pub_data.cratedata.clone())
             .await;
         let result = test_bin
             .crate_storage
-            .add_bin_package(&name, &version, pub_data.cratedata.clone())
+            .put(&name, &version, pub_data.cratedata.clone())
             .await;
 
         assert!(result.is_err());
@@ -245,7 +244,7 @@ mod bin_tests {
         let version = Version::try_from("0.1.0").unwrap();
         test_storage
             .crate_storage
-            .add_bin_package(&name, &version, pub_data.cratedata.clone())
+            .put(&name, &version, pub_data.cratedata.clone())
             .await
             .unwrap();
         let crate_path = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
@@ -275,7 +274,7 @@ mod bin_tests {
 
         test_storage
             .crate_storage
-            .add_bin_package(&name, &version, pub_data.cratedata.clone())
+            .put(&name, &version, pub_data.cratedata.clone())
             .await
             .unwrap();
 
@@ -284,7 +283,7 @@ mod bin_tests {
         assert!(
             test_storage
                 .crate_storage
-                .get_file(crate_path.to_str().unwrap())
+                .get(crate_path.to_str().unwrap())
                 .await
                 .is_some()
         );
@@ -301,7 +300,7 @@ mod bin_tests {
         assert!(
             test_storage
                 .crate_storage
-                .get_file(crate_path.to_str().unwrap())
+                .get(crate_path.to_str().unwrap())
                 .await
                 .is_none()
         );

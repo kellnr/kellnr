@@ -85,13 +85,13 @@ async fn add_remove_crate() {
     let version = Version::try_from("0.1.0").unwrap();
     let result = test_storage
         .crate_storage
-        .add_bin_package(&name, &version, cratedata)
+        .put(&name, &version, cratedata)
         .await;
 
     let path = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
     let path = path.as_os_str().to_str().unwrap();
 
-    let result_crate = test_storage.crate_storage.get_file(path).await;
+    let result_crate = test_storage.crate_storage.get(path).await;
 
     assert!(result.is_ok());
     assert!(result_crate.is_some());
@@ -106,13 +106,13 @@ async fn add_remove_crate() {
     let version = Version::try_from("0.1.0").unwrap();
     let put_result = test_storage
         .crate_storage
-        .add_bin_package(&name, &version, cratedata)
+        .put(&name, &version, cratedata)
         .await;
     let path = test_storage
         .crate_storage
         .crate_path(&name.to_string(), &version.to_string());
 
-    let result_crate = test_storage.crate_storage.get_file(path.as_str()).await;
+    let result_crate = test_storage.crate_storage.get(path.as_str()).await;
 
     assert!(put_result.is_ok());
     assert!(result_crate.is_some());
@@ -125,7 +125,7 @@ async fn add_remove_crate() {
     let version = Version::try_from("0.1.0").unwrap();
     test_storage
         .crate_storage
-        .add_bin_package(&name, &version, cratedata)
+        .put(&name, &version, cratedata)
         .await
         .unwrap();
 

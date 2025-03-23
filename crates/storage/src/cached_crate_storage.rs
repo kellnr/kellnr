@@ -1,94 +1,53 @@
-use crate::{
-    storage_error::StorageError,
-    storage_provider::{self, FSStorage, S3Storage},
-};
+use crate::{storage::Storage, storage_error::StorageError};
 use common::original_name::OriginalName;
-use common::util::generate_rand_string;
 use common::version::Version;
 use moka::future::Cache;
-use settings::{Settings, s3::S3};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-use tokio::fs::DirBuilder;
+use settings::Settings;
+use std::{path::PathBuf, sync::Arc};
 
-pub type CrateCache = Cache<PathBuf, Vec<u8>>;
+pub type CrateCache = Cache<String, Vec<u8>>;
+pub type DynStorage = Box<dyn Storage + Send + Sync>;
 
 pub struct CachedCrateStorage {
     crate_folder: String,
     pub doc_queue_path: PathBuf,
-    storage: storage_provider::Storage,
+    storage: DynStorage,
+    cache: Option<CrateCache>,
 }
 
 impl CachedCrateStorage {
-    pub async fn new(crate_folder: &str, settings: &Settings) -> Result<Self, StorageError> {
-        let storage: storage_provider::Storage = if settings.s3.enabled {
-            let S3 {
-                enabled: _,
-                access_key,
-                secret_key,
-                region,
-                endpoint,
-                allow_http,
-            } = &settings.s3;
-            let mut bucket: Vec<&str> = crate_folder.split("/").collect();
-            bucket.reverse();
-            let bucket = bucket
-                .first()
-                .ok_or(StorageError::StorageInitError(format!(
-                    "Wrong bucket name: {}",
-                    crate_folder
-                )))?;
-
-            S3Storage::new(
-                region,
-                endpoint,
-                bucket,
-                access_key,
-                secret_key,
-                *allow_http,
-            )
-            .map_err(|e| StorageError::StorageInitError(e.to_string()))?
-            .into()
+    pub async fn new(
+        crate_folder: &str,
+        settings: &Settings,
+        storage: DynStorage,
+    ) -> Result<Self, StorageError> {
+        let cache = if settings.registry.cache_size > 0 {
+            Some(Cache::new(settings.registry.cache_size))
         } else {
-            let path = std::path::Path::new(crate_folder);
-            if !path.exists() {
-                DirBuilder::new()
-                    .recursive(true)
-                    .create(&crate_folder)
-                    .await
-                    .map_err(|e| StorageError::CreateBinPath(path.to_path_buf(), e))?;
-            }
-            FSStorage::new(crate_folder, settings.registry.cache_size)
-                .map_err(|e| StorageError::StorageInitError(e.to_string()))?
-                .into()
+            None
         };
 
         let cs = Self {
             crate_folder: crate_folder.to_owned(),
             doc_queue_path: settings.doc_queue_path(),
             storage,
+            cache,
         };
         Ok(cs)
     }
 
-    pub async fn remove_bin(
-        &self,
-        name: &OriginalName,
-        version: &Version,
-    ) -> Result<(), StorageError> {
+    pub fn crate_path(&self, name: &str, version: &str) -> String {
+        format!("{}/{}-{}.crate", &self.crate_folder, name, version)
+    }
+
+    pub async fn delete(&self, name: &OriginalName, version: &Version) -> Result<(), StorageError> {
         let crate_path = self.crate_path(name, version);
-        self.storage.put(&crate_path, None).await.map_err(|e| {
-            StorageError::GenericError(format!(
-                "Error while removing bin from storage. Error: {}",
-                e
-            ))
-        })?;
+        self.storage.delete(&crate_path).await?;
+        self.invalidate_path(&crate_path).await;
         Ok(())
     }
 
-    pub async fn add_bin_package(
+    pub async fn put(
         &self,
         name: &OriginalName,
         version: &Version,
@@ -96,7 +55,7 @@ impl CachedCrateStorage {
     ) -> Result<String, StorageError> {
         let crate_path = self.crate_path(name, version);
         self.storage
-            .put(&crate_path, Some(crate_data.clone().to_vec().into()))
+            .put(&crate_path, crate_data.to_vec().into())
             .await
             .map_err(|e| {
                 if let StorageError::S3Error(object_store::Error::AlreadyExists {
@@ -112,37 +71,24 @@ impl CachedCrateStorage {
         Ok(sha256::digest(&*crate_data))
     }
 
-    pub fn crate_path(&self, name: &str, version: &str) -> String {
-        format!("{}/{}-{}.crate", &self.crate_folder, name, version)
-    }
-
-    pub async fn get_file(&self, file_path: &str) -> Option<Vec<u8>> {
-        self.storage.get(file_path).await.map(<Vec<u8>>::from).ok()
-    }
-
-    pub async fn create_rand_doc_queue_path(&self) -> Result<PathBuf, StorageError> {
-        let rand = generate_rand_string(10);
-        let dir = self.doc_queue_path.join(rand);
-        Self::create_recursive_path(&dir).await?;
-
-        Ok(dir)
-    }
-
-    pub fn cache_has_path(&self, file_path: &PathBuf) -> bool {
-        match &self.storage {
-            storage_provider::Storage::S3(_) => false,
-            storage_provider::Storage::FS(fsstorage) => fsstorage.cache_has_path(file_path),
+    pub async fn get(&self, file_path: &str) -> Option<Vec<u8>> {
+        match self.cache {
+            Some(ref cache) => {
+                if let Some(data) = cache.get(file_path).await {
+                    Some(data.to_vec())
+                } else {
+                    let data = self.storage.get(file_path).await.ok()?;
+                    cache.insert(file_path.to_owned(), data.to_vec()).await;
+                    Some(data.to_vec())
+                }
+            }
+            None => self.storage.get(file_path).await.map(<Vec<u8>>::from).ok(),
         }
     }
 
-    async fn create_recursive_path(path: &Path) -> Result<(), StorageError> {
-        if !path.exists() {
-            DirBuilder::new()
-                .recursive(true)
-                .create(path)
-                .await
-                .map_err(|e| StorageError::CreateDocQueuePath(path.to_path_buf(), e))?;
+    async fn invalidate_path(&self, file_path: &str) {
+        if let Some(cache) = &self.cache {
+            cache.invalidate(file_path).await;
         }
-        Ok(())
     }
 }
