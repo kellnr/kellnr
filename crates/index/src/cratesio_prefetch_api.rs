@@ -640,8 +640,8 @@ mod tests {
 
         let cratesio_prefetch = Router::new()
             .route("/config.json", get(config_cratesio))
-            .route("/:_/:_/:name", get(prefetch_cratesio))
-            .route("/:_/:name", get(prefetch_len2_cratesio));
+            .route("/{_}/{_}/{name}", get(prefetch_cratesio))
+            .route("/{_}/{name}", get(prefetch_len2_cratesio));
 
         let state = AppStateData {
             db: Arc::new(mock_db),

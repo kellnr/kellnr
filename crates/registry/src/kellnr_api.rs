@@ -1201,14 +1201,14 @@ mod reg_api_tests {
         };
 
         let routes = Router::new()
-            .route("/:crate_name/owners", delete(remove_owner))
-            .route("/:crate_name/owners", put(add_owner))
-            .route("/:crate_name/owners", get(list_owners))
+            .route("/{crate_name}/owners", delete(remove_owner))
+            .route("/{crate_name}/owners", put(add_owner))
+            .route("/{crate_name}/owners", get(list_owners))
             .route("/", get(search))
-            .route("/:package/:version/download", get(download))
+            .route("/{package}/{version}/download", get(download))
             .route("/new", put(publish))
-            .route("/:crate_name/:version/yank", delete(yank))
-            .route("/:crate_name/:version/unyank", put(unyank));
+            .route("/{crate_name}/{version}/yank", delete(yank))
+            .route("/{crate_name}/{version}/unyank", put(unyank));
 
         Router::new()
             .nest("/api/v1/crates", routes)

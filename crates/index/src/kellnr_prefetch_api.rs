@@ -178,8 +178,8 @@ mod tests {
 
         let kellnr_prefetch = Router::new()
             .route("/config.json", get(config_kellnr))
-            .route("/:a/:b/:name", get(prefetch_kellnr))
-            .route("/:a/:name", get(prefetch_len2_kellnr));
+            .route("/{a}/{b}/{name}", get(prefetch_kellnr))
+            .route("/{a}/{name}", get(prefetch_len2_kellnr));
 
         let state = AppStateData {
             db: Arc::new(mock_db),

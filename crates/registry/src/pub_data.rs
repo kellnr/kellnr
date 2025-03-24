@@ -33,7 +33,6 @@ fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
     }
 }
 
-#[axum::async_trait]
 impl FromRequest<AppStateData, Body> for PubData {
     type Rejection = ApiError;
 

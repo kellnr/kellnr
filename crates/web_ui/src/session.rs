@@ -68,7 +68,6 @@ impl MaybeUser {
     }
 }
 
-#[axum::async_trait]
 impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
@@ -87,6 +86,28 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
                 Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
             },
             None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+        }
+    }
+}
+
+impl axum::extract::OptionalFromRequestParts<appstate::AppStateData> for MaybeUser {
+    type Rejection = RouteError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &appstate::AppStateData,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
+        let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+        match session_cookie {
+            Some(cookie) => match state.db.validate_session(cookie.value()).await {
+                // admin
+                Ok((name, true)) => Ok(Some(Self::Admin(name))),
+                // not admin
+                Ok((name, false)) => Ok(Some(Self::Normal(name))),
+                Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+            },
+            None => Ok(None),
         }
     }
 }

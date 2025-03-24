@@ -307,7 +307,7 @@ mod tests {
 
         let routes = Router::new()
             .route("/", get(search))
-            .route("/:package/:version/download", get(download))
+            .route("/{package}/{version}/download", get(download))
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 cratesio_enabled,
