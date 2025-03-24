@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use testcontainers::Image;
-use testcontainers::core::WaitFor;
+use testcontainers::core::{ContainerPort, WaitFor};
 
 const NAME: &str = "minio/minio";
 const TAG: &str = "latest";
@@ -15,7 +15,8 @@ pub struct Minio {
 }
 
 impl Minio {
-    pub const PORT: u16 = 9001;
+    pub const PORT: u16 = 9000;
+    pub const CONTAINER_PORT: ContainerPort = ContainerPort::Tcp(Self::PORT);
 }
 
 impl Default for Minio {
@@ -53,6 +54,10 @@ impl Image for Minio {
 
     fn cmd(&self) -> impl IntoIterator<Item = impl Into<Cow<'_, str>>> {
         vec!["-c", "mkdir -p /data/crates && /usr/bin/minio server /data"]
+    }
+
+    fn expose_ports(&self) -> &[ContainerPort] {
+        &[Self::CONTAINER_PORT]
     }
 
     fn env_vars(

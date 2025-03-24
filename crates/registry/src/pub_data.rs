@@ -90,13 +90,13 @@ mod bin_tests {
         kellnr_crate_storage::KellnrCrateStorage,
     };
 
-    struct TestBin {
+    struct TestData {
         settings: Settings,
         crate_storage: KellnrCrateStorage,
     }
 
-    impl TestBin {
-        async fn from(data_dir: &str) -> TestBin {
+    impl TestData {
+        async fn from(data_dir: &str) -> TestData {
             let settings = Settings {
                 registry: settings::Registry {
                     data_dir: data_dir.to_owned(),
@@ -111,7 +111,7 @@ mod bin_tests {
             };
             let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
             let crate_storage = KellnrCrateStorage::new(&settings, storage).await.unwrap();
-            TestBin {
+            TestData {
                 settings,
                 crate_storage,
             }
@@ -131,7 +131,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
 
-        let test_storage = TestBin::from("test_add_crate_binary").await;
+        let test_storage = TestData::from("test_add_crate_binary").await;
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
@@ -161,7 +161,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0"),
         };
 
-        let test_storage = TestBin::from("Test_Add_crate_binary_Upper-Case").await;
+        let test_storage = TestData::from("Test_Add_crate_binary_Upper-Case").await;
         let name = OriginalName::try_from(pub_data.metadata.name).unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
@@ -192,7 +192,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
 
-        let test_bin = TestBin::from("test_add_duplicate_crate_binary").await;
+        let test_bin = TestData::from("test_add_duplicate_crate_binary").await;
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
 
@@ -215,7 +215,7 @@ mod bin_tests {
 
     #[tokio::test]
     async fn create_rand_doc_queue_path() {
-        let test_bin = TestBin::from("test_doc_queue").await;
+        let test_bin = TestData::from("test_doc_queue").await;
 
         let rand_path = test_bin
             .crate_storage
@@ -237,14 +237,14 @@ mod bin_tests {
     }
 
     #[tokio::test]
-    async fn deleting_crate() {
+    async fn delete_crate() {
         let pub_data = PubData {
             crate_length: 5,
             cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
-        let test_storage = TestBin::from("test_delete").await;
+        let test_storage = TestData::from("delete_crate").await;
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         test_storage
@@ -273,7 +273,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.2.0"),
         };
 
-        let test_storage = TestBin::from("test_delete").await;
+        let test_storage = TestData::from("delete_crate_invalidates_cache").await;
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.2.0").unwrap();
 
