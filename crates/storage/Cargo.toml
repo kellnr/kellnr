@@ -11,6 +11,7 @@ license-file = "../../LICENSE"
 # Internal dependencies
 settings.workspace = true
 common.workspace = true
+minio_testcontainer.workspace = true
 
 # External dependencies
 mockall.workspace = true
@@ -19,6 +20,12 @@ moka.workspace = true
 axum.workspace = true
 thiserror.workspace = true
 sha256.workspace = true
+object_store.workspace = true
+bytes.workspace = true
+url.workspace = true
+async-trait.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
+rm_rf.workspace = true
+testcontainers.workspace = true

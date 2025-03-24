@@ -2,7 +2,6 @@ use crate::{
     publish_metadata::{PublishMetadata, RegistryDep},
     version::Version,
 };
-use anyhow::anyhow;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Write};
@@ -85,7 +84,7 @@ pub struct IndexMetadata {
 }
 
 impl IndexMetadata {
-    pub async fn from_max_version(path: &Path) -> Result<Self, anyhow::Error> {
+    pub async fn from_max_version(path: &Path) -> Result<Self, std::io::Error> {
         let mut file = File::open(path).await?;
         let mut content = String::new();
         file.read_to_string(&mut content).await?;
@@ -96,18 +95,20 @@ impl IndexMetadata {
             .collect();
 
         metadata.sort_by(|a, b| {
-            let sv1 = Version::try_from(&a.vers).unwrap();
-            let sv2 = Version::try_from(&b.vers).unwrap();
+            let sv1 = Version::from_unchecked_str(&a.vers);
+            let sv2 = Version::from_unchecked_str(&b.vers);
             sv1.cmp(&sv2)
         });
 
-        metadata
-            .last()
-            .cloned()
-            .ok_or_else(|| anyhow!("Unable to read metadata file."))
+        metadata.last().cloned().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Unable to read metadata file.",
+            )
+        })
     }
 
-    pub async fn from_version(path: &Path, version: &Version) -> Result<Self, anyhow::Error> {
+    pub async fn from_version(path: &Path, version: &Version) -> Result<Self, std::io::Error> {
         let mut file = File::open(path).await?;
         let mut content = String::new();
         file.read_to_string(&mut content).await?;
@@ -125,10 +126,9 @@ impl IndexMetadata {
             })
             .cloned()
             .ok_or_else(|| {
-                anyhow!(
-                    "Unable to read metadata for version {} from file {}.",
-                    version,
-                    path.display()
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Unable to read metadata file.",
                 )
             })
     }

@@ -1,12 +1,6 @@
 [workspace]
-exclude = [
-  "crates/test_data",
-]
-members = [
-  "crates/*",
-  "crates/db/entity",
-  "crates/db/migration"
-]
+exclude = ["crates/test_data"]
+members = ["crates/*", "crates/db/entity", "crates/db/migration"]
 default-members = ["crates/kellnr"]
 resolver = "2"
 
@@ -18,32 +12,32 @@ license-file = "LICENSE"
 
 [workspace.dependencies]
 # Internal dependencies from Kellnr
-common = {path = "./crates/common"}
-db = {path = "./crates/db"}
+common = { path = "./crates/common" }
+db = { path = "./crates/db" }
 entity = { path = "./crates/db/entity" }
-migration = {path = "./crates/db/migration"}
-docs = {path = "./crates/docs"}
-index = {path = "./crates/index"}
-settings = {path = "./crates/settings"}
-web_ui = {path = "./crates/web_ui"}
-registry = {path = "./crates/registry"}
+migration = { path = "./crates/db/migration" }
+docs = { path = "./crates/docs" }
+index = { path = "./crates/index" }
+settings = { path = "./crates/settings" }
+web_ui = { path = "./crates/web_ui" }
+registry = { path = "./crates/registry" }
 pg_testcontainer = { path = "./crates/db/pg_testcontainer" }
 auth = { path = "./crates/auth" }
 error = { path = "./crates/error" }
 appstate = { path = "./crates/appstate" }
 storage = { path = "./crates/storage" }
+minio_testcontainer = { path = "./crates/storage/minio_testcontainer" }
 
 # External dependencies from crates.io
-anyhow = "1.0.95"
 jsonwebtoken = "9.3.0"
 reqwest = {version = "0.12.14", features = ["json", "blocking", "gzip", "http2", "deflate"]}
 serde = {version = "1.0.218", features = ["derive"]}
-sysinfo = "0.32.0"
+sysinfo = "0.33.1"
 semver = "1.0.26"
 regex = "1.11.1"
 serde_json = "1.0.139"
 mockall = "0.13.1"
-rand = "0.8.5"
+rand = "0.9.0"
 chrono = "0.4.40"
 thiserror = "2.0.12"
 sea-orm = { version = "1.1.7", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
@@ -58,16 +52,16 @@ trybuild = {version = "1.0.99", features = ["diff"]}
 zip = "2.2.2"
 flate2 = "1.1.0"
 tar = "0.4.44"
-cargo = "0.83.0"
+cargo = "0.86.0"
 fs_extra = "1.3.0"
 wax = "0.6.0"
 proc-macro2 = "1.0.94"
 moka = {version = "0.12.10", features = ["future"]}
-config = "0.14.1"
+config = "0.15.11"
 toml = "0.8.20"
 time = "0.3.39"
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"]}
+tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"] }
 flume = "0.11.1"
 axum = { version = "0.7.9", features = ["macros", "http2"] }
 axum-extra = { version = "0.9.6", features = ["cookie", "cookie-private", "typed-header"] }
@@ -76,10 +70,12 @@ tower = { version = "0.5.2", features = ["util"] }
 hyper = "1.6.0"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
-futures = "0.3.30"
 url = "2.5.4"
 http-body-util = "0.1.2"
 sha256 = "1.5.0"
+object_store = { version = "0.12.0", features = ["aws"] }
+bytes = "1.10.0"
+async-trait = "0.1.88"
 
 [profile.release]
 lto = "off"
@@ -98,5 +94,3 @@ incremental = false
 inherits = "dev"
 incremental = false
 lto = "off"
-
-

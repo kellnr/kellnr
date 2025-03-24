@@ -3,8 +3,8 @@ use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use db::DbProvider;
-use rand::distributions::Alphanumeric;
-use rand::{Rng, thread_rng};
+use rand::distr::Alphanumeric;
+use rand::{Rng, rng};
 use serde::Deserialize;
 use std::iter;
 use std::sync::Arc;
@@ -25,7 +25,7 @@ pub enum OptionToken {
 }
 
 pub fn generate_token() -> String {
-    let mut rng = thread_rng();
+    let mut rng = rng();
     iter::repeat(())
         .map(|()| rng.sample(Alphanumeric))
         .map(char::from)

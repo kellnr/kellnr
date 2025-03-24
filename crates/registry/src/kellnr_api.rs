@@ -4,7 +4,6 @@ use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
 use crate::{crate_user, crate_version};
-use anyhow::Result;
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
@@ -263,7 +262,7 @@ pub async fn download(
         warn!("Failed to increase download counter: {}", e);
     }
 
-    match cs.get_file(file_path).await {
+    match cs.get(file_path.as_str()).await {
         Some(file) => Ok(file),
         None => Err(RegistryError::CrateNotFound.into()),
     }
@@ -330,7 +329,7 @@ pub async fn publish(
     // Set SHA256 from crate file
     let version = Version::try_from(&pub_data.metadata.vers)?;
     let cksum = cs
-        .add_bin_package(&orig_name, &version, &pub_data.cratedata)
+        .put(&orig_name, &version, pub_data.cratedata.clone())
         .await?;
 
     let created = Utc::now();
@@ -403,10 +402,14 @@ mod reg_api_tests {
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
-    use rand::{Rng, distributions::Alphanumeric, thread_rng};
+    use rand::Rng;
+    use rand::distr::Alphanumeric;
+    use rand::rng;
     use settings::Settings;
     use std::path::PathBuf;
     use std::{iter, path};
+    use storage::cached_crate_storage::DynStorage;
+    use storage::fs_storage::FSStorage;
     use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tokio::fs::read;
     use tower::ServiceExt;
@@ -1132,7 +1135,7 @@ mod reg_api_tests {
     }
 
     fn generate_rand_string(length: usize) -> String {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         iter::repeat(())
             .map(|()| rng.sample(Alphanumeric))
             .map(char::from)
@@ -1174,7 +1177,8 @@ mod reg_api_tests {
     async fn app(settings: Settings) -> Router {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
         let db = Database::new(&con_string, 10).await.unwrap();
-        let cs = KellnrCrateStorage::new(&settings).await.unwrap();
+        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+        let cs = KellnrCrateStorage::new(&settings, storage).await.unwrap();
         db.add_auth_token("test", TOKEN, "admin").await.unwrap();
         db.add_user("ro_dummy", "ro", "", false, true)
             .await

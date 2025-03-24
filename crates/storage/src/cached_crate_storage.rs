@@ -1,145 +1,101 @@
-use crate::storage_error::StorageError;
+use crate::{storage::Storage, storage_error::StorageError};
 use common::original_name::OriginalName;
-use common::util::generate_rand_string;
 use common::version::Version;
 use moka::future::Cache;
 use settings::Settings;
-use std::path::{Path, PathBuf};
-use tokio::{
-    fs::{DirBuilder, File, create_dir_all},
-    io::{AsyncReadExt, AsyncWriteExt},
-};
+use std::{path::PathBuf, sync::Arc};
 
-pub type CrateCache = Cache<PathBuf, Vec<u8>>;
+pub type CrateCache = Cache<String, Vec<u8>>;
+pub type DynStorage = Box<dyn Storage + Send + Sync>;
 
 pub struct CachedCrateStorage {
-    crate_folder: PathBuf,
+    crate_folder: String,
     pub doc_queue_path: PathBuf,
+    storage: DynStorage,
     cache: Option<CrateCache>,
 }
 
 impl CachedCrateStorage {
-    pub async fn new(crate_folder: PathBuf, settings: &Settings) -> Result<Self, StorageError> {
-        let cs = Self {
-            crate_folder,
-            doc_queue_path: settings.doc_queue_path(),
-            cache: if settings.registry.cache_size > 0 {
-                Some(Cache::new(settings.registry.cache_size))
-            } else {
-                None
-            },
+    pub fn new(
+        crate_folder: &str,
+        settings: &Settings,
+        storage: DynStorage,
+    ) -> Result<Self, StorageError> {
+        let cache = if settings.registry.cache_size > 0 {
+            Some(Cache::new(settings.registry.cache_size))
+        } else {
+            None
         };
-        Self::create_bin_path(&cs.crate_folder).await?;
+
+        let cs = Self {
+            crate_folder: crate_folder.to_owned(),
+            doc_queue_path: settings.doc_queue_path(),
+            storage,
+            cache,
+        };
         Ok(cs)
     }
 
-    pub async fn add_bin_package(
-        &self,
-        name: &OriginalName,
-        version: &Version,
-        crate_data: &[u8],
-    ) -> Result<String, StorageError> {
-        if !self.crate_folder.exists() {
-            create_dir_all(&self.crate_folder)
-                .await
-                .map_err(StorageError::CreateCrateFolder)?;
-        }
-
-        let file_path = self.crate_path(name, version);
-        if Path::new(&file_path).exists() {
-            return Err(StorageError::CrateExists(
-                name.to_string(),
-                version.to_string(),
-            ));
-        }
-
-        let mut file = File::create(&file_path)
-            .await
-            .map_err(|e| StorageError::CreateFile(e, file_path.clone()))?;
-
-        file.write_all(crate_data)
-            .await
-            .map_err(|e| StorageError::WriteCrateFile(file_path.clone(), e))?;
-
-        // Need to flush after write_all. See https://github.com/kellnr/kellnr/issues/311#issuecomment-2138296102
-        file.flush()
-            .await
-            .map_err(|e| StorageError::FlushCrateFile(file_path.clone(), e))?;
-
-        Ok(sha256::digest(crate_data))
+    pub fn crate_path(&self, name: &str, version: &str) -> String {
+        format!("{}/{}-{}.crate", &self.crate_folder, name, version)
     }
 
-    pub fn crate_path(&self, name: &str, version: &str) -> PathBuf {
-        self.crate_folder
-            .join(format!("{}-{}.crate", name, version))
-    }
-
-    async fn create_bin_path(crate_path: &Path) -> Result<(), StorageError> {
-        if !crate_path.exists() {
-            DirBuilder::new()
-                .recursive(true)
-                .create(&crate_path)
-                .await
-                .map_err(|e| StorageError::CreateBinPath(crate_path.to_path_buf(), e))?;
-        }
+    pub async fn delete(&self, name: &OriginalName, version: &Version) -> Result<(), StorageError> {
+        let crate_path = self.crate_path(name, version);
+        self.storage.delete(&crate_path).await?;
+        self.invalidate_path(&crate_path).await;
         Ok(())
     }
 
-    pub async fn get_file(&self, file_path: PathBuf) -> Option<Vec<u8>> {
-        async fn from_cache(cache: &CrateCache, file_path: PathBuf) -> Option<Vec<u8>> {
-            match cache.get(&file_path).await {
-                None => {
-                    let mut file = File::open(&file_path).await.ok()?;
-                    let mut krate = Vec::new();
-                    file.read_to_end(&mut krate).await.ok()?;
-                    cache.insert(file_path, krate.clone()).await;
-                    Some(krate)
+    pub async fn put(
+        &self,
+        name: &OriginalName,
+        version: &Version,
+        crate_data: Arc<[u8]>,
+    ) -> Result<String, StorageError> {
+        let crate_path = self.crate_path(name, version);
+        self.storage
+            .put(&crate_path, crate_data.to_vec().into())
+            .await
+            .map_err(|e| {
+                if let StorageError::S3Error(object_store::Error::AlreadyExists {
+                    path: _,
+                    source: _,
+                }) = e
+                {
+                    return StorageError::CrateExists(name.to_string(), version.to_string());
                 }
-                Some(krate) => Some(krate.to_owned()),
-            }
-        }
+                StorageError::GenericError(format!("Error while adding bin package. Error: {}", e))
+            })?;
 
-        match &self.cache {
-            None => {
-                let mut file = File::open(&file_path).await.ok()?;
-                let mut krate = Vec::new();
-                file.read_to_end(&mut krate).await.ok()?;
-                Some(krate)
+        Ok(sha256::digest(&*crate_data))
+    }
+
+    pub async fn get(&self, file_path: &str) -> Option<Vec<u8>> {
+        match self.cache {
+            Some(ref cache) => {
+                if let Some(data) = cache.get(file_path).await {
+                    Some(data.to_vec())
+                } else {
+                    let data = self.storage.get(file_path).await.ok()?;
+                    cache.insert(file_path.to_owned(), data.to_vec()).await;
+                    Some(data.to_vec())
+                }
             }
-            Some(c) => from_cache(c, file_path).await,
+            None => self.storage.get(file_path).await.map(<Vec<u8>>::from).ok(),
         }
     }
 
-    pub async fn invalidate_path(&self, file_path: &PathBuf) {
+    async fn invalidate_path(&self, file_path: &str) {
         if let Some(cache) = &self.cache {
             cache.invalidate(file_path).await;
         }
     }
 
-    pub fn cache_has_path(&self, file_path: &PathBuf) -> bool {
-        if let Some(cache) = &self.cache {
-            cache.contains_key(file_path)
-        } else {
-            false
-        }
-    }
-
-    pub async fn create_rand_doc_queue_path(&self) -> Result<PathBuf, StorageError> {
-        let rand = generate_rand_string(10);
-        let dir = self.doc_queue_path.join(rand);
-        Self::create_recursive_path(&dir).await?;
-
-        Ok(dir)
-    }
-
-    async fn create_recursive_path(path: &Path) -> Result<(), StorageError> {
-        if !path.exists() {
-            DirBuilder::new()
-                .recursive(true)
-                .create(path)
-                .await
-                .map_err(|e| StorageError::CreateDocQueuePath(path.to_path_buf(), e))?;
-        }
-        Ok(())
+    pub fn cache_has_path(&self, file_path: &str) -> bool {
+        self.cache
+            .as_ref()
+            .map(|cache| cache.contains_key(file_path))
+            .unwrap_or(false)
     }
 }
