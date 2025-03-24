@@ -94,7 +94,7 @@ pwd = ""
 
 # Configure S3 as the storage backend instead of the local filesystem
 [s3]
-enabled = true
+enabled = false
 access_key = "minioadmin"
 secret_key = "minioadmin"
 bucket = "rust-crates"
