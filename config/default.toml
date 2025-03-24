@@ -97,7 +97,6 @@ pwd = ""
 enabled = false
 access_key = "minioadmin"
 secret_key = "minioadmin"
-bucket = "rust-crates"
 region = "us-east-1"
 endpoint = "http://localhost:9000"
 allow_http = true
