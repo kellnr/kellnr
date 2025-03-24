@@ -79,7 +79,7 @@ cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
 futures = "0.3.30"
 url = "2.5.4"
 http-body-util = "0.1.2"
-sha256 = "1.5.0"
+sha256 = "1.6.0"
 
 [profile.release]
 lto = "off"
