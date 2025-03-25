@@ -100,3 +100,5 @@ secret_key = "minioadmin"
 region = "us-east-1"
 endpoint = "http://localhost:9000"
 allow_http = true
+crates_bucket = "kellnr-crates" # Used for the crates
+cratesio_bucket = "kellnr-cratesio" # Used for the crates.io proxy

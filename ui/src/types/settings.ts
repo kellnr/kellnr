@@ -61,6 +61,8 @@ export type S3 = {
     region: string
     endpoint: string
     allow_http: boolean
+    crates_bucket: string
+    cratesio_bucket: string
 }
 
 export const emptySettings: Settings = {
@@ -108,6 +110,8 @@ export const emptySettings: Settings = {
         secret_key: "",
         region: "",
         endpoint: "",
-        allow_http: false
+        allow_http: false,
+        crates_bucket: "",
+        cratesio_bucket: ""
     }
 }

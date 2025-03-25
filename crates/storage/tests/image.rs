@@ -53,7 +53,10 @@ impl Image for Minio {
     }
 
     fn cmd(&self) -> impl IntoIterator<Item = impl Into<Cow<'_, str>>> {
-        vec!["-c", "mkdir -p /data/crates && /usr/bin/minio server /data"]
+        vec![
+            "-c",
+            "mkdir -p /data/kellnr-crates && /usr/bin/minio server /data",
+        ]
     }
 
     fn expose_ports(&self) -> &[ContainerPort] {

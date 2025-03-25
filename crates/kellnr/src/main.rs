@@ -21,7 +21,7 @@ use storage::{
 };
 use tokio::{fs::create_dir_all, net::TcpListener};
 use tower_http::services::{ServeDir, ServeFile};
-use tracing::info;
+use tracing::{debug, info};
 use tracing_subscriber::fmt::format;
 use web_ui::{crate_access, session, ui, user};
 
@@ -38,9 +38,12 @@ async fn main() {
     // Initialize kellnr crate storage
     let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).await.into();
 
+    debug!("Crate storgage S3: {}", settings.s3.enabled);
+
     // Create the database connection. Has to be done after the index and storage
     // as the needed folders for the sqlite database my not been created before that.
     let con_string = get_connect_string(&settings);
+    debug!("Connecting to database with: {:?}", con_string);
     let db = Database::new(&con_string, settings.registry.max_db_connections)
         .await
         .expect("Failed to create database");
@@ -256,7 +259,7 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
         .await
         .expect("Failed to create docs directory.");
     if settings.docs.enabled {
-        let storage = init_storage(settings.crates_path(), settings);
+        let storage = init_storage(&settings.crates_path(), settings);
         docs::doc_queue::doc_extraction_queue(
             Database::new(con_string, settings.registry.max_db_connections)
                 .await
@@ -271,26 +274,25 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
 }
 
 async fn init_cratesio_storage(settings: &Settings) -> CratesIoCrateStorage {
-    let storage = init_storage(settings.crates_io_path(), settings);
+    let storage = init_storage(&settings.s3.cratesio_bucket, settings);
     CratesIoCrateStorage::new(settings, storage)
         .await
         .expect("Failed to create crates.io crate storage.")
 }
 
 async fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
-    let storage = init_storage(settings.crates_path(), settings);
+    let storage = init_storage(&settings.s3.crates_bucket, settings);
     KellnrCrateStorage::new(settings, storage)
         .await
         .expect("Failed to create crate storage.")
 }
 
-fn init_storage(crate_folder: String, settings: &Settings) -> DynStorage {
+fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
     if settings.s3.enabled {
-        let s =
-            S3Storage::try_from((crate_folder, settings)).expect("Failed to create S3 storage.");
+        let s = S3Storage::try_from((folder, settings)).expect("Failed to create S3 storage.");
         Box::new(s) as DynStorage
     } else {
-        let s = FSStorage::new(&crate_folder).expect("Failed to create FS storage.");
+        let s = FSStorage::new(folder).expect("Failed to create FS storage.");
         Box::new(s) as DynStorage
     }
 }

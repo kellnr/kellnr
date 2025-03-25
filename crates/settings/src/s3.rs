@@ -8,6 +8,8 @@ pub struct S3 {
     pub region: String,
     pub endpoint: String,
     pub allow_http: bool,
+    pub crates_bucket: String,
+    pub cratesio_bucket: String,
 }
 
 impl Default for S3 {
@@ -19,6 +21,8 @@ impl Default for S3 {
             region: String::from("us-east-1"),
             endpoint: String::from("http://localhost:9000/"),
             allow_http: true,
+            crates_bucket: String::from("kellnr-crates"),
+            cratesio_bucket: String::from("kellnr-cratesio"),
         }
     }
 }

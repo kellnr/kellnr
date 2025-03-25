@@ -36,8 +36,9 @@ impl TestS3Storage {
             },
             ..Settings::default()
         };
-        let storage = Box::new(S3Storage::try_from((settings.crates_path(), &settings)).unwrap())
-            as DynStorage;
+        let storage =
+            Box::new(S3Storage::try_from((settings.s3.crates_bucket.as_str(), &settings)).unwrap())
+                as DynStorage;
         let crate_storage = KellnrCrateStorage::new(&settings, storage).await.unwrap();
         TestS3Storage { crate_storage }
     }

@@ -41,24 +41,16 @@ impl Storage for S3Storage {
 
 impl S3Storage {
     pub fn new(
-        crate_folder: &str,
         region: &str,
         url: &str,
         access_key_id: &str,
         secret_access_key: &str,
         allow_http: bool,
+        bucket: &str,
     ) -> Result<Self, StorageError> {
-        let mut bucket: Vec<&str> = crate_folder.split("/").collect();
-        bucket.reverse();
-        let bucket = bucket
-            .first()
-            .ok_or(StorageError::StorageInitError(format!(
-                "Wrong bucket name: {}",
-                crate_folder
-            )))?;
         let client = AmazonS3Builder::new()
             .with_endpoint(url)
-            .with_bucket_name(*bucket)
+            .with_bucket_name(bucket)
             .with_region(region)
             .with_allow_http(allow_http)
             .with_access_key_id(access_key_id)
@@ -84,17 +76,17 @@ impl S3Storage {
     }
 }
 
-impl TryFrom<(String, &Settings)> for S3Storage {
+impl TryFrom<(&str, &Settings)> for S3Storage {
     type Error = StorageError;
 
-    fn try_from((crate_folder, settings): (String, &Settings)) -> Result<Self, Self::Error> {
+    fn try_from((bucket, settings): (&str, &Settings)) -> Result<Self, Self::Error> {
         S3Storage::new(
-            &crate_folder,
             &settings.s3.region,
             &settings.s3.endpoint,
             &settings.s3.access_key,
             &settings.s3.secret_key,
             settings.s3.allow_http,
+            bucket,
         )
     }
 }
