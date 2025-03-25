@@ -21,7 +21,7 @@ use storage::{
 };
 use tokio::{fs::create_dir_all, net::TcpListener};
 use tower_http::services::{ServeDir, ServeFile};
-use tracing::{debug, info};
+use tracing::info;
 use tracing_subscriber::fmt::format;
 use web_ui::{crate_access, session, ui, user};
 
@@ -35,15 +35,17 @@ async fn main() {
 
     info!("Starting kellnr");
 
+    // Ensure the data directory exists, if not create it
+    create_dir_all(&settings.registry.data_dir)
+        .await
+        .expect("Failed to create data directory.");
+
     // Initialize kellnr crate storage
     let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).await.into();
-
-    debug!("Crate storgage S3: {}", settings.s3.enabled);
 
     // Create the database connection. Has to be done after the index and storage
     // as the needed folders for the sqlite database my not been created before that.
     let con_string = get_connect_string(&settings);
-    debug!("Connecting to database with: {:?}", con_string);
     let db = Database::new(&con_string, settings.registry.max_db_connections)
         .await
         .expect("Failed to create database");
