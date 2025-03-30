@@ -6,6 +6,7 @@ export type Settings = {
     postgresql: Postgresql
     proxy: Proxy
     registry: Registry
+    s3: S3
 }
 
 export type Docs = {
@@ -50,9 +51,21 @@ export type Registry = {
     max_crate_size: number
     max_db_connections: number
     auth_required: boolean
+    required_crate_fields: string[]
 }
 
-export const emptySettings = {
+export type S3 = {
+    enabled: boolean
+    access_key: string
+    secret_key: string
+    region: string
+    endpoint: string
+    allow_http: boolean
+    crates_bucket: string
+    cratesio_bucket: string
+}
+
+export const emptySettings: Settings = {
     docs: {
         enabled: true,
         max_size: 0
@@ -89,5 +102,16 @@ export const emptySettings = {
         max_crate_size: 0,
         max_db_connections: 0,
         auth_required: false,
+        required_crate_fields: []
     },
+    s3: {
+        enabled: false,
+        access_key: "",
+        secret_key: "",
+        region: "",
+        endpoint: "",
+        allow_http: false,
+        crates_bucket: "",
+        cratesio_bucket: ""
+    }
 }

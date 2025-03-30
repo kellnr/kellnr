@@ -76,7 +76,7 @@ export type CrateRegistryDep = {
 }
 
 export type CrateAccessData = {
-    is_download_restricted: Boolean,
+    is_download_restricted: boolean,
 }
 
 export const defaultCrateAccessData : CrateAccessData = {

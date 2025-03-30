@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{
+defineProps<{
   num: number | string
   icon: string
   text: number | string 

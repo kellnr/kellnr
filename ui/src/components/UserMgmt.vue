@@ -1,10 +1,16 @@
 <template>
   <h2 class="k-h2">Users</h2>
-  <template v-for="item in items" :key="item.name">
+  <template v-for="item in items" :key="item">
     <div class="userMgmt glass">
       <span class="userName">{{ item.name }}</span>
-      <span class="role" v-if="item.is_admin">Role: admin</span>
-      <span class="role" v-else>Role: user</span>
+      <span class="" v-if="item.is_admin">Role: admin</span>
+      <span class="" v-else>Role: user</span>
+      <span class="tag is-info is-light" v-if="item.is_read_only">
+        <a @click="set_read_only(item.name, false, item)">Remove Read-only</a>
+      </span>
+      <span class="tag is-primary is-light" v-else>
+        <a @click="set_read_only(item.name, true, item)">Make Read-only</a>
+      </span>
       <span class="tag is-warning is-light resetPwd">
         <a @click="resetPwd(item.name)">Reset password</a>
       </span>
@@ -64,6 +70,11 @@
         <input v-model="is_admin" type="checkbox"/> Is Admin
       </label>
     </div>
+    <div class="field">
+      <label class="checkbox">
+        <input v-model="is_read_only" type="checkbox"> Is Read-only
+      </label>
+    </div>
 
     <status-notification :status="addUserStatus" @update:clear="addUserStatus = $event">
       {{ addUserMsg }}
@@ -78,7 +89,7 @@
 <script setup lang="ts">
 import StatusNotification from "./StatusNotification.vue";
 import {onBeforeMount, ref} from 'vue'
-import {ADD_USER, DELETE_USER, LIST_USERS, RESET_PWD} from "../remote-routes";
+import {ADD_USER, DELETE_USER, LIST_USERS, RESET_PWD, USER_READ_ONLY} from "../remote-routes";
 import axios from "axios";
 import {useRouter} from "vue-router";
 
@@ -92,6 +103,7 @@ const name = ref("")
 const pwd1 = ref("")
 const pwd2 = ref("")
 const is_admin = ref(false)
+const is_read_only = ref(false)
 
 onBeforeMount(() => {
   getUsers()
@@ -103,6 +115,7 @@ function addUser() {
     pwd1: pwd1.value,
     pwd2: pwd2.value,
     is_admin: is_admin.value,
+    is_read_only: is_read_only.value
   };
 
   axios
@@ -136,8 +149,7 @@ function addUser() {
 
 function getUsers() {
   axios
-      // @ts-ignore
-      .get(LIST_USERS, {cache: false}) // disable caching to get updated token list (TS doesn't recognize cache option)
+      .get(LIST_USERS, {cache: false})
       .then((res) => {
         if (res.status == 200) {
           items.value = res.data;
@@ -201,6 +213,38 @@ function resetPwd(name: string) {
         });
   }
 }
+
+function set_read_only(name: string, state: boolean, item: object) {
+  if (!confirm(state ? 'Make "' + name + '" read-only' : 'Remove read-only from "' + name + '"')) {
+    return;
+  }
+
+  axios
+    .post(USER_READ_ONLY(name), {state: state})
+    .then((res) => {
+      if (res.status == 200) {
+        changeUserStatus.value = "Success";
+        if (state) {
+          changeUserMsg.value = '"' + name + '" was made read-only "';
+          item.is_read_only = true; // update UI
+        } else {
+          changeUserMsg.value = 'Removed read-only from "' + name + '"';
+          item.is_read_only = false; // update UI
+        }
+      }
+    })
+    .catch((error) => {
+      changeUserStatus.value = "Error";
+      if (error.response.status == 404) {
+        // "Unauthorized. Login first."
+        router.push("/login");
+      } else if (error.response.status == 500) {
+        changeUserMsg.value = "Read-only could not be modified";
+      } else {
+        changeUserMsg.value = "Unknown error";
+      }
+    });
+}
 </script>
 
 <style scoped>
@@ -209,7 +253,7 @@ function resetPwd(name: string) {
   margin: 0.5rem 0 0.5rem 0;
   padding: 0.5rem;
   display: grid;
-  grid-template-columns: 1fr 1fr max-content max-content;
+  grid-template-columns: 1fr 1fr max-content max-content max-content;
 }
 
 .userName {
@@ -219,5 +263,4 @@ function resetPwd(name: string) {
 .resetPwd {
   margin-right: 0.3rem;
 }
-
 </style>

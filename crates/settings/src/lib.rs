@@ -8,6 +8,7 @@ pub mod postgresql;
 pub mod protocol;
 pub mod proxy;
 pub mod registry;
+pub mod s3;
 pub mod settings;
 pub mod setup;
 
@@ -20,6 +21,6 @@ pub use postgresql::Postgresql;
 pub use protocol::Protocol;
 pub use proxy::Proxy;
 pub use registry::Registry;
-pub use settings::get_settings;
 pub use settings::Settings;
+pub use settings::get_settings;
 pub use setup::Setup;

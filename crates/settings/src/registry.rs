@@ -8,6 +8,7 @@ pub struct Registry {
     pub max_crate_size: u64,
     pub max_db_connections: u32,
     pub auth_required: bool,
+    pub required_crate_fields: Vec<String>,
 }
 
 impl Default for Registry {
@@ -19,6 +20,7 @@ impl Default for Registry {
             max_crate_size: 10 * 1000,
             max_db_connections: 0,
             auth_required: false,
+            required_crate_fields: Vec::new(),
         }
     }
 }

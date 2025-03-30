@@ -18,13 +18,13 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{
+defineProps<{
   list: Array<string>
   icon: string
   title?: string
 }>()
 
-function isNotEmpty(obj: any) {
+function isNotEmpty(obj: object[]) {
   return typeof obj !== "undefined" && obj !== null && obj.length > 0;
 }
 </script>

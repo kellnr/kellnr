@@ -3,8 +3,8 @@ use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use db::DbProvider;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::distr::Alphanumeric;
+use rand::{Rng, rng};
 use serde::Deserialize;
 use std::iter;
 use std::sync::Arc;
@@ -14,6 +14,7 @@ pub struct Token {
     pub token: String,
     pub user: String,
     pub is_admin: bool,
+    pub is_read_only: bool,
 }
 
 // See https://github.com/tokio-rs/axum/discussions/2281
@@ -24,7 +25,7 @@ pub enum OptionToken {
 }
 
 pub fn generate_token() -> String {
-    let mut rng = thread_rng();
+    let mut rng = rng();
     iter::repeat(())
         .map(|()| rng.sample(Alphanumeric))
         .map(char::from)
@@ -61,11 +62,11 @@ impl Token {
             token,
             user: user.name,
             is_admin: user.is_admin,
+            is_read_only: user.is_read_only,
         })
     }
 }
 
-#[axum::async_trait]
 impl FromRequestParts<AppStateData> for Token {
     type Rejection = StatusCode;
 
@@ -77,7 +78,6 @@ impl FromRequestParts<AppStateData> for Token {
     }
 }
 
-#[axum::async_trait]
 impl FromRequestParts<AppStateData> for OptionToken {
     type Rejection = StatusCode;
 

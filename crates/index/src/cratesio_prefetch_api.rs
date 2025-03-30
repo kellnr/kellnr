@@ -1,8 +1,8 @@
 use super::config_json::ConfigJson;
 use appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
-use axum::Json;
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use common::index_metadata::IndexMetadata;
 use common::normalized_name::NormalizedName;
@@ -108,9 +108,7 @@ async fn internal_prefetch_cratesio(
 
     trace!(
         "Prefetching {} from crates.io cache: Etag {:?} - LM {:?}",
-        name,
-        if_none_match,
-        if_modified_since
+        name, if_none_match, if_modified_since
     );
 
     let prefetch_state = db
@@ -214,7 +212,7 @@ async fn cratesio_prefetch_thread(
 ) {
     loop {
         if let Some((name, metadata, desc, etag, last_modified)) =
-            get_insert_data(&cache, &channel).await
+            handle_cratesio_prefetch_msg(&cache, &channel, &db).await
         {
             trace!("Update crates.io prefetch data for {}", name);
             if let Err(e) = db
@@ -267,9 +265,10 @@ async fn convert_index_data(
     }
 }
 
-async fn get_insert_data(
+async fn handle_cratesio_prefetch_msg(
     cache: &Cache<OriginalName, String>,
     channel: &flume::Receiver<CratesioPrefetchMsg>,
+    db: &Arc<impl DbProvider>,
 ) -> Option<(
     OriginalName,
     Vec<IndexMetadata>,
@@ -297,6 +296,16 @@ async fn get_insert_data(
                     .await;
                 fetch_index_data(msg.name, msg.etag, msg.last_modified).await
             }
+        }
+        Ok(CratesioPrefetchMsg::IncDownloadCnt(msg)) => {
+            trace!(
+                "Incrementing download count for {} {}",
+                msg.name, msg.version
+            );
+            db.increase_cached_download_counter(&msg.name, &msg.version)
+                .await
+                .unwrap_or_else(|e| warn!("Failed to increase download counter: {}", e));
+            None
         }
         Err(e) => {
             error!("Could not receive prefetch message: {}", e);
@@ -503,10 +512,10 @@ mod tests {
     use crate::config_json::ConfigJson;
     use appstate::AppStateData;
     use axum::{
-        body::Body,
-        http::{header, Request},
-        routing::get,
         Router,
+        body::Body,
+        http::{Request, header},
+        routing::get,
     };
     use db::mock::MockDb;
     use http_body_util::BodyExt;
@@ -631,8 +640,8 @@ mod tests {
 
         let cratesio_prefetch = Router::new()
             .route("/config.json", get(config_cratesio))
-            .route("/:_/:_/:name", get(prefetch_cratesio))
-            .route("/:_/:name", get(prefetch_len2_cratesio));
+            .route("/{_}/{_}/{name}", get(prefetch_cratesio))
+            .route("/{_}/{name}", get(prefetch_len2_cratesio));
 
         let state = AppStateData {
             db: Arc::new(mock_db),

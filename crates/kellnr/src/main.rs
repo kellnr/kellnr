@@ -1,9 +1,9 @@
 use appstate::AppStateData;
 use axum::{
+    Router,
     extract::DefaultBodyLimit,
     middleware,
     routing::{delete, get, get_service, post, put},
-    Router,
 };
 use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
@@ -16,7 +16,8 @@ use registry::{cratesio_api, kellnr_api};
 use settings::{LogFormat, Settings};
 use std::{net::SocketAddr, path::Path, sync::Arc};
 use storage::{
-    cratesio_crate_storage::CratesIoCrateStorage, kellnr_crate_storage::KellnrCrateStorage,
+    cached_crate_storage::DynStorage, cratesio_crate_storage::CratesIoCrateStorage,
+    fs_storage::FSStorage, kellnr_crate_storage::KellnrCrateStorage, s3_storage::S3Storage,
 };
 use tokio::{fs::create_dir_all, net::TcpListener};
 use tower_http::services::{ServeDir, ServeFile};
@@ -34,6 +35,11 @@ async fn main() {
 
     info!("Starting kellnr");
 
+    // Ensure the data directory exists, if not create it
+    create_dir_all(&settings.registry.data_dir)
+        .await
+        .expect("Failed to create data directory.");
+
     // Initialize kellnr crate storage
     let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).await.into();
 
@@ -46,7 +52,7 @@ async fn main() {
     let db = Arc::new(db) as Arc<dyn DbProvider>;
 
     // Crates.io Proxy
-    let cratesio_storage: Arc<CratesIoCrateStorage> = init_cratesio_proxy(&settings).await.into();
+    let cratesio_storage: Arc<CratesIoCrateStorage> = init_cratesio_storage(&settings).await.into();
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
 
@@ -79,40 +85,41 @@ async fn main() {
         .route("/logout", get(user::logout))
         .route("/change_pwd", post(user::change_pwd))
         .route("/add", post(user::add))
-        .route("/delete/:name", delete(user::delete))
-        .route("/reset_pwd/:name", post(user::reset_pwd))
+        .route("/delete/{name}", delete(user::delete))
+        .route("/reset_pwd/{name}", post(user::reset_pwd))
+        .route("/read_only/{name}", post(user::read_only))
         .route("/add_token", post(user::add_token))
-        .route("/delete_token/:id", delete(user::delete_token))
+        .route("/delete_token/{id}", delete(user::delete_token))
         .route("/list_tokens", get(user::list_tokens))
         .route("/list_users", get(user::list_users))
         .route("/login_state", get(user::login_state));
 
     let crate_access = Router::new()
-        .route("/:crate_name/users", get(crate_access::list_users))
-        .route("/:crate_name/users/:name", put(crate_access::add_user))
+        .route("/{crate_name}/users", get(crate_access::list_users))
+        .route("/{crate_name}/users/{name}", put(crate_access::add_user))
         .route(
-            "/:crate_name/users/:name",
+            "/{crate_name}/users/{name}",
             delete(crate_access::delete_user),
         )
         .route(
-            "/:crate_name/access_data",
+            "/{crate_name}/access_data",
             get(crate_access::get_access_data),
         )
         .route(
-            "/:crate_name/access_data",
+            "/{crate_name}/access_data",
             put(crate_access::set_access_data),
         );
 
     let docs_ui = Router::new()
         .route("/build", post(ui::build_rustdoc))
         .route("/queue", get(docs::api::docs_in_queue))
-        .route("/:package/latest", get(docs::api::latest_docs))
+        .route("/{package}/latest", get(docs::api::latest_docs))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             session::session_auth_when_required,
         ));
     let docs_manual = Router::new().route(
-        "/:package/:version",
+        "/{package}/{version}",
         put(docs::api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000)),
     );
     let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir))).route_layer(
@@ -121,45 +128,51 @@ async fn main() {
 
     let static_path = Path::new(option_env!("KELLNR_STATIC_DIR").unwrap_or("./static"));
     let static_files_service = get_service(
-        ServeDir::new(&static_path)
+        ServeDir::new(static_path)
             .append_index_html_on_directories(true)
             .fallback(ServeFile::new(static_path.join("index.html"))),
     );
 
     let kellnr_api = Router::new()
         .route("/config.json", get(kellnr_prefetch_api::config_kellnr))
-        .route("/:a/:b/:package", get(kellnr_prefetch_api::prefetch_kellnr))
         .route(
-            "/:a/:package",
+            "/{a}/{b}/{package}",
+            get(kellnr_prefetch_api::prefetch_kellnr),
+        )
+        .route(
+            "/{a}/{package}",
             get(kellnr_prefetch_api::prefetch_len2_kellnr),
         )
-        .route("/:crate_name/owners", delete(kellnr_api::remove_owner))
-        .route("/:crate_name/owners", put(kellnr_api::add_owner))
-        .route("/:crate_name/owners", get(kellnr_api::list_owners))
+        .route("/{crate_name}/owners", delete(kellnr_api::remove_owner))
+        .route("/{crate_name}/owners", put(kellnr_api::add_owner))
+        .route("/{crate_name}/owners", get(kellnr_api::list_owners))
         .route(
-            "/:crate_name/crate_users/:user",
+            "/{crate_name}/crate_users/{user}",
             delete(kellnr_api::remove_crate_user),
         )
         .route(
-            "/:crate_name/crate_users/:user",
+            "/{crate_name}/crate_users/{user}",
             put(kellnr_api::add_crate_user),
         )
         .route(
-            "/:crate_name/crate_users",
+            "/{crate_name}/crate_users",
             get(kellnr_api::list_crate_users),
         )
         .route(
-            "/:crate_name/crate_versions",
+            "/{crate_name}/crate_versions",
             get(kellnr_api::list_crate_versions),
         )
         .route("/", get(kellnr_api::search))
-        .route("/dl/:package/:version/download", get(kellnr_api::download))
+        .route(
+            "/dl/{package}/{version}/download",
+            get(kellnr_api::download),
+        )
         .route(
             "/new",
             put(kellnr_api::publish).layer(DefaultBodyLimit::max(max_crate_size * 1_000_000)),
         )
-        .route("/:crate_name/:version/yank", delete(kellnr_api::yank))
-        .route("/:crate_name/:version/unyank", put(kellnr_api::unyank))
+        .route("/{crate_name}/{version}/yank", delete(kellnr_api::yank))
+        .route("/{crate_name}/{version}/unyank", put(kellnr_api::unyank))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_req_token::cargo_auth_when_required,
@@ -168,16 +181,16 @@ async fn main() {
     let cratesio_api = Router::new()
         .route("/config.json", get(cratesio_prefetch_api::config_cratesio))
         .route(
-            "/:a/:b/:name",
+            "/{a}/{b}/{name}",
             get(cratesio_prefetch_api::prefetch_cratesio),
         )
         .route(
-            "/:a/:name",
+            "/{a}/{name}",
             get(cratesio_prefetch_api::prefetch_len2_cratesio),
         )
         .route("/", get(cratesio_api::search))
         .route(
-            "/dl/:package/:version/download",
+            "/dl/{package}/{version}/download",
             get(cratesio_api::download),
         )
         .route_layer(middleware::from_fn_with_state(
@@ -226,7 +239,7 @@ async fn main() {
 
 fn init_tracing(settings: &Settings) {
     let ts = tracing_subscriber::fmt().with_max_level(settings.log.level)
-    .with_env_filter(format!("{},mio::poll=error,want=error,sqlx::query=error,sqlx::postgres=warn,sea_orm_migration=warn,cargo=error,globset=warn,hyper=warn,_=warn,reqwest=warn,tower_http={}", settings.log.level, settings.log.level_web_server));
+    .with_env_filter(format!("{},mio::poll=error,want=error,sqlx::query=error,sqlx::postgres=warn,sea_orm_migration=warn,cargo=error,globset=warn,hyper=warn,_=warn,reqwest=warn,tower_http={},object_store::aws::builder=error", settings.log.level, settings.log.level_web_server));
 
     match settings.log.format {
         LogFormat::Compact => ts.event_format(format().compact()).init(),
@@ -248,11 +261,12 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
         .await
         .expect("Failed to create docs directory.");
     if settings.docs.enabled {
+        let storage = init_storage(&settings.crates_path(), settings);
         docs::doc_queue::doc_extraction_queue(
             Database::new(con_string, settings.registry.max_db_connections)
                 .await
                 .expect("Failed to create database"),
-            KellnrCrateStorage::new(settings)
+            KellnrCrateStorage::new(settings, storage)
                 .await
                 .expect("Failed to create crate storage."),
             settings.docs_path(),
@@ -261,14 +275,26 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
     }
 }
 
-async fn init_cratesio_proxy(settings: &Settings) -> CratesIoCrateStorage {
-    CratesIoCrateStorage::new(settings)
+async fn init_cratesio_storage(settings: &Settings) -> CratesIoCrateStorage {
+    let storage = init_storage(&settings.s3.cratesio_bucket, settings);
+    CratesIoCrateStorage::new(settings, storage)
         .await
         .expect("Failed to create crates.io crate storage.")
 }
 
 async fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
-    KellnrCrateStorage::new(settings)
+    let storage = init_storage(&settings.s3.crates_bucket, settings);
+    KellnrCrateStorage::new(settings, storage)
         .await
         .expect("Failed to create crate storage.")
+}
+
+fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
+    if settings.s3.enabled {
+        let s = S3Storage::try_from((folder, settings)).expect("Failed to create S3 storage.");
+        Box::new(s) as DynStorage
+    } else {
+        let s = FSStorage::new(folder).expect("Failed to create FS storage.");
+        Box::new(s) as DynStorage
+    }
 }

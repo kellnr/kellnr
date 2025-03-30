@@ -1,8 +1,8 @@
 use crate::error::RouteError;
 use crate::session::MaybeUser;
 use appstate::DbState;
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use common::original_name::OriginalName;
 use registry::crate_user::{CrateUser, CrateUserList};
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,11 @@ pub async fn add_user(
     user.assert_admin()?;
 
     let crate_name = crate_name.to_normalized();
+
+    if db.get_user(&name).await.is_err() {
+        return Err(RouteError::UserNotFound(name));
+    }
+
     if !db.is_crate_user(&crate_name, &name).await? {
         db.add_crate_user(&crate_name, &name).await?;
     }
@@ -78,12 +83,14 @@ pub async fn set_access_data(
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<AccessData>,
-) -> Result<(), RouteError> {
+) -> Result<Json<AccessData>, RouteError> {
     user.assert_admin()?;
 
     let crate_name = crate_name.to_normalized();
     db.change_download_restricted(&crate_name, input.download_restricted)
         .await?;
 
-    Ok(())
+    Ok(Json(AccessData {
+        download_restricted: db.is_download_restricted(&crate_name).await?,
+    }))
 }

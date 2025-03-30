@@ -21,6 +21,8 @@
       :value="settings.registry.max_db_connections"></startup-config-item>
     <startup-config-item tomlTable="registry" toml="auth_required" env="KELLNR_REGISTRY__AUTH_REQUIRED"
       :value="settings.registry.auth_required"></startup-config-item>
+    <startup-config-item tomlTable="registry" toml="required_crate_fields" env="KELLNR_REGISTRY__REQUIRED_CRATE_FIELDS"
+      :value="settings.registry.required_crate_fields"></startup-config-item>
   </div>
 
   <div class="settingsSection">
@@ -87,6 +89,24 @@
     <startup-config-item tomlTable="postgresql" toml="user" env="KELLNR_POSTGRESQL__USER"
       :value="settings.postgresql.user"></startup-config-item>
   </div>
+
+  <div class="settingsSection">
+    <h3 class="k-h3">S3</h3>
+    <startup-config-header></startup-config-header>
+    <startup-config-item tomlTable="s3" toml="enabled" env="KELLNR_S3__ENABLED"
+      :value="settings.s3.enabled"></startup-config-item>
+    <startup-config-item tomlTable="s3" toml="access_key" env="KELLNR_S3__ACCESS_KEY"
+      :value="settings.s3.access_key"></startup-config-item>
+    <startup-config-item tomlTable="s3" toml="secret_key" env="KELLNR_S3__SECRET_KEY"
+      :value="settings.s3.secret_key"></startup-config-item>
+    <startup-config-item tomlTable="s3" toml="region" env="KELLNR_S3__REGION"
+      :value="settings.s3.region"></startup-config-item>
+    <startup-config-item tomlTable="s3" toml="endpoint" env="KELLNR_S3__ENDPOINT"
+      :value="settings.s3.endpoint"></startup-config-item>
+    <startup-config-item tomlTable="s3" toml="allow_http" env="KELLNR_S3__ALLOW_HTTP"
+      :value="settings.s3.allow_http"></startup-config-item>
+
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -132,4 +152,3 @@ function getStartupConfig() {
   margin-top: 2rem;
 }
 </style>
-

@@ -1,6 +1,6 @@
 use crate::error::RouteError;
+use axum::{RequestPartsExt, extract::State};
 use axum::{extract::Request, http::request::Parts, middleware::Next, response::Response};
-use axum::{extract::State, RequestPartsExt};
 use axum_extra::extract::PrivateCookieJar;
 use settings::constants;
 
@@ -68,7 +68,6 @@ impl MaybeUser {
     }
 }
 
-#[axum::async_trait]
 impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
@@ -87,6 +86,28 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
                 Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
             },
             None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+        }
+    }
+}
+
+impl axum::extract::OptionalFromRequestParts<appstate::AppStateData> for MaybeUser {
+    type Rejection = RouteError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &appstate::AppStateData,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
+        let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+        match session_cookie {
+            Some(cookie) => match state.db.validate_session(cookie.value()).await {
+                // admin
+                Ok((name, true)) => Ok(Some(Self::Admin(name))),
+                // not admin
+                Ok((name, false)) => Ok(Some(Self::Normal(name))),
+                Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+            },
+            None => Ok(None),
         }
     }
 }
@@ -121,14 +142,16 @@ mod session_tests {
     use super::*;
     use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
-    use axum::{body::Body, routing::get, Router};
+    use axum::{Router, body::Body, routing::get};
     use axum_extra::extract::cookie::Key;
     use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
-    use hyper::{header, Request, StatusCode};
+    use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
     use settings::Settings;
     use std::{result, sync::Arc};
+    use storage::cached_crate_storage::DynStorage;
+    use storage::fs_storage::FSStorage;
     use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tower::ServiceExt;
 
@@ -146,6 +169,7 @@ mod session_tests {
 
     async fn app(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
+        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         Router::new()
             .route("/admin", get(admin_endpoint))
             .route("/normal", get(normal_endpoint))
@@ -153,7 +177,7 @@ mod session_tests {
             .with_state(AppStateData {
                 db,
                 signing_key: Key::from(crate::test_helper::TEST_KEY),
-                crate_storage: Arc::new(KellnrCrateStorage::new(&settings).await.unwrap()),
+                crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage).await.unwrap()),
                 settings: Arc::new(settings),
                 ..appstate::test_state().await
             })
@@ -408,11 +432,11 @@ mod auth_middleware_tests {
     use crate::test_helper::encode_cookies;
     use appstate::AppStateData;
     use axum::middleware::from_fn_with_state;
-    use axum::{body::Body, routing::get, Router};
+    use axum::{Router, body::Body, routing::get};
     use axum_extra::extract::cookie::Key;
     use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
-    use hyper::{header, Request, StatusCode};
+    use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
     use settings::Settings;
     use std::sync::Arc;

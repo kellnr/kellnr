@@ -101,7 +101,7 @@ function getTokens() {
     });
 }
 
-function deleteToken(name: String, id: number) {
+function deleteToken(name: string, id: number) {
   if (confirm('Delete token "' + name + '"?')) {
     axios
       .delete(DELETE_TOKEN(id))

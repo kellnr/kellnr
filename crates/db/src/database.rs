@@ -1,7 +1,7 @@
 use crate::password::{generate_salt, hash_pwd};
 use crate::provider::{DbResult, PrefetchState};
 use crate::tables::init_database;
-use crate::{error::DbError, AuthToken, CrateMeta, CrateSummary, DbProvider, User};
+use crate::{AuthToken, CrateMeta, CrateSummary, DbProvider, User, error::DbError};
 use crate::{ConString, DocQueueEntry};
 use chrono::{DateTime, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
@@ -21,9 +21,9 @@ use entity::{
 use migration::iden::{AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden};
 use sea_orm::sea_query::{Alias, Expr, Query, *};
 use sea_orm::{
-    prelude::async_trait::async_trait, query::*, ActiveModelTrait, ColumnTrait, ConnectionTrait,
-    DatabaseConnection, EntityTrait, FromQueryResult, InsertResult, ModelTrait, QueryFilter,
-    RelationTrait, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
+    prelude::async_trait::async_trait, query::*,
 };
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -88,6 +88,7 @@ impl Database {
             pwd: Set(hashed_pwd),
             salt: Set(con_string.salt()),
             is_admin: Set(true),
+            is_read_only: Set(false),
             ..Default::default()
         };
 
@@ -241,7 +242,7 @@ impl Database {
             .one(&self.db_con)
             .await?;
         if user.is_none() {
-            self.add_user(name, "pwd", "salt", false).await?;
+            self.add_user(name, "pwd", "salt", false, false).await?;
         }
 
         self.add_crate(&pm, "cksum", created, owner).await
@@ -265,7 +266,7 @@ impl Database {
             .one(&self.db_con)
             .await?;
         if user.is_none() {
-            self.add_user(name, "pwd", "salt", false).await?;
+            self.add_user(name, "pwd", "salt", false, false).await?;
         }
 
         self.add_crate(&pm, "cksum", created, owner).await?;
@@ -926,6 +927,7 @@ impl DbProvider for Database {
                 pwd: u.pwd,
                 salt: u.salt,
                 is_admin: u.is_admin,
+                is_read_only: u.is_read_only,
             })
             .collect())
     }
@@ -945,6 +947,7 @@ impl DbProvider for Database {
                 pwd: u.pwd,
                 salt: u.salt,
                 is_admin: u.is_admin,
+                is_read_only: u.is_read_only,
             })
             .collect())
     }
@@ -997,6 +1000,20 @@ impl DbProvider for Database {
 
         u.pwd = Set(hashed.to_owned());
         u.salt = Set(salt);
+
+        u.update(&self.db_con).await?;
+        Ok(())
+    }
+
+    async fn change_read_only_state(&self, user_name: &str, state: bool) -> DbResult<()> {
+        let mut u: user::ActiveModel = user::Entity::find()
+            .filter(user::Column::Name.eq(user_name))
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::UserNotFound(user_name.to_owned()))?
+            .into();
+
+        u.is_read_only = Set(state);
 
         u.update(&self.db_con).await?;
         Ok(())
@@ -1085,6 +1102,7 @@ impl DbProvider for Database {
             pwd: u.pwd,
             salt: u.salt,
             is_admin: u.is_admin,
+            is_read_only: u.is_read_only,
         })
     }
 
@@ -1101,6 +1119,7 @@ impl DbProvider for Database {
             pwd: u.pwd,
             salt: u.salt,
             is_admin: u.is_admin,
+            is_read_only: u.is_read_only,
         })
     }
 
@@ -1160,7 +1179,14 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn add_user(&self, name: &str, pwd: &str, salt: &str, is_admin: bool) -> DbResult<()> {
+    async fn add_user(
+        &self,
+        name: &str,
+        pwd: &str,
+        salt: &str,
+        is_admin: bool,
+        is_read_only: bool,
+    ) -> DbResult<()> {
         let hashed_pwd = hash_pwd(pwd, salt);
 
         let u = user::ActiveModel {
@@ -1168,6 +1194,7 @@ impl DbProvider for Database {
             pwd: Set(hashed_pwd),
             salt: Set(salt.to_owned()),
             is_admin: Set(is_admin),
+            is_read_only: Set(is_read_only),
             ..Default::default()
         };
 
@@ -1189,6 +1216,7 @@ impl DbProvider for Database {
                 pwd: u.pwd,
                 salt: u.salt,
                 is_admin: u.is_admin,
+                is_read_only: u.is_read_only,
             })
             .collect())
     }
