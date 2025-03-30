@@ -279,21 +279,6 @@ impl NewUser {
     }
 }
 
-impl NewUser {
-    pub fn validate(&self) -> Result<(), RouteError> {
-        if self.name.is_empty() {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-        }
-        if self.pwd1.is_empty() || self.pwd2.is_empty() {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-        }
-        if self.pwd1 != self.pwd2 {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-        }
-        Ok(())
-    }
-}
-
 pub async fn add(
     user: MaybeUser,
     State(db): DbState,
