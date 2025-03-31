@@ -16,7 +16,7 @@
 defineProps<{
   num: number | string
   icon: string
-  text: number | string 
+  text: number | string
 }>()
 </script>
 
@@ -26,6 +26,8 @@ defineProps<{
   grid-template-columns: 1fr;
   grid-template-rows: 3fr 1fr;
   margin: 0.3rem 0.3rem 0.3rem 0.3rem;
+  height: 100px;
+  box-sizing: border-box;
 }
 
 body[color-theme="dark"] .card {
@@ -65,4 +67,3 @@ body[color-theme="dark"] .card {
   text-align: center;
 }
 </style>
-

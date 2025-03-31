@@ -15,7 +15,7 @@
   </div>
 
   <div id="statistics">
-    <div class="statisticsCards" v-if="statistics">
+    <div id="statisticsCards" v-if="statistics">
       <!-- Hosted crates statistics -->
       <statistics-card :num="statistics.num_crates" :icon="'fa-boxes'" :text="'Crates'"></statistics-card>
       <statistics-card :num="statistics.num_crate_versions" :icon="'fa-code-branch'"
@@ -71,10 +71,10 @@ function searchCrates() {
 </script>
 
 <style scoped>
-.statisticsCards {
+#statisticsCards {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
 }
 
