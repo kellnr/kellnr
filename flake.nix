@@ -61,6 +61,10 @@
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
           BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.getVersion pkgs.clang}/include";
 
+          OPENSSL_DIR = "${pkgs.openssl.dev}";
+          OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
+          OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
+
         };
 
         # Build *just* the cargo dependencies, so we can reuse
@@ -171,6 +175,7 @@
             just
             node2nix
             jd-diff-patch
+            sea-orm-cli
           ];
         });
 

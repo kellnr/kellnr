@@ -3,7 +3,8 @@ use crate::pub_success::PubDataSuccess;
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
-use crate::{crate_user, crate_version};
+use crate::{crate_group, crate_user, crate_version};
+use anyhow::Result;
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
@@ -59,6 +60,7 @@ pub async fn check_download_auth(
 
     if token.is_admin
         || db.is_crate_user(crate_name, &token.user).await?
+        || db.is_crate_group_user(crate_name, &token.user).await?
         || db.is_owner(crate_name, &token.user).await?
     {
         Ok(())
@@ -110,6 +112,20 @@ pub async fn remove_crate_user(
     db.delete_crate_user(&crate_name, &name).await?;
     Ok(Json(crate_user::CrateUserResponse::from(
         "Removed users from crate.",
+    )))
+}
+
+pub async fn remove_crate_group(
+    token: token::Token,
+    State(db): DbState,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    db.delete_crate_group(&crate_name, &name).await?;
+    Ok(Json(crate_group::CrateGroupResponse::from(
+        "Removed groups from crate.",
     )))
 }
 
@@ -198,6 +214,44 @@ pub async fn list_crate_users(
         .collect();
 
     Ok(Json(crate_user::CrateUserList::from(users)))
+}
+
+pub async fn add_crate_group(
+    token: token::Token,
+    State(db): DbState,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    if !db.is_crate_group(&crate_name, &name).await? {
+        db.add_crate_group(&crate_name, &name).await?;
+    }
+
+    Ok(Json(crate_group::CrateGroupResponse::from(
+        "Added groups to crate.",
+    )))
+}
+
+pub async fn list_crate_groups(
+    token: token::Token,
+    Path(crate_name): Path<OriginalName>,
+    State(db): DbState,
+) -> ApiResult<Json<crate_group::CrateGroupList>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    let groups: Vec<crate_group::CrateGroup> = db
+        .get_crate_groups(&crate_name)
+        .await?
+        .iter()
+        .map(|u| crate_group::CrateGroup {
+            id: u.id,
+            name: u.name.to_owned(),
+        })
+        .collect();
+
+    Ok(Json(crate_group::CrateGroupList::from(groups)))
 }
 
 pub async fn list_crate_versions(
