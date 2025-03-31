@@ -12,34 +12,23 @@
     </div>
   </template>
 
-  <status-notification
-    :status="changeGroupStatus"
-    @update:clear="changeGroupStatus = $event"
-  >
+  <status-notification :status="changeGroupStatus" @update:clear="changeGroupStatus = $event">
     {{ changeGroupMsg }}
   </status-notification>
 
-  <div v-if="!editingGroup" class="glass">
+  <div v-if="!editingGroup">
     <h3 class="k-h3">Add Group</h3>
     <form>
       <div class="field">
         <div class="control is-expanded has-icons-left">
-          <input
-            class="input is-info"
-            v-model="name"
-            placeholder="Name"
-            type="text"
-          />
+          <input class="input is-info" v-model="name" placeholder="Name" type="text" />
           <span class="icon is-small is-left">
             <i class="fas fa-user-group"></i>
           </span>
         </div>
       </div>
 
-      <status-notification
-        :status="addGroupStatus"
-        @update:clear="addGroupStatus = $event"
-      >
+      <status-notification :status="addGroupStatus" @update:clear="addGroupStatus = $event">
         {{ addGroupMsg }}
       </status-notification>
 
@@ -48,21 +37,18 @@
       </div>
     </form>
   </div>
-  <div v-else class="glass">
+  <div v-else>
     <h3 class="k-h3">Edit Group {{ editingGroup }}</h3>
     <h2 class="k-h2">Group users</h2>
     <template v-for="user in groupUsers" :key="user.name">
-      <div class="glass groupUser">
+      <div class="groupUser">
         <span class="userName">{{ user.name }}</span>
         <span class="tag is-danger is-light">
           <a @click="deleteGroupUser(user.name)">Remove</a>
         </span>
       </div>
     </template>
-    <status-notification
-      :status="deleteUserStatus"
-      @update:clear="deleteUserStatus = $event"
-    >
+    <status-notification :status="deleteUserStatus" @update:clear="deleteUserStatus = $event">
       {{ deleteUserMsg }}
     </status-notification>
     <h3 class="k-h3">Add group user</h3>
@@ -78,19 +64,12 @@
           </div>
         </div>
         <div class="control">
-          <button
-            type="submit"
-            class="button is-info"
-            @click.prevent="addGroupUser"
-          >
+          <button type="submit" class="button is-info" @click.prevent="addGroupUser">
             Add
           </button>
         </div>
       </div>
-      <status-notification
-        :status="addUserStatus"
-        @update:clear="addUserStatus = $event"
-      >
+      <status-notification :status="addUserStatus" @update:clear="addUserStatus = $event">
         {{ addUserMsg }}
       </status-notification>
     </form>
