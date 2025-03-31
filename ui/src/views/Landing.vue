@@ -25,11 +25,11 @@
 
       <!-- Top three crates -->
       <statistics-card v-if="statistics.top_crates.first[1] > 0" :num="statistics.top_crates.first[1]"
-        :icon="'fa-medal'" :text="statistics.top_crates.first[0]"></statistics-card>
+        :icon="'fa-medal'" iconColor="#FFD700" :text="statistics.top_crates.first[0]"></statistics-card>
       <statistics-card v-if="statistics.top_crates.second[1] > 0" :num="statistics.top_crates.second[1]"
-        :icon="'fa-medal'" :text="statistics.top_crates.second[0]"></statistics-card>
+        :icon="'fa-medal'" iconColor="#C0C0C0" :text="statistics.top_crates.second[0]"></statistics-card>
       <statistics-card v-if="statistics.top_crates.third[1] > 0" :num="statistics.top_crates.third[1]"
-        :icon="'fa-medal'" :text="statistics.top_crates.third[0]"></statistics-card>
+        :icon="'fa-medal'" iconColor="#CD7F32" :text="statistics.top_crates.third[0]"></statistics-card>
 
       <!-- Last updated crate -->
       <statistics-card v-if="statistics.last_updated_crate" :num="statistics.last_updated_crate[0]"

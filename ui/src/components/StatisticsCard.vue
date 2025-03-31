@@ -4,7 +4,7 @@
       <div class="left">{{ num }}</div>
       <div class="right">
         <span class="icon">
-          <i :class="'fas ' + icon"></i>
+          <i :class="'fas ' + icon" :style="{ color: iconColor }"></i>
         </span>
       </div>
     </div>
@@ -17,6 +17,7 @@ defineProps<{
   num: number | string
   icon: string
   text: number | string
+  iconColor?: string
 }>()
 </script>
 
