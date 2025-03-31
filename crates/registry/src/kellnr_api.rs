@@ -4,7 +4,6 @@ use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
 use crate::{crate_group, crate_user, crate_version};
-use anyhow::Result;
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
