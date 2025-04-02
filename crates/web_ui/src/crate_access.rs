@@ -4,6 +4,7 @@ use appstate::DbState;
 use axum::Json;
 use axum::extract::{Path, State};
 use common::original_name::OriginalName;
+use registry::crate_group::{CrateGroup, CrateGroupList};
 use registry::crate_user::{CrateUser, CrateUserList};
 use serde::{Deserialize, Serialize};
 
@@ -63,6 +64,53 @@ pub async fn delete_user(
 
     let crate_name = crate_name.to_normalized();
     Ok(db.delete_crate_user(&crate_name, &name).await?)
+}
+
+pub async fn list_groups(
+    group: MaybeUser,
+    Path(crate_name): Path<OriginalName>,
+    State(db): DbState,
+) -> Result<Json<CrateGroupList>, RouteError> {
+    group.assert_admin()?;
+
+    let crate_name = crate_name.to_normalized();
+    let groups: Vec<CrateGroup> = db
+        .get_crate_groups(&crate_name)
+        .await?
+        .iter()
+        .map(|u| CrateGroup {
+            id: u.id,
+            name: u.name.to_owned(),
+        })
+        .collect();
+
+    Ok(Json(CrateGroupList::from(groups)))
+}
+
+pub async fn add_group(
+    group: MaybeUser,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+    State(db): DbState,
+) -> Result<(), RouteError> {
+    group.assert_admin()?;
+
+    let crate_name = crate_name.to_normalized();
+    if !db.is_crate_group(&crate_name, &name).await? {
+        db.add_crate_group(&crate_name, &name).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn delete_group(
+    group: MaybeUser,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+    State(db): DbState,
+) -> Result<(), RouteError> {
+    group.assert_admin()?;
+
+    let crate_name = crate_name.to_normalized();
+    Ok(db.delete_crate_group(&crate_name, &name).await?)
 }
 
 pub async fn get_access_data(

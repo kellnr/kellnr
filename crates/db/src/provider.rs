@@ -1,4 +1,4 @@
-use crate::{AuthToken, CrateSummary, DocQueueEntry, User, crate_meta, error::DbError};
+use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta, error::DbError};
 use chrono::{DateTime, Utc};
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
@@ -75,6 +75,19 @@ pub trait DbProvider: Send + Sync {
         is_read_only: bool,
     ) -> DbResult<()>;
     async fn get_users(&self) -> DbResult<Vec<User>>;
+    async fn add_group(&self, name: &str) -> DbResult<()>;
+    async fn get_group(&self, name: &str) -> DbResult<Group>;
+    async fn get_groups(&self) -> DbResult<Vec<Group>>;
+    async fn delete_group(&self, name: &str) -> DbResult<()>;
+    async fn add_group_user(&self, group_name: &str, user: &str) -> DbResult<()>;
+    async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()>;
+    async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>>;
+    async fn is_group_user(&self, group_name: &str, group: &str) -> DbResult<bool>;
+    async fn add_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>;
+    async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>;
+    async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>>;
+    async fn is_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<bool>;
+    async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>;
     async fn get_total_unique_crates(&self) -> DbResult<u32>;
     async fn get_total_crate_versions(&self) -> DbResult<u32>;
     async fn get_total_downloads(&self) -> DbResult<u64>;
@@ -410,6 +423,48 @@ pub mod mock {
 
             async fn yank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
                 unimplemented!()
+            }
+
+            async fn add_group(&self, name: &str) -> DbResult<()> {
+                        unimplemented!()
+            }
+            async fn get_group(&self, name: &str) -> DbResult<Group>{
+                        unimplemented!()
+            }
+            async fn get_groups(&self) -> DbResult<Vec<Group>>{
+                        unimplemented!()
+            }
+            async fn delete_group(&self, name: &str) -> DbResult<()>{
+                        unimplemented!()
+            }
+            async fn add_group_user(&self, group_name: &str, user: &str) -> DbResult<()>{
+                        unimplemented!()
+            }
+            async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()>{
+                        unimplemented!()
+            }
+            async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>> {
+                uninplemented!()
+            }
+            async fn is_group_user(&self, group_name: &str, user: &str) -> DbResult<bool> {
+                uninplemented!()
+            }
+
+            async fn add_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>{
+                uninplemented!()
+            }
+            async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>{
+                uninplemented!()
+            }
+            async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>>{
+                uninplemented!()
+            }
+            async fn is_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<bool>{
+                uninplemented!()
+            }
+
+            async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>{
+                uninplemented!()
             }
         }
     }
