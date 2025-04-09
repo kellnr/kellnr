@@ -1,5 +1,5 @@
 use crate::pub_data::PubData;
-use crate::pub_success::PubDataSuccess;
+use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
@@ -7,10 +7,11 @@ use crate::{crate_group, crate_user, crate_version};
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
-use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
+use axum::http::StatusCode;
 use axum::response::Redirect;
+use axum::Json;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -319,6 +320,38 @@ pub async fn download(
     }
 }
 
+pub async fn add_empty_crate(
+    State(state): AppState,
+    token: token::Token,
+    name: String,
+) -> ApiResult<Json<EmptyCrateSuccess>> {
+    // Only admins can create empty crate placeholders
+    if !token.is_admin {
+        return Err(ApiError::new(
+            "Unauthorized",
+            &String::new(),
+            StatusCode::UNAUTHORIZED,
+        ));
+    }
+    let db = state.db;
+    let orig_name = OriginalName::try_from(&name)?;
+    let normalized_name = orig_name.to_normalized();
+
+    if let Some(id) = db.get_crate_id(&normalized_name).await? {
+        let version = match db.get_max_version_from_id(id).await {
+            Ok(v) => format!("{}", v),
+            _ => String::new(),
+        };
+        return Err(RegistryError::CrateExists(name, version).into());
+    }
+
+    let created = Utc::now();
+
+    // Add crate to DB
+    db.add_empty_crate(&name, &created).await?;
+    Ok(Json(EmptyCrateSuccess::new()))
+}
+
 pub async fn publish(
     State(state): AppState,
     token: token::Token,
@@ -452,20 +485,20 @@ pub async fn unyank(
 mod reg_api_tests {
     use super::*;
     use appstate::AppStateData;
-    use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::http::StatusCode;
     use axum::routing::{delete, get, put};
+    use axum::Router;
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString, test_utils};
     use error::api_error::ErrorDetails;
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
-    use rand::Rng;
     use rand::distr::Alphanumeric;
     use rand::rng;
+    use rand::Rng;
     use settings::Settings;
     use std::path::PathBuf;
     use std::{iter, path};
@@ -1285,6 +1318,7 @@ mod reg_api_tests {
             .route("/{crate_name}/owners", get(list_owners))
             .route("/", get(search))
             .route("/{package}/{version}/download", get(download))
+            .route("/new_empty", put(add_empty_crate))
             .route("/new", put(publish))
             .route("/{crate_name}/{version}/yank", delete(yank))
             .route("/{crate_name}/{version}/unyank", put(unyank));
