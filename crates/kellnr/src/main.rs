@@ -21,7 +21,7 @@ use storage::{
 };
 use tokio::{fs::create_dir_all, net::TcpListener};
 use tower_http::services::{ServeDir, ServeFile};
-use tracing::info;
+use tracing::{debug, info};
 use tracing_subscriber::fmt::format;
 use web_ui::{crate_access, group, session, ui, user};
 
@@ -303,20 +303,21 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
 }
 
 async fn init_cratesio_storage(settings: &Settings) -> CratesIoCrateStorage {
-    let storage = init_storage(&settings.s3.cratesio_bucket, settings);
+    let storage = init_storage(&settings.crates_io_path_or_bucket(), settings);
     CratesIoCrateStorage::new(settings, storage)
         .await
         .expect("Failed to create crates.io crate storage.")
 }
 
 async fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
-    let storage = init_storage(&settings.s3.crates_bucket, settings);
+    let storage = init_storage(&settings.crates_path_or_bucket(), settings);
     KellnrCrateStorage::new(settings, storage)
         .await
         .expect("Failed to create crate storage.")
 }
 
 fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
+    debug!("Initializing storage with folder: {}", folder);
     if settings.s3.enabled {
         let s = S3Storage::try_from((folder, settings)).expect("Failed to create S3 storage.");
         Box::new(s) as DynStorage

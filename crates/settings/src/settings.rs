@@ -95,12 +95,29 @@ impl Settings {
     pub fn crates_io_bin_path(&self) -> path::PathBuf {
         path::PathBuf::from(&self.registry.data_dir).join("cratesio")
     }
+
     pub fn crates_io_path(&self) -> String {
         format!("{}/cratesio", &self.registry.data_dir)
     }
 
     pub fn crates_path(&self) -> String {
         format!("{}/crates", &self.registry.data_dir)
+    }
+
+    pub fn crates_path_or_bucket(&self) -> String {
+        if self.s3.enabled {
+            self.s3.crates_bucket.clone()
+        } else {
+            self.crates_path()
+        }
+    }
+
+    pub fn crates_io_path_or_bucket(&self) -> String {
+        if self.s3.enabled {
+            self.s3.cratesio_bucket.clone()
+        } else {
+            self.crates_io_path()
+        }
     }
 }
 

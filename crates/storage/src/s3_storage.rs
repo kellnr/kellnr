@@ -62,13 +62,7 @@ impl S3Storage {
     }
 
     fn try_path_from(key: &str) -> Result<Path, object_store::path::Error> {
-        let mut prepare_path: Vec<&str> = key.split("/").collect();
-        prepare_path.reverse();
-        if let Some(crate_name) = prepare_path.first() {
-            object_store::path::Path::from_url_path(crate_name)
-        } else {
-            Err(path::Error::InvalidPath { path: key.into() })
-        }
+        object_store::path::Path::from_url_path(key)
     }
 
     fn storage(&self) -> &AmazonS3 {

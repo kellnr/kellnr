@@ -94,6 +94,12 @@ mod bin_tests {
         crate_storage: KellnrCrateStorage,
     }
 
+    impl Drop for TestData {
+        fn drop(&mut self) {
+            self.clean();
+        }
+    }
+
     impl TestData {
         async fn from(data_dir: &str) -> TestData {
             let settings = Settings {
@@ -137,11 +143,10 @@ mod bin_tests {
             .crate_storage
             .put(&name, &version, pub_data.cratedata.clone())
             .await;
-        let result_crate = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
 
         let get_res = test_storage
             .crate_storage
-            .get(result_crate.to_str().unwrap())
+            .get(&name, &version)
             .await
             .expect("Couldn't find file...");
 
@@ -167,12 +172,10 @@ mod bin_tests {
             .crate_storage
             .put(&name, &version, pub_data.cratedata.clone())
             .await;
-        let result_crate = Path::new(&test_storage.settings.bin_path())
-            .join("Test_Add_crate_binary_Upper-Case-0.1.0.crate");
 
         let get_res = test_storage
             .crate_storage
-            .get(result_crate.to_str().unwrap())
+            .get(&name, &version)
             .await
             .expect("Couldn't find file...");
 
@@ -285,8 +288,14 @@ mod bin_tests {
         let crate_path = Path::new(&test_storage.settings.bin_path()).join("test-0.2.0.crate");
         let crate_path = crate_path.to_string_lossy().to_string();
 
-        assert!(test_storage.crate_storage.get(&crate_path).await.is_some());
-        assert!(test_storage.crate_storage.cache_has_path(&crate_path));
+        assert!(
+            test_storage
+                .crate_storage
+                .get(&name, &version)
+                .await
+                .is_some()
+        );
+        assert!(test_storage.crate_storage.cache_has_path(&name, &version));
 
         test_storage
             .crate_storage
@@ -294,9 +303,15 @@ mod bin_tests {
             .await
             .unwrap();
 
-        assert!(!test_storage.crate_storage.cache_has_path(&crate_path));
+        assert!(!test_storage.crate_storage.cache_has_path(&name, &version));
 
-        assert!(test_storage.crate_storage.get(&crate_path).await.is_none());
+        assert!(
+            test_storage
+                .crate_storage
+                .get(&name, &version)
+                .await
+                .is_none()
+        );
 
         assert!(!std::path::PathBuf::from(crate_path).exists());
         test_storage.clean();

@@ -5,17 +5,14 @@ use cargo::{
     ops::{self, CompileOptions, DocOptions, OutputFormat},
     util::command_prelude::CompileMode,
 };
-use common::version::Version;
+use common::{original_name::OriginalName, version::Version};
 use db::{Database, DbProvider, DocQueueEntry};
 use flate2::read::GzDecoder;
 use fs_extra::dir::{CopyOptions, copy};
 use std::path::{Path, PathBuf};
 use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tar::Archive;
-use tokio::{
-    fs::{File, create_dir_all, remove_dir_all},
-    io::AsyncReadExt,
-};
+use tokio::fs::{create_dir_all, remove_dir_all};
 use tracing::error;
 
 pub async fn doc_extraction_queue(db: Database, cs: KellnrCrateStorage, docs_path: PathBuf) {
@@ -45,8 +42,8 @@ async fn inner_loop(
             }
 
             let version = Version::from_unchecked_str(&entry.version);
-            let docs_link = compute_doc_url(&entry.krate, &version);
-            db.update_docs_link(&entry.krate, &version, &docs_link)
+            let docs_link = compute_doc_url(&entry.normalized_name, &version);
+            db.update_docs_link(&entry.normalized_name, &version, &docs_link)
                 .await?;
         }
         db.delete_doc_queue(entry.id).await?;
@@ -60,23 +57,30 @@ async fn extract_docs(
     cs: &KellnrCrateStorage,
     docs_path: &Path,
 ) -> Result<(), DocsError> {
-    let crate_path = cs.crate_path(&doc.krate, &doc.version);
-
     // Unpack crate
-    let mut tar_gz = File::open(&crate_path).await?;
-    let mut contents = vec![];
-    tar_gz.read_to_end(&mut contents).await?;
+
+    // TODO: Only works if normalized name = original name -> Need to get original name from db
+    let orig_name = OriginalName::from_unchecked(doc.normalized_name.to_string());
+    let version = Version::from_unchecked_str(&doc.version);
+    let contents = cs.get(&orig_name, &version).await.ok_or_else(|| {
+        error!("Failed to get crate from storage");
+        DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.to_string())
+    })?;
     let tar = GzDecoder::new(std::io::Cursor::new(contents));
     let mut archive = Archive::new(tar);
     archive.unpack(&doc.path)?;
 
     // Generate the docs
-    let generated_docs_path = &doc.path.join(format!("{}-{}", doc.krate, doc.version));
+    let generated_docs_path = &doc
+        .path
+        .join(format!("{}-{}", doc.normalized_name, doc.version));
     generate_docs(generated_docs_path)?;
 
     // Copy the docs directory
     let from = generated_docs_path.join("target").join("doc");
-    let to = docs_path.join(doc.krate.to_string()).join(&doc.version);
+    let to = docs_path
+        .join(doc.normalized_name.to_string())
+        .join(&doc.version);
     copy_dir(&from, &to).await?;
 
     Ok(())

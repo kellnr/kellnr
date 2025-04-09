@@ -856,7 +856,7 @@ mod tests {
             .returning(move || Ok(999999));
         mock_db.expect_get_last_updated_crate().returning(move || {
             Ok(Some((
-                OriginalName::from_unchecked_str("foobar".to_string()),
+                OriginalName::from_unchecked("foobar".to_string()),
                 Version::try_from("1.0.0").unwrap(),
             )))
         });
@@ -888,7 +888,7 @@ mod tests {
                 third: (String::from("top3"), 100),
             },
             last_updated_crate: Some((
-                OriginalName::from_unchecked_str("foobar".to_string()),
+                OriginalName::from_unchecked("foobar".to_string()),
                 Version::try_from("1.0.0").unwrap(),
             )),
             proxy_enabled: false,

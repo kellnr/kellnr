@@ -114,13 +114,13 @@ mod tests {
             Ok(vec![
                 DocQueueEntry {
                     id: 0,
-                    krate: NormalizedName::from_unchecked("crate1".to_string()),
+                    normalized_name: NormalizedName::from_unchecked("crate1".to_string()),
                     version: "0.0.1".to_string(),
                     path: Default::default(),
                 },
                 DocQueueEntry {
                     id: 1,
-                    krate: NormalizedName::from_unchecked("crate2".to_string()),
+                    normalized_name: NormalizedName::from_unchecked("crate2".to_string()),
                     version: "0.0.2".to_string(),
                     path: Default::default(),
                 },
