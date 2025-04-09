@@ -34,6 +34,8 @@ pub enum RegistryError {
     MissingRequiredFields(String, Vec<String>, Vec<String>),
     #[error("Read-only users cannot modify the registry")]
     ReadOnlyModify,
+    #[error("New crates publishing has been restricted.")]
+    NewCratesRestricted,
 }
 
 impl From<RegistryError> for ApiError {

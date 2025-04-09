@@ -9,6 +9,7 @@ pub struct Registry {
     pub max_db_connections: u32,
     pub auth_required: bool,
     pub required_crate_fields: Vec<String>,
+    pub new_crates_restricted: bool,
 }
 
 impl Default for Registry {
@@ -21,6 +22,7 @@ impl Default for Registry {
             max_db_connections: 0,
             auth_required: false,
             required_crate_fields: Vec::new(),
+            new_crates_restricted: false,
         }
     }
 }
