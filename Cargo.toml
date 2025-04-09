@@ -49,7 +49,7 @@ testcontainers = "0.23.3"
 quote = "1.0.39"
 syn = {version = "2.0.100", features = ["full"]}
 trybuild = {version = "1.0.99", features = ["diff"]}
-zip = "2.2.2"
+zip = "2.6.1"
 flate2 = "1.1.1"
 tar = "0.4.44"
 cargo = "0.86.0"
