@@ -509,6 +509,7 @@ mod reg_api_tests {
     use tower::ServiceExt;
 
     const TOKEN: &str = "854DvwSlUwEHtIo3kWy6x7UCPKHfzCmy";
+    const NON_ADMIN_TOKEN: &str = "g8kfzxSrMswNOVio5kBoTEFBBVm3fRS7";
     const RO_TOKEN: &str = "lJh6orU1Ye376ApXJR8I7V9gI3V6UZWU";
     const RO_ADMIN_TOKEN: &str = "GUOMPlZwN1kliXRW5wJ0ixh54NqYlE6X";
 
@@ -936,6 +937,122 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
+    async fn add_empty_package() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new_empty")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from("{\"name\": \"next-crate\"}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get the empty success results message.
+        let response_status = r.status();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let success: EmptyCrateSuccess =
+            serde_json::from_slice(&result_msg).expect("Cannot deserialize success message");
+
+        assert_eq!(StatusCode::OK, response_status);
+        let normalized_name = OriginalName::try_from("next-crate")
+            .unwrap()
+            .to_normalized();
+        let crate_id = kellnr
+            .db
+            .get_crate_id(&normalized_name)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            Version::from_unchecked_str("0.0.0"),
+            kellnr.db.get_max_version_from_id(crate_id).await.unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn add_empty_non_admin() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new_empty")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, NON_ADMIN_TOKEN)
+                    .body(Body::from("{\"name\": \"rogue-crate\"}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let response_status = r.status();
+
+        assert_eq!(StatusCode::UNAUTHORIZED, response_status);
+
+        let normalized_name = OriginalName::try_from("rogue-crate")
+            .unwrap()
+            .to_normalized();
+        assert_eq!(
+            None,
+            kellnr.db.get_crate_id(&normalized_name).await.unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn add_empty_existing() {
+        // Use valid crate publish data to test.
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package.clone()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new_empty")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from("{\"name\": \"test_lib\"}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let response_status = r.status();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&result_msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(
+            "ERROR: Crate with version already exists: test_lib-0.2.0",
+            error.errors[0].detail
+        );
+    }
+
+    #[tokio::test]
     async fn publish_package() {
         // Use valid crate publish data to test.
         let valid_pub_package = read("../test_data/pub_data.bin")
@@ -1069,6 +1186,140 @@ mod reg_api_tests {
                 .unwrap()[0]
                 .version
         );
+    }
+
+    #[tokio::test]
+    async fn try_publish_with_restricted() {
+        // Use valid crate publish data to test.
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let mut settings = get_settings();
+        settings.registry.new_crates_restricted = true;
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, NON_ADMIN_TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let response_status = r.status();
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(
+            "ERROR: New crates publishing has been restricted",
+            error.errors[0].detail
+        );
+    }
+
+    #[tokio::test]
+    async fn try_publish_with_restricted_added_empty() {
+        let mut settings = get_settings();
+        settings.registry.new_crates_restricted = true;
+        let kellnr = TestKellnr::fake(settings).await;
+
+        // add empty crate placeholder
+        let created = Utc::now();
+        kellnr
+            .db
+            .add_empty_crate("test_lib", &created)
+            .await
+            .unwrap();
+        // add the non_admin user as the owner
+        let normalized_name = OriginalName::try_from("test_lib").unwrap().to_normalized();
+        kellnr
+            .db
+            .add_owner(&normalized_name, "non_admin")
+            .await
+            .unwrap();
+
+        // Use valid crate publish data to test.
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, NON_ADMIN_TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get the empty success results message.
+        let response_status = r.status();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let success: PubDataSuccess =
+            serde_json::from_slice(&result_msg).expect("Cannot deserialize success message");
+
+        assert_eq!(StatusCode::OK, response_status);
+        assert!(success.warnings.is_none());
+        // As the success message is empty in the normal case, the deserialization works even
+        // if an error message was returned. That's why we need to test for an error message, too.
+        assert!(
+            serde_json::from_slice::<ErrorDetails>(&result_msg).is_err(),
+            "An error message instead of a success message was returned"
+        );
+        assert_eq!(1, kellnr.db.get_crate_meta_list(1).await.unwrap().len());
+        assert_eq!(
+            "0.2.0",
+            kellnr.db.get_crate_meta_list(1).await.unwrap()[0].version
+        );
+    }
+
+    #[tokio::test]
+    async fn try_publish_with_restricted_added_empty_non_owner() {
+        let mut settings = get_settings();
+        settings.registry.new_crates_restricted = true;
+        let kellnr = TestKellnr::fake(settings).await;
+
+        let created = Utc::now();
+        kellnr
+            .db
+            .add_empty_crate("test_lib", &created)
+            .await
+            .unwrap();
+
+        // Use valid crate publish data to test.
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, NON_ADMIN_TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let response_status = r.status();
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::FORBIDDEN, response_status);
+        assert_eq!("ERROR: Not the owner of the crate", error.errors[0].detail);
     }
 
     #[tokio::test]
@@ -1302,6 +1553,12 @@ mod reg_api_tests {
             .await
             .unwrap();
         db.add_auth_token("test admin ro", RO_ADMIN_TOKEN, "ro_dummy_admin")
+            .await
+            .unwrap();
+        db.add_user("non_admin", "na", "", false, false)
+            .await
+            .unwrap();
+        db.add_auth_token("test non admin", NON_ADMIN_TOKEN, "non_admin")
             .await
             .unwrap();
 
