@@ -1,9 +1,9 @@
 use appstate::AppStateData;
 use axum::{
-    Router,
     extract::DefaultBodyLimit,
     middleware,
     routing::{delete, get, get_service, post, put},
+    Router,
 };
 use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
@@ -193,6 +193,7 @@ async fn main() {
             "/dl/{package}/{version}/download",
             get(kellnr_api::download),
         )
+        .route("/new_empty", put(kellnr_api::add_empty_crate))
         .route(
             "/new",
             put(kellnr_api::publish).layer(DefaultBodyLimit::max(max_crate_size * 1_000_000)),

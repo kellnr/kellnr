@@ -703,15 +703,13 @@ async fn is_owner_true() {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "admin"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "admin"
+        )
+        .await
+        .unwrap());
 }
 
 #[pg_testcontainer]
@@ -727,15 +725,13 @@ async fn is_owner_false() {
         .await
         .unwrap();
 
-    assert!(
-        !test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "user"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(!test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "user"
+        )
+        .await
+        .unwrap());
 }
 
 #[pg_testcontainer]
@@ -753,12 +749,10 @@ async fn delete_owner_valid_owner() {
 
     test_db.delete_owner("mycrate", "admin").await.unwrap();
 
-    assert!(
-        test_db
-            .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
-            .await
-            .is_ok()
-    );
+    assert!(test_db
+        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .await
+        .is_ok());
 }
 
 #[pg_testcontainer]
@@ -817,6 +811,39 @@ async fn test_add_crate_different_user() {
     assert_eq!(2, owners.len());
     assert_eq!("admin", owners[0].name);
     assert_eq!("user", owners[1].name);
+}
+
+#[pg_testcontainer]
+#[tokio::test]
+async fn test_add_empty_crate() {
+    let created = Utc::now();
+    test_db.add_empty_crate("mycrate", &created).await.unwrap();
+
+    let normalized_name = NormalizedName::from(OriginalName::try_from("mycrate").unwrap());
+    let crate_id = test_db.get_crate_id(&normalized_name).await.unwrap();
+    assert!(crate_id.is_some());
+}
+
+#[pg_testcontainer]
+#[tokio::test]
+async fn test_add_empty_crate_exists() {
+    let created = Utc::now();
+
+    // add a crate with version first
+    test_db
+        .test_add_crate(
+            "mycrate",
+            "admin",
+            &Version::try_from("1.0.0").unwrap(),
+            &Utc::now(),
+        )
+        .await
+        .unwrap();
+
+    // now try to add an empty crate with the same name
+    let result = test_db.add_empty_crate("mycrate", &created).await;
+
+    assert!(result.is_err());
 }
 
 #[pg_testcontainer]
@@ -891,12 +918,10 @@ async fn get_user_from_token_no_token() {
 #[pg_testcontainer]
 #[tokio::test]
 async fn add_auth_token_no_user() {
-    assert!(
-        test_db
-            .add_auth_token("test", "mytoken", "nouser")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .add_auth_token("test", "mytoken", "nouser")
+        .await
+        .is_err());
 }
 
 #[pg_testcontainer]
@@ -944,12 +969,10 @@ async fn add_user_duplicate() {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .add_user("user", "pwd", "salt", false, false)
-            .await
-            .is_err()
-    )
+    assert!(test_db
+        .add_user("user", "pwd", "salt", false, false)
+        .await
+        .is_err())
 }
 
 #[pg_testcontainer]

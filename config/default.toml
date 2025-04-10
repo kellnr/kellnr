@@ -41,6 +41,8 @@ auth_required = false
 # If set to ["authors", "repository"], then all uploaded crates would have
 # to have the authors and repository defined in their Cargo.toml's
 required_crate_fields = []
+# Disallows new crate publishing by the users.
+new_crates_restricted = false
 
 [docs]
 # Enable or disable automatic rustdoc generation for uploaded crates

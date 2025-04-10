@@ -119,6 +119,7 @@ pub trait DbProvider: Send + Sync {
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>>;
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData>;
+    async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64>;
     async fn add_crate(
         &self,
         pub_metadata: &PublishMetadata,
@@ -379,6 +380,10 @@ pub mod mock {
             }
 
             async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {
+                unimplemented!()
+            }
+
+            async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64> {
                 unimplemented!()
             }
 

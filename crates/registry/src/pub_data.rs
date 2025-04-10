@@ -7,7 +7,13 @@ use axum::extract::FromRequest;
 use axum::http::Request;
 use common::publish_metadata::PublishMetadata;
 use error::api_error::ApiError;
+use serde::Deserialize;
 use settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
+
+#[derive(Debug, Deserialize)]
+pub struct EmptyCrateData {
+    pub name: String,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PubData {
@@ -226,15 +232,13 @@ mod bin_tests {
             .unwrap();
 
         assert!(rand_path.exists());
-        assert!(
-            rand_path.starts_with(
-                test_bin
-                    .crate_storage
-                    .doc_queue_path
-                    .to_string_lossy()
-                    .to_string()
-            )
-        );
+        assert!(rand_path.starts_with(
+            test_bin
+                .crate_storage
+                .doc_queue_path
+                .to_string_lossy()
+                .to_string()
+        ));
         test_bin.clean();
     }
 

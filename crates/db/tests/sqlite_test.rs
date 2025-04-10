@@ -600,16 +600,14 @@ async fn is_owner_true() {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "admin"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(test_db
+        .db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "admin"
+        )
+        .await
+        .unwrap());
 }
 
 #[tokio::test]
@@ -627,16 +625,14 @@ async fn is_owner_false() {
         .await
         .unwrap();
 
-    assert!(
-        !test_db
-            .db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "user"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(!test_db
+        .db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "user"
+        )
+        .await
+        .unwrap());
 }
 
 #[tokio::test]
@@ -655,13 +651,11 @@ async fn delete_owner_valid_owner() {
 
     test_db.db.delete_owner("mycrate", "admin").await.unwrap();
 
-    assert!(
-        test_db
-            .db
-            .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
-            .await
-            .is_ok()
-    );
+    assert!(test_db
+        .db
+        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .await
+        .is_ok());
 }
 
 #[tokio::test]
@@ -736,6 +730,44 @@ async fn add_crate_different_user() {
     assert_eq!(2, owners.len());
     assert_eq!("admin", owners[0].name);
     assert_eq!("user", owners[1].name);
+}
+
+#[tokio::test]
+async fn test_add_empty_crate() {
+    let test_db = TestDB::new().await;
+    let created = Utc::now();
+    test_db
+        .db
+        .add_empty_crate("mycrate", &created)
+        .await
+        .unwrap();
+
+    let normalized_name = NormalizedName::from(OriginalName::try_from("mycrate").unwrap());
+    let crate_id = test_db.db.get_crate_id(&normalized_name).await.unwrap();
+    assert!(crate_id.is_some());
+}
+
+#[tokio::test]
+async fn test_add_empty_crate_exists() {
+    let test_db = TestDB::new().await;
+    let created = Utc::now();
+
+    // add a crate with version first
+    test_db
+        .db
+        .test_add_crate(
+            "mycrate",
+            "admin",
+            &Version::try_from("1.0.0").unwrap(),
+            &Utc::now(),
+        )
+        .await
+        .unwrap();
+
+    // now try to add an empty crate with the same name
+    let result = test_db.db.add_empty_crate("mycrate", &created).await;
+
+    assert!(result.is_err());
 }
 
 #[tokio::test]
@@ -819,13 +851,11 @@ async fn get_user_from_token_no_token() {
 async fn add_auth_token_no_user() {
     let test_db = TestDB::new().await;
 
-    assert!(
-        test_db
-            .db
-            .add_auth_token("test", "mytoken", "nouser")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .db
+        .add_auth_token("test", "mytoken", "nouser")
+        .await
+        .is_err());
 }
 
 #[tokio::test]
@@ -878,13 +908,11 @@ async fn add_user_duplicate() {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .db
-            .add_user("user", "pwd", "salt", false, false)
-            .await
-            .is_err()
-    )
+    assert!(test_db
+        .db
+        .add_user("user", "pwd", "salt", false, false)
+        .await
+        .is_err())
 }
 
 #[tokio::test]
@@ -1004,13 +1032,11 @@ async fn get_name_valid_user_and_token() {
 async fn get_session_no_session_in_db() {
     let test_db = TestDB::new().await;
 
-    assert!(
-        test_db
-            .db
-            .validate_session("no_session_token")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .db
+        .validate_session("no_session_token")
+        .await
+        .is_err());
 }
 
 #[tokio::test]
@@ -1039,13 +1065,11 @@ async fn authenticate_user_valid() {
 async fn authenticate_user_unknown_user() {
     let test_db = TestDB::new().await;
 
-    assert!(
-        test_db
-            .db
-            .authenticate_user("unknown", "123")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .db
+        .authenticate_user("unknown", "123")
+        .await
+        .is_err());
 }
 
 #[tokio::test]
