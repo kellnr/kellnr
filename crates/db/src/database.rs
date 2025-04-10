@@ -1,7 +1,7 @@
 use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{DbResult, PrefetchState};
 use crate::tables::init_database;
-use crate::{AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User, error::DbError};
+use crate::{error::DbError, AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User};
 use crate::{ConString, DocQueueEntry};
 use chrono::{DateTime, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
@@ -24,9 +24,9 @@ use migration::iden::{
 };
 use sea_orm::sea_query::{Alias, Expr, Query, *};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
-    prelude::async_trait::async_trait, query::*,
+    prelude::async_trait::async_trait, query::*, ActiveModelTrait, ColumnTrait, ConnectionTrait,
+    DatabaseConnection, EntityTrait, FromQueryResult, InsertResult, ModelTrait, QueryFilter,
+    RelationTrait, Set,
 };
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -1433,11 +1433,7 @@ impl DbProvider for Database {
         Ok(crate_data)
     }
 
-    async fn add_empty_crate(
-        &self,
-        name: &str,
-        created: &DateTime<Utc>,
-    ) -> DbResult<i64> {
+    async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64> {
         let created = created.format(DB_DATE_FORMAT).to_string();
         let normalized_name = NormalizedName::from(
             OriginalName::try_from(name)

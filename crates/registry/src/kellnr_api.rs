@@ -1,4 +1,4 @@
-use crate::pub_data::PubData;
+use crate::pub_data::{EmptyCrateData, PubData};
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
@@ -323,7 +323,7 @@ pub async fn download(
 pub async fn add_empty_crate(
     State(state): AppState,
     token: token::Token,
-    name: String,
+    Json(data): Json<EmptyCrateData>,
 ) -> ApiResult<Json<EmptyCrateSuccess>> {
     // Only admins can create empty crate placeholders
     if !token.is_admin {
@@ -334,7 +334,7 @@ pub async fn add_empty_crate(
         ));
     }
     let db = state.db;
-    let orig_name = OriginalName::try_from(&name)?;
+    let orig_name = OriginalName::try_from(&data.name)?;
     let normalized_name = orig_name.to_normalized();
 
     if let Some(id) = db.get_crate_id(&normalized_name).await? {
@@ -342,13 +342,13 @@ pub async fn add_empty_crate(
             Ok(v) => format!("{}", v),
             _ => String::new(),
         };
-        return Err(RegistryError::CrateExists(name, version).into());
+        return Err(RegistryError::CrateExists(data.name, version).into());
     }
 
     let created = Utc::now();
 
     // Add crate to DB
-    db.add_empty_crate(&name, &created).await?;
+    db.add_empty_crate(&data.name, &created).await?;
     Ok(Json(EmptyCrateSuccess::new()))
 }
 
