@@ -415,20 +415,12 @@ async fn fetch_cratesio_prefetch(
     name: OriginalName,
     sender: &flume::Sender<CratesioPrefetchMsg>,
 ) -> Result<Prefetch, StatusCode> {
-    let time = std::time::Instant::now();
-
     let url = Url::parse("https://index.crates.io/")
         .unwrap()
         .join(&crate_sub_path(&name.to_normalized()))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let response = CLIENT.get(url).send().await;
-
-    debug!(
-        "Fetching prefetch data from crates.io for {} took {:?}",
-        name,
-        time.elapsed()
-    );
 
     match response {
         Ok(r) => {

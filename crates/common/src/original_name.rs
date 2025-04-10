@@ -20,7 +20,7 @@ impl OriginalName {
     pub fn to_normalized(&self) -> NormalizedName {
         NormalizedName::from(self)
     }
-    pub fn from_unchecked_str(name: String) -> Self {
+    pub fn from_unchecked(name: String) -> Self {
         Self(name)
     }
 }

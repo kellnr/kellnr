@@ -24,6 +24,7 @@ object_store.workspace = true
 bytes.workspace = true
 url.workspace = true
 async-trait.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

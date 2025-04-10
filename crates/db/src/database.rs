@@ -219,7 +219,7 @@ impl Database {
         }];
 
         self.add_cratesio_prefetch_data(
-            &OriginalName::from_unchecked_str(name.to_string()),
+            &OriginalName::from_unchecked(name.to_string()),
             etag,
             last_modified,
             description,
@@ -760,7 +760,7 @@ impl DbProvider for Database {
 
         if let Some(krate) = krate {
             // SAFETY: Unchecked is ok, as only valid crate names are inserted into the database
-            let name = OriginalName::from_unchecked_str(krate.original_name);
+            let name = OriginalName::from_unchecked(krate.original_name);
             // SAFETY: Unchecked is ok, as only valid versions are inserted into the database
             let version = Version::from_unchecked_str(&krate.max_version);
             Ok(Some((name, version)))
@@ -2273,7 +2273,7 @@ impl DbProvider for Database {
             .into_iter()
             .map(|krate| {
                 CratesioPrefetchMsg::Update(UpdateData {
-                    name: OriginalName::from_unchecked_str(krate.original_name),
+                    name: OriginalName::from_unchecked(krate.original_name),
                     etag: Some(krate.e_tag),
                     last_modified: Some(krate.last_modified),
                 })

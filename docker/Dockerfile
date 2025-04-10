@@ -22,12 +22,13 @@ RUN apt install -y \
 	libclang-dev \
 	clang \
 	cmake \
- 	pkg-config \
-  	libssl-dev
+	pkg-config \
+	libssl-dev
 
 WORKDIR ${INSTALLDIR}
 RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh | bash -s -- -d ${DATADIR} -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
 RUN rm *.zip
+RUN rustup component add rust-src
 
 HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/ui/version || exit 1
 

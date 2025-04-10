@@ -306,8 +306,6 @@ pub async fn download(
     let cs = state.crate_storage;
     check_download_auth(&package.to_normalized(), &token, &db).await?;
 
-    let file_path = cs.crate_path(&package.to_string(), &version.to_string());
-
     if let Err(e) = db
         .increase_download_counter(&package.to_normalized(), &version)
         .await
@@ -315,7 +313,7 @@ pub async fn download(
         warn!("Failed to increase download counter: {}", e);
     }
 
-    match cs.get(file_path.as_str()).await {
+    match cs.get(&package, &version).await {
         Some(file) => Ok(file),
         None => Err(RegistryError::CrateNotFound.into()),
     }

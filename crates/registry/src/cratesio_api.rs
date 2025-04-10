@@ -1,5 +1,3 @@
-use std::{error::Error, path::PathBuf, sync::Arc};
-
 use crate::{registry_error::RegistryError, search_params::SearchParams};
 use appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
 use axum::{
@@ -15,6 +13,7 @@ use common::{
 };
 use error::api_error::ApiResult;
 use reqwest::{Client, ClientBuilder, Url};
+use std::{error::Error, sync::Arc};
 use tracing::{error, trace, warn};
 
 static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
@@ -66,16 +65,9 @@ pub async fn download(
     State(crate_storage): CrateIoStorageState,
     State(sender): CratesIoPrefetchSenderState,
 ) -> Result<Vec<u8>, StatusCode> {
-    let file_path = crate_storage.crate_path(&package.to_string(), &version.to_string());
+    trace!("Downloading crate: {} ({})", package, version);
 
-    trace!(
-        "Downloading crate: {} ({}) from path {}",
-        package,
-        version,
-        PathBuf::from(file_path.clone()).display()
-    );
-
-    match crate_storage.get(file_path.as_str()).await {
+    match crate_storage.get(&package, &version).await {
         Some(file) => {
             let msg = DownloadData {
                 name: package.into(),
@@ -113,7 +105,7 @@ pub async fn download(
                 })?;
 
             crate_storage
-                .get(file_path.as_str())
+                .get(&package, &version)
                 .await
                 .ok_or(StatusCode::NOT_FOUND)
         }

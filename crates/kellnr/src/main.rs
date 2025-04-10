@@ -303,14 +303,14 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
 }
 
 async fn init_cratesio_storage(settings: &Settings) -> CratesIoCrateStorage {
-    let storage = init_storage(&settings.s3.cratesio_bucket, settings);
+    let storage = init_storage(&settings.crates_io_path_or_bucket(), settings);
     CratesIoCrateStorage::new(settings, storage)
         .await
         .expect("Failed to create crates.io crate storage.")
 }
 
 async fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
-    let storage = init_storage(&settings.s3.crates_bucket, settings);
+    let storage = init_storage(&settings.crates_path_or_bucket(), settings);
     KellnrCrateStorage::new(settings, storage)
         .await
         .expect("Failed to create crate storage.")

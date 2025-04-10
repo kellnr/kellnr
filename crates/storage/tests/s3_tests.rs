@@ -54,9 +54,6 @@ async fn add_and_get_crate() {
     let test_storage = TestS3Storage::from("Test_Add_crate_binary_Upper-Case", &url).await;
     let name = OriginalName::try_from(metadata.name).unwrap();
     let version = Version::try_from("0.1.0").unwrap();
-    let path = test_storage
-        .crate_storage
-        .crate_path(&name.to_string(), &version.to_string());
 
     // Put the crate into the S3 storage
     let put_result = test_storage
@@ -65,7 +62,7 @@ async fn add_and_get_crate() {
         .await;
 
     // Get the crate from the S3 storage
-    let result_crate = test_storage.crate_storage.get(path.as_str()).await;
+    let result_crate = test_storage.crate_storage.get(&name, &version).await;
 
     assert!(put_result.is_ok());
     assert!(result_crate.is_some());

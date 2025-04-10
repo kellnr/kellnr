@@ -1083,7 +1083,7 @@ async fn add_and_get_doc_queue_entries() {
     assert_eq!(
         DocQueueEntry {
             id: 1,
-            krate: NormalizedName::from_unchecked("mycrate".to_string()),
+            normalized_name: NormalizedName::from_unchecked("mycrate".to_string()),
             version: "1.0.0".to_string(),
             path: PathBuf::from("/tmp/foo")
         },
@@ -1093,7 +1093,7 @@ async fn add_and_get_doc_queue_entries() {
     assert_eq!(
         DocQueueEntry {
             id: 2,
-            krate: NormalizedName::from_unchecked("mycrate2".to_string()),
+            normalized_name: NormalizedName::from_unchecked("mycrate2".to_string()),
             version: "2.0.0".to_string(),
             path: PathBuf::from("/tmp/bar")
         },
@@ -1133,7 +1133,7 @@ async fn delete_doc_queue_entry() {
     assert_eq!(
         DocQueueEntry {
             id: 2,
-            krate: NormalizedName::from_unchecked("mycrate2".to_string()),
+            normalized_name: NormalizedName::from_unchecked("mycrate2".to_string()),
             version: "2.0.0".to_string(),
             path: PathBuf::from("/tmp/bar")
         },
@@ -2283,7 +2283,7 @@ async fn is_cratesio_cache_up_to_date_up_to_date() {
     test_db
         .db
         .add_cratesio_prefetch_data(
-            &OriginalName::from_unchecked_str("crate".to_string()),
+            &OriginalName::from_unchecked("crate".to_string()),
             "etag",
             "last_modified",
             None,
@@ -2332,7 +2332,7 @@ async fn is_cratesio_cache_up_to_date_needs_update() {
     test_db
         .db
         .add_cratesio_prefetch_data(
-            &OriginalName::from_unchecked_str("crate".to_string()),
+            &OriginalName::from_unchecked("crate".to_string()),
             "etag",
             "last_modified",
             None,
@@ -2367,7 +2367,7 @@ async fn is_cratesio_cache_up_to_date_needs_update() {
     test_db
         .db
         .add_cratesio_prefetch_data(
-            &OriginalName::from_unchecked_str("crate".to_string()),
+            &OriginalName::from_unchecked("crate".to_string()),
             "etag2",
             "last_modified2",
             None,
