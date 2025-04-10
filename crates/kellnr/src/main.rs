@@ -21,7 +21,7 @@ use storage::{
 };
 use tokio::{fs::create_dir_all, net::TcpListener};
 use tower_http::services::{ServeDir, ServeFile};
-use tracing::{debug, info};
+use tracing::info;
 use tracing_subscriber::fmt::format;
 use web_ui::{crate_access, group, session, ui, user};
 
@@ -317,7 +317,6 @@ async fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
 }
 
 fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
-    debug!("Initializing storage with folder: {}", folder);
     if settings.s3.enabled {
         let s = S3Storage::try_from((folder, settings)).expect("Failed to create S3 storage.");
         Box::new(s) as DynStorage

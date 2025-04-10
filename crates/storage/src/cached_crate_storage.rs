@@ -4,7 +4,6 @@ use common::version::Version;
 use moka::future::Cache;
 use settings::Settings;
 use std::{path::PathBuf, sync::Arc};
-use tracing::debug;
 
 pub type CrateCache = Cache<String, Vec<u8>>;
 pub type DynStorage = Box<dyn Storage + Send + Sync>;
@@ -49,7 +48,6 @@ impl CachedCrateStorage {
         crate_data: Arc<[u8]>,
     ) -> Result<String, StorageError> {
         let crate_file = Self::file_name(name, version);
-        debug!("Adding bin package: {}", crate_file);
         self.storage
             .put(&crate_file, crate_data.to_vec().into())
             .await
@@ -69,7 +67,6 @@ impl CachedCrateStorage {
 
     pub async fn get(&self, name: &OriginalName, version: &Version) -> Option<Vec<u8>> {
         let file_name = Self::file_name(name, version);
-        debug!("Getting crate: {}", file_name);
         match self.cache {
             Some(ref cache) => {
                 if let Some(data) = cache.get(&file_name).await {

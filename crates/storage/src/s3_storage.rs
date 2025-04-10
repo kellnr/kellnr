@@ -4,7 +4,7 @@ use bytes::Bytes;
 use object_store::{
     ObjectStore, PutMode,
     aws::{AmazonS3, AmazonS3Builder},
-    path::{self, Path},
+    path::Path,
 };
 use settings::Settings;
 

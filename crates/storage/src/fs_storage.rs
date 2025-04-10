@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use object_store::{ObjectStore, PutMode, local::LocalFileSystem, path::Path};
 use std::fs::DirBuilder;
-use tracing::debug;
 
 pub struct FSStorage(LocalFileSystem);
 
@@ -20,7 +19,6 @@ impl Storage for FSStorage {
     }
 
     async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
-        debug!("Adding bin package key: {}", key);
         self.storage()
             .put_opts(&Path::from(key), object.into(), PutMode::Create.into())
             .await?;
