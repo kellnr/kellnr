@@ -1,19 +1,19 @@
-use crate::compute_doc_url;
+use crate::{compute_doc_url, docs_error::DocsError};
 use cargo::{
-    core::{resolver::CliFeatures, Workspace},
+    GlobalContext,
+    core::{Workspace, resolver::CliFeatures},
     ops::{self, CompileOptions, DocOptions, OutputFormat},
     util::command_prelude::CompileMode,
-    CargoResult, GlobalContext,
 };
 use common::version::Version;
 use db::{Database, DbProvider, DocQueueEntry};
 use flate2::read::GzDecoder;
-use fs_extra::dir::{copy, CopyOptions};
+use fs_extra::dir::{CopyOptions, copy};
 use std::path::{Path, PathBuf};
 use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tar::Archive;
 use tokio::{
-    fs::{create_dir_all, remove_dir_all, File},
+    fs::{File, create_dir_all, remove_dir_all},
     io::AsyncReadExt,
 };
 use tracing::error;
@@ -33,7 +33,7 @@ async fn inner_loop(
     db: &impl DbProvider,
     cs: &KellnrCrateStorage,
     docs_path: &Path,
-) -> anyhow::Result<()> {
+) -> Result<(), DocsError> {
     let entries = db.get_doc_queue().await?;
 
     for entry in entries {
@@ -59,7 +59,7 @@ async fn extract_docs(
     doc: &DocQueueEntry,
     cs: &KellnrCrateStorage,
     docs_path: &Path,
-) -> anyhow::Result<()> {
+) -> Result<(), DocsError> {
     let crate_path = cs.crate_path(&doc.krate, &doc.version);
 
     // Unpack crate
@@ -82,12 +82,12 @@ async fn extract_docs(
     Ok(())
 }
 
-async fn clean_up(path: &Path) -> anyhow::Result<()> {
+async fn clean_up(path: &Path) -> Result<(), DocsError> {
     remove_dir_all(path).await?;
     Ok(())
 }
 
-async fn copy_dir(from: &Path, to: &Path) -> anyhow::Result<()> {
+async fn copy_dir(from: &Path, to: &Path) -> Result<(), DocsError> {
     create_dir_all(to).await?;
     copy(
         from,
@@ -100,10 +100,11 @@ async fn copy_dir(from: &Path, to: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn generate_docs(crate_path: impl AsRef<Path>) -> CargoResult<()> {
+fn generate_docs(crate_path: impl AsRef<Path>) -> Result<(), DocsError> {
     let manifest_path = crate_path.as_ref().join("Cargo.toml").canonicalize()?;
-    let ctx = GlobalContext::default()?;
-    let workspace = Workspace::new(&manifest_path, &ctx)?;
+    let ctx = GlobalContext::default().map_err(|e| DocsError::CargoError(e.to_string()))?;
+    let workspace =
+        Workspace::new(&manifest_path, &ctx).map_err(|e| DocsError::CargoError(e.to_string()))?;
     let compile_opts = CompileOptions {
         cli_features: CliFeatures::new_all(true),
         ..CompileOptions::new(
@@ -112,13 +113,14 @@ fn generate_docs(crate_path: impl AsRef<Path>) -> CargoResult<()> {
                 deps: false,
                 json: false,
             },
-        )?
+        )
+        .map_err(|e| DocsError::CargoError(e.to_string()))?
     };
     let options = DocOptions {
         open_result: false,
         compile_opts,
         output_format: OutputFormat::Html,
     };
-    ops::doc(&workspace, &options)?;
+    ops::doc(&workspace, &options).map_err(|e| DocsError::CargoError(e.to_string()))?;
     Ok(())
 }

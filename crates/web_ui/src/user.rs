@@ -2,11 +2,11 @@ use crate::error::RouteError;
 use crate::session::MaybeUser;
 use appstate::{AppState, DbState};
 use auth::token;
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
-use axum_extra::extract::cookie::Cookie;
 use axum_extra::extract::PrivateCookieJar;
+use axum_extra::extract::cookie::Cookie;
 use common::util::generate_rand_string;
 use cookie::time;
 use db::password::generate_salt;
@@ -89,6 +89,22 @@ pub async fn reset_pwd(
     .into())
 }
 
+#[derive(Deserialize)]
+pub struct ReadOnlyState {
+    pub state: bool,
+}
+
+pub async fn read_only(
+    user: MaybeUser,
+    Path(name): Path<String>,
+    State(db): DbState,
+    Json(ro_state): Json<ReadOnlyState>,
+) -> Result<(), RouteError> {
+    user.assert_admin()?;
+
+    Ok(db.change_read_only_state(&name, ro_state.state).await?)
+}
+
 pub async fn delete(
     user: MaybeUser,
     Path(name): Path<String>,
@@ -112,11 +128,25 @@ pub struct Credentials {
     pub pwd: String,
 }
 
+impl Credentials {
+    pub fn validate(&self) -> Result<(), RouteError> {
+        if self.user.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.pwd.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        Ok(())
+    }
+}
+
 pub async fn login(
     cookies: PrivateCookieJar,
     State(state): appstate::AppState,
     Json(credentials): Json<Credentials>,
 ) -> Result<(PrivateCookieJar, Json<LoggedInUser>), RouteError> {
+    credentials.validate()?;
+
     let user = state
         .db
         .authenticate_user(&credentials.user, &credentials.pwd)
@@ -193,18 +223,31 @@ pub struct PwdChange {
     pub new_pwd2: String,
 }
 
+impl PwdChange {
+    pub fn validate(&self) -> Result<(), RouteError> {
+        if self.old_pwd.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.new_pwd1.is_empty() || self.new_pwd2.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.new_pwd1 != self.new_pwd2 {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        Ok(())
+    }
+}
+
 pub async fn change_pwd(
     user: MaybeUser,
     State(db): DbState,
     Json(pwd_change): Json<PwdChange>,
 ) -> Result<(), RouteError> {
+    pwd_change.validate()?;
+
     let Ok(user) = db.authenticate_user(user.name(), &pwd_change.old_pwd).await else {
         return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     };
-
-    if pwd_change.new_pwd1 != pwd_change.new_pwd2 {
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-    }
 
     db.change_pwd(&user.name, &pwd_change.new_pwd1).await?;
     Ok(())
@@ -215,8 +258,25 @@ pub struct NewUser {
     pub pwd1: String,
     pub pwd2: String,
     pub name: String,
-    #[serde(default)] // Set to false of not in message from client
+    #[serde(default)] // Set to false if not in message from client
     pub is_admin: bool,
+    #[serde(default)] // Set to false if not in message from client
+    pub is_read_only: bool,
+}
+
+impl NewUser {
+    pub fn validate(&self) -> Result<(), RouteError> {
+        if self.name.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.pwd1.is_empty() || self.pwd2.is_empty() {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        if self.pwd1 != self.pwd2 {
+            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        }
+        Ok(())
+    }
 }
 
 pub async fn add(
@@ -226,12 +286,16 @@ pub async fn add(
 ) -> Result<(), RouteError> {
     user.assert_admin()?;
 
-    if new_user.pwd1 != new_user.pwd2 {
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-    }
+    new_user.validate()?;
 
     let salt = generate_salt();
     Ok(db
-        .add_user(&new_user.name, &new_user.pwd1, &salt, new_user.is_admin)
+        .add_user(
+            &new_user.name,
+            &new_user.pwd1,
+            &salt,
+            new_user.is_admin,
+            new_user.is_read_only,
+        )
         .await?)
 }

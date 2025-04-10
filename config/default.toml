@@ -6,7 +6,6 @@
 ####################################################################################
 
 
-
 ####################################################################################
 #                                                                                  #
 # Values used only on the first startup. Can be changed using the UI on runtime.   #
@@ -37,6 +36,11 @@ max_db_connections = 0
 # Enable required authentication for crate pulls.
 # If set to "false", anyone can download crates from Kellnr. Upload always requires authentication.
 auth_required = false
+# Requires certain fields to be defined on upload crates.
+# Leave empty to not add any restrictions.
+# If set to ["authors", "repository"], then all uploaded crates would have
+# to have the authors and repository defined in their Cargo.toml's
+required_crate_fields = []
 
 [docs]
 # Enable or disable automatic rustdoc generation for uploaded crates
@@ -89,3 +93,14 @@ port = 5432
 db = "kellnr"
 user = ""
 pwd = ""
+
+# Configure S3 as the storage backend instead of the local filesystem
+[s3]
+enabled = false
+access_key = "minioadmin"
+secret_key = "minioadmin"
+region = "us-east-1"
+endpoint = "http://localhost:9000"
+allow_http = true
+crates_bucket = "kellnr-crates" # Used for the crates
+cratesio_bucket = "kellnr-cratesio" # Used for the crates.io proxy

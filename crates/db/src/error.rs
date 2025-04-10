@@ -14,6 +14,8 @@ pub enum DbError {
     InitializationError(String),
     #[error("User not found: {0}")]
     UserNotFound(String),
+    #[error("Group not found: {0}")]
+    GroupNotFound(String),
     #[error("Owner not found: {0}")]
     OwnerNotFound(String),
     #[error("Crate not found: {0}")]

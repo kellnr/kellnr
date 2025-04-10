@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use settings::{Protocol, Settings};
 
@@ -12,9 +11,8 @@ pub struct ConfigJson {
 }
 
 impl ConfigJson {
-    pub fn to_json(&self) -> Result<String> {
-        let json = serde_json::to_string(&self).with_context(|| "Unable to write config.json")?;
-        Ok(json)
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self)
     }
 
     pub fn new(

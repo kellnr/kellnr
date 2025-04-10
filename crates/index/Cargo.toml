@@ -14,7 +14,6 @@ db.workspace = true
 appstate.workspace = true
 
 # External dependencies from crates.io
-anyhow.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 mockall.workspace = true

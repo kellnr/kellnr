@@ -1,18 +1,16 @@
-use crate::owner;
 use crate::pub_data::PubData;
 use crate::pub_success::PubDataSuccess;
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
-use anyhow::Result;
+use crate::{crate_group, crate_user, crate_version};
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
+use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
-use axum::http::StatusCode;
 use axum::response::Redirect;
-use axum::Json;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -37,6 +35,39 @@ pub async fn check_ownership(
     }
 }
 
+pub async fn check_can_modify(token: &token::Token) -> Result<(), ApiError> {
+    if !token.is_admin && token.is_read_only {
+        Err(RegistryError::ReadOnlyModify.into())
+    } else {
+        Ok(())
+    }
+}
+
+pub async fn check_download_auth(
+    crate_name: &NormalizedName,
+    token: &token::OptionToken,
+    db: &Arc<dyn DbProvider>,
+) -> ApiResult<()> {
+    if !db.is_download_restricted(crate_name).await? {
+        return Ok(());
+    }
+
+    let token = match token {
+        token::OptionToken::Some(token) => token,
+        token::OptionToken::None => return Err(RegistryError::DownloadUnauthorized.into()),
+    };
+
+    if token.is_admin
+        || db.is_crate_user(crate_name, &token.user).await?
+        || db.is_crate_group_user(crate_name, &token.user).await?
+        || db.is_owner(crate_name, &token.user).await?
+    {
+        Ok(())
+    } else {
+        Err(RegistryError::NotCrateUser.into())
+    }
+}
+
 pub async fn me() -> Redirect {
     Redirect::to("/login")
 }
@@ -45,8 +76,13 @@ pub async fn remove_owner(
     token: token::Token,
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
-    Json(input): Json<owner::OwnerRequest>,
-) -> ApiResult<Json<owner::OwnerResponse>> {
+    Json(input): Json<crate_user::CrateUserRequest>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
+    // Check if user is read-only and can't remove an owner.
+    // Admin users bypass this check as they can modify
+    // their read-only status.
+    check_can_modify(&token).await?;
+
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
 
@@ -54,8 +90,41 @@ pub async fn remove_owner(
         db.delete_owner(&crate_name, user).await?;
     }
 
-    Ok(Json(owner::OwnerResponse::from(
+    Ok(Json(crate_user::CrateUserResponse::from(
         "Removed owners from crate.",
+    )))
+}
+
+pub async fn remove_crate_user(
+    token: token::Token,
+    State(db): DbState,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
+    // Check if user is read-only and can't remove a crate user.
+    // Admin users bypass this check as they can modify
+    // their read-only status.
+    check_can_modify(&token).await?;
+
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    db.delete_crate_user(&crate_name, &name).await?;
+    Ok(Json(crate_user::CrateUserResponse::from(
+        "Removed users from crate.",
+    )))
+}
+
+pub async fn remove_crate_group(
+    token: token::Token,
+    State(db): DbState,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    db.delete_crate_group(&crate_name, &name).await?;
+    Ok(Json(crate_group::CrateGroupResponse::from(
+        "Removed groups from crate.",
     )))
 }
 
@@ -63,35 +132,143 @@ pub async fn add_owner(
     token: token::Token,
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
-    Json(input): Json<owner::OwnerRequest>,
-) -> ApiResult<Json<owner::OwnerResponse>> {
+    Json(input): Json<crate_user::CrateUserRequest>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
+    // Check if user is read-only and can't add owners.
+    // Admin users bypass this check as they can modify
+    // their read-only status.
+    check_can_modify(&token).await?;
+
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
+
     for user in input.users.iter() {
         db.add_owner(&crate_name, user).await?;
     }
 
-    Ok(Json(owner::OwnerResponse::from("Added owners to crate.")))
+    Ok(Json(crate_user::CrateUserResponse::from(
+        "Added owners to crate.",
+    )))
 }
 
 pub async fn list_owners(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
-) -> ApiResult<Json<owner::OwnerList>> {
+) -> ApiResult<Json<crate_user::CrateUserList>> {
     let crate_name = crate_name.to_normalized();
 
-    let owners: Vec<owner::Owner> = db
+    let owners: Vec<crate_user::CrateUser> = db
         .get_crate_owners(&crate_name)
         .await?
         .iter()
-        .map(|u| owner::Owner {
+        .map(|u| crate_user::CrateUser {
             id: u.id,
             login: u.name.to_owned(),
             name: None,
         })
         .collect();
 
-    Ok(Json(owner::OwnerList::from(owners)))
+    Ok(Json(crate_user::CrateUserList::from(owners)))
+}
+
+pub async fn add_crate_user(
+    token: token::Token,
+    State(db): DbState,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
+    // Check if user is read-only and can't add a crate user.
+    // Admin users bypass this check as they can modify
+    // their read-only status.
+    check_can_modify(&token).await?;
+
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    if !db.is_crate_user(&crate_name, &name).await? {
+        db.add_crate_user(&crate_name, &name).await?;
+    }
+
+    Ok(Json(crate_user::CrateUserResponse::from(
+        "Added users to crate.",
+    )))
+}
+
+pub async fn list_crate_users(
+    token: token::Token,
+    Path(crate_name): Path<OriginalName>,
+    State(db): DbState,
+) -> ApiResult<Json<crate_user::CrateUserList>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    let users: Vec<crate_user::CrateUser> = db
+        .get_crate_users(&crate_name)
+        .await?
+        .iter()
+        .map(|u| crate_user::CrateUser {
+            id: u.id,
+            login: u.name.to_owned(),
+            name: None,
+        })
+        .collect();
+
+    Ok(Json(crate_user::CrateUserList::from(users)))
+}
+
+pub async fn add_crate_group(
+    token: token::Token,
+    State(db): DbState,
+    Path((crate_name, name)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    if !db.is_crate_group(&crate_name, &name).await? {
+        db.add_crate_group(&crate_name, &name).await?;
+    }
+
+    Ok(Json(crate_group::CrateGroupResponse::from(
+        "Added groups to crate.",
+    )))
+}
+
+pub async fn list_crate_groups(
+    token: token::Token,
+    Path(crate_name): Path<OriginalName>,
+    State(db): DbState,
+) -> ApiResult<Json<crate_group::CrateGroupList>> {
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &token, &db).await?;
+
+    let groups: Vec<crate_group::CrateGroup> = db
+        .get_crate_groups(&crate_name)
+        .await?
+        .iter()
+        .map(|u| crate_group::CrateGroup {
+            id: u.id,
+            name: u.name.to_owned(),
+        })
+        .collect();
+
+    Ok(Json(crate_group::CrateGroupList::from(groups)))
+}
+
+pub async fn list_crate_versions(
+    Path(crate_name): Path<OriginalName>,
+    State(db): DbState,
+) -> ApiResult<Json<crate_version::CrateVersionList>> {
+    let crate_name = crate_name.to_normalized();
+
+    let versions: Vec<crate_version::CrateVersion> = db
+        .get_crate_versions(&crate_name)
+        .await?
+        .into_iter()
+        .map(|v| crate_version::CrateVersion {
+            version: v.to_string(),
+        })
+        .collect();
+
+    Ok(Json(crate_version::CrateVersionList::from(versions)))
 }
 
 pub async fn search(
@@ -122,10 +299,12 @@ pub async fn search(
 
 pub async fn download(
     State(state): AppState,
+    token: token::OptionToken,
     Path((package, version)): Path<(OriginalName, Version)>,
-) -> Result<Vec<u8>, StatusCode> {
+) -> ApiResult<Vec<u8>> {
     let db = state.db;
     let cs = state.crate_storage;
+    check_download_auth(&package.to_normalized(), &token, &db).await?;
 
     let file_path = cs.crate_path(&package.to_string(), &version.to_string());
 
@@ -136,9 +315,9 @@ pub async fn download(
         warn!("Failed to increase download counter: {}", e);
     }
 
-    match cs.get_file(file_path).await {
+    match cs.get(file_path.as_str()).await {
         Some(file) => Ok(file),
-        None => Err(StatusCode::NOT_FOUND),
+        None => Err(RegistryError::CrateNotFound.into()),
     }
 }
 
@@ -153,6 +332,11 @@ pub async fn publish(
     let orig_name = OriginalName::try_from(&pub_data.metadata.name)?;
     let normalized_name = orig_name.to_normalized();
 
+    // Check if user is read-only and can't publush (upload) crates.
+    // Admin users bypass this check as they can modify
+    // their read-only status.
+    check_can_modify(&token).await?;
+
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed push a new version.
     // Check if crate with same version already exists.
@@ -166,10 +350,39 @@ pub async fn publish(
         }
     }
 
+    // Check if required crate fields aren't present in crate
+    // Skip serializing if no fields to check
+    if !settings.registry.required_crate_fields.is_empty() {
+        let pkg_metadata = match serde_json::to_value(&pub_data.metadata)
+            .map_err(RegistryError::InvalidMetadataString)?
+        {
+            serde_json::Value::Object(map) => map,
+            _ => unreachable!(), // SAFETY: pub_data.metadata remains a struct
+        };
+
+        let mut missing_fields = Vec::new();
+
+        for field in &settings.registry.required_crate_fields {
+            // If field is null or not present, complain
+            if let Some(serde_json::Value::Null) | None = pkg_metadata.get(field) {
+                missing_fields.push(field.clone())
+            }
+        }
+
+        if !missing_fields.is_empty() {
+            return Err(RegistryError::MissingRequiredFields(
+                pub_data.metadata.name,
+                missing_fields,
+                settings.registry.required_crate_fields.clone(),
+            )
+            .into());
+        }
+    }
+
     // Set SHA256 from crate file
     let version = Version::try_from(&pub_data.metadata.vers)?;
     let cksum = cs
-        .add_bin_package(&orig_name, &version, &pub_data.cratedata)
+        .put(&orig_name, &version, pub_data.cratedata.clone())
         .await?;
 
     let created = Utc::now();
@@ -196,6 +409,11 @@ pub async fn yank(
     token: token::Token,
     State(db): DbState,
 ) -> ApiResult<Json<YankSuccess>> {
+    // Check if user is read-only and can't yank crates.
+    // Admin users bypass this check as they can modify
+    // their read-only status.
+    check_can_modify(&token).await?;
+
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
 
@@ -209,6 +427,11 @@ pub async fn unyank(
     token: token::Token,
     State(db): DbState,
 ) -> ApiResult<Json<YankSuccess>> {
+    // Check if user is read-only and can't unyank crates.
+    // Admin users bypass this check as they can modify
+    // their read-only status.
+    check_can_modify(&token).await?;
+
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
 
@@ -221,25 +444,32 @@ pub async fn unyank(
 mod reg_api_tests {
     use super::*;
     use appstate::AppStateData;
+    use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
+    use axum::http::StatusCode;
     use axum::routing::{delete, get, put};
-    use axum::Router;
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString};
     use error::api_error::ErrorDetails;
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
-    use rand::{distributions::Alphanumeric, thread_rng, Rng};
+    use rand::Rng;
+    use rand::distr::Alphanumeric;
+    use rand::rng;
     use settings::Settings;
     use std::path::PathBuf;
     use std::{iter, path};
+    use storage::cached_crate_storage::DynStorage;
+    use storage::fs_storage::FSStorage;
     use storage::kellnr_crate_storage::KellnrCrateStorage;
     use tokio::fs::read;
     use tower::ServiceExt;
 
     const TOKEN: &str = "854DvwSlUwEHtIo3kWy6x7UCPKHfzCmy";
+    const RO_TOKEN: &str = "lJh6orU1Ye376ApXJR8I7V9gI3V6UZWU";
+    const RO_ADMIN_TOKEN: &str = "GUOMPlZwN1kliXRW5wJ0ixh54NqYlE6X";
 
     #[tokio::test]
     async fn remove_owner_valid_owner() {
@@ -250,7 +480,7 @@ mod reg_api_tests {
         let valid_pub_package = read("../test_data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
-        let del_owner = owner::OwnerRequest {
+        let del_owner = crate_user::CrateUserRequest {
             users: vec![String::from("admin")],
         };
         let _ = kellnr
@@ -290,7 +520,7 @@ mod reg_api_tests {
                 .unwrap()
                 .len()
         );
-        let owners = serde_json::from_slice::<owner::OwnerResponse>(&result_msg).unwrap();
+        let owners = serde_json::from_slice::<crate_user::CrateUserResponse>(&result_msg).unwrap();
         assert!(owners.ok);
     }
 
@@ -316,10 +546,10 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_user("user", "123", "123", false)
+            .add_user("user", "123", "123", false, false)
             .await
             .unwrap();
-        let add_owner = owner::OwnerRequest {
+        let add_owner = crate_user::CrateUserRequest {
             users: vec![String::from("user")],
         };
 
@@ -337,7 +567,7 @@ mod reg_api_tests {
             .unwrap();
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let owners = serde_json::from_slice::<owner::OwnerResponse>(&result_msg).unwrap();
+        let owners = serde_json::from_slice::<crate_user::CrateUserResponse>(&result_msg).unwrap();
         assert!(owners.ok);
     }
 
@@ -377,7 +607,7 @@ mod reg_api_tests {
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
 
-        let owners = serde_json::from_slice::<owner::OwnerList>(&result_msg).unwrap();
+        let owners = serde_json::from_slice::<crate_user::CrateUserList>(&result_msg).unwrap();
         assert_eq!(1, owners.users.len());
         assert_eq!("admin", owners.users[0].login);
     }
@@ -707,6 +937,193 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
+    async fn try_publish_as_read_only_non_admin() {
+        // Use valid crate publish data to test.
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let settings = get_settings();
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, RO_TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let response_status = r.status();
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(
+            "ERROR: Read-only users cannot modify the registry",
+            error.errors[0].detail
+        );
+    }
+
+    #[tokio::test]
+    async fn try_publish_as_read_only_admin() {
+        // Use valid crate publish data to test.
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let settings = get_settings();
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, RO_ADMIN_TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get the empty success results message.
+        let response_status = r.status();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let success: PubDataSuccess =
+            serde_json::from_slice(&result_msg).expect("Cannot deserialize success message");
+
+        assert_eq!(StatusCode::OK, response_status);
+        assert!(success.warnings.is_none());
+        // As the success message is empty in the normal case, the deserialization works even
+        // if an error message was returned. That's why we need to test for an error message, too.
+        assert!(
+            serde_json::from_slice::<ErrorDetails>(&result_msg).is_err(),
+            "An error message instead of a success message was returned"
+        );
+        assert_eq!(1, kellnr.db.get_crate_meta_list(1).await.unwrap().len());
+        assert_eq!(
+            "0.2.0",
+            kellnr.db.get_crate_meta_list(1).await.unwrap()[0].version
+        );
+    }
+
+    #[tokio::test]
+    async fn publish_crate_with_missing_one_required_field() {
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let mut settings = get_settings();
+        settings.registry.required_crate_fields = vec!["repository".to_string()];
+
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get the empty success results message.
+        let response_status = r.status();
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(
+            r#"ERROR: Required field(s) not defined for crate test_lib, missing: ["repository"], requires: ["repository"]"#,
+            error.errors[0].detail
+        );
+    }
+
+    #[tokio::test]
+    async fn publish_crate_with_missing_multiple_required_fields() {
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let mut settings = get_settings();
+        settings.registry.required_crate_fields =
+            vec!["repository".to_string(), "license".to_string()];
+
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get the empty success results message.
+        let response_status = r.status();
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(
+            r#"ERROR: Required field(s) not defined for crate test_lib, missing: ["repository", "license"], requires: ["repository", "license"]"#,
+            error.errors[0].detail
+        );
+    }
+
+    // Missing some but not all required fields
+    #[tokio::test]
+    async fn publish_crate_with_some_required_fields() {
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let mut settings = get_settings();
+        settings.registry.required_crate_fields =
+            vec!["repository".to_string(), "authors".to_string()];
+
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get the empty success results message.
+        let response_status = r.status();
+        let msg = r.into_body().collect().await.unwrap().to_bytes();
+
+        let error: ErrorDetails =
+            serde_json::from_slice(&msg).expect("Cannot deserialize error message");
+
+        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(
+            r#"ERROR: Required field(s) not defined for crate test_lib, missing: ["repository"], requires: ["repository", "authors"]"#,
+            error.errors[0].detail
+        );
+    }
+
+    #[tokio::test]
     async fn publish_existing_package() {
         // Use valid crate publish data to test.
         let valid_pub_package = read("../test_data/pub_data.bin")
@@ -771,7 +1188,7 @@ mod reg_api_tests {
     }
 
     fn generate_rand_string(length: usize) -> String {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         iter::repeat(())
             .map(|()| rng.sample(Alphanumeric))
             .map(char::from)
@@ -813,8 +1230,21 @@ mod reg_api_tests {
     async fn app(settings: Settings) -> Router {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
         let db = Database::new(&con_string, 10).await.unwrap();
-        let cs = KellnrCrateStorage::new(&settings).await.unwrap();
+        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+        let cs = KellnrCrateStorage::new(&settings, storage).await.unwrap();
         db.add_auth_token("test", TOKEN, "admin").await.unwrap();
+        db.add_user("ro_dummy", "ro", "", false, true)
+            .await
+            .unwrap();
+        db.add_auth_token("test ro", RO_TOKEN, "ro_dummy")
+            .await
+            .unwrap();
+        db.add_user("ro_dummy_admin", "roa", "", true, true)
+            .await
+            .unwrap();
+        db.add_auth_token("test admin ro", RO_ADMIN_TOKEN, "ro_dummy_admin")
+            .await
+            .unwrap();
 
         let state = AppStateData {
             db: Arc::new(db),
@@ -824,14 +1254,14 @@ mod reg_api_tests {
         };
 
         let routes = Router::new()
-            .route("/:crate_name/owners", delete(remove_owner))
-            .route("/:crate_name/owners", put(add_owner))
-            .route("/:crate_name/owners", get(list_owners))
+            .route("/{crate_name}/owners", delete(remove_owner))
+            .route("/{crate_name}/owners", put(add_owner))
+            .route("/{crate_name}/owners", get(list_owners))
             .route("/", get(search))
-            .route("/:package/:version/download", get(download))
+            .route("/{package}/{version}/download", get(download))
             .route("/new", put(publish))
-            .route("/:crate_name/:version/yank", delete(yank))
-            .route("/:crate_name/:version/unyank", put(unyank));
+            .route("/{crate_name}/{version}/yank", delete(yank))
+            .route("/{crate_name}/{version}/unyank", put(unyank));
 
         Router::new()
             .nest("/api/v1/crates", routes)

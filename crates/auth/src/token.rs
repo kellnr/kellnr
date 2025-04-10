@@ -3,8 +3,8 @@ use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use db::DbProvider;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::distr::Alphanumeric;
+use rand::{Rng, rng};
 use serde::Deserialize;
 use std::iter;
 use std::sync::Arc;
@@ -14,10 +14,18 @@ pub struct Token {
     pub token: String,
     pub user: String,
     pub is_admin: bool,
+    pub is_read_only: bool,
+}
+
+// See https://github.com/tokio-rs/axum/discussions/2281
+#[derive(Debug)]
+pub enum OptionToken {
+    None,
+    Some(Token),
 }
 
 pub fn generate_token() -> String {
-    let mut rng = thread_rng();
+    let mut rng = rng();
     iter::repeat(())
         .map(|()| rng.sample(Alphanumeric))
         .map(char::from)
@@ -37,6 +45,7 @@ impl Token {
         headers: &HeaderMap,
         db: &Arc<dyn DbProvider>,
     ) -> Result<Token, StatusCode> {
+        // OptionToken code expects UNAUTHORIZED when no token is found
         let token = headers
             .get("Authorization")
             .ok_or(StatusCode::UNAUTHORIZED)?
@@ -53,11 +62,11 @@ impl Token {
             token,
             user: user.name,
             is_admin: user.is_admin,
+            is_read_only: user.is_read_only,
         })
     }
 }
 
-#[axum::async_trait]
 impl FromRequestParts<AppStateData> for Token {
     type Rejection = StatusCode;
 
@@ -66,6 +75,21 @@ impl FromRequestParts<AppStateData> for Token {
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
         Self::extract_token(&parts.headers, &state.db).await
+    }
+}
+
+impl FromRequestParts<AppStateData> for OptionToken {
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
+        match Token::extract_token(&parts.headers, &state.db).await {
+            Ok(token) => Ok(OptionToken::Some(token)),
+            Err(StatusCode::UNAUTHORIZED) => Ok(OptionToken::None),
+            Err(status_code) => Err(status_code),
+        }
     }
 }
 

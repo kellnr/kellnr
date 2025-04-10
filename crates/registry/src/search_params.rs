@@ -1,4 +1,4 @@
-use axum::{extract::Query, http::request::Parts, RequestPartsExt};
+use axum::{RequestPartsExt, extract::Query, http::request::Parts};
 use common::original_name::OriginalName;
 use hyper::StatusCode;
 use std::{collections::HashMap, convert::TryFrom};
@@ -28,8 +28,10 @@ impl From<PerPage> for usize {
     }
 }
 
-#[axum::async_trait]
-impl<S> axum::extract::FromRequestParts<S> for SearchParams {
+impl<S> axum::extract::FromRequestParts<S> for SearchParams
+where
+    S: Sync,
+{
     type Rejection = (StatusCode, String);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {

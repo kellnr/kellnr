@@ -9,6 +9,7 @@ pub enum UserIden {
     Pwd,
     Salt,
     IsAdmin,
+    IsReadOnly,
 }
 
 #[derive(Iden)]
@@ -36,6 +37,7 @@ pub enum CrateIden {
     Homepage,
     Repository,
     ETag,
+    RestrictedDownload,
 }
 
 #[derive(Iden)]
@@ -57,6 +59,17 @@ pub enum CrateMetaIden {
 #[derive(Iden)]
 pub enum OwnerIden {
     #[iden = "owner"]
+    Table,
+    Id,
+    #[iden = "crate_fk"]
+    CrateFk,
+    #[iden = "user_fk"]
+    UserFk,
+}
+
+#[derive(Iden)]
+pub enum CrateUserIden {
+    #[iden = "crate_user"]
     Table,
     Id,
     #[iden = "crate_fk"]
@@ -189,4 +202,34 @@ pub enum CratesIoMetaIden {
     Downloads,
     CratesIoFk,
     Documentation,
+}
+
+#[derive(Iden)]
+pub enum GroupIden {
+    #[iden = "group"]
+    Table,
+    Id,
+    Name,
+}
+
+#[derive(Iden)]
+pub enum GroupUserIden {
+    #[iden = "group_user"]
+    Table,
+    Id,
+    #[iden = "group_fk"]
+    GroupFk,
+    #[iden = "user_fk"]
+    UserFk,
+}
+
+#[derive(Iden)]
+pub enum CrateGroupIden {
+    #[iden = "crate_group"]
+    Table,
+    Id,
+    #[iden = "crate_fk"]
+    CrateFk,
+    #[iden = "group_fk"]
+    GroupFk,
 }

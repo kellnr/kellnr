@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit --composite false",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
+    "lint": "eslint --fix"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^6.4.2",
@@ -18,37 +18,38 @@
     "bulma-switch": "^2.0.4",
     "core-js": "^3.33.3",
     "dayjs": "^1.11.10",
-    "dompurify": "^3.0.6",
+    "dompurify": "^3.2.4",
     "js-cookie": "^3.0.5",
-    "marked": "^12.0.0",
-    "marked-gfm-heading-id": "^3.1.1",
-    "marked-highlight": "^2.0.7",
-    "marked-mangle": "^1.1.5",
-    "vue": "^3.3.9",
+    "marked": "^15.0.7",
+    "marked-gfm-heading-id": "^4.1.1",
+    "marked-highlight": "^2.2.1",
+    "marked-mangle": "^1.1.10",
+    "pinia": "^3.0.1",
+    "pinia-plugin-persistedstate": "^4.2.0",
+    "vue": "^3.5.13",
     "vue-axios": "^3.5.2",
     "vue-class-component": "^8.0.0-0",
-    "vue-router": "^4.2.5",
-    "vue3-highlightjs": "^1.0.5",
-    "pinia": "^2.1.7",
-    "pinia-plugin-persistedstate": "^4.0.0"
+    "vue-router": "^4.5.0",
+    "vue3-highlightjs": "^1.0.5"
   },
   "devDependencies": {
-    "@types/dompurify": "^3.0.4",
+    "@eslint/js": "^9.21.0",
     "@types/node": "^22.0.0",
-    "@vitejs/plugin-vue": "5.2.1",
-    "@vue/eslint-config-typescript": "^13.0.0",
+    "@vitejs/plugin-vue": "^5.2.1",
     "@vue/tsconfig": "^0.7.0",
-    "@babel/eslint-parser": "^7.24.7",
-    "eslint": "^8.56.0",
-    "eslint-plugin-vue": "^9.18.1",
-    "typescript": "~5.7.2",
-    "vite": "6.0.3",
-    "vue-tsc": "^2.0.4",
-    "esbuild": "^0.24.0"
+    "esbuild": "~0.25.0",
+    "eslint": "^9.21.0",
+    "eslint-plugin-vue": "^10.0.0",
+    "globals": "^16.0.0",
+    "typescript": "~5.8.2",
+    "typescript-eslint": "^8.24.1",
+    "vite": "^6.1.1",
+    "vue-tsc": "^2.2.4"
   },
   "overrides": {
     "vite": {
-      "rollup": "npm:@rollup/wasm-node"
+      "rollup": "npm:@rollup/wasm-node",
+      "esbuild": "~0.25.0"
     }
   }
 }

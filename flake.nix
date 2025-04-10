@@ -6,17 +6,20 @@
     flake-utils.url = "github:numtide/flake-utils";
     crane = {
       url = "github:ipetkov/crane";
+    };
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { nixpkgs, flake-utils, crane, ... }:
+  outputs = { nixpkgs, flake-utils, crane, rust-overlay, ... }:
     flake-utils.lib.eachSystem [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ] (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs { inherit system; overlays = [ (import rust-overlay) ]; };
         inherit (pkgs) lib;
 
-        craneLib = crane.mkLib nixpkgs.legacyPackages.${system};
+        craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.stable.latest.default.override { });
 
         # Set a filter of files that are included in the build source directory.
         # This is used to filter out files that are not needed for the build to
@@ -57,6 +60,10 @@
 
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
           BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.getVersion pkgs.clang}/include";
+
+          OPENSSL_DIR = "${pkgs.openssl.dev}";
+          OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
+          OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
 
         };
 
@@ -168,6 +175,7 @@
             just
             node2nix
             jd-diff-patch
+            sea-orm-cli
           ];
         });
 
@@ -181,5 +189,4 @@
       }
     );
 }
-
 

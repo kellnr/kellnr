@@ -1,12 +1,18 @@
+use std::{error::Error, path::PathBuf, sync::Arc};
+
 use crate::{registry_error::RegistryError, search_params::SearchParams};
-use appstate::{CrateIoStorageState, DbState, SettingsState};
+use appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
 use axum::{
     extract::{Path, Request, State},
     http::StatusCode,
     middleware::Next,
     response::Response,
 };
-use common::{original_name::OriginalName, version::Version};
+use common::{
+    cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData},
+    original_name::OriginalName,
+    version::Version,
+};
 use error::api_error::ApiResult;
 use reqwest::{Client, ClientBuilder, Url};
 use tracing::{error, trace, warn};
@@ -58,7 +64,7 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
 pub async fn download(
     Path((package, version)): Path<(OriginalName, Version)>,
     State(crate_storage): CrateIoStorageState,
-    State(db): DbState,
+    State(sender): CratesIoPrefetchSenderState,
 ) -> Result<Vec<u8>, StatusCode> {
     let file_path = crate_storage.crate_path(&package.to_string(), &version.to_string());
 
@@ -66,60 +72,57 @@ pub async fn download(
         "Downloading crate: {} ({}) from path {}",
         package,
         version,
-        file_path.display()
+        PathBuf::from(file_path.clone()).display()
     );
 
-    if !std::path::Path::exists(&file_path) {
-        let target = format!(
-            "https://static.crates.io/crates/{}/{}/download",
-            package, version
-        );
-        trace!(
-            "Crate not found on disk, downloading from crates.io: {}",
-            target
-        );
-        match CLIENT.get(target).send().await {
-            Ok(response) => match response.status() == 200 {
-                true => match response.bytes().await {
-                    Ok(crate_data) => {
-                        // Check again after the download, as another thread maybe
-                        // added the crate already to disk and we can skip the step.
-                        if !std::path::Path::exists(&file_path) {
-                            if let Err(e) = crate_storage
-                                .add_bin_package(&package, &version, &crate_data)
-                                .await
-                            {
-                                error!("Failed to save crate to disk: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to get crate data from response: {}", e);
-                        return Err(StatusCode::NOT_FOUND);
-                    }
-                },
-                // crates.io returned a 404 or another error -> Return NotFound
-                false => return Err(StatusCode::NOT_FOUND),
-            },
-            Err(e) => {
-                error!("Failed to download crate from crates.io: {}", e);
-                return Err(StatusCode::NOT_FOUND);
-            }
-        }
-    } else {
-        trace!("Crate found in cache, skipping download");
-    }
-
-    match crate_storage.get_file(file_path).await {
+    match crate_storage.get(file_path.as_str()).await {
         Some(file) => {
-            let normalized_name = package.to_normalized();
-            db.increase_cached_download_counter(&normalized_name, &version)
-                .await
-                .unwrap_or_else(|e| warn!("Failed to increase download counter: {}", e));
+            let msg = DownloadData {
+                name: package.into(),
+                version,
+            };
+            if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
+                warn!("Failed to send IncDownloadCnt message: {}", e);
+            }
+
             Ok(file)
         }
-        None => Err(StatusCode::NOT_FOUND),
+        None => {
+            let target = format!(
+                "https://static.crates.io/crates/{}/{}/download",
+                package, version
+            );
+
+            let res = match CLIENT.get(target).send().await {
+                Ok(resp) if resp.status() != 200 => Err(StatusCode::NOT_FOUND),
+                Ok(resp) => Ok(resp),
+                Err(e) => {
+                    error!("Encountered error... {}", e);
+                    Err(StatusCode::NOT_FOUND)
+                }
+            }?;
+
+            let crate_data = res.bytes().await.map_err(log_return_error)?;
+            let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
+            let _save = crate_storage
+                .put(&package, &version, crate_data.clone())
+                .await
+                .map_err(|e| {
+                    error!("Failed to save crate to disk: {}", e);
+                    StatusCode::UNPROCESSABLE_ENTITY
+                })?;
+
+            crate_storage
+                .get(file_path.as_str())
+                .await
+                .ok_or(StatusCode::NOT_FOUND)
+        }
     }
+}
+
+fn log_return_error<E: Error>(e: E) -> StatusCode {
+    error!("Failure while crate download...: {}", e);
+    StatusCode::NOT_FOUND
 }
 
 #[cfg(test)]
@@ -129,14 +132,16 @@ mod tests {
     use axum::body::Body;
     use axum::http::Request;
     use axum::routing::get;
-    use axum::{middleware, Router};
+    use axum::{Router, middleware};
     use common::util::generate_rand_string;
     use db::mock::MockDb;
     use http_body_util::BodyExt;
     use settings::Settings;
     use std::path;
     use std::path::PathBuf;
+    use storage::cached_crate_storage::DynStorage;
     use storage::cratesio_crate_storage::CratesIoCrateStorage;
+    use storage::fs_storage::FSStorage;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -287,7 +292,8 @@ mod tests {
     }
 
     async fn app(settings: Settings) -> Router {
-        let cs = CratesIoCrateStorage::new(&settings).await.unwrap();
+        let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
+        let cs = CratesIoCrateStorage::new(&settings, storage).await.unwrap();
         let mut db = MockDb::new();
         db.expect_increase_cached_download_counter()
             .returning(|_, _| Ok(()));
@@ -301,7 +307,7 @@ mod tests {
 
         let routes = Router::new()
             .route("/", get(search))
-            .route("/:package/:version/download", get(download))
+            .route("/{package}/{version}/download", get(download))
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 cratesio_enabled,

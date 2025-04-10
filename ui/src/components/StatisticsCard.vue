@@ -4,7 +4,7 @@
       <div class="left">{{ num }}</div>
       <div class="right">
         <span class="icon">
-          <i :class="'fas ' + icon"></i>
+          <i :class="'fas ' + icon" :style="{ color: iconColor }"></i>
         </span>
       </div>
     </div>
@@ -13,10 +13,11 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{
+defineProps<{
   num: number | string
   icon: string
-  text: number | string 
+  text: number | string
+  iconColor?: string
 }>()
 </script>
 
@@ -26,6 +27,8 @@ const props = defineProps<{
   grid-template-columns: 1fr;
   grid-template-rows: 3fr 1fr;
   margin: 0.3rem 0.3rem 0.3rem 0.3rem;
+  height: 100px;
+  box-sizing: border-box;
 }
 
 body[color-theme="dark"] .card {
@@ -65,4 +68,3 @@ body[color-theme="dark"] .card {
   text-align: center;
 }
 </style>
-

@@ -18,7 +18,7 @@ The easiest way to get started is to use the Docker image. You can start **kelln
 ```bash
 docker run \
     -p 8000:8000 \
-    -e "KELLNR_ORIGIN__HOSTNAME=localhost" ghcr.io/kellnr/kellnr:5.2.5
+    -e "KELLNR_ORIGIN__HOSTNAME=localhost" ghcr.io/kellnr/kellnr:5
 ```
 
 Fore more information about how to configure and run **kellnr**, check out the [documentation](https://kellnr.io/documentation).
@@ -37,6 +37,7 @@ The latest Kubernetes Helm chart can be found here: [Kellnr Helm Chart](https://
 - **Crates.io proxy**: Kellnr can act as a proxy for [crates.io](https://crates.io). This means that you can use Kellnr as a cache for crates.io to speed up the download of crates.
 - **Build in Rust**: Kellnr is written in Rust. This means that you can easily extend Kellnr with your own features or fix bugs. No other dependencies are needed.
 - **Multi-Db support**: Kellnr supports multiple databases. You can use Sqlite or PostgreSQL as the storage backend for Kellnr.
+- **Local File System or S3**: Kellnr supports the local file system or S3 as the storage backend for the crates.
 
 ## Differences to crates.io
 
@@ -74,6 +75,9 @@ just build
 # Build the project (release)
 just build-release
 
+# Build the frontend (result is placed in ./static)
+just npm-build
+
 # Test the project (without Docker integration tests, requires cargo-nextest)
 just test
 
@@ -93,6 +97,14 @@ nix develop
 # Build the project
 nix build
 ```
+
+#### Build options
+
+The following environment variables can be set at compile time:
+
+- `KELLNR_VERSION`: The version of kellnr currently being compiled (default: `0.0.0-unknown`).
+- `KELLNR_CONFIG_DIR`: The configuration directory (default: `./config`, `../config`, or `../../config`).
+- `KELLNR_STATIC_DIR`: The static html directory (default: `./static`).
 
 ### Sea ORM & PostgreSQL
 

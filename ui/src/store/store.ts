@@ -24,7 +24,7 @@ export const useStore = defineStore('store', {
         searchCache: false
     }),
     getters: {
-        loggedIn: (state) => state.loggedInUser !== null
+        loggedIn: (state) => state.loggedInUser !== null,
     },
     actions: {
         login(payload: { "user": string, "is_admin": boolean }) {
@@ -44,7 +44,7 @@ export const useStore = defineStore('store', {
                 this.cargoSmallLogo = `${BACKEND_URL_PATH_PREFIX}/img/cargo-logo-small-light.png`,
             this.kellnrSmallLogo = `${BACKEND_URL_PATH_PREFIX}/img/kellnr-logo-small-light.png`
             }
-        }
+        },
     },
     persist: true
 })

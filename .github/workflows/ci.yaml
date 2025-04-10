@@ -42,11 +42,9 @@ jobs:
         target:
           [
             "x86_64-unknown-linux-gnu",
-            "aarch64-unknown-linux-gnu",
-            "armv7-unknown-linux-gnueabihf",
-            "aarch64-unknown-linux-musl",
             "x86_64-unknown-linux-musl",
-            "armv7-unknown-linux-musleabihf",
+            "aarch64-unknown-linux-gnu",
+            "aarch64-unknown-linux-musl",
           ]
 
     steps:
@@ -79,9 +77,6 @@ jobs:
         run: |
           echo "KELLNR_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
           echo $KELLNR_VERSION
-
-      - name: Replace Version in web_ui/ui
-        run: sed -i 's/0.0.0-debug/'"$KELLNR_VERSION"'/' crates/web_ui/src/ui.rs
 
       - name: Build Release {{ matrix.target }}
         run: just target=${{ matrix.target }} ci-release

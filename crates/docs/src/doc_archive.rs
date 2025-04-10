@@ -21,7 +21,6 @@ impl DocArchive {
     }
 }
 
-#[axum::async_trait]
 impl FromRequest<AppStateData, Body> for DocArchive {
     type Rejection = ApiError;
 
