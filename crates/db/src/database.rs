@@ -1,4 +1,4 @@
-use crate::password::{generate_salt, hash_pwd};
+use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{DbResult, PrefetchState};
 use crate::tables::init_database;
 use crate::{AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User, error::DbError};
@@ -1216,6 +1216,8 @@ impl DbProvider for Database {
     }
 
     async fn add_auth_token(&self, name: &str, token: &str, user: &str) -> DbResult<()> {
+        let hashed_token = hash_token(token);
+
         let user = user::Entity::find()
             .filter(user::Column::Name.eq(user))
             .one(&self.db_con)
@@ -1224,7 +1226,7 @@ impl DbProvider for Database {
 
         let at = auth_token::ActiveModel {
             name: Set(name.to_owned()),
-            token: Set(token.to_owned()),
+            token: Set(hashed_token.to_owned()),
             user_fk: Set(user.id),
             ..Default::default()
         };
@@ -1235,6 +1237,8 @@ impl DbProvider for Database {
     }
 
     async fn get_user_from_token(&self, token: &str) -> DbResult<User> {
+        let token = hash_token(token);
+
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::AuthToken.def())
             .filter(Expr::col((AuthTokenIden::Table, AuthTokenIden::Token)).eq(token))

@@ -422,6 +422,7 @@ dependencies = [
  "rand 0.9.0",
  "serde",
  "settings",
+ "sha256",
  "storage",
  "tokio 1.44.2",
  "tower",
