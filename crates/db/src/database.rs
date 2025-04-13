@@ -96,10 +96,11 @@ impl Database {
         };
 
         let res: InsertResult<user::ActiveModel> = user::Entity::insert(admin).exec(db_con).await?;
+        let auth_token = hash_token(&con_string.admin_token());
 
         let auth_token = auth_token::ActiveModel {
             name: Set("admin".to_string()),
-            token: Set(con_string.admin_token()),
+            token: Set(auth_token),
             user_fk: Set(res.last_insert_id),
             ..Default::default()
         };
