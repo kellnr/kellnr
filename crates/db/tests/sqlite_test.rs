@@ -341,57 +341,7 @@ async fn increase_download_counter_works() {
         .test_add_crate(
             "crate1",
             "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .db
-        .test_add_crate(
-            "crate1",
-            "admin",
             &Version::try_from("2.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .db
-        .test_add_crate(
-            "crate2",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .db
-        .test_add_crate(
-            "crate3",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .db
-        .test_add_crate(
-            "crate4",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .db
-        .test_add_crate(
-            "crate5",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
             &created,
         )
         .await
@@ -565,7 +515,7 @@ async fn get_crate_summaries_works() {
         .test_add_crate(
             "bcrate",
             "admin",
-            &Version::try_from("1.1.0").unwrap(),
+            &Version::try_from("1.1.1").unwrap(),
             &created1,
         )
         .await
@@ -580,7 +530,7 @@ async fn get_crate_summaries_works() {
     assert_eq!("2020-10-08 11:22:12", crates[0].last_updated);
 
     assert_eq!("bcrate", crates[1].name);
-    assert_eq!("1.1.0", crates[1].max_version);
+    assert_eq!("1.1.1", crates[1].max_version);
     assert_eq!(0, crates[1].total_downloads);
     assert_eq!("2020-10-07 13:18:00", crates[1].last_updated);
 }
@@ -600,16 +550,14 @@ async fn is_owner_true() {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "admin"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(test_db
+        .db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "admin"
+        )
+        .await
+        .unwrap());
 }
 
 #[tokio::test]
@@ -627,16 +575,14 @@ async fn is_owner_false() {
         .await
         .unwrap();
 
-    assert!(
-        !test_db
-            .db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "user"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(!test_db
+        .db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "user"
+        )
+        .await
+        .unwrap());
 }
 
 #[tokio::test]
@@ -655,17 +601,15 @@ async fn delete_owner_valid_owner() {
 
     test_db.db.delete_owner("mycrate", "admin").await.unwrap();
 
-    assert!(
-        test_db
-            .db
-            .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
-            .await
-            .is_ok()
-    );
+    assert!(test_db
+        .db
+        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .await
+        .is_ok());
 }
 
 #[tokio::test]
-async fn add_crate_if_not_exists_duplicate() {
+async fn add_crate_if_not_exists_duplicate_owner() {
     let test_db = TestDB::new().await;
 
     test_db
@@ -683,7 +627,7 @@ async fn add_crate_if_not_exists_duplicate() {
         .test_add_crate(
             "mycrate",
             "admin",
-            &Version::try_from("1.0.0").unwrap(),
+            &Version::try_from("1.0.1").unwrap(),
             &Utc::now(),
         )
         .await
@@ -722,7 +666,7 @@ async fn add_crate_different_user() {
         .test_add_crate(
             "mycrate",
             "user",
-            &Version::try_from("1.0.0").unwrap(),
+            &Version::try_from("1.0.1").unwrap(),
             &Utc::now(),
         )
         .await
@@ -819,13 +763,11 @@ async fn get_user_from_token_no_token() {
 async fn add_auth_token_no_user() {
     let test_db = TestDB::new().await;
 
-    assert!(
-        test_db
-            .db
-            .add_auth_token("test", "mytoken", "nouser")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .db
+        .add_auth_token("test", "mytoken", "nouser")
+        .await
+        .is_err());
 }
 
 #[tokio::test]
@@ -878,13 +820,11 @@ async fn add_user_duplicate() {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .db
-            .add_user("user", "pwd", "salt", false, false)
-            .await
-            .is_err()
-    )
+    assert!(test_db
+        .db
+        .add_user("user", "pwd", "salt", false, false)
+        .await
+        .is_err())
 }
 
 #[tokio::test]
@@ -1004,13 +944,11 @@ async fn get_name_valid_user_and_token() {
 async fn get_session_no_session_in_db() {
     let test_db = TestDB::new().await;
 
-    assert!(
-        test_db
-            .db
-            .validate_session("no_session_token")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .db
+        .validate_session("no_session_token")
+        .await
+        .is_err());
 }
 
 #[tokio::test]
@@ -1039,13 +977,11 @@ async fn authenticate_user_valid() {
 async fn authenticate_user_unknown_user() {
     let test_db = TestDB::new().await;
 
-    assert!(
-        test_db
-            .db
-            .authenticate_user("unknown", "123")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .db
+        .authenticate_user("unknown", "123")
+        .await
+        .is_err());
 }
 
 #[tokio::test]

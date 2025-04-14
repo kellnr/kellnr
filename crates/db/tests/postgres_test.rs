@@ -248,52 +248,7 @@ async fn increase_download_counter_works() {
         .test_add_crate(
             "crate1",
             "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "crate1",
-            "admin",
             &Version::try_from("2.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "crate2",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "crate3",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "crate4",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "crate5",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
             &created,
         )
         .await
@@ -491,53 +446,7 @@ async fn get_crate_summaries_works() {
         .test_add_crate(
             "bcrate",
             "admin",
-            &Version::try_from("1.1.0").unwrap(),
-            &created1,
-        )
-        .await
-        .unwrap();
-
-    let crates = test_db.get_crate_summaries().await.unwrap();
-
-    assert_eq!(2, crates.len());
-    assert_eq!("acrate", crates[0].name);
-    assert_eq!("1.2.0", crates[0].max_version);
-    assert_eq!(0, crates[0].total_downloads);
-    assert_eq!("2020-10-08 11:22:12", crates[0].last_updated);
-    let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
-    let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 11, 22, 12).unwrap();
-    test_db
-        .test_add_crate(
-            "acrate",
-            "admin",
-            &Version::try_from("1.1.0").unwrap(),
-            &created1,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "bcrate",
-            "admin",
-            &Version::try_from("1.1.0").unwrap(),
-            &created2,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "acrate",
-            "admin",
-            &Version::try_from("1.2.0").unwrap(),
-            &created2,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "bcrate",
-            "admin",
-            &Version::try_from("1.1.0").unwrap(),
+            &Version::try_from("1.1.1").unwrap(),
             &created1,
         )
         .await
@@ -552,7 +461,7 @@ async fn get_crate_summaries_works() {
     assert_eq!("2020-10-08 11:22:12", crates[0].last_updated);
 
     assert_eq!("bcrate", crates[1].name);
-    assert_eq!("1.1.0", crates[1].max_version);
+    assert_eq!("1.1.1", crates[1].max_version);
     assert_eq!(0, crates[1].total_downloads);
     assert_eq!("2020-10-07 13:18:00", crates[1].last_updated);
 }
@@ -703,15 +612,13 @@ async fn is_owner_true() {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "admin"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "admin"
+        )
+        .await
+        .unwrap());
 }
 
 #[pg_testcontainer]
@@ -727,15 +634,13 @@ async fn is_owner_false() {
         .await
         .unwrap();
 
-    assert!(
-        !test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "user"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(!test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "user"
+        )
+        .await
+        .unwrap());
 }
 
 #[pg_testcontainer]
@@ -753,17 +658,15 @@ async fn delete_owner_valid_owner() {
 
     test_db.delete_owner("mycrate", "admin").await.unwrap();
 
-    assert!(
-        test_db
-            .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
-            .await
-            .is_ok()
-    );
+    assert!(test_db
+        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .await
+        .is_ok());
 }
 
 #[pg_testcontainer]
 #[tokio::test]
-async fn test_add_crate_duplicate() {
+async fn test_add_crate_duplicate_owner() {
     test_db
         .test_add_crate(
             "mycrate",
@@ -777,7 +680,7 @@ async fn test_add_crate_duplicate() {
         .test_add_crate(
             "mycrate",
             "admin",
-            &Version::try_from("1.0.0").unwrap(),
+            &Version::try_from("1.0.1").unwrap(),
             &Utc::now(),
         )
         .await
@@ -805,6 +708,8 @@ async fn test_add_crate_different_user() {
         .add_crate(&pm, "cksum", &created, "admin")
         .await
         .unwrap();
+
+    let pm = PublishMetadata::minimal("mycrate", "1.0.1");
     test_db
         .add_crate(&pm, "cksum", &created, "user")
         .await
@@ -891,12 +796,10 @@ async fn get_user_from_token_no_token() {
 #[pg_testcontainer]
 #[tokio::test]
 async fn add_auth_token_no_user() {
-    assert!(
-        test_db
-            .add_auth_token("test", "mytoken", "nouser")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .add_auth_token("test", "mytoken", "nouser")
+        .await
+        .is_err());
 }
 
 #[pg_testcontainer]
@@ -944,12 +847,10 @@ async fn add_user_duplicate() {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .add_user("user", "pwd", "salt", false, false)
-            .await
-            .is_err()
-    )
+    assert!(test_db
+        .add_user("user", "pwd", "salt", false, false)
+        .await
+        .is_err())
 }
 
 #[pg_testcontainer]
