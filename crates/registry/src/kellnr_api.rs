@@ -7,10 +7,10 @@ use crate::{crate_group, crate_user, crate_version};
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
-use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::response::Redirect;
+use axum::Json;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -330,7 +330,7 @@ pub async fn publish(
     let orig_name = OriginalName::try_from(&pub_data.metadata.name)?;
     let normalized_name = orig_name.to_normalized();
 
-    // Check if user is read-only and can't publush (upload) crates.
+    // Check if user is read-only and can't publish (upload) crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
     check_can_modify(&token).await?;
@@ -442,20 +442,20 @@ pub async fn unyank(
 mod reg_api_tests {
     use super::*;
     use appstate::AppStateData;
-    use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::http::StatusCode;
     use axum::routing::{delete, get, put};
+    use axum::Router;
     use db::mock::MockDb;
-    use db::{ConString, Database, SqliteConString};
+    use db::{test_utils, ConString, Database, SqliteConString};
     use error::api_error::ErrorDetails;
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
-    use rand::Rng;
     use rand::distr::Alphanumeric;
     use rand::rng;
+    use rand::Rng;
     use settings::Settings;
     use std::path::PathBuf;
     use std::{iter, path};
@@ -927,10 +927,19 @@ mod reg_api_tests {
             serde_json::from_slice::<ErrorDetails>(&result_msg).is_err(),
             "An error message instead of a success message was returned"
         );
-        assert_eq!(1, kellnr.db.get_crate_meta_list(1).await.unwrap().len());
+        assert_eq!(
+            1,
+            test_utils::get_crate_meta_list(&kellnr.db, 1)
+                .await
+                .unwrap()
+                .len()
+        );
         assert_eq!(
             "0.2.0",
-            kellnr.db.get_crate_meta_list(1).await.unwrap()[0].version
+            test_utils::get_crate_meta_list(&kellnr.db, 1)
+                .await
+                .unwrap()[0]
+                .version
         );
     }
 
@@ -1003,10 +1012,19 @@ mod reg_api_tests {
             serde_json::from_slice::<ErrorDetails>(&result_msg).is_err(),
             "An error message instead of a success message was returned"
         );
-        assert_eq!(1, kellnr.db.get_crate_meta_list(1).await.unwrap().len());
+        assert_eq!(
+            1,
+            test_utils::get_crate_meta_list(&kellnr.db, 1)
+                .await
+                .unwrap()
+                .len()
+        );
         assert_eq!(
             "0.2.0",
-            kellnr.db.get_crate_meta_list(1).await.unwrap()[0].version
+            test_utils::get_crate_meta_list(&kellnr.db, 1)
+                .await
+                .unwrap()[0]
+                .version
         );
     }
 
