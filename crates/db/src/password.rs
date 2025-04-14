@@ -7,6 +7,10 @@ pub fn hash_pwd(pwd: &str, salt: &str) -> String {
     sha256::digest(concat)
 }
 
+pub fn hash_token(token: &str) -> String {
+    sha256::digest(token)
+}
+
 pub fn generate_salt() -> String {
     generate_rand_string(SALT_LENGTH)
 }
