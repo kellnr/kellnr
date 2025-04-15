@@ -35,7 +35,6 @@
     <v-row>
       <!-- Main Content Area -->
       <v-col cols="12" md="9" order="2" order-md="1">
-        <!-- All content tabs remain unchanged -->
         <!-- Readme Tab -->
         <v-card v-if="tab === 'readme'" class="mb-4" elevation="1">
           <v-card-text>
@@ -83,20 +82,229 @@
 
         <!-- About (Meta) Tab -->
         <v-card v-if="tab === 'meta'" class="mb-4" elevation="1">
-          <!-- Meta content remains unchanged -->
-          <!-- ... -->
+          <v-card-text>
+            <!-- Links section -->
+            <v-list>
+              <v-list-item v-if="crate.homepage">
+                <template v-slot:prepend>
+                  <v-icon>mdi-link-variant</v-icon>
+                </template>
+                <v-list-item-title>Homepage</v-list-item-title>
+                <v-list-item-subtitle>
+                  <a :href="crate.homepage" target="_blank" class="text-decoration-none">{{ crate.homepage }}</a>
+                </v-list-item-subtitle>
+              </v-list-item>
+
+              <v-list-item v-if="selected_version.license">
+                <template v-slot:prepend>
+                  <v-icon>mdi-scale-balance</v-icon>
+                </template>
+                <v-list-item-title>License</v-list-item-title>
+                <v-list-item-subtitle>{{ selected_version.license }}</v-list-item-subtitle>
+              </v-list-item>
+
+              <v-list-item v-if="crate.repository">
+                <template v-slot:prepend>
+                  <v-icon>mdi-github</v-icon>
+                </template>
+                <v-list-item-title>Repository</v-list-item-title>
+                <v-list-item-subtitle>
+                  <a :href="crate.repository" target="_blank" class="text-decoration-none">{{ crate.repository }}</a>
+                </v-list-item-subtitle>
+              </v-list-item>
+
+              <v-list-item v-if="selected_version.yanked === true">
+                <template v-slot:prepend>
+                  <v-icon>mdi-delete</v-icon>
+                </template>
+                <v-list-item-title>Yanked</v-list-item-title>
+                <v-list-item-subtitle>Yes</v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+
+            <!-- Lists section -->
+            <v-list v-if="crate.authors && crate.authors.length > 0">
+              <v-list-subheader>Authors</v-list-subheader>
+              <v-list-item v-for="(author, i) in crate.authors" :key="`author-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-account</v-icon>
+                </template>
+                <v-list-item-title>{{ author }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+
+            <v-list v-if="crate.categories && crate.categories.length > 0">
+              <v-list-subheader>Categories</v-list-subheader>
+              <v-list-item v-for="(category, i) in crate.categories" :key="`category-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-cube</v-icon>
+                </template>
+                <v-list-item-title>{{ category }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+
+            <v-list v-if="flattenedFeatures.length > 0">
+              <v-list-subheader>Features</v-list-subheader>
+              <v-list-item v-for="(feature, i) in flattenedFeatures" :key="`feature-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-cog</v-icon>
+                </template>
+                <v-list-item-title>{{ feature }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+
+            <v-list v-if="crate.keywords && crate.keywords.length > 0">
+              <v-list-subheader>Keywords</v-list-subheader>
+              <v-list-item v-for="(keyword, i) in crate.keywords" :key="`keyword-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-key</v-icon>
+                </template>
+                <v-list-item-title>{{ keyword }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+
+            <v-list v-if="sortedOwners.length > 0">
+              <v-list-subheader>Owners</v-list-subheader>
+              <v-list-item v-for="(owner, i) in sortedOwners" :key="`owner-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-account</v-icon>
+                </template>
+                <v-list-item-title>{{ owner }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-card-text>
         </v-card>
 
         <!-- Settings Tab -->
         <template v-if="tab === 'crateSettings'">
-          <!-- Settings content remains unchanged -->
-          <!-- ... -->
+          <!-- Crate Access -->
+          <v-card class="mb-4" elevation="1">
+            <v-card-title>Crate access</v-card-title>
+            <v-card-text>
+              <v-form @submit.prevent="setCrateAccessData">
+                <v-checkbox v-model="is_download_restricted"
+                  label="Crate users only are allowed to download"></v-checkbox>
+
+                <v-alert v-if="changeCrateAccessStatus"
+                  :type="changeCrateAccessStatus === 'Success' ? 'success' : 'error'" closable
+                  @click:close="changeCrateAccessStatus = ''">
+                  {{ changeCrateAccessMsg }}
+                </v-alert>
+
+                <v-btn color="primary" type="submit">
+                  Change crate access rules
+                </v-btn>
+              </v-form>
+            </v-card-text>
+          </v-card>
+
+          <!-- Crate Users -->
+          <v-card class="mb-4" elevation="1">
+            <v-card-title>Crate users</v-card-title>
+            <v-card-text>
+              <v-list>
+                <v-list-item v-for="user in crateUsers" :key="user.login">
+                  <v-list-item-title>{{ user.login }}</v-list-item-title>
+                  <template v-slot:append>
+                    <v-btn color="error" variant="text" size="small" @click="deleteCrateUser(user.login)">
+                      Delete
+                    </v-btn>
+                  </template>
+                </v-list-item>
+              </v-list>
+
+              <v-alert v-if="deleteCrateUserStatus" :type="deleteCrateUserStatus === 'Success' ? 'success' : 'error'"
+                closable @click:close="deleteCrateUserStatus = ''" class="mt-4">
+                {{ deleteCrateUserMsg }}
+              </v-alert>
+
+              <v-divider class="my-4"></v-divider>
+
+              <h3 class="text-h5 mb-3">Add crate user</h3>
+              <v-form @submit.prevent="addCrateUser">
+                <v-text-field v-model="crateUserName" placeholder="Username" prepend-icon="mdi-account"
+                  variant="outlined" density="comfortable"></v-text-field>
+
+                <v-alert v-if="addCrateUserStatus" :type="addCrateUserStatus === 'Success' ? 'success' : 'error'"
+                  closable @click:close="addCrateUserStatus = ''" class="my-2">
+                  {{ addCrateUserMsg }}
+                </v-alert>
+
+                <v-btn color="primary" type="submit">
+                  Add
+                </v-btn>
+              </v-form>
+            </v-card-text>
+          </v-card>
+
+          <!-- Crate Groups -->
+          <v-card class="mb-4" elevation="1">
+            <v-card-title>Crate groups</v-card-title>
+            <v-card-text>
+              <v-list>
+                <v-list-item v-for="group in crateGroups" :key="group.name">
+                  <v-list-item-title>{{ group.name }}</v-list-item-title>
+                  <template v-slot:append>
+                    <v-btn color="error" variant="text" size="small" @click="deleteCrateGroup(group.name)">
+                      Delete
+                    </v-btn>
+                  </template>
+                </v-list-item>
+              </v-list>
+
+              <v-alert v-if="deleteCrateGroupStatus" :type="deleteCrateGroupStatus === 'Success' ? 'success' : 'error'"
+                closable @click:close="deleteCrateGroupStatus = ''" class="mt-4">
+                {{ deleteCrateGroupMsg }}
+              </v-alert>
+
+              <v-divider class="my-4"></v-divider>
+
+              <h3 class="text-h5 mb-3">Add crate group</h3>
+              <v-form @submit.prevent="addCrateGroup">
+                <v-text-field v-model="crateGroupName" placeholder="Groupname" prepend-icon="mdi-account-group"
+                  variant="outlined" density="comfortable"></v-text-field>
+
+                <v-alert v-if="addCrateGroupStatus" :type="addCrateGroupStatus === 'Success' ? 'success' : 'error'"
+                  closable @click:close="addCrateGroupStatus = ''" class="my-2">
+                  {{ addCrateGroupMsg }}
+                </v-alert>
+
+                <v-btn color="primary" type="submit">
+                  Add
+                </v-btn>
+              </v-form>
+            </v-card-text>
+          </v-card>
         </template>
 
         <!-- Admin Tab -->
         <v-card v-if="tab === 'administrate'" class="mb-4" elevation="1">
-          <!-- Admin content remains unchanged -->
-          <!-- ... -->
+          <v-card-title>Delete Crate Version</v-card-title>
+          <v-card-text>
+            <v-alert type="error" variant="tonal" class="mb-4">
+              <strong>Warning:</strong> Deleting a crate version breaks all crates that depend on it!
+            </v-alert>
+
+            <p class="mb-4">
+              Instead of deleting the crate, think about
+              <a href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" class="text-primary">yanking</a> it
+              instead,
+              which does not break crates that depend on it.
+            </p>
+
+            <v-row>
+              <v-col>
+                <v-btn color="error" @click="deleteVersion(crate.name, selected_version.version)">
+                  Delete Version
+                </v-btn>
+              </v-col>
+              <v-col>
+                <v-btn color="error" @click="deleteCrate(crate.name)">
+                  Delete Crate
+                </v-btn>
+              </v-col>
+            </v-row>
+          </v-card-text>
         </v-card>
       </v-col>
 
@@ -136,7 +344,7 @@ const router = useRouter()
 const route = useRoute()
 const selected_version = ref<CrateVersionData>(defaultCrateVersionData)
 const defaultTab = ref<string>("meta")
-const tab = ref(defaultTab);
+const tab = ref(defaultTab.value);
 const store = useStore();
 
 // Snackbar refs
@@ -210,37 +418,189 @@ const sortedOwners = computed(() => {
   return users.sort();
 });
 
-// Keep all the functions related to API calls and user interactions
 function addCrateUser() {
-  // Function implementation remains unchanged
+  axios
+    .put(CRATE_USER(crate.value.name, crateUserName.value))
+    .then((res) => {
+      if (res.status == 200) {
+        addCrateUserStatus.value = "Success";
+        addCrateUserMsg.value = "Crate user successfully added.";
+        // Update user list
+        getCrateUsers();
+      }
+    })
+    .catch((error) => {
+      if (error.response) {
+        addCrateUserStatus.value = "Error";
+        addCrateUserMsg.value = "Crate user could not be added.";
+
+        if (error.response.status == 401 || error.response.status == 403) {
+          // "Unauthorized. Login first."
+          router.push("/login");
+        }
+        else if (error.response.status == 404) {
+          addCrateUserMsg.value = "User not found. Did you provide an existing user name?";
+        } else if (error.response.status == 500) {
+          addCrateUserMsg.value = "Crate user could not be added";
+        } else {
+          addCrateUserMsg.value = "Unknown error";
+        }
+      }
+    });
 }
 
 function deleteCrateUser(name: string) {
-  // Function implementation remains unchanged
+  if (confirm('Delete crate user "' + name + '"?')) {
+    axios
+      .delete(CRATE_USER(crate.value.name, name))
+      .then((res) => {
+        if (res.status == 200) {
+          deleteCrateUserStatus.value = "Success";
+          deleteCrateUserMsg.value = "Crate user successfully deleted.";
+          // Update user list
+          getCrateUsers();
+        }
+      })
+      .catch((error) => {
+        if (error.response) {
+          deleteCrateUserStatus.value = "Error";
+          deleteCrateUserMsg.value = "Crate user could not be deleted.";
+
+          if (error.response.status == 404) {
+            // "Unauthorized. Login first."
+            router.push("/login");
+          } else if (error.response.status == 500) {
+            deleteCrateUserMsg.value = "Crate user could not be deleted";
+          } else {
+            deleteCrateUserMsg.value = "Unknown error";
+          }
+        }
+      });
+  }
 }
 
 function getCrateUsers() {
-  // Function implementation remains unchanged
+  // disable caching to get updated token list
+  axios
+    // @ts-expect-error TS doesn't recognize cache option
+    .get(CRATE_USERS(crate.value.name), { cache: false })
+    .then((res) => {
+      if (res.status == 200) {
+        crateUsers.value = res.data.users;
+      }
+    })
+    .catch((error) => {
+      console.log(error);
+    });
 }
 
 function addCrateGroup() {
-  // Function implementation remains unchanged
+  axios
+    .put(CRATE_GROUP(crate.value.name, crateGroupName.value))
+    .then((res) => {
+      if (res.status == 200) {
+        addCrateGroupStatus.value = "Success";
+        addCrateGroupMsg.value = "Crate group successfully added.";
+        // Update group list
+        getCrateGroups();
+      }
+    })
+    .catch((error) => {
+      if (error.response) {
+        addCrateGroupStatus.value = "Error";
+        addCrateGroupMsg.value = "Crate group could not be added.";
+
+        if (error.response.status == 401 || error.response.status == 403) {
+          // "Unauthorized. Login first."
+          router.push("/login");
+        }
+        else if (error.response.status == 404) {
+          addCrateGroupMsg.value = "Group not found. Did you provide an existing group name?";
+        } else if (error.response.status == 500) {
+          addCrateGroupMsg.value = "Crate group could not be added";
+        } else {
+          addCrateGroupMsg.value = "Unknown error";
+        }
+      }
+    });
 }
 
 function deleteCrateGroup(name: string) {
-  // Function implementation remains unchanged
+  if (confirm('Delete crate group "' + name + '"?')) {
+    axios
+      .delete(CRATE_GROUP(crate.value.name, name))
+      .then((res) => {
+        if (res.status == 200) {
+          deleteCrateGroupStatus.value = "Success";
+          deleteCrateGroupMsg.value = "Crate group successfully deleted.";
+          // Update group list
+          getCrateGroups();
+        }
+      })
+      .catch((error) => {
+        if (error.response) {
+          deleteCrateGroupStatus.value = "Error";
+          deleteCrateGroupMsg.value = "Crate group could not be deleted.";
+
+          if (error.response.status == 404) {
+            // "Unauthorized. Login first."
+            router.push("/login");
+          } else if (error.response.status == 500) {
+            deleteCrateGroupMsg.value = "Crate group could not be deleted";
+          } else {
+            deleteCrateGroupMsg.value = "Unknown error";
+          }
+        }
+      });
+  }
 }
 
 function getCrateGroups() {
-  // Function implementation remains unchanged
+  // disable caching to get updated token list
+  axios
+    // @ts-expect-error TS doesn't recognize cache option
+    .get(CRATE_GROUPS(crate.value.name), { cache: false })
+    .then((res) => {
+      if (res.status == 200) {
+        crateGroups.value = res.data.groups;
+      }
+    })
+    .catch((error) => {
+      console.log(error);
+    });
 }
 
 function deleteVersion(crate: string, version: string) {
-  // Function implementation remains unchanged
+  if (confirm('Delete "' + crate + '" version "' + version + '"?')) {
+    axios.delete(CRATE_DELETE_VERSION,
+      {
+        params: {
+          name: crate,
+          version: version
+        }
+      }
+    ).then(() => {
+      router.push({ name: "Crates" })
+    }).catch((error) => {
+      console.log(error);
+    });
+  }
 }
 
 function deleteCrate(crate: string) {
-  // Function implementation remains unchanged
+  if (confirm('Delete all versions of "' + crate + '"?')) {
+    axios.delete(CRATE_DELETE_ALL,
+      {
+        params: {
+          name: crate,
+        }
+      }
+    ).then(() => {
+      router.push({ name: "Crates" })
+    }).catch((error) => {
+      console.log(error);
+    });
+  }
 }
 
 function showBuildRustdoc(): boolean {
@@ -327,11 +687,57 @@ function getCrateData(name: string, version?: string) {
 }
 
 function getCrateAccessData() {
-  // Function implementation remains unchanged
+  // disable caching to get updated token list
+  axios
+    // @ts-expect-error TS doesn't recognize cache option
+    .get(CRATE_ACCESS_DATA(crate.value.name), { cache: false })
+    .then((response) => {
+      crate_access.value = response.data;
+      is_download_restricted.value = crate_access.value.download_restricted;
+    })
+    .catch((error) => {
+      console.log(error);
+    });
 }
 
 function setCrateAccessData() {
-  // Function implementation remains unchanged
+  const putData = {
+    download_restricted: is_download_restricted.value,
+  }
+
+  axios
+    .put(CRATE_ACCESS_DATA(crate.value.name), putData)
+    .then((res) => {
+      if (res.status == 200) {
+        changeCrateAccessStatus.value = "Success";
+
+        if (res.data.download_restricted) {
+          changeCrateAccessMsg.value = "Crate access restricted to crate users only.";
+        } else {
+          changeCrateAccessMsg.value = "Crate access open to all.";
+        }
+
+        // Update user list
+        getCrateAccessData();
+      }
+    })
+    .catch((error) => {
+      if (error.response) {
+        changeCrateAccessStatus.value = "Error";
+        changeCrateAccessMsg.value = "Crate access data could not be changed.";
+
+        if (error.response.status == 403 || error.response.status == 401) {
+          console.log("Unauthorized. Login first.");
+          // "Unauthorized. Login first."
+          router.push("/login");
+        }
+        else if (error.response.status == 500) {
+          changeCrateAccessMsg.value = "Crate access data could not be changed";
+        } else {
+          changeCrateAccessMsg.value = "Unknown error";
+        }
+      }
+    });
 }
 
 function getAllData() {
@@ -348,6 +754,7 @@ onBeforeMount(() => {
 })
 
 // Watches route changes and reloads the data.
+// Needed, if the query parameter "name=crate" changes.
 watch(route, () => {
   getAllData()
 })
