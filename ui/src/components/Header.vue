@@ -6,7 +6,7 @@
       <v-app-bar-nav-icon class="d-md-none" @click="drawer = !drawer"></v-app-bar-nav-icon>
 
       <!-- Logo -->
-      <v-app-bar-title class="font-weight-bold">
+      <v-app-bar-title class="font-weight-bold text-h5">
         <router-link to="/" class="text-decoration-none">
           <span class="text-primary">&lt;'kellnr&gt;</span>
         </router-link>
