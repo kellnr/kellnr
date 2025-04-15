@@ -23,11 +23,8 @@
 
       <v-spacer></v-spacer>
 
-      <!-- Theme Toggle Button -->
-      <v-btn icon variant="text" @click="toggleTheme" class="mr-2"
-        :title="store.theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'">
-        <v-icon>{{ store.theme === 'light' ? 'mdi-moon-waxing-crescent' : 'mdi-white-balance-sunny' }}</v-icon>
-      </v-btn>
+      <!-- Theme Toggle Component -->
+      <ThemeToggle @theme-changed="handleThemeChange" />
 
       <!-- Login Button -->
       <span class="pr-4"><login-button></login-button></span>
@@ -57,10 +54,13 @@
 <script setup lang="ts">
 import { ref, onBeforeMount, computed } from "vue";
 import LoginButton from "./LoginButton.vue";
+import ThemeToggle from "./ThemeToggle.vue"; // Import the ThemeToggle component
 import { useStore } from "../store/store";
 import router from "../router";
+import { useTheme } from "vuetify";
 
 const store = useStore();
+const vuetifyTheme = useTheme();
 const drawer = ref(false);
 
 // Snackbar state
@@ -93,6 +93,8 @@ const navItems = computed(() => [
 ]);
 
 onBeforeMount(() => {
+  // Apply the current theme
+  vuetifyTheme.global.name.value = store.theme;
   setTheme(store.theme);
 });
 
@@ -104,10 +106,7 @@ function login() {
   }
 }
 
-function toggleTheme() {
-  store.toggleTheme();
-  setTheme(store.theme);
-
+function handleThemeChange() {
   // Show notification for theme change
   showNotification(`Switched to ${store.theme} theme`);
 }
