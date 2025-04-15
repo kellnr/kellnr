@@ -2338,6 +2338,14 @@ pub mod test_utils {
         Ok(())
     }
 
+    pub async fn test_delete_crate_index(db: &Database, crate_id: i64) -> DbResult<()> {
+        crate_index::Entity::delete_many()
+            .filter(crate_index::Column::CrateFk.eq(crate_id))
+            .exec(&db.db_con)
+            .await?;
+        Ok(())
+    }
+
     pub async fn clean_db(db: &Database, session_age: std::time::Duration) -> DbResult<()> {
         let session_age = chrono::Duration::from_std(session_age).unwrap();
         let now = std::ops::Add::add(Utc::now(), session_age)
