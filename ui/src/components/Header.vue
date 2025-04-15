@@ -30,7 +30,7 @@
       </v-btn>
 
       <!-- Login Button -->
-      <login-button></login-button>
+      <span class="pr-4"><login-button></login-button></span>
     </v-app-bar>
 
     <!-- Mobile Navigation Drawer -->

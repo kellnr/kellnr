@@ -28,9 +28,26 @@ pinia.use(piniaPluginPersistedstate)
 const vuetify = createVuetify({
     components,
     directives,
-    // You can add theme configuration here
     theme: {
-        defaultTheme: 'light'
+        defaultTheme: 'light',
+        themes: {
+            light: {
+                colors: {
+                    primary: '#1867C0',
+                    secondary: '#5CBBF6',
+                    background: '#FFFFFF',
+                    surface: '#FFFFFF',
+                }
+            },
+            dark: {
+                colors: {
+                    primary: '#2196F3',
+                    secondary: '#424242',
+                    background: '#121212',
+                    surface: '#212121',
+                }
+            }
+        }
     },
     icons: {
         defaultSet: 'mdi' // Use Material Design Icons as default
