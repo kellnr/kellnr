@@ -1,112 +1,722 @@
 <template>
-  <h2 class="k-h2">Startup Config</h2>
-  <p id="intro">
-    Values are set on application startup. See
-    <a href="https://kellnr.io/documentation" class="link">Kellnr Configuration Documentation</a>
-    for more information.
-  </p>
+  <v-container>
+    <v-card class="mb-6">
+      <v-card-title class="text-h4 pa-4">Startup Config</v-card-title>
 
-  <div class="settingsSection">
-    <h3 class="k-h3">Registry</h3>
-    <startup-config-header></startup-config-header>
-    <startup-config-item tomlTable="registry" toml="data_dir" env="KELLNR_REGISTRY__DATA_DIR"
-      :value="settings.registry.data_dir"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="session_age_seconds" env="KELLNR_REGISTRY__SESSION_AGE_SECONDS"
-      :value="settings.registry.session_age_seconds"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="cache_size" env="KELLNR_REGISTRY__CACHE_SIZE"
-      :value="settings.registry.cache_size"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="max_crate_size" env="KELLNR_REGISTRY__MAX_CRATE_SIZE"
-      :value="settings.registry.max_crate_size"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="max_db_connections" env="KELLNR_REGISTRY__MAX_DB_CONNECTIONS"
-      :value="settings.registry.max_db_connections"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="auth_required" env="KELLNR_REGISTRY__AUTH_REQUIRED"
-      :value="settings.registry.auth_required"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="required_crate_fields" env="KELLNR_REGISTRY__REQUIRED_CRATE_FIELDS"
-      :value="settings.registry.required_crate_fields"></startup-config-item>
-  </div>
+      <v-card-text>
+        <p class="mb-6">
+          Values are set on application startup. See
+          <a href="https://kellnr.io/documentation" class="text-primary">Kellnr Configuration Documentation</a>
+          for more information.
+        </p>
 
-  <div class="settingsSection">
-    <h3 class="k-h3">Local</h3>
-    <startup-config-header></startup-config-header>
-    <startup-config-item tomlTable="local" toml="ip" env="KELLNR_LOCAL__IP"
-      :value="settings.local.ip"></startup-config-item>
-    <startup-config-item tomlTable="local" toml="port" env="KELLNR_LOCAL__PORT"
-      :value="settings.local.port"></startup-config-item>
-  </div>
+        <!-- Registry Section -->
+        <v-expansion-panels variant="accordion" class="mb-6">
+          <v-expansion-panel>
+            <v-expansion-panel-title>
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-package-variant-closed" class="mr-2"></v-icon>
+                <span class="text-h5">Registry</span>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th class="text-left" width="20%">Configuration Key</th>
+                    <th class="text-left" width="20%">Value</th>
+                    <th class="text-left" width="60%">Config Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-subtitle-2">Data Directory</td>
+                    <td>{{ formatValue(settings.registry.data_dir) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">registry.data_dir</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_REGISTRY__DATA_DIR</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Session Age (seconds)</td>
+                    <td>{{ formatValue(settings.registry.session_age_seconds) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">registry.session_age_seconds</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_REGISTRY__SESSION_AGE_SECONDS</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Cache Size</td>
+                    <td>{{ formatValue(settings.registry.cache_size) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">registry.cache_size</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_REGISTRY__CACHE_SIZE</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Max Crate Size</td>
+                    <td>{{ formatValue(settings.registry.max_crate_size) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">registry.max_crate_size</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_REGISTRY__MAX_CRATE_SIZE</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Max DB Connections</td>
+                    <td>{{ formatValue(settings.registry.max_db_connections) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">registry.max_db_connections</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_REGISTRY__MAX_DB_CONNECTIONS</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Auth Required</td>
+                    <td>
+                      <v-chip :color="settings.registry.auth_required ? 'success' : 'grey'" size="small"
+                        text-color="white">
+                        {{ settings.registry.auth_required ? 'true' : 'false' }}
+                      </v-chip>
+                    </td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">registry.auth_required</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_REGISTRY__AUTH_REQUIRED</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Required Crate Fields</td>
+                    <td>{{ formatValue(settings.registry.required_crate_fields) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">registry.required_crate_fields</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_REGISTRY__REQUIRED_CRATE_FIELDS</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
 
-  <div class="settingsSection">
-    <h3 class="k-h3">Origin</h3>
-    <startup-config-header></startup-config-header>
-    <startup-config-item tomlTable="origin" toml="hostname" env="KELLNR_ORIGIN__HOSTNAME"
-      :value="settings.origin.hostname"></startup-config-item>
-    <startup-config-item tomlTable="origin" toml="port" env="KELLNR_ORIGIN__PORT"
-      :value="settings.origin.port"></startup-config-item>
-    <startup-config-item tomlTable="origin" toml="protocol" env="KELLNR_ORIGIN__PROTOCOL"
-      :value="settings.origin.protocol"></startup-config-item>
-  </div>
+        <!-- Local Section -->
+        <v-expansion-panels variant="accordion" class="mb-6">
+          <v-expansion-panel>
+            <v-expansion-panel-title>
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-server" class="mr-2"></v-icon>
+                <span class="text-h5">Local</span>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th class="text-left" width="20%">Configuration Key</th>
+                    <th class="text-left" width="20%">Value</th>
+                    <th class="text-left" width="60%">Config Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-subtitle-2">IP</td>
+                    <td>{{ formatValue(settings.local.ip) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">local.ip</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_LOCAL__IP</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Port</td>
+                    <td>{{ formatValue(settings.local.port) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">local.port</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_LOCAL__PORT</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
 
-  <div class="settingsSection">
-    <h3 class="k-h3">Log</h3>
-    <startup-config-header></startup-config-header>
-    <startup-config-item tomlTable="log" toml="level" env="KELLNR_LOG__LEVEL"
-      :value="settings.log.level"></startup-config-item>
-    <startup-config-item tomlTable="log" toml="format" env="KELLNR_LOG__FORMAT"
-      :value="settings.log.format"></startup-config-item>
-    <startup-config-item tomlTable="log" toml="level_web_server" env="KELLNR_LOG__LEVEL_WEB_SERVER"
-      :value="settings.log.level_web_server"></startup-config-item>
-    <div></div>
-  </div>
+        <!-- Origin Section -->
+        <v-expansion-panels variant="accordion" class="mb-6">
+          <v-expansion-panel>
+            <v-expansion-panel-title>
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-earth" class="mr-2"></v-icon>
+                <span class="text-h5">Origin</span>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th class="text-left" width="20%">Configuration Key</th>
+                    <th class="text-left" width="20%">Value</th>
+                    <th class="text-left" width="60%">Config Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-subtitle-2">Hostname</td>
+                    <td>{{ formatValue(settings.origin.hostname) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">origin.hostname</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_ORIGIN__HOSTNAME</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Port</td>
+                    <td>{{ formatValue(settings.origin.port) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">origin.port</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_ORIGIN__PORT</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Protocol</td>
+                    <td>{{ formatValue(settings.origin.protocol) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">origin.protocol</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_ORIGIN__PROTOCOL</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
 
-  <div class="settingsSection">
-    <h3 class="k-h3">Proxy</h3>
-    <startup-config-header></startup-config-header>
-    <startup-config-item tomlTable="proxy" toml="enabled" env="KELLNR_PROXY__ENABLED"
-      :value="settings.proxy.enabled"></startup-config-item>
-    <startup-config-item tomlTable="proxy" toml="num_threads" env="KELLNR_PROXY__NUM_THREADS"
-      :value="settings.proxy.num_threads"></startup-config-item>
-  </div>
+        <!-- Log Section -->
+        <v-expansion-panels variant="accordion" class="mb-6">
+          <v-expansion-panel>
+            <v-expansion-panel-title>
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-file-document-outline" class="mr-2"></v-icon>
+                <span class="text-h5">Log</span>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th class="text-left" width="20%">Configuration Key</th>
+                    <th class="text-left" width="20%">Value</th>
+                    <th class="text-left" width="60%">Config Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-subtitle-2">Level</td>
+                    <td>{{ formatValue(settings.log.level) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">log.level</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_LOG__LEVEL</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Format</td>
+                    <td>{{ formatValue(settings.log.format) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">log.format</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_LOG__FORMAT</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Level Web Server</td>
+                    <td>{{ formatValue(settings.log.level_web_server) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">log.level_web_server</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_LOG__LEVEL_WEB_SERVER</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
 
-  <div class="settingsSection">
-    <h3 class="k-h3">Docs</h3>
-    <startup-config-header></startup-config-header>
-    <startup-config-item tomlTable="docs" toml="enabled" env="KELLNR_DOCS__ENABLED"
-      :value="settings.docs.enabled"></startup-config-item>
-    <startup-config-item tomlTable="docs" toml="max_size" env="KELLNR_DOCS__MAX_SIZE"
-      :value="settings.docs.max_size"></startup-config-item>
-  </div>
+        <!-- Proxy Section -->
+        <v-expansion-panels variant="accordion" class="mb-6">
+          <v-expansion-panel>
+            <v-expansion-panel-title>
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-transit-connection-variant" class="mr-2"></v-icon>
+                <span class="text-h5">Proxy</span>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th class="text-left" width="20%">Configuration Key</th>
+                    <th class="text-left" width="20%">Value</th>
+                    <th class="text-left" width="60%">Config Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-subtitle-2">Enabled</td>
+                    <td>
+                      <v-chip :color="settings.proxy.enabled ? 'success' : 'grey'" size="small" text-color="white">
+                        {{ settings.proxy.enabled ? 'true' : 'false' }}
+                      </v-chip>
+                    </td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">proxy.enabled</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_PROXY__ENABLED</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Number of Threads</td>
+                    <td>{{ formatValue(settings.proxy.num_threads) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">proxy.num_threads</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_PROXY__NUM_THREADS</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
 
-  <div class="settingsSection">
-    <h3 class="k-h3">PostgreSQL</h3>
-    <startup-config-header></startup-config-header>
-    <startup-config-item tomlTable="postgresql" toml="enabled" env="KELLNR_POSTGRESQL__ENABLED"
-      :value="settings.postgresql.enabled"></startup-config-item>
-    <startup-config-item tomlTable="postgresql" toml="address" env="KELLNR_POSTGRESQL__ADDRESS"
-      :value="settings.postgresql.address"></startup-config-item>
-    <startup-config-item tomlTable="postgresql" toml="port" env="KELLNR_POSTGRESQL__PORT"
-      :value="settings.postgresql.port"></startup-config-item>
-    <startup-config-item tomlTable="postgresql" toml="db" env="KELLNR_POSTGRESQL__DB"
-      :value="settings.postgresql.db"></startup-config-item>
-    <startup-config-item tomlTable="postgresql" toml="user" env="KELLNR_POSTGRESQL__USER"
-      :value="settings.postgresql.user"></startup-config-item>
-  </div>
+        <!-- Docs Section -->
+        <v-expansion-panels variant="accordion" class="mb-6">
+          <v-expansion-panel>
+            <v-expansion-panel-title>
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-file-document-multiple-outline" class="mr-2"></v-icon>
+                <span class="text-h5">Docs</span>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th class="text-left" width="20%">Configuration Key</th>
+                    <th class="text-left" width="20%">Value</th>
+                    <th class="text-left" width="60%">Config Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-subtitle-2">Enabled</td>
+                    <td>
+                      <v-chip :color="settings.docs.enabled ? 'success' : 'grey'" size="small" text-color="white">
+                        {{ settings.docs.enabled ? 'true' : 'false' }}
+                      </v-chip>
+                    </td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">docs.enabled</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_DOCS__ENABLED</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Max Size</td>
+                    <td>{{ formatValue(settings.docs.max_size) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">docs.max_size</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_DOCS__MAX_SIZE</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
 
-  <div class="settingsSection">
-    <h3 class="k-h3">S3</h3>
-    <startup-config-header></startup-config-header>
-    <startup-config-item tomlTable="s3" toml="enabled" env="KELLNR_S3__ENABLED"
-      :value="settings.s3.enabled"></startup-config-item>
-    <startup-config-item tomlTable="s3" toml="access_key" env="KELLNR_S3__ACCESS_KEY"
-      :value="settings.s3.access_key"></startup-config-item>
-    <startup-config-item tomlTable="s3" toml="secret_key" env="KELLNR_S3__SECRET_KEY"
-      :value="settings.s3.secret_key"></startup-config-item>
-    <startup-config-item tomlTable="s3" toml="region" env="KELLNR_S3__REGION"
-      :value="settings.s3.region"></startup-config-item>
-    <startup-config-item tomlTable="s3" toml="endpoint" env="KELLNR_S3__ENDPOINT"
-      :value="settings.s3.endpoint"></startup-config-item>
-    <startup-config-item tomlTable="s3" toml="allow_http" env="KELLNR_S3__ALLOW_HTTP"
-      :value="settings.s3.allow_http"></startup-config-item>
+        <!-- PostgreSQL Section -->
+        <v-expansion-panels variant="accordion" class="mb-6">
+          <v-expansion-panel>
+            <v-expansion-panel-title>
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-database" class="mr-2"></v-icon>
+                <span class="text-h5">PostgreSQL</span>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th class="text-left" width="20%">Configuration Key</th>
+                    <th class="text-left" width="20%">Value</th>
+                    <th class="text-left" width="60%">Config Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-subtitle-2">Enabled</td>
+                    <td>
+                      <v-chip :color="settings.postgresql.enabled ? 'success' : 'grey'" size="small" text-color="white">
+                        {{ settings.postgresql.enabled ? 'true' : 'false' }}
+                      </v-chip>
+                    </td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">postgresql.enabled</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_POSTGRESQL__ENABLED</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Address</td>
+                    <td>{{ formatValue(settings.postgresql.address) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">postgresql.address</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_POSTGRESQL__ADDRESS</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Port</td>
+                    <td>{{ formatValue(settings.postgresql.port) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">postgresql.port</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_POSTGRESQL__PORT</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Database</td>
+                    <td>{{ formatValue(settings.postgresql.db) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">postgresql.db</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_POSTGRESQL__DB</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">User</td>
+                    <td>{{ formatValue(settings.postgresql.user) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">postgresql.user</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_POSTGRESQL__USER</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
 
-  </div>
+        <!-- S3 Section -->
+        <v-expansion-panels variant="accordion" class="mb-6">
+          <v-expansion-panel>
+            <v-expansion-panel-title>
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-cloud-outline" class="mr-2"></v-icon>
+                <span class="text-h5">S3</span>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th class="text-left" width="20%">Configuration Key</th>
+                    <th class="text-left" width="20%">Value</th>
+                    <th class="text-left" width="60%">Config Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-subtitle-2">Enabled</td>
+                    <td>
+                      <v-chip :color="settings.s3.enabled ? 'success' : 'grey'" size="small" text-color="white">
+                        {{ settings.s3.enabled ? 'true' : 'false' }}
+                      </v-chip>
+                    </td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">s3.enabled</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_S3__ENABLED</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Access Key</td>
+                    <td>{{ formatValue(settings.s3.access_key) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">s3.access_key</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_S3__ACCESS_KEY</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Secret Key</td>
+                    <td>{{ settings.s3.secret_key ? '********' : '-' }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">s3.secret_key</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_S3__SECRET_KEY</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Region</td>
+                    <td>{{ formatValue(settings.s3.region) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">s3.region</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_S3__REGION</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Endpoint</td>
+                    <td>{{ formatValue(settings.s3.endpoint) }}</td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">s3.endpoint</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_S3__ENDPOINT</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-subtitle-2">Allow HTTP</td>
+                    <td>
+                      <v-chip :color="settings.s3.allow_http ? 'warning' : 'grey'" size="small" text-color="white">
+                        {{ settings.s3.allow_http ? 'true' : 'false' }}
+                      </v-chip>
+                    </td>
+                    <td>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                          class="config-chip">TOML</v-chip>
+                        <span class="config-value">s3.allow_http</span>
+                      </div>
+                      <div class="config-ref">
+                        <v-chip label size="small" color="teal-darken-1" text-color="white"
+                          class="config-chip">ENV</v-chip>
+                        <span class="config-value">KELLNR_S3__ALLOW_HTTP</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
+      </v-card-text>
+    </v-card>
+  </v-container>
 </template>
 
 <script setup lang="ts">
@@ -114,8 +724,6 @@ import { onBeforeMount, ref } from "vue";
 import axios from "axios";
 import { emptySettings } from "../types/settings";
 import type { Settings } from "../types/settings";
-import StartupConfigItem from "./StartupConfigItem.vue";
-import StartupConfigHeader from "./StartupConfigHeader.vue";
 import { SETTINGS } from "../remote-routes";
 
 const settings = ref<Settings>(emptySettings);
@@ -134,21 +742,34 @@ function getStartupConfig() {
       console.log(err);
     });
 }
+
+function formatValue(value: any): string {
+  if (value === null || value === undefined) return '-';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (Array.isArray(value)) return value.join(', ');
+  return value.toString();
+}
 </script>
 
 <style scoped>
-#intro {
-  padding-bottom: 1rem;
-}
-</style>
-
-<style scoped>
-.settingsSection {
-  margin-bottom: 1rem;
+.config-ref {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
 }
 
-.k-h3 {
-  margin-bottom: 0rem;
-  margin-top: 2rem;
+.config-chip {
+  min-width: 55px;
+  font-size: 11px;
+  margin-right: 8px;
+}
+
+.config-value {
+  font-family: "Roboto Mono", monospace;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.87);
+  background-color: rgba(0, 0, 0, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 </style>
