@@ -3,14 +3,11 @@
     <!-- Hero Section -->
     <v-row>
       <v-col cols="12">
-        <v-card class="hero-card text-center py-8 px-6 mb-6" flat>
-          <v-card-title class="text-h3 font-weight-bold mb-4">Kellnr Registry</v-card-title>
-          <v-card-subtitle class="text-h6 mb-6">Your private Rust crate registry</v-card-subtitle>
-
+        <v-card class="hero-card text-center py-6 px-4 mb-2" flat>
           <!-- Search Box -->
           <v-row>
             <v-col cols="12" sm="10" md="8" lg="6" class="mx-auto">
-              <v-card elevation="4" class="search-card pa-2">
+              <v-card elevation="4" class="search-card">
                 <v-text-field v-model="searchText" placeholder="Search for crates" variant="solo" density="comfortable"
                   prepend-inner-icon="mdi-magnify" hide-details @keyup.enter="searchCrates()"
                   class="search-field"></v-text-field>
