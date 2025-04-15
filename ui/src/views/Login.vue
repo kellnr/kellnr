@@ -1,77 +1,75 @@
 <template>
-  <div class="login-page">
-    <div class="glass login-form">
-      <h1 class="k-h2 center-wrapper">Sign In</h1>
-    <form>
-      <div class="field">
-        <div class="control is-expanded has-icons-left">
-          <input
-              class="input is-info"
-              v-model="user"
-              placeholder="User"
-              type="text"
-              required
-          />
-          <span class="icon is-small is-left">
-          <i class="fas fa-user"></i>
-        </span>
-        </div>
-      </div>
-      <div class="field">
-        <div class="control has-icons-left">
-          <input
-              class="input is-info"
-              v-model="pwd"
-              placeholder="Password"
-              type="password"
-              required
-          />
-          <span class="icon is-small is-left">
-          <i class="fas fa-lock"></i>
-        </span>
-        </div>
-      </div>
+  <v-container fluid class="fill-height">
+    <v-row align="center" justify="center">
+      <v-col cols="12" sm="8" md="6" lg="4">
+        <v-card class="elevation-12">
+          <v-card-title class="text-center text-h5">
+            Sign In
+          </v-card-title>
+          <v-card-text>
+            <v-form ref="form" @submit.prevent="submit" v-model="isFormValid">
+              <v-text-field v-model="user" label="User" prepend-inner-icon="fas fa-user" variant="outlined"
+                :rules="userRules" required></v-text-field>
 
-      <div id="remember">
-        <input type="checkbox" id="remember-box" v-model="store.rememberMe" name="remember">
-        <label for="remember" id="remember-label">Remember me</label>
-      </div>
+              <v-text-field v-model="pwd" label="Password" prepend-inner-icon="fas fa-lock" type="password"
+                variant="outlined" :rules="passwordRules" required></v-text-field>
 
-      <status-notification :status="loginStatus" @update:clear="loginStatus = $event">
-        {{ loginStatusMsg }}
-      </status-notification>
+              <v-checkbox v-model="store.rememberMe" label="Remember me" class="mt-2 checkbox-fix"></v-checkbox>
 
-      <div class="center-wrapper">
-        <button @click.prevent="submit()" class="button is-info login-button">Confirm</button>
-      </div>
+              <v-alert v-if="loginStatus" :type="loginStatus === 'Success' ? 'success' : 'error'" class="mt-2"
+                density="compact" closable @click:close="loginStatus = ''">
+                {{ loginStatusMsg }}
+              </v-alert>
 
-    </form>
-    </div>
-  </div>
+              <div class="text-center mt-4">
+                <v-btn color="primary" size="large" type="submit" block :disabled="!isFormValid">
+                  Confirm
+                </v-btn>
+              </div>
+            </v-form>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </v-container>
 </template>
 
 <script setup lang="ts">
-import StatusNotification from "../components/StatusNotification.vue";
-import {onMounted, ref} from "vue";
+import { onMounted, ref } from "vue";
 import axios from "axios";
-import {useStore} from "../store/store"
-import {LOGIN} from "../remote-routes";
+import { useStore } from "../store/store";
+import { LOGIN } from "../remote-routes";
 import router from "../router";
 
-const loginStatusMsg = ref("")
-const loginStatus = ref("") // "", "Error", "Success"
-const user = ref("")
-const pwd = ref("")
+const form = ref(null);
+const isFormValid = ref(false);
+const loginStatusMsg = ref("");
+const loginStatus = ref(""); // "", "Error", "Success"
+const user = ref("");
+const pwd = ref("");
 const store = useStore();
 
+// Validation rules
+const userRules = [
+  (v: string) => !!v || 'Username is required',
+];
+
+const passwordRules = [
+  (v: string) => !!v || 'Password is required',
+];
+
 onMounted(() => {
-  if(store.rememberMe && store.rememberMeUser !== null) {
+  if (store.rememberMe && store.rememberMeUser !== null) {
     user.value = store.rememberMeUser;
   }
-})
+});
 
 function submit() {
-  const postData = {user: user.value, pwd: pwd.value};
+  if (!isFormValid.value) {
+    return; // Don't submit if form is not valid
+  }
+
+  const postData = { user: user.value, pwd: pwd.value };
   axios
     .post(LOGIN, postData)
     .then((res) => {
@@ -79,14 +77,13 @@ function submit() {
         loginStatusMsg.value = "Login successful";
         loginStatus.value = "Success";
         store.login(res.data);
-        if(store.rememberMe) {
+        if (store.rememberMe) {
           store.rememberMeUser = user.value;
         }
-        if(router.currentRoute.value.query["redirect"] === "settings") {
-            router.push("/settings")
-        }
-        else {
-          router.push("/")
+        if (router.currentRoute.value.query["redirect"] === "settings") {
+          router.push("/settings");
+        } else {
+          router.push("/");
         }
       }
     })
@@ -105,31 +102,14 @@ function submit() {
 }
 </script>
 
-<style scoped>
-  .login-page {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  .login-form {
-    min-width: 30%;
-  }
+<style>
+/* Global styles to fix Vuetify checkbox opacity */
+.v-selection-control__input input {
+  opacity: 1 !important;
+}
 
-  #remember-box {
-    margin-bottom: 1rem;
-  }
-  #remember-label {
-    margin-left: 0.5rem;
-    color: var(--color-darkest);
-  }
-
-  body[color-theme="dark"] #remember-label {
-    color: var(--dark-color-white);
-  }
-
-  .center-wrapper {
-    display: flex;
-    justify-content: center;
-  }
-
+/* Alternative targeted approach if you only want to affect this component */
+.checkbox-fix .v-selection-control__input input {
+  opacity: 1 !important;
+}
 </style>

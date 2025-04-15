@@ -28,7 +28,8 @@
     "vue-axios": "^3.5.2",
     "vue-class-component": "^8.0.0-0",
     "vue-router": "^4.5.0",
-    "vue3-highlightjs": "^1.0.5"
+    "vue3-highlightjs": "^1.0.5",
+    "vuetify": "^3.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

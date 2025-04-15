@@ -8,6 +8,14 @@ import { createPinia } from 'pinia'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import router from "./router";
 
+// Vuetify
+import 'vuetify/styles'
+import { createVuetify } from 'vuetify'
+import * as components from 'vuetify/components'
+import * as directives from 'vuetify/directives'
+// Optional: Material Design Icons
+// import '@mdi/font/css/materialdesignicons.css'
+
 import 'highlight.js/styles/default.css'
 import './assets/css/main.css'
 import '../node_modules/@fortawesome/fontawesome-free/js/all'
@@ -16,10 +24,21 @@ const axios = setupCache(Axios);
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
 
+// Create Vuetify instance
+const vuetify = createVuetify({
+    components,
+    directives,
+    // You can add theme configuration here
+    theme: {
+        defaultTheme: 'light'
+    }
+})
+
 createApp(App)
     .use(pinia)
     .use(router)
     .use(VueHighlightJS)
     // @ts-expect-error TS doesn't understand axios cache
     .use(VueAxios, axios)
+    .use(vuetify) // Add Vuetify to your app
     .mount('#app')
