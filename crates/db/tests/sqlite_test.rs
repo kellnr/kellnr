@@ -2591,7 +2591,7 @@ async fn test_delete_crate_rollback() {
         .await
         .unwrap();
 
-    // Manually delete crate index entry so the delete method fails in the middle.
+    // Manually delete crate index entry so the crate delete method fails in the middle.
     test_delete_crate_index(&test_db.db, crate_id)
         .await
         .unwrap();

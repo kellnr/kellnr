@@ -2470,3 +2470,56 @@ async fn test_get_total_cached_downloads_works(test_db: &db::Database) {
 
     assert_eq!(60, total_downloads);
 }
+
+#[pg_testcontainer]
+#[tokio::test]
+async fn test_add_crate_rollback() {
+    test_add_crate(
+        &test_db,
+        "mycrate",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &Utc::now(),
+    )
+    .await
+    .unwrap();
+
+    let result = test_add_crate(
+        &test_db,
+        "mycrate",
+        "user",
+        &Version::try_from("2.0.0").unwrap(),
+        &Utc::now(),
+    )
+    .await;
+    // The result is err, as the `user` does not exist.
+    assert!(result.is_err());
+
+    let max_version = test_db
+        .get_max_version_from_name(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .await
+        .unwrap();
+
+    // The version should not be bumped to 2.0.0 as the db transaction is not committed.
+    assert_eq!("1.0.0", max_version.to_string());
+}
+
+#[pg_testcontainer]
+#[tokio::test]
+async fn test_delete_crate_rollback() {
+    let version = Version::try_from("1.0.0").unwrap();
+    let crate_id = test_add_crate(&test_db, "mycrate", "admin", &version, &Utc::now())
+        .await
+        .unwrap();
+
+    // Manually delete crate index entry so the crate delete method fails in the middle.
+    test_delete_crate_index(&test_db, crate_id).await.unwrap();
+
+    let normalized_name = NormalizedName::from_unchecked("mycrate".to_string());
+    let result = test_db.delete_crate(&normalized_name, &version).await;
+    assert!(result.is_err());
+
+    let meta = test_db.get_crate_meta_list(&normalized_name).await.unwrap();
+    // Crate meta is deleted first, but the actions should be rolled back on error.
+    assert_eq!(1, meta.len());
+}
