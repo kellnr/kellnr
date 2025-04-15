@@ -1,9 +1,18 @@
 <template>
-  <Header id="header"/>
-  <main id="main">
-      <router-view></router-view>
-  </main>
-  <Footer id="footer"/>
+  <v-app>
+    <!-- Full-width Header -->
+    <Header />
+
+    <!-- Main content area with centered container -->
+    <v-main>
+      <div class="content-wrapper">
+        <router-view></router-view>
+      </div>
+    </v-main>
+
+    <!-- Full-width Footer -->
+    <Footer />
+  </v-app>
 </template>
 
 <script setup lang="ts">
@@ -15,6 +24,7 @@ import Header from "./components/Header.vue";
 html,
 body {
   margin: 0;
+  padding: 0;
   width: 100%;
   height: 100%;
 }
@@ -24,39 +34,60 @@ p {
   padding-top: 0.5em;
 }
 
-#app {
+/* Ensure v-app takes full height */
+.v-application {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  height: 100%;
+}
+
+/* Ensure main content grows to fill available space */
+.v-main {
+  flex: 1 0 auto;
+  background-color: var(--v-background-base, #ffffff);
+}
+
+/* Centered content wrapper with responsive width */
+.content-wrapper {
   width: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+  box-sizing: border-box;
 }
 
-#header {
-  margin: 1rem 0;
-}
-
-#main {
-  height: 100%;
-  overflow: auto;
-}
-
-@media only screen and (max-width: 768px) {
-  #main {
-    padding: 0 1rem;
+/* Responsive breakpoints */
+@media (min-width: 600px) {
+  .content-wrapper {
+    width: 95%;
+    padding: 0 1.5rem;
   }
 }
 
-@media only screen and (min-width: 768px) {
-  #main {
-    padding: 0 15%;
+@media (min-width: 768px) {
+  .content-wrapper {
+    width: 90%;
+    max-width: 1200px;
+    padding: 0 2rem;
   }
 }
 
-@media only screen and (min-width: 992px) {
-  #main {
-    padding: 0 20%;
+@media (min-width: 992px) {
+  .content-wrapper {
+    width: 80%;
+    /* Ensures at least 10% space on each side */
+    padding: 0;
   }
 }
 
+@media (min-width: 1200px) {
+  .content-wrapper {
+    width: 75%;
+  }
+}
+
+@media (min-width: 1600px) {
+  .content-wrapper {
+    width: 70%;
+  }
+}
 </style>
