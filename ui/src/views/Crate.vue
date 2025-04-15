@@ -1,266 +1,404 @@
 <template>
-  <div class="container" v-if="crate != null">
-    <div class="titleSection">
-      <span class="k-h1">{{ crate.name }}</span>
-      <span class="crateVersion">{{ selected_version.version }}</span>
-    </div>
-    <p v-if="crate.description != null">
-      {{ crate.description }}
-    </p>
+  <v-container v-if="crate != null" class="pa-0">
+    <!-- Title Section -->
+    <v-card class="mb-4" elevation="1">
+      <v-card-title class="d-flex flex-wrap align-baseline">
+        <h1 class="text-h3 font-weight-bold me-3 text-break">{{ crate.name }}</h1>
+        <span class="text-h5">{{ selected_version.version }}</span>
+      </v-card-title>
 
-    <div class="tabSwitch paragraph">
-      <div v-if="selected_version.readme" class="tab clickable" :class="tab === 'readme' ? 'activeTab' : ''"
-        @click="changeTab('readme')">
-        Readme
-      </div>
-      <div class="tab clickable" :class="tab === 'meta' ? 'activeTab' : ''" @click="changeTab('meta')">
-        About
-      </div>
-      <div class="tab clickable" :class="tab === 'deps' ? 'activeTab' : ''" @click="changeTab('deps')">
-        Dependencies
-      </div>
-      <div class="tab clickable" :class="tab === 'versions' ? 'activeTab' : ''" @click="changeTab('versions')">
-        Versions
-      </div>
-      <div v-if="store.loggedInUserIsAdmin" class="tab clickable" :class="tab === 'crateSettings' ? 'activeTab' : ''"
-        @click="changeTab('crateSettings')">
-        Settings
-      </div>
-      <div v-if="store.loggedInUserIsAdmin" class="tab clickable" :class="tab === 'administrate' ? 'activeTab' : ''"
-        @click="changeTab('administrate')">
-        Admin
-      </div>
-    </div>
+      <v-card-text v-if="crate.description != null">
+        <p>{{ crate.description }}</p>
+      </v-card-text>
+    </v-card>
 
-    <div id="infoGrid">
-      <div id="tabs" class="">
-        <div v-if="tab === 'readme'">
-          <Readme :readme="selected_version.readme"></Readme>
-        </div>
+    <!-- Tab Navigation -->
+    <v-card class="mb-4" elevation="1">
+      <v-tabs v-model="tab" color="primary" grow slider-color="primary">
+        <v-tab v-if="selected_version.readme" value="readme">Readme</v-tab>
+        <v-tab value="meta">About</v-tab>
+        <v-tab value="deps">Dependencies</v-tab>
+        <v-tab value="versions">Versions</v-tab>
+        <v-tab v-if="store.loggedInUserIsAdmin" value="crateSettings">Settings</v-tab>
+        <v-tab v-if="store.loggedInUserIsAdmin" value="administrate">Admin</v-tab>
+      </v-tabs>
+    </v-card>
 
-        <div v-if="tab === 'versions'">
-          <div class="">
+    <!-- Snackbar for copy notification -->
+    <v-snackbar v-model="showSnackbar" :timeout="3000" color="success" location="bottom">
+      {{ snackbarText }}
+      <template v-slot:actions>
+        <v-btn variant="text" icon="mdi-close" @click="showSnackbar = false"></v-btn>
+      </template>
+    </v-snackbar>
+
+    <v-row>
+      <!-- Main Content Area -->
+      <v-col cols="12" md="9" order="2" order-md="1">
+        <!-- Readme Tab -->
+        <v-card v-if="tab === 'readme'" class="mb-4" elevation="1">
+          <v-card-text>
+            <Readme :readme="selected_version.readme"></Readme>
+          </v-card-text>
+        </v-card>
+
+        <!-- Versions Tab -->
+        <v-card v-if="tab === 'versions'" class="mb-4" elevation="1">
+          <v-card-text>
             <Version v-for="version in crate.versions" :key="version.version" :name="crate.name"
               :version="version.version" :last_updated="version.created" :downloads="version.downloads.toString()" />
-          </div>
-        </div>
+          </v-card-text>
+        </v-card>
 
-        <div v-if="tab === 'deps'">
-          <div class="" v-if="sortedDeps.length > 0">
-            <Dependency v-for="dep in sortedDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
-              :registry="dep.registry">
-            </Dependency>
-          </div>
+        <!-- Dependencies Tab -->
+        <template v-if="tab === 'deps'">
+          <!-- Normal Dependencies -->
+          <v-card v-if="sortedDeps.length > 0" class="mb-4" elevation="1">
+            <v-card-title>Dependencies</v-card-title>
+            <v-card-text>
+              <Dependency v-for="dep in sortedDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
+                :registry="dep.registry" />
+            </v-card-text>
+          </v-card>
 
-          <div class="" v-if="sortedDevDeps.length > 0">
-            <h2 class="k-h3">Development Dependencies</h2>
-            <Dependency v-for="dep in sortedDevDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
-              :registry="dep.registry">
-            </Dependency>
-          </div>
+          <!-- Dev Dependencies -->
+          <v-card v-if="sortedDevDeps.length > 0" class="mb-4" elevation="1">
+            <v-card-title>Development Dependencies</v-card-title>
+            <v-card-text>
+              <Dependency v-for="dep in sortedDevDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
+                :registry="dep.registry" />
+            </v-card-text>
+          </v-card>
 
-          <div class="" v-if="sortedDevDeps.length > 0">
-            <h2 class="k-h3">Build Dependencies</h2>
-            <Dependency v-for="dep in sortedBuildDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
-              :registry="dep.registry" :desc="dep.description">
-            </Dependency>
-          </div>
-        </div>
+          <!-- Build Dependencies -->
+          <v-card v-if="sortedBuildDeps.length > 0" class="mb-4" elevation="1">
+            <v-card-title>Build Dependencies</v-card-title>
+            <v-card-text>
+              <Dependency v-for="dep in sortedBuildDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
+                :registry="dep.registry" :desc="dep.description" />
+            </v-card-text>
+          </v-card>
+        </template>
 
-        <div v-if="tab === 'meta'" class="metaTab">
-          <div class="glass">
-            <div class="iconElements">
-              <IconElement icon="fas fa-link" title="Homepage" v-if="crate.homepage != null">
-                <a :href="crate.homepage" class="link" target="_blank">{{
-                  crate.homepage
-                  }}</a>
-              </IconElement>
-              <IconElement icon="fas fa-balance-scale" title="License" v-if="selected_version.license != null">
-                {{ selected_version.license }}
-              </IconElement>
-              <IconElement icon="fab fa-github" title="Repository" v-if="crate.repository != null">
-                <a :href="crate.repository" class="link" target="_blank">{{
-                  crate.repository
-                  }}</a>
-              </IconElement>
-              <IconElement icon="fas fa-trash-alt" title="Yanked" v-if="selected_version.yanked === true">
-                Yes
-              </IconElement>
-            </div>
-            <div class="iconLists">
-              <IconList :list="crate.authors" :icon="'fas fa-user'" :title="'Authors'" />
-              <IconList :list="crate.categories" :icon="'fas fa-cubes'" :title="'Categories'" />
-              <IconList :list="flattenedFeatures" :icon="'fas fa-cog'" :title="'Features'" />
-              <IconList :list="crate.keywords" :icon="'fas fa-key'" :title="'Keywords'" />
-              <IconList :list="sortedOwners" :icon="'fas fa-user'" :title="'Owners'" />
-            </div>
-          </div>
-        </div>
+        <!-- About (Meta) Tab -->
+        <v-card v-if="tab === 'meta'" class="mb-4" elevation="1">
+          <v-card-text>
+            <!-- Links section -->
+            <v-list>
+              <v-list-item v-if="crate.homepage">
+                <template v-slot:prepend>
+                  <v-icon>mdi-link-variant</v-icon>
+                </template>
+                <v-list-item-title>Homepage</v-list-item-title>
+                <v-list-item-subtitle>
+                  <a :href="crate.homepage" target="_blank" class="text-decoration-none">{{ crate.homepage }}</a>
+                </v-list-item-subtitle>
+              </v-list-item>
 
-        <div v-if="tab === 'crateSettings'" class="crateSettingsTab">
-          <div class="glass">
-            <h2 class="k-h2">Crate access</h2>
-            <form>
-              <div class="field">
-                <label class="checkbox">
-                  <input type="checkbox" v-model="is_download_restricted" /> Crate users only are allowed to download
-                </label>
-              </div>
-              <status-notification :status="changeCrateAccessStatus" @update:clear="changeCrateAccessStatus = $event">
-                {{ changeCrateAccessMsg }}
-              </status-notification>
-              <div class="control">
-                <button class="button is-info" @click.prevent="setCrateAccessData">Change crate access rules</button>
-              </div>
-            </form>
-          </div>
-          <div class="glass">
-            <h2 class="k-h2">Crate users</h2>
-            <template v-for="user in crateUsers" :key="user.login">
-              <div class="glass crateMember">
-                <span class="userName">{{ user.login }}</span>
-                <span class="tag is-danger is-light">
-                  <a @click="deleteCrateUser(user.login)">Delete</a>
-                </span>
-              </div>
-            </template>
-            <status-notification :status="deleteCrateUserStatus" @update:clear="deleteCrateUserStatus = $event">
-              {{ deleteCrateUserMsg }}
-            </status-notification>
-            <h3 class="k-h3">Add crate user</h3>
-            <form>
-              <div class="field">
-                <div class="control is-expanded has-icons-left">
-                  <input class="input is-info" v-model="crateUserName" placeholder="Username" type="text" />
-                  <span class="icon is-small is-left">
-                    <i class="fas fa-user"></i>
-                  </span>
-                </div>
-              </div>
-              <status-notification :status="addCrateUserStatus" @update:clear="addCrateUserStatus = $event">
-                {{ addCrateUserMsg }}
-              </status-notification>
-              <div class="control">
-                <button class="button is-info" @click.prevent="addCrateUser">Add</button>
-              </div>
-            </form>
-          </div>
-          <div class="glass">
-            <h2 class="k-h2">Crate groups</h2>
-            <template v-for="group in crateGroups" :key="group.login">
-              <div class="glass crateMember">
-                <span class="groupName">{{ group.name }}</span>
-                <span class="tag is-danger is-light">
-                  <a @click="deleteCrateGroup(group.name)">Delete</a>
-                </span>
-              </div>
-            </template>
-            <status-notification :status="deleteCrateGroupStatus" @update:clear="deleteCrateGroupStatus = $event">
-              {{ deleteCrateGroupMsg }}
-            </status-notification>
-            <h3 class="k-h3">Add crate group</h3>
-            <form>
-              <div class="field">
-                <div class="control is-expanded has-icons-left">
-                  <input class="input is-info" v-model="crateGroupName" placeholder="Groupname" type="text" />
-                  <span class="icon is-small is-left">
-                    <i class="fas fa-group"></i>
-                  </span>
-                </div>
-              </div>
-              <status-notification :status="addCrateGroupStatus" @update:clear="addCrateGroupStatus = $event">
-                {{ addCrateGroupMsg }}
-              </status-notification>
-              <div class="control">
-                <button class="button is-info" @click.prevent="addCrateGroup">Add</button>
-              </div>
-            </form>
-          </div>
-        </div>
+              <v-list-item v-if="selected_version.license">
+                <template v-slot:prepend>
+                  <v-icon>mdi-scale-balance</v-icon>
+                </template>
+                <v-list-item-title>License</v-list-item-title>
+                <v-list-item-subtitle>{{ selected_version.license }}</v-list-item-subtitle>
+              </v-list-item>
 
-        <div v-if="tab === 'administrate'" class="administrateTab">
-          <div class="glass">
-            <h2 class="k-h2">Delete Crate Version</h2>
-            <div class="notification is-light is-danger">
+              <v-list-item v-if="crate.repository">
+                <template v-slot:prepend>
+                  <v-icon>mdi-github</v-icon>
+                </template>
+                <v-list-item-title>Repository</v-list-item-title>
+                <v-list-item-subtitle>
+                  <a :href="crate.repository" target="_blank" class="text-decoration-none">{{ crate.repository }}</a>
+                </v-list-item-subtitle>
+              </v-list-item>
+
+              <v-list-item v-if="selected_version.yanked === true">
+                <template v-slot:prepend>
+                  <v-icon>mdi-delete</v-icon>
+                </template>
+                <v-list-item-title>Yanked</v-list-item-title>
+                <v-list-item-subtitle>Yes</v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+
+            <!-- Lists section -->
+            <v-list v-if="crate.authors && crate.authors.length > 0">
+              <v-list-subheader>Authors</v-list-subheader>
+              <v-list-item v-for="(author, i) in crate.authors" :key="`author-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-account</v-icon>
+                </template>
+                <v-list-item-title>{{ author }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+
+            <v-list v-if="crate.categories && crate.categories.length > 0">
+              <v-list-subheader>Categories</v-list-subheader>
+              <v-list-item v-for="(category, i) in crate.categories" :key="`category-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-cube</v-icon>
+                </template>
+                <v-list-item-title>{{ category }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+
+            <v-list v-if="flattenedFeatures.length > 0">
+              <v-list-subheader>Features</v-list-subheader>
+              <v-list-item v-for="(feature, i) in flattenedFeatures" :key="`feature-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-cog</v-icon>
+                </template>
+                <v-list-item-title>{{ feature }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+
+            <v-list v-if="crate.keywords && crate.keywords.length > 0">
+              <v-list-subheader>Keywords</v-list-subheader>
+              <v-list-item v-for="(keyword, i) in crate.keywords" :key="`keyword-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-key</v-icon>
+                </template>
+                <v-list-item-title>{{ keyword }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+
+            <v-list v-if="sortedOwners.length > 0">
+              <v-list-subheader>Owners</v-list-subheader>
+              <v-list-item v-for="(owner, i) in sortedOwners" :key="`owner-${i}`">
+                <template v-slot:prepend>
+                  <v-icon>mdi-account</v-icon>
+                </template>
+                <v-list-item-title>{{ owner }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-card-text>
+        </v-card>
+
+        <!-- Settings Tab -->
+        <template v-if="tab === 'crateSettings'">
+          <!-- Crate Access -->
+          <v-card class="mb-4" elevation="1">
+            <v-card-title>Crate access</v-card-title>
+            <v-card-text>
+              <v-form @submit.prevent="setCrateAccessData">
+                <v-checkbox v-model="is_download_restricted"
+                  label="Crate users only are allowed to download"></v-checkbox>
+
+                <v-alert v-if="changeCrateAccessStatus"
+                  :type="changeCrateAccessStatus === 'Success' ? 'success' : 'error'" closable
+                  @click:close="changeCrateAccessStatus = ''">
+                  {{ changeCrateAccessMsg }}
+                </v-alert>
+
+                <v-btn color="primary" type="submit">
+                  Change crate access rules
+                </v-btn>
+              </v-form>
+            </v-card-text>
+          </v-card>
+
+          <!-- Crate Users -->
+          <v-card class="mb-4" elevation="1">
+            <v-card-title>Crate users</v-card-title>
+            <v-card-text>
+              <v-list>
+                <v-list-item v-for="user in crateUsers" :key="user.login">
+                  <v-list-item-title>{{ user.login }}</v-list-item-title>
+                  <template v-slot:append>
+                    <v-btn color="error" variant="text" size="small" @click="deleteCrateUser(user.login)">
+                      Delete
+                    </v-btn>
+                  </template>
+                </v-list-item>
+              </v-list>
+
+              <v-alert v-if="deleteCrateUserStatus" :type="deleteCrateUserStatus === 'Success' ? 'success' : 'error'"
+                closable @click:close="deleteCrateUserStatus = ''" class="mt-4">
+                {{ deleteCrateUserMsg }}
+              </v-alert>
+
+              <v-divider class="my-4"></v-divider>
+
+              <h3 class="text-h5 mb-3">Add crate user</h3>
+              <v-form @submit.prevent="addCrateUser">
+                <v-text-field v-model="crateUserName" placeholder="Username" prepend-icon="mdi-account"
+                  variant="outlined" density="comfortable"></v-text-field>
+
+                <v-alert v-if="addCrateUserStatus" :type="addCrateUserStatus === 'Success' ? 'success' : 'error'"
+                  closable @click:close="addCrateUserStatus = ''" class="my-2">
+                  {{ addCrateUserMsg }}
+                </v-alert>
+
+                <v-btn color="primary" type="submit">
+                  Add
+                </v-btn>
+              </v-form>
+            </v-card-text>
+          </v-card>
+
+          <!-- Crate Groups -->
+          <v-card class="mb-4" elevation="1">
+            <v-card-title>Crate groups</v-card-title>
+            <v-card-text>
+              <v-list>
+                <v-list-item v-for="group in crateGroups" :key="group.name">
+                  <v-list-item-title>{{ group.name }}</v-list-item-title>
+                  <template v-slot:append>
+                    <v-btn color="error" variant="text" size="small" @click="deleteCrateGroup(group.name)">
+                      Delete
+                    </v-btn>
+                  </template>
+                </v-list-item>
+              </v-list>
+
+              <v-alert v-if="deleteCrateGroupStatus" :type="deleteCrateGroupStatus === 'Success' ? 'success' : 'error'"
+                closable @click:close="deleteCrateGroupStatus = ''" class="mt-4">
+                {{ deleteCrateGroupMsg }}
+              </v-alert>
+
+              <v-divider class="my-4"></v-divider>
+
+              <h3 class="text-h5 mb-3">Add crate group</h3>
+              <v-form @submit.prevent="addCrateGroup">
+                <v-text-field v-model="crateGroupName" placeholder="Groupname" prepend-icon="mdi-account-group"
+                  variant="outlined" density="comfortable"></v-text-field>
+
+                <v-alert v-if="addCrateGroupStatus" :type="addCrateGroupStatus === 'Success' ? 'success' : 'error'"
+                  closable @click:close="addCrateGroupStatus = ''" class="my-2">
+                  {{ addCrateGroupMsg }}
+                </v-alert>
+
+                <v-btn color="primary" type="submit">
+                  Add
+                </v-btn>
+              </v-form>
+            </v-card-text>
+          </v-card>
+        </template>
+
+        <!-- Admin Tab -->
+        <v-card v-if="tab === 'administrate'" class="mb-4" elevation="1">
+          <v-card-title>Delete Crate Version</v-card-title>
+          <v-card-text>
+            <v-alert type="error" variant="tonal" class="mb-4">
               <strong>Warning:</strong> Deleting a crate version breaks all crates that depend on it!
-            </div>
-            <div class="paragraph">
-              Instead of deleting the crate, think about <a
-                href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" class="link">yanking</a> it instead,
-              which
-              does not break crates that depend on it.
-            </div>
-            <br />
-            <div>
-              <span class="control">
-                <button class="button is-danger" @click="deleteVersion(crate.name, selected_version.version)">Delete
-                  Version</button>
-              </span>
-              <span id="deleteCrate" class="control">
-                <button class="button is-danger" @click="deleteCrate(crate.name)">Delete Crate</button>
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+            </v-alert>
 
-      <div id="infos" class="glass">
-        <crate-sidebar-element icon="fa-code" header="Install" class="bottomBorder">
-          <div class="clickable tooltip" @click="copyTomlToClipboard()">
-            {{ crate.name }} = "{{ selected_version.version }}"
-            <span class="tooltiptext">Copy to clipboard</span>
-          </div>
-        </crate-sidebar-element>
+            <p class="mb-4">
+              Instead of deleting the crate, think about
+              <a href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" class="text-primary">yanking</a> it
+              instead,
+              which does not break crates that depend on it.
+            </p>
 
-        <crate-sidebar-element icon="fa-calendar-alt" header="Uploaded" class="bottomBorder">
-          <div class="tooltip">
-            {{ humanizedLastUpdated }}
-            <span class="tooltiptext">{{ crate.last_updated }}</span>
-          </div>
-        </crate-sidebar-element>
+            <v-row>
+              <v-col>
+                <v-btn color="error" @click="deleteVersion(crate.name, selected_version.version)">
+                  Delete Version
+                </v-btn>
+              </v-col>
+              <v-col>
+                <v-btn color="error" @click="deleteCrate(crate.name)">
+                  Delete Crate
+                </v-btn>
+              </v-col>
+            </v-row>
+          </v-card-text>
+        </v-card>
+      </v-col>
 
-        <crate-sidebar-element icon="fa-book" header="Documentation" class="bottomBorder">
-          <div class="docs" @click="openDocsPage()">
-            <div v-if="docLink">
-              <div class="clickable">{{ crate.name }} ({{ selected_version.version }})</div>
-            </div>
-            <div v-else>
-              <router-link class="clickable" to="/publishdocs">Add</router-link>
-            </div>
-          </div>
-          <div class="buildDocs clickable" v-if="showBuildRustdoc()"
-            @click="buildDoc(crate.name, selected_version.version)">
-            <span v-if="docLink">
-              re-build
-            </span>
-            <span v-else>
-              build
-            </span>
-          </div>
-        </crate-sidebar-element>
+      <!-- Sidebar -->
+      <v-col cols="12" md="3" order="1" order-md="2">
+        <v-card elevation="1">
+          <!-- Install Section with copy icon -->
+          <v-list>
+            <v-list-item>
+              <template v-slot:prepend>
+                <v-icon>mdi-code-braces</v-icon>
+              </template>
+              <v-list-item-title>Install</v-list-item-title>
+              <v-list-item-subtitle>
+                <div class="d-flex align-center text-break">
+                  <span class="me-2 text-wrap">{{ crate.name }} = "{{ selected_version.version }}"</span>
+                  <v-icon size="small" color="primary" @click="copyTomlToClipboard()" class="cursor-pointer">
+                    mdi-content-copy
+                  </v-icon>
+                </div>
+              </v-list-item-subtitle>
+            </v-list-item>
 
-        <crate-sidebar-element header="Downloads" icon="fa-cloud-download-alt">
-          <div>Version: {{ selected_version.downloads }}</div>
-          <div>Total: {{ crate.total_downloads }}</div>
-        </crate-sidebar-element>
-      </div>
-    </div>
-  </div>
+            <v-divider></v-divider>
+
+            <!-- Uploaded Section -->
+            <v-list-item>
+              <template v-slot:prepend>
+                <v-icon>mdi-calendar</v-icon>
+              </template>
+              <v-list-item-title>Uploaded</v-list-item-title>
+              <v-list-item-subtitle>
+                <v-tooltip :text="crate.last_updated">
+                  <template v-slot:activator="{ props }">
+                    <span v-bind="props">{{ humanizedLastUpdated }}</span>
+                  </template>
+                </v-tooltip>
+              </v-list-item-subtitle>
+            </v-list-item>
+
+            <v-divider></v-divider>
+
+            <!-- Documentation Section with improved build button -->
+            <v-list-item>
+              <template v-slot:prepend>
+                <v-icon>mdi-book-open-variant</v-icon>
+              </template>
+              <v-list-item-title>Documentation</v-list-item-title>
+              <v-list-item-subtitle>
+                <div class="d-flex align-center mb-2">
+                  <span v-if="docLink" @click="openDocsPage()" class="cursor-pointer">
+                    {{ crate.name }} ({{ selected_version.version }})
+                  </span>
+                  <router-link v-else to="/publishdocs" class="text-decoration-none">
+                    Add
+                  </router-link>
+                </div>
+
+                <v-btn v-if="showBuildRustdoc()" color="primary" variant="outlined" size="small" density="comfortable"
+                  prepend-icon="mdi-cog" @click="buildDoc(crate.name, selected_version.version)" class="mt-1">
+                  {{ docLink ? 're-build docs' : 'build docs' }}
+                </v-btn>
+              </v-list-item-subtitle>
+            </v-list-item>
+
+            <v-divider></v-divider>
+
+            <!-- Downloads Section -->
+            <v-list-item>
+              <template v-slot:prepend>
+                <v-icon>mdi-download</v-icon>
+              </template>
+              <v-list-item-title>Downloads</v-list-item-title>
+              <v-list-item-subtitle>
+                <div class="text-wrap">Version: {{ selected_version.downloads }}</div>
+                <div class="text-wrap">Total: {{ crate.total_downloads }}</div>
+              </v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
+        </v-card>
+      </v-col>
+    </v-row>
+  </v-container>
 </template>
 
 <script setup lang="ts">
 import Dependency from "../components/Dependency.vue";
 import Version from "../components/Version.vue";
-import IconList from "../components/IconList.vue";
-import IconElement from "../components/IconElement.vue";
-import StatusNotification from "../components/StatusNotification.vue";
 import { computed, onBeforeMount, ref, watch } from "vue";
 import axios from "axios";
 import { useRoute, useRouter } from "vue-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
-import CrateSidebarElement from "../components/CrateSidebarElement.vue";
 import { defaultCrateData, defaultCrateAccessData, defaultCrateVersionData } from "../types/crate_data";
 import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
 import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_GROUPS, CRATE_GROUP, CRATE_ACCESS_DATA } from "../remote-routes";
@@ -277,6 +415,10 @@ const selected_version = ref<CrateVersionData>(defaultCrateVersionData)
 const defaultTab = ref<string>("meta")
 const tab = ref(defaultTab);
 const store = useStore();
+
+// Snackbar refs
+const showSnackbar = ref(false);
+const snackbarText = ref('');
 
 const crate_access = ref<CrateAccessData>(defaultCrateAccessData);
 const is_download_restricted = ref(false);
@@ -419,7 +561,7 @@ function getCrateUsers() {
     .catch((error) => {
       console.log(error);
     });
-};
+}
 
 function addCrateGroup() {
   axios
@@ -495,7 +637,7 @@ function getCrateGroups() {
     .catch((error) => {
       console.log(error);
     });
-};
+}
 
 function deleteVersion(crate: string, version: string) {
   if (confirm('Delete "' + crate + '" version "' + version + '"?')) {
@@ -570,6 +712,30 @@ function sortByName(deps: Array<CrateRegistryDep>) {
   });
 }
 
+function copyTomlToClipboard() {
+  const text = crate.value.name + ' = "' + selected_version.value.version + '"';
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      // Show success snackbar
+      snackbarText.value = "Copied to clipboard!";
+      showSnackbar.value = true;
+    })
+    .catch(() => {
+      // Show error snackbar if copying fails
+      snackbarText.value = "Failed to copy. Please try again.";
+      showSnackbar.value = true;
+    });
+}
+
+function openDocsPage() {
+  if (selected_version.value.documentation) {
+    let url = selected_version.value.documentation;
+    window.open(url, "_blank");
+  } else {
+    router.push({ name: "PublishDocs" })
+  }
+}
+
 function getCrateData(name: string, version?: string) {
   axios
     .get(CRATE_DATA, { params: { name: name } })
@@ -582,6 +748,7 @@ function getCrateData(name: string, version?: string) {
 
       // Set the default tab to "readme" if a readme is available, else "meta"
       defaultTab.value = selected_version.value.readme == null ? "meta" : "readme";
+      tab.value = defaultTab.value;
     })
     .catch((error) => {
       console.log(error);
@@ -642,21 +809,6 @@ function setCrateAccessData() {
     });
 }
 
-function copyTomlToClipboard() {
-  const text =
-    crate.value.name + ' = "' + selected_version.value.version + '"';
-  navigator.clipboard.writeText(text);
-}
-
-function openDocsPage() {
-  if (selected_version.value.documentation) {
-    let url = selected_version.value.documentation;
-    window.open(url, "_blank");
-  } else {
-    router.push({ name: "PublishDocs" })
-  }
-}
-
 function getAllData() {
   const version = route.query.version?.toString();
   const name = route.query.name?.toString() ?? "";
@@ -674,122 +826,25 @@ onBeforeMount(() => {
 // Needed, if the query parameter "name=crate" changes.
 watch(route, () => {
   getAllData()
-  changeTab(defaultTab.value)
+})
+
+// Watch for tab changes to load data when needed
+watch(tab, (newTab) => {
+  if (newTab === 'crateSettings') {
+    getCrateAccessData();
+    getCrateUsers();
+    getCrateGroups();
+  }
 })
 </script>
 
-<style scoped>
-.container {
-  width: 100%;
+<style>
+.cursor-pointer {
+  cursor: pointer;
 }
 
-.titleSection {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  width: 100%;
+/* Small utility classes */
+.text-break {
+  word-break: break-word;
 }
-
-.k-h1 {
-  margin: 0 1rem 0 0;
-  word-wrap: break-word;
-  max-width: 100%;
-}
-
-.crateVersion {
-  font-size: x-large;
-}
-
-.tabSwitch {
-  width: fit-content;
-  max-width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  margin: 1rem 0 1rem 0;
-  border-radius: 2rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  background: rgba(248, 248, 248, 0.7);
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-
-body[color-theme="dark"] .tabSwitch {
-  background-color: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.tab {
-  flex-grow: 1;
-  padding: 0.5rem;
-  font-weight: bolder;
-  text-align: center;
-  color: var(--color-darkest);
-}
-
-body[color-theme="light"] .activeTab {
-  color: var(--color-dark);
-}
-
-body[color-theme="dark"] .activeTab {
-  color: var(--dark-color-middle) !important;
-}
-
-#deleteCrate {
-  margin-left: 1rem;
-}
-
-#crateVersion {
-  font-size: x-large;
-  margin-left: 1rem;
-}
-
-#infoGrid {
-  display: grid;
-  column-gap: 2rem;
-  margin-bottom: 1rem;
-}
-
-#tabs {
-  grid-area: tabs;
-}
-
-#infos {
-  margin: 0 0 0 0rem;
-  height: fit-content;
-}
-
-.bottomBorder {
-  border-bottom: 0.05rem;
-  border-bottom-style: solid;
-}
-
-.buildDocs {
-  font-size: smaller;
-}
-
-.crateMember {
-  display: grid;
-  grid-template-columns: 1fr max-content;
-}
-
-@media only screen and (max-width: 768px) {
-  #infoGrid {
-    grid-template-rows: auto auto;
-    grid-template-areas:
-      "infos"
-      "tabs";
-    width: 100%;
-  }
-}
-
-@media only screen and (min-width: 768px) {
-  #infoGrid {
-    grid-template-columns: 3fr 1fr;
-    grid-template-areas: "tabs infos";
-  }
-}
-
-@media only screen and (min-width: 992px) {}
 </style>
