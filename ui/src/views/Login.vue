@@ -101,15 +101,3 @@ function submit() {
     });
 }
 </script>
-
-<style>
-/* Global styles to fix Vuetify checkbox opacity */
-.v-selection-control__input input {
-  opacity: 1 !important;
-}
-
-/* Alternative targeted approach if you only want to affect this component */
-.checkbox-fix .v-selection-control__input input {
-  opacity: 1 !important;
-}
-</style>
