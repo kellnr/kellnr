@@ -102,7 +102,7 @@ async fn get_total_downloads_returns_number_of_total_downloads() {
         )
         .await
         .unwrap();
-    let id2 = test_db
+    test_db
         .test_add_crate(
             "crate2",
             "admin",
@@ -112,15 +112,7 @@ async fn get_total_downloads_returns_number_of_total_downloads() {
         .await
         .unwrap();
     test_db
-        .test_add_crate_meta(id1, &Version::try_from("1.0.0").unwrap(), &created, None)
-        .await
-        .unwrap();
-    test_db
         .test_add_crate_meta(id1, &Version::try_from("2.0.0").unwrap(), &created, None)
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate_meta(id2, &Version::try_from("1.0.0").unwrap(), &created, None)
         .await
         .unwrap();
     test_db
@@ -1001,10 +993,6 @@ async fn crate_version_exists_with_existing_version() {
             &Version::try_from("1.0.0").unwrap(),
             &Utc::now(),
         )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate_meta(id, "1.0.0", &Utc::now(), None)
         .await
         .unwrap();
 
