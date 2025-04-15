@@ -13,8 +13,8 @@ import 'vuetify/styles'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
-// Optional: Material Design Icons
-// import '@mdi/font/css/materialdesignicons.css'
+// Material Design Icons
+import '@mdi/font/css/materialdesignicons.css'
 
 import 'highlight.js/styles/default.css'
 import './assets/css/main.css'
@@ -31,6 +31,9 @@ const vuetify = createVuetify({
     // You can add theme configuration here
     theme: {
         defaultTheme: 'light'
+    },
+    icons: {
+        defaultSet: 'mdi' // Use Material Design Icons as default
     }
 })
 
@@ -42,3 +45,4 @@ createApp(App)
     .use(VueAxios, axios)
     .use(vuetify) // Add Vuetify to your app
     .mount('#app')
+
