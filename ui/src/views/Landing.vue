@@ -15,10 +15,6 @@
             </v-col>
           </v-row>
 
-          <v-card-text class="text-body-1 mt-8">
-            Welcome to Kellnr, your private crate registry. To get started, have a look at the
-            <a href="https://kellnr.io/documentation" class="text-decoration-none font-weight-medium">documentation</a>.
-          </v-card-text>
         </v-card>
       </v-col>
     </v-row>
