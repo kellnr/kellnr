@@ -24,7 +24,10 @@
       <v-col cols="12">
         <div class="d-flex align-center mb-4">
           <div class="section-line mr-4"></div>
-          <h2 class="text-h4 font-weight-bold mb-0">Registry Overview</h2>
+          <h2 class="text-h5 font-weight-bold mb-0">
+            <v-icon icon="mdi-package-variant-closed" color="indigo" class="mr-2"></v-icon>
+            Kellnr Crates
+          </h2>
           <div class="section-line ml-4"></div>
         </div>
       </v-col>
