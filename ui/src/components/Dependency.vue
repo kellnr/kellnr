@@ -1,5 +1,5 @@
 <template>
-  <v-card class="mb-2" variant="outlined" rounded="lg" hover @click="openCratePage">
+  <v-card class="mb-2" rounded="lg" hover @click="openCratePage">
     <v-row no-gutters>
       <!-- Left Column with Name, Version, and Source -->
       <v-col cols="12" sm="3" class="border-r">
