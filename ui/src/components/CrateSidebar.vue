@@ -167,7 +167,8 @@ function buildDocs() {
 }
 
 .sidebar-header {
-  background-color: #f5f5f5;
+  background-color: var(--v-theme-surface-variant);
+  color: var(--v-theme-on-surface-variant);
   padding-top: 16px;
   padding-bottom: 16px;
   font-weight: 500;
@@ -189,10 +190,10 @@ function buildDocs() {
 .copy-container {
   position: relative;
   padding: 8px 12px;
-  background-color: #f5f5f5;
+  background-color: var(--v-theme-surface-variant);
   border-radius: 4px;
   min-height: 36px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--v-theme-outline-variant);
   width: 100%;
 }
 
@@ -232,5 +233,22 @@ function buildDocs() {
 
 .cursor-pointer {
   cursor: pointer;
+}
+
+/* Dark mode specific overrides */
+:deep(.v-theme--dark) .copy-container {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+:deep(.v-theme--dark) .sidebar-content {
+  color: var(--v-theme-on-surface);
+}
+
+:deep(.v-theme--dark) .download-label {
+  color: var(--v-theme-on-surface-variant);
+}
+
+:deep(.v-theme--dark) .download-number {
+  color: var(--v-theme-on-surface);
 }
 </style>
