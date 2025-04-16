@@ -1,46 +1,77 @@
 <template>
-  <h2 class="k-h2">Authentication Tokens</h2>
-  <template v-for="item in items" :key="item.name">
-    <div class="authToken glass">
-      <span class="tokenName">{{ item.name }}</span>
-      <span class="tag is-danger is-light">
-        <a @click="deleteToken(item.name, item.id)">Delete</a>
-      </span>
-    </div>
-  </template>
-  <form>
-    <div class="field">
-      <div class="control is-expanded has-icons-left">
-        <input
-          class="input is-info"
-          v-model="name"
-          placeholder="Descriptive name for the token"
-          type="text"
-        />
-        <span class="icon is-small is-left">
-          <i class="fas fa-align-center"></i>
-        </span>
-      </div>
-    </div>
+  <v-container>
+    <h2 class="text-h4 mb-4">Authentication Tokens</h2>
 
-    <status-notification
-      :status="addTokenStatus"
-      @update:clear="addTokenStatus = $event"
-    >
-      <span>{{ addTokenMsg }}</span>
-      <copy-input :content="addedToken"></copy-input>
-    </status-notification>
+    <v-list v-if="items.length > 0" class="mb-4">
+      <v-list-item v-for="item in items" :key="item.name" class="mb-2">
+        <v-card class="mb-3 pa-3" width="100%">
+          <div class="d-flex justify-space-between align-center">
+            <span class="font-weight-bold">{{ item.name }}</span>
+            <v-btn size="small" color="error" variant="outlined" @click="showDeleteDialog(item.name, item.id)">
+              Delete
+            </v-btn>
+          </div>
+        </v-card>
+      </v-list-item>
+    </v-list>
 
-    <div class="control">
-      <button class="button is-info" @click.prevent="addToken()">Add</button>
-    </div>
-  </form>
+    <v-card class="pa-4 mb-4">
+      <v-form @submit.prevent="addToken">
+        <v-text-field v-model="name" label="Descriptive name for the token" prepend-inner-icon="mdi-tag"
+          variant="outlined" class="mb-4"></v-text-field>
+
+        <v-alert v-if="addTokenStatus" :type="addTokenStatus === 'Success' ? 'success' : 'error'" closable
+          variant="tonal" @update:model-value="addTokenStatus = ''" class="mb-4">
+          <div class="d-flex flex-column">
+            <p class="mb-2">{{ addTokenMsg }}</p>
+
+            <v-card v-if="addedToken" variant="outlined" class="pa-3 mb-2">
+              <div class="d-flex justify-space-between align-center">
+                <code class="token-text">{{ addedToken }}</code>
+                <v-btn size="large" color="primary" variant="elevated" @click="copyToken" class="ml-4">
+                  <v-icon class="mr-2">mdi-content-copy</v-icon>
+                  Copy
+                </v-btn>
+              </div>
+            </v-card>
+          </div>
+        </v-alert>
+
+        <v-btn color="primary" type="submit" :loading="loading">
+          Add
+        </v-btn>
+      </v-form>
+    </v-card>
+
+    <!-- Delete Confirmation Dialog -->
+    <v-dialog v-model="deleteDialog" max-width="500">
+      <v-card>
+        <v-card-title class="text-h5 bg-error-lighten-5 pa-4">
+          <v-icon icon="mdi-alert-circle" color="error" class="mr-2" />
+          Confirm Token Deletion
+        </v-card-title>
+
+        <v-card-text class="pa-4 pt-5">
+          <p>Are you sure you want to delete the token "<strong>{{ tokenToDelete.name }}</strong>"?</p>
+          <p class="text-body-2 mt-2 text-medium-emphasis">This action cannot be undone.</p>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 pt-0">
+          <v-spacer></v-spacer>
+          <v-btn color="default" variant="text" @click="deleteDialog = false">
+            Cancel
+          </v-btn>
+          <v-btn color="error" variant="elevated" @click="confirmDeleteToken">
+            Delete Token
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </v-container>
 </template>
 
 <script setup lang="ts">
 import { onBeforeMount, ref } from "vue";
-import CopyInput from "./CopyInput.vue";
-import StatusNotification from "../components/StatusNotification.vue";
 import axios from "axios";
 import { useRouter } from "vue-router";
 import { ADD_TOKEN, DELETE_TOKEN, LIST_TOKENS } from "../remote-routes";
@@ -50,13 +81,40 @@ const addTokenMsg = ref("");
 const addedToken = ref("");
 const items = ref([]);
 const name = ref("");
+const loading = ref(false);
 const router = useRouter();
+
+// Variables for delete dialog
+const deleteDialog = ref(false);
+const tokenToDelete = ref({ name: '', id: 0 });
 
 onBeforeMount(() => {
   getTokens();
 });
 
+function copyToken() {
+  navigator.clipboard.writeText(addedToken.value)
+    .then(() => {
+      // Optionally provide feedback that the token was copied
+      const originalMessage = addTokenMsg.value;
+      addTokenMsg.value = "Token copied to clipboard!";
+      setTimeout(() => {
+        addTokenMsg.value = originalMessage;
+      }, 2000);
+    })
+    .catch(err => {
+      console.error('Failed to copy token: ', err);
+    });
+}
+
 function addToken() {
+  if (!name.value.trim()) {
+    addTokenStatus.value = "Error";
+    addTokenMsg.value = "Please enter a name for the token";
+    return;
+  }
+
+  loading.value = true;
   const postData = {
     name: name.value,
   };
@@ -69,6 +127,7 @@ function addToken() {
         addTokenMsg.value =
           "New authentication token added. Copy and save the token as it cannot be displayed again. Do not share the token.";
         addTokenStatus.value = "Success";
+        name.value = ""; // Clear the input field
         // update shown token list
         getTokens();
       }
@@ -85,12 +144,15 @@ function addToken() {
           addTokenMsg.value = "Unknown error";
         }
       }
+    })
+    .finally(() => {
+      loading.value = false;
     });
 }
 
 function getTokens() {
   axios
-    .get(LIST_TOKENS, { cache: false }) // disable caching to get updated token list (TS doesn't recognize cache option)
+    .get(LIST_TOKENS, { cache: false })
     .then((res) => {
       if (res.status == 200) {
         items.value = res.data;
@@ -101,30 +163,35 @@ function getTokens() {
     });
 }
 
-function deleteToken(name: string, id: number) {
-  if (confirm('Delete token "' + name + '"?')) {
-    axios
-      .delete(DELETE_TOKEN(id))
-      .then(() => {
-        // Update shown token list
-        getTokens();
-      })
-      .catch((error) => console.log(error));
-  }
-  getTokens();
+// Show the delete dialog and store token info
+function showDeleteDialog(name: string, id: number) {
+  tokenToDelete.value = { name, id };
+  deleteDialog.value = true;
+}
+
+// Perform the actual deletion when confirmed
+function confirmDeleteToken() {
+  axios
+    .delete(DELETE_TOKEN(tokenToDelete.value.id))
+    .then(() => {
+      // Update shown token list
+      getTokens();
+      // Close the dialog
+      deleteDialog.value = false;
+    })
+    .catch((error) => {
+      console.log(error);
+      // Close the dialog
+      deleteDialog.value = false;
+    });
 }
 </script>
 
 <style scoped>
-.authToken {
-  border-radius: 2px;
-  margin: 0.5rem 0 0.5rem 0;
-  padding: 0.5rem;
-  display: grid;
-  grid-template-columns: 1fr max-content;
-}
-
-.tokenName {
-  font-weight: bolder;
+.token-text {
+  word-break: break-all;
+  font-family: monospace;
+  font-size: 1rem;
+  flex: 1;
 }
 </style>

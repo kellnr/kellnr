@@ -1,16 +1,25 @@
 <template>
-  <h1 class="k-h1">Rustdoc Queue</h1>
-  <p>Current items in the queue for <i>rustdoc</i> auto-generation.</p>
-  <div v-if="emptyQueue" id="emptyDocQueue">
-    <p>
-      <i>Queue is empty</i>.
-    </p>
-  </div>
-  <div id="docQueueItems">
-    <template v-for="(item, index) in queue" :key="item.name">
-      <doc-queue-item-card :index="index + 1" :name="item.name" :version="item.version"></doc-queue-item-card>
-    </template>
-  </div>
+  <v-container>
+    <v-card elevation="1" class="mb-4">
+      <v-card-title class="text-h4">
+        Rustdoc Queue
+      </v-card-title>
+      <v-card-text>
+        <p>Current items in the queue for <i>rustdoc</i> auto-generation.</p>
+
+        <v-alert v-if="emptyQueue" type="info" variant="tonal" class="mt-4">
+          <i>Queue is empty</i>.
+        </v-alert>
+      </v-card-text>
+    </v-card>
+
+    <v-slide-y-transition group>
+      <div v-if="!emptyQueue" class="mt-4">
+        <doc-queue-item-card v-for="(item, index) in queue" :key="item.name" :index="index + 1" :name="item.name"
+          :version="item.version" class="mb-3"></doc-queue-item-card>
+      </div>
+    </v-slide-y-transition>
+  </v-container>
 </template>
 
 <script setup lang="ts">
@@ -38,15 +47,4 @@ function getQueueItems() {
 onMounted(() => {
   getQueueItems()
 })
-
 </script>
-
-<style scoped>
-#docQueueItems {
-  padding-top: 1rem;
-}
-
-#emptyDocQueue {
-  margin-top: 1rem;
-}
-</style>

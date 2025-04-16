@@ -38,6 +38,9 @@ clean-node:
 
 clean-all: clean clean-node
 
+npm-dev:
+	cd ui && npm run dev
+
 npm-build: npm-install
 	cd ui && npm run build
 	mkdir -p static
