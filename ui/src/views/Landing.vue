@@ -7,14 +7,14 @@
           <!-- Search Box -->
           <v-row>
             <v-col cols="12" sm="10" md="8" lg="6" class="mx-auto">
-              <v-card elevation="4" class="search-card">
-                <v-text-field v-model="searchText" placeholder="Search for crates" variant="solo" density="comfortable"
-                  prepend-inner-icon="mdi-magnify" hide-details @keyup.enter="searchCrates()"
-                  class="search-field"></v-text-field>
-              </v-card>
+              <!-- Updated search field that works in both light and dark mode -->
+              <div class="search-wrapper">
+                <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined"
+                  density="comfortable" prepend-inner-icon="mdi-magnify" hide-details @keyup.enter="searchCrates()"
+                  class="search-field" bg-color="surface" rounded="pill"></v-text-field>
+              </div>
             </v-col>
           </v-row>
-
         </v-card>
       </v-col>
     </v-row>
@@ -124,9 +124,11 @@ import { STATISTICS } from '../remote-routes';
 import StatisticsCard from '../components/StatisticsCard.vue';
 import type { Statistics } from '../types/statistics';
 import router from '../router';
+import { useTheme } from 'vuetify';
 
 const statistics = ref<Statistics>();
 const searchText = ref("");
+const theme = useTheme();
 
 onBeforeMount(() => {
   axios.get(STATISTICS).then((response) => {
@@ -148,45 +150,85 @@ function searchCrates() {
 }
 
 .hero-card {
-  background: linear-gradient(135deg, rgba(240, 240, 255, 0.7) 0%, rgba(225, 235, 255, 0.7) 100%);
+  background: var(--v-theme-surface);
   border-radius: 16px;
-  backdrop-filter: blur(10px);
   margin-bottom: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--v-theme-outline-variant);
+  position: relative;
+  overflow: hidden;
 }
 
-.search-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
+/* Hero card overlay for light theme */
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, var(--v-theme-primary-lighten-5, rgba(240, 240, 255, 0.2)) 0%,
+      var(--v-theme-primary-lighten-4, rgba(225, 235, 255, 0.2)) 100%);
+  opacity: 0.7;
+  z-index: 0;
+}
+
+.search-wrapper {
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
+  margin: 0 auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 28px;
   transition: all 0.3s ease;
 }
 
-.search-card:hover {
+.search-wrapper:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
 }
 
 .search-field {
   font-size: 1.1rem;
 }
 
+/* Customize text field for better appearance */
+.search-field :deep(.v-field__input) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  font-weight: 400;
+}
+
+.search-field :deep(.v-field__outline) {
+  opacity: 0.8;
+}
+
 .section-line {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.1), transparent);
+  background: linear-gradient(90deg, transparent, var(--v-theme-outline-variant), transparent);
   flex-grow: 1;
 }
 
 /* Dark mode adjustments */
-:deep(.theme--dark) .hero-card {
-  background: linear-gradient(135deg, rgba(30, 30, 35, 0.7) 0%, rgba(40, 45, 55, 0.7) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+:deep(.v-theme--dark) .hero-card::before {
+  background: linear-gradient(135deg,
+      rgba(66, 66, 120, 0.3) 0%,
+      rgba(50, 60, 100, 0.3) 100%);
+  opacity: 1;
 }
 
-:deep(.theme--dark) .search-card {
-  background: rgba(40, 40, 40, 0.8);
+:deep(.v-theme--dark) .search-wrapper {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-:deep(.theme--dark) .section-line {
+:deep(.v-theme--dark) .search-wrapper:hover {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+
+:deep(.v-theme--dark) .search-field :deep(.v-field__outline) {
+  opacity: 0.6;
+}
+
+:deep(.v-theme--dark) .section-line {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
 }
 </style>
