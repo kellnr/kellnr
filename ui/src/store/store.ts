@@ -9,6 +9,9 @@ export interface State {
     rememberMe: boolean
     rememberMeUser: string | null
     searchCache: boolean
+    lightBackgroundImage: string
+    darkBackgroundImage: string
+    currentBackgroundImage: string
 }
 
 export const useStore = defineStore('store', {
@@ -20,7 +23,10 @@ export const useStore = defineStore('store', {
         kellnrSmallLogo: 'img/kellnr-logo-small-light.png',
         rememberMe: false,
         rememberMeUser: null,
-        searchCache: false
+        searchCache: false,
+        lightBackgroundImage: 'img/blob-scene-haikei3.svg',
+        darkBackgroundImage: 'img/layered-peaks-haikei.svg',
+        currentBackgroundImage: 'img/blob-scene-haikei3.svg', // Default to light
     }),
     getters: {
         loggedIn: (state) => state.loggedInUser !== null,
@@ -39,12 +45,14 @@ export const useStore = defineStore('store', {
             if (this.theme === 'light') {
                 this.theme = 'dark'
                 this.kellnrSmallLogo = 'img/kellnr-logo-small-dark.png'
+                this.currentBackgroundImage = this.darkBackgroundImage
                 // Update Vuetify theme dynamically
                 this.updateVuetifyTheme('dark')
             } else {
                 this.theme = 'light'
                 this.cargoSmallLogo = 'img/cargo-logo-small-light.png'
                 this.kellnrSmallLogo = 'img/kellnr-logo-small-light.png'
+                this.currentBackgroundImage = this.lightBackgroundImage
                 // Update Vuetify theme dynamically
                 this.updateVuetifyTheme('light')
             }

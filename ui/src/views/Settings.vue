@@ -11,14 +11,14 @@
           <v-divider></v-divider>
 
           <v-list nav>
-            <v-list-item @click="clickShowChangePwd" :active="showChangePwd" active-color="primary" class="py-2">
+            <v-list-item @click="clickShowChangePwd" :active="showChangePwd" color="primary" class="py-2">
               <template v-slot:prepend>
                 <v-icon>mdi-key</v-icon>
               </template>
               <v-list-item-title>Change Password</v-list-item-title>
             </v-list-item>
 
-            <v-list-item @click="clickShowAuthToken" :active="showAuthToken" active-color="primary" class="py-2">
+            <v-list-item @click="clickShowAuthToken" :active="showAuthToken" color="primary" class="py-2">
               <template v-slot:prepend>
                 <v-icon>mdi-shield-key</v-icon>
               </template>
@@ -26,7 +26,7 @@
             </v-list-item>
 
             <v-list-item v-if="store.loggedInUserIsAdmin" @click="clickShowUserMgmt" :active="showUserMgmt"
-              active-color="primary" class="py-2">
+              color="primary" class="py-2">
               <template v-slot:prepend>
                 <v-icon>mdi-account-multiple</v-icon>
               </template>
@@ -34,7 +34,7 @@
             </v-list-item>
 
             <v-list-item v-if="store.loggedInUserIsAdmin" @click="clickShowGroupMgmt" :active="showGroupMgmt"
-              active-color="primary" class="py-2">
+              color="primary" class="py-2">
               <template v-slot:prepend>
                 <v-icon>mdi-account-group</v-icon>
               </template>
@@ -42,7 +42,7 @@
             </v-list-item>
 
             <v-list-item v-if="store.loggedInUserIsAdmin" @click="clickShowStartupConfig" :active="showStartupConfig"
-              active-color="primary" class="py-2">
+              color="primary" class="py-2">
               <template v-slot:prepend>
                 <v-icon>mdi-cog</v-icon>
               </template>

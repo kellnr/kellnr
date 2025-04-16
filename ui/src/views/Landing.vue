@@ -24,7 +24,7 @@
       <v-col cols="12">
         <div class="d-flex align-center mb-4">
           <div class="section-line mr-4"></div>
-          <h2 class="text-h5 font-weight-bold mb-0">
+          <h2 class="text-h5 font-weight-bold mb-0 z-index-1">
             <v-icon icon="mdi-package-variant-closed" color="indigo" class="mr-2"></v-icon>
             Kellnr Crates
           </h2>
@@ -37,7 +37,7 @@
     <v-row v-if="!statistics" class="my-8">
       <v-col cols="12" class="text-center">
         <v-progress-circular indeterminate color="primary" size="60" width="6"></v-progress-circular>
-        <div class="mt-4 text-body-1">Loading registry statistics...</div>
+        <div class="mt-4 text-body-1 z-index-1">Loading registry statistics...</div>
       </v-col>
     </v-row>
 
@@ -68,7 +68,7 @@
         <v-col cols="12">
           <div class="d-flex align-center mb-4">
             <div class="section-line mr-4"></div>
-            <h2 class="text-h5 font-weight-bold mb-0">
+            <h2 class="text-h5 font-weight-bold mb-0 z-index-1">
               <v-icon icon="mdi-star" color="amber-darken-1" class="mr-2"></v-icon>
               Top Downloaded Crates
             </h2>
@@ -95,7 +95,7 @@
         <v-col cols="12">
           <div class="d-flex align-center mb-4">
             <div class="section-line mr-4"></div>
-            <h2 class="text-h5 font-weight-bold mb-0">
+            <h2 class="text-h5 font-weight-bold mb-0 z-index-1">
               <v-icon icon="mdi-cloud-sync" color="indigo" class="mr-2"></v-icon>
               Cached Crates
             </h2>
@@ -172,7 +172,7 @@ function searchCrates() {
   background: linear-gradient(135deg, var(--v-theme-primary-lighten-5, rgba(240, 240, 255, 0.2)) 0%,
       var(--v-theme-primary-lighten-4, rgba(225, 235, 255, 0.2)) 100%);
   opacity: 0.7;
-  z-index: 0;
+  z-index: 1;
 }
 
 .search-wrapper {
@@ -209,6 +209,10 @@ function searchCrates() {
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--v-theme-outline-variant), transparent);
   flex-grow: 1;
+}
+
+.z-index-1 {
+  z-index: 1;
 }
 
 /* Dark mode adjustments */

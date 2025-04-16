@@ -1,5 +1,6 @@
 <template>
   <v-app :theme="store.theme">
+    <div class="bg-image" :style="{ backgroundImage: `url(${bgImage})` }"></div>
     <!-- Header with full width -->
     <Header />
 
@@ -21,7 +22,7 @@
 
 <script setup lang="ts">
 import { useStore } from './store/store';
-import { onMounted } from 'vue';
+import { onMounted, computed, watch, onBeforeMount } from 'vue';
 import Header from './components/Header.vue';
 import Footer from './components/Footer.vue';
 import { useTheme, useDisplay } from 'vuetify';
@@ -29,6 +30,24 @@ import { useTheme, useDisplay } from 'vuetify';
 const store = useStore();
 const vuetifyTheme = useTheme();
 const display = useDisplay();
+
+// Create a direct reference to the background image URL
+const bgImage = computed(() => {
+  return store.currentBackgroundImage;
+});
+
+// Update background when theme changes
+watch(() => store.theme, () => {
+}, { immediate: true });
+
+onBeforeMount(() => {
+  // Make sure store is properly initialized with the correct initial background
+  if (store.theme === 'dark') {
+    store.currentBackgroundImage = store.darkBackgroundImage;
+  } else {
+    store.currentBackgroundImage = store.lightBackgroundImage;
+  }
+});
 
 onMounted(() => {
   // Set Vuetify theme based on store
@@ -69,5 +88,25 @@ onMounted(() => {
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
+}
+
+:root {
+  --bg-image: url('');
+}
+
+.bg-image {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: var(--bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 0;
+  /* Place it behind other content */
+  opacity: 1;
+  /* Adjust opacity as needed */
 }
 </style>
