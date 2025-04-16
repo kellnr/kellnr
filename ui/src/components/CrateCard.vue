@@ -1,13 +1,11 @@
 <template>
-  <v-card class="crate-card mb-4 rounded-lg transition-swing clickable-card" elevation="2"
-    :color="props.isCache ? 'blue-grey-lighten-5' : 'primary-lighten-5'" variant="elevated" hover
-    @mouseover="isHovered = true" @mouseleave="isHovered = false" @click="navigateToCrate">
+  <v-card class="crate-card mb-4 rounded-lg transition-swing clickable-card" elevation="2" :color="'primary-lighten-5'"
+    variant="elevated" hover @mouseover="isHovered = true" @mouseleave="isHovered = false" @click="navigateToCrate">
     <v-card-text class="pa-4">
       <v-row no-gutters>
         <!-- Origin Logo -->
         <v-col cols="auto" class="mr-4 origin-column">
-          <v-avatar :color="props.isCache ? 'blue-grey-lighten-4' : 'primary-lighten-4'" size="52" class="elevation-1"
-            :class="{ 'scale-up': isHovered }">
+          <v-avatar :color="'primary-lighten-4'" size="52" class="elevation-1 mr-2" :class="{ 'scale-up': isHovered }">
             <v-img v-if="props.isCache" :src="store.cargoSmallLogo" alt="Crates.io logo" />
             <v-img v-else :src="store.kellnrSmallLogo" alt="Kellnr logo" />
           </v-avatar>
