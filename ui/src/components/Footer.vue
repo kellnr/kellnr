@@ -5,10 +5,10 @@
         <!-- Brand and Version -->
         <v-col cols="12" sm="6" class="d-flex flex-column align-sm-start align-center mb-0">
           <div class="d-flex align-center">
-            <v-icon icon="mdi-database-lock" color="primary" class="me-2" size="small" />
-            <span class="text-subtitle-2">Kellnr</span>
+            <v-icon icon="mdi-package-variant-closed" color="primary" class="me-2" size="small" />
+            <span class="text-subtitle-2">kellnr</span>
           </div>
-          <span class="text-caption text-medium-emphasis">Version {{ version }}</span>
+          <span class="text-caption text-medium-emphasis">v{{ version }}</span>
         </v-col>
 
         <!-- Links -->
@@ -42,7 +42,7 @@ const version = ref("");
 // Links configuration
 const links = [
   {
-    text: "Website",
+    text: "kellnr.io",
     icon: "mdi-web",
     url: "https://kellnr.io/"
   },
