@@ -13,7 +13,7 @@
           <!-- Source Indicator below name/version -->
           <div class="mt-2">
             <v-chip size="small" variant="flat" :color="isCratesIoDep(registry) ? 'warning' : 'primary'"
-              :prepend-icon="isCratesIoDep(registry) ? 'mdi-package-variant-closed' : 'mdi-database'"
+              :prepend-icon="isCratesIoDep(registry) ? 'mdi-package-variant' : 'mdi-package-variant-closed'"
               density="comfortable">
               {{ isCratesIoDep(registry) ? 'crates.io' : 'kellnr' }}
             </v-chip>

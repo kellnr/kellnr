@@ -50,7 +50,7 @@
             category="primary"></statistics-card>
         </v-col>
         <v-col cols="12" sm="6" md="4" xl="3">
-          <statistics-card :num="statistics.num_crate_versions" icon="mdi-source-branch" :text="'Total Versions'"
+          <statistics-card :num="statistics.num_crate_versions" icon="mdi-tag-outline" :text="'Total Versions'"
             category="primary"></statistics-card>
         </v-col>
         <v-col cols="12" sm="6" md="4" xl="3">
@@ -104,11 +104,11 @@
         </v-col>
 
         <v-col cols="12" sm="6" md="4">
-          <statistics-card :num="statistics.num_proxy_crates" icon="mdi-cube-outline" :text="'Cached Crates'"
+          <statistics-card :num="statistics.num_proxy_crates" icon="mdi-package-variant" :text="'Cached Crates'"
             category="cached"></statistics-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <statistics-card :num="statistics.num_proxy_crate_versions" icon="mdi-source-branch" :text="'Cached Versions'"
+          <statistics-card :num="statistics.num_proxy_crate_versions" icon="mdi-tag-outline" :text="'Cached Versions'"
             category="cached"></statistics-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
