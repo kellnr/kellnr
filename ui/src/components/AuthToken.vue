@@ -4,7 +4,7 @@
 
     <v-list v-if="items.length > 0" class="mb-4">
       <v-list-item v-for="item in items" :key="item.name" class="mb-2">
-        <v-card width="100%" elevation="1" class="pa-3">
+        <v-card width="100%" elevation="1" class="pa-3" variant="outlined">
           <div class="d-flex justify-space-between align-center">
             <span class="font-weight-bold">{{ item.name }}</span>
             <v-btn size="small" color="error" variant="outlined" @click="deleteToken(item.name, item.id)">
