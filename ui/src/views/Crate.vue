@@ -80,97 +80,8 @@
 
         <!-- About (Meta) Tab -->
         <v-card v-if="tab === 'meta'" class="mb-4" elevation="1">
-          <v-card-text>
-            <!-- Links section -->
-            <v-list>
-              <v-list-item v-if="crate.homepage">
-                <template v-slot:prepend>
-                  <v-icon>mdi-link-variant</v-icon>
-                </template>
-                <v-list-item-title>Homepage</v-list-item-title>
-                <v-list-item-subtitle>
-                  <a :href="crate.homepage" target="_blank" class="text-decoration-none">{{ crate.homepage }}</a>
-                </v-list-item-subtitle>
-              </v-list-item>
-
-              <v-list-item v-if="selected_version.license">
-                <template v-slot:prepend>
-                  <v-icon>mdi-scale-balance</v-icon>
-                </template>
-                <v-list-item-title>License</v-list-item-title>
-                <v-list-item-subtitle>{{ selected_version.license }}</v-list-item-subtitle>
-              </v-list-item>
-
-              <v-list-item v-if="crate.repository">
-                <template v-slot:prepend>
-                  <v-icon>mdi-github</v-icon>
-                </template>
-                <v-list-item-title>Repository</v-list-item-title>
-                <v-list-item-subtitle>
-                  <a :href="crate.repository" target="_blank" class="text-decoration-none">{{ crate.repository }}</a>
-                </v-list-item-subtitle>
-              </v-list-item>
-
-              <v-list-item v-if="selected_version.yanked === true">
-                <template v-slot:prepend>
-                  <v-icon>mdi-delete</v-icon>
-                </template>
-                <v-list-item-title>Yanked</v-list-item-title>
-                <v-list-item-subtitle>Yes</v-list-item-subtitle>
-              </v-list-item>
-            </v-list>
-
-            <!-- Lists section -->
-            <v-list v-if="crate.authors && crate.authors.length > 0">
-              <v-list-subheader>Authors</v-list-subheader>
-              <v-list-item v-for="(author, i) in crate.authors" :key="`author-${i}`">
-                <template v-slot:prepend>
-                  <v-icon>mdi-account</v-icon>
-                </template>
-                <v-list-item-title>{{ author }}</v-list-item-title>
-              </v-list-item>
-            </v-list>
-
-            <v-list v-if="crate.categories && crate.categories.length > 0">
-              <v-list-subheader>Categories</v-list-subheader>
-              <v-list-item v-for="(category, i) in crate.categories" :key="`category-${i}`">
-                <template v-slot:prepend>
-                  <v-icon>mdi-cube</v-icon>
-                </template>
-                <v-list-item-title>{{ category }}</v-list-item-title>
-              </v-list-item>
-            </v-list>
-
-            <v-list v-if="flattenedFeatures.length > 0">
-              <v-list-subheader>Features</v-list-subheader>
-              <v-list-item v-for="(feature, i) in flattenedFeatures" :key="`feature-${i}`">
-                <template v-slot:prepend>
-                  <v-icon>mdi-cog</v-icon>
-                </template>
-                <v-list-item-title>{{ feature }}</v-list-item-title>
-              </v-list-item>
-            </v-list>
-
-            <v-list v-if="crate.keywords && crate.keywords.length > 0">
-              <v-list-subheader>Keywords</v-list-subheader>
-              <v-list-item v-for="(keyword, i) in crate.keywords" :key="`keyword-${i}`">
-                <template v-slot:prepend>
-                  <v-icon>mdi-key</v-icon>
-                </template>
-                <v-list-item-title>{{ keyword }}</v-list-item-title>
-              </v-list-item>
-            </v-list>
-
-            <v-list v-if="sortedOwners.length > 0">
-              <v-list-subheader>Owners</v-list-subheader>
-              <v-list-item v-for="(owner, i) in sortedOwners" :key="`owner-${i}`">
-                <template v-slot:prepend>
-                  <v-icon>mdi-account</v-icon>
-                </template>
-                <v-list-item-title>{{ owner }}</v-list-item-title>
-              </v-list-item>
-            </v-list>
-          </v-card-text>
+          <About :crate="crate" :selected-version="selected_version" :flattened-features="flattenedFeatures"
+            :sorted-owners="sortedOwners" />
         </v-card>
 
         <!-- Settings Tab -->
@@ -322,7 +233,8 @@
 import Dependency from "../components/Dependency.vue";
 import Version from "../components/Version.vue";
 import Readme from "../components/Readme.vue";
-import CrateSidebar from "../components/CrateSidebar.vue"; // Import the new sidebar component
+import CrateSidebar from "../components/CrateSidebar.vue";
+import About from "../components/About.vue";
 import { computed, onBeforeMount, ref, watch } from "vue";
 import axios from "axios";
 import { useRoute, useRouter } from "vue-router";
