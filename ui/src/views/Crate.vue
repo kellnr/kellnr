@@ -37,9 +37,7 @@
       <v-col cols="12" md="9" order="2" order-md="1">
         <!-- Readme Tab -->
         <v-card v-if="tab === 'readme'" class="mb-4" elevation="1">
-          <v-card-text>
-            <Readme :readme="selected_version.readme"></Readme>
-          </v-card-text>
+          <Readme :readme="selected_version.readme"></Readme>
         </v-card>
 
         <!-- Versions Tab -->
