@@ -1,45 +1,43 @@
 <template>
   <v-container>
-    <v-card class="mb-6 pa-4">
-      <v-card-title class="text-h4 pb-2">Users</v-card-title>
+    <v-card-title class="text-h4 pb-2">Users</v-card-title>
 
-      <v-card v-for="item in items" :key="item.name" class="mb-3 pa-3">
-        <v-row align="center">
-          <v-col cols="12" sm="4">
-            <div class="text-subtitle-1 font-weight-bold">{{ item.name }}</div>
-            <v-chip :color="item.is_admin ? 'primary' : 'info'" size="small" class="mt-1">
-              {{ item.is_admin ? 'Admin' : 'User' }}
-            </v-chip>
-          </v-col>
+    <v-card v-for="item in items" :key="item.name" class="mb-3 pa-3">
+      <v-row align="center">
+        <v-col cols="12" sm="4">
+          <div class="text-subtitle-1 font-weight-bold">{{ item.name }}</div>
+          <v-chip :color="item.is_admin ? 'primary' : 'info'" size="small" class="mt-1">
+            {{ item.is_admin ? 'Admin' : 'User' }}
+          </v-chip>
+        </v-col>
 
-          <v-col cols="12" sm="8" class="d-flex flex-wrap gap-2 justify-end">
-            <v-btn :color="item.is_read_only ? 'info' : 'primary'" variant="outlined" size="small"
-              @click="set_read_only(item.name, !item.is_read_only, item)">
-              <v-icon start>{{ item.is_read_only ? 'mdi-lock-open' : 'mdi-lock' }}</v-icon>
-              {{ item.is_read_only ? 'Remove Read-only' : 'Make Read-only' }}
-            </v-btn>
+        <v-col cols="12" sm="8" class="d-flex flex-wrap gap-2 justify-end">
+          <v-btn :color="item.is_read_only ? 'info' : 'primary'" variant="outlined" size="small"
+            @click="set_read_only(item.name, !item.is_read_only, item)">
+            <v-icon start>{{ item.is_read_only ? 'mdi-lock-open' : 'mdi-lock' }}</v-icon>
+            {{ item.is_read_only ? 'Remove Read-only' : 'Make Read-only' }}
+          </v-btn>
 
-            <v-btn color="warning" variant="outlined" size="small" @click="resetPwd(item.name)">
-              <v-icon start>mdi-key</v-icon>
-              Reset password
-            </v-btn>
+          <v-btn color="warning" variant="outlined" size="small" @click="resetPwd(item.name)">
+            <v-icon start>mdi-key</v-icon>
+            Reset password
+          </v-btn>
 
-            <v-btn color="error" variant="outlined" size="small" @click="deleteUser(item.name)">
-              <v-icon start>mdi-delete</v-icon>
-              Delete
-            </v-btn>
-          </v-col>
-        </v-row>
-      </v-card>
-
-      <v-snackbar v-model="showChangeUserStatus" :color="changeUserStatus === 'Success' ? 'success' : 'error'"
-        timeout="5000">
-        {{ changeUserMsg }}
-        <template v-slot:actions>
-          <v-btn variant="text" @click="clearChangeUserStatus">Close</v-btn>
-        </template>
-      </v-snackbar>
+          <v-btn color="error" variant="outlined" size="small" @click="deleteUser(item.name)">
+            <v-icon start>mdi-delete</v-icon>
+            Delete
+          </v-btn>
+        </v-col>
+      </v-row>
     </v-card>
+
+    <v-snackbar v-model="showChangeUserStatus" :color="changeUserStatus === 'Success' ? 'success' : 'error'"
+      timeout="5000">
+      {{ changeUserMsg }}
+      <template v-slot:actions>
+        <v-btn variant="text" @click="clearChangeUserStatus">Close</v-btn>
+      </template>
+    </v-snackbar>
 
     <v-card class="pa-4">
       <v-card-title class="text-h5 pb-2">Add User</v-card-title>

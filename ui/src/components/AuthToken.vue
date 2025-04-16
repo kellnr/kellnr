@@ -4,10 +4,10 @@
 
     <v-list v-if="items.length > 0" class="mb-4">
       <v-list-item v-for="item in items" :key="item.name" class="mb-2">
-        <v-card width="100%" elevation="1" class="pa-3" variant="outlined">
+        <v-card class="mb-3 pa-3" width="100%">
           <div class="d-flex justify-space-between align-center">
             <span class="font-weight-bold">{{ item.name }}</span>
-            <v-btn size="small" color="error" variant="outlined" @click="deleteToken(item.name, item.id)">
+            <v-btn size="small" color="error" variant="outlined" @click="showDeleteDialog(item.name, item.id)">
               Delete
             </v-btn>
           </div>
@@ -42,6 +42,31 @@
         </v-btn>
       </v-form>
     </v-card>
+
+    <!-- Delete Confirmation Dialog -->
+    <v-dialog v-model="deleteDialog" max-width="500">
+      <v-card>
+        <v-card-title class="text-h5 bg-error-lighten-5 pa-4">
+          <v-icon icon="mdi-alert-circle" color="error" class="mr-2" />
+          Confirm Token Deletion
+        </v-card-title>
+
+        <v-card-text class="pa-4 pt-5">
+          <p>Are you sure you want to delete the token "<strong>{{ tokenToDelete.name }}</strong>"?</p>
+          <p class="text-body-2 mt-2 text-medium-emphasis">This action cannot be undone.</p>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 pt-0">
+          <v-spacer></v-spacer>
+          <v-btn color="default" variant="text" @click="deleteDialog = false">
+            Cancel
+          </v-btn>
+          <v-btn color="error" variant="elevated" @click="confirmDeleteToken">
+            Delete Token
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -58,6 +83,10 @@ const items = ref([]);
 const name = ref("");
 const loading = ref(false);
 const router = useRouter();
+
+// Variables for delete dialog
+const deleteDialog = ref(false);
+const tokenToDelete = ref({ name: '', id: 0 });
 
 onBeforeMount(() => {
   getTokens();
@@ -134,16 +163,27 @@ function getTokens() {
     });
 }
 
-function deleteToken(name: string, id: number) {
-  if (confirm('Delete token "' + name + '"?')) {
-    axios
-      .delete(DELETE_TOKEN(id))
-      .then(() => {
-        // Update shown token list
-        getTokens();
-      })
-      .catch((error) => console.log(error));
-  }
+// Show the delete dialog and store token info
+function showDeleteDialog(name: string, id: number) {
+  tokenToDelete.value = { name, id };
+  deleteDialog.value = true;
+}
+
+// Perform the actual deletion when confirmed
+function confirmDeleteToken() {
+  axios
+    .delete(DELETE_TOKEN(tokenToDelete.value.id))
+    .then(() => {
+      // Update shown token list
+      getTokens();
+      // Close the dialog
+      deleteDialog.value = false;
+    })
+    .catch((error) => {
+      console.log(error);
+      // Close the dialog
+      deleteDialog.value = false;
+    });
 }
 </script>
 
