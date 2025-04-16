@@ -11,7 +11,6 @@
     "lint": "eslint --fix"
   },
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^6.4.2",
     "@mdi/font": "^7.4.47",
     "@mdi/js": "^7.4.47",
     "axios": "^1.6.1",

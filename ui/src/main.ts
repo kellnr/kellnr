@@ -19,9 +19,6 @@ import '@mdi/font/css/materialdesignicons.css'
 // Import both light and dark highlight.js themes
 import 'highlight.js/styles/github.css' // Light theme
 import "highlight.js/styles/vs2015.css"; // Good dark theme alternative
-// or another option: import "highlight.js/styles/atom-one-dark.css";
-import './assets/css/main.css'
-import '../node_modules/@fortawesome/fontawesome-free/js/all'
 
 const axios = setupCache(Axios);
 const pinia = createPinia()
