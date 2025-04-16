@@ -1,5 +1,5 @@
 <template>
-  <v-container fluid class="pa-0 d-flex flex-column">
+  <v-container fluid class="pa-0 main-container">
     <!-- Search Header -->
     <v-card class="pa-3 ma-3" elevation="2" rounded="lg" color="surface">
       <v-row no-gutters align="center">
@@ -26,9 +26,8 @@
       </v-row>
     </v-card>
 
-    <!-- Crates List with Infinite Scroll -->
-    <v-card class="flex-grow-1 overflow-auto" flat color="transparent" rounded="lg" ref="cratesContainer"
-      @scroll="handleScroll">
+    <!-- Scrollable Content Container -->
+    <div class="content-container" ref="scrollContainer" @scroll="handleScroll">
       <!-- Empty State -->
       <v-card v-if="crates.length === 0 && !isLoading" class="pa-6 text-center mx-auto my-8" max-width="500"
         variant="outlined">
@@ -62,12 +61,12 @@
       <div v-if="allLoaded && crates.length > 0" class="text-center my-6 text-body-2 text-grey">
         — End of crates —
       </div>
-    </v-card>
+    </div>
   </v-container>
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, onMounted, ref } from "vue"
+import { onBeforeMount, onMounted, ref, nextTick } from "vue"
 import axios from "axios"
 import CrateCard from "../components/CrateCard.vue"
 import type { CrateOverview } from "../types/crate_overview";
@@ -84,7 +83,7 @@ const currentPage = ref(0);
 const isLoading = ref(false);
 const allLoaded = ref(false);
 const searchText = ref("");
-const cratesContainer = ref<HTMLElement | null>(null);
+const scrollContainer = ref<HTMLElement | null>(null);
 const router = useRouter();
 const store = useStore();
 
@@ -100,7 +99,29 @@ onMounted(() => {
   if (searchText.value === "") {
     loadMoreCrates();
   }
+
+  // Add resize event listener to handle window size changes
+  window.addEventListener('resize', updateContainerHeight);
+  // Initial height setup
+  updateContainerHeight();
 });
+
+// Update container height to fill available space
+function updateContainerHeight() {
+  nextTick(() => {
+    if (scrollContainer.value) {
+      const headerHeight = document.querySelector('.v-card.pa-3.ma-3')?.clientHeight || 0;
+      const headerMargin = 24; // 3 * 8px (ma-3)
+
+      // Calculate and set the height of the scrollable container
+      const windowHeight = window.innerHeight;
+      const footerHeight = 48; // Height of the footer if present
+      const availableHeight = windowHeight - headerHeight - headerMargin - footerHeight - 16;
+
+      scrollContainer.value.style.height = `${Math.max(300, availableHeight)}px`;
+    }
+  });
+}
 
 // Load more crates for infinite scrolling
 function loadMoreCrates() {
@@ -139,17 +160,22 @@ function loadMoreCrates() {
 }
 
 // Handle scroll event for infinite scrolling
-function handleScroll() {
+function handleScroll(event: Event) {
+  const target = event.target as HTMLElement;
+
+  // If we're in search mode, don't use infinite scroll
   if (searchText.value !== "") return;
 
-  const container = cratesContainer.value;
-  if (!container) return;
-
   // Calculate if we're near the bottom (within 200px)
-  const bottomPosition = container.scrollHeight - container.clientHeight;
-  const isNearBottom = container.scrollTop > bottomPosition - 200;
+  const scrollTop = target.scrollTop;
+  const scrollHeight = target.scrollHeight;
+  const clientHeight = target.clientHeight;
+
+  const scrollBottom = scrollHeight - scrollTop - clientHeight;
+  const isNearBottom = scrollBottom < 200;
 
   if (isNearBottom && !isLoading.value && !allLoaded.value) {
+    console.log('Near bottom, loading more crates');
     loadMoreCrates();
   }
 }
@@ -159,6 +185,11 @@ function refreshCrates() {
   crates.value = [];
   currentPage.value = 0;
   allLoaded.value = false;
+
+  // Reset scroll position
+  if (scrollContainer.value) {
+    scrollContainer.value.scrollTop = 0;
+  }
 
   loadMoreCrates();
 }
@@ -174,6 +205,11 @@ function searchCrates(searchText: string) {
 
   isLoading.value = true;
   allLoaded.value = false;
+
+  // Reset scroll position
+  if (scrollContainer.value) {
+    scrollContainer.value.scrollTop = 0;
+  }
 
   axios
     .get(SEARCH, {
@@ -197,32 +233,60 @@ function searchCrates(searchText: string) {
 </script>
 
 <style scoped>
+.main-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  /* Adjust for app bar height */
+  overflow: hidden;
+  position: relative;
+}
+
+.content-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  padding: 0;
+  margin: 0 12px 12px 12px;
+  border-radius: 8px;
+  background-color: var(--v-theme-surface);
+}
+
 .search-field :deep(.v-field__input) {
   padding-top: 10px;
   padding-bottom: 10px;
   min-height: 44px;
 }
 
-.fill-height {
-  height: 100%;
-}
-
 /* Improve scrollbar appearance */
-:deep(.v-card.overflow-auto::-webkit-scrollbar) {
+.content-container::-webkit-scrollbar {
   width: 6px;
 }
 
-:deep(.v-card.overflow-auto::-webkit-scrollbar-thumb) {
+.content-container::-webkit-scrollbar-thumb {
   background-color: rgba(0, 0, 0, 0.2);
   border-radius: 3px;
 }
 
-:deep(.v-card.overflow-auto::-webkit-scrollbar-track) {
+.content-container::-webkit-scrollbar-track {
   background: transparent;
 }
 
 /* Dark mode adjustments */
-:deep(.v-theme--dark .v-card.overflow-auto::-webkit-scrollbar-thumb) {
+:deep(.v-theme--dark) .content-container::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .main-container {
+    height: calc(100vh - 56px);
+    /* Adjust for smaller mobile app bar */
+  }
+
+  .content-container {
+    margin: 0 8px 8px 8px;
+  }
 }
 </style>
