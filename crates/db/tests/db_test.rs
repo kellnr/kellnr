@@ -833,9 +833,8 @@ async fn get_auth_tokens_returns_all_tokens(test_db: &db::Database) {
     assert_eq!("test2", tokens[2].name);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn auth_token_insert_and_read() {
+#[db_test]
+async fn auth_token_insert_and_read(test_db: &db::Database) {
     test_db
         .add_auth_token("test", "mytoken", "admin")
         .await
@@ -845,9 +844,8 @@ async fn auth_token_insert_and_read() {
     assert_eq!("admin", user.name);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn auth_token_insert_and_delete() {
+#[db_test]
+async fn auth_token_insert_and_delete(test_db: &db::Database) {
     test_db
         .add_auth_token("test", "mytoken", "admin")
         .await
@@ -858,9 +856,8 @@ async fn auth_token_insert_and_delete() {
     assert!(test_db.get_user_from_token("mytoken").await.is_err());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_user_from_token_no_token() {
+#[db_test]
+async fn get_user_from_token_no_token(test_db: &db::Database) {
     test_db
         .add_auth_token("test", "mytoken", "admin")
         .await
@@ -869,9 +866,8 @@ async fn get_user_from_token_no_token() {
     assert!(test_db.get_user_from_token("wrong_token").await.is_err());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn add_auth_token_no_user() {
+#[db_test]
+async fn add_auth_token_no_user(test_db: &db::Database) {
     assert!(
         test_db
             .add_auth_token("test", "mytoken", "nouser")
@@ -880,9 +876,8 @@ async fn add_auth_token_no_user() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn delete_user_with_sessions() {
+#[db_test]
+async fn delete_user_with_sessions(test_db: &db::Database) {
     test_db
         .add_user("user", "pwd", "salt", false, false)
         .await
@@ -897,9 +892,8 @@ async fn delete_user_with_sessions() {
     assert!(test_db.get_user("user").await.is_err());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn add_user_works() {
+#[db_test]
+async fn add_user_works(test_db: &db::Database) {
     test_db
         .add_user("user", "pwd", "salt", false, false)
         .await
@@ -917,9 +911,8 @@ async fn add_user_works() {
     assert_eq!(expected, user);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn add_user_duplicate() {
+#[db_test]
+async fn add_user_duplicate(test_db: &db::Database) {
     test_db
         .add_user("user", "pwd", "salt", false, false)
         .await
@@ -933,9 +926,8 @@ async fn add_user_duplicate() {
     )
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_users_works() {
+#[db_test]
+async fn get_users_works(test_db: &db::Database) {
     test_db
         .add_user("user", "123", "abc", false, false)
         .await
@@ -948,31 +940,27 @@ async fn get_users_works() {
     assert_eq!("user", users[1].name);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_user_existing_user() {
+#[db_test]
+async fn get_user_existing_user(test_db: &db::Database) {
     let users = test_db.get_user("admin").await.unwrap();
 
     assert_eq!("admin", users.name);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_user_no_user() {
+#[db_test]
+async fn get_user_no_user(test_db: &db::Database) {
     assert!(test_db.get_user("no_user").await.is_err());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn change_pwd_works() {
+#[db_test]
+async fn change_pwd_works(test_db: &db::Database) {
     test_db.change_pwd("admin", "abc").await.unwrap();
 
     assert!(test_db.authenticate_user("admin", "abc").await.is_ok());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn clean_db_after_time() {
+#[db_test]
+async fn clean_db_after_time(test_db: &db::Database) {
     test_db
         .add_session_token("admin", "session_token")
         .await
@@ -990,9 +978,8 @@ async fn clean_db_after_time() {
     assert!(test_db.validate_session("session_token").await.is_err());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn delete_session_token_works() {
+#[db_test]
+async fn delete_session_token_works(test_db: &db::Database) {
     test_db
         .add_session_token("admin", "session_token")
         .await
@@ -1006,9 +993,8 @@ async fn delete_session_token_works() {
     assert!(r.await.is_err());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn delete_session_token_no_token() {
+#[db_test]
+async fn delete_session_token_no_token(test_db: &db::Database) {
     test_db
         .add_session_token("admin", "session_token")
         .await
@@ -1021,9 +1007,8 @@ async fn delete_session_token_no_token() {
     assert!(r.is_ok());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_name_valid_user_and_token() {
+#[db_test]
+async fn get_name_valid_user_and_token(test_db: &db::Database) {
     test_db
         .add_session_token("admin", "session_token")
         .await
@@ -1033,15 +1018,13 @@ async fn get_name_valid_user_and_token() {
     assert_eq!("admin", name);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_session_no_session_in_db() {
+#[db_test]
+async fn get_session_no_session_in_db(test_db: &db::Database) {
     assert!(test_db.validate_session("no_session_token").await.is_err());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn bootstrap_db_inserts_admin() {
+#[db_test]
+async fn bootstrap_db_inserts_admin(test_db: &db::Database) {
     let admin = test_db.get_user("admin").await.unwrap();
     assert_eq!(1, admin.id);
     assert_eq!("admin", admin.name);
@@ -1050,30 +1033,26 @@ async fn bootstrap_db_inserts_admin() {
         admin.pwd
     );
     assert_eq!("salt", admin.salt);
-    assert_eq!(true, admin.is_admin);
+    assert!(admin.is_admin);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn authenticate_user_valid() {
+#[db_test]
+async fn authenticate_user_valid(test_db: &db::Database) {
     assert!(test_db.authenticate_user("admin", "123").await.is_ok());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn authenticate_user_unknown_user() {
+#[db_test]
+async fn authenticate_user_unknown_user(test_db: &db::Database) {
     assert!(test_db.authenticate_user("unknown", "123").await.is_err());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn authenticate_user_wrong_pwd() {
+#[db_test]
+async fn authenticate_user_wrong_pwd(test_db: &db::Database) {
     assert!(test_db.authenticate_user("admin", "abc").await.is_err());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn crate_version_exists_with_existing_version() {
+#[db_test]
+async fn crate_version_exists_with_existing_version(test_db: &db::Database) {
     let id = test_db
         .test_add_crate(
             "foobar",
@@ -1088,15 +1067,11 @@ async fn crate_version_exists_with_existing_version() {
         .await
         .unwrap();
 
-    assert_eq!(
-        true,
-        test_db.crate_version_exists(id, "1.0.0").await.unwrap()
-    );
+    assert!(test_db.crate_version_exists(id, "1.0.0").await.unwrap());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn crate_version_exists_with_no_existing_version() {
+#[db_test]
+async fn crate_version_exists_with_no_existing_version(test_db: &db::Database) {
     let id = test_db
         .test_add_crate(
             "foobar",
@@ -1107,15 +1082,11 @@ async fn crate_version_exists_with_no_existing_version() {
         .await
         .unwrap();
 
-    assert_eq!(
-        false,
-        test_db.crate_version_exists(id, "2.0.0").await.unwrap()
-    );
+    assert!(!test_db.crate_version_exists(id, "2.0.0").await.unwrap());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_total_unique_crates_returns_correct_number() {
+#[db_test]
+async fn get_total_unique_crates_returns_correct_number(test_db: &db::Database) {
     let _ = test_db
         .test_add_crate(
             "foobar",
@@ -1139,9 +1110,8 @@ async fn get_total_unique_crates_returns_correct_number() {
     assert_eq!(2, test_db.get_total_unique_crates().await.unwrap());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn add_and_get_doc_queue_entries() {
+#[db_test]
+async fn add_and_get_doc_queue_entries(test_db: &db::Database) {
     test_db
         .add_doc_queue(
             &NormalizedName::from_unchecked("my_crate".to_string()),
@@ -1182,9 +1152,8 @@ async fn add_and_get_doc_queue_entries() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn delete_doc_queue_entry() {
+#[db_test]
+async fn delete_doc_queue_entry(test_db: &db::Database) {
     test_db
         .add_doc_queue(
             &NormalizedName::from_unchecked("my_crate".to_string()),
@@ -1219,9 +1188,8 @@ async fn delete_doc_queue_entry() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn delete_crate_one_of_multiple_versions() {
+#[db_test]
+async fn delete_crate_one_of_multiple_versions(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
         .test_add_crate(
@@ -1272,9 +1240,8 @@ async fn delete_crate_one_of_multiple_versions() {
     assert_eq!(1, krate.unwrap());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn delete_crate_max_version() {
+#[db_test]
+async fn delete_crate_max_version(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
         .test_add_crate(
@@ -1328,9 +1295,8 @@ async fn delete_crate_max_version() {
     assert_eq!(1, krate);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn delete_crate_only_versions() {
+#[db_test]
+async fn delete_crate_only_versions(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
         .test_add_crate(
@@ -1361,9 +1327,8 @@ async fn delete_crate_only_versions() {
     assert!(krate.is_none());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn search_in_crate_name_found_match() {
+#[db_test]
+async fn search_in_crate_name_found_match(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created_string = created.format("%Y-%m-%d %H:%M:%S").to_string();
     test_db
@@ -1475,9 +1440,8 @@ async fn search_in_crate_name_found_match() {
     assert_eq!(expected, search_results);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_crate_overview_list() {
+#[db_test]
+async fn get_crate_overview_list(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created_string = created.format("%Y-%m-%d %H:%M:%S").to_string();
     test_db
@@ -1569,9 +1533,8 @@ async fn get_crate_overview_list() {
     assert_eq!(expected, overview_list);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn add_crate_and_get_crate_data() {
+#[db_test]
+async fn add_crate_and_get_crate_data(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created_string = created.format("%Y-%m-%d %H:%M:%S").to_string();
     let pm1_v1 = PublishMetadata {
@@ -1980,9 +1943,8 @@ async fn add_crate_and_get_crate_data() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn update_docs_link() {
+#[db_test]
+async fn update_docs_link(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let pm = PublishMetadata::minimal("crate1", "1.0.0");
     test_db
@@ -2019,9 +1981,8 @@ async fn update_docs_link() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_prefetch_data_with_minimal_data() {
+#[db_test]
+async fn get_prefetch_data_with_minimal_data(test_db: &db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
     test_db
@@ -2056,9 +2017,8 @@ async fn get_prefetch_data_with_minimal_data() {
     assert_eq!(185, prefetch_data.data.len());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_prefetch_data_with_full_data() {
+#[db_test]
+async fn get_prefetch_data_with_full_data(test_db: &db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
     let created3 = Utc.with_ymd_and_hms(2020, 10, 9, 13, 18, 00).unwrap();
@@ -2185,9 +2145,8 @@ async fn get_prefetch_data_with_full_data() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn delete_updates_etag() {
+#[db_test]
+async fn delete_updates_etag(test_db: &db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
     let pm1 = PublishMetadata {
@@ -2278,9 +2237,8 @@ async fn delete_updates_etag() {
     assert_ne!(etag_before, etag_after);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn is_cratesio_cache_up_to_date_not_found() {
+#[db_test]
+async fn is_cratesio_cache_up_to_date_not_found(test_db: &db::Database) {
     let prefetch_state = test_db
         .is_cratesio_cache_up_to_date(
             &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
@@ -2293,9 +2251,8 @@ async fn is_cratesio_cache_up_to_date_not_found() {
     assert_eq!(PrefetchState::NotFound, prefetch_state);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn is_cratesio_cache_up_to_date_up_to_date() {
+#[db_test]
+async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &db::Database) {
     test_db
         .add_cratesio_prefetch_data(
             &OriginalName::from_unchecked("crate".to_string()),
@@ -2329,9 +2286,8 @@ async fn is_cratesio_cache_up_to_date_up_to_date() {
     assert_eq!(PrefetchState::UpToDate, prefetch_state);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn is_cratesio_cache_up_to_date_needs_update() {
+#[db_test]
+async fn is_cratesio_cache_up_to_date_needs_update(test_db: &db::Database) {
     let indices1 = vec![IndexMetadata {
         name: "crate".to_string(),
         vers: "1.0.0".to_string(),
@@ -2440,9 +2396,8 @@ async fn is_cratesio_cache_up_to_date_needs_update() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn un_yank_crate() {
+#[db_test]
+async fn un_yank_crate(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
         .test_add_crate(
@@ -2499,9 +2454,8 @@ async fn un_yank_crate() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_get_last_updated_crate_works() {
+#[db_test]
+async fn test_get_last_updated_crate_works(test_db: &db::Database) {
     let created1 = DateTime::parse_from_rfc3339("2021-01-01T00:00:00Z").unwrap();
     let created1 = DateTime::<Utc>::from(created1);
 
@@ -2546,17 +2500,15 @@ async fn test_get_last_updated_crate_works() {
     assert_eq!(String::from("my_crate2"), last_updated.0.to_string());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_get_last_updated_crate_empty() {
+#[db_test]
+async fn test_get_last_updated_crate_empty(test_db: &db::Database) {
     let last_updated = test_db.get_last_updated_crate().await.unwrap();
 
     assert_eq!(None, last_updated);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_get_total_unique_cached_crates_works() {
+#[db_test]
+async fn test_get_total_unique_cached_crates_works(test_db: &db::Database) {
     test_db
         .test_add_cached_crate("my_crate", "1.0.0")
         .await
@@ -2577,9 +2529,8 @@ async fn test_get_total_unique_cached_crates_works() {
     assert_eq!(2, unique_cached_crates);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_get_total_cached_crate_versions_works() {
+#[db_test]
+async fn test_get_total_cached_crate_versions_works(test_db: &db::Database) {
     test_db
         .test_add_cached_crate("my_crate", "1.0.0")
         .await
@@ -2600,9 +2551,8 @@ async fn test_get_total_cached_crate_versions_works() {
     assert_eq!(3, unique_cached_versions);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_get_total_cached_downloads_works() {
+#[db_test]
+async fn test_get_total_cached_downloads_works(test_db: &db::Database) {
     test_db
         .test_add_cached_crate_with_downloads("my_crate", "1.0.0", 10)
         .await

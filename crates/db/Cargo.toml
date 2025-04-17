@@ -8,7 +8,6 @@ license-file = "../../LICENSE"
 # Internal dependencies from Kellnr
 common.workspace = true
 settings.workspace = true
-pg_testcontainer.workspace = true
 db_testcontainer.workspace = true
 entity.workspace = true
 migration.workspace = true

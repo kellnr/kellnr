@@ -1516,7 +1516,6 @@ dependencies = [
  "entity",
  "migration",
  "mockall",
- "pg_testcontainer",
  "rm_rf",
  "sea-orm",
  "serde",
@@ -4765,14 +4764,6 @@ dependencies = [
  "once_cell",
  "pest",
  "sha2",
-]
-
-[[package]]
-name = "pg_testcontainer"
-version = "0.1.0"
-dependencies = [
- "quote",
- "syn 2.0.100",
 ]
 
 [[package]]
