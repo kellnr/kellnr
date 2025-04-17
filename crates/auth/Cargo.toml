@@ -18,6 +18,7 @@ rand.workspace = true
 serde.workspace = true
 axum.workspace = true
 tracing.workspace = true
+sha256.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

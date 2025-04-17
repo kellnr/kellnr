@@ -1,6 +1,9 @@
 <template>
-  <div id="mdContainer" class="glass" v-html="markedReadme">
-  </div>
+  <v-card class="mx-auto readme-container" variant="text">
+    <v-card-text>
+      <div class="markdown-body" v-html="markedReadme"></div>
+    </v-card-text>
+  </v-card>
 </template>
 
 <script setup lang="ts">
@@ -9,8 +12,12 @@ import { mangle } from 'marked-mangle';
 import { gfmHeadingId } from "marked-gfm-heading-id";
 import { markedHighlight } from "marked-highlight";
 import DOMPurify from 'dompurify';
-import { computed } from "vue";
+import { computed, onMounted, watchEffect } from "vue";
 import hljs from 'highlight.js';
+import 'highlight.js/styles/github.css';
+import { useTheme } from 'vuetify';
+
+const theme = useTheme();
 
 const marked = new Marked(
   markedHighlight({
@@ -26,131 +33,108 @@ marked.use(gfmHeadingId());
 
 const props = defineProps<{
   readme: string | null
-}>()
+}>();
 
 const markedReadme = computed(() => {
-  // Use marked.js with heighlight.js to render the readme
-  return DOMPurify.sanitize(marked.parse(props.readme || ''))
-})
+  return DOMPurify.sanitize(marked.parse(props.readme || ''));
+});
 
+// Switch highlight.js theme based on current Vuetify theme
+watchEffect(() => {
+  const linkId = 'highlight-theme';
+  let link = document.getElementById(linkId) as HTMLLinkElement;
+
+  if (!link) {
+    link = document.createElement('link');
+    link.id = linkId;
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+  }
+
+  const themeName = theme.global.current.value.dark ? 'github-dark' : 'github';
+  link.href = `https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.7.0/build/styles/${themeName}.min.css`;
+});
 </script>
 
 <style>
-#mdContainer>pre {
-  /*
-  Line break for code instead of re-size of the code block to fit all text
-  which breaks the layout.
-  Better would be a scroll bar, but that seems not possible
-  */
-  white-space: pre-wrap;
-  padding: 0rem;
+.markdown-body {
+  font-family: inherit;
 }
 
-#mdContainer>h1 {
-  font-size: 2rem !important;
-  font-weight: 700;
-  margin-bottom: 1rem;
+.markdown-body pre {
+  border-radius: 4px;
+  margin: 16px 0;
+  padding: 16px;
+  overflow-x: auto;
 }
 
-#mdContainer>h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
+.markdown-body code:not(pre code) {
+  color: inherit;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+  background-color: rgba(175, 184, 193, 0.2);
 }
 
-#mdContainer>h3 {
-  font-size: 1.2rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
 }
 
-#mdContainer>h4 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
+.markdown-body h1 {
+  font-size: 2em;
 }
 
-#mdContainer>h5 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
+.markdown-body h2 {
+  font-size: 1.5em;
 }
 
-#mdContainer>h6 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
+.markdown-body h3 {
+  font-size: 1.25em;
 }
 
-#mdContainer>p {
-  margin-bottom: 0.7rem;
-  margin-top: 0.5rem;
+.markdown-body p {
+  margin-bottom: 16px;
 }
 
-#mdContainer>* code {
-  background-color: transparent;
-  padding: 1rem;
-  font-size: 1rem;
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
 }
 
-/*Dark theme*/
-body[color-theme="dark"] #mdContainer>* strong {
-  color: var(--dark-color-white);
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 16px;
 }
 
-body[color-theme="dark"] #mdContainer>* code {
-  background-color: transparent;
-  padding: 0.5rem;
-  font-size: 1rem;
-  color: var(--dark-color-white);
+.markdown-body table th,
+.markdown-body table td {
+  border: 1px solid;
+  padding: 6px 13px;
 }
 
-
-body[color-theme="dark"] #mdContainer>h1 {
-  /*Gradient text*/
-  background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-
+/* Make the readme container responsive */
+.readme-container {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
 }
 
-body[color-theme="dark"] #mdContainer>h2 {
-  /*Gradient text*/
-  background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+@media (max-width: 600px) {
+  .markdown-body {
+    font-size: 14px;
+  }
 
-}
-
-body[color-theme="dark"] #mdContainer>h3 {
-  /*Gradient text*/
-  background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-
-}
-
-body[color-theme="dark"] #mdContainer>h4 {
-  /*Gradient text*/
-  background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-
-}
-
-body[color-theme="dark"] #mdContainer>h5 {
-  /*Gradient text*/
-  background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-
-}
-
-body[color-theme="dark"] #mdContainer>h6 {
-  /*Gradient text*/
-  background: linear-gradient(to right, var(--dark-color-middle) 0%, var(--dark-color-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-
+  .markdown-body pre {
+    padding: 8px;
+  }
 }
 </style>

@@ -26,6 +26,8 @@ mod m20250227_005754_add_readonly_user;
 mod m20250227_005754_add_readonly_user_entities;
 mod m20250319_191043_add_groups;
 mod m20250319_191043_add_groups_entities;
+mod m20250412_0000012_hash_tokens;
+mod m20250412_0000012_hash_tokens_entities;
 mod old_index_metadata;
 
 pub struct Migrator;
@@ -47,6 +49,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20220101_0000011_create_table::Migration),
             Box::new(m20250227_005754_add_readonly_user::Migration),
             Box::new(m20250319_191043_add_groups::Migration),
+            Box::new(m20250412_0000012_hash_tokens::Migration),
         ]
     }
 }
