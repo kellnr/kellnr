@@ -11,7 +11,6 @@ use db::password::hash_pwd;
 use db::provider::PrefetchState;
 use db::{DbProvider, DocQueueEntry, User};
 use db_testcontainer::db_test;
-use pg_testcontainer::*;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 mod image;
@@ -88,9 +87,8 @@ async fn get_total_crate_versions_returns_number_of_crate_versions(test_db: &db:
     assert_eq!(3, total_versions);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_total_downloads_returns_number_of_total_downloads() {
+#[db_test]
+async fn get_total_downloads_returns_number_of_total_downloads(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let id1 = test_db
         .test_add_crate(
@@ -156,9 +154,8 @@ async fn get_total_downloads_returns_number_of_total_downloads() {
     assert_eq!(4, total_downloads);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_top_crates_downloads_returns_top_crates_with_downloads() {
+#[db_test]
+async fn get_top_crates_downloads_returns_top_crates_with_downloads(test_db: &db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let crate_id = test_db
         .test_add_crate(
@@ -194,9 +191,8 @@ async fn get_top_crates_downloads_returns_top_crates_with_downloads() {
         .unwrap();
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn increase_download_counter_works() {
+#[db_test]
+async fn increase_download_counter_works(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
         .test_add_crate(
@@ -374,9 +370,8 @@ async fn increase_download_counter_works() {
     assert_eq!(("crate1".to_string(), 3), tops[1]);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_max_version_from_id() {
+#[db_test]
+async fn get_max_version_from_id(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
@@ -413,9 +408,8 @@ async fn get_max_version_from_id() {
     assert_eq!("0.10.0", version.to_string());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_max_version_from_name() {
+#[db_test]
+async fn get_max_version_from_name(test_db: &db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
     test_db
@@ -454,9 +448,8 @@ async fn get_max_version_from_name() {
     assert_eq!("0.10.0", version.to_string());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_crate_summaries_works() {
+#[db_test]
+async fn get_crate_summaries_works(test_db: &db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 11, 22, 12).unwrap();
     test_db
@@ -556,9 +549,8 @@ async fn get_crate_summaries_works() {
     assert_eq!("2020-10-07 13:18:00", crates[1].last_updated);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_crate_versions_returns_all_versions() {
+#[db_test]
+async fn get_crate_versions_returns_all_versions(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
         .test_add_crate(
@@ -600,9 +592,8 @@ async fn get_crate_versions_returns_all_versions() {
     assert_eq!(expected, versions);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_crate_versions_with_yanked_version() {
+#[db_test]
+async fn get_crate_versions_with_yanked_version(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
         .test_add_crate(
@@ -644,9 +635,8 @@ async fn get_crate_versions_with_yanked_version() {
     assert_eq!(expected, versions);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_crate_versions_for_nonexistant_crate() {
+#[db_test]
+async fn get_crate_versions_for_nonexistant_crate(test_db: &db::Database) {
     let outcome = test_db
         .get_crate_versions(&NormalizedName::from_unchecked_str("crate1"))
         .await
@@ -655,9 +645,8 @@ async fn get_crate_versions_for_nonexistant_crate() {
     assert_eq!(outcome, vec![]);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_add_crate_meta_and_read_meta() {
+#[db_test]
+async fn test_add_crate_meta_and_read_meta(test_db: &db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 11, 22, 12).unwrap();
     let crate_id = test_db
@@ -689,9 +678,8 @@ async fn test_add_crate_meta_and_read_meta() {
     assert_eq!("2020-10-08 11:22:12", meta[1].created);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn is_owner_true() {
+#[db_test]
+async fn is_owner_true(test_db: &db::Database) {
     test_db
         .test_add_crate(
             "mycrate",
@@ -713,9 +701,8 @@ async fn is_owner_true() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn is_owner_false() {
+#[db_test]
+async fn is_owner_false(test_db: &db::Database) {
     test_db
         .test_add_crate(
             "mycrate",
@@ -737,9 +724,8 @@ async fn is_owner_false() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn delete_owner_valid_owner() {
+#[db_test]
+async fn delete_owner_valid_owner(test_db: &db::Database) {
     test_db
         .test_add_crate(
             "mycrate",
@@ -760,9 +746,8 @@ async fn delete_owner_valid_owner() {
     );
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_add_crate_duplicate() {
+#[db_test]
+async fn test_add_crate_duplicate(test_db: &db::Database) {
     test_db
         .test_add_crate(
             "mycrate",
@@ -790,9 +775,8 @@ async fn test_add_crate_duplicate() {
     assert_eq!("admin", owners[0].name);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_add_crate_different_user() {
+#[db_test]
+async fn test_add_crate_different_user(test_db: &db::Database) {
     test_db
         .add_user("user", "123", "123", false, false)
         .await
@@ -818,9 +802,8 @@ async fn test_add_crate_different_user() {
     assert_eq!("user", owners[1].name);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_user_from_token_works() {
+#[db_test]
+async fn get_user_from_token_works(test_db: &db::Database) {
     test_db
         .add_auth_token("test1", "mytoken1", "admin")
         .await
@@ -831,9 +814,8 @@ async fn get_user_from_token_works() {
     assert_eq!("admin", user.name);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_auth_tokens_returns_all_tokens() {
+#[db_test]
+async fn get_auth_tokens_returns_all_tokens(test_db: &db::Database) {
     test_db
         .add_auth_token("test1", "mytoken1", "admin")
         .await
