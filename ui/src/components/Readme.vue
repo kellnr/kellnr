@@ -1,5 +1,5 @@
 <template>
-  <v-card class="mx-auto readme-container" elevation="1" rounded="lg">
+  <v-card class="mx-auto readme-container" variant="text">
     <v-card-text>
       <div class="markdown-body" v-html="markedReadme"></div>
     </v-card-text>
