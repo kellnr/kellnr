@@ -22,6 +22,7 @@ settings = { path = "./crates/settings" }
 web_ui = { path = "./crates/web_ui" }
 registry = { path = "./crates/registry" }
 pg_testcontainer = { path = "./crates/db/pg_testcontainer" }
+db_testcontainer = { path = "./crates/db/db_testcontainer" }
 auth = { path = "./crates/auth" }
 error = { path = "./crates/error" }
 appstate = { path = "./crates/appstate" }

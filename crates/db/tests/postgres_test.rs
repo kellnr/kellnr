@@ -10,14 +10,14 @@ use common::version::Version;
 use db::password::hash_pwd;
 use db::provider::PrefetchState;
 use db::{DbProvider, DocQueueEntry, User};
+use db_testcontainer::db_test;
 use pg_testcontainer::*;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 mod image;
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_total_unique_crates_returns_number_of_unique_crates() {
+#[db_test]
+async fn get_total_unique_crates_returns_number_of_unique_crates(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
         .test_add_crate(
@@ -52,9 +52,8 @@ async fn get_total_unique_crates_returns_number_of_unique_crates() {
     assert_eq!(3, total_versions);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn get_total_crate_versions_returns_number_of_crate_versions() {
+#[db_test]
+async fn get_total_crate_versions_returns_number_of_crate_versions(test_db: &db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
         .test_add_crate(
