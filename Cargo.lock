@@ -1512,10 +1512,10 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "common",
+ "db_testcontainer",
  "entity",
  "migration",
  "mockall",
- "pg_testcontainer",
  "rm_rf",
  "sea-orm",
  "serde",
@@ -1525,6 +1525,15 @@ dependencies = [
  "testcontainers",
  "thiserror 2.0.12",
  "tokio 1.44.2",
+]
+
+[[package]]
+name = "db_testcontainer"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
 ]
 
 [[package]]
@@ -4755,14 +4764,6 @@ dependencies = [
  "once_cell",
  "pest",
  "sha2",
-]
-
-[[package]]
-name = "pg_testcontainer"
-version = "0.1.0"
-dependencies = [
- "quote",
- "syn 2.0.100",
 ]
 
 [[package]]

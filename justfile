@@ -27,7 +27,7 @@ clean:
 	cargo clean
 
 test: # Run all tests except the Postgresql integration tests, which require Docker
-	cargo nextest run --workspace -E 'not binary_id(db::postgres_test)'
+	cargo nextest run --workspace -E 'not test(~postgres_)'
 
 test-all:
 	{{test_all}}
