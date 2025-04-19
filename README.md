@@ -38,6 +38,7 @@ The latest Kubernetes Helm chart can be found here: [Kellnr Helm Chart](https://
 - **Build in Rust**: Kellnr is written in Rust. This means that you can easily extend Kellnr with your own features or fix bugs. No other dependencies are needed.
 - **Multi-Db support**: Kellnr supports multiple databases. You can use Sqlite or PostgreSQL as the storage backend for Kellnr.
 - **Local File System or S3**: Kellnr supports the local file system or S3 as the storage backend for the crates.
+- **User and group management**: Kellnr supports user and group management. This means that you can create users and groups and assign them to crates. This is useful in a corporate environment, where you want to control the access to the crates. You can create read-only users or require authentication for crate-pulls.
 
 ## Differences to crates.io
 
@@ -53,71 +54,4 @@ As a security engineer and researcher I fight vulnerabilities in software for a 
 
 You are welcome to contribute to **kellnr**. Create an issue or a pull-request here on Github.
 
-If you want to contribute with code, here are some hints to get you started.
-
-### Prerequisites
-
-The following tools are needed to build **kellnr**: [Rust](https://www.rust-lang.org/tools/install), [NPM / Node.js](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) and [Docker](https://docs.docker.com/get-docker/).
-
-**kellnr** is written in Rust with a UI in [vue.js](https://vuejs.org). NPM and Node.js are only needed at build time, but not at runtime. The UI is hosted by **kellnr** itself, such that no Node.js is needed. Docker is needed for integration tests against the [PostgreSQL](https://www.postgresql.org) backend.
-
-### Build Kellnr
-
-The project uses [just](https://github.com/casey/just) as a task runner. Check the [justfile](./justfile) for all available tasks, or run `just -l` to see all available tasks.
-
-```bash
-# For all available tasks 
-just -l
-
-# Build the project (debug)
-just build
-
-# Build the project (release)
-just build-release
-
-# Build the frontend (result is placed in ./static)
-just npm-build
-
-# Test the project (without Docker integration tests, requires cargo-nextest)
-just test
-
-# Test the project (with Docker integration tests, requires cargo-nextest)
-just test-all
-
-# Run the project
-just run
-```
-
-If you use [Nix](https://nixos.org/), you can use the provided `flake.nix` to build the project and start a development shell.
-
-```bash
-# Start a development shell
-nix develop
-
-# Build the project
-nix build
-```
-
-#### Build options
-
-The following environment variables can be set at compile time:
-
-- `KELLNR_VERSION`: The version of kellnr currently being compiled (default: `0.0.0-unknown`).
-- `KELLNR_CONFIG_DIR`: The configuration directory (default: `./config`, `../config`, or `../../config`).
-- `KELLNR_STATIC_DIR`: The static html directory (default: `./static`).
-
-### Sea ORM & PostgreSQL
-
-**kellnr** uses Sqlite or PostreSQL as the storage backend for all crate related information. If you need a local PostgreSQL to test against, this Docker command sets one up on your local machine.
-
-```bash
-# Run local postgres container.
-docker run -it --rm -p 5432:5432 -e POSTGRES_PASSWORD=admin -e POSTGRES_USER=admin postgres
-```
-
-If you want to generate entities with Sea ORM from the database, run:
-
-```bash
-# in the folder, where the entities should be generated, where "kellnr-db" is the database name.
-sea-orm-cli generate entity -u postgresql://admin:admin@127.0.0.1/kellnr-db
-```
+If you want to contribute with code, please read the [contributing guide](CONTRIBUTING.md) first.
