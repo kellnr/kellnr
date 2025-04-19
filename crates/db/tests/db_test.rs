@@ -109,7 +109,7 @@ async fn get_total_downloads_returns_number_of_total_downloads(test_db: &db::Dat
         .await
         .unwrap();
     test_db
-        .test_add_crate_meta(id1, &Version::try_from("1.0.0").unwrap(), &created, None)
+        .test_add_crate_meta(id1, &Version::try_from("1.1.0").unwrap(), &created, None)
         .await
         .unwrap();
     test_db
@@ -117,7 +117,7 @@ async fn get_total_downloads_returns_number_of_total_downloads(test_db: &db::Dat
         .await
         .unwrap();
     test_db
-        .test_add_crate_meta(id2, &Version::try_from("1.0.0").unwrap(), &created, None)
+        .test_add_crate_meta(id2, &Version::try_from("1.1.0").unwrap(), &created, None)
         .await
         .unwrap();
     test_db
@@ -223,33 +223,6 @@ async fn increase_download_counter_works(test_db: &db::Database) {
         .unwrap();
     test_db
         .test_add_crate(
-            "crate4",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "crate5",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "crate1",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
             "crate1",
             "admin",
             &Version::try_from("2.0.0").unwrap(),
@@ -261,7 +234,7 @@ async fn increase_download_counter_works(test_db: &db::Database) {
         .test_add_crate(
             "crate2",
             "admin",
-            &Version::try_from("1.0.0").unwrap(),
+            &Version::try_from("2.0.0").unwrap(),
             &created,
         )
         .await
@@ -270,29 +243,12 @@ async fn increase_download_counter_works(test_db: &db::Database) {
         .test_add_crate(
             "crate3",
             "admin",
-            &Version::try_from("1.0.0").unwrap(),
+            &Version::try_from("2.0.0").unwrap(),
             &created,
         )
         .await
         .unwrap();
-    test_db
-        .test_add_crate(
-            "crate4",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "crate5",
-            "admin",
-            &Version::try_from("1.0.0").unwrap(),
-            &created,
-        )
-        .await
-        .unwrap();
+
     test_db
         .increase_download_counter(
             &NormalizedName::from_unchecked_str("crate1"),
@@ -335,39 +291,11 @@ async fn increase_download_counter_works(test_db: &db::Database) {
         )
         .await
         .unwrap();
-    test_db
-        .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate5"),
-            &Version::from_unchecked_str("1.0.0"),
-        )
-        .await
-        .unwrap();
-    test_db
-        .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate5"),
-            &Version::from_unchecked_str("1.0.0"),
-        )
-        .await
-        .unwrap();
-    test_db
-        .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate5"),
-            &Version::from_unchecked_str("1.0.0"),
-        )
-        .await
-        .unwrap();
-    test_db
-        .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate5"),
-            &Version::from_unchecked_str("1.0.0"),
-        )
-        .await
-        .unwrap();
 
     let tops = test_db.get_top_crates_downloads(2).await.unwrap();
     assert_eq!(2, tops.len());
-    assert_eq!(("crate5".to_string(), 4), tops[0]);
-    assert_eq!(("crate1".to_string(), 3), tops[1]);
+    assert_eq!(("crate1".to_string(), 3), tops[0]);
+    assert_eq!(("crate3".to_string(), 2), tops[1]);
 }
 
 #[db_test]
@@ -483,7 +411,7 @@ async fn get_crate_summaries_works(test_db: &db::Database) {
         .test_add_crate(
             "bcrate",
             "admin",
-            &Version::try_from("1.1.0").unwrap(),
+            &Version::try_from("1.2.0").unwrap(),
             &created1,
         )
         .await
@@ -502,25 +430,7 @@ async fn get_crate_summaries_works(test_db: &db::Database) {
         .test_add_crate(
             "acrate",
             "admin",
-            &Version::try_from("1.1.0").unwrap(),
-            &created1,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "bcrate",
-            "admin",
-            &Version::try_from("1.1.0").unwrap(),
-            &created2,
-        )
-        .await
-        .unwrap();
-    test_db
-        .test_add_crate(
-            "acrate",
-            "admin",
-            &Version::try_from("1.2.0").unwrap(),
+            &Version::try_from("1.3.0").unwrap(),
             &created2,
         )
         .await
@@ -529,7 +439,7 @@ async fn get_crate_summaries_works(test_db: &db::Database) {
         .test_add_crate(
             "bcrate",
             "admin",
-            &Version::try_from("1.1.0").unwrap(),
+            &Version::try_from("1.3.0").unwrap(),
             &created1,
         )
         .await
@@ -539,12 +449,12 @@ async fn get_crate_summaries_works(test_db: &db::Database) {
 
     assert_eq!(2, crates.len());
     assert_eq!("acrate", crates[0].name);
-    assert_eq!("1.2.0", crates[0].max_version);
+    assert_eq!("1.3.0", crates[0].max_version);
     assert_eq!(0, crates[0].total_downloads);
     assert_eq!("2020-10-08 11:22:12", crates[0].last_updated);
 
     assert_eq!("bcrate", crates[1].name);
-    assert_eq!("1.1.0", crates[1].max_version);
+    assert_eq!("1.3.0", crates[1].max_version);
     assert_eq!(0, crates[1].total_downloads);
     assert_eq!("2020-10-07 13:18:00", crates[1].last_updated);
 }
@@ -761,7 +671,7 @@ async fn test_add_crate_duplicate(test_db: &db::Database) {
         .test_add_crate(
             "mycrate",
             "admin",
-            &Version::try_from("1.0.0").unwrap(),
+            &Version::try_from("1.1.0").unwrap(),
             &Utc::now(),
         )
         .await
@@ -788,18 +698,12 @@ async fn test_add_crate_different_user(test_db: &db::Database) {
         .add_crate(&pm, "cksum", &created, "admin")
         .await
         .unwrap();
-    test_db
-        .add_crate(&pm, "cksum", &created, "user")
-        .await
-        .unwrap();
-
-    let owners = test_db
-        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
-        .await
-        .unwrap();
-    assert_eq!(2, owners.len());
-    assert_eq!("admin", owners[0].name);
-    assert_eq!("user", owners[1].name);
+    assert!(
+        test_db
+            .add_crate(&pm, "cksum", &created, "user")
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
@@ -1062,12 +966,12 @@ async fn crate_version_exists_with_existing_version(test_db: &db::Database) {
         )
         .await
         .unwrap();
-    test_db
-        .test_add_crate_meta(id, "1.0.0", &Utc::now(), None)
-        .await
-        .unwrap();
-
-    assert!(test_db.crate_version_exists(id, "1.0.0").await.unwrap());
+    assert!(
+        test_db
+            .test_add_crate_meta(id, "1.0.0", &Utc::now(), None)
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
