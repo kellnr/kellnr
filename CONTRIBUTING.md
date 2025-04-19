@@ -126,6 +126,9 @@ The following environment variables can be set at compile time:
 ## Update Documentation
 
 If your feature adds or modifies functionality, please update the documentation accordingly. The documentation is in a separate repository. You can find the [kellnr documentation](https://kellnr.io/documentation) here and the correponding repository here: [kellnr website repository](https://github.com/kellnr/website).
+## Update Helm-Chart
+
+If your feature is configurable with settings, please update the [kellnr helm chart](https://github.com/kellnr/helm), too. The settings should be reflected in the helm chart, such that they can be set by the `values.yaml` file.
 
 ## Code Style
 
