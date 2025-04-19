@@ -125,10 +125,7 @@ The following environment variables can be set at compile time:
 
 ## Update Documentation
 
-If your feature adds or modifies functionality, please update the documentation accordingly. The documentation is in a separate repository.
-
-    - [https://kellnr.io/documentation](kellnr documentation)
-    - [https://github.com/kellnr/website](kellnr website repository)
+If your feature adds or modifies functionality, please update the documentation accordingly. The documentation is in a separate repository. You can find the [https://kellnr.io/documentation](kellnr documentation) here and the correponding repository here: [https://github.com/kellnr/website](kellnr website repository)
 
 ## Code Style
 
