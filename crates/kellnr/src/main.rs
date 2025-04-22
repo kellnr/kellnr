@@ -81,8 +81,15 @@ async fn main() {
 }
 
 fn init_tracing(settings: &Settings) {
-    let ts = tracing_subscriber::fmt().with_max_level(settings.log.level)
-    .with_env_filter(format!("{},mio::poll=error,want=error,sqlx::query=error,sqlx::postgres=warn,sea_orm_migration=warn,cargo=error,globset=warn,hyper=warn,_=warn,reqwest=warn,tower_http={},object_store::aws::builder=error", settings.log.level, settings.log.level_web_server));
+    let ts = tracing_subscriber::fmt()
+        .with_max_level(settings.log.level)
+        .with_env_filter(format!(
+            "{},mio::poll=error,want=error,sqlx::query=error,sqlx::postgres=warn,\
+                sea_orm_migration=warn,cargo=error,globset=warn,\
+                hyper=warn,_=warn,reqwest=warn,tower_http={},\
+                object_store::aws::builder=error",
+            settings.log.level, settings.log.level_web_server
+        ));
 
     match settings.log.format {
         LogFormat::Compact => ts.event_format(format().compact()).init(),
