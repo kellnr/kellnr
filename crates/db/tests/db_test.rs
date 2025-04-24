@@ -2471,9 +2471,8 @@ async fn test_get_total_cached_downloads_works(test_db: &db::Database) {
     assert_eq!(60, total_downloads);
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_add_crate_rollback() {
+#[db_test]
+async fn test_add_crate_rollback(test_db: &db::Database) {
     test_add_crate(
         &test_db,
         "mycrate",
@@ -2504,9 +2503,8 @@ async fn test_add_crate_rollback() {
     assert_eq!("1.0.0", max_version.to_string());
 }
 
-#[pg_testcontainer]
-#[tokio::test]
-async fn test_delete_crate_rollback() {
+#[db_test]
+async fn test_delete_crate_rollback(test_db: &db::Database) {
     let version = Version::try_from("1.0.0").unwrap();
     let crate_id = test_add_crate(&test_db, "mycrate", "admin", &version, &Utc::now())
         .await
