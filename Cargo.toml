@@ -47,7 +47,7 @@ sea-orm-migration = { version = "1.1.7", features = [ "sqlx-postgres", "sqlx-sql
 rm_rf = "0.6.2"
 testcontainers = "0.23.3"
 quote = "1.0.39"
-syn = {version = "2.0.100", features = ["full"]}
+syn = {version = "2.0.101", features = ["full"]}
 trybuild = {version = "1.0.99", features = ["diff"]}
 zip = "2.6.1"
 flate2 = "1.1.1"
