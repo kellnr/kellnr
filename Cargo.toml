@@ -41,7 +41,7 @@ rand = "0.9.0"
 chrono = "0.4.41"
 thiserror = "2.0.12"
 sea-orm = { version = "1.1.9", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
-sea-query = "0.32.3"
+sea-query = "0.32.5"
 sea-query-derive = "0.4.3"
 sea-orm-migration = { version = "1.1.7", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
 rm_rf = "0.6.2"
