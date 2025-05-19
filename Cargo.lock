@@ -4094,9 +4094,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minio-rsc"
-version = "0.2.3"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b75742288c3186c800865189b3713355c85a6d79ee682626d6588b752f63593e"
+checksum = "16e246f22c7e75d78a746e234d2ed328a8866e23ce601f3786a81090eaa1c31a"
 dependencies = [
  "async-stream",
  "base64 0.22.1",
