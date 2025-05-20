@@ -1,7 +1,7 @@
 use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{DbResult, PrefetchState};
 use crate::tables::init_database;
-use crate::{error::DbError, AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User};
+use crate::{AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User, error::DbError};
 use crate::{ConString, DocQueueEntry};
 use chrono::{DateTime, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
@@ -24,9 +24,9 @@ use migration::iden::{
 };
 use sea_orm::sea_query::{Alias, Expr, Query, *};
 use sea_orm::{
-    prelude::async_trait::async_trait, query::*, ActiveModelTrait, ColumnTrait, ConnectionTrait,
-    DatabaseConnection, EntityTrait, FromQueryResult, InsertResult, ModelTrait, QueryFilter,
-    RelationTrait, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
+    prelude::async_trait::async_trait, query::*,
 };
 use std::collections::BTreeMap;
 use std::path::Path;

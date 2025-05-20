@@ -7,11 +7,11 @@ use crate::{crate_group, crate_user, crate_version};
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
+use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Redirect;
-use axum::Json;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -485,20 +485,20 @@ pub async fn unyank(
 mod reg_api_tests {
     use super::*;
     use appstate::AppStateData;
+    use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::http::StatusCode;
     use axum::routing::{delete, get, put};
-    use axum::Router;
     use db::mock::MockDb;
     use db::{ConString, Database, SqliteConString, test_utils};
     use error::api_error::ErrorDetails;
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
+    use rand::Rng;
     use rand::distr::Alphanumeric;
     use rand::rng;
-    use rand::Rng;
     use settings::Settings;
     use std::path::PathBuf;
     use std::{iter, path};
@@ -1275,10 +1275,10 @@ mod reg_api_tests {
             serde_json::from_slice::<ErrorDetails>(&result_msg).is_err(),
             "An error message instead of a success message was returned"
         );
-        assert_eq!(1, kellnr.db.get_crate_meta_list(1).await.unwrap().len());
+        assert_eq!(1, kellnr.db.get_crate_meta_list(&normalized_name).await.unwrap().len());
         assert_eq!(
             "0.2.0",
-            kellnr.db.get_crate_meta_list(1).await.unwrap()[0].version
+            kellnr.db.get_crate_meta_list(&normalized_name).await.unwrap()[0].version
         );
     }
 

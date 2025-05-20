@@ -2,26 +2,12 @@
   <v-container>
     <v-card-title class="text-h4 pa-4">Startup Config</v-card-title>
 
-  <div class="settingsSection">
-    <h3 class="k-h3">Registry</h3>
-    <startup-config-header></startup-config-header>
-    <startup-config-item tomlTable="registry" toml="data_dir" env="KELLNR_REGISTRY__DATA_DIR"
-      :value="settings.registry.data_dir"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="session_age_seconds" env="KELLNR_REGISTRY__SESSION_AGE_SECONDS"
-      :value="settings.registry.session_age_seconds"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="cache_size" env="KELLNR_REGISTRY__CACHE_SIZE"
-      :value="settings.registry.cache_size"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="max_crate_size" env="KELLNR_REGISTRY__MAX_CRATE_SIZE"
-      :value="settings.registry.max_crate_size"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="max_db_connections" env="KELLNR_REGISTRY__MAX_DB_CONNECTIONS"
-      :value="settings.registry.max_db_connections"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="auth_required" env="KELLNR_REGISTRY__AUTH_REQUIRED"
-      :value="settings.registry.auth_required"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="required_crate_fields" env="KELLNR_REGISTRY__REQUIRED_CRATE_FIELDS"
-      :value="settings.registry.required_crate_fields"></startup-config-item>
-    <startup-config-item tomlTable="registry" toml="new_crates_restricted" env="KELLNR_REGISTRY__NEW_CRATES_RESTRICTED"
-      :value="settings.registry.new_crates_restricted"></startup-config-item>
-  </div>
+    <v-card-text>
+      <p class="mb-6">
+        Values are set on application startup. See
+        <a href="https://kellnr.io/documentation" class="text-primary">Kellnr Configuration Documentation</a>
+        for more information.
+      </p>
 
       <!-- Registry Section -->
       <v-expansion-panels variant="accordion" class="mb-6">
@@ -156,6 +142,22 @@
                       <v-chip label size="small" color="teal-darken-1" text-color="white"
                         class="config-chip">ENV</v-chip>
                       <span class="config-value">KELLNR_REGISTRY__REQUIRED_CRATE_FIELDS</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-subtitle-2">New crates restricted</td>
+                  <td>{{ formatValue(settings.registry.new_crates_restricted) }}</td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">registry.new_crates_restricted</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_REGISTRY__NEW_CRATES_RESTRICTED</span>
                     </div>
                   </td>
                 </tr>

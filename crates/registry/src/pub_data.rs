@@ -232,13 +232,15 @@ mod bin_tests {
             .unwrap();
 
         assert!(rand_path.exists());
-        assert!(rand_path.starts_with(
-            test_bin
-                .crate_storage
-                .doc_queue_path
-                .to_string_lossy()
-                .to_string()
-        ));
+        assert!(
+            rand_path.starts_with(
+                test_bin
+                    .crate_storage
+                    .doc_queue_path
+                    .to_string_lossy()
+                    .to_string()
+            )
+        );
         test_bin.clean();
     }
 
