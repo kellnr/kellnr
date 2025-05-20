@@ -617,15 +617,13 @@ async fn is_owner_true(test_db: &db::Database) {
     .await
     .unwrap();
 
-    assert!(
-        test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "admin"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "admin"
+        )
+        .await
+        .unwrap());
 }
 
 #[db_test]
@@ -640,15 +638,13 @@ async fn is_owner_false(test_db: &db::Database) {
     .await
     .unwrap();
 
-    assert!(
-        !test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "user"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(!test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "user"
+        )
+        .await
+        .unwrap());
 }
 
 #[db_test]
@@ -665,12 +661,10 @@ async fn delete_owner_valid_owner(test_db: &db::Database) {
 
     test_db.delete_owner("mycrate", "admin").await.unwrap();
 
-    assert!(
-        test_db
-            .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
-            .await
-            .is_ok()
-    );
+    assert!(test_db
+        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .await
+        .is_ok());
 }
 
 #[db_test]
@@ -787,14 +781,13 @@ async fn get_user_from_token_no_token(test_db: &db::Database) {
     assert!(test_db.get_user_from_token("wrong_token").await.is_err());
 }
 
-#[db_test]
-async fn add_auth_token_no_user(test_db: &db::Database) {
-    assert!(
-        test_db
-            .add_auth_token("test", "mytoken", "nouser")
-            .await
-            .is_err()
-    );
+#[pg_testcontainer]
+#[tokio::test]
+async fn add_auth_token_no_user() {
+    assert!(test_db
+        .add_auth_token("test", "mytoken", "nouser")
+        .await
+        .is_err());
 }
 
 #[db_test]
@@ -839,12 +832,10 @@ async fn add_user_duplicate(test_db: &db::Database) {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .add_user("user", "pwd", "salt", false, false)
-            .await
-            .is_err()
-    )
+    assert!(test_db
+        .add_user("user", "pwd", "salt", false, false)
+        .await
+        .is_err())
 }
 
 #[db_test]
