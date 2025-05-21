@@ -14,27 +14,39 @@
   };
 
   outputs = { nixpkgs, flake-utils, crane, rust-overlay, ... }:
-    flake-utils.lib.eachSystem [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ] (system:
+    flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; overlays = [ (import rust-overlay) ]; };
         inherit (pkgs) lib;
 
-        craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.stable.latest.default.override { });
+        # Define cross compilation targets
+        targets = [
+          "x86_64-unknown-linux-gnu"
+          "x86_64-unknown-linux-musl"
+          "aarch64-unknown-linux-gnu"
+          "aarch64-unknown-linux-musl"
+        ];
+
+        # Configure a rust toolchain with all targets
+        rustWithTargets = pkgs.rust-bin.stable.latest.default.override {
+          targets = targets;
+        };
+
+        # Base crane lib with our toolchain - use function for cross-compilation compatibility
+        baseCraneLib = (crane.mkLib pkgs).overrideToolchain (pkgs: rustWithTargets);
 
         # Set a filter of files that are included in the build source directory.
-        # This is used to filter out files that are not needed for the build to
-        # not rebuild on every file change, e.g. in a Readme.md file.
         webuiFilter = path: _type:
           let extensions = [ "js" "json" "ts" "vue" "html" "png" "css" "svg" ];
           in lib.any (ext: lib.hasSuffix ".${ext}" path) extensions;
         webuiOrCargo = path: type:
-          (webuiFilter path type) || (craneLib.filterCargoSources path type);
-        # Include all Rust and WebUI files in the source directory.
+          (webuiFilter path type) || (baseCraneLib.filterCargoSources path type);
         src = lib.cleanSourceWith {
-          src = craneLib.path ./.;
+          src = baseCraneLib.path ./.;
           filter = webuiOrCargo;
         };
 
+        # Common arguments for all builds
         commonArgs = {
           inherit src;
           strictDeps = true;
@@ -56,7 +68,6 @@
             pkgs.iconv
             pkgs.cacert
             pkgs.curl
-          ] ++ lib.optional pkgs.stdenv.isLinux [
           ];
 
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
@@ -65,36 +76,195 @@
           OPENSSL_DIR = "${pkgs.openssl.dev}";
           OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
           OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
-
         };
 
-        # Build *just* the cargo dependencies, so we can reuse
-        # all of that work (e.g. via cachix) when running in CI
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        # Standard cargo artifacts for the host system
+        cargoArtifacts = baseCraneLib.buildDepsOnly commonArgs;
 
         # Install the NPM dependencies
-        node2nixOutput = import ui/nix { inherit pkgs system; nodejs = pkgs.nodejs_24; };
+        node2nixOutput = import ui/nix {
+          inherit pkgs system;
+          nodejs = pkgs.nodejs_24;
+        };
         nodeDeps = node2nixOutput.nodeDependencies;
 
-        # Build the actual crate itself, reusing the dependency
-        # artifacts from above.
-        kellnr-crate = craneLib.buildPackage (commonArgs // {
-          inherit cargoArtifacts nodeDeps;
+        # Function to build UI assets (only needed once)
+        buildUiAssets = ''
+          cd ui;
+          ln -s ${nodeDeps}/lib/node_modules ./node_modules;
+          export PATH="${nodeDeps}/bin:$PATH";
+          npm run build --verbose;
+          cd ..;
+        '';
 
-          # Skip test as we run them with cargo-nextest
+        # Function to create a package for a specific target
+        makePackage = target:
+          let
+            # Extract architecture and libc from target
+            targetParts = builtins.split "-" target;
+            arch = builtins.elemAt targetParts 0;
+            libc = if builtins.elemAt targetParts 3 == "musl" then "musl" else "gnu";
+
+            # Use appropriate pkgsCross based on target
+            crossPkgs =
+              if pkgs.stdenv.isDarwin then
+                if arch == "x86_64" && libc == "musl" then
+                  pkgs.pkgsCross.musl64
+                else if arch == "aarch64" && libc == "musl" then
+                  pkgs.pkgsCross.aarch64-multiplatform-musl
+                else if arch == "aarch64" && libc == "gnu" then
+                  pkgs.pkgsCross.aarch64-multiplatform
+                else if arch == "x86_64" && libc == "gnu" then
+                  pkgs.pkgsCross.gnu64
+                else
+                  pkgs
+              else
+                if arch == "x86_64" && libc == "musl" then
+                  pkgs.pkgsCross.musl64
+                else if arch == "aarch64" && libc == "musl" then
+                  pkgs.pkgsCross.aarch64-multiplatform-musl
+                else if arch == "aarch64" && libc == "gnu" then
+                  pkgs.pkgsCross.aarch64-multiplatform
+                else
+                  pkgs;
+
+            # Get the target OpenSSL
+            targetOpenSsl = crossPkgs.openssl;
+
+            # Find the cross compiler binaries
+            crossLd =
+              if libc == "musl" then
+                "${crossPkgs.stdenv.cc}/bin/${target}-clang"
+              else
+                "${crossPkgs.stdenv.cc}/bin/${target}-gcc";
+
+            crossAr = "${crossPkgs.stdenv.cc}/bin/${target}-ar";
+
+            # Create crane lib specific to this target
+            craneLib = (crane.mkLib crossPkgs).overrideToolchain (p: rustWithTargets);
+
+            # Create a cargo config for cross-compilation
+            cargoConfigContent = ''
+              [target.${target}]
+              linker = "${crossLd}"
+              ar = "${crossAr}"
+              rustflags = [
+                "-C", "link-arg=-Wl,-O1",
+                "-C", "link-arg=-Wl,--strip-all"
+              ]
+              
+              [build]
+              target = "${target}"
+              
+              [profile.release]
+              lto = true
+            '';
+
+            # Target-specific build arguments
+            targetArgs = commonArgs // {
+              inherit cargoArtifacts nodeDeps;
+              doCheck = false;
+
+              # Set Rust target
+              CARGO_BUILD_TARGET = target;
+
+              # Use the target's OpenSSL
+              OPENSSL_DIR = "${targetOpenSsl.dev}";
+              OPENSSL_INCLUDE_DIR = "${targetOpenSsl.dev}/include";
+              OPENSSL_LIB_DIR = "${targetOpenSsl.out}/lib";
+
+              # Add proper build inputs
+              buildInputs = commonArgs.buildInputs ++
+                [
+                  targetOpenSsl.dev
+                  targetOpenSsl.out
+                  crossPkgs.stdenv.cc
+                ] ++
+                (if pkgs.stdenv.isDarwin && (libc == "gnu" || libc == "musl") then [
+                  crossPkgs.stdenv.cc.libc
+                ] else [ ]) ++
+                (if libc == "musl" then [
+                  pkgs.musl
+                ] else [ ]);
+
+              # Build phases
+              preConfigurePhases = [ "npmBuild" "setupCargoConfig" "checkLinker" ];
+
+              setupCargoConfig = ''
+                mkdir -p .cargo
+                cat > .cargo/config.toml << EOF
+                ${cargoConfigContent}
+                EOF
+                cat .cargo/config.toml
+              '';
+
+              # Add a diagnostic phase to check if the linker exists
+              checkLinker = ''
+                echo "Checking cross compiler tools:"
+                echo "Linker: ${crossLd}"
+                echo "AR: ${crossAr}"
+                
+                if [ -e "${crossLd}" ]; then
+                  echo "Linker found: ${crossLd}"
+                  ls -la "${crossLd}"
+                else
+                  echo "ERROR: Linker not found: ${crossLd}"
+                  echo "Contents of directory:"
+                  ls -la ${crossPkgs.stdenv.cc}/bin/
+                fi
+                
+                if [ -e "${crossAr}" ]; then
+                  echo "AR found: ${crossAr}"
+                else
+                  echo "ERROR: AR not found: ${crossAr}"
+                fi
+              '';
+
+              npmBuild = buildUiAssets;
+
+              installPhase =
+                let
+                  binDir = "$out/bin";
+                  configDir = "${binDir}/config";
+                  staticDir = "${binDir}/static";
+
+                  # Binary path depends on target
+                  binaryPath = "target/${target}/release/kellnr";
+                in
+                ''
+                  # Copy kellnr binary into bin directory
+                  mkdir -p ${binDir};
+                  cp ${binaryPath} ${binDir}/kellnr;
+                
+                  # Copy default config
+                  mkdir -p ${configDir};
+                  cp config/default.toml ${configDir};
+                
+                  # Copy the built UI
+                  mkdir -p ${staticDir};
+                  cp -r ui/dist/* ${staticDir};
+                '';
+            };
+          in
+          craneLib.buildPackage targetArgs;
+
+        # Build package for each target
+        packages = builtins.listToAttrs (map
+          (target: {
+            name = builtins.replaceStrings [ "-" ] [ "_" ] target;
+            value = makePackage target;
+          })
+          targets
+        );
+
+        # Also build for the host system
+        hostPackage = baseCraneLib.buildPackage (commonArgs // {
+          inherit cargoArtifacts nodeDeps;
           doCheck = false;
 
-          preConfigurePhases = [
-            "npmBuild"
-          ];
+          preConfigurePhases = [ "npmBuild" ];
 
-          npmBuild = ''
-            cd ui;
-            ln -s ${nodeDeps}/lib/node_modules ./node_modules;
-            export PATH="${nodeDeps}/bin:$PATH";
-            npm run build --verbose;
-            cd ..;
-          '';
+          npmBuild = buildUiAssets;
 
           installPhase =
             let
@@ -106,11 +276,11 @@
               # Copy kellnr binary into bin directory
               mkdir -p ${binDir};
               cp target/release/kellnr ${binDir};
-     
+            
               # Copy default config
               mkdir -p ${configDir};
               cp config/default.toml ${configDir};
-     
+            
               # Copy the built UI
               mkdir -p ${staticDir};
               cp -r ui/dist/* ${staticDir};
@@ -120,22 +290,22 @@
       with pkgs;
       {
         checks = {
-          inherit kellnr-crate;
+          inherit hostPackage;
 
           # Check formatting with rustfmt.
-          fmt = craneLib.cargoFmt (commonArgs // {
+          fmt = baseCraneLib.cargoFmt (commonArgs // {
             inherit src;
           });
 
           # Check for clippy warnings.
-          clippy = craneLib.cargoClippy (commonArgs // {
+          clippy = baseCraneLib.cargoClippy (commonArgs // {
             inherit cargoArtifacts;
             cargoClippyExtraArgs = "--workspace --all-targets -- --deny warnings";
           });
         };
 
-        devShells.default = craneLib.devShell (commonArgs // {
-          inputsFrom = [ kellnr-crate ];
+        devShells.default = baseCraneLib.devShell (commonArgs // {
+          inputsFrom = [ hostPackage ];
 
           shellHook = ''
             alias c=cargo
@@ -155,17 +325,29 @@
             node2nix
             jd-diff-patch
             sea-orm-cli
+            nixpkgs-fmt
+            statix
           ];
         });
 
-        packages = {
-          default = kellnr-crate;
+        # Make all cross-compiled packages available
+        packages = packages // {
+          default = hostPackage;
         };
 
-        apps.default = flake-utils.lib.mkApp {
-          drv = kellnr-crate;
-        };
+        apps = {
+          default = flake-utils.lib.mkApp {
+            drv = hostPackage;
+          };
+        } // builtins.listToAttrs (map
+          (target: {
+            name = builtins.replaceStrings [ "-" ] [ "_" ] target;
+            value = flake-utils.lib.mkApp {
+              drv = packages.${builtins.replaceStrings [ "-" ] [ "_" ] target};
+            };
+          })
+          targets
+        );
       }
     );
 }
-
