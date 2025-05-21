@@ -956,7 +956,7 @@ mod reg_api_tests {
         // Get the empty success results message.
         let response_status = r.status();
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let success: EmptyCrateSuccess =
+        let _success: EmptyCrateSuccess =
             serde_json::from_slice(&result_msg).expect("Cannot deserialize success message");
 
         assert_eq!(StatusCode::OK, response_status);
@@ -1275,10 +1275,23 @@ mod reg_api_tests {
             serde_json::from_slice::<ErrorDetails>(&result_msg).is_err(),
             "An error message instead of a success message was returned"
         );
-        assert_eq!(1, kellnr.db.get_crate_meta_list(&normalized_name).await.unwrap().len());
+        assert_eq!(
+            1,
+            kellnr
+                .db
+                .get_crate_meta_list(&normalized_name)
+                .await
+                .unwrap()
+                .len()
+        );
         assert_eq!(
             "0.2.0",
-            kellnr.db.get_crate_meta_list(&normalized_name).await.unwrap()[0].version
+            kellnr
+                .db
+                .get_crate_meta_list(&normalized_name)
+                .await
+                .unwrap()[0]
+                .version
         );
     }
 

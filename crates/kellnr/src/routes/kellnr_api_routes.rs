@@ -1,10 +1,10 @@
 use appstate::AppStateData;
 use auth::auth_req_token;
 use axum::{
+    Router,
     extract::DefaultBodyLimit,
     middleware,
     routing::{delete, get, put},
-    Router,
 };
 use index::kellnr_prefetch_api;
 use registry::kellnr_api;
