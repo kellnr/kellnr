@@ -1,10 +1,10 @@
 use appstate::AppStateData;
 use auth::auth_req_token;
 use axum::{
-    Router,
     extract::DefaultBodyLimit,
     middleware,
     routing::{delete, get, put},
+    Router,
 };
 use index::kellnr_prefetch_api;
 use registry::kellnr_api;
@@ -61,6 +61,7 @@ pub fn create_routes(state: AppStateData, max_crate_size: usize) -> Router<AppSt
             "/new",
             put(kellnr_api::publish).layer(DefaultBodyLimit::max(max_crate_size * 1_000_000)),
         )
+        .route("/new_empty", put(kellnr_api::add_empty_crate))
         .route("/{crate_name}/{version}/yank", delete(kellnr_api::yank))
         .route("/{crate_name}/{version}/unyank", put(kellnr_api::unyank))
         .route_layer(middleware::from_fn_with_state(

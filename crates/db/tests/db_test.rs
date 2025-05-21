@@ -724,6 +724,37 @@ async fn test_add_crate_different_user(test_db: &db::Database) {
 }
 
 #[db_test]
+async fn test_add_empty_crate(test_db: &db::Database) {
+    let created = Utc::now();
+    test_db.add_empty_crate("mycrate", &created).await.unwrap();
+
+    let normalized_name = NormalizedName::from(OriginalName::try_from("mycrate").unwrap());
+    let crate_id = test_db.get_crate_id(&normalized_name).await.unwrap();
+    assert!(crate_id.is_some());
+}
+
+#[db_test]
+async fn test_add_empty_crate_exists(test_db: &db::Database) {
+    let created = Utc::now();
+
+    // add a crate with version first
+    test_add_crate(
+        &test_db,
+        "mycrate",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &Utc::now(),
+    )
+    .await
+    .unwrap();
+
+    // now try to add an empty crate with the same name
+    let result = test_db.add_empty_crate("mycrate", &created).await;
+
+    assert!(result.is_err());
+}
+
+#[db_test]
 async fn get_user_from_token_works(test_db: &db::Database) {
     test_db
         .add_auth_token("test1", "mytoken1", "admin")

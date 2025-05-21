@@ -1433,6 +1433,28 @@ impl DbProvider for Database {
         Ok(crate_data)
     }
 
+    async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64> {
+        let created = created.format(DB_DATE_FORMAT).to_string();
+        let normalized_name = NormalizedName::from(
+            OriginalName::try_from(name)
+                .map_err(|_| DbError::InvalidCrateName(name.to_string()))?,
+        );
+        let krate = krate::ActiveModel {
+            id: Default::default(),
+            name: Set(normalized_name.to_string()),
+            original_name: Set(name.to_string()),
+            max_version: Set("0.0.0".to_string()),
+            last_updated: Set(created.clone()),
+            total_downloads: Set(0),
+            homepage: Set(None),
+            description: Set(None),
+            repository: Set(None),
+            e_tag: Set("".to_string()), // Set to empty string, as it can be computed, when the crate index is inserted
+            restricted_download: Set(false),
+        };
+        Ok(krate.insert(&self.db_con).await?.id)
+    }
+
     async fn add_crate(
         &self,
         pub_metadata: &PublishMetadata,
