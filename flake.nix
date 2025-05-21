@@ -24,7 +24,9 @@
         # Set a filter of files that are included in the build source directory.
         # This is used to filter out files that are not needed for the build to
         # not rebuild on every file change, e.g. in a Readme.md file.
-        webuiFilter = path: _type: builtins.match ".*.(js|json|ts|vue|html|png|css|svg)$" path != null;
+        webuiFilter = path: _type:
+          let extensions = [ "js" "json" "ts" "vue" "html" "png" "css" "svg" ];
+          in lib.any (ext: lib.hasSuffix ".${ext}" path) extensions;
         webuiOrCargo = path: type:
           (webuiFilter path type) || (craneLib.filterCargoSources path type);
         # Include all Rust and WebUI files in the source directory.
@@ -40,7 +42,7 @@
 
           nativeBuildInputs = [
             pkgs.cmake
-            pkgs.nodejs_22
+            pkgs.nodejs_24
           ] ++ lib.optionals pkgs.stdenv.isLinux [
             pkgs.pkg-config
             pkgs.rustPlatform.bindgenHook
@@ -50,7 +52,6 @@
             pkgs.cargo-nextest
             pkgs.openssl.dev
           ] ++ lib.optional pkgs.stdenv.isDarwin [
-            pkgs.darwin.apple_sdk.frameworks.Cocoa
             pkgs.libiconv
             pkgs.iconv
             pkgs.cacert
@@ -72,8 +73,7 @@
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
         # Install the NPM dependencies
-        nodejs = pkgs.nodejs_22;
-        node2nixOutput = import ui/nix { inherit pkgs nodejs system; };
+        node2nixOutput = import ui/nix { inherit pkgs system; nodejs = pkgs.nodejs_24; };
         nodeDeps = node2nixOutput.nodeDependencies;
 
         # Build the actual crate itself, reusing the dependency
@@ -86,17 +86,7 @@
 
           preConfigurePhases = [
             "npmBuild"
-            "debug"
           ];
-
-          debug = ''
-            echo "---- DEBUG ----"
-            echo "Path: "
-            pwd
-            echo "Directory: "
-            ls -la
-            ls -la ui
-          '';
 
           npmBuild = ''
             cd ui;
@@ -106,42 +96,31 @@
             cd ..;
           '';
 
-          installPhase = ''
-            # Copy kellnr binary into bin directory
-            mkdir -p $out/bin;
-            cp target/release/kellnr $out/bin;
-
-            # Copy default config into bin directory
-            mkdir -p $out/bin/config;
-            cp config/default.toml $out/bin/config;
-
-            # Copy the built UI into the bin directory
-            mkdir -p $out/bin/static;
-            cp -r ui/dist/* $out/bin/static;
-
-            # Debug output
-            ls -la $out/bin;
-            ls -la $out/bin/static;
-            ls -la $out/bin/config;
-          '';
-
-          # fixupPhase = ''
-          # '';
-
+          installPhase =
+            let
+              binDir = "$out/bin";
+              configDir = "${binDir}/config";
+              staticDir = "${binDir}/static";
+            in
+            ''
+              # Copy kellnr binary into bin directory
+              mkdir -p ${binDir};
+              cp target/release/kellnr ${binDir};
+     
+              # Copy default config
+              mkdir -p ${configDir};
+              cp config/default.toml ${configDir};
+     
+              # Copy the built UI
+              mkdir -p ${staticDir};
+              cp -r ui/dist/* ${staticDir};
+            '';
         });
       in
       with pkgs;
       {
         checks = {
           inherit kellnr-crate;
-
-          # Run the tests with cargo-nextest,
-          # excluding the database tests and other tests that do not run
-          # well with the nix sandbox.
-          # nextest = craneLib.cargoNextest (commonArgs // {
-          #   inherit cargoArtifacts;
-          #   cargoNextestExtraArgs = "--workspace -E 'not (binary_id(db::postgres_test) or binary_id(db::sqlite_test) or test(cratesio_prefetch_api::tests::fetch_cratesio_description_works) or test(cratesio_prefetch_api::tests::fetch_cratesio_prefetch_works))'";
-          # });
 
           # Check formatting with rustfmt.
           fmt = craneLib.cargoFmt (commonArgs // {
