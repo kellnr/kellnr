@@ -139,13 +139,13 @@
                 if arch == "aarch64" && !pkgs.stdenv.isDarwin then
                   "${crossPkgs.stdenv.cc}/bin/clang"
                 else
-                  "${crossPkgs.stdenv.cc}/bin/${target}-clang" 
+                  "${crossPkgs.stdenv.cc}/bin/${target}-clang"
               else if arch == "aarch64" && !pkgs.stdenv.isDarwin then
                 "${crossPkgs.stdenv.cc}/bin/gcc"
               else
                 "${crossPkgs.stdenv.cc}/bin/${target}-gcc";
 
-            crossAr = 
+            crossAr =
               if arch == "aarch64" && !pkgs.stdenv.isDarwin then
                 "${crossPkgs.stdenv.cc}/bin/ar"
               else
