@@ -125,20 +125,31 @@
                   pkgs.pkgsCross.aarch64-multiplatform-musl
                 else if arch == "aarch64" && libc == "gnu" then
                   pkgs.pkgsCross.aarch64-multiplatform
+                else if arch == "x86_64" && libc == "gnu" then
+                  pkgs.pkgsCross.gnu64
                 else
                   pkgs;
 
             # Get the target OpenSSL
             targetOpenSsl = crossPkgs.openssl;
 
-            # Find the cross compiler binaries
+            # Find the cross compiler binaries with proper naming based on target and host
             crossLd =
               if libc == "musl" then
-                "${crossPkgs.stdenv.cc}/bin/${target}-clang"
+                if arch == "aarch64" && !pkgs.stdenv.isDarwin then
+                  "${crossPkgs.stdenv.cc}/bin/clang"
+                else
+                  "${crossPkgs.stdenv.cc}/bin/${target}-clang" 
+              else if arch == "aarch64" && !pkgs.stdenv.isDarwin then
+                "${crossPkgs.stdenv.cc}/bin/gcc"
               else
                 "${crossPkgs.stdenv.cc}/bin/${target}-gcc";
 
-            crossAr = "${crossPkgs.stdenv.cc}/bin/${target}-ar";
+            crossAr = 
+              if arch == "aarch64" && !pkgs.stdenv.isDarwin then
+                "${crossPkgs.stdenv.cc}/bin/ar"
+              else
+                "${crossPkgs.stdenv.cc}/bin/${target}-ar";
 
             # Create crane lib specific to this target
             craneLib = (crane.mkLib crossPkgs).overrideToolchain (p: rustWithTargets);
