@@ -74,8 +74,7 @@ patch-package:
 
 # Set the target for the ci-release command.
 # The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", 
-# "armv7-unknown-linux-gnueabihf", "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl",
-# "armv7-unknown-linux-musleabihf".
+# "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl".
 # It's used by the Github Actions CI to build the release binary for the specified target.
 target := "x86_64-unknown-linux-gnu"
 
@@ -102,13 +101,7 @@ x-x86_64-musl:
 x-x86_64-gnu: 
 	cross build --target x86_64-unknown-linux-gnu --features vendored-openssl
 
-x-armv7-musl: 
-	cross build --target armv7-unknown-linux-musleabihf --features vendored-openssl
-
-x-armv7-gnu:
-	cross build --target armv7-unknown-linux-gnueabihf --features vendored-openssl
-
-x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu x-armv7-musl x-armv7-gnu
+x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu
 
 ##########################################
 # Aliases
