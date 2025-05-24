@@ -29,8 +29,13 @@ clean:
 test: # Run all tests except the Postgresql integration tests, which require Docker
 	cargo nextest run --workspace -E 'not test(~postgres_)'
 
-test-all:
-	{{test_all}}
+test-smoke:
+	{{test_smoke}}
+
+test-pgdb:
+	{{test_pgdb}}
+
+test-all: test-pgdb test-smoke
 
 clean-node:
 	rm -rf ui/node_modules
@@ -111,13 +116,12 @@ alias b := build
 alias br := build-release
 alias r := run
 alias t := test
-alias ta := test-all
 alias c := check
 
 # "true" if docker is installed, "false" otherwise
 # Docker is needed for the Postgresql integration tests
 has_docker := if `command -v docker > /dev/null 2>&1; echo $?` == "0" { "true" } else { "false" }
-test_all := if has_docker == "true" { "cargo nextest run --workspace" } else { "echo 'ERROR: Docker is not installed. The Postgresql integration tests require Docker'" }
-
+test_pgdb := if has_docker == "true" { "cargo nextest run --workspace" } else { "echo 'ERROR: Docker is not installed. The Postgresql integration tests require Docker'" }
+test_smoke := if has_docker == "true" { "cd tests && lua run_tests.lua" } else { "echo 'ERROR: Docker is not installed. The smoke tests require Docker'" }
 docker:
 	echo "{{has_docker}}"
