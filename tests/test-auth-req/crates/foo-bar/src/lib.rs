@@ -1,0 +1,16 @@
+//! # test_lib
+//! `test_lib` is a test library for Kellnr.
+//! It is used to test upload, download and Rustdoc functionality.
+
+/// Test function that returns a string.
+pub fn test_fn() -> String {
+    String::from("Hello from test")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
+}

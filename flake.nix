@@ -319,9 +319,22 @@
           inputsFrom = [ hostPackage ];
 
           shellHook = ''
+            echo "Kellnr Development Environment"
+            echo "==========================="
+            echo "Rust version: $(rustc --version)"
+            echo "Cargo version: $(cargo --version)"
+            echo "Node.js version: $(node --version)"
+            echo "NPM version: $(npm --version)"
+            echo "Nixpkgs version: ${nixpkgs.lib.version}"
+            echo "Lua version: $(lua -v)"
+            echo "Docker version: $(docker --version 2>/dev/null || echo 'Docker not available')"
+
             alias c=cargo
             alias j=just
             alias lg=lazygit
+
+            # Ensure the script can find modules in the current directory and parent directory
+            export LUA_PATH="./?.lua;../?.lua;$(lua -e 'print(package.path)')"
           '' + lib.optionalString stdenv.isDarwin ''
             export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
             export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
@@ -338,6 +351,12 @@
             sea-orm-cli
             nixpkgs-fmt
             statix
+            lua5_4
+            lua54Packages.luasocket
+            lua54Packages.luafilesystem
+            jq
+            curl
+            gnused
           ];
         });
 
