@@ -10,5 +10,8 @@ To install all dependencies and run the test, you can use the Nix development sh
 ```bash
 # In the root of the repository, where the flake.nix file is located
 nix develop
+
+# Execute the tests in the tests directory
+./run_tests.lua
 ```
 

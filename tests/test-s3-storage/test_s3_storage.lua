@@ -5,16 +5,16 @@ local os = require("os")
 local socket = require("socket")
 
 -- Parse command line for our test script
--- Take version as first argument, but allow for flags anywhere
-local version
+-- Take image as first argument, but allow for flags anywhere
+local image
 local args = {}
 for i, arg_value in ipairs(arg) do
 	if arg_value:sub(1, 1) == "-" then
 		-- This is a flag, keep it in args table
 		table.insert(args, arg_value)
 	else
-		-- This is likely the version
-		version = arg_value
+		-- This is likely the image
+		image = arg_value
 	end
 end
 
@@ -41,22 +41,17 @@ local config = {
 
 -- Main function
 local function main()
-	-- Check version argument
-	if not version then
-		testing.log("Usage: " .. arg[0] .. " <version> [--debug/-d]", true)
-		testing.log("Version has to be a version from the Raspi registry.", true)
+	-- Check image argument
+	if not image then
+		testing.log("Usage: " .. arg[0] .. " <image> [--debug/-d]", true)
 		testing.log("Options:", true)
 		testing.log("  --debug, -d    Enable debug logging", true)
 		os.exit(1)
 	end
 
-	local image = config.docker_registry .. ":" .. version
 
-	testing.log("Test S3 storage of Kellnr:" .. version, true)
+	testing.log("Test S3 storage of Kellnr:" .. image, true)
 	testing.debug_log("Debug mode is enabled", true)
-
-	-- Pull the Docker image
-	testing.docker_pull(image)
 
 	-- Create logs directory
 	testing.create_directory(config.logs_dir)
@@ -123,7 +118,7 @@ local function main()
 	testing.end_timer(start_time, "Test execution time")
 
 	-- Stop containers and clean up
-	testing.log("Stopping Kellnr:" .. version, true)
+	testing.log("Stopping Kellnr: " .. image, true)
 	testing.docker_stop(config.container)
 
 	testing.log("Stopping S3", true)

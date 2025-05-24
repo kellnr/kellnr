@@ -6,3 +6,4 @@
 .target
 target/
 result/
+tests/

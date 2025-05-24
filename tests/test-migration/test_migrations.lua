@@ -6,26 +6,24 @@ local lfs = require("lfs") -- LuaFileSystem for directory operations
 local socket = require("socket")
 
 -- Parse command line arguments
-local old_version, new_version
+local old_image, new_image
 local args = {}
 
 for i, arg_value in ipairs(_G.arg) do
 	if arg_value:sub(1, 1) == "-" then
 		-- This is a flag, keep it in args table
 		table.insert(args, arg_value)
-	elseif not old_version then
-		-- First non-flag argument is old_version
-		old_version = arg_value
-	elseif not new_version then
-		-- Second non-flag argument is new_version
-		new_version = arg_value
+	elseif not old_image then
+		-- First non-flag argument is old_image
+		old_image = arg_value
+	elseif not new_image then
+		-- Second non-flag argument is new_image
+		new_image = arg_value
 	end
 end
 
 -- Configuration
 local config = {
-	raspi_docker_registry = "registry.raspi.home/kellnr-dev",
-	docker_hub_registry = "ghcr.io/kellnr/kellnr",
 	old_container = "kellnr-old",
 	new_container = "kellnr-new",
 	registry = "kellnr-local",
@@ -48,24 +46,18 @@ end
 -- Main function
 local function main()
 	-- Check version arguments
-	if not old_version or not new_version then
-		testing.log("Usage: " .. arg[0] .. " <old-version> <new-version> [--debug/-d]", true)
-		testing.log("Old version has to be a version from the Docker hub.", true)
-		testing.log("New version has to be a version from the Raspi registry.", true)
+	if not old_image or not new_image then
+		testing.log("Usage: " .. arg[0] .. " <old-image> <new-image> [--debug/-d]", true)
 		testing.log("Options:", true)
 		testing.log("  --debug, -d    Enable debug logging", true)
 		os.exit(1)
 	end
 
-	local old_image = config.docker_hub_registry .. ":" .. old_version
-	local new_image = config.raspi_docker_registry .. ":" .. new_version
-
-	testing.log("Test Kellnr:" .. old_version .. " -> Kellnr:" .. new_version, true)
+	testing.log("Test Kellnr:" .. old_image .. " -> Kellnr:" .. new_image, true)
 	testing.debug_log("Debug mode is enabled", true)
 
 	-- Pull Docker images
 	testing.docker_pull(old_image)
-	testing.docker_pull(new_image)
 
 	-- Remove and recreate directories
 	remove_directory(config.kdata_dir)
@@ -78,7 +70,7 @@ local function main()
 	local kdata_path = current_dir .. "/" .. config.kdata_dir
 
 	-- Start the old version container
-	testing.log("Starting Kellnr:" .. old_version, true)
+	testing.log("Starting Kellnr:" .. old_image, true)
 	local env_vars = {
 		["KELLNR_LOG__LEVEL"] = "debug",
 		["KELLNR_LOG__LEVEL_WEB_SERVER"] = "debug"
@@ -121,13 +113,13 @@ local function main()
 	end
 
 	-- Stop old container
-	testing.log("Stopping Kellnr:" .. old_version, true)
+	testing.log("Stopping Kellnr:" .. old_image, true)
 	testing.debug_log("Waiting 10 seconds before stopping...", true)
 	socket.sleep(10)
 	testing.docker_stop(config.old_container)
 
 	-- Start new container
-	testing.log("Starting Kellnr:" .. new_version, true)
+	testing.log("Starting Kellnr:" .. new_image, true)
 	local run_success = testing.docker_run(config.new_container, new_image, ports, env_vars, additional_params)
 	if not run_success then
 		testing.error_log("Failed to start new Docker container", true)
@@ -155,19 +147,19 @@ local function main()
 	end
 
 	-- Stop new container
-	testing.log("Stopping Kellnr:" .. new_version, true)
+	testing.log("Stopping Kellnr: " .. new_image, true)
 	testing.docker_stop(config.new_container)
 
 	-- Check for errors in logs
 	testing.log("Checking logs for errors...", true)
 
 	-- Check old version logs
-	testing.log("Errors in Kellnr:" .. old_version .. ":", true)
+	testing.log("Errors in Kellnr: " .. old_image .. ":", true)
 	local old_errors, _ = testing.exec("grep -e ERROR logs/kellnr-old.log || true")
 	print(old_errors)
 
 	-- Check new version logs
-	testing.log("Errors in Kellnr:" .. new_version .. ":", true)
+	testing.log("Errors in Kellnr: " .. new_image .. ":", true)
 	local new_errors, _ = testing.exec("grep -e ERROR logs/kellnr-new.log || true")
 	print(new_errors)
 

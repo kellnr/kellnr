@@ -164,7 +164,7 @@ end
 -- Docker build function
 function testing.docker_build(tag, build_args, context)
 	context = context or "."
-	local cmd = "docker build -t " .. tag
+	local cmd = "docker build -f Dockerfile -t " .. tag
 
 	-- Add build args if provided
 	if build_args and type(build_args) == "table" then
@@ -224,14 +224,14 @@ function testing.docker_logs(container_name, output_file, strip_colors)
 
 	if strip_colors then
 		cmd = "docker logs -f " .. container_name ..
-		    " | lua -e \"" ..
-		    "while true do " ..
-		    "  local line = io.read() " ..
-		    "  if not line then break end " ..
-		    "  line = line:gsub('\\027%[[%d;]+m', '') " .. -- Strip ANSI colors
-		    "  io.stdout:write(line .. '\\n') " ..
-		    "end" ..
-		    "\""
+				" | lua -e \"" ..
+				"while true do " ..
+				"  local line = io.read() " ..
+				"  if not line then break end " ..
+				"  line = line:gsub('\\027%[[%d;]+m', '') " .. -- Strip ANSI colors
+				"  io.stdout:write(line .. '\\n') " ..
+				"end" ..
+				"\""
 	else
 		cmd = "docker logs -f " .. container_name
 	end

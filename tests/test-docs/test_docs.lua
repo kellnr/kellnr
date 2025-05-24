@@ -6,16 +6,16 @@ local socket = require("socket")
 local lfs = require("lfs") -- LuaFileSystem, used for directory operations
 
 -- Parse command line for our test script
--- Take version as first argument, but allow for flags anywhere
-local version
+-- Take image as first argument, but allow for flags anywhere
+local image
 local args = {}
 for i, arg_value in ipairs(arg) do
     if arg_value:sub(1, 1) == "-" then
         -- This is a flag, keep it in args table
         table.insert(args, arg_value)
     else
-        -- This is likely the version
-        version = arg_value
+        -- This is likely the image
+        image = arg_value
     end
 end
 
@@ -54,26 +54,16 @@ end
 
 -- Main function
 local function main()
-    -- Check version argument
-    if not version then
-        testing.log("Usage: " .. arg[0] .. " <version> [--debug/-d]", true)
-        testing.log("Version has to be a version from the Raspi registry.", true)
+    -- Check image argument
+    if not image then
+        testing.log("Usage: " .. arg[0] .. " <image> [--debug/-d]", true)
         testing.log("Options:", true)
         testing.log("  --debug, -d    Enable debug logging", true)
         os.exit(1)
     end
 
-    local image = config.docker_registry .. ":" .. version
-
-    testing.log("Test docs registry of Kellnr:" .. version, true)
+    testing.log("Test docs registry of Kellnr:" .. image, true)
     testing.debug_log("Debug mode is enabled", true)
-
-    -- Pull the Docker image
-    local pull_success = testing.docker_pull(image)
-    if not pull_success then
-        testing.error_log("Failed to pull Docker image", true)
-        os.exit(1)
-    end
 
     -- Create logs directory
     testing.create_directory(config.logs_dir)
@@ -98,7 +88,7 @@ local function main()
     local data_path = current_dir .. "/" .. config.data_dir:gsub("^%./", "")
 
     -- Start Kellnr container
-    testing.log("Starting Kellnr:" .. version, true)
+    testing.log("Starting Kellnr:" .. image, true)
     local env_vars = {
         ["KELLNR_LOG__LEVEL"] = "trace",
         ["KELLNR_LOG__LEVEL_WEB_SERVER"] = "debug",
@@ -152,7 +142,7 @@ local function main()
     testing.end_timer(start_time, "Test execution time")
 
     -- Stop the container
-    testing.log("Stopping Kellnr:" .. version, true)
+    testing.log("Stopping Kellnr: " .. image, true)
     testing.docker_stop(config.container)
 
     if docs_generated then

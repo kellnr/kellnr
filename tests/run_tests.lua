@@ -29,15 +29,17 @@ local function run_test(dir, script, new_version, latest_version, description, r
 	end
 end
 
+-- Build a testing image for Kellnr
+local function build_kellnr(image)
+	testing.log("--- BUILDING KELLNR TESTING IMAGE ---", true)
+	testing.docker_build(image, { KELLNR_VERSION = "local" }, "../")
+	testing.log("Kellnr testing image built successfully: " .. image, true)
+end
+
+
 -- Main function
 local function main()
-	-- Ensure the version argument is provided
-	local new_version = arg[1]
-	if not new_version then
-		testing.log("Usage: " .. arg[0] .. " <new-version>", true)
-		testing.log("New version has to be a version from the Raspi registry.", true)
-		os.exit(1)
-	end
+	local image = "kellnr-test:local"
 
 	-- Fetch the latest version of Kellnr from GitHub
 	local latest_version_cmd =
@@ -51,11 +53,16 @@ local function main()
 		os.exit(1)
 	end
 
+	local latest_image = "ghcr.io/kellnr/kellnr:" .. latest_version
+
 	testing.log("INFO: Latest released version of Kellnr is: " .. latest_version, true)
+
+	-- Build the Kellnr testing image
+	build_kellnr(image)
 
 	-- Run each test script
 	for _, test in ipairs(test_scripts) do
-		run_test(test.dir, test.script, new_version, latest_version, test.description, test.requires_latest_version)
+		run_test(test.dir, test.script, image, latest_image, test.description, test.requires_latest_version)
 	end
 
 	testing.log("--- ALL TESTS FINISHED ---", true)

@@ -5,7 +5,7 @@ local os = require("os")
 
 -- Parse command line for our test script
 -- Take version as first argument, but allow for flags anywhere
-local version
+local image
 local args = {}
 for i, arg_value in ipairs(arg) do
 	if arg_value:sub(1, 1) == "-" then
@@ -13,7 +13,7 @@ for i, arg_value in ipairs(arg) do
 		table.insert(args, arg_value)
 	else
 		-- This is likely the version
-		version = arg_value
+		image = arg_value
 	end
 end
 
@@ -22,7 +22,6 @@ local config = {
 	container = "kellnr-auth-req",
 	registry = "kellnr-test",
 	url = "http://localhost:8000",
-	docker_registry = "registry.raspi.home/kellnr-dev",
 	server_timeout = 60, -- seconds
 	logs_dir = "logs"
 }
@@ -30,25 +29,15 @@ local config = {
 -- Main function
 local function main()
 	-- Check version argument
-	if not version then
-		testing.log("Usage: " .. arg[0] .. " <version> [--debug/-d]", true)
-		testing.log("Version has to be a version from the Raspi registry.", true)
+	if not image then
+		testing.log("Usage: " .. arg[0] .. " <image> [--debug/-d]", true)
 		testing.log("Options:", true)
 		testing.log("  --debug, -d    Enable debug logging", true)
 		os.exit(1)
 	end
 
-	local image = config.docker_registry .. ":" .. version
-
-	testing.log("Test required authentication for Kellnr:" .. version, true)
+	testing.log("Test required authentication for Kellnr:" .. image, true)
 	testing.debug_log("Debug mode is enabled", true)
-
-	-- Pull the Docker image
-	local pull_success = testing.docker_pull(image)
-	if not pull_success then
-		testing.error_log("Failed to pull Docker image", true)
-		os.exit(1)
-	end
 
 	-- Create logs directory
 	testing.create_directory(config.logs_dir)
