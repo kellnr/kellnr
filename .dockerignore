@@ -7,3 +7,8 @@
 target/
 result/
 tests/
+*.md
+justfile
+LICENSE
+deny.toml
+flake.*
