@@ -75,7 +75,7 @@ end
 
 -- Execute a command and return output, exit code
 function testing.exec(cmd)
-	testing.debug_log("Executing: " .. cmd, true) -- Changed to debug_log with timestamp
+	testing.debug_log("Executing: " .. cmd, true)
 	local handle = io.popen(cmd .. " 2>&1 ; echo $?")
 	local result = handle:read("*a")
 	handle:close()
@@ -87,17 +87,16 @@ function testing.exec(cmd)
 	return output, exit_code == 0
 end
 
--- Execute a command, log results, and optionally exit on failure
-function testing.exec_with_logging(cmd, exit_on_failure)
+-- Execute a command, log results, and always exit on failure
+function testing.exec_with_logging(cmd, description)
 	local output, success = testing.exec(cmd)
+	description = description or cmd
 
 	if not success then
-		testing.error_log("Command failed: " .. cmd, true)
+		testing.error_log("Command failed: " .. description, true)
 		testing.error_log("Output: " .. output, false)
-
-		if exit_on_failure then
-			os.exit(1)
-		end
+		testing.error_log("Exiting with error code 1", true)
+		os.exit(1)
 	end
 
 	return output, success
@@ -133,7 +132,8 @@ function testing.wait_for_server(url, timeout, expected_status)
 		if os.time() - start_time > timeout then
 			testing.error_log("Server did not return status " .. expected_status ..
 				" within timeout period (" .. timeout .. "s)", true)
-			return false
+			testing.error_log("Exiting with error code 1", true)
+			os.exit(1)
 		end
 
 		socket.sleep(1)
@@ -145,7 +145,8 @@ function testing.create_directory(path)
 	local success = os.execute("mkdir -p " .. path)
 	if not success then
 		testing.error_log("Failed to create directory: " .. path, true)
-		return false
+		testing.error_log("Exiting with error code 1", true)
+		os.exit(1)
 	end
 	return true
 end
@@ -153,12 +154,14 @@ end
 -- Docker network management functions
 function testing.docker_network_create(network_name)
 	testing.log("Creating Docker network: " .. network_name, true)
-	return testing.exec_with_logging("docker network create " .. network_name, false)
+	return testing.exec_with_logging("docker network create " .. network_name, 
+		"Creating Docker network: " .. network_name)
 end
 
 function testing.docker_network_remove(network_name)
 	testing.log("Removing Docker network: " .. network_name, true)
-	return testing.exec_with_logging("docker network rm " .. network_name, false)
+	return testing.exec_with_logging("docker network rm " .. network_name, 
+		"Removing Docker network: " .. network_name)
 end
 
 -- Docker build function
@@ -176,13 +179,14 @@ function testing.docker_build(tag, build_args, context)
 	cmd = cmd .. " " .. context
 
 	testing.log("Building Docker image: " .. tag, true)
-	return testing.exec_with_logging(cmd, false)
+	return testing.exec_with_logging(cmd, "Building Docker image: " .. tag)
 end
 
 -- Docker pull function
 function testing.docker_pull(image)
 	testing.log("Pulling Docker image: " .. image, true)
-	return testing.exec_with_logging("docker pull " .. image, false)
+	return testing.exec_with_logging("docker pull " .. image, 
+		"Pulling Docker image: " .. image)
 end
 
 -- Docker run function
@@ -209,13 +213,14 @@ function testing.docker_run(container_name, image, ports, env_vars, additional_p
 	-- Add image name
 	cmd = cmd .. " -d " .. image
 
-	return testing.exec_with_logging(cmd, false)
+	return testing.exec_with_logging(cmd, "Starting container: " .. container_name)
 end
 
 -- Docker stop function
 function testing.docker_stop(container_name)
 	testing.log("Stopping container: " .. container_name, true)
-	return testing.exec_with_logging("docker stop " .. container_name, false)
+	return testing.exec_with_logging("docker stop " .. container_name, 
+		"Stopping container: " .. container_name)
 end
 
 -- Docker logs function
@@ -242,7 +247,7 @@ function testing.docker_logs(container_name, output_file, strip_colors)
 		cmd = cmd .. " &"
 	end
 
-	return testing.exec_with_logging(cmd, false)
+	return testing.exec_with_logging(cmd, "Getting logs for container: " .. container_name)
 end
 
 -- Function to publish a Cargo crate
@@ -279,7 +284,9 @@ function testing.publish_crate(crate_path, registry, options)
 	-- Execute in the target directory
 	local full_cmd = "cd " .. crate_path .. " && " .. cmd
 
-	return testing.exec_with_logging(full_cmd, false)
+	-- This will exit with code 1 if the command fails
+	local output, success = testing.exec_with_logging(full_cmd, "Publishing crate: " .. crate_path)
+	return success
 end
 
 -- Timing utilities
