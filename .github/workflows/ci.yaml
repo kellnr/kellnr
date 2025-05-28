@@ -3,6 +3,7 @@ on:
   push:
    branches:
      - main
+     - improved-testing
   pull_request:
     branches:
       - main
