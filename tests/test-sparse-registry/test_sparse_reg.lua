@@ -2,8 +2,6 @@
 
 local testing = require("testing_lib")
 local os = require("os")
-local socket = require("socket")
-local lfs = require("lfs") -- LuaFileSystem for directory operations
 
 -- Parse command line for our test script
 -- Take image as first argument, but allow for flags anywhere
@@ -25,7 +23,6 @@ local config = {
 	container = "kellnr-sparse",
 	registry = "kellnr-test",
 	url = "http://localhost:8000",
-	docker_registry = "registry.raspi.home/kellnr-dev",
 	server_timeout = 60, -- seconds
 	logs_dir = "logs"
 }

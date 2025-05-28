@@ -24,7 +24,6 @@ local config = {
     container = "kellnr-docs",
     registry = "kellnr-test",
     url = "http://localhost:8000",
-    docker_registry = "registry.raspi.home/kellnr-dev",
     server_timeout = 60, -- seconds
     logs_dir = "logs",
     data_dir = "./data",
