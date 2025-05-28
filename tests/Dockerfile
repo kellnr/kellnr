@@ -19,6 +19,7 @@ ENV KELLNR_VERSION=$KELLNR_VERSION
 
 RUN apt update
 RUN apt install -y -q --no-install-recommends \
+    ca-certificates \
     git \
     curl \
     sed \
@@ -64,6 +65,9 @@ WORKDIR /opt/kellnr
 COPY --from=builder /sources/target/release/kellnr ./kellnr
 COPY --from=builder /sources/config/default.toml ./config/default.toml
 COPY --from=builder /sources/ui/dist ./static
+
+COPY tests/ca.crt /usr/local/share/ca-certificates/ca.crt
+RUN update-ca-certificates
 
 HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/ui/version || exit 1
 

@@ -43,3 +43,4 @@ package-lock.json
 tests/**/logs/
 tests/**/data/
 tests/**/kdata/
+.certs/

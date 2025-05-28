@@ -30,7 +30,7 @@
         pkgsFor = { localSystem, crossSystem ? null }:
           import nixpkgs ({
             inherit localSystem overlays;
-          } // (if crossSystem != null then { inherit crossSystem; } else {}));
+          } // (if crossSystem != null then { inherit crossSystem; } else { }));
 
         # Function to get a rust toolchain with all targets for a given pkgs
         rustWithTargetsFor = pkgs: pkgs.rust-bin.stable.latest.default.override {
@@ -229,10 +229,41 @@
             echo "Lua version: $(lua -v)"
             echo "Docker version: $(docker --version 2>/dev/null || echo 'Docker not available')"
 
+            # Setup custom CA certificate for testing against local Kellnr registries
+            export CUSTOM_CERT_DIR="$PWD/.certs"
+
+            # Remove existing directory if it exists with wrong permissions
+            if [ -d "$CUSTOM_CERT_DIR" ]; then
+              rm -rf "$CUSTOM_CERT_DIR"
+            fi
+
+            # Create directory with explicit permissions
+            mkdir -p "$CUSTOM_CERT_DIR"
+            chmod 755 "$CUSTOM_CERT_DIR"  # Set correct directory permissions
+
+            # Create combined cert bundle with explicit permissions
+            export COMBINED_CERT_FILE="$CUSTOM_CERT_DIR/combined-ca-bundle.pem"
+            cp "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" "$COMBINED_CERT_FILE"
+            chmod 644 "$COMBINED_CERT_FILE"  # Set read/write permissions
+
+            # Add the certificate from tests/ca.crt
+            if [ -f "$PWD/tests/ca.crt" ]; then
+              cat "$PWD/tests/ca.crt" >> "$COMBINED_CERT_FILE"
+              echo "Added tests/ca.crt certificate to CA bundle"
+            else
+              echo "Warning: tests/ca.crt not found"
+            fi
+            
+            # Set SSL cert environment variables to use the combined bundle
+            export SSL_CERT_FILE="$COMBINED_CERT_FILE"
+            export NIX_SSL_CERT_FILE="$COMBINED_CERT_FILE"
+            export REQUESTS_CA_BUNDLE="$COMBINED_CERT_FILE"
+            export NODE_EXTRA_CA_CERTS="$COMBINED_CERT_FILE"
+
             alias c=cargo
             alias j=just
             alias lg=lazygit
-
+            
             # Ensure the script can find modules in the current directory and parent directory
             export LUA_PATH="./?.lua;../?.lua;$(lua -e 'print(package.path)')"
           '' + lib.optionalString stdenv.isDarwin ''
