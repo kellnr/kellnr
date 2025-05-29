@@ -73,7 +73,7 @@ local function main()
 	-- Publish crates
 	local crates = {
 		{ path = "crates/test_lib",          name = "test_lib" },
-		{ path = "crates/Uppercase-Name123", name = "Uppercase-Name123" },
+		{ path = "crates/UpperCase-Name123", name = "UpperCase-Name123" },
 		{ path = "crates/foo-bar",           name = "foo-bar" }
 	}
 
