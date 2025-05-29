@@ -1468,12 +1468,15 @@ impl DbProvider for Database {
                 .map_err(|_| DbError::InvalidCrateName(pub_metadata.name.clone()))?,
         );
 
+
+        let existing = krate::Entity::find()
+            .filter(krate::Column::Name.eq(pub_metadata.name.clone()))
+            .one(&self.db_con)
+            .await?;
+
         let txn = self.db_con.begin().await?;
 
-        let crate_id = match krate::Entity::find()
-            .filter(krate::Column::Name.eq(pub_metadata.name.clone()))
-            .one(&txn)
-            .await?
+        let crate_id = match existing
         {
             Some(krate) => {
                 let krate_id = krate.id;
@@ -1638,19 +1641,20 @@ impl DbProvider for Database {
             .max()
             .ok_or(DbError::FailedToGetMaxVersionByName(crate_name.to_string()))?;
 
-        let txn = self.db_con.begin().await?;
 
-        let krate = match cratesio_crate::Entity::find()
+        let krate = cratesio_crate::Entity::find()
             .filter(cratesio_crate::Column::Name.eq(normalized_name.to_string()))
-            .one(&txn)
-            .await?
+            .one(&self.db_con)
+            .await?;
+
+        let krate = match krate
         {
             Some(krate) => {
                 let mut krate: cratesio_crate::ActiveModel = krate.into();
                 krate.e_tag = Set(etag.to_string());
                 krate.last_modified = Set(last_modified.to_string());
                 krate.max_version = Set(max_version.to_string());
-                krate.update(&txn).await?
+                krate.update(&self.db_con).await?
             }
             None => {
                 let krate = cratesio_crate::ActiveModel {
@@ -1663,7 +1667,7 @@ impl DbProvider for Database {
                     total_downloads: Set(0),
                     max_version: Set(max_version.to_string()),
                 };
-                krate.insert(&txn).await?
+                krate.insert(&self.db_con).await?
             }
         };
 
@@ -1678,7 +1682,7 @@ impl DbProvider for Database {
                 if index.yanked != current_index.yanked {
                     let mut ci: cratesio_index::ActiveModel = current_index.to_owned().into();
                     ci.yanked = Set(index.yanked);
-                    ci.update(&txn).await?;
+                    ci.update(&self.db_con).await?;
                 }
             } else {
                 let deps = if index.deps.is_empty() {
@@ -1709,7 +1713,7 @@ impl DbProvider for Database {
                     crates_io_fk: Set(krate.id),
                 };
 
-                new_index.insert(&txn).await?;
+                new_index.insert(&self.db_con).await?;
 
                 // Add the meta data for the crate version.
                 let meta = cratesio_meta::ActiveModel {
@@ -1723,11 +1727,9 @@ impl DbProvider for Database {
                     ))),
                 };
 
-                meta.insert(&txn).await?;
+                meta.insert(&self.db_con).await?;
             }
         }
-
-        txn.commit().await?;
 
         Ok(Prefetch {
             data: index_metadata_to_bytes(indices)?,
