@@ -429,8 +429,12 @@ pub async fn publish(
     let created = Utc::now();
 
     // Add crate to DB
-    db.add_crate(&pub_data.metadata, &cksum, &created, &token.user)
-        .await?;
+    if let Err(e) = db.add_crate(&pub_data.metadata, &cksum, &created, &token.user)
+        .await {
+        // On DB error rollback storage insert and bail.
+        let _ = cs.delete(&orig_name, &version).await;
+        return Err(e.into());
+    }
 
     // Add crate to queue for doc extraction if there is no documentation value set already
     if settings.docs.enabled && pub_data.metadata.documentation.is_none() {
