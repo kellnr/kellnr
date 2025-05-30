@@ -145,6 +145,22 @@
                     </div>
                   </td>
                 </tr>
+                <tr>
+                  <td class="text-subtitle-2">New crates restricted</td>
+                  <td>{{ formatValue(settings.registry.new_crates_restricted) }}</td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">registry.new_crates_restricted</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_REGISTRY__NEW_CRATES_RESTRICTED</span>
+                    </div>
+                  </td>
+                </tr>
               </tbody>
             </v-table>
           </v-expansion-panel-text>

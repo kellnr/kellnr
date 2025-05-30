@@ -1,0 +1,9 @@
+[package]
+authors = ["secana <stefan.hausotte@gmx.de>"]
+description = "Test library with docs"
+edition = "2021"
+name = "test_lib"
+publish = ["kellnr-test"]
+version = "2.0.0"
+
+[workspace]
