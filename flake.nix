@@ -285,6 +285,8 @@
             lua5_4
             lua54Packages.luasocket
             lua54Packages.luafilesystem
+            lua54Packages.cjson
+            lua54Packages.http
             jq
             curl
             gnused
