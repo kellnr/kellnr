@@ -5,3 +5,6 @@ kellnr-test = {index = "sparse+http://localhost:8000/api/v1/crates/", token = "Z
 replace-with = "kellnr-test-sparse-cratesio"
 [source.kellnr-test-sparse-cratesio]
 registry = "sparse+http://localhost:8000/api/v1/cratesio/"
+
+[registry]
+global-credential-providers = ["cargo:token"]
