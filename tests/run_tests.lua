@@ -50,7 +50,7 @@ local function find_latest_with_assets(releases, min_assets)
 
     for _, release in ipairs(releases) do
         if release.assets and #release.assets > min_assets then
-            return release.tag_name
+            return string.sub(release.tag_name, 2) -- Remove the 'v' prefix
         end
     end
 
