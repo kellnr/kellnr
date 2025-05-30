@@ -78,19 +78,5 @@ bytes = "1.10.0"
 async-trait = "0.1.88"
 
 [profile.release]
-lto = "off"
-strip = true
-
-# Profile for the CI build in "release"
-# to build as fast as possible
-[profile.ci-release]
 lto = "thin"
-inherits = "release"
-incremental = false
-
-# Profile for the CI build in "debug"
-# to build as fast as possible
-[profile.ci-dev]
-inherits = "dev"
-incremental = false
-lto = "off"
+strip = true

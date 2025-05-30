@@ -16,10 +16,7 @@
   outputs = { nixpkgs, flake-utils, crane, rust-overlay, ... }:
     flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ] (system:
       let
-        pkgs = import nixpkgs { inherit system; overlays = [ (import rust-overlay) ]; };
-        inherit (pkgs) lib;
-
-        # Define cross compilation targets
+        # Define cross compilation targets as Nixpkgs system strings
         targets = [
           "x86_64-unknown-linux-gnu"
           "x86_64-unknown-linux-musl"
@@ -27,22 +24,32 @@
           "aarch64-unknown-linux-musl"
         ];
 
-        # Configure a rust toolchain with all targets
-        rustWithTargets = pkgs.rust-bin.stable.latest.default.override {
+        overlays = [ (import rust-overlay) ];
+
+        # Function to get pkgs for a given system/crossSystem
+        pkgsFor = { localSystem, crossSystem ? null }:
+          import nixpkgs ({
+            inherit localSystem overlays;
+          } // (if crossSystem != null then { inherit crossSystem; } else { }));
+
+        # Function to get a rust toolchain with all targets for a given pkgs
+        rustWithTargetsFor = pkgs: pkgs.rust-bin.stable.latest.default.override {
           targets = targets;
         };
 
-        # Base crane lib with our toolchain - use function for cross-compilation compatibility
-        baseCraneLib = (crane.mkLib pkgs).overrideToolchain (pkgs: rustWithTargets);
+        # Base pkgs for the host system
+        pkgs = pkgsFor { localSystem = system; };
+
+        inherit (pkgs) lib;
 
         # Set a filter of files that are included in the build source directory.
         webuiFilter = path: _type:
           let extensions = [ "js" "json" "ts" "vue" "html" "png" "css" "svg" ];
           in lib.any (ext: lib.hasSuffix ".${ext}" path) extensions;
         webuiOrCargo = path: type:
-          (webuiFilter path type) || (baseCraneLib.filterCargoSources path type);
+          (webuiFilter path type) || ((crane.mkLib pkgs).filterCargoSources path type);
         src = lib.cleanSourceWith {
-          src = baseCraneLib.path ./.;
+          src = (crane.mkLib pkgs).path ./.;
           filter = webuiOrCargo;
         };
 
@@ -79,6 +86,7 @@
         };
 
         # Standard cargo artifacts for the host system
+        baseCraneLib = (crane.mkLib pkgs).overrideToolchain (_: rustWithTargetsFor pkgs);
         cargoArtifacts = baseCraneLib.buildDepsOnly commonArgs;
 
         # Install the NPM dependencies
@@ -100,78 +108,11 @@
         # Function to create a package for a specific target
         makePackage = target:
           let
-            # Extract architecture and libc from target
-            targetParts = builtins.split "-" target;
-            arch = builtins.elemAt targetParts 0;
-            libc = if builtins.elemAt targetParts 3 == "musl" then "musl" else "gnu";
+            # Use Nixpkgs crossSystem for cross builds
+            crossPkgs = pkgsFor { localSystem = system; crossSystem = target; };
+            # Use the buildPackages toolchain for cross builds!
+            craneLib = (crane.mkLib crossPkgs).overrideToolchain (_: rustWithTargetsFor crossPkgs.buildPackages);
 
-            # Use appropriate pkgsCross based on target
-            crossPkgs =
-              if pkgs.stdenv.isDarwin then
-                if arch == "x86_64" && libc == "musl" then
-                  pkgs.pkgsCross.musl64
-                else if arch == "aarch64" && libc == "musl" then
-                  pkgs.pkgsCross.aarch64-multiplatform-musl
-                else if arch == "aarch64" && libc == "gnu" then
-                  pkgs.pkgsCross.aarch64-multiplatform
-                else if arch == "x86_64" && libc == "gnu" then
-                  pkgs.pkgsCross.gnu64
-                else
-                  pkgs
-              else
-                if arch == "x86_64" && libc == "musl" then
-                  pkgs.pkgsCross.musl64
-                else if arch == "aarch64" && libc == "musl" then
-                  pkgs.pkgsCross.aarch64-multiplatform-musl
-                else if arch == "aarch64" && libc == "gnu" then
-                  pkgs.pkgsCross.aarch64-multiplatform
-                else if arch == "x86_64" && libc == "gnu" then
-                  pkgs.pkgsCross.gnu64
-                else
-                  pkgs;
-
-            # Get the target OpenSSL
-            targetOpenSsl = crossPkgs.openssl;
-
-            # Find the cross compiler binaries with proper naming based on target and host
-            crossLd =
-              if libc == "musl" then
-                if arch == "aarch64" && !pkgs.stdenv.isDarwin then
-                  "${crossPkgs.stdenv.cc}/bin/clang"
-                else
-                  "${crossPkgs.stdenv.cc}/bin/${target}-clang"
-              else if arch == "aarch64" && !pkgs.stdenv.isDarwin then
-                "${crossPkgs.stdenv.cc}/bin/gcc"
-              else
-                "${crossPkgs.stdenv.cc}/bin/${target}-gcc";
-
-            crossAr =
-              if arch == "aarch64" && !pkgs.stdenv.isDarwin then
-                "${crossPkgs.stdenv.cc}/bin/ar"
-              else
-                "${crossPkgs.stdenv.cc}/bin/${target}-ar";
-
-            # Create crane lib specific to this target
-            craneLib = (crane.mkLib crossPkgs).overrideToolchain (p: rustWithTargets);
-
-            # Create a cargo config for cross-compilation
-            cargoConfigContent = ''
-              [target.${target}]
-              linker = "${crossLd}"
-              ar = "${crossAr}"
-              rustflags = [
-                "-C", "link-arg=-Wl,-O1",
-                "-C", "link-arg=-Wl,--strip-all"
-              ]
-              
-              [build]
-              target = "${target}"
-              
-              [profile.release]
-              lto = true
-            '';
-
-            # Target-specific build arguments
             targetArgs = commonArgs // {
               inherit cargoArtifacts nodeDeps;
               doCheck = false;
@@ -180,57 +121,18 @@
               CARGO_BUILD_TARGET = target;
 
               # Use the target's OpenSSL
-              OPENSSL_DIR = "${targetOpenSsl.dev}";
-              OPENSSL_INCLUDE_DIR = "${targetOpenSsl.dev}/include";
-              OPENSSL_LIB_DIR = "${targetOpenSsl.out}/lib";
+              OPENSSL_DIR = "${crossPkgs.openssl.dev}";
+              OPENSSL_INCLUDE_DIR = "${crossPkgs.openssl.dev}/include";
+              OPENSSL_LIB_DIR = "${crossPkgs.openssl.out}/lib";
 
               # Add proper build inputs
-              buildInputs = commonArgs.buildInputs ++
-                [
-                  targetOpenSsl.dev
-                  targetOpenSsl.out
-                  crossPkgs.stdenv.cc
-                ] ++
-                (if pkgs.stdenv.isDarwin && (libc == "gnu" || libc == "musl") then [
-                  crossPkgs.stdenv.cc.libc
-                ] else [ ]) ++
-                (if libc == "musl" then [
-                  pkgs.musl
-                ] else [ ]);
+              buildInputs = commonArgs.buildInputs ++ [
+                crossPkgs.openssl.dev
+                crossPkgs.openssl.out
+              ];
 
               # Build phases
-              preConfigurePhases = [ "npmBuild" "setupCargoConfig" "checkLinker" ];
-
-              setupCargoConfig = ''
-                mkdir -p .cargo
-                cat > .cargo/config.toml << EOF
-                ${cargoConfigContent}
-                EOF
-                cat .cargo/config.toml
-              '';
-
-              # Add a diagnostic phase to check if the linker exists
-              checkLinker = ''
-                echo "Checking cross compiler tools:"
-                echo "Linker: ${crossLd}"
-                echo "AR: ${crossAr}"
-                
-                if [ -e "${crossLd}" ]; then
-                  echo "Linker found: ${crossLd}"
-                  ls -la "${crossLd}"
-                else
-                  echo "ERROR: Linker not found: ${crossLd}"
-                  echo "Contents of directory:"
-                  ls -la ${crossPkgs.stdenv.cc}/bin/
-                fi
-                
-                if [ -e "${crossAr}" ]; then
-                  echo "AR found: ${crossAr}"
-                else
-                  echo "ERROR: AR not found: ${crossAr}"
-                fi
-              '';
-
+              preConfigurePhases = [ "npmBuild" ];
               npmBuild = buildUiAssets;
 
               installPhase =
@@ -238,19 +140,17 @@
                   binDir = "$out/bin";
                   configDir = "${binDir}/config";
                   staticDir = "${binDir}/static";
-
-                  # Binary path depends on target
                   binaryPath = "target/${target}/release/kellnr";
                 in
                 ''
                   # Copy kellnr binary into bin directory
                   mkdir -p ${binDir};
                   cp ${binaryPath} ${binDir}/kellnr;
-                
+
                   # Copy default config
                   mkdir -p ${configDir};
                   cp config/default.toml ${configDir};
-                
+
                   # Copy the built UI
                   mkdir -p ${staticDir};
                   cp -r ui/dist/* ${staticDir};
@@ -287,11 +187,11 @@
               # Copy kellnr binary into bin directory
               mkdir -p ${binDir};
               cp target/release/kellnr ${binDir};
-            
+
               # Copy default config
               mkdir -p ${configDir};
               cp config/default.toml ${configDir};
-            
+
               # Copy the built UI
               mkdir -p ${staticDir};
               cp -r ui/dist/* ${staticDir};
@@ -319,9 +219,53 @@
           inputsFrom = [ hostPackage ];
 
           shellHook = ''
+            echo "Kellnr Development Environment"
+            echo "==========================="
+            echo "Rust version: $(rustc --version)"
+            echo "Cargo version: $(cargo --version)"
+            echo "Node.js version: $(node --version)"
+            echo "NPM version: $(npm --version)"
+            echo "Nixpkgs version: ${nixpkgs.lib.version}"
+            echo "Lua version: $(lua -v)"
+            echo "Docker version: $(docker --version 2>/dev/null || echo 'Docker not available')"
+
+            # Setup custom CA certificate for testing against local Kellnr registries
+            export CUSTOM_CERT_DIR="$PWD/.certs"
+
+            # Remove existing directory if it exists with wrong permissions
+            if [ -d "$CUSTOM_CERT_DIR" ]; then
+              rm -rf "$CUSTOM_CERT_DIR"
+            fi
+
+            # Create directory with explicit permissions
+            mkdir -p "$CUSTOM_CERT_DIR"
+            chmod 755 "$CUSTOM_CERT_DIR"  # Set correct directory permissions
+
+            # Create combined cert bundle with explicit permissions
+            export COMBINED_CERT_FILE="$CUSTOM_CERT_DIR/combined-ca-bundle.pem"
+            cp "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" "$COMBINED_CERT_FILE"
+            chmod 644 "$COMBINED_CERT_FILE"  # Set read/write permissions
+
+            # Add the certificate from tests/ca.crt
+            if [ -f "$PWD/tests/ca.crt" ]; then
+              cat "$PWD/tests/ca.crt" >> "$COMBINED_CERT_FILE"
+              echo "Added tests/ca.crt certificate to CA bundle"
+            else
+              echo "Warning: tests/ca.crt not found"
+            fi
+            
+            # Set SSL cert environment variables to use the combined bundle
+            export SSL_CERT_FILE="$COMBINED_CERT_FILE"
+            export NIX_SSL_CERT_FILE="$COMBINED_CERT_FILE"
+            export REQUESTS_CA_BUNDLE="$COMBINED_CERT_FILE"
+            export NODE_EXTRA_CA_CERTS="$COMBINED_CERT_FILE"
+
             alias c=cargo
             alias j=just
             alias lg=lazygit
+            
+            # Ensure the script can find modules in the current directory and parent directory
+            export LUA_PATH="./?.lua;../?.lua;$(lua -e 'print(package.path)')"
           '' + lib.optionalString stdenv.isDarwin ''
             export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
             export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
@@ -338,6 +282,12 @@
             sea-orm-cli
             nixpkgs-fmt
             statix
+            lua5_4
+            lua54Packages.luasocket
+            lua54Packages.luafilesystem
+            jq
+            curl
+            gnused
           ];
         });
 

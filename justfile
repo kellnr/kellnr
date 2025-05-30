@@ -26,11 +26,16 @@ run: npm-build build
 clean:
 	cargo clean
 
-test: # Run all tests except the Postgresql integration tests, which require Docker
+test: # Run all tests which do NOT require Docker
 	cargo nextest run --workspace -E 'not test(~postgres_)'
 
-test-all:
-	{{test_all}}
+test-smoke: # Run the smoke tests which require Docker
+	{{test_smoke}}
+
+test-pgdb: # Run Postgresql integration tests which require Docker
+	{{test_pgdb}}
+
+test-all: test test-pgdb test-smoke
 
 clean-node:
 	rm -rf ui/node_modules
@@ -74,16 +79,12 @@ patch-package:
 
 # Set the target for the ci-release command.
 # The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", 
-# "armv7-unknown-linux-gnueabihf", "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl",
-# "armv7-unknown-linux-musleabihf".
+# "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl".
 # It's used by the Github Actions CI to build the release binary for the specified target.
 target := "x86_64-unknown-linux-gnu"
 
-ci-test: npm-build
-	cargo test --workspace --profile ci-dev
-
 ci-release: npm-build
-        cross build --profile ci-release --target {{target}} --features vendored-openssl
+        cross build --release --target {{target}} --features vendored-openssl
 
 ##########################################
 # Commands for cross-rs to build the
@@ -102,13 +103,7 @@ x-x86_64-musl:
 x-x86_64-gnu: 
 	cross build --target x86_64-unknown-linux-gnu --features vendored-openssl
 
-x-armv7-musl: 
-	cross build --target armv7-unknown-linux-musleabihf --features vendored-openssl
-
-x-armv7-gnu:
-	cross build --target armv7-unknown-linux-gnueabihf --features vendored-openssl
-
-x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu x-armv7-musl x-armv7-gnu
+x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu
 
 ##########################################
 # Aliases
@@ -118,13 +113,15 @@ alias b := build
 alias br := build-release
 alias r := run
 alias t := test
-alias ta := test-all
 alias c := check
 
 # "true" if docker is installed, "false" otherwise
 # Docker is needed for the Postgresql integration tests
 has_docker := if `command -v docker > /dev/null 2>&1; echo $?` == "0" { "true" } else { "false" }
-test_all := if has_docker == "true" { "cargo nextest run --workspace" } else { "echo 'ERROR: Docker is not installed. The Postgresql integration tests require Docker'" }
+
+test_pgdb := if has_docker == "true" { "cargo nextest run --workspace -E 'test(~postgres_)'" } else { "echo 'ERROR: Docker is not installed. The Postgresql integration tests require Docker'" }
+
+test_smoke := if has_docker == "true" { "cd tests && lua run_tests.lua" } else { "echo 'ERROR: Docker is not installed. The smoke tests require Docker'" }
 
 docker:
 	echo "{{has_docker}}"
