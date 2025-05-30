@@ -12,6 +12,7 @@ local test_scripts = {
     { dir = "./test-auth-req",        script = "test_auth_req.lua",   description = "REGISTRY AUTHENTICATION TEST", requires_latest_version = false },
     { dir = "./test-s3-storage",      script = "test_s3_storage.lua", description = "S3 STORAGE TEST",              requires_latest_version = false },
     { dir = "./test-docs",            script = "test_docs.lua",       description = "DOCS GENERATION TEST",         requires_latest_version = false }
+}
 
 -- Helper function to run a test script
 local function run_test(dir, script, new_version, latest_version, description, requires_latest_version)
