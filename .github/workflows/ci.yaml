@@ -122,7 +122,7 @@ jobs:
       - name: Package Kellnr
         uses: montudor/action-zip@v0.1.1
         with:
-          args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/ci-release/kellnr
+          args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/release/kellnr
 
       - name: Set Asset Name
         run: echo "KELLNR_ASSET=kellnr-${{ matrix.target }}.zip" >> $GITHUB_ENV
