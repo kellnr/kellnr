@@ -22,7 +22,7 @@ pub async fn cargo_auth_when_required(
     match token {
         Ok(_) => Ok(next.run(request).await),
         Err(status) => {
-            warn!("Authentication required, but failed: {}", status);
+            warn!("Authentication required, but failed: {status}");
             Err(status)
         }
     }

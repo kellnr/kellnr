@@ -65,7 +65,7 @@ pub async fn download(
     State(crate_storage): CrateIoStorageState,
     State(sender): CratesIoPrefetchSenderState,
 ) -> Result<Vec<u8>, StatusCode> {
-    trace!("Downloading crate: {} ({})", package, version);
+    trace!("Downloading crate: {package} ({version})");
 
     match crate_storage.get(&package, &version).await {
         Some(file) => {
@@ -74,22 +74,19 @@ pub async fn download(
                 version,
             };
             if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
-                warn!("Failed to send IncDownloadCnt message: {}", e);
+                warn!("Failed to send IncDownloadCnt message: {e}");
             }
 
             Ok(file)
         }
         None => {
-            let target = format!(
-                "https://static.crates.io/crates/{}/{}/download",
-                package, version
-            );
+            let target = format!("https://static.crates.io/crates/{package}/{version}/download");
 
             let res = match CLIENT.get(target).send().await {
                 Ok(resp) if resp.status() != 200 => Err(StatusCode::NOT_FOUND),
                 Ok(resp) => Ok(resp),
                 Err(e) => {
-                    error!("Encountered error... {}", e);
+                    error!("Encountered error... {e}");
                     Err(StatusCode::NOT_FOUND)
                 }
             }?;
@@ -100,7 +97,7 @@ pub async fn download(
                 .put(&package, &version, crate_data.clone())
                 .await
                 .map_err(|e| {
-                    error!("Failed to save crate to disk: {}", e);
+                    error!("Failed to save crate to disk: {e}");
                     StatusCode::UNPROCESSABLE_ENTITY
                 })?;
 
@@ -113,7 +110,7 @@ pub async fn download(
 }
 
 fn log_return_error<E: Error>(e: E) -> StatusCode {
-    error!("Failure while crate download...: {}", e);
+    error!("Failure while crate download...: {e}");
     StatusCode::NOT_FOUND
 }
 

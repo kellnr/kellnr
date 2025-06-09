@@ -1161,9 +1161,7 @@ impl DbProvider for Database {
                 Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
                     .equals((CrateIden::Table, CrateIden::Id)),
             )
-            .and_where(
-                Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{}%", contains)),
-            )
+            .and_where(Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{contains}%")))
             .and_where(
                 Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
                     .equals((CrateIden::Table, CrateIden::MaxVersion)),
@@ -1207,7 +1205,7 @@ impl DbProvider for Database {
                         )
                         .and_where(
                             Expr::col((CratesIoIden::Table, CrateIden::OriginalName))
-                                .like(format!("%{}%", contains)),
+                                .like(format!("%{contains}%")),
                         )
                         .to_owned(),
                 )
@@ -1468,7 +1466,6 @@ impl DbProvider for Database {
                 .map_err(|_| DbError::InvalidCrateName(pub_metadata.name.clone()))?,
         );
 
-
         let existing = krate::Entity::find()
             .filter(krate::Column::Name.eq(pub_metadata.name.clone()))
             .one(&self.db_con)
@@ -1476,8 +1473,7 @@ impl DbProvider for Database {
 
         let txn = self.db_con.begin().await?;
 
-        let crate_id = match existing
-        {
+        let crate_id = match existing {
             Some(krate) => {
                 let krate_id = krate.id;
                 let current_max_version = Version::try_from(&krate.max_version)
@@ -1641,14 +1637,12 @@ impl DbProvider for Database {
             .max()
             .ok_or(DbError::FailedToGetMaxVersionByName(crate_name.to_string()))?;
 
-
         let krate = cratesio_crate::Entity::find()
             .filter(cratesio_crate::Column::Name.eq(normalized_name.to_string()))
             .one(&self.db_con)
             .await?;
 
-        let krate = match krate
-        {
+        let krate = match krate {
             Some(krate) => {
                 let mut krate: cratesio_crate::ActiveModel = krate.into();
                 krate.e_tag = Set(etag.to_string());
@@ -1722,8 +1716,8 @@ impl DbProvider for Database {
                     downloads: Set(0),
                     crates_io_fk: Set(krate.id),
                     documentation: Set(Some(format!(
-                        "https://docs.rs/{}/{}",
-                        normalized_name, index.vers,
+                        "https://docs.rs/{normalized_name}/{}",
+                        index.vers,
                     ))),
                 };
 

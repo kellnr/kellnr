@@ -421,7 +421,7 @@ async fn fill_crate_index(
             match serde_json::value::to_value(index.deps.clone()) {
                 Ok(v) => Some(v),
                 Err(e) => {
-                    error!("Failed to serialize deps: {}", e);
+                    error!("Failed to serialize deps: {e}");
                     return Err(DbErr::Custom(e.to_string()));
                 }
             }
@@ -433,7 +433,7 @@ async fn fill_crate_index(
             match serde_json::value::to_value(index.features.clone()) {
                 Ok(v) => Some(v),
                 Err(e) => {
-                    error!("Failed to serialize features: {}", e);
+                    error!("Failed to serialize features: {e}");
                     return Err(DbErr::Custom(e.to_string()));
                 }
             }

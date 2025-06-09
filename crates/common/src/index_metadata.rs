@@ -182,9 +182,9 @@ impl IndexMetadata {
         let mut index = String::new();
         for (i, ix) in indices.iter().enumerate() {
             if i == indices.len() - 1 {
-                write!(&mut index, "{}", ix).unwrap();
+                write!(&mut index, "{ix}").unwrap();
             } else {
-                writeln!(&mut index, "{}", ix).unwrap();
+                writeln!(&mut index, "{ix}").unwrap();
             }
         }
         Ok(index)
@@ -272,7 +272,7 @@ impl Display for DependencyKind {
             DependencyKind::Normal => write!(f, "normal"),
             DependencyKind::Build => write!(f, "build"),
             DependencyKind::Dev => write!(f, "dev"),
-            DependencyKind::Other(s) => write!(f, "{}", s),
+            DependencyKind::Other(s) => write!(f, "{s}"),
         }
     }
 }
