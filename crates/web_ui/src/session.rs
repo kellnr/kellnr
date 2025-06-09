@@ -185,7 +185,7 @@ mod session_tests {
 
     // AdminUser tests
 
-    type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
+    type Result<T = ()> = result::Result<T, Box<dyn std::error::Error>>;
 
     fn c1234() -> String {
         encode_cookies([(constants::COOKIE_SESSION_ID, "1234")])

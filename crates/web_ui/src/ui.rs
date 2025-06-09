@@ -121,7 +121,7 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
 
     match resp {
         Ok(resp) => match resp.status() {
-            reqwest::StatusCode::OK => {
+            StatusCode::OK => {
                 let data = resp.text().await;
                 match data {
                     Ok(data) => Ok(data),
@@ -131,7 +131,7 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
                     }
                 }
             }
-            reqwest::StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
+            StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
             _ => {
                 error!("Failed to get crates.io data: {}", resp.status());
                 Err(StatusCode::NOT_FOUND)
@@ -312,7 +312,7 @@ pub async fn build_rustdoc(
         MaybeUser::Normal(user) => db
             .is_owner(&normalized_name, &user)
             .await
-            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
         MaybeUser::Admin(_) => true,
     };
 

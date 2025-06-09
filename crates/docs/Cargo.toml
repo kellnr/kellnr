@@ -34,3 +34,6 @@ hyper.workspace = true
 tokio.workspace = true
 tower.workspace = true
 hyper.workspace = true
+
+[lints]
+workspace = true

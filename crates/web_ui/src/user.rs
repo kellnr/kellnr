@@ -142,7 +142,7 @@ impl Credentials {
 
 pub async fn login(
     cookies: PrivateCookieJar,
-    State(state): appstate::AppState,
+    State(state): AppState,
     Json(credentials): Json<Credentials>,
 ) -> Result<(PrivateCookieJar, Json<LoggedInUser>), RouteError> {
     credentials.validate()?;

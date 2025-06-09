@@ -272,15 +272,12 @@ pub async fn list_crate_versions(
     Ok(Json(crate_version::CrateVersionList::from(versions)))
 }
 
-pub async fn search(
-    State(db): DbState,
-    params: SearchParams,
-) -> ApiResult<Json<search_result::SearchResult>> {
+pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<SearchResult>> {
     let crates = db
         .search_in_crate_name(&params.q, false)
         .await?
         .into_iter()
-        .map(|c| search_result::Crate {
+        .map(|c| Crate {
             name: c.name,
             max_version: c.version,
             description: c
@@ -504,8 +501,8 @@ mod reg_api_tests {
     use rand::distr::Alphanumeric;
     use rand::rng;
     use settings::Settings;
+    use std::iter;
     use std::path::PathBuf;
-    use std::{iter, path};
     use storage::cached_crate_storage::DynStorage;
     use storage::fs_storage::FSStorage;
     use storage::kellnr_crate_storage::KellnrCrateStorage;
@@ -821,7 +818,7 @@ mod reg_api_tests {
             .unwrap();
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        assert!(serde_json::from_slice::<search_result::SearchResult>(&result_msg).is_err());
+        assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_err());
     }
 
     #[tokio::test]
@@ -1529,7 +1526,7 @@ mod reg_api_tests {
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             let db = Database::new(&con_string, 10).await.unwrap();
             TestKellnr {
-                path: path::PathBuf::from(&settings.registry.data_dir),
+                path: PathBuf::from(&settings.registry.data_dir),
                 db,
                 client: app(settings).await,
             }
@@ -1541,7 +1538,7 @@ mod reg_api_tests {
             let db = Database::new(&con_string, 10).await.unwrap();
 
             TestKellnr {
-                path: path::PathBuf::from(&settings.registry.data_dir),
+                path: PathBuf::from(&settings.registry.data_dir),
                 db,
                 client: app(settings).await,
             }

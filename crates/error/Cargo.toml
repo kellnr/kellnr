@@ -17,3 +17,6 @@ storage.workspace = true
 zip.workspace = true
 serde.workspace = true
 axum.workspace = true
+
+[lints]
+workspace = true
