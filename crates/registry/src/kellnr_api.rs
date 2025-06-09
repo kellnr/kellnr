@@ -426,8 +426,10 @@ pub async fn publish(
     let created = Utc::now();
 
     // Add crate to DB
-    if let Err(e) = db.add_crate(&pub_data.metadata, &cksum, &created, &token.user)
-        .await {
+    if let Err(e) = db
+        .add_crate(&pub_data.metadata, &cksum, &created, &token.user)
+        .await
+    {
         // On DB error rollback storage insert and bail.
         let _ = cs.delete(&orig_name, &version).await;
         return Err(e.into());
