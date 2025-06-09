@@ -111,7 +111,7 @@ async fn fill_documentation(db: &SchemaManagerConnection<'_>) -> Result<(), DbEr
         let name = c.unwrap().name;
         let version = cm.version.clone();
         let mut m: cratesio_meta::ActiveModel = cm.into();
-        m.documentation = Set(Some(format!("https://docs.rs/{}/{}", name, version,)));
+        m.documentation = Set(Some(format!("https://docs.rs/{name}/{version}")));
         m.update(db).await?;
     }
     Ok(())

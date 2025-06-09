@@ -30,7 +30,7 @@ impl From<&OriginalName> for NormalizedName {
 
 impl fmt::Display for NormalizedName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", &self.0)
+        write!(f, "{}", self.0)
     }
 }
 

@@ -126,7 +126,7 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
                 match data {
                     Ok(data) => Ok(data),
                     Err(e) => {
-                        error!("Failed to parse crates.io data: {}", e);
+                        error!("Failed to parse crates.io data: {e}");
                         Err(StatusCode::INTERNAL_SERVER_ERROR)
                     }
                 }
@@ -138,7 +138,7 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
             }
         },
         Err(e) => {
-            error!("Failed to get crates.io data: {}", e);
+            error!("Failed to get crates.io data: {e}");
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -160,17 +160,17 @@ pub async fn delete_version(
     let name = params.name;
 
     if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
-        error!("Failed to delete crate from database: {:?}", e);
+        error!("Failed to delete crate from database: {e:?}");
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     if let Err(e) = state.crate_storage.delete(&name, &version).await {
-        error!("Failed to delete crate from storage: {}", e);
+        error!("Failed to delete crate from storage: {e}");
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     if let Err(e) = docs::delete(&name, &version, &state.settings).await {
-        error!("Failed to delete crate from docs: {}", e);
+        error!("Failed to delete crate from docs: {e}");
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
@@ -195,17 +195,17 @@ pub async fn delete_crate(
     for cm in crate_meta.iter() {
         let version = Version::from_unchecked_str(&cm.version);
         if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
-            error!("Failed to delete crate from database: {:?}", e);
+            error!("Failed to delete crate from database: {e:?}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
 
         if let Err(e) = state.crate_storage.delete(&name, &version).await {
-            error!("Failed to delete crate from storage: {}", e);
+            error!("Failed to delete crate from storage: {e}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
 
         if let Err(e) = docs::delete(&name, &cm.version, &state.settings).await {
-            error!("Failed to delete crate from docs: {}", e);
+            error!("Failed to delete crate from docs: {e}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
     }

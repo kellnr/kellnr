@@ -308,7 +308,7 @@ pub async fn download(
         .increase_download_counter(&package.to_normalized(), &version)
         .await
     {
-        warn!("Failed to increase download counter: {}", e);
+        warn!("Failed to increase download counter: {e}");
     }
 
     match cs.get(&package, &version).await {
@@ -336,7 +336,7 @@ pub async fn add_empty_crate(
 
     if let Some(id) = db.get_crate_id(&normalized_name).await? {
         let version = match db.get_max_version_from_id(id).await {
-            Ok(v) => format!("{}", v),
+            Ok(v) => format!("{v}"),
             _ => String::new(),
         };
         return Err(RegistryError::CrateExists(data.name, version).into());

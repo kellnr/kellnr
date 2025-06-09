@@ -223,8 +223,7 @@ fn get_doc_url(crate_name: &str, crate_version: &Version, settings: &Settings) -
 
     if doc_exists(crate_name, crate_version, settings) {
         Some(format!(
-            "/docs/{}/{}/doc/{}/index.html",
-            crate_name, crate_version, docs_name
+            "/docs/{crate_name}/{crate_version}/doc/{docs_name}/index.html",
         ))
     } else {
         None

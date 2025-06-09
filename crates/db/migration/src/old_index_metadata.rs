@@ -104,8 +104,7 @@ impl OldIndexMetadata {
             .cloned()
             .ok_or_else(|| {
                 DbErr::Custom(format!(
-                    "Could not find version {} in index file {}",
-                    version,
+                    "Could not find version {version} in index file {}",
                     path.display()
                 ))
             })

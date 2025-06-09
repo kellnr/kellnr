@@ -1161,9 +1161,7 @@ impl DbProvider for Database {
                 Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
                     .equals((CrateIden::Table, CrateIden::Id)),
             )
-            .and_where(
-                Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{}%", contains)),
-            )
+            .and_where(Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{contains}%")))
             .and_where(
                 Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
                     .equals((CrateIden::Table, CrateIden::MaxVersion)),
@@ -1207,7 +1205,7 @@ impl DbProvider for Database {
                         )
                         .and_where(
                             Expr::col((CratesIoIden::Table, CrateIden::OriginalName))
-                                .like(format!("%{}%", contains)),
+                                .like(format!("%{contains}%")),
                         )
                         .to_owned(),
                 )
@@ -1718,8 +1716,8 @@ impl DbProvider for Database {
                     downloads: Set(0),
                     crates_io_fk: Set(krate.id),
                     documentation: Set(Some(format!(
-                        "https://docs.rs/{}/{}",
-                        normalized_name, index.vers,
+                        "https://docs.rs/{normalized_name}/{}",
+                        index.vers,
                     ))),
                 };
 

@@ -31,7 +31,7 @@ impl CachedCrateStorage {
     }
 
     fn file_name(name: &str, version: &str) -> String {
-        format!("{}-{}.crate", name, version)
+        format!("{name}-{version}.crate")
     }
 
     pub async fn delete(&self, name: &OriginalName, version: &Version) -> Result<(), StorageError> {
@@ -59,7 +59,7 @@ impl CachedCrateStorage {
                 {
                     return StorageError::CrateExists(name.to_string(), version.to_string());
                 }
-                StorageError::GenericError(format!("Error while adding bin package. Error: {}", e))
+                StorageError::GenericError(format!("Error while adding bin package. Error: {e}"))
             })?;
 
         Ok(sha256::digest(&*crate_data))

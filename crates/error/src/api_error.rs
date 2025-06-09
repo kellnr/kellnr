@@ -39,9 +39,9 @@ impl ApiError {
     pub fn new(msg: &str, error: &dyn ToString, status: StatusCode) -> Self {
         let error = error.to_string();
         let e = if error.is_empty() {
-            format!("ERROR: {}", msg)
+            format!("ERROR: {msg}")
         } else {
-            format!("ERROR: {} -> {}", msg, error)
+            format!("ERROR: {msg} -> {error}")
         };
         Self {
             status,
@@ -58,7 +58,7 @@ impl ApiError {
     }
 
     pub fn from_err(e: &dyn std::error::Error, status: StatusCode) -> Self {
-        let e = format!("ERROR: {}", e);
+        let e = format!("ERROR: {e}");
         Self {
             status,
             details: ErrorDetails::from(e),
