@@ -4116,9 +4116,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minio-rsc"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16e246f22c7e75d78a746e234d2ed328a8866e23ce601f3786a81090eaa1c31a"
+checksum = "f9aa1246dead593bdbdc9fe13b76e66e85331c5f92fa5967cb83f8cb0bfc01be"
 dependencies = [
  "async-stream",
  "base64 0.22.1",
@@ -4130,7 +4130,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hmac",
- "hyper",
+ "http",
  "md5",
  "once_cell",
  "regex",
@@ -4138,6 +4138,7 @@ dependencies = [
  "serde",
  "serde-xml-rs",
  "sha2",
+ "thiserror 2.0.12",
  "urlencoding",
 ]
 
@@ -5947,9 +5948,9 @@ dependencies = [
 
 [[package]]
 name = "serde-xml-rs"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb3aa78ecda1ebc9ec9847d5d3aba7d618823446a049ba2491940506da6e2782"
+checksum = "c6560602b989198ebb381e3192c86970116b3b2e13b8b8a39d6d0850e40b6b81"
 dependencies = [
  "log 0.4.27",
  "serde",
