@@ -164,7 +164,7 @@ async fn background_update_thread(db: impl DbProvider, sender: flume::Sender<Cra
 
         for c in crates {
             if let Err(e) = sender.send(c) {
-                error!("Could not send update message: {e}")
+                error!("Could not send update message: {e}");
             }
         }
 
@@ -345,7 +345,7 @@ async fn fetch_index_data(
                     "Retry {i}/{max_retries} - Could not fetch index from crates.io for {name}: {e}"
                 );
             }
-        };
+        }
         if i >= max_retries {
             error!("Could not fetch index from crates.io for {name} after 3 tries",);
             break None;
@@ -570,7 +570,7 @@ mod tests {
 
         assert_eq!(
             ConfigJson::new(
-                &Protocol::Http,
+                Protocol::Http,
                 "test.api.com",
                 1234,
                 "cratesio",

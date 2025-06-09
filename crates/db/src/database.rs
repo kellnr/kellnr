@@ -1370,7 +1370,12 @@ impl DbProvider for Database {
                     let mut ft = Vec::new();
                     for dep in ix {
                         ft.push(CrateRegistryDep::from_index(
-                            get_desc_for_crate_dep(&self.db_con, &dep.name, &dep.registry).await?,
+                            get_desc_for_crate_dep(
+                                &self.db_con,
+                                &dep.name,
+                                dep.registry.as_deref(),
+                            )
+                            .await?,
                             dep,
                         ));
                     }
@@ -1399,7 +1404,7 @@ impl DbProvider for Database {
                 yanked: ci.yanked,
                 links: ci.links.clone(),
                 v: ci.v,
-            })
+            });
         }
         versions.sort_by(|a, b| {
             Version::from_unchecked_str(&b.version).cmp(&Version::from_unchecked_str(&a.version))
@@ -1574,13 +1579,12 @@ impl DbProvider for Database {
         etag: Option<String>,
         last_modified: Option<String>,
     ) -> DbResult<PrefetchState> {
-        let krate = match cratesio_crate::Entity::find()
+        let Some(krate) = cratesio_crate::Entity::find()
             .filter(cratesio_crate::Column::Name.eq(crate_name.to_string()))
             .one(&self.db_con)
             .await?
-        {
-            Some(krate) => krate,
-            None => return Ok(PrefetchState::NotFound),
+        else {
+            return Ok(PrefetchState::NotFound);
         };
 
         let needs_update = match (etag, last_modified) {
@@ -1779,9 +1783,9 @@ impl DbProvider for Database {
 async fn get_desc_for_crate_dep<C: ConnectionTrait>(
     db_con: &C,
     name: &str,
-    registry: &Option<String>,
+    registry: Option<&str>,
 ) -> DbResult<Option<String>> {
-    let desc = if registry == &Some("https://github.com/rust-lang/crates.io-index".to_string()) {
+    let desc = if registry.unwrap_or_default() == "https://github.com/rust-lang/crates.io-index" {
         let krate = cratesio_crate::Entity::find()
             .filter(cratesio_crate::Column::Name.eq(name))
             .one(db_con)

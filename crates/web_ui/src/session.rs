@@ -112,7 +112,8 @@ impl axum::extract::OptionalFromRequestParts<appstate::AppStateData> for MaybeUs
     }
 }
 
-/// Middleware that checks if a user is logged in, when settings.registry.auth_required is true.<br>
+/// Middleware that checks if a user is logged in when `settings.registry.auth_required` is `true`
+///
 /// If the user is not logged in, a 401 is returned.
 pub async fn session_auth_when_required(
     State(state): State<appstate::AppStateData>,

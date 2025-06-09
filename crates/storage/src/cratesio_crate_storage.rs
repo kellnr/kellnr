@@ -9,7 +9,7 @@ pub struct CratesIoCrateStorage(CachedCrateStorage);
 
 impl CratesIoCrateStorage {
     pub async fn new(settings: &Settings, storage: DynStorage) -> Result<Self, StorageError> {
-        Ok(Self(CachedCrateStorage::new(settings, storage)?))
+        Ok(Self(CachedCrateStorage::new(settings, storage)))
     }
 }
 

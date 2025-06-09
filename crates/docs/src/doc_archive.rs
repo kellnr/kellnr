@@ -14,10 +14,7 @@ pub struct DocArchive(Zip);
 
 impl DocArchive {
     pub fn extract(&mut self, path: &Path) -> ApiResult<()> {
-        match self.0.extract(path) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(ApiError::from(e)),
-        }
+        Ok(self.0.extract(path)?)
     }
 }
 

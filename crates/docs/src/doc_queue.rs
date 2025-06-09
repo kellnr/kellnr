@@ -38,7 +38,7 @@ async fn inner_loop(
             error!("Failed to extract docs from crate: {e}");
         } else {
             if let Err(e) = clean_up(&entry.path).await {
-                error!("Failed to delete temporary rustdoc queue folder: {e}")
+                error!("Failed to delete temporary rustdoc queue folder: {e}");
             }
 
             let version = Version::from_unchecked_str(&entry.version);

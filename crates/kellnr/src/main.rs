@@ -71,7 +71,7 @@ async fn main() {
     };
 
     // Create router using the route module
-    let app = routes::create_router(state, data_dir, max_docs_size, max_crate_size);
+    let app = routes::create_router(state, &data_dir, max_docs_size, max_crate_size);
 
     // Start the server
     let listener = TcpListener::bind(addr)
@@ -95,7 +95,7 @@ fn init_tracing(settings: &Settings) {
         LogFormat::Compact => ts.event_format(format().compact()).init(),
         LogFormat::Pretty => ts.event_format(format().pretty()).init(),
         LogFormat::Json => ts.event_format(format().json()).init(),
-    };
+    }
 }
 
 fn get_connect_string(settings: &Settings) -> ConString {

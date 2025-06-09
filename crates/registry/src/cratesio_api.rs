@@ -36,9 +36,10 @@ pub async fn cratesio_enabled(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    match settings.proxy.enabled {
-        true => Ok(next.run(request).await),
-        _ => Err(StatusCode::NOT_FOUND),
+    if settings.proxy.enabled {
+        Ok(next.run(request).await)
+    } else {
+        Err(StatusCode::NOT_FOUND)
     }
 }
 
@@ -272,7 +273,7 @@ mod tests {
 
     impl Drop for TestKellnr {
         fn drop(&mut self) {
-            rm_rf::remove(&self.path).expect("Cannot remove TestKellnr")
+            rm_rf::remove(&self.path).expect("Cannot remove TestKellnr");
         }
     }
 

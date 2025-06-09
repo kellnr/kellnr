@@ -192,7 +192,7 @@ pub async fn delete_crate(
 
     let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
 
-    for cm in crate_meta.iter() {
+    for cm in &crate_meta {
         let version = Version::from_unchecked_str(&cm.version);
         if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
             error!("Failed to delete crate from database: {e:?}");
@@ -234,6 +234,14 @@ pub struct TopCrates {
 }
 
 pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Json<Statistic> {
+    fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
+        if tops.len() > i {
+            tops[i].clone()
+        } else {
+            (String::new(), 0)
+        }
+    }
+
     let num_crates = db.get_total_unique_crates().await.unwrap_or_default();
     let num_crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
     let num_crate_downloads = db.get_total_downloads().await.unwrap_or_default();
@@ -248,14 +256,6 @@ pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Js
         .unwrap_or_default();
     let num_proxy_crate_downloads = db.get_total_cached_downloads().await.unwrap_or_default();
     let last_updated_crate = db.get_last_updated_crate().await.unwrap_or_default();
-
-    fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
-        if tops.len() > i {
-            tops[i].clone()
-        } else {
-            (String::new(), 0)
-        }
-    }
 
     Json(Statistic {
         num_crates,
@@ -834,7 +834,7 @@ mod tests {
             .returning(move || Ok(10000));
         mock_db
             .expect_get_total_downloads()
-            .returning(move || Ok(100000));
+            .returning(move || Ok(100_000));
         mock_db
             .expect_get_top_crates_downloads()
             .with(eq(3))
@@ -853,7 +853,7 @@ mod tests {
             .returning(move || Ok(99999));
         mock_db
             .expect_get_total_cached_downloads()
-            .returning(move || Ok(999999));
+            .returning(move || Ok(999_999));
         mock_db.expect_get_last_updated_crate().returning(move || {
             Ok(Some((
                 OriginalName::from_unchecked("foobar".to_string()),
@@ -878,10 +878,10 @@ mod tests {
         let expect = Statistic {
             num_crates: 1000,
             num_crate_versions: 10000,
-            num_crate_downloads: 100000,
+            num_crate_downloads: 100_000,
             num_proxy_crates: 9999,
             num_proxy_crate_versions: 99999,
-            num_proxy_crate_downloads: 999999,
+            num_proxy_crate_downloads: 999_999,
             top_crates: TopCrates {
                 first: ("top1".to_string(), 1000),
                 second: ("top2".to_string(), 500),

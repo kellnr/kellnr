@@ -15,19 +15,18 @@ pub struct CachedCrateStorage {
 }
 
 impl CachedCrateStorage {
-    pub fn new(settings: &Settings, storage: DynStorage) -> Result<Self, StorageError> {
+    pub fn new(settings: &Settings, storage: DynStorage) -> Self {
         let cache = if settings.registry.cache_size > 0 {
             Some(Cache::new(settings.registry.cache_size))
         } else {
             None
         };
 
-        let cs = Self {
+        Self {
             doc_queue_path: settings.doc_queue_path(),
             storage,
             cache,
-        };
-        Ok(cs)
+        }
     }
 
     fn file_name(name: &str, version: &str) -> String {
@@ -91,7 +90,6 @@ impl CachedCrateStorage {
         let file_name = Self::file_name(name, version);
         self.cache
             .as_ref()
-            .map(|cache| cache.contains_key(&file_name))
-            .unwrap_or(false)
+            .is_some_and(|cache| cache.contains_key(&file_name))
     }
 }

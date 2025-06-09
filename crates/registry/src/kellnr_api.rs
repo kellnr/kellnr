@@ -87,7 +87,7 @@ pub async fn remove_owner(
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
 
-    for user in input.users.iter() {
+    for user in &input.users {
         db.delete_owner(&crate_name, user).await?;
     }
 
@@ -143,7 +143,7 @@ pub async fn add_owner(
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
 
-    for user in input.users.iter() {
+    for user in &input.users {
         db.add_owner(&crate_name, user).await?;
     }
 
@@ -387,11 +387,10 @@ pub async fn publish(
     // Check if required crate fields aren't present in crate
     // Skip serializing if no fields to check
     if !settings.registry.required_crate_fields.is_empty() {
-        let pkg_metadata = match serde_json::to_value(&pub_data.metadata)
+        let serde_json::Value::Object(pkg_metadata) = serde_json::to_value(&pub_data.metadata)
             .map_err(RegistryError::InvalidMetadataString)?
-        {
-            serde_json::Value::Object(map) => map,
-            _ => unreachable!(), // SAFETY: pub_data.metadata remains a struct
+        else {
+            unreachable!()
         };
 
         let mut missing_fields = Vec::new();
@@ -399,7 +398,7 @@ pub async fn publish(
         for field in &settings.registry.required_crate_fields {
             // If field is null or not present, complain
             if let Some(serde_json::Value::Null) | None = pkg_metadata.get(field) {
-                missing_fields.push(field.clone())
+                missing_fields.push(field.clone());
             }
         }
 
@@ -1545,7 +1544,7 @@ mod reg_api_tests {
 
     impl Drop for TestKellnr {
         fn drop(&mut self) {
-            rm_rf::remove(&self.path).expect("Cannot remove TestKellnr")
+            rm_rf::remove(&self.path).expect("Cannot remove TestKellnr");
         }
     }
 
