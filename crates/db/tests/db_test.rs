@@ -2296,8 +2296,8 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &db::Database) {
 
     let expected_prefetch = Prefetch {
         data: IndexMetadata::serialize_indices(&indices2)
-            .map(|idx| idx.into_bytes())
-            .unwrap(),
+            .unwrap()
+            .into_bytes(),
         etag: "etag2".to_string(),
         last_modified: "last_modified2".to_string(),
     };
