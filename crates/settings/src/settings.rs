@@ -1,11 +1,7 @@
 use config::{Config, ConfigError, Environment, File};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::{
-    convert::TryFrom,
-    env,
-    path::{self, Path},
-};
+use std::{convert::TryFrom, env, path::Path};
 
 use crate::docs::Docs;
 use crate::local::Local;
@@ -72,28 +68,28 @@ impl Settings {
             .ok_or_else(|| ConfigError::Message("Invalid UTF-8 string".to_string()))
     }
 
-    pub fn bin_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("crates")
+    pub fn bin_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("crates")
     }
 
     pub fn doc_queue_path(&self) -> PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("doc_queue")
+        PathBuf::from(&self.registry.data_dir).join("doc_queue")
     }
 
-    pub fn sqlite_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("db.sqlite")
+    pub fn sqlite_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("db.sqlite")
     }
 
-    pub fn docs_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("docs")
+    pub fn docs_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("docs")
     }
 
-    pub fn base_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("git")
+    pub fn base_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("git")
     }
 
-    pub fn crates_io_bin_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("cratesio")
+    pub fn crates_io_bin_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("cratesio")
     }
 
     pub fn crates_io_path(&self) -> String {

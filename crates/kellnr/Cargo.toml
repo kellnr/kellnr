@@ -38,3 +38,6 @@ vendored-openssl = ["openssl/vendored"]
 # "cargo machete" will show openssl as an unused depedenency
 [package.metadata.cargo-machete]
 ignored = ["openssl"]
+
+[lints]
+workspace = true

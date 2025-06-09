@@ -32,3 +32,6 @@ rm_rf.workspace = true
 rand.workspace = true
 tokio.workspace = true
 tower.workspace = true
+
+[lints]
+workspace = true

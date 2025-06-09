@@ -21,7 +21,7 @@ use tracing::{debug, error, trace, warn};
 static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
 static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
-    let mut headers = reqwest::header::HeaderMap::new();
+    let mut headers = HeaderMap::new();
     headers.insert(
         reqwest::header::USER_AGENT,
         reqwest::header::HeaderValue::from_static("kellnr.io/kellnr"),
@@ -172,7 +172,7 @@ async fn background_update_thread(db: impl DbProvider, sender: flume::Sender<Cra
             }
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(UPDATE_INTERVAL_SECS)).await;
+        tokio::time::sleep(Duration::from_secs(UPDATE_INTERVAL_SECS)).await;
     }
 }
 
@@ -372,15 +372,15 @@ async fn fetch_index_data(
 
     if let Some(r) = r {
         match r.status() {
-            reqwest::StatusCode::NOT_MODIFIED => {
+            StatusCode::NOT_MODIFIED => {
                 trace!("Index not-modified for {}", name);
                 None
             }
-            reqwest::StatusCode::NOT_FOUND => {
+            StatusCode::NOT_FOUND => {
                 trace!("Index not found for {}", name);
                 None
             }
-            reqwest::StatusCode::OK => {
+            StatusCode::OK => {
                 let headers = r.headers();
                 let etag = headers
                     .get("ETag")
@@ -425,14 +425,14 @@ async fn fetch_cratesio_prefetch(
     match response {
         Ok(r) => {
             match r.status() {
-                status @ (reqwest::StatusCode::NOT_FOUND
-                | reqwest::StatusCode::GONE
-                | reqwest::StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS) => {
+                status @ (StatusCode::NOT_FOUND
+                | StatusCode::GONE
+                | StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS) => {
                     debug!("Crate: '{name}' not available on crates.io ({status})");
                     Err(status)
                 }
 
-                reqwest::StatusCode::OK => {
+                StatusCode::OK => {
                     let headers = r.headers();
                     let etag = headers
                         .get("ETag")

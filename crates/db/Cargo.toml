@@ -25,3 +25,6 @@ sha256.workspace = true
 rm_rf.workspace = true
 testcontainers.workspace = true
 tokio.workspace = true
+
+[lints]
+workspace = true

@@ -33,7 +33,7 @@ fn deserialize_metadata(raw_data: &[u8]) -> Result<PublishMetadata, RegistryErro
 }
 
 fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
-    match std::convert::TryInto::try_into(raw_data) {
+    match TryInto::try_into(raw_data) {
         Ok(i) => Ok(u32::from_le_bytes(i)),
         Err(e) => Err(RegistryError::InvalidMetadataLength(e)),
     }

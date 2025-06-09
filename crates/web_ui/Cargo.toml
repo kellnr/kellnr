@@ -31,3 +31,6 @@ mockall.workspace = true
 hyper.workspace = true
 tower.workspace = true
 tokio.workspace = true
+
+[lints]
+workspace = true

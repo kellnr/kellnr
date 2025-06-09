@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use zip::result::ZipError;
 
-pub type ApiResult<T> = core::result::Result<T, ApiError>;
+pub type ApiResult<T> = Result<T, ApiError>;
 
 pub struct ApiError {
     status: StatusCode,
@@ -90,8 +90,8 @@ impl From<std::io::Error> for ApiError {
     }
 }
 
-impl From<zip::result::ZipError> for ApiError {
-    fn from(e: zip::result::ZipError) -> Self {
+impl From<ZipError> for ApiError {
+    fn from(e: ZipError) -> Self {
         match e {
             ZipError::Io(e) => ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR),
             ZipError::InvalidArchive(s) => {

@@ -20,6 +20,9 @@ build:
 build-release:
 	cargo build --release --features vendored-openssl
 
+clippy:
+    cargo clippy --workspace --all-targets --all-features
+
 run: npm-build build
 	cargo run
 

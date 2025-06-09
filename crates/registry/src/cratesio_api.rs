@@ -129,7 +129,6 @@ mod tests {
     use db::mock::MockDb;
     use http_body_util::BodyExt;
     use settings::Settings;
-    use std::path;
     use std::path::PathBuf;
     use storage::cached_crate_storage::DynStorage;
     use storage::cratesio_crate_storage::CratesIoCrateStorage;
@@ -271,7 +270,7 @@ mod tests {
         async fn new(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             TestKellnr {
-                path: path::PathBuf::from(&settings.registry.data_dir),
+                path: PathBuf::from(&settings.registry.data_dir),
                 client: app(settings).await,
             }
         }
@@ -293,7 +292,7 @@ mod tests {
         let state = AppStateData {
             settings: settings.into(),
             cratesio_storage: cs.into(),
-            db: std::sync::Arc::<MockDb>::new(db),
+            db: Arc::<MockDb>::new(db),
             ..appstate::test_state().await
         };
 

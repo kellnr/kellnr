@@ -62,7 +62,7 @@ impl S3Storage {
     }
 
     fn try_path_from(key: &str) -> Result<Path, object_store::path::Error> {
-        object_store::path::Path::from_url_path(key)
+        Path::from_url_path(key)
     }
 
     fn storage(&self) -> &AmazonS3 {
