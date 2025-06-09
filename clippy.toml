@@ -1,2 +1,3 @@
 allow-unwrap-in-tests = true
+allowed-wildcard-imports = ["super", "mockall"]
 avoid-breaking-exported-api = false

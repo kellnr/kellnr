@@ -22,15 +22,15 @@ use entity::{
 use migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
 };
-use sea_orm::sea_query::{Alias, Expr, Query, *};
+use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
     FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
-    prelude::async_trait::async_trait, query::*,
+    prelude::async_trait::async_trait,
+    query::{QueryOrder, QuerySelect, TransactionTrait},
 };
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::vec;
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
