@@ -1318,9 +1318,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?
             .into_iter()
-            .map(|(_, u)| u)
-            .filter(|u| u.is_some())
-            .map(|u| u.unwrap().name)
+            .filter_map(|(_, v)| v.map(|v| v.name))
             .collect();
         let categories: Vec<String> = krate
             .find_related(crate_category_to_crate::Entity)
@@ -1328,9 +1326,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?
             .into_iter()
-            .map(|(_, c)| c)
-            .filter(|c| c.is_some())
-            .map(|c| c.unwrap().category)
+            .filter_map(|(_, v)| v.map(|v| v.category))
             .collect();
         let keywords: Vec<String> = krate
             .find_related(crate_keyword_to_crate::Entity)
@@ -1338,9 +1334,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?
             .into_iter()
-            .map(|(_, k)| k)
-            .filter(|k| k.is_some())
-            .map(|k| k.unwrap().keyword)
+            .filter_map(|(_, v)| v.map(|v| v.keyword))
             .collect();
         let authors: Vec<String> = krate
             .find_related(crate_author_to_crate::Entity)
@@ -1348,9 +1342,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?
             .into_iter()
-            .map(|(_, a)| a)
-            .filter(|a| a.is_some())
-            .map(|a| a.unwrap().author)
+            .filter_map(|(_, v)| v.map(|v| v.author))
             .collect();
         let crate_metas = krate
             .find_related(crate_meta::Entity)
@@ -2097,7 +2089,7 @@ async fn compute_etag<C: ConnectionTrait>(
 
 fn index_metadata_to_bytes(index_metadata: &[IndexMetadata]) -> DbResult<Vec<u8>> {
     IndexMetadata::serialize_indices(index_metadata)
-        .map(|idx| idx.into_bytes())
+        .map(String::into_bytes)
         .map_err(|e| DbError::FailedToConvertToJson(format!("{e}")))
 }
 
