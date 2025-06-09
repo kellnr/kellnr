@@ -61,9 +61,9 @@ async fn move_cached_crates(db: &SchemaManagerConnection<'_>) -> Result<(), DbEr
         }
 
         // Move the crate
-        debug!("Moving {} from {:?} to {:?}", name, old, new);
+        debug!("Moving {name} from {old:?} to {new:?}");
         if let Err(e) = std::fs::rename(old, new).map_err(|e| DbErr::Custom(e.to_string())) {
-            debug!("Failed to move {}: {}", name, e);
+            debug!("Failed to move {name}: {e}");
             continue;
         }
     }
@@ -76,12 +76,9 @@ fn get_path(
     name: &str,
     version: &str,
 ) -> (std::path::PathBuf, std::path::PathBuf) {
+    let crate_name = format!("{name}-{version}.crate");
     (
-        settings
-            .bin_path()
-            .join(format!("{}-{}.crate", name, version)),
-        settings
-            .crates_io_bin_path()
-            .join(format!("{}-{}.crate", name, version)),
+        settings.bin_path().join(&crate_name),
+        settings.crates_io_bin_path().join(&crate_name),
     )
 }

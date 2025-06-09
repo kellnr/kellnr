@@ -31,7 +31,7 @@ pub fn create_router(
     );
 
     // Setup docs service
-    let docs_service = get_service(ServeDir::new(format!("{}/docs", data_dir))).route_layer(
+    let docs_service = get_service(ServeDir::new(format!("{data_dir}/docs"))).route_layer(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
 

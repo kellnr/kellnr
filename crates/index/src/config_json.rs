@@ -24,12 +24,9 @@ impl ConfigJson {
         auth_required: bool,
     ) -> Self {
         Self {
-            dl: format!(
-                "{}://{}:{}/api/v1/{}/dl",
-                protocol, api_address, api_port, api_path
-            ),
+            dl: format!("{protocol}://{api_address}:{api_port}/api/v1/{api_path}/dl"),
             api: if api_available {
-                Some(format!("{}://{}:{}", protocol, api_address, api_port))
+                Some(format!("{protocol}://{api_address}:{api_port}"))
             } else {
                 None
             },

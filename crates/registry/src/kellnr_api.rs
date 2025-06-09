@@ -308,7 +308,7 @@ pub async fn download(
         .increase_download_counter(&package.to_normalized(), &version)
         .await
     {
-        warn!("Failed to increase download counter: {}", e);
+        warn!("Failed to increase download counter: {e}");
     }
 
     match cs.get(&package, &version).await {
@@ -336,7 +336,7 @@ pub async fn add_empty_crate(
 
     if let Some(id) = db.get_crate_id(&normalized_name).await? {
         let version = match db.get_max_version_from_id(id).await {
-            Ok(v) => format!("{}", v),
+            Ok(v) => format!("{v}"),
             _ => String::new(),
         };
         return Err(RegistryError::CrateExists(data.name, version).into());
@@ -426,8 +426,10 @@ pub async fn publish(
     let created = Utc::now();
 
     // Add crate to DB
-    if let Err(e) = db.add_crate(&pub_data.metadata, &cksum, &created, &token.user)
-        .await {
+    if let Err(e) = db
+        .add_crate(&pub_data.metadata, &cksum, &created, &token.user)
+        .await
+    {
         // On DB error rollback storage insert and bail.
         let _ = cs.delete(&orig_name, &version).await;
         return Err(e.into());

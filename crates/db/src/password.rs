@@ -3,7 +3,7 @@ use common::util::generate_rand_string;
 const SALT_LENGTH: usize = 10;
 
 pub fn hash_pwd(pwd: &str, salt: &str) -> String {
-    let concat = format!("{}{}", pwd, salt);
+    let concat = format!("{pwd}{salt}");
     sha256::digest(concat)
 }
 

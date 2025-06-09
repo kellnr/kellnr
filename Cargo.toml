@@ -93,7 +93,6 @@ pedantic = { level = "warn", priority = -1 }
 used_underscore_binding = "allow" # 672
 missing_errors_doc = "allow" # 182
 must_use_candidate = "allow" # 74
-uninlined_format_args = "allow" # 52
 default_trait_access = "allow" # 45
 implicit_clone = "allow" # 32
 cast_possible_truncation = "allow" # 28

@@ -107,8 +107,7 @@ async fn internal_prefetch_cratesio(
         .map(|h| h.to_str().unwrap_or_default().to_string());
 
     trace!(
-        "Prefetching {} from crates.io cache: Etag {:?} - LM {:?}",
-        name, if_none_match, if_modified_since
+        "Prefetching {name} from crates.io cache: Etag {if_none_match:?} - LM {if_modified_since:?}",
     );
 
     let prefetch_state = db
@@ -119,22 +118,19 @@ async fn internal_prefetch_cratesio(
         )
         .await
         .map_err(|e| {
-            error!(
-                "Could not check if cache is up to date for {}. Error {}",
-                name, e
-            );
+            error!("Could not check if cache is up to date for {name}. Error {e}",);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     match prefetch_state {
         PrefetchState::NeedsUpdate(p) => {
             background_update(name.clone(), sender, if_modified_since, if_none_match);
-            trace!("Prefetching {} from crates.io cache: Needs Update", name);
+            trace!("Prefetching {name} from crates.io cache: Needs Update");
             Ok(p)
         }
         PrefetchState::UpToDate => {
             background_update(name.clone(), sender, if_modified_since, if_none_match);
-            trace!("Prefetching {} from crates.io cache: Up to Date", name);
+            trace!("Prefetching {name} from crates.io cache: Up to Date");
             Err(StatusCode::NOT_MODIFIED)
         }
         PrefetchState::NotFound => Ok(fetch_cratesio_prefetch(name, sender).await?),
@@ -152,7 +148,7 @@ fn background_update(
         etag: if_none_match,
         last_modified: if_modified_since,
     })) {
-        error!("Could not send update message: {}", e);
+        error!("Could not send update message: {e}");
     }
 }
 
@@ -161,14 +157,14 @@ async fn background_update_thread(db: impl DbProvider, sender: flume::Sender<Cra
         let crates = match db.get_cratesio_index_update_list().await {
             Ok(crates) => crates,
             Err(e) => {
-                error!("Could not get crates.io index update list: {}", e);
+                error!("Could not get crates.io index update list: {e}");
                 continue;
             }
         };
 
         for c in crates {
             if let Err(e) = sender.send(c) {
-                error!("Could not send update message: {}", e)
+                error!("Could not send update message: {e}")
             }
         }
 
@@ -214,7 +210,7 @@ async fn cratesio_prefetch_thread(
         if let Some((name, metadata, desc, etag, last_modified)) =
             handle_cratesio_prefetch_msg(&cache, &channel, &db).await
         {
-            trace!("Update crates.io prefetch data for {}", name);
+            trace!("Update crates.io prefetch data for {name}");
             if let Err(e) = db
                 .add_cratesio_prefetch_data(
                     &name,
@@ -226,8 +222,7 @@ async fn cratesio_prefetch_thread(
                 .await
             {
                 error!(
-                    "Could not insert prefetch data from crates.io into database for {}: {}",
-                    name, e
+                    "Could not insert prefetch data from crates.io into database for {name}: {e}",
                 );
             }
         }
@@ -246,20 +241,14 @@ async fn convert_index_data(
     match metadata {
         Ok(m) => {
             let desc = fetch_cratesio_description(name).await.unwrap_or_else(|e| {
-                error!(
-                    "Could not fetch description for from crates.io {}: {:?}",
-                    name, e
-                );
+                error!("Could not fetch description for from crates.io {name}: {e:?}",);
                 None
             });
 
             Some((m, desc))
         }
         Err(e) => {
-            error!(
-                "Could not parse prefetch data from crates.io for {}: {}",
-                name, e
-            );
+            error!("Could not parse prefetch data from crates.io for {name}: {e}",);
             None
         }
     }
@@ -288,7 +277,7 @@ async fn handle_cratesio_prefetch_msg(
         Ok(CratesioPrefetchMsg::Update(msg)) => {
             trace!("Updating prefetch data for {}", msg.name);
             if let Some(date) = cache.get(&msg.name).await {
-                trace!("No update needed for {}. Last update: {}", msg.name, date);
+                trace!("No update needed for {}. Last update: {date}", msg.name);
                 None
             } else {
                 cache
@@ -304,11 +293,11 @@ async fn handle_cratesio_prefetch_msg(
             );
             db.increase_cached_download_counter(&msg.name, &msg.version)
                 .await
-                .unwrap_or_else(|e| warn!("Failed to increase download counter: {}", e));
+                .unwrap_or_else(|e| warn!("Failed to increase download counter: {e}"));
             None
         }
         Err(e) => {
-            error!("Could not receive prefetch message: {}", e);
+            error!("Could not receive prefetch message: {e}");
             None
         }
     }
@@ -331,7 +320,7 @@ async fn fetch_index_data(
     {
         Ok(url) => url,
         Err(e) => {
-            error!("Could not parse crates.io url for {}: {}", name, e);
+            error!("Could not parse crates.io url for {name}: {e}");
             return None;
         }
     };
@@ -351,21 +340,14 @@ async fn fetch_index_data(
         {
             Ok(response) => break Some(response),
             Err(e) => {
-                warn!(
-                    "Retry {}/{} - Could not fetch index from crates.io for {}: {}",
-                    i + 1,
-                    max_retries,
-                    name,
-                    e
-                );
                 i += 1;
+                warn!(
+                    "Retry {i}/{max_retries} - Could not fetch index from crates.io for {name}: {e}"
+                );
             }
         };
         if i >= max_retries {
-            error!(
-                "Could not fetch index from crates.io for {} after 3 tries",
-                name
-            );
+            error!("Could not fetch index from crates.io for {name} after 3 tries",);
             break None;
         }
     };
@@ -373,11 +355,11 @@ async fn fetch_index_data(
     if let Some(r) = r {
         match r.status() {
             StatusCode::NOT_MODIFIED => {
-                trace!("Index not-modified for {}", name);
+                trace!("Index not-modified for {name}");
                 None
             }
             StatusCode::NOT_FOUND => {
-                trace!("Index not found for {}", name);
+                trace!("Index not found for {name}");
                 None
             }
             StatusCode::OK => {
@@ -392,7 +374,7 @@ async fn fetch_index_data(
                 let data = match r.text().await {
                     Ok(data) => data,
                     Err(e) => {
-                        error!("Could not read index from crates.io for {}: {}", name, e);
+                        error!("Could not read index from crates.io for {name}: {e}");
                         return None;
                     }
                 };
@@ -402,7 +384,7 @@ async fn fetch_index_data(
                     .map(|(m, d)| (name, m, d, etag, last_modified))
             }
             s => {
-                error!("Unexpected status code from crates.io for {}: {}", name, s);
+                error!("Unexpected status code from crates.io for {name}: {s}");
                 None
             }
         }
@@ -463,20 +445,20 @@ async fn fetch_cratesio_prefetch(
                             data,
                         }))
                         .map_err(|e| {
-                            error!("Could not send prefetch message: {}", e);
+                            error!("Could not send prefetch message: {e}");
                             StatusCode::INTERNAL_SERVER_ERROR
                         })?;
 
                     Ok(prefetch)
                 }
                 s => {
-                    error!("Unexpected status code from crates.io for {}: {}", name, s);
+                    error!("Unexpected status code from crates.io for {name}: {s}");
                     Err(StatusCode::INTERNAL_SERVER_ERROR)
                 }
             }
         }
         Err(e) => {
-            error!("Error fetching prefetch data from crates.io: {}", e);
+            error!("Error fetching prefetch data from crates.io: {e}");
             Err(StatusCode::NOT_FOUND)
         }
     }
@@ -484,16 +466,16 @@ async fn fetch_cratesio_prefetch(
 
 fn crate_sub_path(name: &NormalizedName) -> String {
     match name.len() {
-        1 => format!("1/{}", name),
-        2 => format!("2/{}", name),
+        1 => format!("1/{name}"),
+        2 => format!("2/{name}"),
         3 => {
             let first_char = &name[0..1];
-            format!("3/{}/{}", first_char, name)
+            format!("3/{first_char}/{name}")
         }
         _ => {
             let first_two = &name[0..2];
             let second_two = &name[2..4];
-            format!("{}/{}/{}", first_two, second_two, name)
+            format!("{first_two}/{second_two}/{name}")
         }
     }
 }

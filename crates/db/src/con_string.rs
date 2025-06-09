@@ -16,7 +16,7 @@ impl Display for ConString {
             ConString::Postgres(p) => p.to_string(),
             ConString::Sqlite(s) => s.to_string(),
         };
-        write!(f, "{}", con_string)
+        write!(f, "{con_string}")
     }
 }
 
