@@ -9,8 +9,8 @@ pub struct Setup {
 impl Default for Setup {
     fn default() -> Self {
         Self {
-            admin_pwd: String::from("admin"),
-            admin_token: String::from("Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"),
+            admin_pwd: "admin".to_string(),
+            admin_token: "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD".to_string(),
         }
     }
 }

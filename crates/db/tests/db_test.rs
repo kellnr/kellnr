@@ -2447,7 +2447,7 @@ async fn test_get_last_updated_crate_works(test_db: &db::Database) {
 
     let last_updated = test_db.get_last_updated_crate().await.unwrap().unwrap();
 
-    assert_eq!(String::from("my_crate2"), last_updated.0.to_string());
+    assert_eq!("my_crate2", last_updated.0.to_string());
 }
 
 #[db_test]

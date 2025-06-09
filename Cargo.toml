@@ -96,7 +96,6 @@ must_use_candidate = "allow" # 74
 default_trait_access = "allow" # 45
 implicit_clone = "allow" # 32
 cast_possible_truncation = "allow" # 28
-manual_string_new = "allow" # 20
 cast_sign_loss = "allow" # 20
 unused_async = "allow" # 16
 redundant_closure_for_method_calls = "allow" # 13

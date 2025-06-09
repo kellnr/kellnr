@@ -143,8 +143,8 @@ mod test {
                 Ok(User {
                     id: 0,
                     name: "user".to_string(),
-                    pwd: "".to_string(),
-                    salt: "".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
                 })

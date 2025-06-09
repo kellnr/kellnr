@@ -31,16 +31,16 @@ mod tests {
     fn create_new_doc_upload_response_works() {
         let name = OriginalName::try_from("mycrate").unwrap();
         let version = Version::try_from("1.0.0-beta2").unwrap();
-        let msg = String::from("Hello, this is the message.");
+        let msg = "Hello, this is the message.".to_string();
 
         let dur = DocUploadResponse::new(msg, &name, &version);
 
         assert_eq!(
             DocUploadResponse {
-                message: String::from("Hello, this is the message."),
-                url: String::from("/docs/mycrate/1.0.0-beta2/doc/mycrate/index.html"),
-                crate_name: String::from("mycrate"),
-                crate_version: String::from("1.0.0-beta2")
+                message: "Hello, this is the message.".to_string(),
+                url: "/docs/mycrate/1.0.0-beta2/doc/mycrate/index.html".to_string(),
+                crate_name: "mycrate".to_string(),
+                crate_version: "1.0.0-beta2".to_string()
             },
             dur
         );
@@ -50,16 +50,16 @@ mod tests {
     fn create_new_doc_upload_replace_hyphen_with_underscore() {
         let name = OriginalName::try_from("my-crate").unwrap();
         let version = Version::try_from("1.0.0").unwrap();
-        let msg = String::from("Hello, this is the message.");
+        let msg = "Hello, this is the message.".to_string();
 
         let dur = DocUploadResponse::new(msg, &name, &version);
 
         assert_eq!(
             DocUploadResponse {
-                message: String::from("Hello, this is the message."),
-                url: String::from("/docs/my-crate/1.0.0/doc/my_crate/index.html"),
-                crate_name: String::from("my-crate"),
-                crate_version: String::from("1.0.0")
+                message: "Hello, this is the message.".to_string(),
+                url: "/docs/my-crate/1.0.0/doc/my_crate/index.html".to_string(),
+                crate_name: "my-crate".to_string(),
+                crate_version: "1.0.0".to_string()
             },
             dur
         );

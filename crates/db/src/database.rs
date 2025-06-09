@@ -1447,7 +1447,7 @@ impl DbProvider for Database {
             homepage: Set(None),
             description: Set(None),
             repository: Set(None),
-            e_tag: Set("".to_string()), // Set to empty string, as it can be computed, when the crate index is inserted
+            e_tag: Set(String::new()), // Set to empty string, as it can be computed, when the crate index is inserted
             restricted_download: Set(false),
         };
         Ok(krate.insert(&self.db_con).await?.id)
@@ -1489,7 +1489,7 @@ impl DbProvider for Database {
                 krate.homepage = Set(pub_metadata.homepage.clone());
                 krate.description = Set(pub_metadata.description.clone());
                 krate.repository = Set(pub_metadata.repository.clone());
-                krate.e_tag = Set("".to_string()); // Set to empty string, as it can be computed, when the crate index is inserted
+                krate.e_tag = Set(String::new()); // Set to empty string, as it can be computed, when the crate index is inserted
                 krate.update(&txn).await?;
                 krate_id
             }
@@ -1504,7 +1504,7 @@ impl DbProvider for Database {
                     homepage: Set(pub_metadata.homepage.clone()),
                     description: Set(pub_metadata.description.clone()),
                     repository: Set(pub_metadata.repository.clone()),
-                    e_tag: Set("".to_string()), // Set to empty string, as it can be computed, when the crate index is inserted
+                    e_tag: Set(String::new()), // Set to empty string, as it can be computed, when the crate index is inserted
                     restricted_download: Set(false),
                 };
                 let krate = krate.insert(&txn).await?;

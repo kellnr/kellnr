@@ -192,7 +192,7 @@ pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
             is_logged_in: true,
         },
         None => LoggedInUser {
-            user: "".to_owned(),
+            user: String::new(),
             is_admin: false,
             is_logged_in: false,
         },
