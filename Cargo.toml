@@ -58,7 +58,7 @@ wax = "0.6.0"
 proc-macro2 = "1.0.95"
 moka = {version = "0.12.10", features = ["future"]}
 config = "0.15.11"
-toml = "0.8.22"
+toml = "0.8.23"
 time = "0.3.41"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"] }
