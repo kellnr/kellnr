@@ -16,13 +16,13 @@ impl Default for S3 {
     fn default() -> Self {
         Self {
             enabled: false,
-            access_key: String::from("minioadmin"),
-            secret_key: String::from("minioadmin"),
-            region: String::from("us-east-1"),
-            endpoint: String::from("http://localhost:9000/"),
+            access_key: "minioadmin".to_string(),
+            secret_key: "minioadmin".to_string(),
+            region: "us-east-1".to_string(),
+            endpoint: "http://localhost:9000/".to_string(),
             allow_http: true,
-            crates_bucket: String::from("kellnr-crates"),
-            cratesio_bucket: String::from("kellnr-cratesio"),
+            crates_bucket: "kellnr-crates".to_string(),
+            cratesio_bucket: "kellnr-cratesio".to_string(),
         }
     }
 }

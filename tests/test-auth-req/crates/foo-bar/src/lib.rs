@@ -4,7 +4,7 @@
 
 /// Test function that returns a string.
 pub fn test_fn() -> String {
-    String::from("Hello from test")
+    "Hello from test".to_string()
 }
 
 #[cfg(test)]

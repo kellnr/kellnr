@@ -15,11 +15,11 @@ impl Default for Postgresql {
     fn default() -> Self {
         Self {
             enabled: false,
-            address: String::from("localhost"),
+            address: "localhost".to_string(),
             port: 5432,
-            db: String::from("kellnr"),
-            user: String::from(""),
-            pwd: String::from(""),
+            db: "kellnr".to_string(),
+            user: String::new(),
+            pwd: String::new(),
         }
     }
 }

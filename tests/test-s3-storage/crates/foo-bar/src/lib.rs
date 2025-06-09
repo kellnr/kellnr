@@ -8,7 +8,7 @@ use regex::Regex;
 /// Test function that returns a string.
 pub fn test_fn() -> String {
     let _ = Regex::new(r"^[a-zA-Z][a-zA-Z0-9-_]*$").unwrap();
-    String::from("Hello from test")
+    "Hello from test".to_string()
 }
 
 #[cfg(test)]

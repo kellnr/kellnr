@@ -36,8 +36,7 @@ pub struct ErrorDetail {
 }
 
 impl ApiError {
-    pub fn new(msg: &str, error: &dyn ToString, status: StatusCode) -> Self {
-        let error = error.to_string();
+    pub fn new(msg: &str, error: &str, status: StatusCode) -> Self {
         let e = if error.is_empty() {
             format!("ERROR: {msg}")
         } else {
@@ -49,11 +48,10 @@ impl ApiError {
         }
     }
 
-    fn from_dyn_str(e: &dyn ToString, status: StatusCode) -> Self {
-        let e = format!("ERROR: {}", e.to_string());
+    fn from_str(e: &str, status: StatusCode) -> Self {
         Self {
             status,
-            details: ErrorDetails::from(e),
+            details: ErrorDetails::from(format!("ERROR: {e}")),
         }
     }
 
@@ -94,20 +92,12 @@ impl From<ZipError> for ApiError {
     fn from(e: ZipError) -> Self {
         match e {
             ZipError::Io(e) => ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR),
-            ZipError::InvalidArchive(s) => {
-                ApiError::from_dyn_str(&s.to_string(), StatusCode::BAD_REQUEST)
+            ZipError::InvalidArchive(s) => ApiError::from_str(&s, StatusCode::BAD_REQUEST),
+            ZipError::UnsupportedArchive(s) => ApiError::from_str(s, StatusCode::BAD_REQUEST),
+            ZipError::FileNotFound => {
+                ApiError::from_str("Zip archive not found", StatusCode::NOT_FOUND)
             }
-            ZipError::UnsupportedArchive(s) => {
-                ApiError::from_dyn_str(&s.to_string(), StatusCode::BAD_REQUEST)
-            }
-            ZipError::FileNotFound => ApiError::from_dyn_str(
-                &String::from("Zip archive not found"),
-                StatusCode::NOT_FOUND,
-            ),
-            _ => ApiError::from_dyn_str(
-                &String::from("Unknown zip error"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ),
+            _ => ApiError::from_str("Unknown zip error", StatusCode::INTERNAL_SERVER_ERROR),
         }
     }
 }

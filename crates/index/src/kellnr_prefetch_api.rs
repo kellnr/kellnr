@@ -154,7 +154,7 @@ mod tests {
         let settings = Settings {
             origin: settings::Origin {
                 protocol: Protocol::Http,
-                hostname: String::from("test.api.com"),
+                hostname: "test.api.com".to_string(),
                 port: 1234,
             },
             ..Settings::default()
@@ -167,8 +167,8 @@ mod tests {
             .returning(move |_| {
                 Ok(Prefetch {
                     data: vec![0x1, 0x2, 0x3],
-                    etag: String::from("etag"),
-                    last_modified: String::from("date"),
+                    etag: "etag".to_string(),
+                    last_modified: "date".to_string(),
                 })
             });
         mock_db

@@ -324,11 +324,7 @@ pub async fn add_empty_crate(
 ) -> ApiResult<Json<EmptyCrateSuccess>> {
     // Only admins can create empty crate placeholders
     if !token.is_admin {
-        return Err(ApiError::new(
-            "Unauthorized",
-            &String::new(),
-            StatusCode::UNAUTHORIZED,
-        ));
+        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }
     let db = state.db;
     let orig_name = OriginalName::try_from(&data.name)?;
@@ -526,7 +522,7 @@ mod reg_api_tests {
             .await
             .expect("Cannot open valid package file.");
         let del_owner = crate_user::CrateUserRequest {
-            users: vec![String::from("admin")],
+            users: vec!["admin".to_string()],
         };
         let _ = kellnr
             .client
@@ -595,7 +591,7 @@ mod reg_api_tests {
             .await
             .unwrap();
         let add_owner = crate_user::CrateUserRequest {
-            users: vec![String::from("user")],
+            users: vec!["user".to_string()],
         };
 
         let r = kellnr

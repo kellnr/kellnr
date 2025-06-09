@@ -531,8 +531,8 @@ mod tests {
                 Ok(User {
                     id: 0,
                     name: "user".to_string(),
-                    pwd: "".to_string(),
-                    salt: "".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -590,8 +590,8 @@ mod tests {
                 Ok(User {
                     id: 0,
                     name: "user".to_string(),
-                    pwd: "".to_string(),
-                    salt: "".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -659,8 +659,8 @@ mod tests {
                 Ok(User {
                     id: 0,
                     name: "user".to_string(),
-                    pwd: "".to_string(),
-                    salt: "".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -750,7 +750,7 @@ mod tests {
             num_proxy_crate_versions: 0,
             num_proxy_crate_downloads: 0,
             top_crates: TopCrates {
-                first: (String::from("top1"), 1000),
+                first: ("top1".to_string(), 1000),
                 second: (String::new(), 0),
                 third: (String::new(), 0),
             },
@@ -883,9 +883,9 @@ mod tests {
             num_proxy_crate_versions: 99999,
             num_proxy_crate_downloads: 999999,
             top_crates: TopCrates {
-                first: (String::from("top1"), 1000),
-                second: (String::from("top2"), 500),
-                third: (String::from("top3"), 100),
+                first: ("top1".to_string(), 1000),
+                second: ("top2".to_string(), 500),
+                third: ("top3".to_string(), 100),
             },
             last_updated_crate: Some((
                 OriginalName::from_unchecked("foobar".to_string()),
