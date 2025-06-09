@@ -112,7 +112,7 @@ impl axum::extract::OptionalFromRequestParts<appstate::AppStateData> for MaybeUs
     }
 }
 
-/// Middleware that checks if a user is logged in, when settings.registry.auth_required is true.<br>
+/// Middleware that checks if a user is logged in, when settings.registry.auth_required is true.
 /// If the user is not logged in, a 401 is returned.
 pub async fn session_auth_when_required(
     State(state): State<appstate::AppStateData>,
@@ -121,7 +121,7 @@ pub async fn session_auth_when_required(
     next: Next,
 ) -> Result<Response, RouteError> {
     if !state.settings.registry.auth_required {
-        // If auth_required is not true, pass through.
+        // If "auth_required" is "false", pass through.
         return Ok(next.run(request).await);
     }
     let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
