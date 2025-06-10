@@ -98,7 +98,6 @@ implicit_clone = "allow" # 32
 cast_possible_truncation = "allow" # 28
 cast_sign_loss = "allow" # 20
 unused_async = "allow" # 16
-single_match_else = "allow" # 12
 semicolon_if_nothing_returned = "allow" # 11
 missing_panics_doc = "allow" # 10
 cast_possible_wrap = "allow" # 10

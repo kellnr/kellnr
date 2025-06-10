@@ -67,45 +67,42 @@ pub async fn download(
 ) -> Result<Vec<u8>, StatusCode> {
     trace!("Downloading crate: {package} ({version})");
 
-    match crate_storage.get(&package, &version).await {
-        Some(file) => {
-            let msg = DownloadData {
-                name: package.into(),
-                version,
-            };
-            if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
-                warn!("Failed to send IncDownloadCnt message: {e}");
+    if let Some(file) = crate_storage.get(&package, &version).await {
+        let msg = DownloadData {
+            name: package.into(),
+            version,
+        };
+        if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
+            warn!("Failed to send IncDownloadCnt message: {e}");
+        }
+
+        Ok(file)
+    } else {
+        let target = format!("https://static.crates.io/crates/{package}/{version}/download");
+
+        let res = match CLIENT.get(target).send().await {
+            Ok(resp) if resp.status() != 200 => Err(StatusCode::NOT_FOUND),
+            Ok(resp) => Ok(resp),
+            Err(e) => {
+                error!("Encountered error... {e}");
+                Err(StatusCode::NOT_FOUND)
             }
+        }?;
 
-            Ok(file)
-        }
-        None => {
-            let target = format!("https://static.crates.io/crates/{package}/{version}/download");
+        let crate_data = res.bytes().await.map_err(log_return_error)?;
+        let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
+        let _save = crate_storage
+            .put(&package, &version, crate_data.clone())
+            .await
+            .map_err(|e| {
+                error!("Failed to save crate to disk: {e}");
+                StatusCode::UNPROCESSABLE_ENTITY
+            })?;
 
-            let res = match CLIENT.get(target).send().await {
-                Ok(resp) if resp.status() != 200 => Err(StatusCode::NOT_FOUND),
-                Ok(resp) => Ok(resp),
-                Err(e) => {
-                    error!("Encountered error... {e}");
-                    Err(StatusCode::NOT_FOUND)
-                }
-            }?;
-
-            let crate_data = res.bytes().await.map_err(log_return_error)?;
-            let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
-            let _save = crate_storage
-                .put(&package, &version, crate_data.clone())
-                .await
-                .map_err(|e| {
-                    error!("Failed to save crate to disk: {e}");
-                    StatusCode::UNPROCESSABLE_ENTITY
-                })?;
-
-            crate_storage
-                .get(&package, &version)
-                .await
-                .ok_or(StatusCode::NOT_FOUND)
-        }
+        crate_storage
+            .get(&package, &version)
+            .await
+            .ok_or(StatusCode::NOT_FOUND)
     }
 }
 
