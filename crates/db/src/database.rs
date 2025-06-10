@@ -1465,43 +1465,40 @@ impl DbProvider for Database {
 
         let txn = self.db_con.begin().await?;
 
-        let crate_id = match existing {
-            Some(krate) => {
-                let krate_id = krate.id;
-                let current_max_version = Version::try_from(&krate.max_version)
-                    .map_err(|_| DbError::InvalidVersion(krate.max_version.clone()))?;
-                let max_version = current_max_version.max(
-                    Version::try_from(&pub_metadata.vers)
-                        .map_err(|_| DbError::InvalidVersion(pub_metadata.vers.clone()))?,
-                );
+        let crate_id = if let Some(krate) = existing {
+            let krate_id = krate.id;
+            let current_max_version = Version::try_from(&krate.max_version)
+                .map_err(|_| DbError::InvalidVersion(krate.max_version.clone()))?;
+            let max_version = current_max_version.max(
+                Version::try_from(&pub_metadata.vers)
+                    .map_err(|_| DbError::InvalidVersion(pub_metadata.vers.clone()))?,
+            );
 
-                let mut krate: krate::ActiveModel = krate.into();
-                krate.last_updated = Set(created.clone());
-                krate.max_version = Set(max_version.to_string());
-                krate.homepage = Set(pub_metadata.homepage.clone());
-                krate.description = Set(pub_metadata.description.clone());
-                krate.repository = Set(pub_metadata.repository.clone());
-                krate.e_tag = Set(String::new()); // Set to empty string, as it can be computed, when the crate index is inserted
-                krate.update(&txn).await?;
-                krate_id
-            }
-            None => {
-                let krate = krate::ActiveModel {
-                    id: Default::default(),
-                    name: Set(normalized_name.to_string()),
-                    original_name: Set(pub_metadata.name.clone()),
-                    max_version: Set(pub_metadata.vers.clone()),
-                    last_updated: Set(created.clone()),
-                    total_downloads: Set(0),
-                    homepage: Set(pub_metadata.homepage.clone()),
-                    description: Set(pub_metadata.description.clone()),
-                    repository: Set(pub_metadata.repository.clone()),
-                    e_tag: Set(String::new()), // Set to empty string, as it can be computed, when the crate index is inserted
-                    restricted_download: Set(false),
-                };
-                let krate = krate.insert(&txn).await?;
-                krate.id
-            }
+            let mut krate: krate::ActiveModel = krate.into();
+            krate.last_updated = Set(created.clone());
+            krate.max_version = Set(max_version.to_string());
+            krate.homepage = Set(pub_metadata.homepage.clone());
+            krate.description = Set(pub_metadata.description.clone());
+            krate.repository = Set(pub_metadata.repository.clone());
+            krate.e_tag = Set(String::new()); // Set to empty string, as it can be computed, when the crate index is inserted
+            krate.update(&txn).await?;
+            krate_id
+        } else {
+            let krate = krate::ActiveModel {
+                id: Default::default(),
+                name: Set(normalized_name.to_string()),
+                original_name: Set(pub_metadata.name.clone()),
+                max_version: Set(pub_metadata.vers.clone()),
+                last_updated: Set(created.clone()),
+                total_downloads: Set(0),
+                homepage: Set(pub_metadata.homepage.clone()),
+                description: Set(pub_metadata.description.clone()),
+                repository: Set(pub_metadata.repository.clone()),
+                e_tag: Set(String::new()), // Set to empty string, as it can be computed, when the crate index is inserted
+                restricted_download: Set(false),
+            };
+            let krate = krate.insert(&txn).await?;
+            krate.id
         };
 
         add_owner_if_not_exists(&txn, owner, crate_id).await?;
@@ -1634,27 +1631,24 @@ impl DbProvider for Database {
             .one(&self.db_con)
             .await?;
 
-        let krate = match krate {
-            Some(krate) => {
-                let mut krate: cratesio_crate::ActiveModel = krate.into();
-                krate.e_tag = Set(etag.to_string());
-                krate.last_modified = Set(last_modified.to_string());
-                krate.max_version = Set(max_version.to_string());
-                krate.update(&self.db_con).await?
-            }
-            None => {
-                let krate = cratesio_crate::ActiveModel {
-                    id: Default::default(),
-                    name: Set(normalized_name.to_string()),
-                    original_name: Set(crate_name.to_string()),
-                    description: Set(description),
-                    e_tag: Set(etag.to_string()),
-                    last_modified: Set(last_modified.to_string()),
-                    total_downloads: Set(0),
-                    max_version: Set(max_version.to_string()),
-                };
-                krate.insert(&self.db_con).await?
-            }
+        let krate = if let Some(krate) = krate {
+            let mut krate: cratesio_crate::ActiveModel = krate.into();
+            krate.e_tag = Set(etag.to_string());
+            krate.last_modified = Set(last_modified.to_string());
+            krate.max_version = Set(max_version.to_string());
+            krate.update(&self.db_con).await?
+        } else {
+            let krate = cratesio_crate::ActiveModel {
+                id: Default::default(),
+                name: Set(normalized_name.to_string()),
+                original_name: Set(crate_name.to_string()),
+                description: Set(description),
+                e_tag: Set(etag.to_string()),
+                last_modified: Set(last_modified.to_string()),
+                total_downloads: Set(0),
+                max_version: Set(max_version.to_string()),
+            };
+            krate.insert(&self.db_con).await?
         };
 
         let current_indices = cratesio_index::Entity::find()
@@ -1955,16 +1949,15 @@ async fn update_crate_categories<C: ConnectionTrait>(
             .map(|model| model.id);
 
         // If the category does not exist, create it
-        let category_fk = match category_fk {
-            Some(category_fk) => category_fk,
-            None => {
-                let cc = crate_category::ActiveModel {
-                    id: Default::default(),
-                    category: Set(category.clone()),
-                };
+        let category_fk = if let Some(category_fk) = category_fk {
+            category_fk
+        } else {
+            let cc = crate_category::ActiveModel {
+                id: Default::default(),
+                category: Set(category.clone()),
+            };
 
-                cc.insert(db_con).await?.id
-            }
+            cc.insert(db_con).await?.id
         };
 
         // Add the relationship between the crate and the category
@@ -2001,16 +1994,15 @@ async fn update_crate_keywords<C: ConnectionTrait>(
             .map(|model| model.id);
 
         // If the keyword does not exist, create it
-        let keyword_fk = match keyword_fk {
-            Some(keyword_fk) => keyword_fk,
-            None => {
-                let ck = crate_keyword::ActiveModel {
-                    id: Default::default(),
-                    keyword: Set(keyword.clone()),
-                };
+        let keyword_fk = if let Some(keyword_fk) = keyword_fk {
+            keyword_fk
+        } else {
+            let ck = crate_keyword::ActiveModel {
+                id: Default::default(),
+                keyword: Set(keyword.clone()),
+            };
 
-                ck.insert(db_con).await?.id
-            }
+            ck.insert(db_con).await?.id
         };
 
         // Add the relationship between the crate and the keyword
@@ -2047,16 +2039,15 @@ async fn update_crate_authors<C: ConnectionTrait>(
             .map(|model| model.id);
 
         // If the author does not exist, create it
-        let author_fk = match author_fk {
-            Some(author_fk) => author_fk,
-            None => {
-                let ca = crate_author::ActiveModel {
-                    id: Default::default(),
-                    author: Set(author.clone()),
-                };
+        let author_fk = if let Some(author_fk) = author_fk {
+            author_fk
+        } else {
+            let ca = crate_author::ActiveModel {
+                id: Default::default(),
+                author: Set(author.clone()),
+            };
 
-                ca.insert(db_con).await?.id
-            }
+            ca.insert(db_con).await?.id
         };
 
         // Add the relationship between the crate and the author
