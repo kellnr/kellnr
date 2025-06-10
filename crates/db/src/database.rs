@@ -599,7 +599,7 @@ impl DbProvider for Database {
             .ok_or_else(|| DbError::UserNotFound(user_name.to_owned()))?
             .into();
 
-        u.pwd = Set(hashed.to_owned());
+        u.pwd = Set(hashed.clone());
         u.salt = Set(salt);
 
         u.update(&self.db_con).await?;
@@ -674,7 +674,7 @@ impl DbProvider for Database {
 
         let at = auth_token::ActiveModel {
             name: Set(name.to_owned()),
-            token: Set(hashed_token.to_owned()),
+            token: Set(hashed_token.clone()),
             user_fk: Set(user.id),
             ..Default::default()
         };

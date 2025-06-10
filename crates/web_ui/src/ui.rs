@@ -20,7 +20,7 @@ pub async fn settings(
     State(settings): SettingsState,
 ) -> Result<Json<Settings>, RouteError> {
     user.assert_admin()?;
-    let s: Settings = (*settings).to_owned();
+    let s: Settings = (*settings).clone();
     Ok(Json(s))
 }
 

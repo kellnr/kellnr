@@ -94,7 +94,6 @@ used_underscore_binding = "allow" # 672
 missing_errors_doc = "allow" # 182
 must_use_candidate = "allow" # 74
 default_trait_access = "allow" # 45
-implicit_clone = "allow" # 32
 cast_possible_truncation = "allow" # 28
 cast_sign_loss = "allow" # 20
 unused_async = "allow" # 16
