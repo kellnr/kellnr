@@ -12,7 +12,7 @@ pub trait Name {
 pub struct AdminUser(pub String);
 impl Name for AdminUser {
     fn name(&self) -> String {
-        self.0.to_owned()
+        self.0.clone()
     }
     fn new(name: String) -> Self {
         Self(name)
@@ -22,7 +22,7 @@ impl Name for AdminUser {
 pub struct NormalUser(pub String);
 impl Name for NormalUser {
     fn name(&self) -> String {
-        self.0.to_owned()
+        self.0.clone()
     }
     fn new(name: String) -> Self {
         Self(name)
@@ -32,7 +32,7 @@ impl Name for NormalUser {
 pub struct AnyUser(pub String);
 impl Name for AnyUser {
     fn name(&self) -> String {
-        self.0.to_owned()
+        self.0.clone()
     }
     fn new(name: String) -> Self {
         Self(name)

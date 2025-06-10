@@ -70,11 +70,11 @@ impl CachedCrateStorage {
         match self.cache {
             Some(ref cache) => {
                 if let Some(data) = cache.get(&file_name).await {
-                    Some(data.to_vec())
+                    Some(data)
                 } else {
-                    let data = self.storage.get(&file_name).await.ok()?;
-                    cache.insert(file_name.to_owned(), data.to_vec()).await;
-                    Some(data.to_vec())
+                    let data = self.storage.get(&file_name).await.ok()?.to_vec();
+                    cache.insert(file_name.clone(), data.clone()).await;
+                    Some(data)
                 }
             }
             None => self.storage.get(&file_name).await.map(<Vec<u8>>::from).ok(),

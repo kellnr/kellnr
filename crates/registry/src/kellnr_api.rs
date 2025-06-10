@@ -164,7 +164,7 @@ pub async fn list_owners(
         .iter()
         .map(|u| crate_user::CrateUser {
             id: u.id,
-            login: u.name.to_owned(),
+            login: u.name.clone(),
             name: None,
         })
         .collect();
@@ -208,7 +208,7 @@ pub async fn list_crate_users(
         .iter()
         .map(|u| crate_user::CrateUser {
             id: u.id,
-            login: u.name.to_owned(),
+            login: u.name.clone(),
             name: None,
         })
         .collect();
@@ -247,7 +247,7 @@ pub async fn list_crate_groups(
         .iter()
         .map(|u| crate_group::CrateGroup {
             id: u.id,
-            name: u.name.to_owned(),
+            name: u.name.clone(),
         })
         .collect();
 

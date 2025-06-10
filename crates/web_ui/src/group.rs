@@ -88,7 +88,7 @@ pub async fn list_users(
         .iter()
         .map(|u| GroupUser {
             id: u.id,
-            name: u.name.to_owned(),
+            name: u.name.clone(),
         })
         .collect();
 

@@ -27,7 +27,7 @@ pub async fn list_users(
         .iter()
         .map(|u| CrateUser {
             id: u.id,
-            login: u.name.to_owned(),
+            login: u.name.clone(),
             name: None,
         })
         .collect();
@@ -80,7 +80,7 @@ pub async fn list_groups(
         .iter()
         .map(|u| CrateGroup {
             id: u.id,
-            name: u.name.to_owned(),
+            name: u.name.clone(),
         })
         .collect();
 
