@@ -30,6 +30,7 @@ impl From<Vec<DocQueueEntry>> for DocQueueResponse {
 mod tests {
     use super::*;
     use common::normalized_name::NormalizedName;
+    use std::path::PathBuf;
 
     #[test]
     fn doc_queue_response_from_doc_queue_entry() {
@@ -38,13 +39,13 @@ mod tests {
                 id: 0,
                 normalized_name: NormalizedName::from_unchecked("crate1".to_string()),
                 version: "0.0.1".to_string(),
-                path: Default::default(),
+                path: PathBuf::default(),
             },
             DocQueueEntry {
                 id: 1,
                 normalized_name: NormalizedName::from_unchecked("crate2".to_string()),
                 version: "0.0.2".to_string(),
-                path: Default::default(),
+                path: PathBuf::default(),
             },
         ];
 

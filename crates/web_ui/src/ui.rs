@@ -354,6 +354,7 @@ mod tests {
     use mockall::predicate::*;
     use settings::Settings;
     use settings::{Postgresql, constants};
+    use std::collections::BTreeMap;
     use std::sync::Arc;
     use storage::cached_crate_storage::DynStorage;
     use storage::fs_storage::FSStorage;
@@ -1024,16 +1025,13 @@ mod tests {
                     name: "dep1".to_string(),
                     description: Some("description".to_string()),
                     version_req: "1.0.0".to_string(),
-                    features: None,
-                    optional: false,
-                    default_features: false,
                     target: Some("target".to_string()),
                     kind: Some("dev".to_string()),
                     registry: Some("registry".to_string()),
-                    explicit_name_in_toml: None,
+                    ..Default::default()
                 }],
                 checksum: "checksum".to_string(),
-                features: Default::default(),
+                features: BTreeMap::default(),
                 yanked: false,
                 links: Some("links".to_string()),
                 v: 1,
