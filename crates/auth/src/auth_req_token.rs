@@ -5,7 +5,8 @@ use axum::middleware::Next;
 use axum::response::Response;
 use tracing::warn;
 
-/// Middleware that checks if a cargo token is provided, when settings.registry.auth_required is true.<br>
+/// Middleware that checks if a cargo token is provided when `settings.registry.auth_required` is `true`.
+///
 /// If the user is not logged in, a 401 is returned.
 pub async fn cargo_auth_when_required(
     State(state): State<appstate::AppStateData>,

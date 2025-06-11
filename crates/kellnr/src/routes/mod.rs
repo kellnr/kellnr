@@ -18,7 +18,7 @@ mod user_routes;
 /// Creates and returns the complete application router with all routes configured
 pub fn create_router(
     state: AppStateData,
-    data_dir: String,
+    data_dir: &str,
     max_docs_size: usize,
     max_crate_size: usize,
 ) -> Router {

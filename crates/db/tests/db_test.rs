@@ -875,7 +875,7 @@ async fn add_user_duplicate(test_db: &db::Database) {
             .add_user("user", "pwd", "salt", false, false)
             .await
             .is_err()
-    )
+    );
 }
 
 #[db_test]
