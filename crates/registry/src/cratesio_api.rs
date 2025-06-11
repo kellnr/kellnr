@@ -133,7 +133,7 @@ mod tests {
     #[tokio::test]
     async fn download_not_existing_package() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -151,7 +151,7 @@ mod tests {
     #[tokio::test]
     async fn download_invalid_package_name() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -169,7 +169,7 @@ mod tests {
     #[tokio::test]
     async fn download_not_existing_version() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -187,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn download_invalid_package_version() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -205,7 +205,7 @@ mod tests {
     #[tokio::test]
     async fn download_valid_package() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -226,7 +226,7 @@ mod tests {
     async fn cratesio_disabled_returns_404() {
         let mut settings = get_settings();
         settings.proxy.enabled = false;
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -262,11 +262,11 @@ mod tests {
     }
 
     impl TestKellnr {
-        async fn new(settings: Settings) -> Self {
+        fn new(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             TestKellnr {
                 path: PathBuf::from(&settings.registry.data_dir),
-                client: app(settings).await,
+                client: app(settings),
             }
         }
     }
@@ -277,9 +277,9 @@ mod tests {
         }
     }
 
-    async fn app(settings: Settings) -> Router {
+    fn app(settings: Settings) -> Router {
         let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
-        let cs = CratesIoCrateStorage::new(&settings, storage).await.unwrap();
+        let cs = CratesIoCrateStorage::new(&settings, storage);
         let mut db = MockDb::new();
         db.expect_increase_cached_download_counter()
             .returning(|_, _| Ok(()));
@@ -288,7 +288,7 @@ mod tests {
             settings: settings.into(),
             cratesio_storage: cs.into(),
             db: Arc::<MockDb>::new(db),
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
 
         let routes = Router::new()

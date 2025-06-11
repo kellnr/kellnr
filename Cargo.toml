@@ -91,7 +91,6 @@ used_underscore_binding = "allow"
 # Most likely some of should be permanently allowed, but they at least should be reviewed.
 cast_possible_truncation = "allow" # 28
 cast_sign_loss = "allow" # 20
-unused_async = "allow" # 16
 missing_panics_doc = "allow" # 10
 cast_possible_wrap = "allow" # 10
 if_not_else = "allow" # 8

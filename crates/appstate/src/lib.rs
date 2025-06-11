@@ -31,23 +31,19 @@ pub struct AppStateData {
     pub cratesio_prefetch_sender: Sender<CratesioPrefetchMsg>,
 }
 
-pub async fn test_state() -> AppStateData {
+pub fn test_state() -> AppStateData {
     let db = Arc::new(db::mock::MockDb::new());
     let signing_key = Key::generate();
     let settings = Arc::new(Settings::default());
     let kellnr_storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
     let crate_storage = Arc::new(
-        KellnrCrateStorage::new(&settings, kellnr_storage)
-            .await
-            .unwrap(),
+        KellnrCrateStorage::new(&settings, kellnr_storage),
     );
     let cratesio_storage = Arc::new(
         CratesIoCrateStorage::new(
             &settings,
             Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage,
-        )
-        .await
-        .unwrap(),
+        ),
     );
     let (cratesio_prefetch_sender, _) = flume::unbounded();
     AppStateData {

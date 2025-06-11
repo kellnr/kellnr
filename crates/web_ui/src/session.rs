@@ -168,7 +168,7 @@ mod session_tests {
 
     async fn any_endpoint(_user: MaybeUser) {}
 
-    async fn app(db: Arc<dyn DbProvider>) -> Router {
+    fn app(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
         let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         Router::new()
@@ -178,9 +178,9 @@ mod session_tests {
             .with_state(AppStateData {
                 db,
                 signing_key: Key::from(crate::test_helper::TEST_KEY),
-                crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage).await.unwrap()),
+                crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
                 settings: Arc::new(settings),
-                ..appstate::test_state().await
+                ..appstate::test_state()
             })
     }
 
@@ -201,7 +201,6 @@ mod session_tests {
             .returning(|_st| Ok(("admin".to_string(), true)));
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/admin")
                     .header(
@@ -225,7 +224,6 @@ mod session_tests {
             .returning(|_st| Ok(("admin".to_string(), false)));
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/admin")
                     .header(header::COOKIE, c1234())
@@ -242,7 +240,6 @@ mod session_tests {
         let mock_db = MockDb::new();
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(Request::get("/admin").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -259,7 +256,6 @@ mod session_tests {
             .returning(|_st| Err(DbError::SessionNotFound));
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/admin")
                     .header(header::COOKIE, c1234())
@@ -282,7 +278,6 @@ mod session_tests {
             .returning(|_st| Ok(("normal".to_string(), false)));
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/normal")
                     .header(header::COOKIE, c1234())
@@ -303,7 +298,6 @@ mod session_tests {
             .returning(|_st| Ok(("normal".to_string(), true)));
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/normal")
                     .header(header::COOKIE, c1234())
@@ -320,7 +314,6 @@ mod session_tests {
         let mock_db = MockDb::new();
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(Request::get("/normal").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -337,7 +330,6 @@ mod session_tests {
             .returning(|_st| Err(DbError::SessionNotFound));
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/normal")
                     .header(header::COOKIE, c1234())
@@ -360,7 +352,6 @@ mod session_tests {
             .returning(|_st| Ok(("guest".to_string(), false)));
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/any")
                     .header(header::COOKIE, c1234())
@@ -381,7 +372,6 @@ mod session_tests {
             .returning(|_st| Ok(("guest".to_string(), true)));
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/any")
                     .header(header::COOKIE, c1234())
@@ -398,7 +388,6 @@ mod session_tests {
         let mock_db = MockDb::new();
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(Request::get("/any").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -414,7 +403,6 @@ mod session_tests {
             .returning(|_st| Err(DbError::SessionNotFound));
 
         let r = app(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/any")
                     .header(header::COOKIE, c1234())
@@ -443,7 +431,7 @@ mod auth_middleware_tests {
     use std::sync::Arc;
     use tower::ServiceExt;
 
-    async fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
+    fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
         let state = AppStateData {
             db,
@@ -455,7 +443,7 @@ mod auth_middleware_tests {
                 },
                 ..settings
             }),
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))
@@ -467,13 +455,13 @@ mod auth_middleware_tests {
             .with_state(state)
     }
 
-    async fn app_not_required_auth(db: Arc<dyn DbProvider>) -> Router {
+    fn app_not_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
         let state = AppStateData {
             db,
             signing_key: Key::from(crate::test_helper::TEST_KEY),
             settings: Arc::new(settings),
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))
@@ -499,7 +487,6 @@ mod auth_middleware_tests {
             .returning(|_st| Ok(("guest".to_string(), false)));
 
         let r = app_required_auth(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/guarded")
                     .header(header::COOKIE, c1234())
@@ -520,7 +507,6 @@ mod auth_middleware_tests {
             .returning(|_st| Err(DbError::SessionNotFound));
 
         let r = app_required_auth(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/guarded")
                     .header(header::COOKIE, c1234())
@@ -537,7 +523,6 @@ mod auth_middleware_tests {
         let mock_db = MockDb::new();
 
         let r = app_required_auth(Arc::new(mock_db))
-            .await
             .oneshot(Request::get("/guarded").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -550,7 +535,6 @@ mod auth_middleware_tests {
         let mock_db = MockDb::new();
 
         let r = app_required_auth(Arc::new(mock_db))
-            .await
             .oneshot(Request::get("/not_guarded").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::OK);
@@ -563,7 +547,6 @@ mod auth_middleware_tests {
         let mock_db = MockDb::new();
 
         let r = app_not_required_auth(Arc::new(mock_db))
-            .await
             .oneshot(Request::get("/guarded").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::OK);

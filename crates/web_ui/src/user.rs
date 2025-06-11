@@ -179,6 +179,7 @@ pub async fn login(
     ))
 }
 
+#[expect(clippy::unused_async)] // part of the router
 pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
     match user {
         Some(MaybeUser::Normal(user)) => LoggedInUser {

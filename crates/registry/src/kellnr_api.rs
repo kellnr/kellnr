@@ -36,7 +36,7 @@ pub async fn check_ownership(
     }
 }
 
-pub async fn check_can_modify(token: &token::Token) -> Result<(), ApiError> {
+pub fn check_can_modify(token: &token::Token) -> Result<(), ApiError> {
     if !token.is_admin && token.is_read_only {
         Err(RegistryError::ReadOnlyModify.into())
     } else {
@@ -69,6 +69,7 @@ pub async fn check_download_auth(
     }
 }
 
+#[expect(clippy::unused_async)] // part of the router
 pub async fn me() -> Redirect {
     Redirect::to("/login")
 }
@@ -82,7 +83,7 @@ pub async fn remove_owner(
     // Check if user is read-only and can't remove an owner.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token).await?;
+    check_can_modify(&token)?;
 
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
@@ -104,7 +105,7 @@ pub async fn remove_crate_user(
     // Check if user is read-only and can't remove a crate user.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token).await?;
+    check_can_modify(&token)?;
 
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
@@ -138,7 +139,7 @@ pub async fn add_owner(
     // Check if user is read-only and can't add owners.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token).await?;
+    check_can_modify(&token)?;
 
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
@@ -180,7 +181,7 @@ pub async fn add_crate_user(
     // Check if user is read-only and can't add a crate user.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token).await?;
+    check_can_modify(&token)?;
 
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
@@ -359,7 +360,7 @@ pub async fn publish(
     // Check if user is read-only and can't publish (upload) crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token).await?;
+    check_can_modify(&token)?;
 
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed push a new version.
@@ -451,7 +452,7 @@ pub async fn yank(
     // Check if user is read-only and can't yank crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token).await?;
+    check_can_modify(&token)?;
 
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
@@ -469,7 +470,7 @@ pub async fn unyank(
     // Check if user is read-only and can't unyank crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token).await?;
+    check_can_modify(&token)?;
 
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &token, &db).await?;
@@ -763,7 +764,7 @@ mod reg_api_tests {
             .with(eq("foo"), eq(false))
             .returning(|_, _| Ok(vec![]));
 
-        let kellnr = app_search(Arc::new(mock_db)).await;
+        let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
             .oneshot(
                 Request::get("/api/v1/crates?q=foo")
@@ -785,7 +786,7 @@ mod reg_api_tests {
             .with(eq("foo"), eq(false))
             .returning(|_, _| Ok(vec![]));
 
-        let kellnr = app_search(Arc::new(mock_db)).await;
+        let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
             .oneshot(
                 Request::get("/api/v1/crates?q=foo&per_page=20")
@@ -1552,7 +1553,7 @@ mod reg_api_tests {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
         let db = Database::new(&con_string, 10).await.unwrap();
         let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
-        let cs = KellnrCrateStorage::new(&settings, storage).await.unwrap();
+        let cs = KellnrCrateStorage::new(&settings, storage);
         db.add_auth_token("test", TOKEN, "admin").await.unwrap();
         db.add_user("ro_dummy", "ro", "", false, true)
             .await
@@ -1577,7 +1578,7 @@ mod reg_api_tests {
             db: Arc::new(db),
             settings: settings.into(),
             crate_storage: cs.into(),
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
 
         let routes = Router::new()
@@ -1596,12 +1597,12 @@ mod reg_api_tests {
             .with_state(state)
     }
 
-    async fn app_search(db: Arc<dyn DbProvider>) -> Router {
+    fn app_search(db: Arc<dyn DbProvider>) -> Router {
         Router::new()
             .route("/api/v1/crates", get(search))
             .with_state(AppStateData {
                 db,
-                ..appstate::test_state().await
+                ..appstate::test_state()
             })
     }
 }
