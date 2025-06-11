@@ -12,7 +12,7 @@ use cookie::time;
 use db::password::generate_salt;
 use db::{self, AuthToken, User};
 use serde::{Deserialize, Serialize};
-use settings::constants::*;
+use settings::constants::{COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {

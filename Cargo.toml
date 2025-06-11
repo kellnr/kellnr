@@ -101,7 +101,6 @@ semicolon_if_nothing_returned = "allow" # 11
 missing_panics_doc = "allow" # 10
 cast_possible_wrap = "allow" # 10
 if_not_else = "allow" # 8
-wildcard_imports = "allow" # 7
 too_many_lines = "allow" # 6
 explicit_iter_loop = "allow" # 6
 cast_lossless = "allow" # 6
