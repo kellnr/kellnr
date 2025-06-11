@@ -36,9 +36,10 @@ pub async fn cratesio_enabled(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    match settings.proxy.enabled {
-        true => Ok(next.run(request).await),
-        _ => Err(StatusCode::NOT_FOUND),
+    if settings.proxy.enabled {
+        Ok(next.run(request).await)
+    } else {
+        Err(StatusCode::NOT_FOUND)
     }
 }
 
@@ -67,45 +68,42 @@ pub async fn download(
 ) -> Result<Vec<u8>, StatusCode> {
     trace!("Downloading crate: {package} ({version})");
 
-    match crate_storage.get(&package, &version).await {
-        Some(file) => {
-            let msg = DownloadData {
-                name: package.into(),
-                version,
-            };
-            if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
-                warn!("Failed to send IncDownloadCnt message: {e}");
+    if let Some(file) = crate_storage.get(&package, &version).await {
+        let msg = DownloadData {
+            name: package.into(),
+            version,
+        };
+        if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
+            warn!("Failed to send IncDownloadCnt message: {e}");
+        }
+
+        Ok(file)
+    } else {
+        let target = format!("https://static.crates.io/crates/{package}/{version}/download");
+
+        let res = match CLIENT.get(target).send().await {
+            Ok(resp) if resp.status() != 200 => Err(StatusCode::NOT_FOUND),
+            Ok(resp) => Ok(resp),
+            Err(e) => {
+                error!("Encountered error... {e}");
+                Err(StatusCode::NOT_FOUND)
             }
+        }?;
 
-            Ok(file)
-        }
-        None => {
-            let target = format!("https://static.crates.io/crates/{package}/{version}/download");
+        let crate_data = res.bytes().await.map_err(log_return_error)?;
+        let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
+        let _save = crate_storage
+            .put(&package, &version, crate_data.clone())
+            .await
+            .map_err(|e| {
+                error!("Failed to save crate to disk: {e}");
+                StatusCode::UNPROCESSABLE_ENTITY
+            })?;
 
-            let res = match CLIENT.get(target).send().await {
-                Ok(resp) if resp.status() != 200 => Err(StatusCode::NOT_FOUND),
-                Ok(resp) => Ok(resp),
-                Err(e) => {
-                    error!("Encountered error... {e}");
-                    Err(StatusCode::NOT_FOUND)
-                }
-            }?;
-
-            let crate_data = res.bytes().await.map_err(log_return_error)?;
-            let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
-            let _save = crate_storage
-                .put(&package, &version, crate_data.clone())
-                .await
-                .map_err(|e| {
-                    error!("Failed to save crate to disk: {e}");
-                    StatusCode::UNPROCESSABLE_ENTITY
-                })?;
-
-            crate_storage
-                .get(&package, &version)
-                .await
-                .ok_or(StatusCode::NOT_FOUND)
-        }
+        crate_storage
+            .get(&package, &version)
+            .await
+            .ok_or(StatusCode::NOT_FOUND)
     }
 }
 
@@ -135,7 +133,7 @@ mod tests {
     #[tokio::test]
     async fn download_not_existing_package() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -153,7 +151,7 @@ mod tests {
     #[tokio::test]
     async fn download_invalid_package_name() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -171,7 +169,7 @@ mod tests {
     #[tokio::test]
     async fn download_not_existing_version() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -189,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn download_invalid_package_version() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -207,7 +205,7 @@ mod tests {
     #[tokio::test]
     async fn download_valid_package() {
         let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -228,7 +226,7 @@ mod tests {
     async fn cratesio_disabled_returns_404() {
         let mut settings = get_settings();
         settings.proxy.enabled = false;
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(settings);
         let r = kellnr
             .client
             .clone()
@@ -264,24 +262,24 @@ mod tests {
     }
 
     impl TestKellnr {
-        async fn new(settings: Settings) -> Self {
+        fn new(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             TestKellnr {
                 path: PathBuf::from(&settings.registry.data_dir),
-                client: app(settings).await,
+                client: app(settings),
             }
         }
     }
 
     impl Drop for TestKellnr {
         fn drop(&mut self) {
-            rm_rf::remove(&self.path).expect("Cannot remove TestKellnr")
+            rm_rf::remove(&self.path).expect("Cannot remove TestKellnr");
         }
     }
 
-    async fn app(settings: Settings) -> Router {
+    fn app(settings: Settings) -> Router {
         let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
-        let cs = CratesIoCrateStorage::new(&settings, storage).await.unwrap();
+        let cs = CratesIoCrateStorage::new(&settings, storage);
         let mut db = MockDb::new();
         db.expect_increase_cached_download_counter()
             .returning(|_, _| Ok(()));
@@ -290,7 +288,7 @@ mod tests {
             settings: settings.into(),
             cratesio_storage: cs.into(),
             db: Arc::<MockDb>::new(db),
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
 
         let routes = Router::new()

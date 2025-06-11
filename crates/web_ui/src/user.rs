@@ -12,7 +12,7 @@ use cookie::time;
 use db::password::generate_salt;
 use db::{self, AuthToken, User};
 use serde::{Deserialize, Serialize};
-use settings::constants::*;
+use settings::constants::{COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {
@@ -179,6 +179,7 @@ pub async fn login(
     ))
 }
 
+#[expect(clippy::unused_async)] // part of the router
 pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
     match user {
         Some(MaybeUser::Normal(user)) => LoggedInUser {
@@ -192,7 +193,7 @@ pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
             is_logged_in: true,
         },
         None => LoggedInUser {
-            user: "".to_owned(),
+            user: String::new(),
             is_admin: false,
             is_logged_in: false,
         },

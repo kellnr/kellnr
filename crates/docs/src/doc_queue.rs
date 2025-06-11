@@ -15,7 +15,7 @@ use tar::Archive;
 use tokio::fs::{create_dir_all, remove_dir_all};
 use tracing::error;
 
-pub async fn doc_extraction_queue(db: Database, cs: KellnrCrateStorage, docs_path: PathBuf) {
+pub fn doc_extraction_queue(db: Database, cs: KellnrCrateStorage, docs_path: PathBuf) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
@@ -38,7 +38,7 @@ async fn inner_loop(
             error!("Failed to extract docs from crate: {e}");
         } else {
             if let Err(e) = clean_up(&entry.path).await {
-                error!("Failed to delete temporary rustdoc queue folder: {e}")
+                error!("Failed to delete temporary rustdoc queue folder: {e}");
             }
 
             let version = Version::from_unchecked_str(&entry.version);

@@ -16,7 +16,7 @@ impl ConfigJson {
     }
 
     pub fn new(
-        protocol: &Protocol,
+        protocol: Protocol,
         api_address: &str,
         api_port: u16,
         api_path: &str,
@@ -38,7 +38,7 @@ impl ConfigJson {
 impl From<(&Settings, &str, bool)> for ConfigJson {
     fn from(value: (&Settings, &str, bool)) -> Self {
         Self::new(
-            &value.0.origin.protocol,
+            value.0.origin.protocol,
             &value.0.origin.hostname,
             value.0.origin.port,
             value.1,
@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn test_config_json_to_json_http() {
-        let config = ConfigJson::new(&Protocol::Http, "localhost", 8080, "path", true, false);
+        let config = ConfigJson::new(Protocol::Http, "localhost", 8080, "path", true, false);
         let json = config.to_json().unwrap();
 
         assert_eq!(
@@ -66,7 +66,7 @@ mod tests {
 
     #[test]
     fn test_config_json_to_json_https() {
-        let config = ConfigJson::new(&Protocol::Https, "localhost", 8081, "path", true, true);
+        let config = ConfigJson::new(Protocol::Https, "localhost", 8081, "path", true, true);
         let json = config.to_json().unwrap();
 
         assert_eq!(
@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn test_config_json_no_api() {
-        let config = ConfigJson::new(&Protocol::Https, "localhost", 8081, "path", false, true);
+        let config = ConfigJson::new(Protocol::Https, "localhost", 8081, "path", false, true);
         let json = config.to_json().unwrap();
 
         assert_eq!(

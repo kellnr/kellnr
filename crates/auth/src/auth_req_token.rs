@@ -5,7 +5,8 @@ use axum::middleware::Next;
 use axum::response::Response;
 use tracing::warn;
 
-/// Middleware that checks if a cargo token is provided, when settings.registry.auth_required is true.<br>
+/// Middleware that checks if a cargo token is provided when `settings.registry.auth_required` is `true`.
+///
 /// If the user is not logged in, a 401 is returned.
 pub async fn cargo_auth_when_required(
     State(state): State<appstate::AppStateData>,
@@ -55,7 +56,6 @@ mod test {
         };
 
         let r = app(settings)
-            .await
             .oneshot(Request::get("/test").body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -74,7 +74,6 @@ mod test {
         };
 
         let r = app(settings)
-            .await
             .oneshot(Request::get("/test").body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -93,7 +92,6 @@ mod test {
         };
 
         let r = app(settings)
-            .await
             .oneshot(
                 Request::get("/test")
                     .header(header::AUTHORIZATION, "wrong_token")
@@ -117,7 +115,6 @@ mod test {
         };
 
         let r = app(settings)
-            .await
             .oneshot(
                 Request::get("/test")
                     .header(header::AUTHORIZATION, "token")
@@ -134,7 +131,7 @@ mod test {
         StatusCode::OK
     }
 
-    async fn app(settings: Settings) -> Router {
+    fn app(settings: Settings) -> Router {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
@@ -143,8 +140,8 @@ mod test {
                 Ok(User {
                     id: 0,
                     name: "user".to_string(),
-                    pwd: "".to_string(),
-                    salt: "".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -157,7 +154,7 @@ mod test {
         let state = AppStateData {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
         Router::new()
             .route("/test", get(test_auth_req_token))
@@ -184,7 +181,7 @@ mod auth_middleware_tests {
     use std::sync::Arc;
     use tower::ServiceExt;
 
-    async fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
+    fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
         let state = AppStateData {
             db,
@@ -195,7 +192,7 @@ mod auth_middleware_tests {
                 },
                 ..settings
             }),
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
 
         Router::new()
@@ -205,12 +202,12 @@ mod auth_middleware_tests {
             .with_state(state)
     }
 
-    async fn app_not_required_auth(db: Arc<dyn DbProvider>) -> Router {
+    fn app_not_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
         let state = AppStateData {
             db,
             settings: Arc::new(settings),
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))
@@ -229,7 +226,6 @@ mod auth_middleware_tests {
             .returning(|_st| Err(DbError::UserNotFound("1234".to_owned())));
 
         let r = app_required_auth(Arc::new(mock_db))
-            .await
             .oneshot(
                 Request::get("/guarded")
                     .header(header::AUTHORIZATION, "1234")
@@ -246,7 +242,6 @@ mod auth_middleware_tests {
         let mock_db = MockDb::new();
 
         let r = app_required_auth(Arc::new(mock_db))
-            .await
             .oneshot(Request::get("/guarded").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
@@ -259,7 +254,6 @@ mod auth_middleware_tests {
         let mock_db = MockDb::new();
 
         let r = app_required_auth(Arc::new(mock_db))
-            .await
             .oneshot(Request::get("/not_guarded").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::OK);
@@ -272,7 +266,6 @@ mod auth_middleware_tests {
         let mock_db = MockDb::new();
 
         let r = app_not_required_auth(Arc::new(mock_db))
-            .await
             .oneshot(Request::get("/guarded").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::OK);

@@ -6,34 +6,34 @@ license-file = "../../LICENSE"
 
 [dependencies]
 # Internal dependencies from Kellnr
-settings.workspace = true
-registry.workspace = true
+appstate.workspace = true
+auth.workspace = true
 common.workspace = true
 db.workspace = true
 error.workspace = true
-auth.workspace = true
+registry.workspace = true
+settings.workspace = true
 storage.workspace = true
-appstate.workspace = true
 
 # External dependencies from crates.io
-zip.workspace = true
+axum.workspace = true
+cargo.workspace = true
+flate2.workspace = true
+fs_extra.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-flate2.workspace = true
 tar.workspace = true
-cargo.workspace = true
-fs_extra.workspace = true
-tracing.workspace = true
-axum.workspace = true
-tokio.workspace = true
-http-body-util.workspace = true
 thiserror.workspace = true
-hyper.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
+hyper.workspace = true
 tokio.workspace = true
 tower.workspace = true
-hyper.workspace = true
 
 [lints]
 workspace = true

@@ -15,7 +15,7 @@ pub struct Registry {
 impl Default for Registry {
     fn default() -> Self {
         Self {
-            data_dir: String::from("/tmp/kellnr"),
+            data_dir: "/tmp/kellnr".to_string(),
             session_age_seconds: 60 * 60 * 8,
             cache_size: 1000,
             max_crate_size: 10 * 1000,

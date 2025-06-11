@@ -875,7 +875,7 @@ async fn add_user_duplicate(test_db: &db::Database) {
             .add_user("user", "pwd", "salt", false, false)
             .await
             .is_err()
-    )
+    );
 }
 
 #[db_test]
@@ -1863,7 +1863,7 @@ async fn add_crate_and_get_crate_data(test_db: &db::Database) {
                         .map(CrateRegistryDep::from)
                         .collect(),
                     checksum: "cksum2_2".to_string(),
-                    features: Default::default(),
+                    features: BTreeMap::default(),
                     yanked: false,
                     links: pm2_v2.links.clone(),
                     v: 1,
@@ -2214,7 +2214,7 @@ async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &db::Database) {
                 vers: "1.0.0".to_string(),
                 deps: vec![],
                 cksum: "cksum".to_string(),
-                features: Default::default(),
+                features: BTreeMap::default(),
                 yanked: false,
                 links: None,
                 v: Some(1),
@@ -2243,7 +2243,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &db::Database) {
         vers: "1.0.0".to_string(),
         deps: vec![],
         cksum: "cksum".to_string(),
-        features: Default::default(),
+        features: BTreeMap::default(),
         yanked: false,
         links: None,
         v: Some(1),
@@ -2265,7 +2265,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &db::Database) {
             vers: "1.0.0".to_string(),
             deps: vec![],
             cksum: "cksum".to_string(),
-            features: Default::default(),
+            features: BTreeMap::default(),
             yanked: true,
             links: None,
             v: Some(1),
@@ -2276,7 +2276,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &db::Database) {
             vers: "2.0.0".to_string(),
             deps: vec![],
             cksum: "cksum".to_string(),
-            features: Default::default(),
+            features: BTreeMap::default(),
             yanked: false,
             links: None,
             v: Some(1),
@@ -2296,8 +2296,8 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &db::Database) {
 
     let expected_prefetch = Prefetch {
         data: IndexMetadata::serialize_indices(&indices2)
-            .map(|idx| idx.into_bytes())
-            .unwrap(),
+            .unwrap()
+            .into_bytes(),
         etag: "etag2".to_string(),
         last_modified: "last_modified2".to_string(),
     };
@@ -2447,7 +2447,7 @@ async fn test_get_last_updated_crate_works(test_db: &db::Database) {
 
     let last_updated = test_db.get_last_updated_crate().await.unwrap().unwrap();
 
-    assert_eq!(String::from("my_crate2"), last_updated.0.to_string());
+    assert_eq!("my_crate2", last_updated.0.to_string());
 }
 
 #[db_test]

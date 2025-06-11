@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Token {
-    pub token: String,
+    pub value: String,
     pub user: String,
     pub is_admin: bool,
     pub is_read_only: bool,
@@ -59,7 +59,7 @@ impl Token {
             .map_err(|_| StatusCode::FORBIDDEN)?;
 
         Ok(Token {
-            token,
+            value: token,
             user: user.name,
             is_admin: user.is_admin,
             is_read_only: user.is_read_only,

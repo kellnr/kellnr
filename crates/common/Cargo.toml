@@ -7,18 +7,16 @@ license-file = "../../LICENSE"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# Internal dependencies from Kellnr
-
 # External dependencies from crates.io
-serde.workspace = true
-semver.workspace = true
-regex.workspace = true
-serde_json.workspace = true
-rand.workspace = true
-sea-orm.workspace = true
 axum.workspace = true
-tokio.workspace = true
+rand.workspace = true
+regex.workspace = true
+sea-orm.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

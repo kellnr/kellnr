@@ -33,6 +33,7 @@ static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
         .unwrap()
 });
 
+#[allow(clippy::unused_async)] // part of the router
 pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson> {
     Json(ConfigJson::from((&(*settings), "cratesio", false)))
 }
@@ -164,7 +165,7 @@ async fn background_update_thread(db: impl DbProvider, sender: flume::Sender<Cra
 
         for c in crates {
             if let Err(e) = sender.send(c) {
-                error!("Could not send update message: {e}")
+                error!("Could not send update message: {e}");
             }
         }
 
@@ -345,7 +346,7 @@ async fn fetch_index_data(
                     "Retry {i}/{max_retries} - Could not fetch index from crates.io for {name}: {e}"
                 );
             }
-        };
+        }
         if i >= max_retries {
             error!("Could not fetch index from crates.io for {name} after 3 tries",);
             break None;
@@ -518,7 +519,6 @@ mod tests {
     #[tokio::test]
     async fn fetch_cratesio_prefetch_works() {
         let r = app()
-            .await
             .oneshot(
                 Request::get("/api/v1/cratesio/ro/ck/rocket")
                     .header(header::IF_MODIFIED_SINCE, "date")
@@ -538,7 +538,6 @@ mod tests {
     #[tokio::test]
     async fn fetch_cratesio_prefetch_404() {
         let r = app()
-            .await
             .oneshot(
                 // URL points to crate that does not exist
                 Request::get("/api/v1/cratesio/ro/ck/rock123456789")
@@ -556,7 +555,6 @@ mod tests {
     #[tokio::test]
     async fn config_returns_config_json() {
         let r = app()
-            .await
             .oneshot(
                 Request::get("/api/v1/cratesio/config.json")
                     .body(Body::empty())
@@ -570,7 +568,7 @@ mod tests {
 
         assert_eq!(
             ConfigJson::new(
-                &Protocol::Http,
+                Protocol::Http,
                 "test.api.com",
                 1234,
                 "cratesio",
@@ -581,11 +579,11 @@ mod tests {
         );
     }
 
-    async fn app() -> Router {
+    fn app() -> Router {
         let settings = Settings {
             origin: settings::Origin {
                 protocol: Protocol::Http,
-                hostname: String::from("test.api.com"),
+                hostname: "test.api.com".to_string(),
                 port: 1234,
             },
             ..Settings::default()
@@ -598,8 +596,8 @@ mod tests {
             .returning(move |_, _, _, _, _| {
                 Ok(Prefetch {
                     data: vec![0x1, 0x2, 0x3],
-                    etag: String::from("etag"),
-                    last_modified: String::from("date"),
+                    etag: "etag".to_string(),
+                    last_modified: "date".to_string(),
                 })
             });
 
@@ -621,7 +619,7 @@ mod tests {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
             cratesio_prefetch_sender: sender,
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
 
         Router::new()

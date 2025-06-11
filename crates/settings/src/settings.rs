@@ -64,7 +64,7 @@ impl Settings {
         config_path
             .join(file)
             .to_str()
-            .map(|x| x.to_string())
+            .map(ToString::to_string)
             .ok_or_else(|| ConfigError::Message("Invalid UTF-8 string".to_string()))
     }
 

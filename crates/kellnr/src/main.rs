@@ -31,7 +31,7 @@ async fn main() {
         .expect("Failed to create data directory.");
 
     // Initialize kellnr crate storage
-    let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).await.into();
+    let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).into();
 
     // Create the database connection. Has to be done after the index and storage
     // as the needed folders for the sqlite database my not been created before that.
@@ -42,7 +42,7 @@ async fn main() {
     let db = Arc::new(db) as Arc<dyn DbProvider>;
 
     // Crates.io Proxy
-    let cratesio_storage: Arc<CratesIoCrateStorage> = init_cratesio_storage(&settings).await.into();
+    let cratesio_storage: Arc<CratesIoCrateStorage> = init_cratesio_storage(&settings).into();
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
 
@@ -71,7 +71,7 @@ async fn main() {
     };
 
     // Create router using the route module
-    let app = routes::create_router(state, data_dir, max_docs_size, max_crate_size);
+    let app = routes::create_router(state, &data_dir, max_docs_size, max_crate_size);
 
     // Start the server
     let listener = TcpListener::bind(addr)
@@ -95,7 +95,7 @@ fn init_tracing(settings: &Settings) {
         LogFormat::Compact => ts.event_format(format().compact()).init(),
         LogFormat::Pretty => ts.event_format(format().pretty()).init(),
         LogFormat::Json => ts.event_format(format().json()).init(),
-    };
+    }
 }
 
 fn get_connect_string(settings: &Settings) -> ConString {
@@ -116,27 +116,20 @@ async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
             Database::new(con_string, settings.registry.max_db_connections)
                 .await
                 .expect("Failed to create database"),
-            KellnrCrateStorage::new(settings, storage)
-                .await
-                .expect("Failed to create crate storage."),
+            KellnrCrateStorage::new(settings, storage),
             settings.docs_path(),
-        )
-        .await;
+        );
     }
 }
 
-async fn init_cratesio_storage(settings: &Settings) -> CratesIoCrateStorage {
+fn init_cratesio_storage(settings: &Settings) -> CratesIoCrateStorage {
     let storage = init_storage(&settings.crates_io_path_or_bucket(), settings);
     CratesIoCrateStorage::new(settings, storage)
-        .await
-        .expect("Failed to create crates.io crate storage.")
 }
 
-async fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
+fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
     let storage = init_storage(&settings.crates_path_or_bucket(), settings);
     KellnrCrateStorage::new(settings, storage)
-        .await
-        .expect("Failed to create crate storage.")
 }
 
 fn init_storage(folder: &str, settings: &Settings) -> DynStorage {

@@ -15,19 +15,18 @@ pub struct CachedCrateStorage {
 }
 
 impl CachedCrateStorage {
-    pub fn new(settings: &Settings, storage: DynStorage) -> Result<Self, StorageError> {
+    pub fn new(settings: &Settings, storage: DynStorage) -> Self {
         let cache = if settings.registry.cache_size > 0 {
             Some(Cache::new(settings.registry.cache_size))
         } else {
             None
         };
 
-        let cs = Self {
+        Self {
             doc_queue_path: settings.doc_queue_path(),
             storage,
             cache,
-        };
-        Ok(cs)
+        }
     }
 
     fn file_name(name: &str, version: &str) -> String {
@@ -70,11 +69,11 @@ impl CachedCrateStorage {
         match self.cache {
             Some(ref cache) => {
                 if let Some(data) = cache.get(&file_name).await {
-                    Some(data.to_vec())
+                    Some(data)
                 } else {
-                    let data = self.storage.get(&file_name).await.ok()?;
-                    cache.insert(file_name.to_owned(), data.to_vec()).await;
-                    Some(data.to_vec())
+                    let data = self.storage.get(&file_name).await.ok()?.to_vec();
+                    cache.insert(file_name.clone(), data.clone()).await;
+                    Some(data)
                 }
             }
             None => self.storage.get(&file_name).await.map(<Vec<u8>>::from).ok(),
@@ -91,7 +90,6 @@ impl CachedCrateStorage {
         let file_name = Self::file_name(name, version);
         self.cache
             .as_ref()
-            .map(|cache| cache.contains_key(&file_name))
-            .unwrap_or(false)
+            .is_some_and(|cache| cache.contains_key(&file_name))
     }
 }

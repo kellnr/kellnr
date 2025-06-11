@@ -107,7 +107,7 @@ mod bin_tests {
     }
 
     impl TestData {
-        async fn from(data_dir: &str) -> TestData {
+        fn from(data_dir: &str) -> TestData {
             let settings = Settings {
                 registry: settings::Registry {
                     data_dir: data_dir.to_owned(),
@@ -121,7 +121,7 @@ mod bin_tests {
                 ..Settings::default()
             };
             let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
-            let crate_storage = KellnrCrateStorage::new(&settings, storage).await.unwrap();
+            let crate_storage = KellnrCrateStorage::new(&settings, storage);
             TestData {
                 settings,
                 crate_storage,
@@ -142,7 +142,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
 
-        let test_storage = TestData::from("test_add_crate_binary").await;
+        let test_storage = TestData::from("test_add_crate_binary");
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
@@ -171,7 +171,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0"),
         };
 
-        let test_storage = TestData::from("Test_Add_crate_binary_Upper-Case").await;
+        let test_storage = TestData::from("Test_Add_crate_binary_Upper-Case");
         let name = OriginalName::try_from(pub_data.metadata.name).unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
@@ -200,7 +200,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
 
-        let test_bin = TestData::from("test_add_duplicate_crate_binary").await;
+        let test_bin = TestData::from("test_add_duplicate_crate_binary");
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
 
@@ -223,7 +223,7 @@ mod bin_tests {
 
     #[tokio::test]
     async fn create_rand_doc_queue_path() {
-        let test_bin = TestData::from("test_doc_queue").await;
+        let test_bin = TestData::from("test_doc_queue");
 
         let rand_path = test_bin
             .crate_storage
@@ -252,7 +252,7 @@ mod bin_tests {
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
-        let test_storage = TestData::from("delete_crate").await;
+        let test_storage = TestData::from("delete_crate");
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         test_storage
@@ -281,7 +281,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.2.0"),
         };
 
-        let test_storage = TestData::from("delete_crate_invalidates_cache").await;
+        let test_storage = TestData::from("delete_crate_invalidates_cache");
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.2.0").unwrap();
 
