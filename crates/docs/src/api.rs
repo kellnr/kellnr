@@ -104,6 +104,7 @@ mod tests {
     use db::mock::MockDb;
     use db::{DbProvider, DocQueueEntry};
     use http_body_util::BodyExt;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use tower::ServiceExt;
 
@@ -116,13 +117,13 @@ mod tests {
                     id: 0,
                     normalized_name: NormalizedName::from_unchecked("crate1".to_string()),
                     version: "0.0.1".to_string(),
-                    path: Default::default(),
+                    path: PathBuf::default(),
                 },
                 DocQueueEntry {
                     id: 1,
                     normalized_name: NormalizedName::from_unchecked("crate2".to_string()),
                     version: "0.0.2".to_string(),
-                    path: Default::default(),
+                    path: PathBuf::default(),
                 },
             ])
         });

@@ -24,7 +24,7 @@ use migration::iden::{
 };
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
     FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
     prelude::async_trait::async_trait,
     query::{QueryOrder, QuerySelect, TransactionTrait},
@@ -1435,7 +1435,7 @@ impl DbProvider for Database {
                 .map_err(|_| DbError::InvalidCrateName(name.to_string()))?,
         );
         let krate = krate::ActiveModel {
-            id: Default::default(),
+            id: ActiveValue::default(),
             name: Set(normalized_name.to_string()),
             original_name: Set(name.to_string()),
             max_version: Set("0.0.0".to_string()),
@@ -1490,7 +1490,7 @@ impl DbProvider for Database {
             krate_id
         } else {
             let krate = krate::ActiveModel {
-                id: Default::default(),
+                id: ActiveValue::default(),
                 name: Set(normalized_name.to_string()),
                 original_name: Set(pub_metadata.name.clone()),
                 max_version: Set(pub_metadata.vers.clone()),
@@ -1643,7 +1643,7 @@ impl DbProvider for Database {
             krate.update(&self.db_con).await?
         } else {
             let krate = cratesio_crate::ActiveModel {
-                id: Default::default(),
+                id: ActiveValue::default(),
                 name: Set(normalized_name.to_string()),
                 original_name: Set(crate_name.to_string()),
                 description: Set(description),
@@ -1684,7 +1684,7 @@ impl DbProvider for Database {
                     .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
 
                 let new_index = cratesio_index::ActiveModel {
-                    id: Default::default(),
+                    id: ActiveValue::default(),
                     name: Set(index.name.clone()),
                     vers: Set(index.vers.clone()),
                     deps: Set(deps),
@@ -1701,7 +1701,7 @@ impl DbProvider for Database {
 
                 // Add the meta data for the crate version.
                 let meta = cratesio_meta::ActiveModel {
-                    id: Default::default(),
+                    id: ActiveValue::default(),
                     version: Set(index.vers.clone()),
                     downloads: Set(0),
                     crates_io_fk: Set(krate.id),
@@ -1892,13 +1892,13 @@ async fn add_crate_index<C: ConnectionTrait>(
         .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
 
     let ci = crate_index::ActiveModel {
-        id: Default::default(),
+        id: ActiveValue::default(),
         name: Set(index_data.name),
         vers: Set(index_data.vers),
         deps: Set(deps),
         cksum: Set(cksum.to_owned()),
         features: Set(Some(features)),
-        yanked: Default::default(),
+        yanked: ActiveValue::default(),
         links: Set(index_data.links),
         v: Set(index_data.v.unwrap_or(1) as i32),
         crate_fk: Set(crate_id),
@@ -1915,7 +1915,7 @@ async fn add_crate_metadata<C: ConnectionTrait>(
     crate_id: i64,
 ) -> DbResult<()> {
     let cm = crate_meta::ActiveModel {
-        id: Default::default(),
+        id: ActiveValue::default(),
         version: Set(pub_metadata.vers.to_string()),
         created: Set(created.to_string()),
         downloads: Set(0),
@@ -1957,7 +1957,7 @@ async fn update_crate_categories<C: ConnectionTrait>(
             category_fk
         } else {
             let cc = crate_category::ActiveModel {
-                id: Default::default(),
+                id: ActiveValue::default(),
                 category: Set(category.clone()),
             };
 
@@ -1966,7 +1966,7 @@ async fn update_crate_categories<C: ConnectionTrait>(
 
         // Add the relationship between the crate and the category
         let cctc = crate_category_to_crate::ActiveModel {
-            id: Default::default(),
+            id: ActiveValue::default(),
             crate_fk: Set(crate_id),
             category_fk: Set(category_fk),
         };
@@ -2002,7 +2002,7 @@ async fn update_crate_keywords<C: ConnectionTrait>(
             keyword_fk
         } else {
             let ck = crate_keyword::ActiveModel {
-                id: Default::default(),
+                id: ActiveValue::default(),
                 keyword: Set(keyword.clone()),
             };
 
@@ -2011,7 +2011,7 @@ async fn update_crate_keywords<C: ConnectionTrait>(
 
         // Add the relationship between the crate and the keyword
         let cktc = crate_keyword_to_crate::ActiveModel {
-            id: Default::default(),
+            id: ActiveValue::default(),
             crate_fk: Set(crate_id),
             keyword_fk: Set(keyword_fk),
         };
@@ -2047,7 +2047,7 @@ async fn update_crate_authors<C: ConnectionTrait>(
             author_fk
         } else {
             let ca = crate_author::ActiveModel {
-                id: Default::default(),
+                id: ActiveValue::default(),
                 author: Set(author.clone()),
             };
 
@@ -2056,7 +2056,7 @@ async fn update_crate_authors<C: ConnectionTrait>(
 
         // Add the relationship between the crate and the author
         let catc = crate_author_to_crate::ActiveModel {
-            id: Default::default(),
+            id: ActiveValue::default(),
             crate_fk: Set(crate_id),
             author_fk: Set(author_fk),
         };
