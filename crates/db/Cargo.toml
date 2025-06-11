@@ -7,19 +7,19 @@ license-file = "../../LICENSE"
 [dependencies]
 # Internal dependencies from Kellnr
 common.workspace = true
-settings.workspace = true
 db_testcontainer.workspace = true
 entity.workspace = true
 migration.workspace = true
+settings.workspace = true
 
 # External dependencies from crates.io
-serde.workspace = true
 chrono.workspace = true
 mockall.workspace = true
-thiserror.workspace = true
 sea-orm.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 sha256.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 rm_rf.workspace = true

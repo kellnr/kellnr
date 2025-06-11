@@ -12,70 +12,64 @@ license-file = "LICENSE"
 
 [workspace.dependencies]
 # Internal dependencies from Kellnr
+appstate = { path = "./crates/appstate" }
+auth = { path = "./crates/auth" }
 common = { path = "./crates/common" }
 db = { path = "./crates/db" }
-entity = { path = "./crates/db/entity" }
-migration = { path = "./crates/db/migration" }
-docs = { path = "./crates/docs" }
-index = { path = "./crates/index" }
-settings = { path = "./crates/settings" }
-web_ui = { path = "./crates/web_ui" }
-registry = { path = "./crates/registry" }
 db_testcontainer = { path = "./crates/db/db_testcontainer" }
-auth = { path = "./crates/auth" }
+docs = { path = "./crates/docs" }
+entity = { path = "./crates/db/entity" }
 error = { path = "./crates/error" }
-appstate = { path = "./crates/appstate" }
-storage = { path = "./crates/storage" }
+index = { path = "./crates/index" }
+migration = { path = "./crates/db/migration" }
 minio_testcontainer = { path = "./crates/storage/minio_testcontainer" }
+registry = { path = "./crates/registry" }
+settings = { path = "./crates/settings" }
+storage = { path = "./crates/storage" }
+web_ui = { path = "./crates/web_ui" }
 
 # External dependencies from crates.io
-jsonwebtoken = "9.3.1"
-reqwest = {version = "0.12.19", features = ["json", "blocking", "gzip", "http2", "deflate"]}
-serde = {version = "1.0.219", features = ["derive"]}
-sysinfo = "0.35.1"
-semver = "1.0.26"
-regex = "1.11.1"
-serde_json = "1.0.140"
-mockall = "0.13.1"
-rand = "0.9.1"
-chrono = "0.4.41"
-thiserror = "2.0.12"
-sea-orm = { version = "1.1.12", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
-sea-query = "0.32.6"
-sea-query-derive = "0.4.3"
-sea-orm-migration = { version = "1.1.12", features = [ "sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls" ] }
-rm_rf = "0.6.2"
-testcontainers = "0.24.0"
-quote = "1.0.40"
-syn = {version = "2.0.101", features = ["full"]}
-trybuild = {version = "1.0.105", features = ["diff"]}
-zip = "4.0.0"
-flate2 = "1.1.2"
-tar = "0.4.44"
-cargo = "0.86.0"
-fs_extra = "1.3.0"
-wax = "0.6.0"
-proc-macro2 = "1.0.95"
-moka = {version = "0.12.10", features = ["future"]}
-config = "0.15.11"
-toml = "0.8.23"
-time = "0.3.41"
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"] }
-flume = "0.11.1"
+async-trait = "0.1.88"
 axum = { version = "0.8.4", features = ["macros", "http2"] }
 axum-extra = { version = "0.10.1", features = ["cookie", "cookie-private", "typed-header"] }
-tokio = { version = "1.45.1", features = ["macros"] }
-tower = { version = "0.5.2", features = ["util"] }
-hyper = "1.6.0"
-tower-http = { version = "0.6.6", features = ["fs", "trace"] }
-cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
-url = "2.5.4"
-http-body-util = "0.1.3"
-sha256 = "1.6.0"
-object_store = { version = "0.12.1", features = ["aws"] }
 bytes = "1.10.0"
-async-trait = "0.1.88"
+cargo = "0.86.0"
+chrono = "0.4.41"
+config = "0.15.11"
+cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
+flate2 = "1.1.2"
+flume = "0.11.1"
+fs_extra = "1.3.0"
+http-body-util = "0.1.3"
+hyper = "1.6.0"
+mockall = "0.13.1"
+moka = { version = "0.12.10", features = ["future"] }
+object_store = { version = "0.12.1", features = ["aws"] }
+quote = "1.0.40"
+rand = "0.9.1"
+regex = "1.11.1"
+reqwest = { version = "0.12.19", features = ["json", "blocking", "gzip", "http2", "deflate"] }
+rm_rf = "0.6.2"
+sea-orm = { version = "1.1.12", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { version = "1.1.12", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls"] }
+sea-query = "0.32.6"
+semver = "1.0.26"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+sha256 = "1.6.0"
+syn = { version = "2.0.101", features = ["full"] }
+tar = "0.4.44"
+testcontainers = "0.24.0"
+thiserror = "2.0.12"
+time = "0.3.41"
+tokio = { version = "1.45.1", features = ["macros"] }
+toml = "0.8.23"
+tower = { version = "0.5.2", features = ["util"] }
+tower-http = { version = "0.6.6", features = ["fs", "trace"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["json", "fmt"] }
+url = "2.5.4"
+zip = "4.0.0"
 
 [profile.release]
 lto = "thin"
