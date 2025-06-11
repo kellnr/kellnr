@@ -128,7 +128,7 @@ mod tests {
             ])
         });
 
-        let kellnr = app(Arc::new(db)).await;
+        let kellnr = app(Arc::new(db));
         let r = kellnr
             .oneshot(Request::get("/queue").body(Body::empty()).unwrap())
             .await
@@ -153,12 +153,12 @@ mod tests {
         );
     }
 
-    async fn app(db: Arc<dyn DbProvider>) -> Router {
+    fn app(db: Arc<dyn DbProvider>) -> Router {
         Router::new()
             .route("/queue", get(docs_in_queue))
             .with_state(AppStateData {
                 db,
-                ..appstate::test_state().await
+                ..appstate::test_state()
             })
     }
 }

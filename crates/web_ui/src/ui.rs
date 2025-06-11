@@ -15,6 +15,7 @@ use db::error::DbError;
 use settings::Settings;
 use tracing::error;
 
+#[allow(clippy::unused_async)] // part of the router
 pub async fn settings(
     user: MaybeUser,
     State(settings): SettingsState,
@@ -29,6 +30,7 @@ pub struct KellnrVersion {
     pub version: String,
 }
 
+#[allow(clippy::unused_async)] // part of the router
 pub async fn kellnr_version() -> Json<KellnrVersion> {
     Json(KellnrVersion {
         version: option_env!("KELLNR_VERSION")
@@ -371,10 +373,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/settings").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -392,10 +393,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/settings")
                 .header(
@@ -443,10 +443,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -482,10 +481,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -541,10 +539,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -610,10 +607,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -679,10 +675,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(header::CONTENT_TYPE, "application/json")
@@ -732,10 +727,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -794,10 +788,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -865,10 +858,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -904,10 +896,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/version").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -930,10 +921,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/search?name=doesnotexist")
                 .body(Body::empty())
@@ -973,10 +963,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/search?name=hello")
                 .body(Body::empty())
@@ -1045,10 +1034,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/crate_data?name=crate1&version=1.0.0")
                 .body(Body::empty())
@@ -1093,10 +1081,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/crates?page=0").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -1156,10 +1143,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/crates").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -1181,10 +1167,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/cratesio_data?name=quote")
                 .body(Body::empty())
@@ -1206,10 +1191,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/cratesio_data?name=thisdoesnotevenexist")
                 .body(Body::empty())
@@ -1229,7 +1213,7 @@ mod tests {
     }
 
     const TEST_KEY: &[u8] = &[1; 64];
-    async fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
+    fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
         Router::new()
             .route("/search", get(search))
             .route("/crates", get(crates))
@@ -1244,7 +1228,7 @@ mod tests {
                 signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings),
                 crate_storage: Arc::new(crate_storage),
-                ..appstate::test_state().await
+                ..appstate::test_state()
             })
     }
 }

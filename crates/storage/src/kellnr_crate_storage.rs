@@ -13,8 +13,8 @@ use tokio::fs::DirBuilder;
 pub struct KellnrCrateStorage(CachedCrateStorage);
 
 impl KellnrCrateStorage {
-    pub async fn new(settings: &Settings, storage: DynStorage) -> Result<Self, StorageError> {
-        Ok(Self(CachedCrateStorage::new(settings, storage)))
+    pub fn new(settings: &Settings, storage: DynStorage) -> Self {
+        Self(CachedCrateStorage::new(settings, storage))
     }
 
     pub async fn create_rand_doc_queue_path(&self) -> Result<PathBuf, StorageError> {

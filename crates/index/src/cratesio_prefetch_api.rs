@@ -33,6 +33,7 @@ static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
         .unwrap()
 });
 
+#[allow(clippy::unused_async)] // part of the router
 pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson> {
     Json(ConfigJson::from((&(*settings), "cratesio", false)))
 }
@@ -518,7 +519,6 @@ mod tests {
     #[tokio::test]
     async fn fetch_cratesio_prefetch_works() {
         let r = app()
-            .await
             .oneshot(
                 Request::get("/api/v1/cratesio/ro/ck/rocket")
                     .header(header::IF_MODIFIED_SINCE, "date")
@@ -538,7 +538,6 @@ mod tests {
     #[tokio::test]
     async fn fetch_cratesio_prefetch_404() {
         let r = app()
-            .await
             .oneshot(
                 // URL points to crate that does not exist
                 Request::get("/api/v1/cratesio/ro/ck/rock123456789")
@@ -556,7 +555,6 @@ mod tests {
     #[tokio::test]
     async fn config_returns_config_json() {
         let r = app()
-            .await
             .oneshot(
                 Request::get("/api/v1/cratesio/config.json")
                     .body(Body::empty())
@@ -581,7 +579,7 @@ mod tests {
         );
     }
 
-    async fn app() -> Router {
+    fn app() -> Router {
         let settings = Settings {
             origin: settings::Origin {
                 protocol: Protocol::Http,
@@ -621,7 +619,7 @@ mod tests {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
             cratesio_prefetch_sender: sender,
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
 
         Router::new()
