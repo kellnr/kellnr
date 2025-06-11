@@ -7,29 +7,26 @@ license-file = "../../LICENSE"
 
 [dependencies]
 # Internal dependencies from Kellnr
+appstate.workspace = true
+auth.workspace = true
 common.workspace = true
 db.workspace = true
 docs.workspace = true
 index.workspace = true
-settings.workspace = true
-web_ui.workspace = true
 registry.workspace = true
-appstate.workspace = true
+settings.workspace = true
 storage.workspace = true
-auth.workspace = true
+web_ui.workspace = true
 
 # External dependencies from crates.io
-tracing.workspace = true
-tracing-subscriber.workspace = true
-flume.workspace = true
-axum.workspace = true
 axum-extra.workspace = true
-tower-http.workspace = true
-tokio.workspace = true
+axum.workspace = true
+flume.workspace = true
 openssl = { version = "*", optional = true } # Not needed directly but for cross-compilation with the vendored-openssl feature
-minio-rsc = "0.2.6"
-bytes = "1.10.0"
-future-utils = "0.12.1"
+tokio.workspace = true
+tower-http.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
 
 [features]
 vendored-openssl = ["openssl/vendored"]

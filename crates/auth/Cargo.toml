@@ -9,24 +9,21 @@ license-file = "../../LICENSE"
 
 [dependencies]
 # Internal dependencies from Kellnr
-settings.workspace = true
-db.workspace = true
 appstate.workspace = true
+db.workspace = true
+settings.workspace = true
 
 # External dependencies from crates.io
+axum.workspace = true
 rand.workspace = true
 serde.workspace = true
-axum.workspace = true
 tracing.workspace = true
-sha256.workspace = true
 
 [dev-dependencies]
+hyper.workspace = true
 mockall.workspace = true
-axum-extra.workspace = true
 tokio.workspace = true
 tower.workspace = true
-storage.workspace = true
-hyper.workspace = true
 
 [lints]
 workspace = true
