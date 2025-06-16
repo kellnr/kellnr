@@ -13,8 +13,8 @@ pub async fn cargo_auth_when_required(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    if !state.settings.registry.auth_required {
-        // If auth_required is not true, pass through.
+    if !state.settings.registry.auth_required.for_api() {
+        // If crates API authentication is not required, pass through.
         return Ok(next.run(request).await);
     }
 
@@ -42,6 +42,7 @@ mod test {
     use db::mock::MockDb;
     use mockall::predicate::*;
     use settings::Settings;
+    use settings::registry::LegacyAuthRequiredWrapper;
     use std::sync::Arc;
     use tower::ServiceExt;
 
@@ -49,7 +50,7 @@ mod test {
     async fn no_auth_required() {
         let settings = Settings {
             registry: settings::Registry {
-                auth_required: false,
+                auth_required: LegacyAuthRequiredWrapper::Deprecated(false),
                 ..settings::Registry::default()
             },
             ..Settings::default()
@@ -67,7 +68,7 @@ mod test {
     async fn auth_required_but_not_provided() {
         let settings = Settings {
             registry: settings::Registry {
-                auth_required: true,
+                auth_required: LegacyAuthRequiredWrapper::Deprecated(true),
                 ..settings::Registry::default()
             },
             ..Settings::default()
@@ -85,7 +86,7 @@ mod test {
     async fn auth_required_but_wrong_token_provided() {
         let settings = Settings {
             registry: settings::Registry {
-                auth_required: true,
+                auth_required: LegacyAuthRequiredWrapper::Deprecated(true),
                 ..settings::Registry::default()
             },
             ..Settings::default()
@@ -108,7 +109,7 @@ mod test {
     async fn auth_required_and_right_token_provided() {
         let settings = Settings {
             registry: settings::Registry {
-                auth_required: true,
+                auth_required: LegacyAuthRequiredWrapper::Deprecated(true),
                 ..settings::Registry::default()
             },
             ..Settings::default()
@@ -178,6 +179,7 @@ mod auth_middleware_tests {
     use hyper::{Request, header};
     use mockall::predicate::*;
     use settings::Settings;
+    use settings::registry::{AuthRequired, LegacyAuthRequiredWrapper};
     use std::sync::Arc;
     use tower::ServiceExt;
 
@@ -187,7 +189,7 @@ mod auth_middleware_tests {
             db,
             settings: Arc::new(Settings {
                 registry: settings::Registry {
-                    auth_required: true,
+                    auth_required: LegacyAuthRequiredWrapper::Deprecated(true),
                     ..settings::Registry::default()
                 },
                 ..settings
@@ -207,6 +209,25 @@ mod auth_middleware_tests {
         let state = AppStateData {
             db,
             settings: Arc::new(settings),
+            ..appstate::test_state()
+        };
+        Router::new()
+            .route("/guarded", get(StatusCode::OK))
+            .route_layer(from_fn_with_state(state.clone(), cargo_auth_when_required))
+            .with_state(state)
+    }
+
+    fn app_required_auth_only_for_api(db: Arc<dyn DbProvider>) -> Router {
+        let settings = Settings::default();
+        let state = AppStateData {
+            db,
+            settings: Arc::new(Settings {
+                registry: settings::Registry {
+                    auth_required: LegacyAuthRequiredWrapper::Current(AuthRequired::OnlyApi),
+                    ..settings::Registry::default()
+                },
+                ..settings
+            }),
             ..appstate::test_state()
         };
         Router::new()
@@ -269,6 +290,18 @@ mod auth_middleware_tests {
             .oneshot(Request::get("/guarded").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::OK);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn app_required_auth_only_for_api_with_guarded_route() -> Result {
+        let mock_db = MockDb::new();
+
+        let r = app_required_auth_only_for_api(Arc::new(mock_db))
+            .oneshot(Request::get("/guarded").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
         Ok(())
     }

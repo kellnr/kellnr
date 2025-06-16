@@ -120,8 +120,8 @@ pub async fn session_auth_when_required(
     request: Request,
     next: Next,
 ) -> Result<Response, RouteError> {
-    if !state.settings.registry.auth_required {
-        // If "auth_required" is "false", pass through.
+    if !state.settings.registry.auth_required.for_ui() {
+        // If web UI authentication is not required, pass through.
         return Ok(next.run(request).await);
     }
     let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
@@ -427,6 +427,7 @@ mod auth_middleware_tests {
     use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
     use settings::Settings;
+    use settings::registry::{AuthRequired, LegacyAuthRequiredWrapper};
     use std::sync::Arc;
     use tower::ServiceExt;
 
@@ -437,7 +438,7 @@ mod auth_middleware_tests {
             signing_key: Key::from(crate::test_helper::TEST_KEY),
             settings: Arc::new(Settings {
                 registry: settings::Registry {
-                    auth_required: true,
+                    auth_required: LegacyAuthRequiredWrapper::Deprecated(true),
                     ..settings::Registry::default()
                 },
                 ..settings
@@ -460,6 +461,29 @@ mod auth_middleware_tests {
             db,
             signing_key: Key::from(crate::test_helper::TEST_KEY),
             settings: Arc::new(settings),
+            ..appstate::test_state()
+        };
+        Router::new()
+            .route("/guarded", get(StatusCode::OK))
+            .route_layer(from_fn_with_state(
+                state.clone(),
+                session_auth_when_required,
+            ))
+            .with_state(state)
+    }
+
+    fn app_required_auth_only_for_api(db: Arc<dyn DbProvider>) -> Router {
+        let settings = Settings::default();
+        let state = AppStateData {
+            db,
+            signing_key: Key::from(crate::test_helper::TEST_KEY),
+            settings: Arc::new(Settings {
+                registry: settings::Registry {
+                    auth_required: LegacyAuthRequiredWrapper::Current(AuthRequired::OnlyApi),
+                    ..settings::Registry::default()
+                },
+                ..settings
+            }),
             ..appstate::test_state()
         };
         Router::new()
@@ -546,6 +570,18 @@ mod auth_middleware_tests {
         let mock_db = MockDb::new();
 
         let r = app_not_required_auth(Arc::new(mock_db))
+            .oneshot(Request::get("/guarded").body(Body::empty())?)
+            .await?;
+        assert_eq!(r.status(), StatusCode::OK);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn app_required_auth_only_for_apu_with_guarded_route() -> Result {
+        let mock_db = MockDb::new();
+
+        let r = app_required_auth_only_for_api(Arc::new(mock_db))
             .oneshot(Request::get("/guarded").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::OK);
