@@ -50,7 +50,7 @@ rand = "0.9.1"
 regex = "1.11.1"
 reqwest = { version = "0.12.20", features = ["json", "blocking", "gzip", "http2", "deflate"] }
 rm_rf = "0.6.2"
-sea-orm = { version = "1.1.12", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
+sea-orm = { version = "1.1.13", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
 sea-orm-migration = { version = "1.1.12", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls"] }
 sea-query = "0.32.6"
 semver = "1.0.26"
