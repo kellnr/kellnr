@@ -44,7 +44,7 @@
     "typescript": "~5.8.2",
     "typescript-eslint": "^8.24.1",
     "vite": "^7.0.0",
-    "vue-tsc": "^2.2.4"
+    "vue-tsc": "^3.0.1"
   },
   "overrides": {
     "vite": {
