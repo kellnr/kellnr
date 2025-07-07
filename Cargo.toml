@@ -62,7 +62,7 @@ tar = "0.4.44"
 testcontainers = "0.24.0"
 thiserror = "2.0.12"
 time = "0.3.41"
-tokio = { version = "1.45.1", features = ["macros"] }
+tokio = { version = "1.46.1", features = ["macros"] }
 toml = "0.8.23"
 tower = { version = "0.5.2", features = ["util"] }
 tower-http = { version = "0.6.6", features = ["fs", "trace"] }
