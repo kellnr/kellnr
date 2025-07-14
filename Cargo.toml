@@ -35,7 +35,7 @@ axum-extra = { version = "0.10.1", features = ["cookie", "cookie-private", "type
 bytes = "1.10.0"
 cargo = "0.86.0"
 chrono = "0.4.41"
-config = "0.15.11"
+config = "0.15.13"
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
 flate2 = "1.1.2"
 flume = "0.11.1"
