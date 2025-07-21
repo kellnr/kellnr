@@ -44,7 +44,7 @@ http-body-util = "0.1.3"
 hyper = "1.6.0"
 mockall = "0.13.1"
 moka = { version = "0.12.10", features = ["future"] }
-object_store = { version = "0.12.2", features = ["aws"] }
+object_store = { version = "0.12.3", features = ["aws"] }
 quote = "1.0.40"
 rand = "0.9.1"
 regex = "1.11.1"
