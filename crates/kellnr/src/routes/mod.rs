@@ -11,6 +11,7 @@ mod crate_access_routes;
 mod cratesio_api_routes;
 mod docs_routes;
 mod group_routes;
+mod health_routes;
 mod kellnr_api_routes;
 mod ui_routes;
 mod user_routes;
@@ -55,6 +56,7 @@ pub fn create_router(
             "/api/v1/cratesio",
             cratesio_api_routes::create_routes(state.clone()),
         )
+        .nest("/api/v1", health_routes::create_routes())
         .nest_service("/docs", docs_service)
         .fallback(static_files_service)
         .with_state(state)
