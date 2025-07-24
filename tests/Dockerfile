@@ -19,25 +19,25 @@ ENV KELLNR_VERSION=$KELLNR_VERSION
 
 RUN apt update
 RUN apt install -y -q --no-install-recommends \
-    ca-certificates \
-    git \
-    curl \
-    sed \
-    build-essential \
-    pkg-config \
-    openssl \
-    libssl-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+  ca-certificates \
+  git \
+  curl \
+  sed \
+  build-essential \
+  pkg-config \
+  openssl \
+  libssl-dev \
+  gcc \
+  && rm -rf /var/lib/apt/lists/*
 
 # Install latest nodejs version with nvm
 ENV NVM_DIR="/root/.nvm"
 ENV NODE_VERSION="23.2.0"
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash \
-    && . "$NVM_DIR/nvm.sh" \
-    && nvm install $NODE_VERSION \
-    && nvm alias default $NODE_VERSION \
-    && nvm use $NODE_VERSION
+  && . "$NVM_DIR/nvm.sh" \
+  && nvm install $NODE_VERSION \
+  && nvm alias default $NODE_VERSION \
+  && nvm use $NODE_VERSION
 ENV NODE_PATH="$NVM_DIR/versions/node/$NODE_VERSION/lib/node_modules"
 ENV PATH="$NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH"
 COPY . /sources
@@ -69,7 +69,7 @@ COPY --from=builder /sources/ui/dist ./static
 COPY tests/ca.crt /usr/local/share/ca-certificates/ca.crt
 RUN update-ca-certificates
 
-HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/ui/version || exit 1
+HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
 EXPOSE 8000
 
