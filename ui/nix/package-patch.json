@@ -11,7 +11,17 @@
     },
     {
         "op": "add",
+        "path": "/devDependencies/@esbuild~1linux-x64",
+        "value": "^0.25.0"
+    },
+    {
+        "op": "add",
         "path": "/devDependencies/@rollup~1rollup-linux-arm64-gnu",
+        "value": "^4.18.0"
+    },
+    {
+        "op": "add",
+        "path": "/devDependencies/@rollup~1rollup-linux-x64-gnu",
         "value": "^4.18.0"
     },
     {
