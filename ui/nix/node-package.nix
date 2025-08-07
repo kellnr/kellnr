@@ -76,6 +76,15 @@ let
         sha512 = "WIgg00ARWv/uYLU7lsuDK00d/hHSfES5BzdWAdAig1ioV5kaFNrtK8EqGcUBJhYqotlUByUKz5Qo6u8tt7iD/w==";
       };
     };
+    "@esbuild/linux-x64-0.25.8" = {
+      name = "_at_esbuild_slash_linux-x64";
+      packageName = "@esbuild/linux-x64";
+      version = "0.25.8";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.25.8.tgz";
+        sha512 = "ASFQhgY4ElXh3nDcOMTkQero4b1lgubskNlhIfJrsH5OKZXDpUAKBlNS0Kx81jwOBp+HCeZqmoJuihTv57/jvQ==";
+      };
+    };
     "@eslint-community/eslint-utils-4.7.0" = {
       name = "_at_eslint-community_slash_eslint-utils";
       packageName = "@eslint-community/eslint-utils";
@@ -353,6 +362,15 @@ let
       src = fetchurl {
         url = "https://registry.npmjs.org/@rollup/rollup-linux-arm64-gnu/-/rollup-linux-arm64-gnu-4.46.2.tgz";
         sha512 = "3dRaqLfcOXYsfvw5xMrxAk9Lb1f395gkoBYzSFcc/scgRFptRXL9DOaDpMiehf9CO8ZDRJW2z45b6fpU5nwjng==";
+      };
+    };
+    "@rollup/rollup-linux-x64-gnu-4.46.2" = {
+      name = "_at_rollup_slash_rollup-linux-x64-gnu";
+      packageName = "@rollup/rollup-linux-x64-gnu";
+      version = "4.46.2";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/@rollup/rollup-linux-x64-gnu/-/rollup-linux-x64-gnu-4.46.2.tgz";
+        sha512 = "Jj5a9RUoe5ra+MEyERkDKLwTXVu6s3aACP51nkfnK9wJTraCC8IMe3snOfALkrjTYd2G1ViE1hICj0fZ7ALBPA==";
       };
     };
     "@types/eslint-9.6.1" = {
@@ -3907,6 +3925,7 @@ let
       sources."@bufbuild/protobuf-2.6.3"
       sources."@esbuild/darwin-arm64-0.25.8"
       sources."@esbuild/linux-arm64-0.25.8"
+      sources."@esbuild/linux-x64-0.25.8"
       (sources."@eslint-community/eslint-utils-4.7.0" // {
         dependencies = [
           sources."eslint-visitor-keys-3.4.3"
@@ -3953,6 +3972,7 @@ let
       sources."@rolldown/pluginutils-1.0.0-beta.29"
       sources."@rollup/rollup-darwin-arm64-4.46.2"
       sources."@rollup/rollup-linux-arm64-gnu-4.46.2"
+      sources."@rollup/rollup-linux-x64-gnu-4.46.2"
       sources."@types/eslint-9.6.1"
       sources."@types/eslint-scope-3.7.7"
       sources."@types/estree-1.0.8"
