@@ -47,16 +47,14 @@ async fn main() {
         flume::unbounded::<CratesioPrefetchMsg>();
 
     init_cratesio_prefetch_thread(
-        get_connect_string(&settings),
         cratesio_prefetch_sender.clone(),
         cratesio_prefetch_receiver,
-        settings.proxy.num_threads,
-        settings.registry.max_db_connections,
-    )
-    .await;
+        settings.proxy.num_threads as usize,
+        db.clone(),
+    );
 
     // Docs hosting
-    init_docs_hosting(&settings, &con_string).await;
+    init_docs_hosting(&settings, db.clone()).await;
     let data_dir = settings.registry.data_dir.clone();
     let signing_key = Key::generate();
     let max_docs_size = settings.docs.max_size;
@@ -106,16 +104,14 @@ fn get_connect_string(settings: &Settings) -> ConString {
     }
 }
 
-async fn init_docs_hosting(settings: &Settings, con_string: &ConString) {
+async fn init_docs_hosting(settings: &Settings, db: Arc<dyn DbProvider + 'static>) {
     create_dir_all(settings.docs_path())
         .await
         .expect("Failed to create docs directory.");
     if settings.docs.enabled {
         let storage = init_storage(&settings.crates_path(), settings);
         docs::doc_queue::doc_extraction_queue(
-            Database::new(con_string, settings.registry.max_db_connections)
-                .await
-                .expect("Failed to create database"),
+            db,
             KellnrCrateStorage::new(settings, storage),
             settings.docs_path(),
         );

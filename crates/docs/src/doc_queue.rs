@@ -6,20 +6,23 @@ use cargo::{
     util::command_prelude::CompileMode,
 };
 use common::{original_name::OriginalName, version::Version};
-use db::{Database, DbProvider, DocQueueEntry};
+use db::{DbProvider, DocQueueEntry};
 use flate2::read::GzDecoder;
 use fs_extra::dir::{CopyOptions, copy};
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use storage::kellnr_crate_storage::KellnrCrateStorage;
 use tar::Archive;
 use tokio::fs::{create_dir_all, remove_dir_all};
 use tracing::error;
 
-pub fn doc_extraction_queue(db: Database, cs: KellnrCrateStorage, docs_path: PathBuf) {
+pub fn doc_extraction_queue(db: Arc<dyn DbProvider>, cs: KellnrCrateStorage, docs_path: PathBuf) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-            if let Err(e) = inner_loop(&db, &cs, &docs_path).await {
+            if let Err(e) = inner_loop(db.clone(), &cs, &docs_path).await {
                 error!("Rustdoc generation loop failed: {e}");
             }
         }
@@ -27,7 +30,7 @@ pub fn doc_extraction_queue(db: Database, cs: KellnrCrateStorage, docs_path: Pat
 }
 
 async fn inner_loop(
-    db: &impl DbProvider,
+    db: Arc<dyn DbProvider>,
     cs: &KellnrCrateStorage,
     docs_path: &Path,
 ) -> Result<(), DocsError> {

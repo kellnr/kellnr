@@ -8,8 +8,8 @@ use common::index_metadata::IndexMetadata;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
+use db::DbProvider;
 use db::provider::PrefetchState;
-use db::{ConString, Database, DbProvider};
 use hyper::StatusCode;
 use moka::future::Cache;
 use reqwest::{Client, ClientBuilder, Url};
@@ -56,19 +56,13 @@ pub async fn prefetch_len2_cratesio(
     internal_prefetch_cratesio(name, headers, &db, &sender).await
 }
 
-pub async fn init_cratesio_prefetch_thread(
-    con_string: ConString,
+pub fn init_cratesio_prefetch_thread(
     sender: flume::Sender<CratesioPrefetchMsg>,
     recv: flume::Receiver<CratesioPrefetchMsg>,
     num_threads: usize,
-    max_con: u32,
+    db: Arc<dyn DbProvider + 'static>,
 ) {
     // Threads that takes messages to update the crates.io index
-    let db = Arc::new(
-        Database::new(&con_string, max_con)
-            .await
-            .expect("Failed to create database connection for crates.io prefetch thread"),
-    );
 
     let cache = Cache::builder()
         .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
@@ -85,12 +79,9 @@ pub async fn init_cratesio_prefetch_thread(
     }
 
     // Thread that periodically checks if the crates.io index needs to be updated.
-    // It sends an update message to the thread above which then updates the index.
+    // It sends an update message to the threads above which then updates the index.
     tokio::spawn(async move {
-        let db = Database::new(&con_string, max_con)
-            .await
-            .expect("Failed to create database connection for crates.io update thread");
-        background_update_thread(db, sender).await;
+        background_update_thread(db.clone(), sender).await;
     });
 }
 
@@ -153,7 +144,10 @@ fn background_update(
     }
 }
 
-async fn background_update_thread(db: impl DbProvider, sender: flume::Sender<CratesioPrefetchMsg>) {
+async fn background_update_thread(
+    db: Arc<dyn DbProvider>,
+    sender: flume::Sender<CratesioPrefetchMsg>,
+) {
     loop {
         let crates = match db.get_cratesio_index_update_list().await {
             Ok(crates) => crates,
@@ -203,7 +197,7 @@ async fn fetch_cratesio_description(name: &str) -> Result<Option<String>, Status
 }
 
 async fn cratesio_prefetch_thread(
-    db: Arc<impl DbProvider>,
+    db: Arc<dyn DbProvider>,
     cache: Cache<OriginalName, String>,
     channel: flume::Receiver<CratesioPrefetchMsg>,
 ) {
@@ -258,7 +252,7 @@ async fn convert_index_data(
 async fn handle_cratesio_prefetch_msg(
     cache: &Cache<OriginalName, String>,
     channel: &flume::Receiver<CratesioPrefetchMsg>,
-    db: &Arc<impl DbProvider>,
+    db: &Arc<dyn DbProvider>,
 ) -> Option<(
     OriginalName,
     Vec<IndexMetadata>,
