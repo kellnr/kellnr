@@ -1,6 +1,4 @@
-use crate::{
-    cached_crate_storage::{CachedCrateStorage, DynStorage},    
-};
+use crate::cached_crate_storage::{CachedCrateStorage, DynStorage};
 use settings::Settings;
 use std::ops::{Deref, DerefMut};
 
