@@ -7,27 +7,14 @@ use axum::{
     response::Response,
 };
 use common::{
+    cratesio_downloader::{CLIENT, download_crate},
     cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData},
     original_name::OriginalName,
     version::Version,
 };
 use error::api_error::ApiResult;
-use reqwest::{Client, ClientBuilder, Url};
-use std::{error::Error, sync::Arc};
+use reqwest::Url;
 use tracing::{error, trace, warn};
-
-static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        reqwest::header::USER_AGENT,
-        reqwest::header::HeaderValue::from_static("kellnr.io/kellnr"),
-    );
-    ClientBuilder::new()
-        .gzip(true)
-        .default_headers(headers)
-        .build()
-        .unwrap()
-});
 
 /// Middleware that checks if the crates.io proxy is enabled.
 /// If not, a 404 is returned.
@@ -62,15 +49,15 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
 }
 
 pub async fn download(
-    Path((package, version)): Path<(OriginalName, Version)>,
+    Path((name, version)): Path<(OriginalName, Version)>,
     State(crate_storage): CrateIoStorageState,
     State(sender): CratesIoPrefetchSenderState,
 ) -> Result<Vec<u8>, StatusCode> {
-    trace!("Downloading crate: {package} ({version})");
+    trace!("Downloading crate: {name} ({version})");
 
-    if let Some(file) = crate_storage.get(&package, &version).await {
+    if let Some(file) = crate_storage.get(&name, &version).await {
         let msg = DownloadData {
-            name: package.into(),
+            name: name.into(),
             version,
         };
         if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
@@ -79,21 +66,10 @@ pub async fn download(
 
         Ok(file)
     } else {
-        let target = format!("https://static.crates.io/crates/{package}/{version}/download");
+        let crate_data = download_crate(&name, &version).await?;
 
-        let res = match CLIENT.get(target).send().await {
-            Ok(resp) if resp.status() != 200 => Err(StatusCode::NOT_FOUND),
-            Ok(resp) => Ok(resp),
-            Err(e) => {
-                error!("Encountered error... {e}");
-                Err(StatusCode::NOT_FOUND)
-            }
-        }?;
-
-        let crate_data = res.bytes().await.map_err(log_return_error)?;
-        let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
         let _save = crate_storage
-            .put(&package, &version, crate_data.clone())
+            .put(&name, &version, crate_data.clone())
             .await
             .map_err(|e| {
                 error!("Failed to save crate to disk: {e}");
@@ -101,15 +77,10 @@ pub async fn download(
             })?;
 
         crate_storage
-            .get(&package, &version)
+            .get(&name, &version)
             .await
             .ok_or(StatusCode::NOT_FOUND)
     }
-}
-
-fn log_return_error<E: Error>(e: E) -> StatusCode {
-    error!("Failure while crate download...: {e}");
-    StatusCode::NOT_FOUND
 }
 
 #[cfg(test)]
@@ -125,6 +96,7 @@ mod tests {
     use http_body_util::BodyExt;
     use settings::Settings;
     use std::path::PathBuf;
+    use std::sync::Arc;
     use storage::cached_crate_storage::DynStorage;
     use storage::cratesio_crate_storage::CratesIoCrateStorage;
     use storage::fs_storage::FSStorage;

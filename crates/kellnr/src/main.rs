@@ -2,9 +2,12 @@ use appstate::AppStateData;
 use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use db::{ConString, Database, DbProvider, PgConString, SqliteConString};
-use index::cratesio_prefetch_api::init_cratesio_prefetch_thread;
+use index::cratesio_prefetch_api::{
+    CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
+};
+use moka::future::Cache;
 use settings::{LogFormat, Settings};
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use storage::{
     cached_crate_storage::DynStorage, cratesio_crate_storage::CratesIoCrateStorage,
     fs_storage::FSStorage, kellnr_crate_storage::KellnrCrateStorage, s3_storage::S3Storage,
@@ -46,11 +49,20 @@ async fn main() {
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
 
+    let prefetch_args = CratesIoPrefetchArgs {
+        db: db.clone(),
+        cache: Cache::builder()
+            .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
+            .build(),
+        recv: cratesio_prefetch_receiver.clone(),
+        download_on_update: settings.proxy.download_on_update,
+        storage: cratesio_storage.clone(),
+    };
+
     init_cratesio_prefetch_thread(
         cratesio_prefetch_sender.clone(),
-        cratesio_prefetch_receiver,
         settings.proxy.num_threads as usize,
-        db.clone(),
+        prefetch_args,
     );
 
     // Docs hosting

@@ -1103,12 +1103,14 @@ dependencies = [
  "axum",
  "rand 0.9.2",
  "regex",
+ "reqwest",
  "sea-orm",
  "semver",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3414,6 +3416,7 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
+ "storage",
  "tokio",
  "tower",
  "tracing",
@@ -3612,6 +3615,7 @@ dependencies = [
  "docs",
  "flume",
  "index",
+ "moka",
  "openssl",
  "registry",
  "settings",
