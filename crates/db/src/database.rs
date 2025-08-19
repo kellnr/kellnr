@@ -2330,7 +2330,7 @@ pub mod test_utils {
         downloads: Option<i64>,
     ) -> DbResult<()> {
         let cm = crate_meta::ActiveModel {
-            id: Default::default(),
+            id: ActiveValue::default(),
             version: Set(version.to_string()),
             created: Set(created.to_string()),
             downloads: Set(downloads.unwrap_or_default()),

@@ -244,35 +244,43 @@ async fn predownload_crate(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) {
     let name = OriginalName::from_unchecked(idx.name.clone());
     let version = Version::from_unchecked_str(&idx.vers);
 
-    if args.storage.cache_has_path(&name, &version) {
-        trace!(
-            "Crate {} version {} already cached, skipping download",
-            idx.name, idx.vers
-        );
-        return;
-    }
-
-    trace!("Downloading version {} for crate {}", idx.vers, idx.name);
-    match download_crate(&idx.name, &idx.vers).await {
-        Ok(crate_data) => {
-            if let Err(e) = args
-                .storage
-                .put(
-                    &OriginalName::from_unchecked(idx.name.clone()),
-                    &Version::from_unchecked_str(&idx.vers),
-                    crate_data,
-                )
-                .await
-            {
-                error!(
-                    "Could not save crate {} version {}: {e}",
-                    idx.name, idx.vers
-                );
+    match args.storage.exists(&name, &version).await {
+        Ok(true) => {
+            trace!(
+                "Crate {} version {} already exists in storage, skipping download",
+                idx.name, idx.vers
+            );
+        }
+        Ok(false) => {
+            trace!("Downloading version {} for crate {}", idx.vers, idx.name);
+            match download_crate(&idx.name, &idx.vers).await {
+                Ok(crate_data) => {
+                    if let Err(e) = args
+                        .storage
+                        .put(
+                            &OriginalName::from_unchecked(idx.name.clone()),
+                            &Version::from_unchecked_str(&idx.vers),
+                            crate_data,
+                        )
+                        .await
+                    {
+                        warn!(
+                            "Could not save crate {} version {}: {e}",
+                            idx.name, idx.vers
+                        );
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "Could not download crate {} version {}: {e}",
+                        idx.name, idx.vers
+                    );
+                }
             }
         }
         Err(e) => {
             error!(
-                "Could not download crate {} version {}: {e}",
+                "Could not check if crate {} version {} exists: {e}",
                 idx.name, idx.vers
             );
         }

@@ -37,6 +37,18 @@ impl Storage for S3Storage {
         self.storage().delete(&path).await?;
         Ok(())
     }
+
+    async fn exists(&self, key: &str) -> Result<bool, StorageError> {
+        let path = Self::try_path_from(key)?;
+        self.storage()
+            .head(&path)
+            .await
+            .map(|_| true)
+            .or_else(|e| match e {
+                object_store::Error::NotFound { .. } => Ok(false),
+                _ => Err(StorageError::from(e)),
+            })
+    }
 }
 
 impl S3Storage {
