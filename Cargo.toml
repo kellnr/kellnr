@@ -32,6 +32,7 @@ web_ui = { path = "./crates/web_ui" }
 async-trait = "0.1.89"
 axum = { version = "0.8.4", features = ["macros", "http2"] }
 axum-extra = { version = "0.10.1", features = ["cookie", "cookie-private", "typed-header"] }
+base64 = "0.22.1"
 bytes = "1.10.0"
 cargo = "0.86.0"
 chrono = "0.4.41"
@@ -59,8 +60,8 @@ serde_json = "1.0.143"
 sha256 = "1.6.0"
 syn = { version = "2.0.106", features = ["full"] }
 tar = "0.4.44"
-testcontainers = "0.24.0"
-thiserror = "2.0.12"
+testcontainers = "0.25.0"
+thiserror = "2.0.16"
 time = "0.3.41"
 tokio = { version = "1.47.1", features = ["macros"] }
 toml = "0.9.5"

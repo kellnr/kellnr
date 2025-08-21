@@ -1,6 +1,7 @@
 use crate::token::Token;
+use axum::body::Body;
 use axum::extract::{Request, State};
-use axum::http::StatusCode;
+use axum::http::HeaderValue;
 use axum::middleware::Next;
 use axum::response::Response;
 use tracing::warn;
@@ -12,19 +13,34 @@ pub async fn cargo_auth_when_required(
     State(state): State<appstate::AppStateData>,
     request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Response {
+    // Do not expose publicly /config.json even if auth_required is true, cargo and other registries
+    // are expected to retry with authentication if they got a 401 status code.
+    // See:
+    // - https://github.com/kellnr/kellnr/pull/773#discussion_r2300752458
+    // - https://doc.rust-lang.org/cargo/reference/registry-index.html#sparse-authentication
     if !state.settings.registry.auth_required {
         // If auth_required is not true, pass through.
-        return Ok(next.run(request).await);
+        return next.run(request).await;
     }
 
     let token = Token::from_header(request.headers(), &state.db).await;
 
     match token {
-        Ok(_) => Ok(next.run(request).await),
+        Ok(_) => next.run(request).await,
         Err(status) => {
+            // Forge the response to handle www-authenticate header.
+            // See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/WWW-Authenticate
             warn!("Authentication required, but failed: {status}");
-            Err(status)
+            let mut response = Response::new(Body::empty());
+
+            (*response.status_mut()) = status;
+            response.headers_mut().insert(
+                "WWW-Authenticate",
+                HeaderValue::from_static("Basic, Bearer"),
+            );
+
+            response
         }
     }
 }
@@ -172,7 +188,7 @@ mod auth_middleware_tests {
     use appstate::AppStateData;
     use axum::body::Body;
     use axum::middleware::from_fn_with_state;
-    use axum::{Router, routing::get};
+    use axum::{Router, http::StatusCode, routing::get};
     use db::DbProvider;
     use db::{error::DbError, mock::MockDb};
     use hyper::{Request, header};
