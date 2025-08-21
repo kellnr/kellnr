@@ -36,15 +36,11 @@ pub fn test_state() -> AppStateData {
     let signing_key = Key::generate();
     let settings = Arc::new(Settings::default());
     let kellnr_storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
-    let crate_storage = Arc::new(
-        KellnrCrateStorage::new(&settings, kellnr_storage),
-    );
-    let cratesio_storage = Arc::new(
-        CratesIoCrateStorage::new(
-            &settings,
-            Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage,
-        ),
-    );
+    let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, kellnr_storage));
+    let cratesio_storage = Arc::new(CratesIoCrateStorage::new(
+        &settings,
+        Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage,
+    ));
     let (cratesio_prefetch_sender, _) = flume::unbounded();
     AppStateData {
         db,
