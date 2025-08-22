@@ -1,6 +1,7 @@
 use crate::token::Token;
+use axum::body::Body;
 use axum::extract::{Request, State};
-use axum::http::StatusCode;
+use axum::http::HeaderValue;
 use axum::middleware::Next;
 use axum::response::Response;
 use tracing::warn;
@@ -12,19 +13,31 @@ pub async fn cargo_auth_when_required(
     State(state): State<appstate::AppStateData>,
     request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
-    if !state.settings.registry.auth_required {
+) -> Response {
+    // The path /config.json is always accessible even if auth_required is true
+    // it is used for cargo and others registry as nexus to know if we should provide a token or not
+    if !state.settings.registry.auth_required || request.uri().path() == "/config.json" {
         // If auth_required is not true, pass through.
-        return Ok(next.run(request).await);
+        return next.run(request).await;
     }
 
     let token = Token::from_header(request.headers(), &state.db).await;
 
     match token {
-        Ok(_) => Ok(next.run(request).await),
+        Ok(_) => next.run(request).await,
         Err(status) => {
+            // Forge the response to handle www-authenticate header.
+            // See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/WWW-Authenticate
             warn!("Authentication required, but failed: {status}");
-            Err(status)
+            let mut response = Response::new(Body::empty());
+
+            (*response.status_mut()) = status;
+            response.headers_mut().insert(
+                "WWW-Authenticate",
+                HeaderValue::from_static("Basic, Bearer"),
+            );
+
+            response
         }
     }
 }
