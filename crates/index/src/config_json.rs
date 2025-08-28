@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use settings::registry::{AuthRequired, LegacyAuthRequiredWrapper};
 use settings::{Protocol, Settings};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -37,13 +38,19 @@ impl ConfigJson {
 
 impl From<(&Settings, &str, bool)> for ConfigJson {
     fn from(value: (&Settings, &str, bool)) -> Self {
+        let auth_required = match value.0.registry.auth_required {
+            LegacyAuthRequiredWrapper::Deprecated(value) => value,
+            LegacyAuthRequiredWrapper::Current(AuthRequired::All | AuthRequired::OnlyApi) => true,
+            LegacyAuthRequiredWrapper::Current(AuthRequired::No) => false,
+        };
+
         Self::new(
             value.0.origin.protocol,
             &value.0.origin.hostname,
             value.0.origin.port,
             value.1,
             value.2,
-            value.0.registry.auth_required,
+            auth_required,
         )
     }
 }
