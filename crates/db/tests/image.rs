@@ -4,7 +4,7 @@ use testcontainers::Image;
 use testcontainers::core::WaitFor;
 
 const NAME: &str = "postgres";
-const TAG: &str = "14.3-alpine";
+const TAG: &str = "17-alpine";
 const POSTGRES_PASSWORD: &str = "admin";
 const POSTGRES_USER: &str = "admin";
 const POSTGRES_DB: &str = "kellnr";
@@ -38,9 +38,10 @@ impl Image for Postgres {
     }
 
     fn ready_conditions(&self) -> Vec<WaitFor> {
-        vec![WaitFor::message_on_stderr(
-            "database system is ready to accept connections",
-        )]
+        vec![
+            WaitFor::message_on_stderr("database system is ready to accept connections"),
+            WaitFor::seconds(1),
+        ]
     }
 
     fn env_vars(

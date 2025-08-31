@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct Proxy {
     pub enabled: bool,
     pub num_threads: usize,
+    pub download_on_update: bool,
 }
 
 impl Default for Proxy {
@@ -11,6 +12,7 @@ impl Default for Proxy {
         Self {
             enabled: false,
             num_threads: 10,
+            download_on_update: false,
         }
     }
 }

@@ -92,4 +92,14 @@ impl CachedCrateStorage {
             .as_ref()
             .is_some_and(|cache| cache.contains_key(&file_name))
     }
+
+    // Check if a crate exists in the storage unrelated to the cache.
+    pub async fn exists(
+        &self,
+        name: &OriginalName,
+        version: &Version,
+    ) -> Result<bool, StorageError> {
+        let file_name = Self::file_name(name, version);
+        self.storage.exists(&file_name).await
+    }
 }

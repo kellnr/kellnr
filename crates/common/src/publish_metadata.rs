@@ -61,6 +61,10 @@ pub struct PublishMetadata {
     // specified. This field is optional and defaults to null.
     #[serde(default)]
     pub links: Option<String>,
+    // The minimal supported Rust version (optional)
+    // This must be a valid version requirement without an operator (e.g. no `=`)
+    #[serde(rename(serialize = "rust-version"))]
+    pub rust_version: Option<String>,
 }
 
 impl PublishMetadata {

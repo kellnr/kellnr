@@ -425,6 +425,26 @@
                     </div>
                   </td>
                 </tr>
+                <tr>
+                  <td class="text-subtitle-2">Download on Update</td>
+                  <td>
+                    <v-chip :color="settings.proxy.download_on_update ? 'success' : 'grey'" size="small" text-color="white">
+                      {{ settings.proxy.download_on_update ? 'true' : 'false' }}
+                    </v-chip>
+                  </td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">proxy.download_on_update</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_PROXY__DOWNLOAD_ON_UPDATE</span>
+                    </div>
+                  </td>
+                </tr>
               </tbody>
             </v-table>
           </v-expansion-panel-text>

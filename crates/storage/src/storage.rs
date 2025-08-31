@@ -7,4 +7,5 @@ pub trait Storage {
     async fn get(&self, key: &str) -> Result<Bytes, StorageError>;
     async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError>;
     async fn delete(&self, key: &str) -> Result<(), StorageError>;
+    async fn exists(&self, key: &str) -> Result<bool, StorageError>;
 }

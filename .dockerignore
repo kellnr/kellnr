@@ -4,7 +4,6 @@
 .idea
 .vscode
 .target
-target/
 result/
 tests/
 !tests/ca.crt

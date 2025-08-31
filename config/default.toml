@@ -57,6 +57,9 @@ enabled = false
 # Number of threads used to keep the crates.io proxy up to date.
 # A too high number can lead to exhausting the available database connection.
 num_threads = 20
+# If enabled, crates will be downloaded and cached periodically in the background, instead
+# of only on demand.
+download_on_update = false
 
 [log]
 # Set the log level to "trace", "debug", "info", "warn", or "error".

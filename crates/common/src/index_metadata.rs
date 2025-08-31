@@ -378,6 +378,7 @@ mod tests {
             license_file: None,
             repository: None,
             badges: None,
+            rust_version: None,
         };
 
         let index_meta = IndexMetadata::from_reg_meta(&reg_meta, "1234");

@@ -1531,6 +1531,7 @@ async fn add_crate_and_get_crate_data(test_db: &db::Database) {
         repository: Some("repository1".to_string()),
         badges: None,
         links: Some("links1".to_string()),
+        rust_version: None,
     };
     let pm1_v2 = PublishMetadata {
         name: "crate1".to_string(),
@@ -1580,6 +1581,7 @@ async fn add_crate_and_get_crate_data(test_db: &db::Database) {
         repository: Some("repository2".to_string()),
         badges: None,
         links: Some("links2".to_string()),
+        rust_version: None,
     };
     let pm2_v1 = PublishMetadata {
         name: "crate2".to_string(),
@@ -1625,6 +1627,7 @@ async fn add_crate_and_get_crate_data(test_db: &db::Database) {
         repository: Some("repository1".to_string()),
         badges: None,
         links: Some("links1".to_string()),
+        rust_version: None,
     };
     let pm2_v2 = PublishMetadata {
         name: "crate2".to_string(),
@@ -2003,6 +2006,7 @@ async fn get_prefetch_data_with_full_data(test_db: &db::Database) {
         badges: None,
         links: Some("links1".to_string()),
         readme_file: Some("readme_file1".to_string()),
+        rust_version: None,
     };
     let pm2 = PublishMetadata {
         name: "crate".to_string(),
@@ -2035,6 +2039,7 @@ async fn get_prefetch_data_with_full_data(test_db: &db::Database) {
         badges: None,
         links: Some("links2".to_string()),
         readme_file: Some("readme_file2".to_string()),
+        rust_version: None,
     };
     let pm3 = PublishMetadata {
         name: "crate".to_string(),
@@ -2067,6 +2072,7 @@ async fn get_prefetch_data_with_full_data(test_db: &db::Database) {
         badges: None,
         links: Some("links3".to_string()),
         readme_file: Some("readme_file3".to_string()),
+        rust_version: None,
     };
 
     test_db
@@ -2130,6 +2136,7 @@ async fn delete_updates_etag(test_db: &db::Database) {
         badges: None,
         links: Some("links1".to_string()),
         readme_file: Some("readme_file1".to_string()),
+        rust_version: None,
     };
     let pm2 = PublishMetadata {
         name: "crate".to_string(),
@@ -2162,6 +2169,7 @@ async fn delete_updates_etag(test_db: &db::Database) {
         badges: None,
         links: Some("links2".to_string()),
         readme_file: Some("readme_file2".to_string()),
+        rust_version: None,
     };
     test_db
         .add_crate(&pm1, "cksum1_1", &created1, "admin")

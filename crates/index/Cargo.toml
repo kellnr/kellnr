@@ -12,6 +12,7 @@ appstate.workspace = true
 common.workspace = true
 db.workspace = true
 settings.workspace = true
+storage.workspace = true
 
 # External dependencies from crates.io
 axum.workspace = true
