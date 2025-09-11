@@ -32,7 +32,7 @@ RUN apt install -y -q --no-install-recommends \
 
 # Install latest nodejs version with nvm
 ENV NVM_DIR="/root/.nvm"
-ENV NODE_VERSION="23.2.0"
+ENV NODE_VERSION="24.5.0"
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash \
   && . "$NVM_DIR/nvm.sh" \
   && nvm install $NODE_VERSION \

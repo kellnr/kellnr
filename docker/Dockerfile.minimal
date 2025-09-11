@@ -1,0 +1,39 @@
+##################
+# Builder image  #
+##################
+FROM alpine:3.22 AS builder
+
+ARG ADMINPWD=admin
+ENV INSTALLDIR=/opt
+ENV DATADIR=/opt/kdata
+ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
+ARG VERSION
+
+# Install only what's needed for downloading and extracting
+RUN apk add --no-cache curl zip lscpu sed
+
+# Download and extract in one layer to reduce image size
+WORKDIR ${INSTALLDIR}
+RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh | /bin/sh -s -- -m -d ${DATADIR} -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+
+##################
+# Runtime image  #
+##################
+FROM alpine:3.22
+
+ENV INSTALLDIR=/opt
+ENV DATADIR=/opt/kdata
+
+# Install only runtime dependencies
+RUN apk add --no-cache ca-certificates
+
+# Copy only the necessary files from the builder stage
+COPY --from=builder ${DATADIR} ${DATADIR}
+COPY --from=builder ${INSTALLDIR}/kellnr ${INSTALLDIR}/kellnr
+
+HEALTHCHECK --interval=5m --timeout=3s CMD wget -q --spider http://localhost:8000/api/v1/health || exit 1
+
+EXPOSE 8000
+
+WORKDIR ${INSTALLDIR}/kellnr
+ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && ./kellnr"]
