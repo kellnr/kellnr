@@ -101,11 +101,11 @@ function build_and_push_image {
 }
 
 function build_and_push {
-    build_and_push_image "./docker/Dockerfile" "$TAGS" "--build-arg VERSION=\"$VERSION\""
+    build_and_push_image "./docker/Dockerfile" "$TAGS" "--build-arg VERSION=$VERSION"
 }
 
 function build_and_push_minimal {
-    build_and_push_image "./docker/Dockerfile.minimal" "$TAGS_MIN" "--build-arg VERSION=\"$VERSION\""
+    build_and_push_image "./docker/Dockerfile.minimal" "$TAGS_MIN" "--build-arg VERSION=$VERSION"
 }
 
 # Main execution
