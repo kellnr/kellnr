@@ -11,6 +11,9 @@
 # Common commands
 ##########################################
 
+@_default:
+    {{just_executable()}} --list
+
 check:
 	cargo check
 
