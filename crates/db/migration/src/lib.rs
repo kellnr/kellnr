@@ -29,6 +29,7 @@ mod m20250319_191043_add_groups_entities;
 mod m20250412_0000012_hash_tokens;
 mod m20250412_0000012_hash_tokens_entities;
 mod m20250414_102510_add_unique_indices;
+mod m20250911_000001_cratesio_indices;
 mod old_index_metadata;
 
 pub struct Migrator;
@@ -52,6 +53,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250319_191043_add_groups::Migration),
             Box::new(m20250412_0000012_hash_tokens::Migration),
             Box::new(m20250414_102510_add_unique_indices::Migration),
+            Box::new(m20250911_000001_cratesio_indices::Migration),
         ]
     }
 }
