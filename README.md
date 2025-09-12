@@ -27,8 +27,8 @@ You can find the latest binary releases here: [Kellnr Binary Releases](https://g
 
 For the latest Docker images, check here: 
 
-    - [Kellnr Docker Images](https://github.com/kellnr/kellnr/pkgs/container/kellnr) 
-    - [Kellnr Minimal Docker Images](https://github.com/kellnr/kellnr/pkgs/container/kellnr-minimal)
+- [Kellnr Docker Images](https://github.com/kellnr/kellnr/pkgs/container/kellnr) 
+- [Kellnr Minimal Docker Images](https://github.com/kellnr/kellnr/pkgs/container/kellnr-minimal)
 
 The latest Kubernetes Helm chart can be found here: [Kellnr Helm Chart](https://github.com/kellnr/helm/releases)
 
