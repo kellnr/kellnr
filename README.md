@@ -26,6 +26,7 @@ Fore more information about how to configure and run **kellnr**, check out the [
 You can find the latest binary releases here: [Kellnr Binary Releases](https://github.com/kellnr/kellnr/releases). 
 
 For the latest Docker images, check here: 
+
     - [Kellnr Docker Images](https://github.com/kellnr/kellnr/pkgs/container/kellnr) 
     - [Kellnr Minimal Docker Images](https://github.com/kellnr/kellnr/pkgs/container/kellnr-minimal)
 
