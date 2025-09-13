@@ -18,7 +18,6 @@ import '@mdi/font/css/materialdesignicons.css'
 
 // Import both light and dark highlight.js themes
 import 'highlight.js/styles/github.css' // Light theme
-import "highlight.js/styles/vs2015.css"; // Good dark theme alternative
 
 const axios = setupCache(Axios);
 const pinia = createPinia()
@@ -45,7 +44,7 @@ const vuetify = createVuetify({
           primary: '#1867C0',
           secondary: '#5CBBF6',
           background: '#FFFFFF',
-          surface: '#FBFBFF',
+          surface: '#F6F7FA',
         }
       },
       dark: {
