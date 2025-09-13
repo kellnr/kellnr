@@ -127,12 +127,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Updated info -->
-    <div class="d-flex justify-end text-caption text-medium-emphasis mt-3">
-      <v-icon icon="mdi-clock-outline" size="x-small" class="me-1"></v-icon>
-      <span>Updated: 2025-04-16 11:02:27 UTC</span>
-    </div>
   </div>
 </template>
 
