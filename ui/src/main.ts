@@ -34,40 +34,40 @@ const store = useStore()
 
 // Create Vuetify instance with theme from store
 const vuetify = createVuetify({
-    components,
-    directives,
-    theme: {
-        // Use the theme from the store instead of hardcoded 'light'
-        defaultTheme: store.theme,
-        themes: {
-            light: {
-                colors: {
-                    primary: '#1867C0',
-                    secondary: '#5CBBF6',
-                    background: '#FFFFFF',
-                    surface: '#FBFBFF',
-                }
-            },
-            dark: {
-                colors: {
-                    primary: '#2196F3',
-                    secondary: '#424242',
-                    background: '#121212',
-                    surface: '#212121',
-                }
-            }
+  components,
+  directives,
+  theme: {
+    // Use the theme from the store instead of hardcoded 'light'
+    defaultTheme: store.theme,
+    themes: {
+      light: {
+        colors: {
+          primary: '#1867C0',
+          secondary: '#5CBBF6',
+          background: '#FFFFFF',
+          surface: '#FBFBFF',
         }
-    },
-    icons: {
-        defaultSet: 'mdi' // Use Material Design Icons as default
+      },
+      dark: {
+        colors: {
+          primary: '#2196F3',
+          secondary: '#424242',
+          background: '#121212',
+          surface: '#212121',
+        }
+      }
     }
+  },
+  icons: {
+    defaultSet: 'mdi' // Use Material Design Icons as default
+  }
 })
 
 // Complete the app initialization
 app
-    .use(router)
-    .use(VueHighlightJS)
-    // @ts-expect-error TS doesn't understand axios cache
-    .use(VueAxios, axios)
-    .use(vuetify)
-    .mount('#app')
+  .use(router)
+  .use(VueHighlightJS)
+  // @ts-expect-error TS doesn't understand axios cache
+  .use(VueAxios, axios)
+  .use(vuetify)
+  .mount('#app')
