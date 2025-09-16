@@ -3,19 +3,17 @@
     <!-- Hero Section -->
     <v-row>
       <v-col cols="12">
-        <v-card class="hero-card text-center py-6 px-4 mb-2" flat>
-          <!-- Search Box -->
-          <v-row>
-            <v-col cols="12" sm="10" md="8" lg="6" class="mx-auto">
-              <!-- Updated search field that works in both light and dark mode -->
-              <div class="search-wrapper">
-                <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined"
-                  density="comfortable" prepend-inner-icon="mdi-magnify" hide-details @keyup.enter="searchCrates()"
-                  class="search-field" bg-color="surface" rounded="pill"></v-text-field>
-              </div>
-            </v-col>
-          </v-row>
-        </v-card>
+        <!-- Search Box -->
+        <v-row>
+          <v-col cols="12" sm="10" md="8" lg="6" class="mx-auto">
+            <!-- Updated search field that works in both light and dark mode -->
+            <div class="search-wrapper">
+              <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined"
+                density="comfortable" prepend-inner-icon="mdi-magnify" hide-details @keyup.enter="searchCrates()"
+                class="search-field" bg-color="surface" rounded="pill"></v-text-field>
+            </div>
+          </v-col>
+        </v-row>
       </v-col>
     </v-row>
 

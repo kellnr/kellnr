@@ -25,13 +25,13 @@ ENV INSTALLDIR=/opt
 ENV DATADIR=/opt/kdata
 
 # Install only runtime dependencies
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates curl
 
 # Copy only the necessary files from the builder stage
 COPY --from=builder ${DATADIR} ${DATADIR}
 COPY --from=builder ${INSTALLDIR}/kellnr ${INSTALLDIR}/kellnr
 
-HEALTHCHECK --interval=5m --timeout=3s CMD wget -q --spider http://localhost:8000/api/v1/health || exit 1
+HEALTHCHECK --interval=5m --timeout=3s CMD curl -sf http://localhost:8000/api/v1/health || exit 1
 
 EXPOSE 8000
 

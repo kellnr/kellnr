@@ -12,3 +12,4 @@ justfile
 LICENSE
 deny.toml
 flake.*
+ui/node_modules/

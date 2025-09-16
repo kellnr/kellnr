@@ -36,7 +36,7 @@
           <p>To learn how to publish crates to <strong>Kellnr</strong>, read the
             <a href="https://kellnr.io/documentation" target="_blank" class="text-decoration-none font-weight-medium">
               documentation
-            </a>.
+            </a>
           </p>
           <v-icon icon="mdi-package-variant" size="x-large" color="grey-lighten-1" class="my-4"></v-icon>
         </v-card-text>

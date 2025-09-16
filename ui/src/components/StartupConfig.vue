@@ -801,7 +801,6 @@ function formatValue(value: any): string {
 .config-value {
   font-family: "Roboto Mono", monospace;
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.87);
   background-color: rgba(0, 0, 0, 0.04);
   padding: 2px 6px;
   border-radius: 4px;
