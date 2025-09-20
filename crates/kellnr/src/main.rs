@@ -66,7 +66,7 @@ async fn main() {
     );
 
     // Docs hosting
-    init_docs_hosting(&settings, db.clone()).await;
+    init_docs_hosting(&settings, crate_storage.clone(), db.clone()).await;
     let data_dir = settings.registry.data_dir.clone();
     let signing_key = Key::generate();
     let max_docs_size = settings.docs.max_size;
@@ -116,17 +116,16 @@ fn get_connect_string(settings: &Settings) -> ConString {
     }
 }
 
-async fn init_docs_hosting(settings: &Settings, db: Arc<dyn DbProvider + 'static>) {
+async fn init_docs_hosting(
+    settings: &Settings,
+    cs: Arc<KellnrCrateStorage>,
+    db: Arc<dyn DbProvider + 'static>,
+) {
     create_dir_all(settings.docs_path())
         .await
         .expect("Failed to create docs directory.");
     if settings.docs.enabled {
-        let storage = init_storage(&settings.crates_path(), settings);
-        docs::doc_queue::doc_extraction_queue(
-            db,
-            KellnrCrateStorage::new(settings, storage),
-            settings.docs_path(),
-        );
+        docs::doc_queue::doc_extraction_queue(db, cs, settings.docs_path());
     }
 }
 
