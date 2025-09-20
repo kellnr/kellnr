@@ -18,7 +18,11 @@ use tar::Archive;
 use tokio::fs::{create_dir_all, remove_dir_all};
 use tracing::error;
 
-pub fn doc_extraction_queue(db: Arc<dyn DbProvider>, cs: KellnrCrateStorage, docs_path: PathBuf) {
+pub fn doc_extraction_queue(
+    db: Arc<dyn DbProvider>,
+    cs: Arc<KellnrCrateStorage>,
+    docs_path: PathBuf,
+) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
