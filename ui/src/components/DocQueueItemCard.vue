@@ -28,7 +28,8 @@ defineProps<{
   grid-template-columns: 1fr 4fr 4fr;
   text-align: left;
   border-bottom-width: 1px;
-  margin: 0.5rem 0 0.5rem 0;
+  margin: 0.4rem 0 0.4rem 0;
+  padding: 0 0.4rem 0 0.4rem;
 }
 
 #left {
