@@ -62,7 +62,7 @@ syn = { version = "2.0.106", features = ["full"] }
 tar = "0.4.44"
 testcontainers = "0.25.0"
 thiserror = "2.0.16"
-time = "0.3.43"
+time = "0.3.44"
 tokio = { version = "1.47.1", features = ["macros"] }
 toml = "0.9.5"
 tower = { version = "0.5.2", features = ["util"] }
