@@ -64,7 +64,7 @@ testcontainers = "0.25.0"
 thiserror = "2.0.16"
 time = "0.3.43"
 tokio = { version = "1.47.1", features = ["macros"] }
-toml = "0.9.5"
+toml = "0.9.6"
 tower = { version = "0.5.2", features = ["util"] }
 tower-http = { version = "0.6.6", features = ["fs", "trace"] }
 tracing = "0.1.41"
