@@ -55,7 +55,7 @@ sea-orm = { version = "1.1.16", features = ["sqlx-postgres", "sqlx-sqlite", "run
 sea-orm-migration = { version = "1.1.16", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls"] }
 sea-query = "0.32.7"
 semver = "1.0.27"
-serde = { version = "1.0.224", features = ["derive"] }
+serde = { version = "1.0.226", features = ["derive"] }
 serde_json = "1.0.145"
 sha256 = "1.6.0"
 syn = { version = "2.0.106", features = ["full"] }
