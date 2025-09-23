@@ -1,8 +1,6 @@
 use sea_orm_migration::{prelude::*, schema::*};
 
-use crate::iden::{
-    CratesIoIndexIden, CratesIoIden, CratesIoMetaIden
-};
+use crate::iden::{CratesIoIden, CratesIoIndexIden, CratesIoMetaIden};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
