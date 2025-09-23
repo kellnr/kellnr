@@ -1,4 +1,4 @@
-use crate::password::generate_salt;
+use common::crypto::generate_salt;
 use settings::Settings;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};

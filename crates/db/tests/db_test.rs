@@ -1,13 +1,13 @@
 use chrono::{DateTime, TimeZone, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use common::crate_overview::CrateOverview;
+use common::crypto::hash_pwd;
 use common::index_metadata::IndexMetadata;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::{PublishMetadata, RegistryDep};
 use common::version::Version;
-use db::password::hash_pwd;
 use db::provider::PrefetchState;
 use db::{DbProvider, DocQueueEntry, User, test_utils::*};
 use db_testcontainer::db_test;

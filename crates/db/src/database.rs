@@ -1,4 +1,3 @@
-use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{DbResult, PrefetchState};
 use crate::tables::init_database;
 use crate::{AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User, error::DbError};
@@ -7,6 +6,7 @@ use chrono::{DateTime, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use common::crate_overview::CrateOverview;
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
+use common::crypto::{generate_salt, hash_pwd, hash_token};
 use common::index_metadata::{IndexDep, IndexMetadata};
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;

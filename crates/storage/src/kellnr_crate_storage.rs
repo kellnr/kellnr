@@ -2,7 +2,7 @@ use crate::{
     cached_crate_storage::{CachedCrateStorage, DynStorage},
     storage_error::StorageError,
 };
-use common::util::generate_rand_string;
+use common::crypto::generate_rand_string;
 use settings::Settings;
 use std::{
     ops::{Deref, DerefMut},

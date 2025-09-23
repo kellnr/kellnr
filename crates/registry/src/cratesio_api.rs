@@ -91,7 +91,7 @@ mod tests {
     use axum::http::Request;
     use axum::routing::get;
     use axum::{Router, middleware};
-    use common::util::generate_rand_string;
+    use common::crypto::generate_rand_string;
     use db::mock::MockDb;
     use http_body_util::BodyExt;
     use settings::Settings;

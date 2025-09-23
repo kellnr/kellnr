@@ -7,7 +7,6 @@ mod doc_queue_entry;
 pub mod error;
 mod group;
 mod krate;
-pub mod password;
 pub mod provider;
 mod tables;
 mod user;
