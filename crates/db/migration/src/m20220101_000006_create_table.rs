@@ -110,7 +110,7 @@ async fn compute_etag(
             ))
         })?;
 
-    Ok(sha256::digest(data))
+    Ok(common::crypto::hash_file_sha256(&data))
 }
 
 #[derive(Iden)]

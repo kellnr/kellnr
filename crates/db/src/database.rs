@@ -2079,7 +2079,7 @@ async fn compute_etag<C: ConnectionTrait>(
     let index_metadata = crate_index_model_to_index_metadata(crate_name, crate_indices)?;
     let data = index_metadata_to_bytes(&index_metadata)?;
 
-    Ok(sha256::digest(data))
+    Ok(common::crypto::hash_file_sha256(&data))
 }
 
 fn index_metadata_to_bytes(index_metadata: &[IndexMetadata]) -> DbResult<Vec<u8>> {

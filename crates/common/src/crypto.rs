@@ -21,6 +21,10 @@ pub fn hash_token(token: &str) -> String {
     sha256::digest(token)
 }
 
+pub fn hash_file_sha256(data: &[u8]) -> String {
+    sha256::digest(data)
+}
+
 pub fn generate_salt() -> String {
     generate_rand_string(SALT_LENGTH)
 }

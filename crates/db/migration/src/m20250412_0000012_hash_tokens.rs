@@ -58,7 +58,7 @@ async fn hash_all_tokens(db: &SchemaManagerConnection<'_>) -> Result<(), DbErr> 
         .collect::<Vec<_>>();
 
     for token in tokens {
-        let hash = hash_token(&token.token);
+        let hash = common::crypto::hash_token(&token.token);
         let token_model = auth_token::ActiveModel {
             token: Set(hash),
             ..token.into()
@@ -67,8 +67,4 @@ async fn hash_all_tokens(db: &SchemaManagerConnection<'_>) -> Result<(), DbErr> 
     }
 
     Ok(())
-}
-
-fn hash_token(token: &str) -> String {
-    sha256::digest(token)
 }

@@ -387,7 +387,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_crate(&self, pub_metadata: &PublishMetadata, sha256: &str, created: &DateTime<Utc>, owner: &str) -> DbResult<i64> {
+            async fn add_crate(&self, pub_metadata: &PublishMetadata, cksum: &str, created: &DateTime<Utc>, owner: &str) -> DbResult<i64> {
                 unimplemented!()
             }
 

@@ -61,7 +61,7 @@ impl CachedCrateStorage {
                 StorageError::GenericError(format!("Error while adding bin package. Error: {e}"))
             })?;
 
-        Ok(sha256::digest(&*crate_data))
+        Ok(common::crypto::hash_file_sha256(&crate_data))
     }
 
     pub async fn get(&self, name: &OriginalName, version: &Version) -> Option<Vec<u8>> {
