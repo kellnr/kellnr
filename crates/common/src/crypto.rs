@@ -1,7 +1,74 @@
 use rand::{Rng, distr::Alphanumeric, rng};
 use std::iter;
 
-mod crypto_new {
+pub mod update {
+    use crate::crypto::new::CryptoError;
+    use crate::crypto::new::generate_rand_string;
+    use crate::crypto::new::store_password;
+    use crate::crypto::new::store_token;
+    use crate::crypto::new::verify_password;
+    use crate::crypto::new::verify_token;
+
+    /// Signals if the password hash and salt should be updated to new values
+    pub enum ShouldMigratePwHash {
+        // No
+        Keep,
+        //Yes
+        Update { pwhash: String, salt: String },
+    }
+
+    /// Signals if the token hash should be updated to a new hash
+    pub enum ShouldMigrateTokenHash {
+        // No
+        Keep,
+        // Yes
+        Update { tkhash: String },
+    }
+
+    /// Verifies the password againts the given hash.
+    /// Gives advise if the saved hash should be updated to a new hash,
+    /// for example due to a change in the hashing algorithm
+    pub fn verify_password_with_advise(
+        password: &str,
+        salt: &str,
+        hash: &str,
+    ) -> Result<ShouldMigratePwHash, CryptoError> {
+        if hash.starts_with("$argon2id") {
+            verify_password(password, hash)?;
+            // function would have returned if password does not matched given hash
+            Ok(ShouldMigratePwHash::Keep)
+        } else if crate::crypto::hash_pwd(password, salt) == hash {
+            let pwhash = store_password(password)?;
+            // set salt to something random as fallback
+            let rndm = generate_rand_string(32)?;
+            let salt = format!("MIGRATEDTOARGON2ID{rndm}");
+            Ok(ShouldMigratePwHash::Update { pwhash, salt })
+        } else {
+            Err(CryptoError::PasswordIncorrect)
+        }
+    }
+
+    /// Verifies the token againts the given hash.
+    /// Gives advise if the saved hash should be updated to a new hash,
+    /// for example due to a change in the hashing algorithm
+    pub fn verify_token_with_advise(
+        token: &str,
+        hash: &str,
+    ) -> Result<ShouldMigrateTokenHash, CryptoError> {
+        if hash.starts_with("$argon2id") {
+            verify_token(token, hash)?;
+            // function would have returned if password does not matched given hash
+            Ok(ShouldMigrateTokenHash::Keep)
+        } else if crate::crypto::hash_token(token) == hash {
+            let tkhash = store_token(token)?;
+            Ok(ShouldMigrateTokenHash::Update { tkhash })
+        } else {
+            Err(CryptoError::PasswordIncorrect)
+        }
+    }
+}
+
+mod new {
     use alkali::hash::pbkdf;
 
     #[derive(Debug, Eq, PartialEq, thiserror::Error)]
@@ -12,6 +79,8 @@ mod crypto_new {
         FailedToHashPassword(String),
         #[error("Failed to verify password: {0}")]
         FailedToVerifyPassword(String),
+        #[error("Failed to generate random string: {0}")]
+        FailedToGenerateRandomString(String),
     }
 
     /// Hash a `password` for storage and later identity verification with [`verify_password`].
@@ -32,6 +101,28 @@ mod crypto_new {
             }
             other => CryptoError::FailedToVerifyPassword(other.to_string()),
         })
+    }
+
+    pub fn generate_rand_string(length: usize) -> Result<String, CryptoError> {
+        let mut buf = vec![0; length + 1];
+        alkali::random::fill_random(&mut buf)
+            .map_err(|err| CryptoError::FailedToGenerateRandomString(err.to_string()))?;
+        let mut s = alkali::encode::hex::encode(&buf)
+            .map_err(|err| CryptoError::FailedToGenerateRandomString(err.to_string()))?;
+        let _ = s.split_off(length);
+        Ok(s)
+    }
+
+    pub fn store_token(token: &str) -> Result<String, CryptoError> {
+        store_password(token)
+    }
+
+    pub fn verify_token(token: &str, hash: &str) -> Result<(), CryptoError> {
+        verify_password(token, hash)
+    }
+
+    pub fn generate_token() -> Result<String, CryptoError> {
+        generate_rand_string(64)
     }
 
     mod constants {
