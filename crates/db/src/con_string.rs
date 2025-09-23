@@ -1,4 +1,4 @@
-use common::crypto::generate_salt;
+use common::crypto::update::generate_salt;
 use settings::Settings;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
@@ -90,7 +90,7 @@ impl From<&Settings> for PgConString {
             admin: AdminUser {
                 pwd: s.setup.admin_pwd.clone(),
                 token: s.setup.admin_token.clone(),
-                salt: generate_salt(),
+                salt: generate_salt().unwrap(),
             },
         }
     }
@@ -137,7 +137,7 @@ impl From<&Settings> for SqliteConString {
     fn from(settings: &Settings) -> Self {
         Self {
             path: settings.sqlite_path(),
-            salt: generate_salt(),
+            salt: generate_salt().unwrap(),
             admin_pwd: settings.setup.admin_pwd.clone(),
             admin_token: settings.setup.admin_token.clone(),
             session_age: Duration::from_secs(settings.registry.session_age_seconds),

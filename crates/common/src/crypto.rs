@@ -2,27 +2,19 @@ use rand::{Rng, distr::Alphanumeric, rng};
 use std::iter;
 
 pub mod update {
-    use crate::crypto::new::CryptoError;
-    use crate::crypto::new::generate_rand_string;
-    use crate::crypto::new::store_password;
-    use crate::crypto::new::store_token;
-    use crate::crypto::new::verify_password;
-    use crate::crypto::new::verify_token;
+    pub use crate::crypto::new::CryptoError;
+    pub use crate::crypto::new::generate_rand_string;
+    pub use crate::crypto::new::store_password;
+    pub use crate::crypto::new::store_token;
+    pub use crate::crypto::new::verify_password;
+    pub use crate::crypto::new::verify_token;
 
-    /// Signals if the password hash and salt should be updated to new values
-    pub enum ShouldMigratePwHash {
+    /// Signals if the password hash should be updated to a new hash
+    pub enum ShouldMigrateHash {
         // No
         Keep,
         //Yes
-        Update { pwhash: String, salt: String },
-    }
-
-    /// Signals if the token hash should be updated to a new hash
-    pub enum ShouldMigrateTokenHash {
-        // No
-        Keep,
-        // Yes
-        Update { tkhash: String },
+        Update,
     }
 
     /// Verifies the password againts the given hash.
@@ -32,39 +24,40 @@ pub mod update {
         password: &str,
         salt: &str,
         hash: &str,
-    ) -> Result<ShouldMigratePwHash, CryptoError> {
+    ) -> Result<ShouldMigrateHash, CryptoError> {
         if hash.starts_with("$argon2id") {
             verify_password(password, hash)?;
             // function would have returned if password does not matched given hash
-            Ok(ShouldMigratePwHash::Keep)
+            Ok(ShouldMigrateHash::Keep)
         } else if crate::crypto::hash_pwd(password, salt) == hash {
-            let pwhash = store_password(password)?;
-            // set salt to something random as fallback
-            let rndm = generate_rand_string(32)?;
-            let salt = format!("MIGRATEDTOARGON2ID{rndm}");
-            Ok(ShouldMigratePwHash::Update { pwhash, salt })
+            Ok(ShouldMigrateHash::Update)
         } else {
             Err(CryptoError::PasswordIncorrect)
         }
     }
 
-    /// Verifies the token againts the given hash.
-    /// Gives advise if the saved hash should be updated to a new hash,
+    /// Hashes the token.
+    /// Gives advise if the token should be updated to a new hash,
     /// for example due to a change in the hashing algorithm
-    pub fn verify_token_with_advise(
+    pub fn store_token_with_advise(
         token: &str,
         hash: &str,
-    ) -> Result<ShouldMigrateTokenHash, CryptoError> {
+    ) -> Result<ShouldMigrateHash, CryptoError> {
         if hash.starts_with("$argon2id") {
             verify_token(token, hash)?;
             // function would have returned if password does not matched given hash
-            Ok(ShouldMigrateTokenHash::Keep)
+            Ok(ShouldMigrateHash::Keep)
         } else if crate::crypto::hash_token(token) == hash {
-            let tkhash = store_token(token)?;
-            Ok(ShouldMigrateTokenHash::Update { tkhash })
+            Ok(ShouldMigrateHash::Update)
         } else {
             Err(CryptoError::PasswordIncorrect)
         }
+    }
+
+    pub fn generate_salt() -> Result<String, CryptoError> {
+        // set salt to something random as fallback
+        let rndm = generate_rand_string(32)?;
+        Ok(format!("MIGRATEDTOARGON2ID{rndm}"))
     }
 }
 

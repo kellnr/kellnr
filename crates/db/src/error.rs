@@ -52,4 +52,6 @@ pub enum DbError {
     InvalidCrateName(String),
     #[error("Crates.io index data is missing for crate {0}")]
     MissingCratesIoIndexData(String),
+    #[error("Using cryptography failed {0}")]
+    FailedCrypto(String),
 }

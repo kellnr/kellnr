@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use common::crate_overview::CrateOverview;
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
-use common::crypto::{generate_salt, hash_pwd, hash_token};
+use common::crypto::update as crypto_update;
 use common::index_metadata::{IndexDep, IndexMetadata};
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -130,11 +130,20 @@ impl DbProvider for Database {
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User> {
         let user = self.get_user(name).await?;
 
-        if hash_pwd(pwd, &user.salt) == user.pwd {
-            Ok(user)
-        } else {
-            Err(DbError::PasswordMismatch)
-        }
+        let advise = crypto_update::verify_password_with_advise(pwd, &user.salt, &user.pwd)
+            .map_err(|_| DbError::PasswordMismatch)?;
+
+        let user = match advise {
+            crypto_update::ShouldMigrateHash::Keep => user,
+            crypto_update::ShouldMigrateHash::Update => {
+                // update password
+                self.change_pwd(name, pwd).await?;
+                // return updated user
+                self.get_user(name).await?
+            }
+        };
+
+        Ok(user)
     }
 
     async fn increase_download_counter(
@@ -589,8 +598,10 @@ impl DbProvider for Database {
     }
 
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()> {
-        let salt = generate_salt();
-        let hashed = hash_pwd(new_pwd, &salt);
+        let salt =
+            crypto_update::generate_salt().map_err(|err| DbError::FailedCrypto(err.to_string()))?;
+        let hashed = crypto_update::store_password(new_pwd)
+            .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
         let mut u: user::ActiveModel = user::Entity::find()
             .filter(user::Column::Name.eq(user_name))
@@ -664,7 +675,8 @@ impl DbProvider for Database {
     }
 
     async fn add_auth_token(&self, name: &str, token: &str, user: &str) -> DbResult<()> {
-        let hashed_token = hash_token(token);
+        let hashed_token = crypto_update::store_token(token)
+            .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
         let user = user::Entity::find()
             .filter(user::Column::Name.eq(user))
@@ -685,7 +697,8 @@ impl DbProvider for Database {
     }
 
     async fn get_user_from_token(&self, token: &str) -> DbResult<User> {
-        let token = hash_token(token);
+        let token = crypto_update::store_token(token)
+            .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::AuthToken.def())
@@ -834,7 +847,8 @@ impl DbProvider for Database {
         is_admin: bool,
         is_read_only: bool,
     ) -> DbResult<()> {
-        let hashed_pwd = hash_pwd(pwd, salt);
+        let hashed_pwd = crypto_update::store_password(pwd)
+            .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
         let u = user::ActiveModel {
             name: Set(name.to_owned()),
@@ -1808,7 +1822,8 @@ async fn insert_admin_credentials<C: ConnectionTrait>(
     db_con: &C,
     con_string: &ConString,
 ) -> DbResult<()> {
-    let hashed_pwd = hash_pwd(&con_string.admin_pwd(), &con_string.salt());
+    let hashed_pwd = crypto_update::store_password(&con_string.admin_pwd())
+        .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
     let admin = user::ActiveModel {
         name: Set("admin".to_string()),
@@ -1820,7 +1835,8 @@ async fn insert_admin_credentials<C: ConnectionTrait>(
     };
 
     let res: InsertResult<user::ActiveModel> = user::Entity::insert(admin).exec(db_con).await?;
-    let auth_token = hash_token(&con_string.admin_token());
+    let auth_token = crypto_update::store_token(&con_string.admin_token())
+        .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
     let auth_token = auth_token::ActiveModel {
         name: Set("admin".to_string()),
