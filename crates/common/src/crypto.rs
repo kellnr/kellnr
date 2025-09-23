@@ -41,24 +41,6 @@ mod crypto_new {
     }
 }
 
-pub fn generate_rand_string(length: usize) -> String {
-    let mut rng = rng();
-    iter::repeat(())
-        .map(|()| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(length)
-        .collect::<String>()
-}
-
-pub fn generate_token() -> String {
-    let mut rng = rng();
-    iter::repeat(())
-        .map(|()| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(32)
-        .collect::<String>()
-}
-
 const SALT_LENGTH: usize = 10;
 
 pub fn hash_pwd(pwd: &str, salt: &str) -> String {
@@ -74,8 +56,21 @@ pub fn hash_file_sha256(data: &[u8]) -> String {
     sha256::digest(data)
 }
 
+pub fn generate_rand_string(length: usize) -> String {
+    let mut rng = rng();
+    iter::repeat(())
+        .map(|()| rng.sample(Alphanumeric))
+        .map(char::from)
+        .take(length)
+        .collect::<String>()
+}
+
 pub fn generate_salt() -> String {
     generate_rand_string(SALT_LENGTH)
+}
+
+pub fn generate_token() -> String {
+    generate_rand_string(32)
 }
 
 #[cfg(test)]
