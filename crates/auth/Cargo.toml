@@ -16,7 +16,6 @@ settings.workspace = true
 # External dependencies from crates.io
 axum.workspace = true
 base64.workspace = true
-rand.workspace = true
 serde.workspace = true
 tracing.workspace = true
 

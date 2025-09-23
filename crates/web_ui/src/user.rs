@@ -7,7 +7,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
-use common::crypto::{generate_rand_string, generate_salt};
+use common::crypto::{generate_rand_string, generate_salt, generate_token};
 use cookie::time;
 use db::{self, AuthToken, User};
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,7 @@ pub async fn add_token(
     State(db): DbState,
     Json(auth_token): Json<token::NewTokenReqData>,
 ) -> Result<Json<NewTokenResponse>, RouteError> {
-    let token = token::generate_token();
+    let token = generate_token();
     db.add_auth_token(&auth_token.name, &token, user.name())
         .await?;
 

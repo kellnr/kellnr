@@ -28,7 +28,6 @@ url.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
-rand.workspace = true
 rm_rf.workspace = true
 tokio.workspace = true
 tower.workspace = true

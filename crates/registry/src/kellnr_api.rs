@@ -495,11 +495,7 @@ mod reg_api_tests {
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
-    use rand::Rng;
-    use rand::distr::Alphanumeric;
-    use rand::rng;
     use settings::Settings;
-    use std::iter;
     use std::path::PathBuf;
     use storage::cached_crate_storage::DynStorage;
     use storage::fs_storage::FSStorage;
@@ -1501,21 +1497,12 @@ mod reg_api_tests {
     fn get_settings() -> Settings {
         Settings {
             registry: settings::Registry {
-                data_dir: "/tmp/".to_string() + &generate_rand_string(10),
+                data_dir: "/tmp/".to_string() + &common::crypto::generate_rand_string(10),
                 session_age_seconds: 10,
                 ..settings::Registry::default()
             },
             ..Settings::default()
         }
-    }
-
-    fn generate_rand_string(length: usize) -> String {
-        let mut rng = rng();
-        iter::repeat(())
-            .map(|()| rng.sample(Alphanumeric))
-            .map(char::from)
-            .take(length)
-            .collect::<String>()
     }
 
     impl TestKellnr {

@@ -10,6 +10,15 @@ pub fn generate_rand_string(length: usize) -> String {
         .collect::<String>()
 }
 
+pub fn generate_token() -> String {
+    let mut rng = rng();
+    iter::repeat(())
+        .map(|()| rng.sample(Alphanumeric))
+        .map(char::from)
+        .take(32)
+        .collect::<String>()
+}
+
 const SALT_LENGTH: usize = 10;
 
 pub fn hash_pwd(pwd: &str, salt: &str) -> String {

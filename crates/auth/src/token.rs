@@ -5,10 +5,7 @@ use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use db::DbProvider;
-use rand::distr::Alphanumeric;
-use rand::{Rng, rng};
 use serde::Deserialize;
-use std::iter;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -24,15 +21,6 @@ pub struct Token {
 pub enum OptionToken {
     None,
     Some(Token),
-}
-
-pub fn generate_token() -> String {
-    let mut rng = rng();
-    iter::repeat(())
-        .map(|()| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(32)
-        .collect::<String>()
 }
 
 impl Token {
