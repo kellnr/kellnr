@@ -9,6 +9,7 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
+use common::webhook::Webhook;
 use crate_meta::CrateMeta;
 use sea_orm::prelude::async_trait::async_trait;
 use std::path::Path;
@@ -157,6 +158,13 @@ pub trait DbProvider: Send + Sync {
     async fn get_cratesio_index_update_list(&self) -> DbResult<Vec<CratesioPrefetchMsg>>;
     async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()>;
     async fn yank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()>;
+    async fn register_webhook(
+        &self,
+        webhook: Webhook
+    ) -> DbResult<String>;
+    async fn delete_webhook(&self, id: &str) -> DbResult<()>;
+    async fn get_webhook(&self, id: &str) -> DbResult<Webhook>;
+    async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>>;
 }
 
 pub mod mock {
@@ -470,6 +478,22 @@ pub mod mock {
 
             async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>{
                 uninplemented!()
+            }
+
+            async fn register_webhook(
+                &self,
+                webhook: Webhook
+            ) -> DbResult<String> {
+                uninplemented!()
+            }
+            async fn delete_webhook(&self, id: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+            async fn get_webhook(&self, id: &str) -> DbResult<Webhook> {
+                unimplemented!()
+            }
+            async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>> {
+                unimplemented!()
             }
         }
     }

@@ -1,7 +1,8 @@
 use appstate::AppStateData;
 use axum::{
-    Router, middleware,
+    middleware,
     routing::{get, get_service},
+    Router,
 };
 use std::path::Path;
 use tower_http::services::{ServeDir, ServeFile};
@@ -15,6 +16,7 @@ mod health_routes;
 mod kellnr_api_routes;
 mod ui_routes;
 mod user_routes;
+mod webhook_routes;
 
 /// Creates and returns the complete application router with all routes configured
 pub fn create_router(
@@ -56,6 +58,7 @@ pub fn create_router(
             "/api/v1/cratesio",
             cratesio_api_routes::create_routes(state.clone()),
         )
+        .nest("/api/v1/webhook", webhook_routes::create_routes())
         .nest("/api/v1", health_routes::create_routes())
         .nest_service("/docs", docs_service)
         .fallback(static_files_service)

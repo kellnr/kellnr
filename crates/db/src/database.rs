@@ -13,20 +13,23 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
+use common::webhook::Webhook;
 use entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
     cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate, owner,
-    prelude::*, session, user,
+    prelude::*, session, user, webhook, webhook_queue
 };
 use migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
 };
+use migration::DeleteStatement;
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
     FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
     prelude::async_trait::async_trait,
+    entity::prelude::Uuid,
     query::{QueryOrder, QuerySelect, TransactionTrait},
 };
 use std::collections::BTreeMap;
@@ -1775,6 +1778,63 @@ impl DbProvider for Database {
         ci.save(&self.db_con).await?;
 
         Ok(())
+    }
+
+    async fn register_webhook(
+        &self,
+        webhook: Webhook
+    ) -> DbResult<String> {
+        let w = webhook::ActiveModel {
+            action: Set(Into::<&str>::into(webhook.action).to_string()),
+            callback_url: Set(webhook.callback_url),
+            name: Set(webhook.name),
+            ..Default::default()
+        };
+
+        let w: webhook::Model = w.insert(&self.db_con).await?;
+        Ok(w.id.to_string())
+    }
+    async fn delete_webhook(&self, id: &str) -> DbResult<()> {
+        let w = webhook::Entity::find()
+            .filter(webhook::Column::Id.eq(TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::WebhookNotFound)?;
+
+        w.delete(&self.db_con).await?;
+        Ok(())
+
+    }
+    async fn get_webhook(&self, id: &str) -> DbResult<Webhook> {
+        let w = webhook::Entity::find()
+            .filter(webhook::Column::Id.eq(TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::WebhookNotFound)?;
+
+        Ok(
+            Webhook {
+                id: Some(w.id.into()),
+                name: w.name,
+                action: w.action.as_str().try_into().map_err(|_| DbError::InvalidWebhookAction(w.action))?,
+                callback_url: w.callback_url
+            }
+        )
+    }
+    async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>> {
+        let w = webhook::Entity::find()
+            .all(&self.db_con)
+            .await?;
+
+        Ok(w.into_iter().filter_map(|w|
+            Some(Webhook {
+                id: Some(w.id.into()),
+                name: w.name,
+                // Entries with invalid actions would get skipped
+                action: w.action.as_str().try_into().ok()?,
+                callback_url: w.callback_url
+            })
+        ).collect())
     }
 }
 
