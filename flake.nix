@@ -69,6 +69,7 @@
 
           buildInputs = [
             pkgs.cargo-nextest
+            pkgs.libsodium.dev
             pkgs.openssl.dev
           ] ++ lib.optional pkgs.stdenv.isDarwin [
             pkgs.libiconv

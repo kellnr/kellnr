@@ -1,6 +1,46 @@
 use rand::{Rng, distr::Alphanumeric, rng};
 use std::iter;
 
+mod crypto_new {
+    use alkali::hash::pbkdf;
+
+    #[derive(Debug, Eq, PartialEq, thiserror::Error)]
+    pub enum CryptoError {
+        #[error("Incorrect password")]
+        PasswordIncorrect,
+        #[error("Failed to hash password: {0}")]
+        FailedToHashPassword(String),
+        #[error("Failed to verify password: {0}")]
+        FailedToVerifyPassword(String),
+    }
+
+    /// Hash a `password` for storage and later identity verification with [`verify_password`].
+    pub fn store_password(password: &str) -> Result<String, CryptoError> {
+        pbkdf::store_password(
+            password,
+            constants::PBKDF_AUTH_OPS_LIMIT,
+            constants::PBKDF_AUTH_MEM_LIMIT,
+        )
+        .map_err(|err| CryptoError::FailedToHashPassword(err.to_string()))
+    }
+
+    /// Verify `password` matches the provided `hash`, returned by [`store_password`].
+    pub fn verify_password(password: &str, hash: &str) -> Result<(), CryptoError> {
+        pbkdf::verify_password(password, hash).map_err(|err| match err {
+            alkali::AlkaliError::PasswordHashError(pbkdf::PasswordHashError::PasswordIncorrect) => {
+                CryptoError::PasswordIncorrect
+            }
+            other => CryptoError::FailedToVerifyPassword(other.to_string()),
+        })
+    }
+
+    mod constants {
+        use alkali::hash::pbkdf;
+        pub const PBKDF_AUTH_OPS_LIMIT: usize = pbkdf::OPS_LIMIT_INTERACTIVE;
+        pub const PBKDF_AUTH_MEM_LIMIT: usize = pbkdf::MEM_LIMIT_INTERACTIVE;
+    }
+}
+
 pub fn generate_rand_string(length: usize) -> String {
     let mut rng = rng();
     iter::repeat(())

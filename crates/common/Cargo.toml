@@ -8,6 +8,7 @@ license-file = "../../LICENSE"
 
 [dependencies]
 # External dependencies from crates.io
+alkali.workspace = true
 axum.workspace = true
 rand.workspace = true
 regex.workspace = true
