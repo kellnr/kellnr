@@ -27,8 +27,8 @@ impl MigrationTrait for Migration {
                     .col(pk_uuid(WebhookQueueIden::Id))
                     .col(uuid(WebhookQueueIden::WebhookFk))
                     .col(json(WebhookQueueIden::Payload))
-                    .col(date_time_null(WebhookQueueIden::LastAttempt))
-                    .col(date_time(WebhookQueueIden::NextAttempt))
+                    .col(timestamp_with_time_zone_null(WebhookQueueIden::LastAttempt))
+                    .col(timestamp_with_time_zone(WebhookQueueIden::NextAttempt))
                     .foreign_key(
                         ForeignKey::create()
                             .name("webhook_fk")

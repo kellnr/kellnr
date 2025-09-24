@@ -1,73 +1,36 @@
-use auth::token;
-use axum::Json;
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use appstate::DbState;
-use common::webhook::Webhook;
-use error::api_error::{ApiError, ApiResult};
+use chrono::{Utc, DateTime};
+use common::{normalized_name::NormalizedName, version::Version, webhook::WebhookAction};
+use db::DbProvider;
+use serde_json::json;
 
+mod endpoints;
 mod types;
 
-pub async fn register_webhook(
-    token: token::Token,
-    State(db): DbState,
-    Json(input): Json<types::RegisterWebhookRequest>,
-) -> ApiResult<Json<types::RegisterWebhookResponse>> {
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
+pub use endpoints::{delete_webhook, get_all_webhooks, get_webhook, register_webhook};
+
+pub async fn notify_crate(
+    action: WebhookAction,
+    timestamp: &DateTime<Utc>,
+    normalized_name: &NormalizedName,
+    version: &Version,
+    db: &std::sync::Arc<dyn DbProvider>,
+) {
+    println!("{action:?}");
+    println!("{timestamp:?}");
+    println!("{normalized_name:?}");
+    println!("{version:?}");
+
+    let payload = json!({
+        "type": action,
+        "timestamp": timestamp,
+        "data": {
+            "crate_name": format!("{}", normalized_name),
+            "crate_version": version
+        }
+    });
+    println!("Payload: {payload:?}");
+
+    if let Err(err) = db.add_webhook_queue(action, payload).await {
+        tracing::error!("Db: {err:?}");
     }
-
-    let id = db.register_webhook(
-        Webhook {
-            id: None,
-            action: input.action,
-            callback_url: input.callback_url,
-            name: input.name}
-    ).await?;
-
-    Ok(Json(types::RegisterWebhookResponse { id }))
-}
-
-pub async fn get_webhook(
-    token: token::Token,
-    Path(id): Path<String>,
-    State(db): DbState,
-) -> ApiResult<Json<types::GetWebhookResponse>> {
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
-    }
-
-    let w = db.get_webhook(&id).await?;
-    Ok(Json(types::GetWebhookResponse {
-        id: w.id.unwrap_or_default(),
-        action: w.action,
-        callback_url: w.callback_url,
-        name: w.name
-         }))
-}
-
-pub async fn get_all_webhooks(
-    token: token::Token,
-    State(db): DbState,
-) -> ApiResult<Json<types::GetAllWebhooksResponse>> {
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
-    }
-
-    let w = db.get_all_webhooks().await?;
-    Ok(Json(types::GetAllWebhooksResponse (
-       w  )))
-}
-
-pub async fn delete_webhook(
-    token: token::Token,
-    Path(id): Path<String>,
-    State(db): DbState,
-) -> ApiResult<()> {
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
-    }
-
-    db.delete_webhook(&id).await?;
-    Ok(())
 }

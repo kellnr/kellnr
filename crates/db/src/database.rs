@@ -13,7 +13,7 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
-use common::webhook::Webhook;
+use common::webhook::{WebhookAction, Webhook};
 use entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
@@ -23,7 +23,6 @@ use entity::{
 use migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
 };
-use migration::DeleteStatement;
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
@@ -1835,6 +1834,30 @@ impl DbProvider for Database {
                 callback_url: w.callback_url
             })
         ).collect())
+    }
+    async fn add_webhook_queue(&self, action: WebhookAction, payload: serde_json::Value) -> DbResult<()> {
+        let w = webhook::Entity::find()
+            .filter(webhook::Column::Action.eq(Into::<&str>::into(action)))
+            .all(&self.db_con)
+            .await
+            .map_err(|_| DbError::WebhookNotFound)?;
+        if w.is_empty() {
+            return Ok(());
+        }
+
+        let now = Utc::now();
+
+        let entries = w.iter()
+            .map(|w| webhook_queue::ActiveModel {
+                webhook_fk: Set(w.id),
+                payload: Set(payload.clone()),
+                next_attempt: Set(now.into()),
+                last_attempt: Set(None),
+                ..Default::default()
+            });
+
+        webhook_queue::Entity::insert_many(entries).exec(&self.db_con).await?;
+        Ok(())
     }
 }
 

@@ -18,6 +18,7 @@ use common::original_name::OriginalName;
 use common::search_result;
 use common::search_result::{Crate, SearchResult};
 use common::version::Version;
+use common::webhook::WebhookAction;
 use db::DbProvider;
 use error::api_error::{ApiError, ApiResult};
 use std::convert::TryFrom;
@@ -430,6 +431,14 @@ pub async fn publish(
         let _ = cs.delete(&orig_name, &version).await;
         return Err(e.into());
     }
+
+    webhooks::notify_crate(
+        if id.is_none() { WebhookAction::CrateAdd } else { WebhookAction::CrateUpdate },
+        &created,
+        &normalized_name,
+        &version,
+        &db
+    ).await;
 
     // Add crate to queue for doc extraction if there is no documentation value set already
     if settings.docs.enabled && pub_data.metadata.documentation.is_none() {

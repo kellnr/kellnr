@@ -10,8 +10,8 @@ pub struct Model {
     pub id: Uuid,
     pub webhook_fk: Uuid,
     pub payload: Json,
-    pub last_attempt: Option<DateTime>,
-    pub next_attempt: DateTime,
+    pub last_attempt: Option<DateTimeWithTimeZone>,
+    pub next_attempt: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

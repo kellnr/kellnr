@@ -9,7 +9,7 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
-use common::webhook::Webhook;
+use common::webhook::{Webhook, WebhookAction};
 use crate_meta::CrateMeta;
 use sea_orm::prelude::async_trait::async_trait;
 use std::path::Path;
@@ -165,6 +165,10 @@ pub trait DbProvider: Send + Sync {
     async fn delete_webhook(&self, id: &str) -> DbResult<()>;
     async fn get_webhook(&self, id: &str) -> DbResult<Webhook>;
     async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>>;
+    /// Creates a new webhook queue entry for each register webhook
+    /// matching the given action. Next_attempt is set to current time,
+    ///  in order to trigger immediate dispatch
+    async fn add_webhook_queue(&self, action: WebhookAction, payload: serde_json::Value) -> DbResult<()>;
 }
 
 pub mod mock {
@@ -493,6 +497,9 @@ pub mod mock {
                 unimplemented!()
             }
             async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>> {
+                unimplemented!()
+            }
+            async fn add_webhook_queue(&self, action: WebhookAction, payload: serde_json::Value) -> DbResult<()> {
                 unimplemented!()
             }
         }
