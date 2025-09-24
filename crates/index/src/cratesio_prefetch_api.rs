@@ -666,6 +666,7 @@ mod tests {
                 Protocol::Http,
                 "test.api.com",
                 1234,
+                "",
                 "cratesio",
                 false,
                 false

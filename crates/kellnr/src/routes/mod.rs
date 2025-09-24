@@ -1,4 +1,5 @@
 use appstate::AppStateData;
+use axum::response::Redirect;
 use axum::{
     Router, middleware,
     routing::{get, get_service},
@@ -71,6 +72,13 @@ pub fn create_router(
         );
         std::process::exit(1);
     } else {
-        Router::new().nest(&origin_path, router)
+        let path = origin_path.clone();
+        let redirect = get(move || async {
+            let path = path;
+            Redirect::temporary(&path)
+        });
+        Router::new()
+            .route(origin_path.trim_end_matches('/'), redirect)
+            .nest(&origin_path, router)
     }
 }
