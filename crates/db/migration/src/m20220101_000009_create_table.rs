@@ -2,7 +2,7 @@ use crate::sea_orm::ActiveValue::Set;
 use crate::sea_orm::{ActiveModelTrait, EntityTrait};
 use sea_orm::{ModelTrait, Related};
 use sea_orm_migration::prelude::*;
-use settings::{get_settings, Settings};
+use settings::{Settings, get_settings};
 use tracing::debug;
 
 #[derive(DeriveMigrationName)]
