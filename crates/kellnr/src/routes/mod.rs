@@ -1,8 +1,7 @@
 use appstate::AppStateData;
 use axum::{
-    middleware,
+    Router, middleware,
     routing::{get, get_service},
-    Router,
 };
 use std::path::Path;
 use tower_http::services::{ServeDir, ServeFile};

@@ -3,7 +3,7 @@ use axum_extra::extract::cookie::Key;
 use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use index::cratesio_prefetch_api::{
-    init_cratesio_prefetch_thread, CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS,
+    CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
 use moka::future::Cache;
 use settings::{LogFormat, Settings};

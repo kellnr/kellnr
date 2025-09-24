@@ -26,7 +26,7 @@ async fn handle_queue(db: &Arc<dyn DbProvider>) -> Result<(), WebhookError> {
         let request = client.post(&entry.callback_url).json(&entry.payload);
 
         match request.send().await {
-            Ok(_) => {
+            Ok(resp) if resp.status().as_u16() < 300 => {
                 tracing::debug!(
                     "Webhook callback sent successfully to: {}",
                     entry.callback_url
@@ -35,9 +35,19 @@ async fn handle_queue(db: &Arc<dyn DbProvider>) -> Result<(), WebhookError> {
                     tracing::error!("Cannot delete webhook queue entry. Reason {err}");
                 }
             }
+            Ok(resp) => {
+                tracing::error!(
+                    "Webhook callback failed for: {}. Response status: {}",
+                    entry.callback_url,
+                    resp.status(),
+                );
+                if let Err(err) = handle_failed_entry(db, &entry).await {
+                    tracing::error!("Error while handling webhook failure: {err}");
+                }
+            }
             Err(err) => {
                 tracing::error!(
-                    "Webhook callback failed at: {}. Reason: {err}",
+                    "Webhook callback failed for: {}. Reason: {err}",
                     entry.callback_url
                 );
                 if let Err(err) = handle_failed_entry(db, &entry).await {
@@ -56,7 +66,7 @@ async fn handle_failed_entry(
     match get_next_attempt(&entry.last_attempt, &entry.next_attempt) {
         Some(next) => {
             db.update_webhook_queue(&entry.id, entry.next_attempt, next)
-                .await?
+                .await?;
         }
         None => db.delete_webhook_queue(&entry.id).await?,
     }
@@ -64,7 +74,7 @@ async fn handle_failed_entry(
 }
 
 /// Resend timings according to:
-/// https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md#deliverability-and-reliability
+/// <https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md#deliverability-and-reliability>
 fn get_next_attempt(
     last_attempt: &Option<DateTime<Utc>>,
     current_attempt: &DateTime<Utc>,
