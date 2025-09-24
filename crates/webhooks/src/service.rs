@@ -37,9 +37,10 @@ async fn handle_queue(db: &Arc<dyn DbProvider>) -> Result<(), WebhookError> {
             }
             Ok(resp) => {
                 tracing::error!(
-                    "Webhook callback failed for: {}. Response status: {}",
+                    "Webhook callback failed for: {}. Response status: {}. Msg: {:?}",
                     entry.callback_url,
                     resp.status(),
+                    resp.text().await
                 );
                 if let Err(err) = handle_failed_entry(db, &entry).await {
                     tracing::error!("Error while handling webhook failure: {err}");

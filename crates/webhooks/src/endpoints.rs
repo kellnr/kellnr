@@ -71,3 +71,27 @@ pub async fn delete_webhook(
     db.delete_webhook(&id).await?;
     Ok(())
 }
+
+pub async fn test_webhook(
+    token: token::Token,
+    Path(id): Path<String>,
+    State(db): DbState,
+) -> ApiResult<()> {
+    if !token.is_admin {
+        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
+    }
+
+    let w = db.get_webhook(&id).await?;
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&w.callback_url)
+        .json("Test Payload")
+        .send()
+        .await
+        .map_err(|e| ApiError::new(&e.to_string(), "", StatusCode::from_u16(500).unwrap()))?;
+
+    match resp.status() {
+        a if a.as_u16() < 300 => Ok(()),
+        a => Err(ApiError::new(&resp.text().await.unwrap_or_default(), "", a)),
+    }
+}

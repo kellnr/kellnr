@@ -7,7 +7,9 @@ mod endpoints;
 mod service;
 mod types;
 
-pub use endpoints::{delete_webhook, get_all_webhooks, get_webhook, register_webhook};
+pub use endpoints::{
+    delete_webhook, get_all_webhooks, get_webhook, register_webhook, test_webhook,
+};
 pub use service::run_webhook_service;
 
 pub async fn notify_crate(

@@ -1,7 +1,7 @@
 use appstate::AppStateData;
 use axum::{
-    Router,
     routing::{delete, get, post},
+    Router,
 };
 
 /// Creates the user routes
@@ -11,4 +11,5 @@ pub fn create_routes() -> Router<AppStateData> {
         .route("/", post(webhooks::register_webhook))
         .route("/{id}", get(webhooks::get_webhook))
         .route("/{id}", delete(webhooks::delete_webhook))
+        .route("/{id}/test", get(webhooks::test_webhook))
 }
