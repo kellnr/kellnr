@@ -60,7 +60,7 @@ enum WebhookIden {
     Action,
     #[iden = "callback_url"]
     CallbackUrl,
-    Name
+    Name,
 }
 
 #[derive(Iden)]
@@ -74,5 +74,5 @@ enum WebhookQueueIden {
     #[iden = "last_attempt"]
     LastAttempt,
     #[iden = "next_attempt"]
-    NextAttempt
+    NextAttempt,
 }

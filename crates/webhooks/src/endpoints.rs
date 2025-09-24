@@ -1,8 +1,8 @@
+use appstate::DbState;
 use auth::token;
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use appstate::DbState;
+use axum::Json;
 use common::webhook::Webhook;
 use error::api_error::{ApiError, ApiResult};
 
@@ -17,13 +17,14 @@ pub async fn register_webhook(
         return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }
 
-    let id = db.register_webhook(
-        Webhook {
+    let id = db
+        .register_webhook(Webhook {
             id: None,
             action: input.action,
             callback_url: input.callback_url,
-            name: input.name}
-    ).await?;
+            name: input.name,
+        })
+        .await?;
 
     Ok(Json(types::RegisterWebhookResponse { id }))
 }
@@ -42,8 +43,8 @@ pub async fn get_webhook(
         id: w.id.unwrap_or_default(),
         action: w.action,
         callback_url: w.callback_url,
-        name: w.name
-         }))
+        name: w.name,
+    }))
 }
 
 pub async fn get_all_webhooks(
@@ -55,8 +56,7 @@ pub async fn get_all_webhooks(
     }
 
     let w = db.get_all_webhooks().await?;
-    Ok(Json(types::GetAllWebhooksResponse (
-       w  )))
+    Ok(Json(types::GetAllWebhooksResponse(w)))
 }
 
 pub async fn delete_webhook(

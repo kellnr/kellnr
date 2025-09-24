@@ -9,6 +9,7 @@ license-file = "../../LICENSE"
 [dependencies]
 # External dependencies from crates.io
 axum.workspace = true
+chrono.workspace = true
 rand.workspace = true
 regex.workspace = true
 sea-orm.workspace = true

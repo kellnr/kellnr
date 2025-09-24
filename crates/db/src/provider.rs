@@ -1,4 +1,4 @@
-use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta, error::DbError};
+use crate::{crate_meta, error::DbError, AuthToken, CrateSummary, DocQueueEntry, Group, User};
 use chrono::{DateTime, Utc};
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
@@ -9,7 +9,7 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
-use common::webhook::{Webhook, WebhookAction};
+use common::webhook::{Webhook, WebhookAction, WebhookQueue};
 use crate_meta::CrateMeta;
 use sea_orm::prelude::async_trait::async_trait;
 use std::path::Path;
@@ -158,17 +158,30 @@ pub trait DbProvider: Send + Sync {
     async fn get_cratesio_index_update_list(&self) -> DbResult<Vec<CratesioPrefetchMsg>>;
     async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()>;
     async fn yank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()>;
-    async fn register_webhook(
-        &self,
-        webhook: Webhook
-    ) -> DbResult<String>;
+    async fn register_webhook(&self, webhook: Webhook) -> DbResult<String>;
     async fn delete_webhook(&self, id: &str) -> DbResult<()>;
     async fn get_webhook(&self, id: &str) -> DbResult<Webhook>;
     async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>>;
     /// Creates a new webhook queue entry for each register webhook
     /// matching the given action. Next_attempt is set to current time,
-    ///  in order to trigger immediate dispatch
-    async fn add_webhook_queue(&self, action: WebhookAction, payload: serde_json::Value) -> DbResult<()>;
+    ///  in order to trigger immediate dispatch.
+    async fn add_webhook_queue(
+        &self,
+        action: WebhookAction,
+        payload: serde_json::Value,
+    ) -> DbResult<()>;
+    /// Extracts webhook queue entries with `next_attempt` at or earlier than proviced timestamp.
+    async fn get_pending_webhook_queue_entries(
+        &self,
+        timestamp: DateTime<Utc>,
+    ) -> DbResult<Vec<WebhookQueue>>;
+    async fn update_webhook_queue(
+        &self,
+        id: &str,
+        last_attempt: DateTime<Utc>,
+        next_attempt: DateTime<Utc>,
+    ) -> DbResult<()>;
+    async fn delete_webhook_queue(&self, id: &str) -> DbResult<()>;
 }
 
 pub mod mock {
@@ -500,6 +513,15 @@ pub mod mock {
                 unimplemented!()
             }
             async fn add_webhook_queue(&self, action: WebhookAction, payload: serde_json::Value) -> DbResult<()> {
+                unimplemented!()
+            }
+            async fn get_pending_webhook_queue_entries(&self, timestamp: DateTime<Utc>) -> DbResult<Vec<WebhookQueue>> {
+                unimplemented!()
+            }
+            async fn update_webhook_queue(&self, id: &str, last_attempt: DateTime<Utc>, next_attempt: DateTime<Utc>) -> DbResult<()> {
+                unimplemented!()
+            }
+            async fn delete_webhook_queue(&self, id: &str) -> DbResult<()> {
                 unimplemented!()
             }
         }

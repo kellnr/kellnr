@@ -9,7 +9,7 @@ use common::version::Version;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use sea_orm_migration::prelude::*;
 use serde::{Deserialize, Serialize};
-use settings::{Settings, get_settings};
+use settings::{get_settings, Settings};
 use std::collections::HashMap;
 use tracing::{debug, error};
 

@@ -1,12 +1,14 @@
-use chrono::{Utc, DateTime};
+use chrono::{DateTime, Utc};
 use common::{normalized_name::NormalizedName, version::Version, webhook::WebhookAction};
 use db::DbProvider;
 use serde_json::json;
 
 mod endpoints;
+mod service;
 mod types;
 
 pub use endpoints::{delete_webhook, get_all_webhooks, get_webhook, register_webhook};
+pub use service::run_webhook_service;
 
 pub async fn notify_crate(
     action: WebhookAction,
@@ -15,11 +17,6 @@ pub async fn notify_crate(
     version: &Version,
     db: &std::sync::Arc<dyn DbProvider>,
 ) {
-    println!("{action:?}");
-    println!("{timestamp:?}");
-    println!("{normalized_name:?}");
-    println!("{version:?}");
-
     let payload = json!({
         "type": action,
         "timestamp": timestamp,
@@ -28,7 +25,6 @@ pub async fn notify_crate(
             "crate_version": version
         }
     });
-    println!("Payload: {payload:?}");
 
     if let Err(err) = db.add_webhook_queue(action, payload).await {
         tracing::error!("Db: {err:?}");

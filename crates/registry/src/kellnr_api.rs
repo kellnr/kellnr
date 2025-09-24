@@ -7,11 +7,11 @@ use crate::{crate_group, crate_user, crate_version};
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
-use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Redirect;
+use axum::Json;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -433,12 +433,17 @@ pub async fn publish(
     }
 
     webhooks::notify_crate(
-        if id.is_none() { WebhookAction::CrateAdd } else { WebhookAction::CrateUpdate },
+        if id.is_none() {
+            WebhookAction::CrateAdd
+        } else {
+            WebhookAction::CrateUpdate
+        },
         &created,
         &normalized_name,
         &version,
-        &db
-    ).await;
+        &db,
+    )
+    .await;
 
     // Add crate to queue for doc extraction if there is no documentation value set already
     if settings.docs.enabled && pub_data.metadata.documentation.is_none() {
@@ -493,20 +498,20 @@ pub async fn unyank(
 mod reg_api_tests {
     use super::*;
     use appstate::AppStateData;
-    use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::http::StatusCode;
     use axum::routing::{delete, get, put};
+    use axum::Router;
     use db::mock::MockDb;
-    use db::{ConString, Database, SqliteConString, test_utils};
+    use db::{test_utils, ConString, Database, SqliteConString};
     use error::api_error::ErrorDetails;
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
-    use rand::Rng;
     use rand::distr::Alphanumeric;
     use rand::rng;
+    use rand::Rng;
     use settings::Settings;
     use std::iter;
     use std::path::PathBuf;

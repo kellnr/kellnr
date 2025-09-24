@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -6,6 +7,15 @@ pub struct Webhook {
     pub action: WebhookAction,
     pub callback_url: String,
     pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebhookQueue {
+    pub id: String,
+    pub callback_url: String,
+    pub payload: serde_json::Value,
+    pub last_attempt: Option<DateTime<Utc>>,
+    pub next_attempt: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
