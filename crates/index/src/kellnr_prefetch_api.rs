@@ -86,7 +86,15 @@ mod tests {
         let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
 
         assert_eq!(
-            ConfigJson::new(Protocol::Http, "test.api.com", 1234, "crates", true, false),
+            ConfigJson::new(
+                Protocol::Http,
+                "test.api.com",
+                1234,
+                "",
+                "crates",
+                true,
+                false
+            ),
             actual
         );
     }
