@@ -7,11 +7,11 @@ use crate::{crate_group, crate_user, crate_version};
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
-use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Redirect;
+use axum::Json;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -473,6 +473,15 @@ pub async fn yank(
 
     db.yank_crate(&crate_name, &version).await?;
 
+    webhooks::notify_crate(
+        WebhookAction::CrateYank,
+        &Utc::now(),
+        &crate_name,
+        &version,
+        &db,
+    )
+    .await;
+
     Ok(Json(YankSuccess::new()))
 }
 
@@ -491,6 +500,15 @@ pub async fn unyank(
 
     db.unyank_crate(&crate_name, &version).await?;
 
+    webhooks::notify_crate(
+        WebhookAction::CrateUnyank,
+        &Utc::now(),
+        &crate_name,
+        &version,
+        &db,
+    )
+    .await;
+
     Ok(Json(YankSuccess::new()))
 }
 
@@ -498,20 +516,20 @@ pub async fn unyank(
 mod reg_api_tests {
     use super::*;
     use appstate::AppStateData;
-    use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::http::StatusCode;
     use axum::routing::{delete, get, put};
+    use axum::Router;
     use db::mock::MockDb;
-    use db::{ConString, Database, SqliteConString, test_utils};
+    use db::{test_utils, ConString, Database, SqliteConString};
     use error::api_error::ErrorDetails;
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
-    use rand::Rng;
     use rand::distr::Alphanumeric;
     use rand::rng;
+    use rand::Rng;
     use settings::Settings;
     use std::iter;
     use std::path::PathBuf;
