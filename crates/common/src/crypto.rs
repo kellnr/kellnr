@@ -1,13 +1,15 @@
-use rand::{Rng, distr::Alphanumeric, rng};
-use std::iter;
+pub use new::generate_rand_string;
+pub use new::generate_token;
+pub use new::store_password;
+pub use new::store_token;
+pub use new::verify_password;
+pub use new::verify_token;
 
 pub mod update {
     pub use crate::crypto::new::CryptoError;
-    pub use crate::crypto::new::generate_rand_string;
-    pub use crate::crypto::new::store_password;
-    pub use crate::crypto::new::store_token;
-    pub use crate::crypto::new::verify_password;
-    pub use crate::crypto::new::verify_token;
+    use crate::crypto::new::generate_rand_string;
+    use crate::crypto::new::verify_password;
+    use crate::crypto::new::verify_token;
 
     /// Signals if the password hash should be updated to a new hash
     pub enum ShouldMigrateHash {
@@ -29,7 +31,7 @@ pub mod update {
             verify_password(password, hash)?;
             // function would have returned if password does not matched given hash
             Ok(ShouldMigrateHash::Keep)
-        } else if crate::crypto::hash_pwd(password, salt) == hash {
+        } else if crate::crypto::old::hash_pwd(password, salt) == hash {
             Ok(ShouldMigrateHash::Update)
         } else {
             Err(CryptoError::PasswordIncorrect)
@@ -47,22 +49,24 @@ pub mod update {
             verify_token(token, hash)?;
             // function would have returned if password does not matched given hash
             Ok(ShouldMigrateHash::Keep)
-        } else if crate::crypto::hash_token(token) == hash {
+        } else if crate::crypto::old::hash_token(token) == hash {
             Ok(ShouldMigrateHash::Update)
         } else {
             Err(CryptoError::PasswordIncorrect)
         }
     }
 
-    pub fn generate_salt() -> Result<String, CryptoError> {
+    pub fn generate_salt() -> String {
         // set salt to something random as fallback
-        let rndm = generate_rand_string(32)?;
-        Ok(format!("MIGRATEDTOARGON2ID{rndm}"))
+        let rndm = generate_rand_string(32);
+        format!("MIGRATEDTOARGON2ID{rndm}")
     }
 }
 
 mod new {
     use alkali::hash::pbkdf;
+    use rand::Rng;
+    use rand::distributions::Alphanumeric;
 
     #[derive(Debug, Eq, PartialEq, thiserror::Error)]
     pub enum CryptoError {
@@ -70,8 +74,12 @@ mod new {
         PasswordIncorrect,
         #[error("Failed to hash password: {0}")]
         FailedToHashPassword(String),
+        #[error("Failed to hash token: {0}")]
+        FailedToHashToken(String),
         #[error("Failed to verify password: {0}")]
         FailedToVerifyPassword(String),
+        #[error("Failed to verify token: {0}")]
+        FailedToVerifyToken(String),
         #[error("Failed to generate random string: {0}")]
         FailedToGenerateRandomString(String),
     }
@@ -96,25 +104,34 @@ mod new {
         })
     }
 
-    pub fn generate_rand_string(length: usize) -> Result<String, CryptoError> {
-        let mut buf = vec![0; length + 1];
-        alkali::random::fill_random(&mut buf)
-            .map_err(|err| CryptoError::FailedToGenerateRandomString(err.to_string()))?;
-        let mut s = alkali::encode::hex::encode(&buf)
-            .map_err(|err| CryptoError::FailedToGenerateRandomString(err.to_string()))?;
-        let _ = s.split_off(length);
-        Ok(s)
+    pub fn generate_rand_string(length: usize) -> String {
+        let mut rng = alkali::random::SodiumRng;
+        std::iter::repeat(())
+            .map(|()| rng.sample(Alphanumeric))
+            .map(char::from)
+            .take(length)
+            .collect::<String>()
     }
 
     pub fn store_token(token: &str) -> Result<String, CryptoError> {
-        store_password(token)
+        let digest = alkali::hash::generic::hash(token.as_bytes(), None)
+            .map_err(|err| CryptoError::FailedToHashToken(err.to_string()))?;
+        alkali::encode::hex::encode(&digest)
+            .map_err(|err| CryptoError::FailedToHashToken(err.to_string()))
     }
 
     pub fn verify_token(token: &str, hash: &str) -> Result<(), CryptoError> {
-        verify_password(token, hash)
+        if alkali::mem::eq(token.as_bytes(), hash.as_bytes())
+            .map_err(|err| CryptoError::FailedToVerifyPassword(err.to_string()))
+            .is_ok_and(|x| x)
+        {
+            Ok(())
+        } else {
+            Err(CryptoError::PasswordIncorrect)
+        }
     }
 
-    pub fn generate_token() -> Result<String, CryptoError> {
+    pub fn generate_token() -> String {
         generate_rand_string(64)
     }
 
@@ -125,61 +142,17 @@ mod new {
     }
 }
 
-const SALT_LENGTH: usize = 10;
-
-pub fn hash_pwd(pwd: &str, salt: &str) -> String {
-    let concat = format!("{pwd}{salt}");
-    sha256::digest(concat)
-}
-
-pub fn hash_token(token: &str) -> String {
-    sha256::digest(token)
-}
-
 pub fn hash_file_sha256(data: &[u8]) -> String {
     sha256::digest(data)
 }
 
-pub fn generate_rand_string(length: usize) -> String {
-    let mut rng = rng();
-    iter::repeat(())
-        .map(|()| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(length)
-        .collect::<String>()
-}
-
-pub fn generate_salt() -> String {
-    generate_rand_string(SALT_LENGTH)
-}
-
-pub fn generate_token() -> String {
-    generate_rand_string(32)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn generate_salt_creates_random_string() {
-        let s1 = generate_salt();
-        let s2 = generate_salt();
-
-        assert_eq!(SALT_LENGTH, s1.len());
-        assert_eq!(SALT_LENGTH, s2.len());
-        assert_ne!(s1, s2);
+mod old {
+    pub fn hash_pwd(pwd: &str, salt: &str) -> String {
+        let concat = format!("{pwd}{salt}");
+        sha256::digest(concat)
     }
 
-    #[test]
-    fn hash_pwd_computes_correct_hash() {
-        let pwd = "admin";
-        let salt = "C6udtgbngX";
-        let hash = hash_pwd(pwd, salt);
-
-        assert_eq!(
-            hash,
-            "5dcec54caf0f55652766f71c32a0eac6538e7faeeab9301f956a58b7dbad02fb"
-        );
+    pub fn hash_token(token: &str) -> String {
+        sha256::digest(token)
     }
 }

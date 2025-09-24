@@ -1,7 +1,7 @@
 use chrono::{DateTime, TimeZone, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use common::crate_overview::CrateOverview;
-use common::crypto::hash_pwd;
+use common::crypto::store_password;
 use common::index_metadata::IndexMetadata;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
@@ -854,13 +854,17 @@ async fn add_user_works(test_db: &db::Database) {
     let expected = User {
         id: 2,
         name: "user".to_owned(),
-        pwd: hash_pwd("pwd", "salt"),
+        pwd: store_password("pwd").unwrap(),
         salt: "salt".to_owned(),
         is_admin: false,
         is_read_only: false,
     };
     let user = test_db.get_user("user").await.unwrap();
-    assert_eq!(expected, user);
+    assert_eq!(expected.id, user.id);
+    assert_eq!(expected.name, user.name);
+    assert_eq!(expected.is_admin, user.is_admin);
+    assert_eq!(expected.is_read_only, user.is_read_only);
+    assert!(common::crypto::verify_password("pwd", &user.pwd).is_ok());
 }
 
 #[db_test]
@@ -979,11 +983,8 @@ async fn bootstrap_db_inserts_admin(test_db: &db::Database) {
     let admin = test_db.get_user("admin").await.unwrap();
     assert_eq!(1, admin.id);
     assert_eq!("admin", admin.name);
-    assert_eq!(
-        "81d40d94fee4fb4eeb1a21bb7adb93c06aad35b929c1a2b024ae33b3a9b79e23",
-        admin.pwd
-    );
-    assert_eq!("salt", admin.salt);
+    assert!(common::crypto::verify_password("123", &admin.pwd).is_ok());
+    assert!(admin.salt.starts_with("MIGRATEDTOARGON2ID"));
     assert!(admin.is_admin);
 }
 

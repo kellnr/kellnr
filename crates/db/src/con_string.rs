@@ -90,7 +90,7 @@ impl From<&Settings> for PgConString {
             admin: AdminUser {
                 pwd: s.setup.admin_pwd.clone(),
                 token: s.setup.admin_token.clone(),
-                salt: generate_salt().unwrap(),
+                salt: generate_salt(),
             },
         }
     }
@@ -137,7 +137,7 @@ impl From<&Settings> for SqliteConString {
     fn from(settings: &Settings) -> Self {
         Self {
             path: settings.sqlite_path(),
-            salt: generate_salt().unwrap(),
+            salt: generate_salt(),
             admin_pwd: settings.setup.admin_pwd.clone(),
             admin_token: settings.setup.admin_token.clone(),
             session_age: Duration::from_secs(settings.registry.session_age_seconds),

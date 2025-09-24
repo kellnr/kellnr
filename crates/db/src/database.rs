@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use common::crate_overview::CrateOverview;
 use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
+use common::crypto;
 use common::crypto::update as crypto_update;
 use common::index_metadata::{IndexDep, IndexMetadata};
 use common::normalized_name::NormalizedName;
@@ -598,9 +599,8 @@ impl DbProvider for Database {
     }
 
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()> {
-        let salt =
-            crypto_update::generate_salt().map_err(|err| DbError::FailedCrypto(err.to_string()))?;
-        let hashed = crypto_update::store_password(new_pwd)
+        let salt = crypto_update::generate_salt();
+        let hashed = crypto::store_password(new_pwd)
             .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
         let mut u: user::ActiveModel = user::Entity::find()
@@ -675,8 +675,8 @@ impl DbProvider for Database {
     }
 
     async fn add_auth_token(&self, name: &str, token: &str, user: &str) -> DbResult<()> {
-        let hashed_token = crypto_update::store_token(token)
-            .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
+        let hashed_token =
+            crypto::store_token(token).map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
         let user = user::Entity::find()
             .filter(user::Column::Name.eq(user))
@@ -697,8 +697,8 @@ impl DbProvider for Database {
     }
 
     async fn get_user_from_token(&self, token: &str) -> DbResult<User> {
-        let token = crypto_update::store_token(token)
-            .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
+        let token =
+            crypto::store_token(token).map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::AuthToken.def())
@@ -847,8 +847,8 @@ impl DbProvider for Database {
         is_admin: bool,
         is_read_only: bool,
     ) -> DbResult<()> {
-        let hashed_pwd = crypto_update::store_password(pwd)
-            .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
+        let hashed_pwd =
+            crypto::store_password(pwd).map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
         let u = user::ActiveModel {
             name: Set(name.to_owned()),
@@ -1822,7 +1822,7 @@ async fn insert_admin_credentials<C: ConnectionTrait>(
     db_con: &C,
     con_string: &ConString,
 ) -> DbResult<()> {
-    let hashed_pwd = crypto_update::store_password(&con_string.admin_pwd())
+    let hashed_pwd = crypto::store_password(&con_string.admin_pwd())
         .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
     let admin = user::ActiveModel {
@@ -1835,7 +1835,7 @@ async fn insert_admin_credentials<C: ConnectionTrait>(
     };
 
     let res: InsertResult<user::ActiveModel> = user::Entity::insert(admin).exec(db_con).await?;
-    let auth_token = crypto_update::store_token(&con_string.admin_token())
+    let auth_token = crypto::store_token(&con_string.admin_token())
         .map_err(|err| DbError::FailedCrypto(err.to_string()))?;
 
     let auth_token = auth_token::ActiveModel {
@@ -2095,7 +2095,7 @@ async fn compute_etag<C: ConnectionTrait>(
     let index_metadata = crate_index_model_to_index_metadata(crate_name, crate_indices)?;
     let data = index_metadata_to_bytes(&index_metadata)?;
 
-    Ok(common::crypto::hash_file_sha256(&data))
+    Ok(crypto::hash_file_sha256(&data))
 }
 
 fn index_metadata_to_bytes(index_metadata: &[IndexMetadata]) -> DbResult<Vec<u8>> {
