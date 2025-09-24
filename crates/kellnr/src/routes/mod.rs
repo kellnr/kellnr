@@ -35,9 +35,10 @@ pub fn create_router(
     let docs_service = get_service(ServeDir::new(format!("{data_dir}/docs"))).route_layer(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
+    let origin_path = state.settings.origin.path.clone();
 
     // Combine all routes into the main application router
-    Router::new()
+    let router = Router::new()
         .route("/me", get(registry::kellnr_api::me))
         .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
         .nest("/api/v1/user", user_routes::create_routes())
@@ -60,5 +61,16 @@ pub fn create_router(
         .nest_service("/docs", docs_service)
         .fallback(static_files_service)
         .with_state(state)
-        .layer(tower_http::trace::TraceLayer::new_for_http())
+        .layer(tower_http::trace::TraceLayer::new_for_http());
+
+    if origin_path.is_empty() || origin_path.chars().all(|c| c == '/') {
+        router
+    } else if !origin_path.starts_with('/') || !origin_path.ends_with('/') {
+        eprintln!(
+            "origin.path needs to start and end with a slash(/): origin.path={origin_path:?}"
+        );
+        std::process::exit(1);
+    } else {
+        Router::new().nest(&origin_path, router)
+    }
 }

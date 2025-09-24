@@ -153,6 +153,7 @@ mod tests {
                 protocol: Protocol::Http,
                 hostname: "test.api.com".to_string(),
                 port: 1234,
+                path: String::new(),
             },
             ..Settings::default()
         };
