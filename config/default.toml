@@ -88,6 +88,11 @@ port = 8000
 # Either "https" or "http". Use in combination with a reverse proxy that provides HTTPS.
 protocol = "http"
 
+# Run Kellnr on a sub path of a URL, e.g. https://www.example.com/kellnring/
+# The leading and trailing slashes are important
+# path = "/kellnring/"
+path = ""
+
 # Configure Postgresql as the database backend instead of Sqlite
 [postgresql]
 enabled = false

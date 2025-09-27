@@ -68,10 +68,13 @@ const routes = [
   }
 ]
 
+const currentPath = window.location.pathname;
+const base = currentPath.substring(0, currentPath.lastIndexOf("/") + 1);
+
 const router = createRouter({
-  history: createWebHistory(),
-  routes
-})
+  history: createWebHistory(base),
+  routes,
+});
 
 router.beforeEach(async (to) => {
   const store = useStore();
