@@ -13,11 +13,12 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
+use common::webhook::{Webhook, WebhookAction, WebhookQueue};
 use entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
     cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate, owner,
-    prelude::*, session, user,
+    prelude::*, session, user, webhook, webhook_queue,
 };
 use migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
@@ -26,6 +27,7 @@ use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
     FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
+    entity::prelude::Uuid,
     prelude::async_trait::async_trait,
     query::{QueryOrder, QuerySelect, TransactionTrait},
 };
@@ -1774,6 +1776,148 @@ impl DbProvider for Database {
         ci.yanked = Set(true);
         ci.save(&self.db_con).await?;
 
+        Ok(())
+    }
+
+    async fn register_webhook(&self, webhook: Webhook) -> DbResult<String> {
+        let w = webhook::ActiveModel {
+            action: Set(Into::<&str>::into(webhook.action).to_string()),
+            callback_url: Set(webhook.callback_url),
+            name: Set(webhook.name),
+            ..Default::default()
+        };
+
+        let w: webhook::Model = w.insert(&self.db_con).await?;
+        Ok(w.id.to_string())
+    }
+    async fn delete_webhook(&self, id: &str) -> DbResult<()> {
+        let w = webhook::Entity::find()
+            .filter(webhook::Column::Id.eq(
+                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
+            ))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::WebhookNotFound)?;
+
+        w.delete(&self.db_con).await?;
+        Ok(())
+    }
+    async fn get_webhook(&self, id: &str) -> DbResult<Webhook> {
+        let w = webhook::Entity::find()
+            .filter(webhook::Column::Id.eq(
+                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
+            ))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::WebhookNotFound)?;
+
+        Ok(Webhook {
+            id: Some(w.id.into()),
+            name: w.name,
+            action: w
+                .action
+                .as_str()
+                .try_into()
+                .map_err(|_| DbError::InvalidWebhookAction(w.action))?,
+            callback_url: w.callback_url,
+        })
+    }
+    async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>> {
+        let w = webhook::Entity::find().all(&self.db_con).await?;
+
+        Ok(w.into_iter()
+            .filter_map(|w| {
+                Some(Webhook {
+                    id: Some(w.id.into()),
+                    name: w.name,
+                    // Entries with invalid actions would get skipped
+                    action: w.action.as_str().try_into().ok()?,
+                    callback_url: w.callback_url,
+                })
+            })
+            .collect())
+    }
+    async fn add_webhook_queue(
+        &self,
+        action: WebhookAction,
+        payload: serde_json::Value,
+    ) -> DbResult<()> {
+        let w = webhook::Entity::find()
+            .filter(webhook::Column::Action.eq(Into::<&str>::into(action)))
+            .all(&self.db_con)
+            .await?;
+
+        if w.is_empty() {
+            return Ok(());
+        }
+
+        let now = Utc::now();
+
+        let entries = w.iter().map(|w| webhook_queue::ActiveModel {
+            webhook_fk: Set(w.id),
+            payload: Set(payload.clone()),
+            next_attempt: Set(now.into()),
+            last_attempt: Set(None),
+            ..Default::default()
+        });
+
+        webhook_queue::Entity::insert_many(entries)
+            .exec(&self.db_con)
+            .await?;
+        Ok(())
+    }
+    async fn get_pending_webhook_queue_entries(
+        &self,
+        timestamp: DateTime<Utc>,
+    ) -> DbResult<Vec<WebhookQueue>> {
+        let w = webhook_queue::Entity::find()
+            .find_with_related(webhook::Entity)
+            .filter(webhook_queue::Column::NextAttempt.lte(timestamp))
+            .all(&self.db_con)
+            .await?;
+
+        Ok(w.iter()
+            .filter_map(|w| {
+                Some(WebhookQueue {
+                    id: Into::<String>::into(w.0.id),
+                    callback_url: w.1.first()?.callback_url.to_string(),
+                    payload: w.0.payload.clone(),
+                    last_attempt: w.0.last_attempt.map(|a| a.into()),
+                    next_attempt: w.0.next_attempt.into(),
+                })
+            })
+            .collect())
+    }
+    async fn update_webhook_queue(
+        &self,
+        id: &str,
+        last_attempt: DateTime<Utc>,
+        next_attempt: DateTime<Utc>,
+    ) -> DbResult<()> {
+        let w = webhook_queue::Entity::find()
+            .filter(webhook_queue::Column::Id.eq(
+                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
+            ))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::WebhookNotFound)?;
+
+        let mut w: webhook_queue::ActiveModel = w.into();
+        w.last_attempt = Set(Some(last_attempt.into()));
+        w.next_attempt = Set(next_attempt.into());
+        w.update(&self.db_con).await?;
+        Ok(())
+    }
+    async fn delete_webhook_queue(&self, id: &str) -> DbResult<()> {
+        let w = webhook_queue::Entity::find()
+            .filter(webhook_queue::Column::Id.eq(
+                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
+            ))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::WebhookNotFound)?;
+
+        w.delete(&self.db_con).await?;
         Ok(())
     }
 }

@@ -27,6 +27,7 @@ registry = { path = "./crates/registry" }
 settings = { path = "./crates/settings" }
 storage = { path = "./crates/storage" }
 web_ui = { path = "./crates/web_ui" }
+webhooks = { path = "./crates/webhooks" }
 
 # External dependencies from crates.io
 async-trait = "0.1.89"

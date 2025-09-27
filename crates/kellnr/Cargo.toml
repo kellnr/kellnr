@@ -17,6 +17,7 @@ registry.workspace = true
 settings.workspace = true
 storage.workspace = true
 web_ui.workspace = true
+webhooks.workspace = true
 
 # External dependencies from crates.io
 axum-extra.workspace = true
