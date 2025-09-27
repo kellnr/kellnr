@@ -49,6 +49,9 @@ impl TryFrom<&Path> for Settings {
             // Eg. `KELLNR_DEBUG=1 ./target/app` would set the `debug` key
             .add_source(
                 Environment::with_prefix("KELLNR")
+                    .list_separator(",")
+                    .with_list_parse_key("registry.required_crate_fields")
+                    .try_parsing(true)
                     .prefix_separator("_")
                     .separator("__"),
             )
