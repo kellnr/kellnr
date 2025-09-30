@@ -1,5 +1,4 @@
 use appstate::AppStateData;
-use axum::response::Redirect;
 use axum::{
     Router, middleware,
     routing::{get, get_service},
@@ -36,10 +35,9 @@ pub fn create_router(
     let docs_service = get_service(ServeDir::new(format!("{data_dir}/docs"))).route_layer(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
-    let origin_path = state.settings.origin.path.clone();
 
     // Combine all routes into the main application router
-    let router = Router::new()
+    Router::new()
         .route("/me", get(registry::kellnr_api::me))
         .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
         .nest("/api/v1/user", user_routes::create_routes())
@@ -62,23 +60,5 @@ pub fn create_router(
         .nest_service("/docs", docs_service)
         .fallback(static_files_service)
         .with_state(state)
-        .layer(tower_http::trace::TraceLayer::new_for_http());
-
-    if origin_path.is_empty() || origin_path.chars().all(|c| c == '/') {
-        router
-    } else if !origin_path.starts_with('/') || !origin_path.ends_with('/') {
-        eprintln!(
-            "origin.path needs to start and end with a slash(/): origin.path={origin_path:?}"
-        );
-        std::process::exit(1);
-    } else {
-        let path = origin_path.clone();
-        let redirect = get(move || async {
-            let path = path;
-            Redirect::temporary(&path)
-        });
-        Router::new()
-            .route(origin_path.trim_end_matches('/'), redirect)
-            .nest(&origin_path, router)
-    }
+        .layer(tower_http::trace::TraceLayer::new_for_http())
 }
