@@ -413,9 +413,9 @@ impl DbProvider for Database {
     async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool> {
         let user = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::GroupUser.def())
+            .join(JoinType::InnerJoin, group_user::Relation::Group.def())
+            .join(JoinType::InnerJoin, group::Relation::CrateGroup.def())
             .join(JoinType::InnerJoin, crate_group::Relation::Krate.def())
-            .join(JoinType::InnerJoin, crate_group::Relation::Group.def())
-            .join(JoinType::InnerJoin, krate::Relation::CrateGroup.def())
             .filter(
                 Cond::all()
                     .add(krate::Column::Name.eq(crate_name.to_string()))
