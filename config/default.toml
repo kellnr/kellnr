@@ -89,7 +89,6 @@ port = 8000
 protocol = "http"
 
 # Run Kellnr on a sub path of a URL, e.g. https://www.example.com/kellnring/
-# The leading and trailing slashes are important
 # path = "/kellnring/"
 path = ""
 
