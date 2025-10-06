@@ -30,7 +30,7 @@ web_ui = { path = "./crates/web_ui" }
 
 # External dependencies from crates.io
 async-trait = "0.1.89"
-axum = { version = "0.8.4", features = ["macros", "http2"] }
+axum = { version = "0.8.6", features = ["macros", "http2"] }
 axum-extra = { version = "0.10.1", features = ["cookie", "cookie-private", "typed-header"] }
 base64 = "0.22.1"
 bytes = "1.10.0"
