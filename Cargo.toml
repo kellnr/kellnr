@@ -36,7 +36,7 @@ base64 = "0.22.1"
 bytes = "1.10.0"
 cargo = "0.86.0"
 chrono = "0.4.41"
-config = "0.15.17"
+config = "0.15.18"
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
 flate2 = "1.1.2"
 flume = "0.11.1"
