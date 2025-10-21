@@ -32,6 +32,7 @@ impl TestS3Storage {
                 access_key: Some("minioadmin".into()),
                 secret_key: Some("minioadmin".into()),
                 endpoint: Some(url.to_string()),
+                allow_http: true,
                 ..S3::default()
             },
             ..Settings::default()
