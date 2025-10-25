@@ -104,16 +104,20 @@ impl Settings {
     }
 
     pub fn crates_path_or_bucket(&self) -> String {
-        if self.s3.enabled {
-            self.s3.crates_bucket.clone()
+        if self.s3.enabled
+            && let Some(bucket) = &self.s3.crates_bucket
+        {
+            bucket.clone()
         } else {
             self.crates_path()
         }
     }
 
     pub fn crates_io_path_or_bucket(&self) -> String {
-        if self.s3.enabled {
-            self.s3.cratesio_bucket.clone()
+        if self.s3.enabled
+            && let Some(bucket) = &self.s3.cratesio_bucket
+        {
+            bucket.clone()
         } else {
             self.crates_io_path()
         }
