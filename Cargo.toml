@@ -38,7 +38,7 @@ cargo = "0.86.0"
 chrono = "0.4.41"
 config = "0.15.18"
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
-flate2 = "1.1.4"
+flate2 = "1.1.5"
 flume = "0.11.1"
 fs_extra = "1.3.0"
 http-body-util = "0.1.3"
