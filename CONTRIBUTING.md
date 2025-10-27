@@ -55,6 +55,8 @@ nix develop
 nix build
 ```
 
+You can also use the provided devcontainer. Please see that [README.md](devcontainer/README.md) for more info.
+
 ### Build and Test
 
 The project uses `just` as a task runner. Common tasks:
