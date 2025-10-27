@@ -1,0 +1,8 @@
+version=latest
+
+cont_tag=kellnrdevcontainer:${version}
+
+build_user_data=build-kellnr-user-data-${version}
+build_user_home=~/.build-kellnr-user-home-${version}
+
+devcontainer_name="Kellnr Dev Container"

@@ -1,0 +1,71 @@
+FROM docker.io/library/ubuntu:24.04
+LABEL maintainer="Sean Bentley <sfb103@gmail.com>"
+
+USER root
+
+# Install all the build dependencies we'll retrieve via apt-get
+ENV LD_LIBRARY_PATH="/usr/local/lib"
+ENV NODE_MAJOR="23"
+ENV NPM_VERSION="11.0.0"
+ENV RUSTUP_HOME="/.rustup"
+ENV CARGO_HOME="/.cargo"
+ENV PATH="/.cargo/bin:$PATH"
+RUN echo && echo 'Update apt cache' && \
+    apt-get update && apt-get upgrade -y && \
+    \
+    echo && echo "Installing dev tools" && \
+    apt-get install -y git git-lfs vim vim-tiny net-tools iputils-ping dnsutils bash-completion nano tree curl \
+                       unzip apt-transport-https ca-certificates gnupg libtool autoconf automake pkg-config gcc \
+                       cmake ninja-build autogen libgtest-dev libboost-all-dev build-essential libapr1-dev \
+                       libaprutil1-dev libssl-dev openssl xz-utils just && \
+    \
+    echo && echo "Installing docker" && \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && apt-get install -y docker-ce-cli docker-buildx-plugin docker-compose-plugin && \
+    \
+    echo && echo 'Installing node.js and npm' && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && apt-get install -y nodejs && \
+    npm install -g npm@${NPM_VERSION} && \
+    npm install -g webpack && \
+    \
+    echo && echo 'Clean up apt' && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/archives/*deb && \
+    rm -rf /tmp/* && \
+    \
+    echo && echo "Installing Rust support" && \
+    curl --proto '=https' --tlsv1.3 -sSfL https://sh.rustup.rs | sh -s -- -y && \
+    rustup install stable && \
+    cargo install cargo2junit && \
+    cargo install --locked cargo-nextest && \
+    chmod -R a+rw /.cargo /.rustup
+
+USER ubuntu
+
+# Echo install versions and final ENVs, for the record
+RUN echo && \
+    echo 'Final install versions for the record' && \
+    for pkg in git git-lfs vim vim-tiny net-tools iputils-ping dnsutils bash-completion nano tree curl \
+               unzip apt-transport-https ca-certificates gnupg libtool autoconf automake pkg-config gcc \
+               cmake ninja-build autogen libtool libgtest-dev libboost-all-dev build-essential libapr1-dev \
+               libaprutil1-dev libssl-dev openssl xz-utils just \
+               nodejs \
+               docker-ce-cli docker-buildx-plugin docker-compose-plugin \
+               ; do \
+    echo -n $pkg && apt-cache policy $pkg | grep Installed; done && \
+    cargo -V && \
+    echo "node $(node -v)" && \
+    echo "npm $(npm -v)" && \
+    echo && \
+    echo 'Final ENVs for the record' && \
+    export && \
+    echo
+
+COPY *.sh /
+COPY Containerfile /
+              

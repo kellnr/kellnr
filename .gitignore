@@ -15,6 +15,7 @@ result
 # VS Code
 .ionide/
 .vscode/
+.devcontainer/
 
 # VS
 .vs/
