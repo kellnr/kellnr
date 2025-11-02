@@ -13,16 +13,10 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, crane, rust-overlay, ... }:
+  outputs = { nixpkgs, flake-utils, crane, rust-overlay, ... }:
     flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ] (system:
       let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [ (import rust-overlay) ];
-        };
-        inherit (pkgs) lib;
-
-        # Define cross-compilation targets
+        # Define cross compilation targets as Nixpkgs system strings
         targets = [
           "x86_64-unknown-linux-gnu"
           "x86_64-unknown-linux-musl"
@@ -30,48 +24,70 @@
           "aarch64-unknown-linux-musl"
         ];
 
-        # Cross-compilation package sets
-        pkgsCrossX86_64 = import nixpkgs {
-          inherit system;
-          crossSystem = lib.systems.examples.gnu64;
-          overlays = [ (import rust-overlay) ];
+        overlays = [ (import rust-overlay) ];
+
+        # Function to get pkgs for a given system/crossSystem
+        pkgsFor = { localSystem, crossSystem ? null }:
+          import nixpkgs ({
+            inherit localSystem overlays;
+          } // (if crossSystem != null then { inherit crossSystem; } else { }));
+
+        # Function to get a rust toolchain with all targets for a given pkgs
+        rustWithTargetsFor = pkgs: pkgs.rust-bin.stable.latest.default.override {
+          targets = targets;
         };
 
-        pkgsCrossX86_64Musl = import nixpkgs {
-          inherit system;
-          crossSystem = lib.systems.examples.musl64;
-          overlays = [ (import rust-overlay) ];
-        };
+        # Base pkgs for the host system
+        pkgs = pkgsFor { localSystem = system; };
 
-        pkgsCrossAarch64 = import nixpkgs {
-          inherit system;
-          crossSystem = lib.systems.examples.aarch64-multiplatform;
-          overlays = [ (import rust-overlay) ];
-        };
-
-        pkgsCrossAarch64Musl = import nixpkgs {
-          inherit system;
-          crossSystem = lib.systems.examples.aarch64-multiplatform-musl;
-          overlays = [ (import rust-overlay) ];
-        };
-
-        # Create crane lib with all targets
-        craneLib = (crane.mkLib pkgs).overrideToolchain (
-          p: p.rust-bin.stable.latest.default.override {
-            inherit targets;
-          }
-        );
+        inherit (pkgs) lib;
 
         # Set a filter of files that are included in the build source directory.
         webuiFilter = path: _type:
           let extensions = [ "js" "json" "ts" "vue" "html" "png" "css" "svg" ];
           in lib.any (ext: lib.hasSuffix ".${ext}" path) extensions;
         webuiOrCargo = path: type:
-          (webuiFilter path type) || (craneLib.filterCargoSources path type);
+          (webuiFilter path type) || ((crane.mkLib pkgs).filterCargoSources path type);
         src = lib.cleanSourceWith {
-          src = craneLib.path ./.;
+          src = (crane.mkLib pkgs).path ./.;
           filter = webuiOrCargo;
         };
+
+        # Common arguments for all builds
+        commonArgs = {
+          inherit src;
+          strictDeps = true;
+          pname = "kellnr";
+
+          nativeBuildInputs = [
+            pkgs.cmake
+            pkgs.nodejs_24
+          ] ++ lib.optionals pkgs.stdenv.isLinux [
+            pkgs.pkg-config
+            pkgs.rustPlatform.bindgenHook
+          ];
+
+          buildInputs = [
+            pkgs.cargo-nextest
+            pkgs.openssl.dev
+          ] ++ lib.optional pkgs.stdenv.isDarwin [
+            pkgs.libiconv
+            pkgs.iconv
+            pkgs.cacert
+            pkgs.curl
+          ];
+
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+          BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.getVersion pkgs.clang}/include";
+
+          OPENSSL_DIR = "${pkgs.openssl.dev}";
+          OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
+          OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
+        };
+
+        # Standard cargo artifacts for the host system
+        baseCraneLib = (crane.mkLib pkgs).overrideToolchain (_: rustWithTargetsFor pkgs);
+        cargoArtifacts = baseCraneLib.buildDepsOnly commonArgs;
 
         # Install the NPM dependencies
         node2nixOutput = import ui/nix {
@@ -89,149 +105,33 @@
           cd ..;
         '';
 
-        # Common arguments for all builds
-        commonArgs = {
-          inherit src;
-          strictDeps = true;
-          pname = "kellnr";
-
-          nativeBuildInputs = [
-            pkgs.cmake
-            pkgs.nodejs_24
-            pkgs.pkg-config
-            pkgs.rustPlatform.bindgenHook
-          ] ++ lib.optionals pkgs.stdenv.isDarwin [
-            pkgs.libiconv
-          ];
-
-          buildInputs = [
-            pkgs.cargo-nextest
-            pkgs.openssl.dev
-          ] ++ lib.optionals pkgs.stdenv.isDarwin [
-            pkgs.iconv
-            pkgs.cacert
-            pkgs.curl
-          ];
-
-          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-          BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.getVersion pkgs.clang}/include";
-        };
-
-        # Build *just* the cargo dependencies, so we can reuse
-        # all of that work (e.g. via cachix) when running in CI
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-
-        # Build the actual crate for the host system
-        hostPackage = craneLib.buildPackage (
-          commonArgs
-          // {
-            inherit cargoArtifacts nodeDeps;
-            doCheck = false;
-
-            preConfigurePhases = [ "npmBuild" ];
-            npmBuild = buildUiAssets;
-
-            installPhase =
-              let
-                binDir = "$out/bin";
-                configDir = "${binDir}/config";
-                staticDir = "${binDir}/static";
-              in
-              ''
-                # Copy kellnr binary into bin directory
-                mkdir -p ${binDir};
-                cp target/release/kellnr ${binDir};
-
-                # Copy default config
-                mkdir -p ${configDir};
-                cp config/default.toml ${configDir};
-
-                # Copy the built UI
-                mkdir -p ${staticDir};
-                cp -r ui/dist/* ${staticDir};
-              '';
-          }
-        );
-
-        # Helper function to build for specific target with proper cross-compilation support
-        mkTargetBuild = { target, targetPkgs, isCross ? false }:
+        # Function to create a package for a specific target
+        makePackage = target:
           let
-            # Create crane lib for the target packages
-            targetCraneLib = (crane.mkLib targetPkgs).overrideToolchain (
-              p: p.rust-bin.stable.latest.default.override {
-                targets = [ target ];
-              }
-            );
+            # Use Nixpkgs crossSystem for cross builds
+            crossPkgs = pkgsFor { localSystem = system; crossSystem = target; };
+            # Use the buildPackages toolchain for cross builds!
+            craneLib = (crane.mkLib crossPkgs).overrideToolchain (_: rustWithTargetsFor crossPkgs.buildPackages);
 
-            # Build arguments specific to the target
-            targetCommonArgs = {
-              inherit src;
-              strictDeps = true;
-              pname = "kellnr";
-
-              nativeBuildInputs = [
-                pkgs.cmake
-                pkgs.nodejs_24
-                pkgs.rustPlatform.bindgenHook  # Use host bindgenHook for cross-compilation
-              ] ++ lib.optionals isCross [
-                pkgs.stdenv.cc
-                pkgs.pkg-config
-              ] ++ lib.optionals (!isCross) [
-                targetPkgs.stdenv.cc
-                targetPkgs.pkg-config
-              ];
-
-              buildInputs = [
-                pkgs.cargo-nextest
-                targetPkgs.openssl.dev
-                targetPkgs.openssl
-              ];
-
-              CARGO_BUILD_TARGET = target;
-
-              # Use host libclang for bindgen (it runs on host, not target)
-              LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-              BINDGEN_EXTRA_CLANG_ARGS = if isCross then
-                builtins.concatStringsSep " " [
-                  "--target=${target}"
-                  "-nostdinc"
-                  "-isystem ${targetPkgs.stdenv.cc.libc.dev}/include"
-                  "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${lib.getVersion pkgs.clang}/include"
-                ]
-              else
-                "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${lib.getVersion pkgs.clang}/include";
-
-              # Override NIX_CFLAGS_COMPILE to prevent wrong headers during cross-compilation
-              NIX_CFLAGS_COMPILE = lib.optionalString isCross "-isystem ${targetPkgs.stdenv.cc.libc.dev}/include";
-
-              # OpenSSL configuration for cross-compilation
-              OPENSSL_DIR = "${targetPkgs.openssl.dev}";
-              OPENSSL_LIB_DIR = "${targetPkgs.openssl.out}/lib";
-              OPENSSL_INCLUDE_DIR = "${targetPkgs.openssl.dev}/include";
-              PKG_CONFIG_PATH = "${targetPkgs.openssl.dev}/lib/pkgconfig";
-
-              # Configure cross-compilation environment
-              depsBuildBuild = lib.optionals isCross [
-                pkgs.stdenv.cc
-              ];
-
-              # Set CC and AR for cross-compilation
-              CC = if isCross then "${targetPkgs.stdenv.cc}/bin/${targetPkgs.stdenv.cc.targetPrefix}cc" else null;
-              AR = if isCross then "${targetPkgs.stdenv.cc.bintools}/bin/${targetPkgs.stdenv.cc.targetPrefix}ar" else null;
-
-              # Cargo environment for cross-compilation
-              CARGO_BUILD_RUSTFLAGS = lib.optionalString isCross "-C linker=${targetPkgs.stdenv.cc}/bin/${targetPkgs.stdenv.cc.targetPrefix}cc";
-            };
-
-            targetCargoArtifacts = targetCraneLib.buildDepsOnly targetCommonArgs;
-          in
-          targetCraneLib.buildPackage (
-            targetCommonArgs
-            // {
-              inherit nodeDeps;
-              cargoArtifacts = targetCargoArtifacts;
+            targetArgs = commonArgs // {
+              inherit cargoArtifacts nodeDeps;
               doCheck = false;
 
+              # Set Rust target
+              CARGO_BUILD_TARGET = target;
+
+              # Use the target's OpenSSL
+              OPENSSL_DIR = "${crossPkgs.openssl.dev}";
+              OPENSSL_INCLUDE_DIR = "${crossPkgs.openssl.dev}/include";
+              OPENSSL_LIB_DIR = "${crossPkgs.openssl.out}/lib";
+
+              # Add proper build inputs
+              buildInputs = commonArgs.buildInputs ++ [
+                crossPkgs.openssl.dev
+                crossPkgs.openssl.out
+              ];
+
+              # Build phases
               preConfigurePhases = [ "npmBuild" ];
               npmBuild = buildUiAssets;
 
@@ -255,37 +155,48 @@
                   mkdir -p ${staticDir};
                   cp -r ui/dist/* ${staticDir};
                 '';
-            }
-          );
+            };
+          in
+          craneLib.buildPackage targetArgs;
 
-        # Build for x86_64 GNU (native or cross-compiled)
-        kellnr-x86_64-gnu = mkTargetBuild {
-          target = "x86_64-unknown-linux-gnu";
-          targetPkgs = if system == "x86_64-linux" then pkgs else pkgsCrossX86_64;
-          isCross = system != "x86_64-linux";
-        };
+        # Build package for each target
+        packages = builtins.listToAttrs (map
+          (target: {
+            name = builtins.replaceStrings [ "-" ] [ "_" ] target;
+            value = makePackage target;
+          })
+          targets
+        );
 
-        # Build for x86_64 MUSL (always cross-compiled from perspective of most systems)
-        kellnr-x86_64-musl = mkTargetBuild {
-          target = "x86_64-unknown-linux-musl";
-          targetPkgs = pkgsCrossX86_64Musl;
-          isCross = true;
-        };
+        # Also build for the host system
+        hostPackage = baseCraneLib.buildPackage (commonArgs // {
+          inherit cargoArtifacts nodeDeps;
+          doCheck = false;
 
-        # Build for aarch64 GNU (native or cross-compiled)
-        kellnr-aarch64-gnu = mkTargetBuild {
-          target = "aarch64-unknown-linux-gnu";
-          targetPkgs = if system == "aarch64-linux" then pkgs else pkgsCrossAarch64;
-          isCross = system != "aarch64-linux";
-        };
+          preConfigurePhases = [ "npmBuild" ];
 
-        # Build for aarch64 MUSL (always cross-compiled from perspective of most systems)
-        kellnr-aarch64-musl = mkTargetBuild {
-          target = "aarch64-unknown-linux-musl";
-          targetPkgs = pkgsCrossAarch64Musl;
-          isCross = true;
-        };
+          npmBuild = buildUiAssets;
 
+          installPhase =
+            let
+              binDir = "$out/bin";
+              configDir = "${binDir}/config";
+              staticDir = "${binDir}/static";
+            in
+            ''
+              # Copy kellnr binary into bin directory
+              mkdir -p ${binDir};
+              cp target/release/kellnr ${binDir};
+
+              # Copy default config
+              mkdir -p ${configDir};
+              cp config/default.toml ${configDir};
+
+              # Copy the built UI
+              mkdir -p ${staticDir};
+              cp -r ui/dist/* ${staticDir};
+            '';
+        });
       in
       with pkgs;
       {
@@ -293,18 +204,18 @@
           inherit hostPackage;
 
           # Check formatting with rustfmt.
-          fmt = craneLib.cargoFmt (commonArgs // {
+          fmt = baseCraneLib.cargoFmt (commonArgs // {
             inherit src;
           });
 
           # Check for clippy warnings.
-          clippy = craneLib.cargoClippy (commonArgs // {
+          clippy = baseCraneLib.cargoClippy (commonArgs // {
             inherit cargoArtifacts;
             cargoClippyExtraArgs = "--workspace --all-targets -- --deny warnings";
           });
         };
 
-        devShells.default = craneLib.devShell (commonArgs // {
+        devShells.default = baseCraneLib.devShell (commonArgs // {
           inputsFrom = [ hostPackage ];
 
           shellHook = ''
@@ -331,7 +242,7 @@
             chmod 755 "$CUSTOM_CERT_DIR"  # Set correct directory permissions
 
             # Create combined cert bundle with explicit permissions
-            export COMBINED_CERT_FILE="$CUSTOM_CERT_DIR/combined-ca-bundle.crt"
+            export COMBINED_CERT_FILE="$CUSTOM_CERT_DIR/combined-ca-bundle.pem"
             cp "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" "$COMBINED_CERT_FILE"
             chmod 644 "$COMBINED_CERT_FILE"  # Set read/write permissions
 
@@ -342,7 +253,7 @@
             else
               echo "Warning: tests/ca.crt not found"
             fi
-
+            
             # Set SSL cert environment variables to use the combined bundle
             export SSL_CERT_FILE="$COMBINED_CERT_FILE"
             export NIX_SSL_CERT_FILE="$COMBINED_CERT_FILE"
@@ -352,7 +263,7 @@
             alias c=cargo
             alias j=just
             alias lg=lazygit
-
+            
             # Ensure the script can find modules in the current directory and parent directory
             export LUA_PATH="./?.lua;../?.lua;$(lua -e 'print(package.path)')"
           '' + lib.optionalString stdenv.isDarwin ''
@@ -382,47 +293,24 @@
           ];
         });
 
-        packages = {
+        # Make all cross-compiled packages available
+        packages = packages // {
           default = hostPackage;
-          x86_64-unknown-linux-gnu = kellnr-x86_64-gnu;
-          x86_64_unknown_linux_gnu = kellnr-x86_64-gnu;
-          x86_64-unknown-linux-musl = kellnr-x86_64-musl;
-          x86_64_unknown_linux_musl = kellnr-x86_64-musl;
-          aarch64-unknown-linux-gnu = kellnr-aarch64-gnu;
-          aarch64_unknown_linux_gnu = kellnr-aarch64-gnu;
-          aarch64-unknown-linux-musl = kellnr-aarch64-musl;
-          aarch64_unknown_linux_musl = kellnr-aarch64-musl;
         };
 
         apps = {
           default = flake-utils.lib.mkApp {
             drv = hostPackage;
           };
-          x86_64-unknown-linux-gnu = flake-utils.lib.mkApp {
-            drv = kellnr-x86_64-gnu;
-          };
-          x86_64_unknown_linux_gnu = flake-utils.lib.mkApp {
-            drv = kellnr-x86_64-gnu;
-          };
-          x86_64-unknown-linux-musl = flake-utils.lib.mkApp {
-            drv = kellnr-x86_64-musl;
-          };
-          x86_64_unknown_linux_musl = flake-utils.lib.mkApp {
-            drv = kellnr-x86_64-musl;
-          };
-          aarch64-unknown-linux-gnu = flake-utils.lib.mkApp {
-            drv = kellnr-aarch64-gnu;
-          };
-          aarch64_unknown_linux_gnu = flake-utils.lib.mkApp {
-            drv = kellnr-aarch64-gnu;
-          };
-          aarch64-unknown-linux-musl = flake-utils.lib.mkApp {
-            drv = kellnr-aarch64-musl;
-          };
-          aarch64_unknown_linux_musl = flake-utils.lib.mkApp {
-            drv = kellnr-aarch64-musl;
-          };
-        };
+        } // builtins.listToAttrs (map
+          (target: {
+            name = builtins.replaceStrings [ "-" ] [ "_" ] target;
+            value = flake-utils.lib.mkApp {
+              drv = packages.${builtins.replaceStrings [ "-" ] [ "_" ] target};
+            };
+          })
+          targets
+        );
       }
     );
 }

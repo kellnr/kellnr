@@ -1,6 +1,6 @@
 ############################################
 # Just commands for Kellnr
-#
+# 
 # It's recommended to use the just commands
 # instead of the cargo commands, as they
 # provide additional functionality.
@@ -73,10 +73,10 @@ node2nix: clean-node patch-package
 		--composition ui/nix/default.nix \
 		--output ui/nix/node-package.nix
 
-patch-package:
+patch-package: 
 	jd -o ui/nix/package.json \
 	-p \
-	-f patch ui/nix/package-patch.json ui/package.json || true
+	-f patch ui/nix/package-patch.json ui/package.json || true 
 
 
 ##########################################
@@ -84,40 +84,30 @@ patch-package:
 ##########################################
 
 # Set the target for the ci-release command.
-# The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
+# The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", 
 # "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl".
 # It's used by the Github Actions CI to build the release binary for the specified target.
-target := "x86_64_unknown_linux_gnu"
+target := "x86_64-unknown-linux-gnu"
 
-ci-release:
-	@echo "Building Kellnr for target: {{target}}"
-	nix build .#{{target}} -L
-	@echo "Copying binary to target/{{target}}/release/"
-	mkdir -p target/{{target}}/release
-	cp -L result/bin/kellnr target/{{target}}/release/kellnr
-	@echo "✓ Build complete: target/{{target}}/release/kellnr"
-	@ls -lh target/{{target}}/release/kellnr
+ci-release: npm-build
+        cross build --release --target {{target}} --features vendored-openssl
 
 ##########################################
-# Commands for Nix-based cross-compilation
-# to build release binaries for different targets
-#
-# These commands use Nix directly on the host system.
-# Note: On macOS, cross-compilation to Linux may fail.
-# In that case, use the Docker-based commands below instead.
+# Commands for cross-rs to build the
+# release binary for different targets
 ##########################################
 
-x-aarch64-musl:
-	nix build .#aarch64_unknown_linux_musl -L
+x-aarch64-musl: 
+	cross build --target aarch64-unknown-linux-musl --features vendored-openssl
 
-x-aarch64-gnu:
-	nix build .#aarch64_unknown_linux_gnu -L
+x-aarch64-gnu: 
+	cross build --target aarch64-unknown-linux-gnu --features vendored-openssl
 
-x-x86_64-musl:
-	nix build .#x86_64_unknown_linux_musl -L
+x-x86_64-musl: 
+	cross build --target x86_64-unknown-linux-musl --features vendored-openssl
 
-x-x86_64-gnu:
-	nix build .#x86_64_unknown_linux_gnu -L
+x-x86_64-gnu: 
+	cross build --target x86_64-unknown-linux-gnu --features vendored-openssl
 
 x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu
 
