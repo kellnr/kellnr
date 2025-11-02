@@ -912,6 +912,35 @@ async fn change_pwd_works(test_db: &db::Database) {
 }
 
 #[db_test]
+async fn is_crate_group_user_works(test_db: &db::Database) {
+    let group = "group";
+    let user = "user";
+    test_db
+        .add_user(user, "pwd", "salt", false, false)
+        .await
+        .unwrap();
+    test_db.add_group(group).await.unwrap();
+    test_db.add_group_user(group, user).await.unwrap();
+    let id = test_add_crate(
+        test_db,
+        "foobar",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &Utc::now(),
+    )
+    .await
+    .unwrap();
+    let crate_name_norm = NormalizedName::from_unchecked_str("foobar");
+    test_db
+        .add_crate_group(&crate_name_norm, group)
+        .await
+        .unwrap();
+
+    let res = test_db.is_crate_group_user(&crate_name_norm, user).await;
+    assert!(res.is_ok_and(|user_is_in_crate_group| user_is_in_crate_group));
+}
+
+#[db_test]
 async fn clean_db_after_time(test_db: &db::Database) {
     test_db
         .add_session_token("admin", "session_token")

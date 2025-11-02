@@ -62,10 +62,7 @@ impl Token {
             let decoded_str = String::from_utf8(decoded).map_err(|_| StatusCode::BAD_REQUEST)?;
             let (user, token) = decoded_str.split_once(':').ok_or(StatusCode::BAD_REQUEST)?;
 
-            let user = db
-                .get_user(user)
-                .await
-                .map_err(|_| StatusCode::FORBIDDEN)?;
+            let user = db.get_user(user).await.map_err(|_| StatusCode::FORBIDDEN)?;
             if db.authenticate_user(&user.name, token).await.is_err() {
                 return Err(StatusCode::FORBIDDEN);
             }
