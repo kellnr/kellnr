@@ -1,8 +1,8 @@
 name: kellnr-ci
 on:
   push:
-   branches:
-     - main
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -26,6 +26,8 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
       - name: Smoke Test
         run: nix develop --command just test
@@ -41,6 +43,8 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
       - name: Smoke Test
         run: nix develop --command just test-pgdb
@@ -56,6 +60,8 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
       - name: Smoke Test
         run: nix develop --command just test-smoke
@@ -68,18 +74,21 @@ jobs:
       matrix:
         target:
           [
-            "x86_64-unknown-linux-gnu",
-            "x86_64-unknown-linux-musl",
-            "aarch64-unknown-linux-gnu",
-            "aarch64-unknown-linux-musl",
+            "x86_64_unknown_linux_gnu",
+            "x86_64_unknown_linux_musl",
+            "aarch64_unknown_linux_gnu",
+            "aarch64_unknown_linux_musl",
           ]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Update APT Repositories
-        run: sudo apt update
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
       - name: Install dependencies
         run: sudo apt install -y sed zip
@@ -88,17 +97,6 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: just
-
-      - name: Setup Rust
-        uses: hecrj/setup-rust-action@v2
-
-      - name: Add Rust Targets
-        run: rustup target add ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install cross-rs
-        run: cargo install cross
 
       - name: Extract Version
         run: |
@@ -165,7 +163,7 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Log in to registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
 
