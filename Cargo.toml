@@ -42,7 +42,7 @@ flate2 = "1.1.5"
 flume = "0.11.1"
 fs_extra = "1.3.0"
 http-body-util = "0.1.3"
-hyper = "1.7.0"
+hyper = "1.8.1"
 mockall = "0.13.1"
 moka = { version = "0.12.11", features = ["future"] }
 object_store = { version = "0.12.4", default-features = false, features = ["aws", "fs"] }
