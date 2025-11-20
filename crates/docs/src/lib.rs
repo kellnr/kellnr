@@ -20,8 +20,7 @@ pub fn get_doc_url(crate_name: &str, crate_version: &Version, docs_path: &Path) 
 
     if doc_exists(crate_name, crate_version, docs_path) {
         Some(format!(
-            "/docs/{}/{}/doc/{}/index.html",
-            crate_name, crate_version, docs_name
+            "/docs/{crate_name}/{crate_version}/doc/{docs_name}/index.html"
         ))
     } else {
         None
@@ -30,10 +29,7 @@ pub fn get_doc_url(crate_name: &str, crate_version: &Version, docs_path: &Path) 
 
 pub fn compute_doc_url(crate_name: &str, crate_version: &Version) -> String {
     let docs_name = crate_name_to_docs_name(crate_name);
-    format!(
-        "/docs/{}/{}/doc/{}/index.html",
-        crate_name, crate_version, docs_name
-    )
+    format!("/docs/{crate_name}/{crate_version}/doc/{docs_name}/index.html")
 }
 
 fn crate_name_to_docs_name(crate_name: &str) -> String {

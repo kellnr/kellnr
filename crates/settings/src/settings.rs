@@ -1,11 +1,7 @@
 use config::{Config, ConfigError, Environment, File};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::{
-    convert::TryFrom,
-    env,
-    path::{self, Path},
-};
+use std::{convert::TryFrom, env, path::Path};
 
 use crate::docs::Docs;
 use crate::local::Local;
@@ -53,6 +49,9 @@ impl TryFrom<&Path> for Settings {
             // Eg. `KELLNR_DEBUG=1 ./target/app` would set the `debug` key
             .add_source(
                 Environment::with_prefix("KELLNR")
+                    .list_separator(",")
+                    .with_list_parse_key("registry.required_crate_fields")
+                    .try_parsing(true)
                     .prefix_separator("_")
                     .separator("__"),
             )
@@ -68,39 +67,60 @@ impl Settings {
         config_path
             .join(file)
             .to_str()
-            .map(|x| x.to_string())
+            .map(ToString::to_string)
             .ok_or_else(|| ConfigError::Message("Invalid UTF-8 string".to_string()))
     }
 
-    pub fn bin_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("crates")
+    pub fn bin_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("crates")
     }
 
     pub fn doc_queue_path(&self) -> PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("doc_queue")
+        PathBuf::from(&self.registry.data_dir).join("doc_queue")
     }
 
-    pub fn sqlite_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("db.sqlite")
+    pub fn sqlite_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("db.sqlite")
     }
 
-    pub fn docs_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("docs")
+    pub fn docs_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("docs")
     }
 
-    pub fn base_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("git")
+    pub fn base_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("git")
     }
 
-    pub fn crates_io_bin_path(&self) -> path::PathBuf {
-        path::PathBuf::from(&self.registry.data_dir).join("cratesio")
+    pub fn crates_io_bin_path(&self) -> PathBuf {
+        PathBuf::from(&self.registry.data_dir).join("cratesio")
     }
+
     pub fn crates_io_path(&self) -> String {
-        format!("{}/cratesio", &self.registry.data_dir)
+        format!("{}/cratesio", self.registry.data_dir)
     }
 
     pub fn crates_path(&self) -> String {
-        format!("{}/crates", &self.registry.data_dir)
+        format!("{}/crates", self.registry.data_dir)
+    }
+
+    pub fn crates_path_or_bucket(&self) -> String {
+        if self.s3.enabled
+            && let Some(bucket) = &self.s3.crates_bucket
+        {
+            bucket.clone()
+        } else {
+            self.crates_path()
+        }
+    }
+
+    pub fn crates_io_path_or_bucket(&self) -> String {
+        if self.s3.enabled
+            && let Some(bucket) = &self.s3.cratesio_bucket
+        {
+            bucket.clone()
+        } else {
+            self.crates_io_path()
+        }
     }
 }
 

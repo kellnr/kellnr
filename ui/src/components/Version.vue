@@ -1,32 +1,43 @@
 <template>
-  <div class="ver clickable glass" @click="openCrateVersionPage">
-    <div class="verVersion">
-      <div>
-        {{ version }}
-      </div>
-      <div><i class="fas fa-code-branch"></i></div>
-    </div>
-    <div class="verLastUpdated">
-      <div>
-        <span class="icon">
-          <i class="fas fa-calendar-alt"></i>
-        </span>
-      </div>
-      <div>{{ humanizedLastUpdated }}</div>
-    </div>
-    <div class="verDownloads">
-      <div><i class="fas fa-cloud-download-alt"></i></div>
-      <div>{{ downloads }}</div>
-    </div>
-  </div>
+  <v-card class="mb-2" elevation="1" :elevation-on-hover="3" @click="openCrateVersionPage">
+    <v-row no-gutters align="center">
+      <v-col cols="12" sm="4" md="3" lg="2" class="pa-3">
+        <v-card-text class="pa-0 d-flex justify-center align-center">
+          <span class="font-weight-bold text-body-1 me-2">{{ version }}</span>
+          <v-icon size="small" color="info">mdi-tag-outline</v-icon>
+        </v-card-text>
+      </v-col>
+
+      <v-divider vertical></v-divider>
+
+      <v-col cols="12" sm="4" md="6" lg="7" class="pa-3">
+        <v-card-text class="pa-0 d-flex justify-center align-center">
+          <v-icon size="small" class="me-2" color="info">mdi-calendar</v-icon>
+          <span>{{ humanizedLastUpdated }}</span>
+        </v-card-text>
+      </v-col>
+
+      <v-divider vertical></v-divider>
+
+      <v-col cols="12" sm="4" md="3" lg="3" class="pa-3">
+        <v-card-text class="pa-0 d-flex justify-center align-center">
+          <v-icon size="small" class="me-2" color="success">mdi-download</v-icon>
+          <span>{{ downloads }}</span>
+        </v-card-text>
+      </v-col>
+    </v-row>
+    <v-tooltip activator="parent" location="bottom">
+      View details for version {{ version }}
+    </v-tooltip>
+  </v-card>
 </template>
 
 <script setup lang="ts">
 import dayjs from 'dayjs'
-import {computed} from "vue";
+import { computed } from "vue";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
-import {useRouter} from "vue-router";
+import { useRouter } from "vue-router";
 
 dayjs.extend(relativeTime);
 dayjs.extend(utc);
@@ -36,38 +47,15 @@ const props = defineProps<{
   version: string,
   last_updated: string,
   downloads: string
-}>()
-const router = useRouter()
+}>();
+
+const router = useRouter();
 
 const humanizedLastUpdated = computed(() => {
   return dayjs.utc(props.last_updated).fromNow();
-})
+});
 
 function openCrateVersionPage() {
-  router.push({name: 'Crate', query: {name: props.name, version: props.version}})
+  router.push({ name: 'Crate', query: { name: props.name, version: props.version } });
 }
-
 </script>
-
-<style scoped>
-.ver {
-  padding: 0.5rem;
-  margin: 0 0 0.5rem 0;
-  display: grid;
-  grid-template-columns: 1fr 2fr 1fr;
-  text-align: center;
-}
-
-.verVersion {
-  padding: 0 0.5rem 0 0;
-  border-right-style: solid;
-  border-width: 0.1rem;
-  font-weight: bold;
-}
-
-.verLastUpdated {
-  padding: 0 0.5rem 0 0;
-  border-right-style: solid;
-  border-width: 0.1rem;
-}
-</style>

@@ -13,7 +13,7 @@ mod tables;
 mod user;
 
 // Re-exports
-pub use crate::database::Database;
+pub use crate::database::{Database, test_utils};
 pub use auth_token::AuthToken;
 pub use con_string::AdminUser;
 pub use con_string::ConString;

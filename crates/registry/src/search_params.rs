@@ -42,7 +42,7 @@ where
             .map_err(|e| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to extract query parameters: {}", e),
+                    format!("Failed to extract query parameters: {e}"),
                 )
             })?;
 
@@ -58,7 +58,7 @@ where
             .map_err(|e| {
                 (
                     StatusCode::BAD_REQUEST,
-                    format!("Invalid value for per_page: {}", e),
+                    format!("Invalid value for per_page: {e}"),
                 )
             })?;
         let per_page =

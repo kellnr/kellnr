@@ -4,7 +4,8 @@
       <div class="index">{{ index }}.</div>
     </div>
     <div id="middle">
-      <router-link class="link" :to="{name: 'Crate', query: {name: name, version: version}}">{{ name }}</router-link>
+      <router-link class="link" :to="{ name: 'Crate', query: { name: name, version: version } }">{{ name
+        }}</router-link>
     </div>
     <div id="right">
       <div id="version">{{ version }}</div>
@@ -22,23 +23,24 @@ defineProps<{
 </script>
 
 <style scoped>
-  #docQueueItem {
-    display: grid;
-    grid-template-columns: 1fr 4fr 4fr;
-    text-align: left;
-    border-bottom-width: 1px;
-    margin: 0.5rem 0 0.5rem 0;
-  }
+#docQueueItem {
+  display: grid;
+  grid-template-columns: 1fr 4fr 4fr;
+  text-align: left;
+  border-bottom-width: 1px;
+  margin: 0.4rem 0 0.4rem 0;
+  padding: 0 0.4rem 0 0.4rem;
+}
 
-  #left {
-    grid-column: 1;
-  }
+#left {
+  grid-column: 1;
+}
 
-  #middle {
-    grid-column: 2;
-  }
+#middle {
+  grid-column: 2;
+}
 
-  #right {
-    grid-column: 3;
-  }
+#right {
+  grid-column: 3;
+}
 </style>

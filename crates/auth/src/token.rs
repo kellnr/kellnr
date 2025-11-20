@@ -2,6 +2,8 @@ use appstate::AppStateData;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use db::DbProvider;
 use rand::distr::Alphanumeric;
 use rand::{Rng, rng};
@@ -11,7 +13,7 @@ use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Token {
-    pub token: String,
+    pub value: String,
     pub user: String,
     pub is_admin: bool,
     pub is_read_only: bool,
@@ -46,20 +48,45 @@ impl Token {
         db: &Arc<dyn DbProvider>,
     ) -> Result<Token, StatusCode> {
         // OptionToken code expects UNAUTHORIZED when no token is found
-        let token = headers
+        let mut token = headers
             .get("Authorization")
             .ok_or(StatusCode::UNAUTHORIZED)?
             .to_str()
-            .map_err(|_| StatusCode::BAD_REQUEST)?
-            .to_owned();
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+        // Handle basic authentication
+        if token.starts_with("Basic ") || token.starts_with("basic ") {
+            let decoded = STANDARD
+                .decode(&token[6..])
+                .map_err(|_| StatusCode::BAD_REQUEST)?;
+            let decoded_str = String::from_utf8(decoded).map_err(|_| StatusCode::BAD_REQUEST)?;
+            let (user, token) = decoded_str.split_once(':').ok_or(StatusCode::BAD_REQUEST)?;
+
+            let user = db.get_user(user).await.map_err(|_| StatusCode::FORBIDDEN)?;
+            if db.authenticate_user(&user.name, token).await.is_err() {
+                return Err(StatusCode::FORBIDDEN);
+            }
+
+            return Ok(Token {
+                value: token.to_string(),
+                user: user.name,
+                is_admin: user.is_admin,
+                is_read_only: user.is_read_only,
+            });
+        }
+
+        // Handle bearer authentication
+        if token.starts_with("Bearer ") || token.starts_with("bearer ") {
+            token = &token[7..];
+        }
 
         let user = db
-            .get_user_from_token(&token)
+            .get_user_from_token(token)
             .await
             .map_err(|_| StatusCode::FORBIDDEN)?;
 
         Ok(Token {
-            token,
+            value: token.to_string(),
             user: user.name,
             is_admin: user.is_admin,
             is_read_only: user.is_read_only,

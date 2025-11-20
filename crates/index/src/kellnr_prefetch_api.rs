@@ -9,6 +9,7 @@ use common::{normalized_name::NormalizedName, original_name::OriginalName, prefe
 use db::DbProvider;
 use std::sync::Arc;
 
+#[allow(clippy::unused_async)] // part of the router
 pub async fn config_kellnr(State(settings): SettingsState) -> Json<ConfigJson> {
     Json(ConfigJson::from((&(*settings), "crates", true)))
 }
@@ -73,7 +74,6 @@ mod tests {
     #[tokio::test]
     async fn config_returns_config_json() {
         let r = app()
-            .await
             .oneshot(
                 Request::get("/api/v1/index/config.json")
                     .body(Body::empty())
@@ -86,7 +86,15 @@ mod tests {
         let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
 
         assert_eq!(
-            ConfigJson::new(&Protocol::Http, "test.api.com", 1234, "crates", true, false),
+            ConfigJson::new(
+                Protocol::Http,
+                "test.api.com",
+                1234,
+                None,
+                "crates",
+                true,
+                false
+            ),
             actual
         );
     }
@@ -94,7 +102,6 @@ mod tests {
     #[tokio::test]
     async fn prefetch_returns_prefetch_data() {
         let r = app()
-            .await
             .oneshot(
                 Request::get("/api/v1/index/me/ta/metadata")
                     .header(header::IF_MODIFIED_SINCE, "foo")
@@ -119,7 +126,6 @@ mod tests {
     #[tokio::test]
     async fn prefetch_returns_not_modified() {
         let r = app()
-            .await
             .oneshot(
                 Request::get("/api/v1/index/me/ta/metadata")
                     .header(header::IF_MODIFIED_SINCE, "date")
@@ -136,7 +142,6 @@ mod tests {
     #[tokio::test]
     async fn prefetch_returns_not_found() {
         let r = app()
-            .await
             .oneshot(
                 Request::get("/api/v1/index/no/tf/notfound")
                     .header(header::IF_MODIFIED_SINCE, "date")
@@ -150,12 +155,13 @@ mod tests {
         assert_eq!(StatusCode::NOT_FOUND, r.status());
     }
 
-    async fn app() -> Router {
+    fn app() -> Router {
         let settings = Settings {
             origin: settings::Origin {
                 protocol: Protocol::Http,
-                hostname: String::from("test.api.com"),
+                hostname: "test.api.com".to_string(),
                 port: 1234,
+                path: String::new(),
             },
             ..Settings::default()
         };
@@ -167,8 +173,8 @@ mod tests {
             .returning(move |_| {
                 Ok(Prefetch {
                     data: vec![0x1, 0x2, 0x3],
-                    etag: String::from("etag"),
-                    last_modified: String::from("date"),
+                    etag: "etag".to_string(),
+                    last_modified: "date".to_string(),
                 })
             });
         mock_db
@@ -184,7 +190,7 @@ mod tests {
         let state = AppStateData {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
-            ..appstate::test_state().await
+            ..appstate::test_state()
         };
 
         Router::new()

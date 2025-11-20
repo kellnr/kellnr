@@ -16,7 +16,7 @@ impl Display for ConString {
             ConString::Postgres(p) => p.to_string(),
             ConString::Sqlite(s) => s.to_string(),
         };
-        write!(f, "{}", con_string)
+        write!(f, "{con_string}")
     }
 }
 
@@ -138,8 +138,8 @@ impl From<&Settings> for SqliteConString {
         Self {
             path: settings.sqlite_path(),
             salt: generate_salt(),
-            admin_pwd: settings.setup.admin_pwd.to_owned(),
-            admin_token: settings.setup.admin_token.to_owned(),
+            admin_pwd: settings.setup.admin_pwd.clone(),
+            admin_token: settings.setup.admin_token.clone(),
             session_age: Duration::from_secs(settings.registry.session_age_seconds),
         }
     }

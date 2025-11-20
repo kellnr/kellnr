@@ -104,6 +104,7 @@ mod tests {
     use db::mock::MockDb;
     use db::{DbProvider, DocQueueEntry};
     use http_body_util::BodyExt;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use tower::ServiceExt;
 
@@ -114,20 +115,20 @@ mod tests {
             Ok(vec![
                 DocQueueEntry {
                     id: 0,
-                    krate: NormalizedName::from_unchecked("crate1".to_string()),
+                    normalized_name: NormalizedName::from_unchecked("crate1".to_string()),
                     version: "0.0.1".to_string(),
-                    path: Default::default(),
+                    path: PathBuf::default(),
                 },
                 DocQueueEntry {
                     id: 1,
-                    krate: NormalizedName::from_unchecked("crate2".to_string()),
+                    normalized_name: NormalizedName::from_unchecked("crate2".to_string()),
                     version: "0.0.2".to_string(),
-                    path: Default::default(),
+                    path: PathBuf::default(),
                 },
             ])
         });
 
-        let kellnr = app(Arc::new(db)).await;
+        let kellnr = app(Arc::new(db));
         let r = kellnr
             .oneshot(Request::get("/queue").body(Body::empty()).unwrap())
             .await
@@ -152,12 +153,12 @@ mod tests {
         );
     }
 
-    async fn app(db: Arc<dyn DbProvider>) -> Router {
+    fn app(db: Arc<dyn DbProvider>) -> Router {
         Router::new()
             .route("/queue", get(docs_in_queue))
             .with_state(AppStateData {
                 db,
-                ..appstate::test_state().await
+                ..appstate::test_state()
             })
     }
 }

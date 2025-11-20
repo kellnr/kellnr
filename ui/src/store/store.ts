@@ -1,5 +1,4 @@
 import { defineStore } from 'pinia'
-import { BACKEND_URL_PATH_PREFIX } from '../remote-routes'
 
 export interface State {
     loggedInUser: string | null
@@ -10,6 +9,9 @@ export interface State {
     rememberMe: boolean
     rememberMeUser: string | null
     searchCache: boolean
+    lightBackgroundImage: string
+    darkBackgroundImage: string
+    currentBackgroundImage: string
 }
 
 export const useStore = defineStore('store', {
@@ -17,14 +19,18 @@ export const useStore = defineStore('store', {
         loggedInUser: null,
         loggedInUserIsAdmin: false,
         theme: 'light',
-        cargoSmallLogo: `${BACKEND_URL_PATH_PREFIX}/img/cargo-logo-small-light.png`,
-          kellnrSmallLogo: `${BACKEND_URL_PATH_PREFIX}/img/kellnr-logo-small-light.png`,
+        cargoSmallLogo: 'img/cargo-logo-small-light.png',
+        kellnrSmallLogo: 'img/kellnr-logo-small-light.png',
         rememberMe: false,
         rememberMeUser: null,
-        searchCache: false
+        searchCache: false,
+        lightBackgroundImage: 'img/blob-scene-haikei3.svg',
+        darkBackgroundImage: 'img/layered-peaks-haikei.svg',
+        currentBackgroundImage: 'img/blob-scene-haikei3.svg', // Default to light
     }),
     getters: {
         loggedIn: (state) => state.loggedInUser !== null,
+        isDark: (state) => state.theme === 'dark'
     },
     actions: {
         login(payload: { "user": string, "is_admin": boolean }) {
@@ -38,13 +44,45 @@ export const useStore = defineStore('store', {
         toggleTheme() {
             if (this.theme === 'light') {
                 this.theme = 'dark'
-                this.kellnrSmallLogo = `${BACKEND_URL_PATH_PREFIX}/img/kellnr-logo-small-dark.png`
+                this.kellnrSmallLogo = 'img/kellnr-logo-small-dark.png'
+                this.currentBackgroundImage = this.darkBackgroundImage
+                // Update Vuetify theme dynamically
+                this.updateVuetifyTheme('dark')
             } else {
                 this.theme = 'light'
-                this.cargoSmallLogo = `${BACKEND_URL_PATH_PREFIX}/img/cargo-logo-small-light.png`,
-            this.kellnrSmallLogo = `${BACKEND_URL_PATH_PREFIX}/img/kellnr-logo-small-light.png`
+                this.cargoSmallLogo = 'img/cargo-logo-small-light.png'
+                this.kellnrSmallLogo = 'img/kellnr-logo-small-light.png'
+                this.currentBackgroundImage = this.lightBackgroundImage
+                // Update Vuetify theme dynamically
+                this.updateVuetifyTheme('light')
+            }
+
+            // Toggle highlight.js theme
+            this.toggleHighlightTheme()
+        },
+        updateVuetifyTheme(theme: string) {
+            // Access Vuetify instance and update theme
+            const vuetify = document.querySelector('html')?.getAttribute('data-vue-app')
+                ? (window as any)?.$vuetify
+                : null;
+
+            if (vuetify && vuetify.theme) {
+                vuetify.theme.global.name.value = theme;
             }
         },
+        toggleHighlightTheme() {
+            // Toggle between highlight.js themes
+            const isDark = this.theme === 'dark';
+
+            // Select all highlight.js style links
+            const hlLight = document.querySelector('link[href*="highlight.js/styles/github.css"]');
+            const hlDark = document.querySelector('link[href*="highlight.js/styles/github-dark.css"]');
+
+            if (hlLight && hlDark) {
+                hlLight.setAttribute('disabled', isDark.toString());
+                hlDark.setAttribute('disabled', (!isDark).toString());
+            }
+        }
     },
     persist: true
 })

@@ -1,5 +1,6 @@
 pub mod crate_data;
 pub mod crate_overview;
+pub mod cratesio_downloader;
 pub mod cratesio_prefetch_msg;
 pub mod index_metadata;
 pub mod normalized_name;

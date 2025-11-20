@@ -166,7 +166,7 @@ impl IndexMetadata {
             vers: vers.to_string(),
             cksum: cksum.to_string(),
             deps: vec![],
-            features: Default::default(),
+            features: BTreeMap::default(),
             yanked: false,
             links: None,
             v: Some(1),
@@ -182,9 +182,9 @@ impl IndexMetadata {
         let mut index = String::new();
         for (i, ix) in indices.iter().enumerate() {
             if i == indices.len() - 1 {
-                write!(&mut index, "{}", ix).unwrap();
+                write!(&mut index, "{ix}").unwrap();
             } else {
-                writeln!(&mut index, "{}", ix).unwrap();
+                writeln!(&mut index, "{ix}").unwrap();
             }
         }
         Ok(index)
@@ -272,7 +272,7 @@ impl Display for DependencyKind {
             DependencyKind::Normal => write!(f, "normal"),
             DependencyKind::Build => write!(f, "build"),
             DependencyKind::Dev => write!(f, "dev"),
-            DependencyKind::Other(s) => write!(f, "{}", s),
+            DependencyKind::Other(s) => write!(f, "{s}"),
         }
     }
 }
@@ -364,7 +364,7 @@ mod tests {
                     explicit_name_in_toml: Some("qux".to_string()),
                 },
             ],
-            features: Default::default(),
+            features: BTreeMap::default(),
             links: None,
             description: None,
             authors: None,
@@ -372,12 +372,13 @@ mod tests {
             homepage: None,
             readme: None,
             readme_file: None,
-            keywords: Default::default(),
-            categories: Default::default(),
+            keywords: Vec::default(),
+            categories: Vec::default(),
             license: None,
             license_file: None,
             repository: None,
             badges: None,
+            rust_version: None,
         };
 
         let index_meta = IndexMetadata::from_reg_meta(&reg_meta, "1234");

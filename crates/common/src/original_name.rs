@@ -20,7 +20,7 @@ impl OriginalName {
     pub fn to_normalized(&self) -> NormalizedName {
         NormalizedName::from(self)
     }
-    pub fn from_unchecked_str(name: String) -> Self {
+    pub fn from_unchecked(name: String) -> Self {
         Self(name)
     }
 }
@@ -79,7 +79,7 @@ impl Deref for OriginalName {
 
 impl fmt::Display for OriginalName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", &self.0)
+        write!(f, "{}", self.0)
     }
 }
 

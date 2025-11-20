@@ -4,5 +4,12 @@
 .idea
 .vscode
 .target
-target/
 result/
+tests/
+!tests/ca.crt
+*.md
+justfile
+LICENSE
+deny.toml
+flake.*
+ui/node_modules/

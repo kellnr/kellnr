@@ -9,12 +9,15 @@ license-file = "../../LICENSE"
 
 [dependencies]
 # Internal dependencies
+common.workspace = true
 db.workspace = true
 settings.workspace = true
 storage.workspace = true
-common.workspace = true
 
 # External dependencies
-axum.workspace = true
 axum-extra.workspace = true
+axum.workspace = true
 flume.workspace = true
+
+[lints]
+workspace = true

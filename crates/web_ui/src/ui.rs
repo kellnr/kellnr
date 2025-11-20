@@ -15,12 +15,13 @@ use db::error::DbError;
 use settings::Settings;
 use tracing::error;
 
+#[allow(clippy::unused_async)] // part of the router
 pub async fn settings(
     user: MaybeUser,
     State(settings): SettingsState,
 ) -> Result<Json<Settings>, RouteError> {
     user.assert_admin()?;
-    let s: Settings = (*settings).to_owned();
+    let s: Settings = (*settings).clone();
     Ok(Json(s))
 }
 
@@ -29,6 +30,7 @@ pub struct KellnrVersion {
     pub version: String,
 }
 
+#[allow(clippy::unused_async)] // part of the router
 pub async fn kellnr_version() -> Json<KellnrVersion> {
     Json(KellnrVersion {
         version: option_env!("KELLNR_VERSION")
@@ -121,24 +123,24 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
 
     match resp {
         Ok(resp) => match resp.status() {
-            reqwest::StatusCode::OK => {
+            StatusCode::OK => {
                 let data = resp.text().await;
                 match data {
                     Ok(data) => Ok(data),
                     Err(e) => {
-                        error!("Failed to parse crates.io data: {}", e);
+                        error!("Failed to parse crates.io data: {e}");
                         Err(StatusCode::INTERNAL_SERVER_ERROR)
                     }
                 }
             }
-            reqwest::StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
+            StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
             _ => {
                 error!("Failed to get crates.io data: {}", resp.status());
                 Err(StatusCode::NOT_FOUND)
             }
         },
         Err(e) => {
-            error!("Failed to get crates.io data: {}", e);
+            error!("Failed to get crates.io data: {e}");
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -160,17 +162,17 @@ pub async fn delete_version(
     let name = params.name;
 
     if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
-        error!("Failed to delete crate from database: {:?}", e);
+        error!("Failed to delete crate from database: {e:?}");
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     if let Err(e) = state.crate_storage.delete(&name, &version).await {
-        error!("Failed to delete crate from storage: {}", e);
+        error!("Failed to delete crate from storage: {e}");
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     if let Err(e) = docs::delete(&name, &version, &state.settings).await {
-        error!("Failed to delete crate from docs: {}", e);
+        error!("Failed to delete crate from docs: {e}");
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
@@ -192,20 +194,20 @@ pub async fn delete_crate(
 
     let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
 
-    for cm in crate_meta.iter() {
+    for cm in &crate_meta {
         let version = Version::from_unchecked_str(&cm.version);
         if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
-            error!("Failed to delete crate from database: {:?}", e);
+            error!("Failed to delete crate from database: {e:?}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
 
         if let Err(e) = state.crate_storage.delete(&name, &version).await {
-            error!("Failed to delete crate from storage: {}", e);
+            error!("Failed to delete crate from storage: {e}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
 
         if let Err(e) = docs::delete(&name, &cm.version, &state.settings).await {
-            error!("Failed to delete crate from docs: {}", e);
+            error!("Failed to delete crate from docs: {e}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
     }
@@ -234,6 +236,14 @@ pub struct TopCrates {
 }
 
 pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Json<Statistic> {
+    fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
+        if tops.len() > i {
+            tops[i].clone()
+        } else {
+            (String::new(), 0)
+        }
+    }
+
     let num_crates = db.get_total_unique_crates().await.unwrap_or_default();
     let num_crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
     let num_crate_downloads = db.get_total_downloads().await.unwrap_or_default();
@@ -248,14 +258,6 @@ pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Js
         .unwrap_or_default();
     let num_proxy_crate_downloads = db.get_total_cached_downloads().await.unwrap_or_default();
     let last_updated_crate = db.get_last_updated_crate().await.unwrap_or_default();
-
-    fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
-        if tops.len() > i {
-            tops[i].clone()
-        } else {
-            (String::new(), 0)
-        }
-    }
 
     Json(Statistic {
         num_crates,
@@ -312,7 +314,7 @@ pub async fn build_rustdoc(
         MaybeUser::Normal(user) => db
             .is_owner(&normalized_name, &user)
             .await
-            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
         MaybeUser::Admin(_) => true,
     };
 
@@ -354,6 +356,7 @@ mod tests {
     use mockall::predicate::*;
     use settings::Settings;
     use settings::{Postgresql, constants};
+    use std::collections::BTreeMap;
     use std::sync::Arc;
     use storage::cached_crate_storage::DynStorage;
     use storage::fs_storage::FSStorage;
@@ -370,10 +373,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/settings").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -391,10 +393,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/settings")
                 .header(
@@ -442,10 +443,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -481,10 +481,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -531,8 +530,8 @@ mod tests {
                 Ok(User {
                     id: 0,
                     name: "user".to_string(),
-                    pwd: "".to_string(),
-                    salt: "".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -540,10 +539,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -590,8 +588,8 @@ mod tests {
                 Ok(User {
                     id: 0,
                     name: "user".to_string(),
-                    pwd: "".to_string(),
-                    salt: "".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -609,10 +607,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(
@@ -659,8 +656,8 @@ mod tests {
                 Ok(User {
                     id: 0,
                     name: "user".to_string(),
-                    pwd: "".to_string(),
-                    salt: "".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -678,10 +675,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::post("/build?package=foobar&version=1.0.0")
                 .header(header::CONTENT_TYPE, "application/json")
@@ -731,10 +727,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -750,7 +745,7 @@ mod tests {
             num_proxy_crate_versions: 0,
             num_proxy_crate_downloads: 0,
             top_crates: TopCrates {
-                first: (String::from("top1"), 1000),
+                first: ("top1".to_string(), 1000),
                 second: (String::new(), 0),
                 third: (String::new(), 0),
             },
@@ -793,10 +788,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -834,7 +828,7 @@ mod tests {
             .returning(move || Ok(10000));
         mock_db
             .expect_get_total_downloads()
-            .returning(move || Ok(100000));
+            .returning(move || Ok(100_000));
         mock_db
             .expect_get_top_crates_downloads()
             .with(eq(3))
@@ -853,10 +847,10 @@ mod tests {
             .returning(move || Ok(99999));
         mock_db
             .expect_get_total_cached_downloads()
-            .returning(move || Ok(999999));
+            .returning(move || Ok(999_999));
         mock_db.expect_get_last_updated_crate().returning(move || {
             Ok(Some((
-                OriginalName::from_unchecked_str("foobar".to_string()),
+                OriginalName::from_unchecked("foobar".to_string()),
                 Version::try_from("1.0.0").unwrap(),
             )))
         });
@@ -864,10 +858,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -878,17 +871,17 @@ mod tests {
         let expect = Statistic {
             num_crates: 1000,
             num_crate_versions: 10000,
-            num_crate_downloads: 100000,
+            num_crate_downloads: 100_000,
             num_proxy_crates: 9999,
             num_proxy_crate_versions: 99999,
-            num_proxy_crate_downloads: 999999,
+            num_proxy_crate_downloads: 999_999,
             top_crates: TopCrates {
-                first: (String::from("top1"), 1000),
-                second: (String::from("top2"), 500),
-                third: (String::from("top3"), 100),
+                first: ("top1".to_string(), 1000),
+                second: ("top2".to_string(), 500),
+                third: ("top3".to_string(), 100),
             },
             last_updated_crate: Some((
-                OriginalName::from_unchecked_str("foobar".to_string()),
+                OriginalName::from_unchecked("foobar".to_string()),
                 Version::try_from("1.0.0").unwrap(),
             )),
             proxy_enabled: false,
@@ -903,10 +896,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/version").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -929,10 +921,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/search?name=doesnotexist")
                 .body(Body::empty())
@@ -972,10 +963,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/search?name=hello")
                 .body(Body::empty())
@@ -1024,16 +1014,13 @@ mod tests {
                     name: "dep1".to_string(),
                     description: Some("description".to_string()),
                     version_req: "1.0.0".to_string(),
-                    features: None,
-                    optional: false,
-                    default_features: false,
                     target: Some("target".to_string()),
                     kind: Some("dev".to_string()),
                     registry: Some("registry".to_string()),
-                    explicit_name_in_toml: None,
+                    ..Default::default()
                 }],
                 checksum: "checksum".to_string(),
-                features: Default::default(),
+                features: BTreeMap::default(),
                 yanked: false,
                 links: Some("links".to_string()),
                 v: 1,
@@ -1047,10 +1034,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/crate_data?name=crate1&version=1.0.0")
                 .body(Body::empty())
@@ -1095,10 +1081,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/crates?page=0").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -1158,10 +1143,9 @@ mod tests {
 
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(Request::get("/crates").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -1183,10 +1167,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/cratesio_data?name=quote")
                 .body(Body::empty())
@@ -1208,10 +1191,9 @@ mod tests {
         let (settings, storage) = test_deps();
         let r = app(
             mock_db,
-            KellnrCrateStorage::new(&settings, storage).await.unwrap(),
+            KellnrCrateStorage::new(&settings, storage),
             settings,
         )
-        .await
         .oneshot(
             Request::get("/cratesio_data?name=thisdoesnotevenexist")
                 .body(Body::empty())
@@ -1231,7 +1213,7 @@ mod tests {
     }
 
     const TEST_KEY: &[u8] = &[1; 64];
-    async fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
+    fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
         Router::new()
             .route("/search", get(search))
             .route("/crates", get(crates))
@@ -1246,7 +1228,7 @@ mod tests {
                 signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings),
                 crate_storage: Arc::new(crate_storage),
-                ..appstate::test_state().await
+                ..appstate::test_state()
             })
     }
 }

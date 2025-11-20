@@ -7,7 +7,13 @@ use axum::extract::FromRequest;
 use axum::http::Request;
 use common::publish_metadata::PublishMetadata;
 use error::api_error::ApiError;
+use serde::Deserialize;
 use settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
+
+#[derive(Debug, Deserialize)]
+pub struct EmptyCrateData {
+    pub name: String,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PubData {
@@ -27,7 +33,7 @@ fn deserialize_metadata(raw_data: &[u8]) -> Result<PublishMetadata, RegistryErro
 }
 
 fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
-    match std::convert::TryInto::try_into(raw_data) {
+    match TryInto::try_into(raw_data) {
         Ok(i) => Ok(u32::from_le_bytes(i)),
         Err(e) => Err(RegistryError::InvalidMetadataLength(e)),
     }
@@ -94,8 +100,14 @@ mod bin_tests {
         crate_storage: KellnrCrateStorage,
     }
 
+    impl Drop for TestData {
+        fn drop(&mut self) {
+            self.clean();
+        }
+    }
+
     impl TestData {
-        async fn from(data_dir: &str) -> TestData {
+        fn from(data_dir: &str) -> TestData {
             let settings = Settings {
                 registry: settings::Registry {
                     data_dir: data_dir.to_owned(),
@@ -109,7 +121,7 @@ mod bin_tests {
                 ..Settings::default()
             };
             let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
-            let crate_storage = KellnrCrateStorage::new(&settings, storage).await.unwrap();
+            let crate_storage = KellnrCrateStorage::new(&settings, storage);
             TestData {
                 settings,
                 crate_storage,
@@ -130,18 +142,17 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
 
-        let test_storage = TestData::from("test_add_crate_binary").await;
+        let test_storage = TestData::from("test_add_crate_binary");
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
             .crate_storage
             .put(&name, &version, pub_data.cratedata.clone())
             .await;
-        let result_crate = Path::new(&test_storage.settings.bin_path()).join("test-0.1.0.crate");
 
         let get_res = test_storage
             .crate_storage
-            .get(result_crate.to_str().unwrap())
+            .get(&name, &version)
             .await
             .expect("Couldn't find file...");
 
@@ -160,19 +171,17 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0"),
         };
 
-        let test_storage = TestData::from("Test_Add_crate_binary_Upper-Case").await;
+        let test_storage = TestData::from("Test_Add_crate_binary_Upper-Case");
         let name = OriginalName::try_from(pub_data.metadata.name).unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
             .crate_storage
             .put(&name, &version, pub_data.cratedata.clone())
             .await;
-        let result_crate = Path::new(&test_storage.settings.bin_path())
-            .join("Test_Add_crate_binary_Upper-Case-0.1.0.crate");
 
         let get_res = test_storage
             .crate_storage
-            .get(result_crate.to_str().unwrap())
+            .get(&name, &version)
             .await
             .expect("Couldn't find file...");
 
@@ -191,7 +200,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
 
-        let test_bin = TestData::from("test_add_duplicate_crate_binary").await;
+        let test_bin = TestData::from("test_add_duplicate_crate_binary");
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
 
@@ -214,7 +223,7 @@ mod bin_tests {
 
     #[tokio::test]
     async fn create_rand_doc_queue_path() {
-        let test_bin = TestData::from("test_doc_queue").await;
+        let test_bin = TestData::from("test_doc_queue");
 
         let rand_path = test_bin
             .crate_storage
@@ -243,7 +252,7 @@ mod bin_tests {
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
-        let test_storage = TestData::from("delete_crate").await;
+        let test_storage = TestData::from("delete_crate");
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         test_storage
@@ -272,7 +281,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.2.0"),
         };
 
-        let test_storage = TestData::from("delete_crate_invalidates_cache").await;
+        let test_storage = TestData::from("delete_crate_invalidates_cache");
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.2.0").unwrap();
 
@@ -285,8 +294,14 @@ mod bin_tests {
         let crate_path = Path::new(&test_storage.settings.bin_path()).join("test-0.2.0.crate");
         let crate_path = crate_path.to_string_lossy().to_string();
 
-        assert!(test_storage.crate_storage.get(&crate_path).await.is_some());
-        assert!(test_storage.crate_storage.cache_has_path(&crate_path));
+        assert!(
+            test_storage
+                .crate_storage
+                .get(&name, &version)
+                .await
+                .is_some()
+        );
+        assert!(test_storage.crate_storage.cache_has_path(&name, &version));
 
         test_storage
             .crate_storage
@@ -294,9 +309,15 @@ mod bin_tests {
             .await
             .unwrap();
 
-        assert!(!test_storage.crate_storage.cache_has_path(&crate_path));
+        assert!(!test_storage.crate_storage.cache_has_path(&name, &version));
 
-        assert!(test_storage.crate_storage.get(&crate_path).await.is_none());
+        assert!(
+            test_storage
+                .crate_storage
+                .get(&name, &version)
+                .await
+                .is_none()
+        );
 
         assert!(!std::path::PathBuf::from(crate_path).exists());
         test_storage.clean();

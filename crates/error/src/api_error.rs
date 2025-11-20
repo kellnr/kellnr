@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use zip::result::ZipError;
 
-pub type ApiResult<T> = core::result::Result<T, ApiError>;
+pub type ApiResult<T> = Result<T, ApiError>;
 
 pub struct ApiError {
     status: StatusCode,
@@ -36,12 +36,11 @@ pub struct ErrorDetail {
 }
 
 impl ApiError {
-    pub fn new(msg: &str, error: &dyn ToString, status: StatusCode) -> Self {
-        let error = error.to_string();
+    pub fn new(msg: &str, error: &str, status: StatusCode) -> Self {
         let e = if error.is_empty() {
-            format!("ERROR: {}", msg)
+            format!("ERROR: {msg}")
         } else {
-            format!("ERROR: {} -> {}", msg, error)
+            format!("ERROR: {msg} -> {error}")
         };
         Self {
             status,
@@ -49,16 +48,15 @@ impl ApiError {
         }
     }
 
-    fn from_dyn_str(e: &dyn ToString, status: StatusCode) -> Self {
-        let e = format!("ERROR: {}", e.to_string());
+    fn from_str(e: &str, status: StatusCode) -> Self {
         Self {
             status,
-            details: ErrorDetails::from(e),
+            details: ErrorDetails::from(format!("ERROR: {e}")),
         }
     }
 
     pub fn from_err(e: &dyn std::error::Error, status: StatusCode) -> Self {
-        let e = format!("ERROR: {}", e);
+        let e = format!("ERROR: {e}");
         Self {
             status,
             details: ErrorDetails::from(e),
@@ -90,24 +88,16 @@ impl From<std::io::Error> for ApiError {
     }
 }
 
-impl From<zip::result::ZipError> for ApiError {
-    fn from(e: zip::result::ZipError) -> Self {
+impl From<ZipError> for ApiError {
+    fn from(e: ZipError) -> Self {
         match e {
             ZipError::Io(e) => ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR),
-            ZipError::InvalidArchive(s) => {
-                ApiError::from_dyn_str(&s.to_string(), StatusCode::BAD_REQUEST)
+            ZipError::InvalidArchive(s) => ApiError::from_str(&s, StatusCode::BAD_REQUEST),
+            ZipError::UnsupportedArchive(s) => ApiError::from_str(s, StatusCode::BAD_REQUEST),
+            ZipError::FileNotFound => {
+                ApiError::from_str("Zip archive not found", StatusCode::NOT_FOUND)
             }
-            ZipError::UnsupportedArchive(s) => {
-                ApiError::from_dyn_str(&s.to_string(), StatusCode::BAD_REQUEST)
-            }
-            ZipError::FileNotFound => ApiError::from_dyn_str(
-                &String::from("Zip archive not found"),
-                StatusCode::NOT_FOUND,
-            ),
-            _ => ApiError::from_dyn_str(
-                &String::from("Unknown zip error"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ),
+            _ => ApiError::from_str("Unknown zip error", StatusCode::INTERNAL_SERVER_ERROR),
         }
     }
 }

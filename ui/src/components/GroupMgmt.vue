@@ -1,89 +1,154 @@
 <template>
-  <h2 class="k-h2">Groups</h2>
-  <template v-for="item in items" :key="item.name">
-    <div class="groupMgmt glass">
-      <span class="groupName">{{ item.name }}</span>
-      <span class="tag is-warning is-light">
-        <a @click="editGroup(item.name)">Edit</a>
-      </span>
-      <span class="tag is-danger is-light">
-        <a @click="deleteGroup(item.name)">Delete</a>
-      </span>
-    </div>
-  </template>
+  <v-container>
+    <!-- Groups List -->
+    <v-card class="mb-6 pa-4">
+      <v-card-title class="text-h4 pb-2">Groups</v-card-title>
 
-  <status-notification :status="changeGroupStatus" @update:clear="changeGroupStatus = $event">
-    {{ changeGroupMsg }}
-  </status-notification>
+      <div v-if="items.length === 0" class="text-center pa-4">
+        <v-icon icon="mdi-account-group" size="large" color="grey-lighten-1" class="mb-2"></v-icon>
+        <div class="text-body-1 text-grey">No groups found. Create a new group below.</div>
+      </div>
 
-  <div v-if="!editingGroup">
-    <h3 class="k-h3">Add Group</h3>
-    <form>
-      <div class="field">
-        <div class="control is-expanded has-icons-left">
-          <input class="input is-info" v-model="name" placeholder="Name" type="text" />
-          <span class="icon is-small is-left">
-            <i class="fas fa-user-group"></i>
-          </span>
+      <v-card v-for="item in items" :key="item.name" class="mb-3 pa-3">
+        <v-row align="center">
+          <v-col cols="12" sm="6">
+            <div class="text-subtitle-1 font-weight-bold d-flex align-center">
+              <v-icon icon="mdi-account-group" class="mr-2"></v-icon>
+              {{ item.name }}
+            </div>
+          </v-col>
+
+          <v-col cols="12" sm="6" class="d-flex flex-wrap gap-2 justify-end">
+            <v-btn color="warning" variant="outlined" size="small" @click="editGroup(item.name)">
+              <v-icon start>mdi-pencil</v-icon>
+              Edit
+            </v-btn>
+
+            <v-btn color="error" variant="outlined" size="small" @click="promptDeleteGroup(item.name)">
+              <v-icon start>mdi-delete</v-icon>
+              Delete
+            </v-btn>
+          </v-col>
+        </v-row>
+      </v-card>
+
+      <v-snackbar v-model="showChangeGroupStatus" :color="changeGroupStatus === 'Success' ? 'success' : 'error'"
+        timeout="5000">
+        {{ changeGroupMsg }}
+        <template v-slot:actions>
+          <v-btn variant="text" @click="clearChangeGroupStatus">Close</v-btn>
+        </template>
+      </v-snackbar>
+    </v-card>
+
+    <!-- Add Group Section -->
+    <v-card v-if="!editingGroup" class="pa-4">
+      <v-card-title class="text-h5 pb-2">Add Group</v-card-title>
+      <v-form @submit.prevent="addGroup">
+        <v-text-field v-model="name" label="Group Name" prepend-inner-icon="mdi-account-group" variant="outlined"
+          class="mb-2"></v-text-field>
+
+        <v-alert v-if="addGroupStatus" :type="addGroupStatus === 'Success' ? 'success' : 'error'" variant="tonal"
+          class="my-4" closable @click:close="addGroupStatus = ''">
+          {{ addGroupMsg }}
+        </v-alert>
+
+        <v-btn type="submit" color="primary" class="mt-2">
+          <v-icon start>mdi-plus</v-icon>
+          Add Group
+        </v-btn>
+      </v-form>
+    </v-card>
+
+    <!-- Edit Group Section -->
+    <v-card v-else class="pa-4">
+      <v-card-title class="text-h5 pb-2">
+        <v-icon icon="mdi-account-group" class="mr-2"></v-icon>
+        Edit Group: {{ editingGroup }}
+      </v-card-title>
+
+      <!-- Group Users List -->
+      <v-card class="mb-4 pa-3 bg-grey-lighten-5">
+        <v-card-title class="text-h6">Group Members</v-card-title>
+
+        <div v-if="groupUsers.length === 0" class="text-center pa-4">
+          <v-icon icon="mdi-account-off" size="large" color="grey-lighten-1" class="mb-2"></v-icon>
+          <div class="text-body-1 text-grey">No users in this group. Add members below.</div>
         </div>
-      </div>
 
-      <status-notification :status="addGroupStatus" @update:clear="addGroupStatus = $event">
-        {{ addGroupMsg }}
-      </status-notification>
+        <v-list v-else>
+          <v-list-item v-for="user in groupUsers" :key="user.name" class="py-1">
+            <template v-slot:prepend>
+              <v-avatar color="primary" size="32">
+                <v-icon icon="mdi-account" size="small" color="white"></v-icon>
+              </v-avatar>
+            </template>
 
-      <div class="control">
-        <button class="button is-info" @click.prevent="addGroup">Add</button>
-      </div>
-    </form>
-  </div>
-  <div v-else>
-    <h3 class="k-h3">Edit Group {{ editingGroup }}</h3>
-    <h2 class="k-h2">Group users</h2>
-    <template v-for="user in groupUsers" :key="user.name">
-      <div class="groupUser">
-        <span class="userName">{{ user.name }}</span>
-        <span class="tag is-danger is-light">
-          <a @click="deleteGroupUser(user.name)">Remove</a>
-        </span>
-      </div>
-    </template>
-    <status-notification :status="deleteUserStatus" @update:clear="deleteUserStatus = $event">
-      {{ deleteUserMsg }}
-    </status-notification>
-    <h3 class="k-h3">Add group user</h3>
-    <form class="mb-3">
-      <div class="field has-addons">
-        <div class="control is-expanded">
-          <div class="select is-fullwidth">
-            <select v-model="groupUserName" class="input is-info">
-              <option v-for="option in availableUsers" :value="option.name">
-                {{ option.name }}
-              </option>
-            </select>
-          </div>
-        </div>
-        <div class="control">
-          <button type="submit" class="button is-info" @click.prevent="addGroupUser">
-            Add
-          </button>
-        </div>
-      </div>
-      <status-notification :status="addUserStatus" @update:clear="addUserStatus = $event">
-        {{ addUserMsg }}
-      </status-notification>
-    </form>
+            <v-list-item-title>{{ user.name }}</v-list-item-title>
 
-    <div class="control">
-      <button class="button is-info" @click.prevent="cancelEditGroup">
-        Cancel
-      </button>
-    </div>
-  </div>
+            <template v-slot:append>
+              <v-btn variant="text" color="error" density="comfortable" icon="mdi-delete"
+                @click="promptDeleteGroupUser(user.name)"></v-btn>
+            </template>
+          </v-list-item>
+        </v-list>
+
+        <v-alert v-if="deleteUserStatus" :type="deleteUserStatus === 'Success' ? 'success' : 'error'" variant="tonal"
+          class="mt-4" closable @click:close="deleteUserStatus = ''">
+          {{ deleteUserMsg }}
+        </v-alert>
+      </v-card>
+
+      <!-- Add User to Group -->
+      <v-card class="mb-4 pa-3 bg-grey-lighten-5">
+        <v-card-title class="text-h6">Add Member</v-card-title>
+
+        <v-form @submit.prevent="addGroupUser" class="mt-2">
+          <v-row>
+            <v-col cols="12" sm="8">
+              <v-select v-model="groupUserName" :items="availableUsers" item-title="name" item-value="name"
+                label="Select User" variant="outlined" prepend-inner-icon="mdi-account-plus"
+                :disabled="availableUsers.length === 0"
+                :hint="availableUsers.length === 0 ? 'No available users to add' : ''" persistent-hint></v-select>
+            </v-col>
+
+            <v-col cols="12" sm="4" class="d-flex align-center">
+              <v-btn type="submit" color="primary" :disabled="!groupUserName || availableUsers.length === 0" block>
+                <v-icon start>mdi-account-plus</v-icon>
+                Add User
+              </v-btn>
+            </v-col>
+          </v-row>
+        </v-form>
+
+        <v-alert v-if="addUserStatus" :type="addUserStatus === 'Success' ? 'success' : 'error'" variant="tonal"
+          class="mt-4" closable @click:close="addUserStatus = ''">
+          {{ addUserMsg }}
+        </v-alert>
+      </v-card>
+
+      <v-btn color="grey" variant="outlined" class="mt-2" @click="cancelEditGroup">
+        <v-icon start>mdi-arrow-left</v-icon>
+        Back to Groups
+      </v-btn>
+    </v-card>
+
+    <!-- Confirmation Dialogs -->
+    <v-dialog v-model="confirmDialog" max-width="500">
+      <v-card>
+        <v-card-title>{{ confirmTitle }}</v-card-title>
+        <v-card-text>{{ confirmMessage }}</v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="grey-darken-1" variant="text" @click="confirmDialog = false">Cancel</v-btn>
+          <v-btn color="primary" variant="text" @click="confirmAction">Confirm</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </v-container>
 </template>
 
 <script setup lang="ts">
-import StatusNotification from "./StatusNotification.vue";
 import { onBeforeMount, ref, computed } from "vue";
 import {
   ADD_GROUP,
@@ -105,6 +170,7 @@ const deleteUserStatus = ref("");
 const deleteUserMsg = ref("");
 const changeGroupStatus = ref("");
 const changeGroupMsg = ref("");
+const showChangeGroupStatus = ref(false);
 const items = ref([]);
 const users = ref([]);
 const groupUsers = ref([]);
@@ -112,10 +178,15 @@ const groupUserName = ref("");
 const name = ref("");
 const editingGroup = ref("");
 
+// Confirmation dialog
+const confirmDialog = ref(false);
+const confirmTitle = ref("");
+const confirmMessage = ref("");
+const confirmAction = ref(() => { });
+
 const availableUsers = computed(() => {
   return users.value.filter(
-    (user) =>
-      !groupUsers.value.some((groupUser) => groupUser.name === user.name),
+    (user) => !groupUsers.value.some((groupUser) => groupUser.name === user.name)
   );
 });
 
@@ -124,12 +195,21 @@ onBeforeMount(() => {
   getUsers();
 });
 
+function clearChangeGroupStatus() {
+  showChangeGroupStatus.value = false;
+  setTimeout(() => {
+    changeGroupStatus.value = "";
+    changeGroupMsg.value = "";
+  }, 300);
+}
+
 function editGroup(groupName) {
   editingGroup.value = groupName;
+  groupUserName.value = "";
   getGroupUsers();
 }
 
-function cancelEditGroup(groupName) {
+function cancelEditGroup() {
   editingGroup.value = "";
   groupUserName.value = "";
   groupUsers.value = [];
@@ -146,7 +226,9 @@ function addGroup() {
       if (res.status == 200) {
         addGroupStatus.value = "Success";
         addGroupMsg.value = "Group successfully added.";
-        // Update user list
+        // Clear the form
+        name.value = "";
+        // Update group list
         getGroups();
       }
     })
@@ -171,8 +253,7 @@ function addGroup() {
 
 function getGroups() {
   axios
-    // @ts-ignore
-    .get(LIST_GROUPS, { cache: false }) // disable caching to get updated token list (TS doesn't recognize cache option)
+    .get(LIST_GROUPS, { cache: false }) // disable caching to get updated token list
     .then((res) => {
       if (res.status == 200) {
         items.value = res.data;
@@ -185,8 +266,7 @@ function getGroups() {
 
 function getUsers() {
   axios
-    // @ts-ignore
-    .get(LIST_USERS, { cache: false }) // disable caching to get updated token list (TS doesn't recognize cache option)
+    .get(LIST_USERS, { cache: false }) // disable caching to get updated token list
     .then((res) => {
       if (res.status == 200) {
         users.value = res.data;
@@ -197,38 +277,51 @@ function getUsers() {
     });
 }
 
-function deleteGroup(name: string) {
-  if (confirm('Delete group "' + name + '"?')) {
-    axios
-      .delete(DELETE_GROUP(name))
-      .then((res) => {
-        if (res.status == 200) {
-          changeGroupStatus.value = "Success";
-          changeGroupMsg.value = 'Group "' + name + '" deleted';
-          getGroups();
-        }
-      })
-      .catch((error) => {
-        changeGroupStatus.value = "Error";
-        if (error.response.status == 404) {
-          // "Unauthorized. Login first."
-          router.push("/login");
-        } else if (error.response.status == 500) {
-          changeGroupMsg.value = "Group could not be deleted";
-        } else {
-          changeGroupMsg.value = "Unknown error";
-        }
-      });
-  }
+function promptDeleteGroup(name: string) {
+  confirmTitle.value = "Delete Group";
+  confirmMessage.value = `Are you sure you want to delete group "${name}"?`;
+  confirmAction.value = () => deleteGroup(name);
+  confirmDialog.value = true;
 }
+
+function deleteGroup(name: string) {
+  axios
+    .delete(DELETE_GROUP(name))
+    .then((res) => {
+      if (res.status == 200) {
+        changeGroupStatus.value = "Success";
+        changeGroupMsg.value = `Group "${name}" deleted`;
+        showChangeGroupStatus.value = true;
+        confirmDialog.value = false;
+        getGroups();
+      }
+    })
+    .catch((error) => {
+      changeGroupStatus.value = "Error";
+      if (error.response.status == 404) {
+        // "Unauthorized. Login first."
+        router.push("/login");
+      } else if (error.response.status == 500) {
+        changeGroupMsg.value = "Group could not be deleted";
+      } else {
+        changeGroupMsg.value = "Unknown error";
+      }
+      showChangeGroupStatus.value = true;
+      confirmDialog.value = false;
+    });
+}
+
 function addGroupUser() {
+  if (!groupUserName.value) return;
+
   axios
     .put(GROUP_USER(editingGroup.value, groupUserName.value))
     .then((res) => {
       if (res.status == 200) {
         addUserStatus.value = "Success";
         addUserMsg.value = "Group user successfully added.";
-        // Update user list
+        // Clear selection and update user list
+        groupUserName.value = "";
         getGroupUsers();
       }
     })
@@ -249,40 +342,45 @@ function addGroupUser() {
     });
 }
 
-function deleteGroupUser(name: string) {
-  if (confirm('Delete group user "' + name + '"?')) {
-    axios
-      .delete(GROUP_USER(editingGroup.value, name))
-      .then((res) => {
-        if (res.status == 200) {
-          deleteUserStatus.value = "Success";
-          deleteUserMsg.value = "Group user successfully deleted.";
-          // Update user list
-          getGroupUsers();
-        }
-      })
-      .catch((error) => {
-        if (error.response) {
-          deleteUserStatus.value = "Error";
-          deleteUserMsg.value = "Group user could not be deleted.";
+function promptDeleteGroupUser(name: string) {
+  confirmTitle.value = "Remove User from Group";
+  confirmMessage.value = `Are you sure you want to remove user "${name}" from the group?`;
+  confirmAction.value = () => deleteGroupUser(name);
+  confirmDialog.value = true;
+}
 
-          if (error.response.status == 404) {
-            // "Unauthorized. Login first."
-            router.push("/login");
-          } else if (error.response.status == 500) {
-            deleteUserMsg.value = "Group user could not be deleted";
-          } else {
-            deleteUserMsg.value = "Unknown error";
-          }
+function deleteGroupUser(name: string) {
+  axios
+    .delete(GROUP_USER(editingGroup.value, name))
+    .then((res) => {
+      if (res.status == 200) {
+        deleteUserStatus.value = "Success";
+        deleteUserMsg.value = "Group user successfully removed.";
+        confirmDialog.value = false;
+        // Update user list
+        getGroupUsers();
+      }
+    })
+    .catch((error) => {
+      if (error.response) {
+        deleteUserStatus.value = "Error";
+        deleteUserMsg.value = "Group user could not be removed.";
+        confirmDialog.value = false;
+
+        if (error.response.status == 404) {
+          // "Unauthorized. Login first."
+          router.push("/login");
+        } else if (error.response.status == 500) {
+          deleteUserMsg.value = "Group user could not be removed";
+        } else {
+          deleteUserMsg.value = "Unknown error";
         }
-      });
-  }
+      }
+    });
 }
 
 function getGroupUsers() {
   axios
-    // disable caching to get updated token list (TS doesn't recognize cache option)
-    // @ts-ignore
     .get(GROUP_USERS(editingGroup.value), { cache: false })
     .then((res) => {
       if (res.status == 200) {
@@ -296,23 +394,7 @@ function getGroupUsers() {
 </script>
 
 <style scoped>
-.groupMgmt {
-  border-radius: 2px;
-  margin: 0.5rem 0 0.5rem 0;
-  padding: 0.5rem;
-  display: grid;
-  grid-template-columns: 1fr max-content max-content;
-}
-
-.groupUser {
-  border-radius: 2px;
-  margin: 0.5rem 0 0.5rem 0;
-  padding: 0.5rem;
-  display: grid;
-  grid-template-columns: 1fr max-content;
-}
-
-.groupName {
-  font-weight: bolder;
+.gap-2 {
+  gap: 8px;
 }
 </style>
