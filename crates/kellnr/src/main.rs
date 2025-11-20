@@ -71,6 +71,7 @@ async fn main() {
     let signing_key = Key::generate();
     let max_docs_size = settings.docs.max_size;
     let max_crate_size = settings.registry.max_crate_size as usize;
+    let route_path_prefix = settings.origin.path.trim().to_owned();
     let state = AppStateData {
         db,
         signing_key,
@@ -81,7 +82,10 @@ async fn main() {
     };
 
     // Create router using the route module
-    let app = routes::create_router(state, &data_dir, max_docs_size, max_crate_size);
+    let mut app = routes::create_router(state, &data_dir, max_docs_size, max_crate_size);
+    if !route_path_prefix.is_empty() {
+        app = axum::Router::new().nest(&route_path_prefix, app);
+    }
 
     // Start the server
     let listener = TcpListener::bind(addr)
