@@ -108,7 +108,7 @@ mod service_tests {
     use common::{
         normalized_name::NormalizedName,
         version::Version,
-        webhook::{Webhook, WebhookAction},
+        webhook::{Webhook, WebhookEvent},
     };
     use db::{ConString, Database, DbProvider, SqliteConString};
 
@@ -122,13 +122,13 @@ mod service_tests {
 
         for _ in 0..5 {
             let _ = db
-                .register_webhook(sample_webhook(WebhookAction::CrateAdd, 9980))
+                .register_webhook(sample_webhook(WebhookEvent::CrateAdd, 9980))
                 .await
                 .unwrap();
         }
 
         notify_crate(
-            WebhookAction::CrateAdd,
+            WebhookEvent::CrateAdd,
             &Utc::now(),
             &NormalizedName::from_unchecked_str("Test-Crate"),
             &Version::from_unchecked_str("0.1.0"),
@@ -154,12 +154,12 @@ mod service_tests {
         let db = get_db().await;
 
         let _ = db
-            .register_webhook(sample_webhook(WebhookAction::CrateAdd, 9981))
+            .register_webhook(sample_webhook(WebhookEvent::CrateAdd, 9981))
             .await
             .unwrap();
 
         notify_crate(
-            WebhookAction::CrateAdd,
+            WebhookEvent::CrateAdd,
             &Utc::now(),
             &NormalizedName::from_unchecked_str("Test-Crate"),
             &Version::from_unchecked_str("0.1.0"),
@@ -200,12 +200,12 @@ mod service_tests {
         let db = get_db().await;
 
         let _ = db
-            .register_webhook(sample_webhook(WebhookAction::CrateAdd, 9982))
+            .register_webhook(sample_webhook(WebhookEvent::CrateAdd, 9982))
             .await
             .unwrap();
 
         notify_crate(
-            WebhookAction::CrateAdd,
+            WebhookEvent::CrateAdd,
             &Utc::now(),
             &NormalizedName::from_unchecked_str("Test-Crate"),
             &Version::from_unchecked_str("0.1.0"),
@@ -232,10 +232,10 @@ mod service_tests {
         Arc::new(db)
     }
 
-    fn sample_webhook(action: WebhookAction, callback_port: u16) -> Webhook {
+    fn sample_webhook(event: WebhookEvent, callback_port: u16) -> Webhook {
         Webhook {
             id: None,
-            action,
+            event,
             callback_url: format!("http://0.0.0.0:{callback_port}"),
             name: None,
         }

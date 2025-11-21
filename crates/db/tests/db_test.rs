@@ -7,7 +7,7 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::{PublishMetadata, RegistryDep};
 use common::version::Version;
-use common::webhook::{Webhook, WebhookAction, WebhookQueue};
+use common::webhook::{Webhook, WebhookEvent, WebhookQueue};
 use db::password::hash_pwd;
 use db::provider::PrefetchState;
 use db::{test_utils::*, DbProvider, DocQueueEntry, User};
@@ -2566,14 +2566,14 @@ async fn test_delete_crate_rollback(test_db: &db::Database) {
 async fn test_register_webhook(test_db: &db::Database) {
     let webhook = Webhook {
         id: None,
-        action: WebhookAction::CrateYank,
+        event: WebhookEvent::CrateYank,
         callback_url: "https://my-other-service:8005".to_string(),
         name: Some("myWebhook".to_string()),
     };
     let id = test_db.register_webhook(webhook).await.unwrap();
     let entry = test_db.get_webhook(&id).await.unwrap();
 
-    assert_eq!(WebhookAction::CrateYank, entry.action);
+    assert_eq!(WebhookEvent::CrateYank, entry.event);
     assert_eq!(
         "https://my-other-service:8005".to_string(),
         entry.callback_url
@@ -2585,7 +2585,7 @@ async fn test_register_webhook(test_db: &db::Database) {
 async fn test_delete_webhook(test_db: &db::Database) {
     let webhook = Webhook {
         id: None,
-        action: WebhookAction::CrateYank,
+        event: WebhookEvent::CrateYank,
         callback_url: "https://my-other-service:8005".to_string(),
         name: None,
     };
@@ -2606,10 +2606,10 @@ async fn test_get_all_webhooks(test_db: &db::Database) {
             test_db
                 .register_webhook(Webhook {
                     id: None,
-                    action: if i % 2 == 0 {
-                        WebhookAction::CrateYank
+                    event: if i % 2 == 0 {
+                        WebhookEvent::CrateYank
                     } else {
-                        WebhookAction::CrateAdd
+                        WebhookEvent::CrateAdd
                     },
                     callback_url: String::new(),
                     name: None,
@@ -2631,7 +2631,7 @@ async fn test_get_all_webhooks(test_db: &db::Database) {
 async fn test_add_webhook_queue(test_db: &db::Database) {
     let webhook = Webhook {
         id: None,
-        action: WebhookAction::CrateUpdate,
+        event: WebhookEvent::CrateUpdate,
         callback_url: "https://update-service.io".to_string(),
         name: None,
     };
@@ -2639,7 +2639,7 @@ async fn test_add_webhook_queue(test_db: &db::Database) {
 
     let payload = json!({"test": "data"});
     let result = test_db
-        .add_webhook_queue(WebhookAction::CrateUpdate, payload.clone())
+        .add_webhook_queue(WebhookEvent::CrateUpdate, payload.clone())
         .await;
     assert!(result.is_ok());
 
@@ -2661,7 +2661,7 @@ async fn test_add_webhook_queue(test_db: &db::Database) {
 async fn test_get_pending_webhook_queue_entries(test_db: &db::Database) {
     let webhook = Webhook {
         id: None,
-        action: WebhookAction::CrateUpdate,
+        event: WebhookEvent::CrateUpdate,
         callback_url: String::new(),
         name: None,
     };
@@ -2670,7 +2670,7 @@ async fn test_get_pending_webhook_queue_entries(test_db: &db::Database) {
     let payloads = (0..3).map(|i| json!(i)).collect::<Vec<_>>();
     for payload in payloads.iter() {
         test_db
-            .add_webhook_queue(WebhookAction::CrateUpdate, payload.clone())
+            .add_webhook_queue(WebhookEvent::CrateUpdate, payload.clone())
             .await
             .unwrap();
     }
@@ -2706,7 +2706,7 @@ async fn test_get_pending_webhook_queue_entries(test_db: &db::Database) {
 async fn test_delete_webhook_queue(test_db: &db::Database) {
     let webhook = Webhook {
         id: None,
-        action: WebhookAction::CrateUpdate,
+        event: WebhookEvent::CrateUpdate,
         callback_url: String::new(),
         name: None,
     };
@@ -2714,7 +2714,7 @@ async fn test_delete_webhook_queue(test_db: &db::Database) {
 
     let payload = json!(0);
     let result = test_db
-        .add_webhook_queue(WebhookAction::CrateUpdate, payload.clone())
+        .add_webhook_queue(WebhookEvent::CrateUpdate, payload.clone())
         .await;
     assert!(result.is_ok());
 

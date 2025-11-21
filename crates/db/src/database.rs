@@ -1,7 +1,7 @@
 use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{DbResult, PrefetchState};
 use crate::tables::init_database;
-use crate::{AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User, error::DbError};
+use crate::{error::DbError, AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User};
 use crate::{ConString, DocQueueEntry};
 use chrono::{DateTime, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
@@ -13,7 +13,7 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
-use common::webhook::{Webhook, WebhookAction, WebhookQueue};
+use common::webhook::{Webhook, WebhookEvent, WebhookQueue};
 use entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
@@ -25,11 +25,11 @@ use migration::iden::{
 };
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
     entity::prelude::Uuid,
     prelude::async_trait::async_trait,
     query::{QueryOrder, QuerySelect, TransactionTrait},
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
 };
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -1781,7 +1781,7 @@ impl DbProvider for Database {
 
     async fn register_webhook(&self, webhook: Webhook) -> DbResult<String> {
         let w = webhook::ActiveModel {
-            action: Set(Into::<&str>::into(webhook.action).to_string()),
+            event: Set(Into::<&str>::into(webhook.event).to_string()),
             callback_url: Set(webhook.callback_url),
             name: Set(webhook.name),
             ..Default::default()
@@ -1814,11 +1814,11 @@ impl DbProvider for Database {
         Ok(Webhook {
             id: Some(w.id.into()),
             name: w.name,
-            action: w
-                .action
+            event: w
+                .event
                 .as_str()
                 .try_into()
-                .map_err(|_| DbError::InvalidWebhookAction(w.action))?,
+                .map_err(|_| DbError::InvalidWebhookEvent(w.event))?,
             callback_url: w.callback_url,
         })
     }
@@ -1830,8 +1830,8 @@ impl DbProvider for Database {
                 Some(Webhook {
                     id: Some(w.id.into()),
                     name: w.name,
-                    // Entries with invalid actions would get skipped
-                    action: w.action.as_str().try_into().ok()?,
+                    // Entries with invalid events would get skipped
+                    event: w.event.as_str().try_into().ok()?,
                     callback_url: w.callback_url,
                 })
             })
@@ -1839,11 +1839,11 @@ impl DbProvider for Database {
     }
     async fn add_webhook_queue(
         &self,
-        action: WebhookAction,
+        event: WebhookEvent,
         payload: serde_json::Value,
     ) -> DbResult<()> {
         let w = webhook::Entity::find()
-            .filter(webhook::Column::Action.eq(Into::<&str>::into(action)))
+            .filter(webhook::Column::Event.eq(Into::<&str>::into(event)))
             .all(&self.db_con)
             .await?;
 

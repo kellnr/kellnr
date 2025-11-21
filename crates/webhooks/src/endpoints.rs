@@ -20,7 +20,7 @@ pub async fn register_webhook(
     let id = db
         .register_webhook(Webhook {
             id: None,
-            action: input.action,
+            event: input.event,
             callback_url: input.callback_url,
             name: input.name,
         })
@@ -41,7 +41,7 @@ pub async fn get_webhook(
     let w = db.get_webhook(&id).await?;
     Ok(Json(types::GetWebhookResponse {
         id: w.id.unwrap_or_default(),
-        action: w.action,
+        event: w.event,
         callback_url: w.callback_url,
         name: w.name,
     }))
@@ -104,7 +104,7 @@ mod endpoint_tests {
     use axum::response::Response;
     use axum::routing::{delete, get, post};
     use axum::Router;
-    use common::webhook::WebhookAction;
+    use common::webhook::WebhookEvent;
     use db::{ConString, Database, DbProvider, SqliteConString};
     use hyper::header;
     use serde::de::DeserializeOwned;
@@ -123,7 +123,7 @@ mod endpoint_tests {
     async fn test_register_webhook() {
         let (router, db) = get_app().await;
 
-        let payload = "{\"action\": \"crate_add\", \"callback_url\": \"http://my-service:8000\"}";
+        let payload = "{\"type\": \"crate_add\", \"callback_url\": \"http://my-service:8000\"}";
 
         let response = router
             .clone()
@@ -142,7 +142,7 @@ mod endpoint_tests {
         let response: RegisterWebhookResponse = parse_response(response).await;
 
         let webhook = db.get_webhook(&response.id).await.unwrap();
-        assert_eq!(webhook.action, WebhookAction::CrateAdd);
+        assert_eq!(webhook.event, WebhookEvent::CrateAdd);
         assert_eq!(webhook.callback_url, "http://my-service:8000".to_string());
     }
 
@@ -150,7 +150,7 @@ mod endpoint_tests {
     async fn test_register_webhook_non_admin() {
         let (router, _) = get_app().await;
 
-        let payload = "{\"action\": \"crate_add\", \"callback_url\": \"http://my-service:8000\"}";
+        let payload = "{\"type\": \"crate_add\", \"callback_url\": \"http://my-service:8000\"}";
 
         let response = router
             .clone()
@@ -188,7 +188,7 @@ mod endpoint_tests {
 
         let response: GetWebhookResponse = parse_response(response).await;
 
-        assert_eq!(response.action, WebhookAction::CrateUpdate);
+        assert_eq!(response.event, WebhookEvent::CrateUpdate);
         assert_eq!(response.callback_url, sample_webhook().callback_url);
         assert_eq!(response.name, sample_webhook().name);
     }
@@ -407,7 +407,7 @@ mod endpoint_tests {
     fn sample_webhook() -> Webhook {
         Webhook {
             id: None,
-            action: WebhookAction::CrateUpdate,
+            event: WebhookEvent::CrateUpdate,
             callback_url: "https://some-callback:8000".to_string(),
             name: Some("My callback".to_string()),
         }

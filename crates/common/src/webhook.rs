@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Webhook {
     pub id: Option<String>,
-    pub action: WebhookAction,
+    // `type` alias included for webhook standards compatibility
+    #[serde(alias = "type")]
+    pub event: WebhookEvent,
     pub callback_url: String,
     pub name: Option<String>,
 }
@@ -19,7 +21,7 @@ pub struct WebhookQueue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum WebhookAction {
+pub enum WebhookEvent {
     #[serde(rename = "crate_add")]
     CrateAdd,
     #[serde(rename = "crate_update")]
@@ -29,17 +31,17 @@ pub enum WebhookAction {
     #[serde(rename = "crate_unyank")]
     CrateUnyank,
 }
-impl From<WebhookAction> for &str {
-    fn from(value: WebhookAction) -> Self {
+impl From<WebhookEvent> for &str {
+    fn from(value: WebhookEvent) -> Self {
         match value {
-            WebhookAction::CrateAdd => "crate_add",
-            WebhookAction::CrateUpdate => "crate_update",
-            WebhookAction::CrateYank => "crate_yank",
-            WebhookAction::CrateUnyank => "crate_unyank",
+            WebhookEvent::CrateAdd => "crate_add",
+            WebhookEvent::CrateUpdate => "crate_update",
+            WebhookEvent::CrateYank => "crate_yank",
+            WebhookEvent::CrateUnyank => "crate_unyank",
         }
     }
 }
-impl TryFrom<&str> for WebhookAction {
+impl TryFrom<&str> for WebhookEvent {
     type Error = String;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
@@ -47,7 +49,7 @@ impl TryFrom<&str> for WebhookAction {
             "crate_update" => Ok(Self::CrateUpdate),
             "crate_yank" => Ok(Self::CrateYank),
             "crate_unyank" => Ok(Self::CrateUnyank),
-            a => Err(format!("'{a}' is not a valid webhook action")),
+            a => Err(format!("'{a}' is not a valid webhook event")),
         }
     }
 }

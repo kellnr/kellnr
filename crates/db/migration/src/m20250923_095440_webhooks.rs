@@ -12,7 +12,7 @@ impl MigrationTrait for Migration {
                     .table(WebhookIden::Table)
                     .if_not_exists()
                     .col(pk_uuid(WebhookIden::Id))
-                    .col(string(WebhookIden::Action))
+                    .col(string(WebhookIden::Event))
                     .col(string(WebhookIden::CallbackUrl))
                     .col(string_null(WebhookIden::Name))
                     .to_owned(),
@@ -57,7 +57,7 @@ enum WebhookIden {
     #[iden = "webhook"]
     Table,
     Id,
-    Action,
+    Event,
     #[iden = "callback_url"]
     CallbackUrl,
     Name,

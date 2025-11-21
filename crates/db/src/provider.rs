@@ -1,4 +1,4 @@
-use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta, error::DbError};
+use crate::{crate_meta, error::DbError, AuthToken, CrateSummary, DocQueueEntry, Group, User};
 use chrono::{DateTime, Utc};
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;
@@ -9,7 +9,7 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::PublishMetadata;
 use common::version::Version;
-use common::webhook::{Webhook, WebhookAction, WebhookQueue};
+use common::webhook::{Webhook, WebhookEvent, WebhookQueue};
 use crate_meta::CrateMeta;
 use sea_orm::prelude::async_trait::async_trait;
 use std::path::Path;
@@ -163,11 +163,11 @@ pub trait DbProvider: Send + Sync {
     async fn get_webhook(&self, id: &str) -> DbResult<Webhook>;
     async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>>;
     /// Creates a new webhook queue entry for each register webhook
-    /// matching the given action. Next_attempt is set to current time,
+    /// matching the given event. Next_attempt is set to current time,
     ///  in order to trigger immediate dispatch.
     async fn add_webhook_queue(
         &self,
-        action: WebhookAction,
+        event: WebhookEvent,
         payload: serde_json::Value,
     ) -> DbResult<()>;
     /// Extracts webhook queue entries with `next_attempt` at or earlier than proviced timestamp.
@@ -512,7 +512,7 @@ pub mod mock {
             async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>> {
                 unimplemented!()
             }
-            async fn add_webhook_queue(&self, action: WebhookAction, payload: serde_json::Value) -> DbResult<()> {
+            async fn add_webhook_queue(&self, event: WebhookEvent, payload: serde_json::Value) -> DbResult<()> {
                 unimplemented!()
             }
             async fn get_pending_webhook_queue_entries(&self, timestamp: DateTime<Utc>) -> DbResult<Vec<WebhookQueue>> {

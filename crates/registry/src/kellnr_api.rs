@@ -18,7 +18,7 @@ use common::original_name::OriginalName;
 use common::search_result;
 use common::search_result::{Crate, SearchResult};
 use common::version::Version;
-use common::webhook::WebhookAction;
+use common::webhook::WebhookEvent;
 use db::DbProvider;
 use error::api_error::{ApiError, ApiResult};
 use std::convert::TryFrom;
@@ -434,9 +434,9 @@ pub async fn publish(
 
     webhooks::notify_crate(
         if id.is_none() {
-            WebhookAction::CrateAdd
+            WebhookEvent::CrateAdd
         } else {
-            WebhookAction::CrateUpdate
+            WebhookEvent::CrateUpdate
         },
         &created,
         &normalized_name,
@@ -474,7 +474,7 @@ pub async fn yank(
     db.yank_crate(&crate_name, &version).await?;
 
     webhooks::notify_crate(
-        WebhookAction::CrateYank,
+        WebhookEvent::CrateYank,
         &Utc::now(),
         &crate_name,
         &version,
@@ -501,7 +501,7 @@ pub async fn unyank(
     db.unyank_crate(&crate_name, &version).await?;
 
     webhooks::notify_crate(
-        WebhookAction::CrateUnyank,
+        WebhookEvent::CrateUnyank,
         &Utc::now(),
         &crate_name,
         &version,

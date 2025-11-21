@@ -1,10 +1,10 @@
-use common::webhook::{Webhook, WebhookAction};
+use common::webhook::{Webhook, WebhookEvent};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegisterWebhookRequest {
-    pub action: WebhookAction,
+    pub event: WebhookEvent,
     pub callback_url: String,
     pub name: Option<String>,
 }
@@ -17,7 +17,7 @@ pub struct RegisterWebhookResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GetWebhookResponse {
     pub id: String,
-    pub action: WebhookAction,
+    pub event: WebhookEvent,
     pub callback_url: String,
     pub name: Option<String>,
 }

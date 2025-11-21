@@ -54,8 +54,8 @@ pub enum DbError {
     MissingCratesIoIndexData(String),
     #[error("Webhook not found")]
     WebhookNotFound,
-    #[error("Invalid webhook action {0}")]
-    InvalidWebhookAction(String),
+    #[error("Invalid webhook event {0}")]
+    InvalidWebhookEvent(String),
     #[error("Invalid id {0}")]
     InvalidId(String),
 }
