@@ -4,6 +4,8 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegisterWebhookRequest {
+    // `type` alias included for webhook standards compatibility
+    #[serde(alias = "type")]
     pub event: WebhookEvent,
     pub callback_url: String,
     pub name: Option<String>,

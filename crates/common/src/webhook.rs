@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Webhook {
     pub id: Option<String>,
-    // `type` alias included for webhook standards compatibility
-    #[serde(alias = "type")]
     pub event: WebhookEvent,
     pub callback_url: String,
     pub name: Option<String>,
