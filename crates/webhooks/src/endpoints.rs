@@ -311,7 +311,7 @@ mod endpoint_tests {
     #[tokio::test]
     async fn test_test_webhook() {
         let (router, db) = get_app().await;
-        let mut listener = get_test_listener(9977).await;
+        let mut listener = get_test_listener(9977, 200).await;
 
         let mut webhook = sample_webhook();
         webhook.callback_url = "http://0.0.0.0:9977".to_string();
@@ -337,7 +337,7 @@ mod endpoint_tests {
     #[tokio::test]
     async fn test_test_webhook_non_admin() {
         let (router, db) = get_app().await;
-        let mut listener = get_test_listener(9978).await;
+        let mut listener = get_test_listener(9978, 200).await;
 
         let mut webhook = sample_webhook();
         webhook.callback_url = "http://0.0.0.0:9978".to_string();
