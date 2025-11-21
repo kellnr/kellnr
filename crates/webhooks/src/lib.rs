@@ -5,6 +5,8 @@ use serde_json::json;
 
 mod endpoints;
 mod service;
+#[cfg(test)]
+mod tests;
 mod types;
 
 pub use endpoints::{
