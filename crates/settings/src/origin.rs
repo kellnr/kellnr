@@ -6,6 +6,7 @@ pub struct Origin {
     pub hostname: String,
     pub port: u16,
     pub protocol: Protocol,
+    pub path: String,
 }
 
 impl Default for Origin {
@@ -14,6 +15,7 @@ impl Default for Origin {
             hostname: "127.0.0.1".to_string(),
             port: 8000,
             protocol: Protocol::Http,
+            path: String::new(),
         }
     }
 }

@@ -29,16 +29,16 @@ impl TestS3Storage {
             },
             s3: S3 {
                 enabled: true,
-                access_key: "minioadmin".into(),
-                secret_key: "minioadmin".into(),
-                endpoint: url.to_string(),
+                access_key: Some("minioadmin".into()),
+                secret_key: Some("minioadmin".into()),
+                endpoint: Some(url.to_string()),
+                allow_http: true,
                 ..S3::default()
             },
             ..Settings::default()
         };
         let storage =
-            Box::new(S3Storage::try_from((settings.s3.crates_bucket.as_str(), &settings)).unwrap())
-                as DynStorage;
+            Box::new(S3Storage::try_from(("kellnr-crates", &settings)).unwrap()) as DynStorage;
         let crate_storage = KellnrCrateStorage::new(&settings, storage);
         TestS3Storage { crate_storage }
     }

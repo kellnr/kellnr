@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub use sea_orm_migration::prelude::*;
 pub mod iden;
 mod m20220101_0000010_create_table;

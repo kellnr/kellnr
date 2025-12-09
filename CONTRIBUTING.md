@@ -145,3 +145,25 @@ If your feature is configurable with settings, please update the [kellnr helm ch
 If you have any questions about contributing, please open an issue for discussion.
 
 Thank you for contributing to Kellnr!
+
+# Creating a new Release
+
+As `kellnr` is a multi-repo project, creating a new release involves several steps across different repositories. Please follow the steps below to ensure a smooth release process.
+
+0. Create a new release in the `kellnr` repository from the `main` branch [here](https://github.com/kellnr/kellnr/releases). 
+    - The version should be in the format `vX.Y.Z`, e.g., `v1.2.3`. 
+    - This builds `kellnr` and creates the release artifacts, e.g. binary files and Docker images.
+0. Release a new version of the `helm` chart for `kellnr`:
+    - Navigate to the [kellnr helm chart repository](https://github.com/kellnr/helm)
+    - Update the `Chart.yaml` file with the new version number and any other relevant changes.
+    - If settings have changed, update the `values.yaml` file and templates accordingly.
+    - Commit the changes and push them to the `main` branch. 
+    - Every push to the `main` branch will automatically create a new release in the helm chart repository.
+0. Update the documentation to reflect the new release:
+    - Navigate to the [kellnr documentation repository](https://github.com/kellnr/website)
+    - Update the [changelog](https://github.com/kellnr/website/blob/main/src/views/ChangelogView.vue) by adding a new entry for the release.
+    - Update the [XSS feed](https://github.com/kellnr/website/blob/main/public/rss.xml) by adding a new item for the release.
+    - If needed, update the [documentation](https://github.com/kellnr/website/blob/main/src/views/DocumentationV5View.vue) pages to reflect any new features or changes in the release.
+    - Commit the changes and push them to the `main` branch. This will automatically deploy the updated documentation.
+
+By following these steps, you will ensure that the new release of `kellnr` is properly documented and available for users to deploy via the helm chart. Thank you for your contributions!

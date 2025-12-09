@@ -52,27 +52,6 @@ impl Storage for S3Storage {
 }
 
 impl S3Storage {
-    pub fn new(
-        region: &str,
-        url: &str,
-        access_key_id: &str,
-        secret_access_key: &str,
-        allow_http: bool,
-        bucket: &str,
-    ) -> Result<Self, StorageError> {
-        let client = AmazonS3Builder::new()
-            .with_endpoint(url)
-            .with_bucket_name(bucket)
-            .with_region(region)
-            .with_allow_http(allow_http)
-            .with_access_key_id(access_key_id)
-            .with_secret_access_key(secret_access_key)
-            .with_conditional_put(object_store::aws::S3ConditionalPut::ETagMatch) // MinIO suitable
-            .build()?;
-
-        Ok(Self(client))
-    }
-
     fn try_path_from(key: &str) -> Result<Path, object_store::path::Error> {
         Path::from_url_path(key)
     }
@@ -86,13 +65,23 @@ impl TryFrom<(&str, &Settings)> for S3Storage {
     type Error = StorageError;
 
     fn try_from((bucket, settings): (&str, &Settings)) -> Result<Self, Self::Error> {
-        S3Storage::new(
-            &settings.s3.region,
-            &settings.s3.endpoint,
-            &settings.s3.access_key,
-            &settings.s3.secret_key,
-            settings.s3.allow_http,
-            bucket,
-        )
+        let mut s3 = AmazonS3Builder::new()
+            .with_bucket_name(bucket)
+            .with_allow_http(settings.s3.allow_http)
+            .with_conditional_put(object_store::aws::S3ConditionalPut::ETagMatch);
+        if let Some(value) = &settings.s3.endpoint {
+            s3 = s3.with_endpoint(value);
+        }
+        if let Some(value) = &settings.s3.region {
+            s3 = s3.with_region(value);
+        }
+        if let Some(value) = &settings.s3.access_key {
+            s3 = s3.with_access_key_id(value);
+        }
+        if let Some(value) = &settings.s3.secret_key {
+            s3 = s3.with_secret_access_key(value);
+        }
+        // MinIO suitable
+        Ok(Self(s3.build()?))
     }
 }

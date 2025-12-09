@@ -19,17 +19,27 @@ impl ConfigJson {
         protocol: Protocol,
         api_address: &str,
         api_port: u16,
+        api_url_path: Option<&str>,
         api_path: &str,
         api_available: bool,
         auth_required: bool,
     ) -> Self {
+        let url = format!("{protocol}://{api_address}:{api_port}");
+        let url_end = format!("/api/v1/{api_path}/dl");
+        let url = match api_url_path {
+            Some(api_url_path) => {
+                let api_url_path = api_url_path.trim_matches('/');
+                if !api_url_path.is_empty() {
+                    format!("{url}/{api_url_path}")
+                } else {
+                    url
+                }
+            }
+            None => url,
+        };
         Self {
-            dl: format!("{protocol}://{api_address}:{api_port}/api/v1/{api_path}/dl"),
-            api: if api_available {
-                Some(format!("{protocol}://{api_address}:{api_port}"))
-            } else {
-                None
-            },
+            dl: format!("{url}{url_end}"),
+            api: if api_available { Some(url) } else { None },
             auth_required,
         }
     }
@@ -37,10 +47,16 @@ impl ConfigJson {
 
 impl From<(&Settings, &str, bool)> for ConfigJson {
     fn from(value: (&Settings, &str, bool)) -> Self {
+        let api_url_path: Option<&str> = if value.0.origin.path.is_empty() {
+            None
+        } else {
+            Some(&value.0.origin.path)
+        };
         Self::new(
             value.0.origin.protocol,
             &value.0.origin.hostname,
             value.0.origin.port,
+            api_url_path,
             value.1,
             value.2,
             value.0.registry.auth_required,
@@ -55,7 +71,7 @@ mod tests {
 
     #[test]
     fn test_config_json_to_json_http() {
-        let config = ConfigJson::new(Protocol::Http, "localhost", 8080, "path", true, false);
+        let config = ConfigJson::new(Protocol::Http, "localhost", 8080, None, "path", true, false);
         let json = config.to_json().unwrap();
 
         assert_eq!(
@@ -65,8 +81,27 @@ mod tests {
     }
 
     #[test]
+    fn test_config_json_to_json_http_with_url_path() {
+        let config = ConfigJson::new(
+            Protocol::Http,
+            "localhost",
+            8080,
+            Some("/kellnring/"),
+            "path",
+            true,
+            false,
+        );
+        let json = config.to_json().unwrap();
+
+        assert_eq!(
+            json,
+            r#"{"dl":"http://localhost:8080/kellnring/api/v1/path/dl","api":"http://localhost:8080/kellnring","auth-required":false}"#
+        );
+    }
+
+    #[test]
     fn test_config_json_to_json_https() {
-        let config = ConfigJson::new(Protocol::Https, "localhost", 8081, "path", true, true);
+        let config = ConfigJson::new(Protocol::Https, "localhost", 8081, None, "path", true, true);
         let json = config.to_json().unwrap();
 
         assert_eq!(
@@ -77,7 +112,15 @@ mod tests {
 
     #[test]
     fn test_config_json_no_api() {
-        let config = ConfigJson::new(Protocol::Https, "localhost", 8081, "path", false, true);
+        let config = ConfigJson::new(
+            Protocol::Https,
+            "localhost",
+            8081,
+            None,
+            "path",
+            false,
+            true,
+        );
         let json = config.to_json().unwrap();
 
         assert_eq!(
