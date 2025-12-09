@@ -49,6 +49,9 @@ impl TryFrom<&Path> for Settings {
             // Eg. `KELLNR_DEBUG=1 ./target/app` would set the `debug` key
             .add_source(
                 Environment::with_prefix("KELLNR")
+                    .list_separator(",")
+                    .with_list_parse_key("registry.required_crate_fields")
+                    .try_parsing(true)
                     .prefix_separator("_")
                     .separator("__"),
             )
@@ -101,16 +104,20 @@ impl Settings {
     }
 
     pub fn crates_path_or_bucket(&self) -> String {
-        if self.s3.enabled {
-            self.s3.crates_bucket.clone()
+        if self.s3.enabled
+            && let Some(bucket) = &self.s3.crates_bucket
+        {
+            bucket.clone()
         } else {
             self.crates_path()
         }
     }
 
     pub fn crates_io_path_or_bucket(&self) -> String {
-        if self.s3.enabled {
-            self.s3.cratesio_bucket.clone()
+        if self.s3.enabled
+            && let Some(bucket) = &self.s3.cratesio_bucket
+        {
+            bucket.clone()
         } else {
             self.crates_io_path()
         }
