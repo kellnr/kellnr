@@ -46,67 +46,38 @@ The Kellnr DevContainer includes pre-configured VSCode/Cursor extensions:
 ### Prerequisites
 
 - Docker installed on your host machine
-- VSCode/Cursor with the DevContainers extension (optional, for VSCode/Cursor integration)
+- VSCode/Cursor with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) (optional, for VSCode/Cursor integration)
 
 ### Building the Container
 
-Execute the following from the root of the kellnr project. *Note*, these steps will build the DevContainer from within the devcontainer dir.
-
-1. **Build the container image:**
+**(1)** Build the container image:
    ```bash
-   cd devcontainer
-   ./build.sh
-   cd ..
+   devcontainer/dockerBuild.sh
    ```
-
-## File Structure
-
-```
-devcontainer/
-├── README.md               # This file
-├── build.sh                # Build script for the container
-├── devcontainer.common     # Common configuration variables
-├── setupUser.sh            # User setup script
-├── shell.sh                # Shell launcher script
-├── sourceEnv.sh            # Environment variable setup
-├── initUserVol.sh          # User volume initialization
-├── src/                    # Container source files
-│   ├── Containerfile       # Main container image definition
-│   ├── setupUser.sh        # User setup script (internal container ver)
-│   ├── initUserVol.sh      # Volume init script (internal container ver)
-│   └── test.sh             # Test script
-├── LICENSE                 # License file
-└── VERSION                 # Version information
-```
 
 ## Usage
 
 ### DevContainer Usage
 
-Execute the following from the root of the kellnr project. *Note*: at the project root, these are shortcuts into the devcontainer dir.
+**(1)** Set up devcontainer user
+```bash
+devcontainer/setupUser.sh
+```
 
-1. **Initialize user data (*first time only*):**
-   ```bash
-   ./initUserVol.sh y
-   ```
-
-2. **Set up your user environment (*first time only*):**
-   ```bash
-   ./setupUser.sh
-   ```
-
-3. **Launch a DevContainer shell (to use it outside VSCode/Cursor):**
-   ```bash
-   ./shell.sh
-   ```
+**(2)** Run the `devcontainer` in a terminal.
+```bash
+./shell.sh
+```
 
 ### VSCode/Cursor DevContainer Usage
 
 The setup script automatically generates a `.devcontainer/devcontainer.json` file for VSCode/Cursor integration:
 
-1. Follow the manual setup steps above
-2. Open the project in VSCode/Cursor
-3. Use "Reopen in Container" from the Command Palette
+**(1)** Follow the steps above
+
+**(2)** Open the project in VSCode/Cursor
+
+**(3)** Use "Reopen in Container" from the Command Palette
 
 ## Configuration
 
@@ -127,7 +98,20 @@ The container automatically mounts:
 - Git configuration (`~/.gitconfig`)
 - Current workspace directory
 - User data volume for persistent settings
-- User home directory for persistent files
+- User home volume for persistent files
+
+## Additional notes
+1. Any of the devcontainer scripts can be run either in the devcontainer directory or in the root of the project, e.g.
+```bash
+cd devcontainer
+./setupUser.sh
+# or
+devcontainer/setupUser.sh
+```
+2. `setupUser.sh` will automatically create user volumes whenever needed.
+1. If the user **data** volume already exists, `setupUser.sh` takes no action on it.
+1. If the user **home** volume already exists, `setupUser.sh` will attempt to freshen its contents, but does not remove it beforehand.
+1. If either user volume exists, and `setupUser.sh -c` is run (i.e. with the `-c` switch), it will remove both volumes and recreate them.
 
 ## Development Workflow
 
@@ -189,14 +173,32 @@ If the container build fails:
 If user setup fails:
 1. Ensure the container image was built successfully
 2. Check Docker volume permissions
-3. Try recreating user volumes: `./initUserVol.sh y`
+3. Try recreating user volumes: `devcontainer/setupUser.sh -c`
 
 ### Volume Issues
 
 If persistent data isn't working:
 1. Check Docker volume exists: `docker volume ls`
-2. Recreate volumes if needed: `./initUserVol.sh y`
+2. Recreate volumes if needed: `devcontainer/setupUser.sh -c`
 3. Verify volume mounts in `sourceEnv.sh`
+
+## File Structure
+
+```
+devcontainer/
+├── README.md               # This file
+├── devcontainer.common     # Common configuration variables
+├── dockerBuild.sh          # Build script for the container image
+├── dockerPull.sh           # Pull script for the container image
+├── setupUser.sh            # User setup script
+├── shell.sh                # Shell launcher script
+├── sourceEnv.sh            # Environment variable setup
+└── src/                    # Container source files
+    ├── bootstrapUser.sh    # User setup script
+    ├── bootstrapUserVol.sh # Volume init script
+    ├── Containerfile       # Main container image definition    
+    └── test.sh             # Test script
+```
 
 ## Maintenance
 
@@ -204,9 +206,8 @@ If persistent data isn't working:
 
 To update the container with new packages or tools:
 1. Modify `src/Containerfile`
-2. Rebuild: `./build.sh`
-3. Recreate user volumes: `./initUserVol.sh y`
-4. Re-run setup: `./setupUser.sh`
+2. Rebuild: `devcontainer/dockerBuild.sh`
+3. Recreate user volumes: `devcontainer/setupUser.sh -c`
 
 ### Cleaning Up
 
@@ -216,7 +217,9 @@ To clean up Docker resources:
 docker rmi kellnrdevcontainer:latest
 
 # Remove volumes (WARNING: This will delete persistent data)
-docker volume rm build-kellnr-user-data-latest
+. devcontainer/devcontainer.common
+docker volume rm $build_user_data
+docker volume rm $build_user_home
 ```
 
 ## Contributing

@@ -1,1 +1,1 @@
-devcontainer/shell.sh
+(cd devcontainer && ./shell.sh "$@")
