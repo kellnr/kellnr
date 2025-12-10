@@ -104,8 +104,6 @@ pwd = ""
 # Configure S3 as the storage backend instead of the local filesystem
 [s3]
 enabled = false
-access_key = "minioadmin"
-secret_key = "minioadmin"
 region = "us-east-1"
 endpoint = "http://localhost:9000"
 allow_http = true
