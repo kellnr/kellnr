@@ -1,0 +1,113 @@
+####################################################################################
+#                                                                                  #
+# Kellnr configuration.                                                            #
+# For more details, see: https://www.kellnr.io/documentation                       #
+#                                                                                  #
+####################################################################################
+
+
+####################################################################################
+#                                                                                  #
+# Values used only on the first startup. Can be changed using the UI on runtime.   #
+#                                                                                  #
+####################################################################################
+[setup]
+admin_pwd = "admin"
+admin_token = "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"
+
+####################################################################################
+#                                                                                  #
+# Values used on each start of Kellnr. Overwrite and restart Kellnr to change.     #
+#                                                                                  #
+####################################################################################
+
+[registry]
+# Directory where Kellnr stores all its data, e.g. crates, indices etc.
+data_dir = "/opt/kdata"
+# Seconds until a user is logged out automatically after inactivity in the UI
+session_age_seconds = 28800
+# Number of crates to cache in-memory. If set to 0, the cache is disabled. 
+cache_size = 1000
+# Max size of a crate that can be uploaded to Kellnr in MB
+max_crate_size = 10
+# Max number of internal database connections for Kellnr.
+# "0" disables the limit.
+max_db_connections = 0
+# Enable required authentication for crate pulls.
+# If set to "false", anyone can download crates from Kellnr. Upload always requires authentication.
+auth_required = false
+# Requires certain fields to be defined on upload crates.
+# Leave empty to not add any restrictions.
+# If set to ["authors", "repository"], then all uploaded crates would have
+# to have the authors and repository defined in their Cargo.toml's
+required_crate_fields = []
+# Disallows new crate publishing by the users.
+new_crates_restricted = false
+
+[docs]
+# Enable or disable automatic rustdoc generation for uploaded crates
+enabled = false
+# Max size of a crate docs that can be uploaded to Kellnr in MB
+max_size = 100
+
+[proxy]
+# Set to "true" to enable the crates.io proxy. The the official Kellnr documentation
+# for more information.
+enabled = false
+# Number of threads used to keep the crates.io proxy up to date.
+# A too high number can lead to exhausting the available database connection.
+num_threads = 20
+# If enabled, crates will be downloaded and cached periodically in the background, instead
+# of only on demand.
+download_on_update = false
+
+[log]
+# Set the log level to "trace", "debug", "info", "warn", or "error".
+level = "info"
+# Set the log format to "compact", "pretty" or "json".
+format = "compact"
+# Set the log level for the underlying web framework to "trace", "debug", "info", "warn", or "error".
+level_web_server = "warn"
+
+[local]
+# Address where the API and web server is started. Usually no change is needed.
+ip = "0.0.0.0"
+# The port where Kellnr starts listening for incoming connections
+port = 8000
+
+# Address where Kellnr will be reachable
+# E.g. https://kellnr.example.com:443
+# This setting is important as the cargo protocol needs Kellnr
+# to know, where it is reachable from the outside, e.g. behind a reverse proxy.
+[origin]
+# The hostname where Kellnr is reachable from the outside
+hostname = "127.0.0.1"
+# If a proxy is used in front of Kellnr, the port of the proxy can be specified here
+# If no proxy is used, it is the same as the "api_port"
+port = 8000
+# Either "https" or "http". Use in combination with a reverse proxy that provides HTTPS.
+protocol = "http"
+
+# Run Kellnr on a sub path of a URL, e.g. https://www.example.com/kellnring/
+# path = "/kellnring/"
+path = ""
+
+# Configure Postgresql as the database backend instead of Sqlite
+[postgresql]
+enabled = false
+address = "localhost"
+port = 5432
+db = "kellnr"
+user = ""
+pwd = ""
+
+# Configure S3 as the storage backend instead of the local filesystem
+[s3]
+enabled = false
+access_key = ""
+secret_key = ""
+region = "us-east-1"
+endpoint = "http://localhost:9000"
+allow_http = true
+crates_bucket = "kellnr-crates" # Used for the crates
+cratesio_bucket = "kellnr-cratesio" # Used for the crates.io proxy
