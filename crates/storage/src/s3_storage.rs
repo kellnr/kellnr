@@ -76,10 +76,14 @@ impl TryFrom<(&str, &Settings)> for S3Storage {
             s3 = s3.with_region(value);
         }
         if let Some(value) = &settings.s3.access_key {
-            s3 = s3.with_access_key_id(value);
+            if !value.is_empty() {
+                s3 = s3.with_access_key_id(value);
+            }
         }
         if let Some(value) = &settings.s3.secret_key {
-            s3 = s3.with_secret_access_key(value);
+            if !value.is_empty() {
+                s3 = s3.with_secret_access_key(value);
+            }
         }
         // MinIO suitable
         Ok(Self(s3.build()?))
