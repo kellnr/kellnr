@@ -147,6 +147,10 @@ impl From<&Settings> for SqliteConString {
 
 impl Display for SqliteConString {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "sqlite://{}?mode=rwc", self.path.display())
+        if self.path.to_str() == Some(":memory:") {
+            write!(f, "sqlite::memory:")
+        } else {
+            write!(f, "sqlite://{}?mode=rwc", self.path.display())
+        }
     }
 }

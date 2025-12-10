@@ -7,17 +7,18 @@ use crate::{crate_group, crate_user, crate_version};
 use appstate::AppState;
 use appstate::DbState;
 use auth::token;
-use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Redirect;
+use axum::Json;
 use chrono::Utc;
 use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
 use common::search_result;
 use common::search_result::{Crate, SearchResult};
 use common::version::Version;
+use common::webhook::WebhookEvent;
 use db::DbProvider;
 use error::api_error::{ApiError, ApiResult};
 use std::convert::TryFrom;
@@ -431,6 +432,19 @@ pub async fn publish(
         return Err(e.into());
     }
 
+    webhooks::notify_crate(
+        if id.is_none() {
+            WebhookEvent::CrateAdd
+        } else {
+            WebhookEvent::CrateUpdate
+        },
+        &created,
+        &normalized_name,
+        &version,
+        &db,
+    )
+    .await;
+
     // Add crate to queue for doc extraction if there is no documentation value set already
     if settings.docs.enabled && pub_data.metadata.documentation.is_none() {
         db.add_doc_queue(
@@ -459,6 +473,15 @@ pub async fn yank(
 
     db.yank_crate(&crate_name, &version).await?;
 
+    webhooks::notify_crate(
+        WebhookEvent::CrateYank,
+        &Utc::now(),
+        &crate_name,
+        &version,
+        &db,
+    )
+    .await;
+
     Ok(Json(YankSuccess::new()))
 }
 
@@ -477,6 +500,15 @@ pub async fn unyank(
 
     db.unyank_crate(&crate_name, &version).await?;
 
+    webhooks::notify_crate(
+        WebhookEvent::CrateUnyank,
+        &Utc::now(),
+        &crate_name,
+        &version,
+        &db,
+    )
+    .await;
+
     Ok(Json(YankSuccess::new()))
 }
 
@@ -484,20 +516,20 @@ pub async fn unyank(
 mod reg_api_tests {
     use super::*;
     use appstate::AppStateData;
-    use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::http::StatusCode;
     use axum::routing::{delete, get, put};
+    use axum::Router;
     use db::mock::MockDb;
-    use db::{ConString, Database, SqliteConString, test_utils};
+    use db::{test_utils, ConString, Database, SqliteConString};
     use error::api_error::ErrorDetails;
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
-    use rand::Rng;
     use rand::distr::Alphanumeric;
     use rand::rng;
+    use rand::Rng;
     use settings::Settings;
     use std::iter;
     use std::path::PathBuf;

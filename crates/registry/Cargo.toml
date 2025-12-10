@@ -13,6 +13,7 @@ db.workspace = true
 error.workspace = true
 settings.workspace = true
 storage.workspace = true
+webhooks.workspace = true
 
 # External dependencies from crates.io
 axum.workspace = true
