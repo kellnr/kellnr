@@ -65,7 +65,7 @@ impl TryFrom<(&str, &Settings)> for S3Storage {
     type Error = StorageError;
 
     fn try_from((bucket, settings): (&str, &Settings)) -> Result<Self, Self::Error> {
-        let mut s3 = AmazonS3Builder::new()
+        let mut s3 = AmazonS3Builder::from_env()
             .with_bucket_name(bucket)
             .with_allow_http(settings.s3.allow_http)
             .with_conditional_put(object_store::aws::S3ConditionalPut::ETagMatch);
