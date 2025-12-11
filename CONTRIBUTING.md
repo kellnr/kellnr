@@ -6,18 +6,18 @@ Thank you for your interest in contributing to Kellnr! This document provides gu
 
 ### Branching Strategy
 
-- **Main branch**: Contains the current stable release. Do not submit pull requests directly to this branch, except for critical hotfixes.
-- **Devel branch**: Contains the next version to be released. All pull requests must be submitted to this branch.
+- **Main branch**: Contains the current stable release with a tagged version. Features and fixes that should be in the next release must be merged into this branch.
+- **Feature branches**: Created from `main` for new features or bug fixes that are intended for the next release.
 
 ### Submitting Changes
 
 #### For Bug Fixes
 
 1. Fork the repository
-2. Create a branch from `devel`, except for hotfixes
+2. Create a branch from `main`, except for hotfixes
 3. Fix the bug
 4. Ensure your code is formatted with `cargo fmt` (default settings)
-5. Submit a pull request to the `devel` branch
+5. Submit a pull request to the `main` branch
 
 #### For New Features
 
@@ -27,10 +27,10 @@ Thank you for your interest in contributing to Kellnr! This document provides gu
    - Any relevant technical details
 2. Wait for discussion and approval
 3. Fork the repository
-4. Create a branch from `devel`
+4. Create a branch from `main`
 5. Implement the feature
 6. Ensure your code is formatted with `cargo fmt` (default settings)
-7. Submit a pull request to the `devel` branch
+7. Submit a pull request to the `main` branch
 8. Reference the original issue in your pull request
 
 ## Development Environment
