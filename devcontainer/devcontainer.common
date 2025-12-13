@@ -1,0 +1,34 @@
+#!/bin/sh
+
+# --- Shell Compatibility ---
+if [ -z "${BASH_VERSION}" ] && [ -z "${ZSH_VERSION}" ]; then
+    if command -v bash >/dev/null 2>&1; then
+        exec bash "$0" "$@"
+    elif command -v zsh >/dev/null 2>&1; then
+        exec zsh "$0" "$@"
+    fi
+fi
+
+# --- System Info ---
+arch=$(uname -m)
+case $arch in
+    x86_64) arch=amd64 ;;
+    aarch64) arch=arm64 ;; 
+esac
+os_type=$(uname -s)
+os_type_lower=$(echo "${os_type}" | tr '[:upper:]' '[:lower:]')
+case "$os_type_lower" in
+    darwin) docker_gid=0 ;; # On macOS, Docker Desktop remaps socket to root:root inside containers
+    *) docker_gid=$(awk -F\: '/docker/ {print $3}' /etc/group) ;;
+esac
+x11_enabled=false
+if [ -n "$DISPLAY" ] && [ -d /tmp/.X11-unix ]; then
+    x11_enabled=true
+fi
+
+# --- Container Info ---
+version=latest
+cont_tag=kellnrdevcontainer:${version}
+build_user_data=build-kellnr-user-data-$(id -u)-${version}
+build_user_home=build-kellnr-user-home-$(id -u)-${version}
+devcontainer_name="Kellnr Dev Container"
