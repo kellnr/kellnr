@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(default)]
 pub struct S3 {
     pub enabled: bool,
     pub access_key: Option<String>,

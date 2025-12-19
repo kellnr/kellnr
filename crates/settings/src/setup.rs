@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(default)]
 pub struct Setup {
     pub admin_pwd: String,
     pub admin_token: String,
