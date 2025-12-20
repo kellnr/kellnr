@@ -13,8 +13,15 @@
     };
   };
 
-  outputs = { nixpkgs, flake-utils, crane, rust-overlay, ... }:
-    flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ] (system:
+  outputs =
+    { nixpkgs
+    , flake-utils
+    , crane
+    , rust-overlay
+    , ...
+    }:
+    flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ] (
+      system:
       let
         # Define cross compilation targets as Nixpkgs system strings
         targets = [
@@ -27,15 +34,24 @@
         overlays = [ (import rust-overlay) ];
 
         # Function to get pkgs for a given system/crossSystem
-        pkgsFor = { localSystem, crossSystem ? null }:
-          import nixpkgs ({
-            inherit localSystem overlays;
-          } // (if crossSystem != null then { inherit crossSystem; } else { }));
+        pkgsFor =
+          { localSystem
+          , crossSystem ? null
+          ,
+          }:
+          import nixpkgs (
+            {
+              inherit localSystem overlays;
+            }
+            // (if crossSystem != null then { inherit crossSystem; } else { })
+          );
 
         # Function to get a rust toolchain with all targets for a given pkgs
-        rustWithTargetsFor = pkgs: pkgs.rust-bin.stable.latest.default.override {
-          targets = targets;
-        };
+        rustWithTargetsFor =
+          pkgs:
+          pkgs.rust-bin.stable.latest.default.override {
+            targets = targets;
+          };
 
         # Base pkgs for the host system
         pkgs = pkgsFor { localSystem = system; };
@@ -43,11 +59,23 @@
         inherit (pkgs) lib;
 
         # Set a filter of files that are included in the build source directory.
-        webuiFilter = path: _type:
-          let extensions = [ "js" "json" "ts" "vue" "html" "png" "css" "svg" ];
-          in lib.any (ext: lib.hasSuffix ".${ext}" path) extensions;
-        webuiOrCargo = path: type:
-          (webuiFilter path type) || ((crane.mkLib pkgs).filterCargoSources path type);
+        webuiFilter =
+          path: _type:
+          let
+            extensions = [
+              "js"
+              "json"
+              "ts"
+              "vue"
+              "html"
+              "png"
+              "css"
+              "svg"
+            ];
+          in
+          lib.any (ext: lib.hasSuffix ".${ext}" path) extensions;
+        webuiOrCargo =
+          path: type: (webuiFilter path type) || ((crane.mkLib pkgs).filterCargoSources path type);
         src = lib.cleanSourceWith {
           src = (crane.mkLib pkgs).path ./.;
           filter = webuiOrCargo;
@@ -62,7 +90,8 @@
           nativeBuildInputs = [
             pkgs.cmake
             pkgs.nodejs_24
-          ] ++ lib.optionals pkgs.stdenv.isLinux [
+          ]
+          ++ lib.optionals pkgs.stdenv.isLinux [
             pkgs.pkg-config
             pkgs.rustPlatform.bindgenHook
           ];
@@ -70,7 +99,8 @@
           buildInputs = [
             pkgs.cargo-nextest
             pkgs.openssl.dev
-          ] ++ lib.optional pkgs.stdenv.isDarwin [
+          ]
+          ++ lib.optional pkgs.stdenv.isDarwin [
             pkgs.libiconv
             pkgs.iconv
             pkgs.cacert
@@ -106,12 +136,18 @@
         '';
 
         # Function to create a package for a specific target
-        makePackage = target:
+        makePackage =
+          target:
           let
             # Use Nixpkgs crossSystem for cross builds
-            crossPkgs = pkgsFor { localSystem = system; crossSystem = target; };
+            crossPkgs = pkgsFor {
+              localSystem = system;
+              crossSystem = target;
+            };
             # Use the buildPackages toolchain for cross builds!
-            craneLib = (crane.mkLib crossPkgs).overrideToolchain (_: rustWithTargetsFor crossPkgs.buildPackages);
+            craneLib = (crane.mkLib crossPkgs).overrideToolchain (
+              _: rustWithTargetsFor crossPkgs.buildPackages
+            );
 
             targetArgs = commonArgs // {
               inherit cargoArtifacts nodeDeps;
@@ -138,65 +174,49 @@
               installPhase =
                 let
                   binDir = "$out/bin";
-                  configDir = "${binDir}/config";
-                  staticDir = "${binDir}/static";
                   binaryPath = "target/${target}/release/kellnr";
                 in
                 ''
                   # Copy kellnr binary into bin directory
                   mkdir -p ${binDir};
                   cp ${binaryPath} ${binDir}/kellnr;
-
-                  # Copy default config
-                  mkdir -p ${configDir};
-                  cp config/default.toml ${configDir};
-
-                  # Copy the built UI
-                  mkdir -p ${staticDir};
-                  cp -r ui/dist/* ${staticDir};
                 '';
             };
           in
           craneLib.buildPackage targetArgs;
 
         # Build package for each target
-        packages = builtins.listToAttrs (map
-          (target: {
-            name = builtins.replaceStrings [ "-" ] [ "_" ] target;
-            value = makePackage target;
-          })
-          targets
+        packages = builtins.listToAttrs (
+          map
+            (target: {
+              name = builtins.replaceStrings [ "-" ] [ "_" ] target;
+              value = makePackage target;
+            })
+            targets
         );
 
         # Also build for the host system
-        hostPackage = baseCraneLib.buildPackage (commonArgs // {
-          inherit cargoArtifacts nodeDeps;
-          doCheck = false;
+        hostPackage = baseCraneLib.buildPackage (
+          commonArgs
+          // {
+            inherit cargoArtifacts nodeDeps;
+            doCheck = false;
 
-          preConfigurePhases = [ "npmBuild" ];
+            preConfigurePhases = [ "npmBuild" ];
 
-          npmBuild = buildUiAssets;
+            npmBuild = buildUiAssets;
 
-          installPhase =
-            let
-              binDir = "$out/bin";
-              configDir = "${binDir}/config";
-              staticDir = "${binDir}/static";
-            in
-            ''
-              # Copy kellnr binary into bin directory
-              mkdir -p ${binDir};
-              cp target/release/kellnr ${binDir};
-
-              # Copy default config
-              mkdir -p ${configDir};
-              cp config/default.toml ${configDir};
-
-              # Copy the built UI
-              mkdir -p ${staticDir};
-              cp -r ui/dist/* ${staticDir};
-            '';
-        });
+            installPhase =
+              let
+                binDir = "$out/bin";
+              in
+              ''
+                # Copy kellnr binary into bin directory
+                mkdir -p ${binDir};
+                cp target/release/kellnr ${binDir};
+              '';
+          }
+        );
       in
       with pkgs;
       {
@@ -204,94 +224,104 @@
           inherit hostPackage;
 
           # Check formatting with rustfmt.
-          fmt = baseCraneLib.cargoFmt (commonArgs // {
-            inherit src;
-          });
+          fmt = baseCraneLib.cargoFmt (
+            commonArgs
+            // {
+              inherit src;
+            }
+          );
 
           # Check for clippy warnings.
-          clippy = baseCraneLib.cargoClippy (commonArgs // {
-            inherit cargoArtifacts;
-            cargoClippyExtraArgs = "--workspace --all-targets -- --deny warnings";
-          });
+          clippy = baseCraneLib.cargoClippy (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              cargoClippyExtraArgs = "--workspace --all-targets -- --deny warnings";
+            }
+          );
         };
 
-        devShells.default = baseCraneLib.devShell (commonArgs // {
-          inputsFrom = [ hostPackage ];
+        devShells.default = baseCraneLib.devShell (
+          commonArgs
+          // {
+            inputsFrom = [ hostPackage ];
 
-          shellHook = ''
-            echo "Kellnr Development Environment"
-            echo "==========================="
-            echo "Rust version: $(rustc --version)"
-            echo "Cargo version: $(cargo --version)"
-            echo "Node.js version: $(node --version)"
-            echo "NPM version: $(npm --version)"
-            echo "Nixpkgs version: ${nixpkgs.lib.version}"
-            echo "Lua version: $(lua -v)"
-            echo "Docker version: $(docker --version 2>/dev/null || echo 'Docker not available')"
+            shellHook = ''
+              echo "Kellnr Development Environment"
+              echo "==========================="
+              echo "Rust version: $(rustc --version)"
+              echo "Cargo version: $(cargo --version)"
+              echo "Node.js version: $(node --version)"
+              echo "NPM version: $(npm --version)"
+              echo "Nixpkgs version: ${nixpkgs.lib.version}"
+              echo "Lua version: $(lua -v)"
+              echo "Docker version: $(docker --version 2>/dev/null || echo 'Docker not available')"
 
-            # Setup custom CA certificate for testing against local Kellnr registries
-            export CUSTOM_CERT_DIR="$PWD/.certs"
+              # Setup custom CA certificate for testing against local Kellnr registries
+              export CUSTOM_CERT_DIR="$PWD/.certs"
 
-            # Remove existing directory if it exists with wrong permissions
-            if [ -d "$CUSTOM_CERT_DIR" ]; then
-              rm -rf "$CUSTOM_CERT_DIR"
-            fi
+              # Remove existing directory if it exists with wrong permissions
+              if [ -d "$CUSTOM_CERT_DIR" ]; then
+                rm -rf "$CUSTOM_CERT_DIR"
+              fi
 
-            # Create directory with explicit permissions
-            mkdir -p "$CUSTOM_CERT_DIR"
-            chmod 755 "$CUSTOM_CERT_DIR"  # Set correct directory permissions
+              # Create directory with explicit permissions
+              mkdir -p "$CUSTOM_CERT_DIR"
+              chmod 755 "$CUSTOM_CERT_DIR"  # Set correct directory permissions
 
-            # Create combined cert bundle with explicit permissions
-            export COMBINED_CERT_FILE="$CUSTOM_CERT_DIR/combined-ca-bundle.pem"
-            cp "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" "$COMBINED_CERT_FILE"
-            chmod 644 "$COMBINED_CERT_FILE"  # Set read/write permissions
+              # Create combined cert bundle with explicit permissions
+              export COMBINED_CERT_FILE="$CUSTOM_CERT_DIR/combined-ca-bundle.pem"
+              cp "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" "$COMBINED_CERT_FILE"
+              chmod 644 "$COMBINED_CERT_FILE"  # Set read/write permissions
 
-            # Add the certificate from tests/ca.crt
-            if [ -f "$PWD/tests/ca.crt" ]; then
-              cat "$PWD/tests/ca.crt" >> "$COMBINED_CERT_FILE"
-              echo "Added tests/ca.crt certificate to CA bundle"
-            else
-              echo "Warning: tests/ca.crt not found"
-            fi
-            
-            # Set SSL cert environment variables to use the combined bundle
-            export SSL_CERT_FILE="$COMBINED_CERT_FILE"
-            export NIX_SSL_CERT_FILE="$COMBINED_CERT_FILE"
-            export REQUESTS_CA_BUNDLE="$COMBINED_CERT_FILE"
-            export NODE_EXTRA_CA_CERTS="$COMBINED_CERT_FILE"
+              # Add the certificate from tests/ca.crt
+              if [ -f "$PWD/tests/ca.crt" ]; then
+                cat "$PWD/tests/ca.crt" >> "$COMBINED_CERT_FILE"
+                echo "Added tests/ca.crt certificate to CA bundle"
+              else
+                echo "Warning: tests/ca.crt not found"
+              fi
 
-            alias c=cargo
-            alias j=just
-            alias lg=lazygit
-            
-            # Ensure the script can find modules in the current directory and parent directory
-            export LUA_PATH="./?.lua;../?.lua;$(lua -e 'print(package.path)')"
-          '' + lib.optionalString stdenv.isDarwin ''
-            export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
-            export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
-          '';
+              # Set SSL cert environment variables to use the combined bundle
+              export SSL_CERT_FILE="$COMBINED_CERT_FILE"
+              export NIX_SSL_CERT_FILE="$COMBINED_CERT_FILE"
+              export REQUESTS_CA_BUNDLE="$COMBINED_CERT_FILE"
+              export NODE_EXTRA_CA_CERTS="$COMBINED_CERT_FILE"
 
-          packages = with pkgs; [
-            rust-analyzer
-            cargo-nextest
-            cargo-machete
-            lazygit
-            just
-            node2nix
-            jd-diff-patch
-            sea-orm-cli
-            nixpkgs-fmt
-            statix
-            lua5_4
-            lua54Packages.luasocket
-            lua54Packages.luafilesystem
-            lua54Packages.cjson
-            lua54Packages.http
-            jq
-            curl
-            gnused
-          ];
-        });
+              alias c=cargo
+              alias j=just
+              alias lg=lazygit
+
+              # Ensure the script can find modules in the current directory and parent directory
+              export LUA_PATH="./?.lua;../?.lua;$(lua -e 'print(package.path)')"
+            ''
+            + lib.optionalString stdenv.isDarwin ''
+              export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
+              export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
+            '';
+
+            packages = with pkgs; [
+              rust-analyzer
+              cargo-nextest
+              cargo-machete
+              lazygit
+              just
+              node2nix
+              jd-diff-patch
+              sea-orm-cli
+              nixpkgs-fmt
+              statix
+              lua5_4
+              lua54Packages.luasocket
+              lua54Packages.luafilesystem
+              lua54Packages.cjson
+              lua54Packages.http
+              jq
+              curl
+              gnused
+            ];
+          }
+        );
 
         # Make all cross-compiled packages available
         packages = packages // {
@@ -302,14 +332,16 @@
           default = flake-utils.lib.mkApp {
             drv = hostPackage;
           };
-        } // builtins.listToAttrs (map
-          (target: {
-            name = builtins.replaceStrings [ "-" ] [ "_" ] target;
-            value = flake-utils.lib.mkApp {
-              drv = packages.${builtins.replaceStrings [ "-" ] [ "_" ] target};
-            };
-          })
-          targets
+        }
+        // builtins.listToAttrs (
+          map
+            (target: {
+              name = builtins.replaceStrings [ "-" ] [ "_" ] target;
+              value = flake-utils.lib.mkApp {
+                drv = packages.${builtins.replaceStrings [ "-" ] [ "_" ] target};
+              };
+            })
+            targets
         );
       }
     );

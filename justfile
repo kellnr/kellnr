@@ -20,7 +20,7 @@ check:
 build:
 	cargo build --features vendored-openssl
 
-build-release: clean-static npm-build
+build-release: npm-build
 	cargo build --release --features vendored-openssl
 
 clippy:
@@ -43,22 +43,17 @@ test-pgdb: npm-build # Run Postgresql integration tests which require Docker
 
 test-all: test test-pgdb test-smoke
 
-clean-static:
-  rm -rf static/*
-
 clean-node:
 	rm -rf ui/node_modules
 	rm -rf ui/package-lock.json
 
-clean-all: clean clean-node clean-static
+clean-all: clean clean-node
 
 npm-dev:
 	cd ui && npm run dev
 
 npm-build: npm-install
 	cd ui && npm run build
-	mkdir -p static
-	cp -r ui/dist/* static/
 
 npm-install:
 	cd ui && npm install

@@ -25,7 +25,7 @@ mod kellnr_api_routes;
 mod ui_routes;
 mod user_routes;
 
-static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../static");
+static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../ui/dist");
 
 fn cache_control_for_path(path: &str) -> &'static str {
     // For SPAs, avoid caching `index.html` aggressively so deploys update quickly.
