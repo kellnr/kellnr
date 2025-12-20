@@ -24,7 +24,7 @@ build-release: clean-static npm-build
 	cargo build --release --features vendored-openssl
 
 clippy:
-    cargo clippy --workspace --all-targets --all-features
+  cargo clippy --workspace --all-targets --all-features
 
 run: npm-build build
 	cargo run
