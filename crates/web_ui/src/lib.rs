@@ -22,9 +22,9 @@ mod test_helper {
     ) -> String {
         let mut clear = CookieJar::new();
         let mut jar = clear.private_mut(&TEST_KEY.try_into().unwrap());
-        cookies
-            .into_iter()
-            .for_each(|(k, v)| jar.add(Cookie::new(k, v)));
+        for (k, v) in cookies {
+            jar.add(Cookie::new(k, v));
+        }
         clear
             .iter()
             .map(|c| c.encoded().to_string())

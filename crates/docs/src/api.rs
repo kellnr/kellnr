@@ -29,13 +29,11 @@ pub async fn latest_docs(
     let opt_doc_version = get_latest_version_with_doc(&name, &settings);
     let res_db_version = db.get_max_version_from_name(&name).await;
 
-    if let Some(doc_version) = opt_doc_version {
-        if let Ok(db_version) = res_db_version {
-            if doc_version == db_version {
+    if let Some(doc_version) = opt_doc_version
+        && let Ok(db_version) = res_db_version
+            && doc_version == db_version {
                 return Redirect::temporary(&compute_doc_url(&name, &db_version));
             }
-        }
-    }
 
     Redirect::temporary("/")
 }

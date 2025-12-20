@@ -59,6 +59,11 @@ impl Database {
 #[async_trait]
 impl DbProvider for Database {
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
         let stmt = Query::select()
             .expr_as(
                 Expr::col((CratesIoIden::Table, CratesIoIden::Id)).count(),
@@ -66,11 +71,6 @@ impl DbProvider for Database {
             )
             .from(CratesIoIden::Table)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -84,6 +84,11 @@ impl DbProvider for Database {
     }
 
     async fn get_total_cached_crate_versions(&self) -> DbResult<u64> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
         let stmt = Query::select()
             .expr_as(
                 Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Id)).count(),
@@ -91,11 +96,6 @@ impl DbProvider for Database {
             )
             .from(CratesIoMetaIden::Table)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -894,6 +894,11 @@ impl DbProvider for Database {
     }
 
     async fn get_total_unique_crates(&self) -> DbResult<u32> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
         let stmt = Query::select()
             .expr_as(
                 Expr::col((CrateIden::Table, CrateIden::Id)).count(),
@@ -901,11 +906,6 @@ impl DbProvider for Database {
             )
             .from(CrateIden::Table)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -919,6 +919,11 @@ impl DbProvider for Database {
     }
 
     async fn get_total_crate_versions(&self) -> DbResult<u32> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
         let stmt = Query::select()
             .expr_as(
                 Expr::col((CrateMetaIden::Table, CrateMetaIden::Id)).count(),
@@ -926,11 +931,6 @@ impl DbProvider for Database {
             )
             .from(CrateMetaIden::Table)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -963,18 +963,18 @@ impl DbProvider for Database {
     }
 
     async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            original_name: String,
+            total_downloads: i64,
+        }
+
         let stmt = Query::select()
             .columns(vec![CrateIden::OriginalName, CrateIden::TotalDownloads])
             .from(CrateIden::Table)
             .order_by(CrateIden::TotalDownloads, Order::Desc)
             .limit(top as u64)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            original_name: String,
-            total_downloads: i64,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -1916,7 +1916,7 @@ async fn add_crate_metadata<C: ConnectionTrait>(
 ) -> DbResult<()> {
     let cm = crate_meta::ActiveModel {
         id: ActiveValue::default(),
-        version: Set(pub_metadata.vers.to_string()),
+        version: Set(pub_metadata.vers.clone()),
         created: Set(created.to_string()),
         downloads: Set(0),
         crate_fk: Set(crate_id),
@@ -2155,9 +2155,9 @@ fn cratesio_index_model_to_index_metadata(
 
         let cm = IndexMetadata {
             name: ci.name,
-            vers: ci.vers.to_string(),
+            vers: ci.vers.clone(),
             deps,
-            cksum: ci.cksum.to_string(),
+            cksum: ci.cksum.clone(),
             features,
             features2,
             yanked: ci.yanked,
