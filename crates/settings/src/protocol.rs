@@ -2,16 +2,13 @@ use crate::deserialize_with::DeserializeWith;
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum Protocol {
+    #[default]
     Http,
     Https,
 }
 
-impl Default for Protocol {
-    fn default() -> Self {
-        Self::Http
-    }
-}
 
 impl std::fmt::Display for Protocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

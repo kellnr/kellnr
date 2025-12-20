@@ -113,7 +113,7 @@ impl From<IndexDep> for RegistryDep {
     fn from(dep: IndexDep) -> Self {
         RegistryDep {
             name: match dep.package {
-                Some(ref package) => package.to_string(),
+                Some(ref package) => package.clone(),
                 None => dep.name.clone(),
             },
             version_req: dep.req,
