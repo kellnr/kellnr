@@ -8,7 +8,7 @@ use include_dir::{Dir, include_dir};
 use mime_guess::from_path;
 use std::borrow::Cow;
 use tower_http::services::ServeDir;
-use tracing::{debug, warn};
+use tracing::warn;
 use web_ui::session;
 
 use axum::{
@@ -25,8 +25,6 @@ mod kellnr_api_routes;
 mod ui_routes;
 mod user_routes;
 
-// Embedded UI assets (copied from `ui/dist` into workspace `static/` by `just npm-build`).
-// NOTE: This file lives in `crates/kellnr/src/routes/`, so we need to go up to the workspace root.
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../static");
 
 fn cache_control_for_path(path: &str) -> &'static str {
@@ -46,8 +44,6 @@ fn serve_embedded_asset(path: &str) -> Response<Body> {
         let mime = from_path(normalized).first_or_octet_stream();
         let body = Body::from(Bytes::copy_from_slice(file.contents()));
 
-        debug!(path = normalized, "serving embedded ui asset");
-
         Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, mime.as_ref())
@@ -64,12 +60,8 @@ fn serve_embedded_asset(path: &str) -> Response<Body> {
 }
 
 async fn embedded_static_handler(uri: Uri) -> Response<Body> {
-    // `Uri::path()` always starts with `/`
     let path = uri.path();
 
-    debug!(path, "ui request");
-
-    // Map `/` to `index.html`
     if path == "/" {
         return serve_embedded_asset("index.html");
     }
@@ -95,19 +87,17 @@ async fn embedded_static_handler(uri: Uri) -> Response<Body> {
     serve_embedded_asset("index.html")
 }
 
-/// Creates and returns the complete application router with all routes configured
 pub fn create_router(
     state: AppStateData,
     data_dir: &str,
     max_docs_size: usize,
     max_crate_size: usize,
 ) -> Router {
-    // Docs are served from disk (generated/managed at runtime)
+    // Docs are served from disk and not from embedded assets
     let docs_service = get_service(ServeDir::new(format!("{data_dir}/docs"))).route_layer(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
 
-    // Combine all routes into the main application router
     Router::new()
         .route("/me", get(registry::kellnr_api::me))
         .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
