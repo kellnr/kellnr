@@ -94,7 +94,7 @@ impl CrateRegistryDep {
     pub fn from_index(desc: Option<String>, dep: IndexDep) -> Self {
         CrateRegistryDep {
             name: match dep.package {
-                Some(ref package) => package.to_string(),
+                Some(ref package) => package.clone(),
                 None => dep.name.clone(),
             },
             description: desc,
