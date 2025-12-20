@@ -3,10 +3,9 @@ use axum::{
     Router, middleware,
     routing::{delete, get},
 };
-use web_ui::session;
-use web_ui::ui;
+use web_ui::{session, ui};
 
-/// Creates the UI routes
+/// Creates the UI API routes (JSON endpoints used by the web frontend).
 pub fn create_routes(state: AppStateData) -> Router<AppStateData> {
     Router::new()
         .route("/version", get(ui::kellnr_version))

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(default)]
 pub struct Postgresql {
     pub enabled: bool,
     pub address: String,

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(default)]
 pub struct Registry {
     pub data_dir: String,
     pub session_age_seconds: u64,

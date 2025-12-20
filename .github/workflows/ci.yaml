@@ -1,8 +1,8 @@
 name: kellnr-ci
 on:
   push:
-   branches:
-     - main
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -117,7 +117,7 @@ jobs:
       - name: Package Resources
         uses: montudor/action-zip@v0.1.1
         with:
-          args: zip -qq -r ${{ env.KELLNR_PACKAGE }} static config
+          args: zip -qq -r ${{ env.KELLNR_PACKAGE }}
 
       - name: Package Kellnr
         uses: montudor/action-zip@v0.1.1
@@ -165,7 +165,7 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Log in to registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
 
