@@ -23,22 +23,22 @@ impl Display for ConString {
 impl ConString {
     pub fn admin_pwd(&self) -> String {
         match self {
-            ConString::Postgres(p) => p.admin.pwd.to_string(),
-            ConString::Sqlite(s) => s.admin_pwd.to_string(),
+            ConString::Postgres(p) => p.admin.pwd.clone(),
+            ConString::Sqlite(s) => s.admin_pwd.clone(),
         }
     }
 
     pub fn salt(&self) -> String {
         match self {
-            ConString::Postgres(p) => p.admin.salt.to_string(),
-            ConString::Sqlite(s) => s.salt.to_string(),
+            ConString::Postgres(p) => p.admin.salt.clone(),
+            ConString::Sqlite(s) => s.salt.clone(),
         }
     }
 
     pub fn admin_token(&self) -> String {
         match self {
-            ConString::Postgres(p) => p.admin.token.to_string(),
-            ConString::Sqlite(s) => s.admin_token.to_string(),
+            ConString::Postgres(p) => p.admin.token.clone(),
+            ConString::Sqlite(s) => s.admin_token.clone(),
         }
     }
 }
