@@ -32,13 +32,13 @@ run: npm-build build
 clean:
 	cargo clean
 
-test: # Run all tests which do NOT require Docker
+test: npm-build # Run all tests which do NOT require Docker
 	cargo nextest run --workspace -E 'not test(~postgres_)'
 
 test-smoke: # Run the smoke tests which require Docker
 	{{test_smoke}}
 
-test-pgdb: # Run Postgresql integration tests which require Docker
+test-pgdb: npm-build # Run Postgresql integration tests which require Docker
 	{{test_pgdb}}
 
 test-all: test test-pgdb test-smoke
