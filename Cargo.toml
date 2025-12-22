@@ -46,7 +46,7 @@ hyper = "1.8.1"
 include_dir = "0.7.4"
 mime_guess = "2.0.5"
 mockall = "0.14.0"
-moka = { version = "0.12.11", features = ["future"] }
+moka = { version = "0.12.12", features = ["future"] }
 object_store = { version = "0.12.4", default-features = false, features = ["aws", "fs"] }
 quote = "1.0.42"
 rand = "0.9.2"
