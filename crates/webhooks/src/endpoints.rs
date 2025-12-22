@@ -88,7 +88,7 @@ pub async fn test_webhook(
         .json("Test Payload")
         .send()
         .await
-        .map_err(|e| ApiError::new(&e.to_string(), "", StatusCode::from_u16(500).unwrap()))?;
+        .map_err(|e| ApiError::new(&e.to_string(), "", StatusCode::INTERNAL_SERVER_ERROR))?;
 
     match resp.status() {
         a if a.as_u16() < 300 => Ok(()),

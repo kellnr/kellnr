@@ -170,7 +170,7 @@ pub trait DbProvider: Send + Sync {
         event: WebhookEvent,
         payload: serde_json::Value,
     ) -> DbResult<()>;
-    /// Extracts webhook queue entries with `next_attempt` at or earlier than proviced timestamp.
+    /// Extracts webhook queue entries with `next_attempt` at or earlier than provided timestamp.
     async fn get_pending_webhook_queue_entries(
         &self,
         timestamp: DateTime<Utc>,
@@ -474,34 +474,34 @@ pub mod mock {
                         unimplemented!()
             }
             async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>> {
-                uninplemented!()
+                unimplemented!()
             }
             async fn is_group_user(&self, group_name: &str, user: &str) -> DbResult<bool> {
-                uninplemented!()
+                unimplemented!()
             }
 
             async fn add_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>{
-                uninplemented!()
+                unimplemented!()
             }
             async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>{
-                uninplemented!()
+                unimplemented!()
             }
             async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>>{
-                uninplemented!()
+                unimplemented!()
             }
             async fn is_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<bool>{
-                uninplemented!()
+                unimplemented!()
             }
 
             async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>{
-                uninplemented!()
+                unimplemented!()
             }
 
             async fn register_webhook(
                 &self,
                 webhook: Webhook
             ) -> DbResult<String> {
-                uninplemented!()
+                unimplemented!()
             }
             async fn delete_webhook(&self, id: &str) -> DbResult<()> {
                 unimplemented!()

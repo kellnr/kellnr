@@ -4,7 +4,7 @@ use axum::{
     Router,
 };
 
-/// Creates the user routes
+/// Creates the webhook routes
 pub fn create_routes() -> Router<AppStateData> {
     Router::new()
         .route("/", get(webhooks::get_all_webhooks))
