@@ -67,6 +67,10 @@ async fn main() {
 
     // Docs hosting
     init_docs_hosting(&settings, crate_storage.clone(), db.clone()).await;
+
+    // Webhook support
+    init_webhook_service(db.clone());
+
     let data_dir = settings.registry.data_dir.clone();
     let signing_key = Key::generate();
     let max_docs_size = settings.docs.max_size;
@@ -151,4 +155,8 @@ fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
         let s = FSStorage::new(folder).expect("Failed to create FS storage.");
         Box::new(s) as DynStorage
     }
+}
+
+fn init_webhook_service(db: Arc<dyn DbProvider + 'static>) {
+    webhooks::run_webhook_service(db);
 }

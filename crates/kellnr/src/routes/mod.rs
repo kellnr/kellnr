@@ -24,6 +24,7 @@ mod health_routes;
 mod kellnr_api_routes;
 mod ui_routes;
 mod user_routes;
+mod webhook_routes;
 
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../ui/dist");
 
@@ -117,6 +118,7 @@ pub fn create_router(
             "/api/v1/cratesio",
             cratesio_api_routes::create_routes(state.clone()),
         )
+        .nest("/api/v1/webhook", webhook_routes::create_routes())
         .nest("/api/v1", health_routes::create_routes())
         .nest_service("/docs", docs_service)
         // Always serve the UI from the embedded directory (single-binary deploy).

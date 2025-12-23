@@ -1,4 +1,4 @@
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use common::crate_overview::CrateOverview;
 use common::index_metadata::IndexMetadata;
@@ -7,10 +7,13 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::{PublishMetadata, RegistryDep};
 use common::version::Version;
+use common::webhook::{Webhook, WebhookEvent, WebhookQueue};
 use db::password::hash_pwd;
 use db::provider::PrefetchState;
-use db::{DbProvider, DocQueueEntry, User, test_utils::*};
+use db::{test_utils::*, DbProvider, DocQueueEntry, User};
 use db_testcontainer::db_test;
+use rm_rf::ensure_removed;
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 mod image;
@@ -617,15 +620,13 @@ async fn is_owner_true(test_db: &db::Database) {
     .await
     .unwrap();
 
-    assert!(
-        test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "admin"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "admin"
+        )
+        .await
+        .unwrap());
 }
 
 #[db_test]
@@ -640,15 +641,13 @@ async fn is_owner_false(test_db: &db::Database) {
     .await
     .unwrap();
 
-    assert!(
-        !test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "user"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(!test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "user"
+        )
+        .await
+        .unwrap());
 }
 
 #[db_test]
@@ -665,12 +664,10 @@ async fn delete_owner_valid_owner(test_db: &db::Database) {
 
     test_db.delete_owner("mycrate", "admin").await.unwrap();
 
-    assert!(
-        test_db
-            .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
-            .await
-            .is_ok()
-    );
+    assert!(test_db
+        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .await
+        .is_ok());
 }
 
 #[db_test]
@@ -715,12 +712,10 @@ async fn test_add_crate_different_user(test_db: &db::Database) {
         .add_crate(&pm, "cksum", &created, "admin")
         .await
         .unwrap();
-    assert!(
-        test_db
-            .add_crate(&pm, "cksum", &created, "user")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .add_crate(&pm, "cksum", &created, "user")
+        .await
+        .is_err());
 }
 
 #[db_test]
@@ -820,12 +815,10 @@ async fn get_user_from_token_no_token(test_db: &db::Database) {
 
 #[db_test]
 async fn add_auth_token_no_user(test_db: &db::Database) {
-    assert!(
-        test_db
-            .add_auth_token("test", "mytoken", "nouser")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .add_auth_token("test", "mytoken", "nouser")
+        .await
+        .is_err());
 }
 
 #[db_test]
@@ -870,12 +863,10 @@ async fn add_user_duplicate(test_db: &db::Database) {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .add_user("user", "pwd", "salt", false, false)
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .add_user("user", "pwd", "salt", false, false)
+        .await
+        .is_err());
 }
 
 #[db_test]
@@ -1042,11 +1033,9 @@ async fn crate_version_exists_with_existing_version(test_db: &db::Database) {
     )
     .await
     .unwrap();
-    assert!(
-        test_add_crate_meta(test_db, id, "1.0.0", &Utc::now(), None)
-            .await
-            .is_err()
-    );
+    assert!(test_add_crate_meta(test_db, id, "1.0.0", &Utc::now(), None)
+        .await
+        .is_err());
 }
 
 #[db_test]
@@ -2600,4 +2589,173 @@ async fn test_delete_crate_rollback(test_db: &db::Database) {
     let meta = test_db.get_crate_meta_list(&normalized_name).await.unwrap();
     // Crate meta is deleted first, but the actions should be rolled back on error.
     assert_eq!(1, meta.len());
+}
+
+#[db_test]
+async fn test_register_webhook(test_db: &db::Database) {
+    let webhook = Webhook {
+        id: None,
+        event: WebhookEvent::CrateYank,
+        callback_url: "https://my-other-service:8005".to_string(),
+        name: Some("myWebhook".to_string()),
+    };
+    let id = test_db.register_webhook(webhook).await.unwrap();
+    let entry = test_db.get_webhook(&id).await.unwrap();
+
+    assert_eq!(WebhookEvent::CrateYank, entry.event);
+    assert_eq!(
+        "https://my-other-service:8005".to_string(),
+        entry.callback_url
+    );
+    assert_eq!(Some("myWebhook".to_string()), entry.name);
+}
+
+#[db_test]
+async fn test_delete_webhook(test_db: &db::Database) {
+    let webhook = Webhook {
+        id: None,
+        event: WebhookEvent::CrateYank,
+        callback_url: "https://my-other-service:8005".to_string(),
+        name: None,
+    };
+    let id = test_db.register_webhook(webhook).await.unwrap();
+
+    let result = test_db.delete_webhook(&id).await;
+    assert!(result.is_ok());
+
+    let result = test_db.get_webhook(&id).await;
+    assert!(result.is_err());
+}
+
+#[db_test]
+async fn test_get_all_webhooks(test_db: &db::Database) {
+    let mut ids = vec![];
+    for i in 0..10 {
+        ids.push(
+            test_db
+                .register_webhook(Webhook {
+                    id: None,
+                    event: if i % 2 == 0 {
+                        WebhookEvent::CrateYank
+                    } else {
+                        WebhookEvent::CrateAdd
+                    },
+                    callback_url: String::new(),
+                    name: None,
+                })
+                .await
+                .unwrap(),
+        );
+    }
+
+    let entries = test_db.get_all_webhooks().await.unwrap();
+
+    assert_eq!(10, entries.len());
+    for id in ids.iter() {
+        assert!(entries.iter().any(|a| a.id.as_ref().unwrap() == id));
+    }
+}
+
+#[db_test]
+async fn test_add_webhook_queue(test_db: &db::Database) {
+    let webhook = Webhook {
+        id: None,
+        event: WebhookEvent::CrateUpdate,
+        callback_url: "https://update-service.io".to_string(),
+        name: None,
+    };
+    let webhook_id = test_db.register_webhook(webhook).await.unwrap();
+
+    let payload = json!({"test": "data"});
+    let result = test_db
+        .add_webhook_queue(WebhookEvent::CrateUpdate, payload.clone())
+        .await;
+    assert!(result.is_ok());
+
+    // New entry should always be `pending`
+    let entries = test_db
+        .get_pending_webhook_queue_entries(Utc::now())
+        .await
+        .unwrap();
+
+    assert_eq!(entries[0].payload, payload);
+    assert_eq!(
+        entries[0].callback_url,
+        "https://update-service.io".to_string()
+    );
+    assert_eq!(entries[0].last_attempt, None);
+}
+
+#[db_test]
+async fn test_get_pending_webhook_queue_entries(test_db: &db::Database) {
+    let webhook = Webhook {
+        id: None,
+        event: WebhookEvent::CrateUpdate,
+        callback_url: String::new(),
+        name: None,
+    };
+    let webhook_id = test_db.register_webhook(webhook).await.unwrap();
+
+    let payloads = (0..3).map(|i| json!(i)).collect::<Vec<_>>();
+    for payload in payloads.iter() {
+        test_db
+            .add_webhook_queue(WebhookEvent::CrateUpdate, payload.clone())
+            .await
+            .unwrap();
+    }
+
+    let entries = test_db
+        .get_pending_webhook_queue_entries(Utc::now())
+        .await
+        .unwrap();
+
+    // Do not rely on indexing as DB order is not deterministic
+    let entry_1 = entries.iter().find(|a| a.payload == json!(1)).unwrap();
+
+    test_db
+        .update_webhook_queue(
+            &entry_1.id,
+            entry_1.next_attempt,
+            Utc::now() + TimeDelta::minutes(15),
+        )
+        .await
+        .unwrap();
+
+    // Schedule one of the entries for a future time.
+    let entries = test_db
+        .get_pending_webhook_queue_entries(Utc::now())
+        .await
+        .unwrap();
+
+    assert_eq!(2, entries.len());
+    assert!(!entries.iter().any(|a| a.payload == json!(1)));
+}
+
+#[db_test]
+async fn test_delete_webhook_queue(test_db: &db::Database) {
+    let webhook = Webhook {
+        id: None,
+        event: WebhookEvent::CrateUpdate,
+        callback_url: String::new(),
+        name: None,
+    };
+    let webhook_id = test_db.register_webhook(webhook).await.unwrap();
+
+    let payload = json!(0);
+    let result = test_db
+        .add_webhook_queue(WebhookEvent::CrateUpdate, payload.clone())
+        .await;
+    assert!(result.is_ok());
+
+    let entry = &test_db
+        .get_pending_webhook_queue_entries(Utc::now())
+        .await
+        .unwrap()[0];
+
+    test_db.delete_webhook_queue(&entry.id).await.unwrap();
+    let entries = test_db
+        .get_pending_webhook_queue_entries(Utc::now())
+        .await
+        .unwrap();
+    assert!(entries.is_empty());
 }
