@@ -31,10 +31,21 @@ local function run_test(dir, script, new_version, latest_version, description, r
 end
 
 -- Function to fetch releases from GitHub API
+-- Optionally supports authenticated calls via environment variables to reduce rate-limit issues.
+-- Recommended in CI: set GITHUB_TOKEN (fine-grained PAT or classic PAT with public_repo is sufficient for public repos).
+-- Supports both:
+--   - GITHUB_TOKEN (preferred; GitHub Actions provides one automatically if permissions allow)
+--   - GH_TOKEN (alternate name)
 local function fetch_releases()
   local request = http_request.new_from_uri("https://api.github.com/repos/kellnr/kellnr/releases")
   request.headers:upsert(":method", "GET")
   request.headers:upsert("user-agent", "kellnr-test-script/1.0")
+
+  -- Optional auth: increases rate limits and reduces flakiness.
+  local token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
+  if token and token ~= "" then
+    request.headers:upsert("authorization", "Bearer " .. token)
+  end
 
   local headers, stream = request:go()
   if not headers then
@@ -42,6 +53,15 @@ local function fetch_releases()
   end
 
   local body = stream:get_body_as_string()
+
+  -- If we got a non-2xx, return a synthetic JSON body so JSON parsing always succeeds
+  -- and we can provide actionable error messages (rate-limit, auth, etc).
+  local status = headers:get(":status")
+  local status_num = tonumber(status)
+  if status_num and (status_num < 200 or status_num >= 300) then
+    return string.format('{"message":"GitHub API error","status":%d,"body":%q}', status_num, body or "")
+  end
+
   return body
 end
 
@@ -79,13 +99,32 @@ local function main()
 
   local success, releases = pcall(json.decode, json_data)
   if not success then
-    testing.error_log("Failed to parse JSON response from GitHub API.", true)
+    testing.error_log("Failed to parse JSON response from GitHub API. Response prefix: " .. tostring(json_data):sub(1, 200), true)
     os.exit(1)
   end
 
-  -- Check if Github API rate limit is exceeded
+  -- If the GitHub API returned an error payload (we synthesize it for non-2xx responses),
+  -- surface it with actionable guidance.
+  if type(releases) == "table" and releases.message == "GitHub API error" then
+    local status = tostring(releases.status or "unknown")
+    local body = tostring(releases.body or "")
+    if body:match("API rate limit exceeded") then
+      testing.error_log(
+        "GitHub API rate limit exceeded. Set GITHUB_TOKEN (or GH_TOKEN) to increase the rate limit. Status: " .. status .. ". Body prefix: " .. body:sub(1, 200),
+        true
+      )
+    else
+      testing.error_log(
+        "GitHub API request failed. Status: " .. status .. ". Body prefix: " .. body:sub(1, 200),
+        true
+      )
+    end
+    os.exit(1)
+  end
+
+  -- Check if Github API rate limit is exceeded (in case GitHub changes behavior and still returns 200)
   if type(releases) == "table" and releases.message and releases.message:match("API rate limit exceeded") then
-    testing.error_log("GitHub API rate limit exceeded. Please try again later.", true)
+    testing.error_log("GitHub API rate limit exceeded. Set GITHUB_TOKEN (or GH_TOKEN) to increase the rate limit.", true)
     os.exit(1)
   end
 
