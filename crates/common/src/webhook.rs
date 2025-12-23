@@ -19,6 +19,7 @@ pub struct WebhookQueue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::enum_variant_names)]
 pub enum WebhookEvent {
     #[serde(rename = "crate_add")]
     CrateAdd,

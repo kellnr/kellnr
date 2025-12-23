@@ -1,7 +1,7 @@
 use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{DbResult, PrefetchState};
 use crate::tables::init_database;
-use crate::{error::DbError, AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User};
+use crate::{AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User, error::DbError};
 use crate::{ConString, DocQueueEntry};
 use chrono::{DateTime, Utc};
 use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
@@ -25,11 +25,11 @@ use migration::iden::{
 };
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
     entity::prelude::Uuid,
     prelude::async_trait::async_trait,
     query::{QueryOrder, QuerySelect, TransactionTrait},
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
 };
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -1880,9 +1880,9 @@ impl DbProvider for Database {
             .filter_map(|w| {
                 Some(WebhookQueue {
                     id: Into::<String>::into(w.0.id),
-                    callback_url: w.1.first()?.callback_url.to_string(),
+                    callback_url: w.1.first()?.callback_url.clone(),
                     payload: w.0.payload.clone(),
-                    last_attempt: w.0.last_attempt.map(|a| a.into()),
+                    last_attempt: w.0.last_attempt.map(Into::into),
                     next_attempt: w.0.next_attempt.into(),
                 })
             })
