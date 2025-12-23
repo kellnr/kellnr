@@ -52,4 +52,10 @@ pub enum DbError {
     InvalidCrateName(String),
     #[error("Crates.io index data is missing for crate {0}")]
     MissingCratesIoIndexData(String),
+    #[error("Webhook not found")]
+    WebhookNotFound,
+    #[error("Invalid webhook event {0}")]
+    InvalidWebhookEvent(String),
+    #[error("Invalid id {0}")]
+    InvalidId(String),
 }
