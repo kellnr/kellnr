@@ -51,7 +51,7 @@ enabled = false
 max_size = 100
 
 [proxy]
-# Set to "true" to enable the crates.io proxy. The the official Kellnr documentation
+# Set to "true" to enable the crates.io proxy. See the official Kellnr documentation
 # for more information.
 enabled = false
 # Number of threads used to keep the crates.io proxy up to date.
