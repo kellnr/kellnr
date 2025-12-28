@@ -119,11 +119,6 @@ jobs:
       - name: Print Packagename
         run: echo $KELLNR_PACKAGE
 
-      - name: Package Resources
-        uses: montudor/action-zip@v1.0.0
-        with:
-          args: zip -qq -r ${{ env.KELLNR_PACKAGE }}
-
       - name: Package Kellnr
         uses: montudor/action-zip@v1.0.0
         with:
