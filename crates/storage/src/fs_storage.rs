@@ -2,7 +2,7 @@ use crate::storage::Storage;
 use crate::storage_error::StorageError;
 use async_trait::async_trait;
 use bytes::Bytes;
-use object_store::{ObjectStore, PutMode, local::LocalFileSystem, path::Path};
+use object_store::{ObjectStore, ObjectStoreExt, PutMode, local::LocalFileSystem, path::Path};
 use std::fs::DirBuilder;
 
 pub struct FSStorage(LocalFileSystem);

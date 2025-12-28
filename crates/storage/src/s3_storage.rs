@@ -2,7 +2,7 @@ use crate::{storage::Storage, storage_error::StorageError};
 use async_trait::async_trait;
 use bytes::Bytes;
 use object_store::{
-    ObjectStore, PutMode,
+    ObjectStore, ObjectStoreExt, PutMode,
     aws::{AmazonS3, AmazonS3Builder},
     path::Path,
 };
