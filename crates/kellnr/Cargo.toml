@@ -22,7 +22,10 @@ webhooks.workspace = true
 # External dependencies from crates.io
 axum-extra.workspace = true
 axum.workspace = true
+bytes.workspace = true
 flume.workspace = true
+mime_guess.workspace = true
+include_dir.workspace = true
 openssl = { version = "*", optional = true } # Not needed directly but for cross-compilation with the vendored-openssl feature
 tokio.workspace = true
 tower-http.workspace = true

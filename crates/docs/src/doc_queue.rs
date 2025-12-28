@@ -71,7 +71,7 @@ async fn extract_docs(
     let version = Version::from_unchecked_str(&doc.version);
     let contents = cs.get(&orig_name, &version).await.ok_or_else(|| {
         error!("Failed to get crate from storage");
-        DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.to_string())
+        DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.clone())
     })?;
     let tar = GzDecoder::new(std::io::Cursor::new(contents));
     let mut archive = Archive::new(tar);

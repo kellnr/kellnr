@@ -30,6 +30,9 @@ RUN apt install -y -q --no-install-recommends \
   gcc \
   && rm -rf /var/lib/apt/lists/*
 
+# Install just command runner
+RUN cargo install just
+
 # Install latest nodejs version with nvm
 ENV NVM_DIR="/root/.nvm"
 ENV NODE_VERSION="24.5.0"
@@ -39,18 +42,12 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | b
   && nvm alias default $NODE_VERSION \
   && nvm use $NODE_VERSION
 ENV NODE_PATH="$NVM_DIR/versions/node/$NODE_VERSION/lib/node_modules"
-ENV PATH="$NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH"
+ENV PATH="$NVM_DIR/versions/node/v$NODE_VERSION/bin:$HOME/.cargo/bin:$PATH"
 COPY . /sources
-
-# Build the UI
-WORKDIR /sources/ui
-RUN npm install
-RUN npm run build
-
 
 # Build kellnr
 WORKDIR /sources
-RUN cargo build --release --features "vendored-openssl"
+RUN just build-release 
 
 
 ##################
@@ -63,8 +60,9 @@ RUN mkdir -p /opt/kellnr
 RUN rustup component add rust-src
 WORKDIR /opt/kellnr
 COPY --from=builder /sources/target/release/kellnr ./kellnr
+# The next line can be removed in future releases if the default config is baked into the binary
+# It is currently needed, for the migration test from a version that needs the config file (5.8.0 and earlier)
 COPY --from=builder /sources/config/default.toml ./config/default.toml
-COPY --from=builder /sources/ui/dist ./static
 
 COPY tests/ca.crt /usr/local/share/ca-certificates/ca.crt
 RUN update-ca-certificates

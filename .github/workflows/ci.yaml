@@ -122,7 +122,7 @@ jobs:
       - name: Package Resources
         uses: montudor/action-zip@v0.1.1
         with:
-          args: zip -qq -r ${{ env.KELLNR_PACKAGE }} static config
+          args: zip -qq -r ${{ env.KELLNR_PACKAGE }}
 
       - name: Package Kellnr
         uses: montudor/action-zip@v0.1.1

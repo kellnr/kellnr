@@ -57,7 +57,7 @@ impl TryFrom<&String> for OriginalName {
     type Error = NameError;
 
     fn try_from(package_name: &String) -> Result<Self, Self::Error> {
-        OriginalName::try_from(package_name.to_string())
+        OriginalName::try_from(package_name.clone())
     }
 }
 

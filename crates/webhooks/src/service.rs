@@ -64,7 +64,7 @@ async fn handle_failed_entry(
     db: &Arc<dyn DbProvider>,
     entry: &WebhookQueue,
 ) -> Result<(), WebhookError> {
-    match get_next_attempt(&entry.last_attempt, &entry.next_attempt) {
+    match get_next_attempt(entry.last_attempt.as_ref(), &entry.next_attempt) {
         Some(next) => {
             db.update_webhook_queue(&entry.id, entry.next_attempt, next)
                 .await?;
@@ -77,7 +77,7 @@ async fn handle_failed_entry(
 /// Resend timings according to:
 /// <https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md#deliverability-and-reliability>
 fn get_next_attempt(
-    last_attempt: &Option<DateTime<Utc>>,
+    last_attempt: Option<&DateTime<Utc>>,
     current_attempt: &DateTime<Utc>,
 ) -> Option<DateTime<Utc>> {
     let delta = last_attempt.map(|a| *current_attempt - a);

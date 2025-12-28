@@ -9,9 +9,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    target-branch: "devel"
+    target-branch: "main"
   - package-ecosystem: "npm"
     directory: "ui/"
     schedule:
       interval: "weekly"
-    target-branch: "devel"
+    target-branch: "main"

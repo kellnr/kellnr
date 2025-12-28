@@ -51,9 +51,8 @@ fn doc_exists(crate_name: &str, crate_version: &str, docs_path: &Path) -> bool {
 
 fn get_latest_version_with_doc(crate_name: &str, settings: &Settings) -> Option<Version> {
     let versions_path = settings.docs_path().join(crate_name);
-    let version_folders = match std::fs::read_dir(versions_path) {
-        Err(_) => return None,
-        Ok(f) => f,
+    let Ok(version_folders) = std::fs::read_dir(versions_path) else {
+        return None;
     };
 
     let mut versions: Vec<Version> = version_folders

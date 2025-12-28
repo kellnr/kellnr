@@ -163,7 +163,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_webhook(&self, id: &str) -> DbResult<Webhook>;
     async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>>;
     /// Creates a new webhook queue entry for each register webhook
-    /// matching the given event. Next_attempt is set to current time,
+    /// matching the given event. `Next_attempt` is set to current time,
     ///  in order to trigger immediate dispatch.
     async fn add_webhook_queue(
         &self,

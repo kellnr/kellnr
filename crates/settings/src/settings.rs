@@ -14,6 +14,7 @@ use crate::s3::S3;
 use crate::setup::Setup;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Default, Clone)]
+#[serde(default)]
 pub struct Settings {
     pub setup: Setup,
     pub registry: Registry,
@@ -37,7 +38,7 @@ impl TryFrom<&Path> for Settings {
 
         let s = Config::builder()
             // Start off by merging in the "default" configuration file
-            .add_source(File::with_name(&default_file))
+            .add_source(File::with_name(&default_file).required(false))
             // Add in the current environment file
             // Default to 'development' env
             // Note that this file is _optional_
@@ -46,7 +47,6 @@ impl TryFrom<&Path> for Settings {
             // This file shouldn't be checked in to git
             .add_source(File::with_name(&local_file).required(false))
             // Add in settings from the environment (with a prefix of KELLNR)
-            // Eg. `KELLNR_DEBUG=1 ./target/app` would set the `debug` key
             .add_source(
                 Environment::with_prefix("KELLNR")
                     .list_separator(",")

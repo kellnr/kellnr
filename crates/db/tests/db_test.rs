@@ -7,12 +7,11 @@ use common::original_name::OriginalName;
 use common::prefetch::Prefetch;
 use common::publish_metadata::{PublishMetadata, RegistryDep};
 use common::version::Version;
-use common::webhook::{Webhook, WebhookEvent, WebhookQueue};
+use common::webhook::{Webhook, WebhookEvent};
 use db::password::hash_pwd;
 use db::provider::PrefetchState;
 use db::{test_utils::*, DbProvider, DocQueueEntry, User};
 use db_testcontainer::db_test;
-use rm_rf::ensure_removed;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -2651,7 +2650,7 @@ async fn test_get_all_webhooks(test_db: &db::Database) {
     let entries = test_db.get_all_webhooks().await.unwrap();
 
     assert_eq!(10, entries.len());
-    for id in ids.iter() {
+    for id in &ids {
         assert!(entries.iter().any(|a| a.id.as_ref().unwrap() == id));
     }
 }
@@ -2697,7 +2696,7 @@ async fn test_get_pending_webhook_queue_entries(test_db: &db::Database) {
     let webhook_id = test_db.register_webhook(webhook).await.unwrap();
 
     let payloads = (0..3).map(|i| json!(i)).collect::<Vec<_>>();
-    for payload in payloads.iter() {
+    for payload in &payloads {
         test_db
             .add_webhook_queue(WebhookEvent::CrateUpdate, payload.clone())
             .await

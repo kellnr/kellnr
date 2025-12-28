@@ -25,6 +25,8 @@ use migration::iden::{
 };
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
     entity::prelude::Uuid,
     prelude::async_trait::async_trait,
     query::{QueryOrder, QuerySelect, TransactionTrait},
@@ -61,6 +63,11 @@ impl Database {
 #[async_trait]
 impl DbProvider for Database {
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
         let stmt = Query::select()
             .expr_as(
                 Expr::col((CratesIoIden::Table, CratesIoIden::Id)).count(),
@@ -68,11 +75,6 @@ impl DbProvider for Database {
             )
             .from(CratesIoIden::Table)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -86,6 +88,11 @@ impl DbProvider for Database {
     }
 
     async fn get_total_cached_crate_versions(&self) -> DbResult<u64> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
         let stmt = Query::select()
             .expr_as(
                 Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Id)).count(),
@@ -93,11 +100,6 @@ impl DbProvider for Database {
             )
             .from(CratesIoMetaIden::Table)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -896,6 +898,11 @@ impl DbProvider for Database {
     }
 
     async fn get_total_unique_crates(&self) -> DbResult<u32> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
         let stmt = Query::select()
             .expr_as(
                 Expr::col((CrateIden::Table, CrateIden::Id)).count(),
@@ -903,11 +910,6 @@ impl DbProvider for Database {
             )
             .from(CrateIden::Table)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -921,6 +923,11 @@ impl DbProvider for Database {
     }
 
     async fn get_total_crate_versions(&self) -> DbResult<u32> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            count: Option<i64>,
+        }
+
         let stmt = Query::select()
             .expr_as(
                 Expr::col((CrateMetaIden::Table, CrateMetaIden::Id)).count(),
@@ -928,11 +935,6 @@ impl DbProvider for Database {
             )
             .from(CrateMetaIden::Table)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -965,18 +967,18 @@ impl DbProvider for Database {
     }
 
     async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>> {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct SelectResult {
+            original_name: String,
+            total_downloads: i64,
+        }
+
         let stmt = Query::select()
             .columns(vec![CrateIden::OriginalName, CrateIden::TotalDownloads])
             .from(CrateIden::Table)
             .order_by(CrateIden::TotalDownloads, Order::Desc)
             .limit(top as u64)
             .to_owned();
-
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            original_name: String,
-            total_downloads: i64,
-        }
 
         let builder = self.db_con.get_database_backend();
         let result = SelectResult::find_by_statement(builder.build(&stmt))
@@ -1880,9 +1882,9 @@ impl DbProvider for Database {
             .filter_map(|w| {
                 Some(WebhookQueue {
                     id: Into::<String>::into(w.0.id),
-                    callback_url: w.1.first()?.callback_url.to_string(),
+                    callback_url: w.1.first()?.callback_url.clone(),
                     payload: w.0.payload.clone(),
-                    last_attempt: w.0.last_attempt.map(|a| a.into()),
+                    last_attempt: w.0.last_attempt.map(Into::into),
                     next_attempt: w.0.next_attempt.into(),
                 })
             })
@@ -2060,7 +2062,7 @@ async fn add_crate_metadata<C: ConnectionTrait>(
 ) -> DbResult<()> {
     let cm = crate_meta::ActiveModel {
         id: ActiveValue::default(),
-        version: Set(pub_metadata.vers.to_string()),
+        version: Set(pub_metadata.vers.clone()),
         created: Set(created.to_string()),
         downloads: Set(0),
         crate_fk: Set(crate_id),
@@ -2299,9 +2301,9 @@ fn cratesio_index_model_to_index_metadata(
 
         let cm = IndexMetadata {
             name: ci.name,
-            vers: ci.vers.to_string(),
+            vers: ci.vers.clone(),
             deps,
-            cksum: ci.cksum.to_string(),
+            cksum: ci.cksum.clone(),
             features,
             features2,
             yanked: ci.yanked,

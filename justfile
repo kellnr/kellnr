@@ -20,11 +20,11 @@ check:
 build:
 	cargo build --features vendored-openssl
 
-build-release:
+build-release: npm-build
 	cargo build --release --features vendored-openssl
 
 clippy:
-    cargo clippy --workspace --all-targets --all-features
+  cargo clippy --workspace --all-targets --all-features
 
 run: npm-build build
 	cargo run
@@ -32,13 +32,13 @@ run: npm-build build
 clean:
 	cargo clean
 
-test: # Run all tests which do NOT require Docker
+test: npm-build # Run all tests which do NOT require Docker
 	cargo nextest run --workspace -E 'not test(~postgres_)'
 
 test-smoke: # Run the smoke tests which require Docker
 	{{test_smoke}}
 
-test-pgdb: # Run Postgresql integration tests which require Docker
+test-pgdb: npm-build # Run Postgresql integration tests which require Docker
 	{{test_pgdb}}
 
 test-all: test test-pgdb test-smoke
@@ -54,8 +54,6 @@ npm-dev:
 
 npm-build: npm-install
 	cd ui && npm run build
-	mkdir -p static
-	cp -r ui/dist/* static/
 
 npm-install:
 	cd ui && npm install

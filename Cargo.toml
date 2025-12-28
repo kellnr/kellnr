@@ -40,17 +40,19 @@ chrono = "0.4.41"
 config = "0.15.19"
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
 flate2 = "1.1.5"
-flume = "0.11.1"
+flume = "0.12.0"
 fs_extra = "1.3.0"
 http-body-util = "0.1.3"
 hyper = "1.8.1"
+include_dir = "0.7.4"
+mime_guess = "2.0.5"
 mockall = "0.14.0"
-moka = { version = "0.12.11", features = ["future"] }
+moka = { version = "0.12.12", features = ["future"] }
 object_store = { version = "0.12.4", default-features = false, features = ["aws", "fs"] }
 quote = "1.0.42"
 rand = "0.9.2"
 regex = "1.12.2"
-reqwest = { version = "0.12.23", features = ["json", "blocking", "gzip", "http2", "deflate", "rustls-tls"] }
+reqwest = { version = "0.12.25", features = ["json", "blocking", "gzip", "http2", "deflate", "rustls-tls"] }
 rm_rf = "0.6.2"
 sea-orm = { version = "1.1.19", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
 sea-orm-migration = { version = "1.1.19", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls"] }
@@ -67,11 +69,11 @@ time = "0.3.44"
 tokio = { version = "1.48.0", features = ["macros"] }
 toml = "0.9.8"
 tower = { version = "0.5.2", features = ["util"] }
-tower-http = { version = "0.6.7", features = ["fs", "trace"] }
+tower-http = { version = "0.6.8", features = ["fs", "trace"] }
 tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["json", "fmt"] }
 url = "2.5.4"
-zip = "6.0.0"
+zip = "7.0.0"
 
 [profile.release]
 lto = "thin"

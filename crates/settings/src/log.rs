@@ -3,6 +3,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt::Display;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(default)]
 pub struct Log {
     #[serde(deserialize_with = "LogFormat::deserialize_with")]
     pub format: LogFormat,

@@ -2,6 +2,7 @@ use crate::protocol::Protocol;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(default)]
 pub struct Origin {
     pub hostname: String,
     pub port: u16,
