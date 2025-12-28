@@ -150,9 +150,9 @@ As `kellnr` is a multi-repo project, creating a new release involves several ste
 0. Create a new release in the `kellnr` repository from the `main` branch [here](https://github.com/kellnr/kellnr/releases). 
     - The version should be in the format `vX.Y.Z`, e.g., `v1.2.3`. 
     - This builds `kellnr` and creates the release artifacts, e.g. binary files and Docker images.
-0. Release a new version of the `helm` chart for `kellnr`:
+0. On a successfull release, a PR for the`helm` chart for `kellnr` is automatically created.
     - Navigate to the [kellnr helm chart repository](https://github.com/kellnr/helm)
-    - Update the `Chart.yaml` file with the new version number and any other relevant changes.
+    - Review the `Chart.yaml` file with the new version number and any other relevant changes.
     - If settings have changed, update the `values.yaml` file and templates accordingly.
     - Commit the changes and push them to the `main` branch. 
     - Every push to the `main` branch will automatically create a new release in the helm chart repository.
