@@ -1,4 +1,4 @@
-use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta, error::DbError};
+use crate::{crate_meta, error::DbError, AuthToken, CrateSummary, DocQueueEntry, Group, User};
 use chrono::{DateTime, Utc};
 use common::crate_data::CrateData;
 use common::crate_overview::CrateOverview;

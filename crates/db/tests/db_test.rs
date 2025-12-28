@@ -10,7 +10,7 @@ use common::version::Version;
 use common::webhook::{Webhook, WebhookEvent};
 use db::password::hash_pwd;
 use db::provider::PrefetchState;
-use db::{DbProvider, DocQueueEntry, User, test_utils::*};
+use db::{test_utils::*, DbProvider, DocQueueEntry, User};
 use db_testcontainer::db_test;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -619,15 +619,13 @@ async fn is_owner_true(test_db: &db::Database) {
     .await
     .unwrap();
 
-    assert!(
-        test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "admin"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "admin"
+        )
+        .await
+        .unwrap());
 }
 
 #[db_test]
@@ -642,15 +640,13 @@ async fn is_owner_false(test_db: &db::Database) {
     .await
     .unwrap();
 
-    assert!(
-        !test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "user"
-            )
-            .await
-            .unwrap()
-    );
+    assert!(!test_db
+        .is_owner(
+            &NormalizedName::from_unchecked("mycrate".to_string()),
+            "user"
+        )
+        .await
+        .unwrap());
 }
 
 #[db_test]
@@ -667,12 +663,10 @@ async fn delete_owner_valid_owner(test_db: &db::Database) {
 
     test_db.delete_owner("mycrate", "admin").await.unwrap();
 
-    assert!(
-        test_db
-            .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
-            .await
-            .is_ok()
-    );
+    assert!(test_db
+        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .await
+        .is_ok());
 }
 
 #[db_test]
@@ -717,12 +711,10 @@ async fn test_add_crate_different_user(test_db: &db::Database) {
         .add_crate(&pm, "cksum", &created, "admin")
         .await
         .unwrap();
-    assert!(
-        test_db
-            .add_crate(&pm, "cksum", &created, "user")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .add_crate(&pm, "cksum", &created, "user")
+        .await
+        .is_err());
 }
 
 #[db_test]
@@ -822,12 +814,10 @@ async fn get_user_from_token_no_token(test_db: &db::Database) {
 
 #[db_test]
 async fn add_auth_token_no_user(test_db: &db::Database) {
-    assert!(
-        test_db
-            .add_auth_token("test", "mytoken", "nouser")
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .add_auth_token("test", "mytoken", "nouser")
+        .await
+        .is_err());
 }
 
 #[db_test]
@@ -872,12 +862,10 @@ async fn add_user_duplicate(test_db: &db::Database) {
         .await
         .unwrap();
 
-    assert!(
-        test_db
-            .add_user("user", "pwd", "salt", false, false)
-            .await
-            .is_err()
-    );
+    assert!(test_db
+        .add_user("user", "pwd", "salt", false, false)
+        .await
+        .is_err());
 }
 
 #[db_test]
@@ -1044,11 +1032,9 @@ async fn crate_version_exists_with_existing_version(test_db: &db::Database) {
     )
     .await
     .unwrap();
-    assert!(
-        test_add_crate_meta(test_db, id, "1.0.0", &Utc::now(), None)
-            .await
-            .is_err()
-    );
+    assert!(test_add_crate_meta(test_db, id, "1.0.0", &Utc::now(), None)
+        .await
+        .is_err());
 }
 
 #[db_test]
