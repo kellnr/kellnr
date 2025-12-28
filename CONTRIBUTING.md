@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Kellnr! This document provides gu
 #### For Bug Fixes
 
 1. Fork the repository
-2. Create a branch from `main`, except for hotfixes
+2. Create a branch from `main`
 3. Fix the bug
 4. Ensure your code is formatted with `cargo fmt` (default settings)
 5. Submit a pull request to the `main` branch
@@ -121,7 +121,6 @@ The following environment variables can be set at compile time:
 
 - `KELLNR_VERSION`: The version of kellnr currently being compiled (default: `0.0.0-unknown`).
 - `KELLNR_CONFIG_DIR`: The configuration directory (default: `./config`, `../config`, or `../../config`).
-- `KELLNR_STATIC_DIR`: The static html directory (default: `./static`).
 
 ## Update Documentation
 
