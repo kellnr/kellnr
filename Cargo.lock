@@ -6751,9 +6751,9 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "testcontainers"
-version = "0.26.2"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1483605f58b2fff80d786eb56a0b6b4e8b1e5423fbc9ec2e3e562fa2040d6f27"
+checksum = "a81ec0158db5fbb9831e09d1813fe5ea9023a2b5e6e8e0a5fe67e2a820733629"
 dependencies = [
  "astral-tokio-tar",
  "async-trait",
