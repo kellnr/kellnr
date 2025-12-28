@@ -69,6 +69,8 @@ jobs:
     name: Kellnr Build
     if: github.event_name == 'release'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     strategy:
       matrix:
         target:
