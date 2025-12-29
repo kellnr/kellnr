@@ -148,7 +148,6 @@ mod session_tests {
     use db::{error::DbError, mock::MockDb};
     use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
-    use settings::Settings;
     use std::{result, sync::Arc};
     use storage::cached_crate_storage::DynStorage;
     use storage::fs_storage::FSStorage;
@@ -168,7 +167,7 @@ mod session_tests {
     async fn any_endpoint(_user: MaybeUser) {}
 
     fn app(db: Arc<dyn DbProvider>) -> Router {
-        let settings = Settings::default();
+        let settings = settings::test_settings();
         let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         Router::new()
             .route("/admin", get(admin_endpoint))

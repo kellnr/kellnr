@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::{convert::TryFrom, env, path::Path};
 
+use crate::compile_time_config;
 use crate::docs::Docs;
 use crate::local::Local;
 use crate::log::Log;
@@ -27,25 +28,35 @@ pub struct Settings {
     pub s3: S3,
 }
 
-impl TryFrom<&Path> for Settings {
+impl TryFrom<Option<&Path>> for Settings {
     type Error = ConfigError;
 
-    fn try_from(config_path: &Path) -> Result<Self, Self::Error> {
-        let default_file = Settings::join_path(config_path, "default")?;
+    fn try_from(config_path: Option<&Path>) -> Result<Self, Self::Error> {
         let env = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
-        let env_file = Settings::join_path(config_path, &env)?;
-        let local_file = Settings::join_path(config_path, "local")?;
+        let builder = Config::builder();
 
-        let s = Config::builder()
-            // Start off by merging in the "default" configuration file
-            .add_source(File::with_name(&default_file).required(false))
-            // Add in the current environment file
-            // Default to 'development' env
-            // Note that this file is _optional_
-            .add_source(File::with_name(&env_file).required(false))
-            // Add in a local configuration file
-            // This file shouldn't be checked in to git
-            .add_source(File::with_name(&local_file).required(false))
+        // Add configuration values from a config file if a config path is provided
+        let builder = match config_path {
+            Some(config_path) => {
+                let default_file = Settings::join_path(config_path, "default")?;
+                let env_file = Settings::join_path(config_path, &env)?;
+                let local_file = Settings::join_path(config_path, "local")?;
+
+                builder
+                    // Start off by merging in the "default" configuration file
+                    .add_source(File::with_name(&default_file).required(false))
+                    // Add in the current environment file
+                    // Default to 'development' env
+                    // Note that this file is _optional_
+                    .add_source(File::with_name(&env_file).required(false))
+                    // Add in a local configuration file
+                    // This file shouldn't be checked in to git
+                    .add_source(File::with_name(&local_file).required(false))
+            }
+            None => builder,
+        };
+
+        let s = builder
             // Add in settings from the environment (with a prefix of KELLNR)
             .add_source(
                 Environment::with_prefix("KELLNR")
@@ -125,17 +136,28 @@ impl Settings {
 }
 
 pub fn get_settings() -> Result<Settings, ConfigError> {
-    let path = if let Some(path) = option_env!("KELLNR_CONFIG_DIR") {
-        Path::new(path)
+    let path = if Path::new(compile_time_config::KELLNR_CONFIG_DIR).exists() {
+        Some(Path::new(compile_time_config::KELLNR_CONFIG_DIR))
     } else if Path::new("./config").exists() {
-        Path::new("./config")
+        Some(Path::new("./config"))
     } else if Path::new("../config").exists() {
-        Path::new("../config")
+        Some(Path::new("../config"))
     } else if Path::new("../../config").exists() {
-        Path::new("../../config")
+        Some(Path::new("../../config"))
     } else {
-        return Err(ConfigError::NotFound("Config folder not found".to_string()));
+        None
     };
 
     Settings::try_from(path)
+}
+
+/// Used in Unit and Integration tests to provide test settings
+pub fn test_settings() -> Settings {
+    Settings {
+        registry: Registry {
+            data_dir: "/tmp/kdata_test".to_string(),
+            ..Registry::default()
+        },
+        ..Settings::default()
+    }
 }

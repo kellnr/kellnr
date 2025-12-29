@@ -1,3 +1,4 @@
+pub mod compile_time_config;
 pub mod constants;
 mod deserialize_with;
 pub mod docs;
@@ -23,4 +24,5 @@ pub use proxy::Proxy;
 pub use registry::Registry;
 pub use settings::Settings;
 pub use settings::get_settings;
+pub use settings::test_settings;
 pub use setup::Setup;

@@ -1,3 +1,4 @@
+use crate::compile_time_config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
@@ -16,7 +17,7 @@ pub struct Registry {
 impl Default for Registry {
     fn default() -> Self {
         Self {
-            data_dir: "/tmp/kellnr".to_string(),
+            data_dir: compile_time_config::KELLNR_DATA_DIR.to_string(),
             session_age_seconds: 60 * 60 * 8,
             cache_size: 1000,
             max_crate_size: 10 * 1000,

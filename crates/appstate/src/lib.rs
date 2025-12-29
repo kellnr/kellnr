@@ -34,7 +34,7 @@ pub struct AppStateData {
 pub fn test_state() -> AppStateData {
     let db = Arc::new(db::mock::MockDb::new());
     let signing_key = Key::generate();
-    let settings = Arc::new(Settings::default());
+    let settings = Arc::new(settings::test_settings());
     let kellnr_storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
     let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, kellnr_storage));
     let cratesio_storage = Arc::new(CratesIoCrateStorage::new(
