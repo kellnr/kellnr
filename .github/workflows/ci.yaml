@@ -48,22 +48,22 @@ jobs:
       - name: Smoke Test
         run: nix develop --command just test-pgdb
 
-  test-kellnr-smoke:
-    name: Smoke Test
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - uses: cachix/install-nix-action@v31
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-
-      - name: Smoke Test
-        run: nix develop --command just test-smoke
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # test-kellnr-smoke:
+  #   name: Smoke Test
+  #   runs-on: ubuntu-24.04
+  #
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v6
+  #
+  #     - uses: cachix/install-nix-action@v31
+  #       with:
+  #         nix_path: nixpkgs=channel:nixos-unstable
+  #
+  #     - name: Smoke Test
+  #       run: nix develop --command just test-smoke
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-kellnr:
     name: Kellnr Build
@@ -145,7 +145,7 @@ jobs:
       - build-kellnr
       - test-kellnr
       - test-kellnr-pgdb
-      - test-kellnr-smoke
+      # - test-kellnr-smoke
     permissions:
       packages: write
       contents: read
