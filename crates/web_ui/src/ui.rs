@@ -12,7 +12,7 @@ use common::normalized_name::NormalizedName;
 use common::original_name::OriginalName;
 use common::version::Version;
 use db::error::DbError;
-use settings::Settings;
+use settings::{Settings, compile_time_config};
 use tracing::error;
 
 #[allow(clippy::unused_async)] // part of the router
@@ -33,9 +33,7 @@ pub struct KellnrVersion {
 #[allow(clippy::unused_async)] // part of the router
 pub async fn kellnr_version() -> Json<KellnrVersion> {
     Json(KellnrVersion {
-        version: option_env!("KELLNR_VERSION")
-            .unwrap_or("0.0.0-unknown")
-            .to_string(),
+        version: compile_time_config::KELLNR_VERSION.to_string(),
     })
 }
 
@@ -415,7 +413,7 @@ mod tests {
         let result_state = serde_json::from_slice::<Settings>(&result_msg).unwrap();
 
         // Set the password to empty string because it is not serialized
-        let tmp = Settings::default();
+        let tmp = settings::test_settings();
         let psq = Postgresql {
             pwd: String::default(),
             ..tmp.postgresql
@@ -1206,7 +1204,7 @@ mod tests {
     }
 
     fn test_deps() -> (Settings, DynStorage) {
-        let settings = Settings::default();
+        let settings = settings::test_settings();
         let storage = FSStorage::new(&settings.crates_path()).unwrap();
         let storage = Box::new(storage) as DynStorage;
         (settings, storage)

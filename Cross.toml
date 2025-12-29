@@ -4,4 +4,12 @@ passthrough = [
     # to cross in the github workflow to set the version
     # correctly in the kellnr web ui.
     "KELLNR_VERSION",
+
+    # Sets the config directory for kellnr at 
+    # compile time.
+    "KELLNR_CONFIG_DIR",
+
+    # Sets the data directory for kellnr at
+    # compile time.
+    "KELLNR_DATA_DIR",
 ]

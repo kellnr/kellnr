@@ -63,14 +63,7 @@ mod test {
 
     #[tokio::test]
     async fn no_auth_required() {
-        let settings = Settings {
-            registry: settings::Registry {
-                auth_required: false,
-                ..settings::Registry::default()
-            },
-            ..Settings::default()
-        };
-
+        let settings = test_settings(false);
         let r = app(settings)
             .oneshot(Request::get("/test").body(Body::empty()).unwrap())
             .await
@@ -81,14 +74,7 @@ mod test {
 
     #[tokio::test]
     async fn auth_required_but_not_provided() {
-        let settings = Settings {
-            registry: settings::Registry {
-                auth_required: true,
-                ..settings::Registry::default()
-            },
-            ..Settings::default()
-        };
-
+        let settings = test_settings(true);
         let r = app(settings)
             .oneshot(Request::get("/test").body(Body::empty()).unwrap())
             .await
@@ -99,14 +85,7 @@ mod test {
 
     #[tokio::test]
     async fn auth_required_but_wrong_token_provided() {
-        let settings = Settings {
-            registry: settings::Registry {
-                auth_required: true,
-                ..settings::Registry::default()
-            },
-            ..Settings::default()
-        };
-
+        let settings = test_settings(true);
         let r = app(settings)
             .oneshot(
                 Request::get("/test")
@@ -122,14 +101,7 @@ mod test {
 
     #[tokio::test]
     async fn auth_required_and_right_token_provided() {
-        let settings = Settings {
-            registry: settings::Registry {
-                auth_required: true,
-                ..settings::Registry::default()
-            },
-            ..Settings::default()
-        };
-
+        let settings = test_settings(true);
         let r = app(settings)
             .oneshot(
                 Request::get("/test")
@@ -145,6 +117,16 @@ mod test {
 
     pub async fn test_auth_req_token() -> StatusCode {
         StatusCode::OK
+    }
+
+    fn test_settings(auth_required: bool) -> Settings {
+        Settings {
+            registry: settings::Registry {
+                auth_required,
+                ..settings::Registry::default()
+            },
+            ..Settings::default()
+        }
     }
 
     fn app(settings: Settings) -> Router {
@@ -167,11 +149,15 @@ mod test {
             .with(eq("wrong_token"))
             .returning(move |_| Err(DbError::UserNotFound("user".to_string())));
 
+        println!("settings: {:?}", settings.registry);
         let state = AppStateData {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
             ..appstate::test_state()
         };
+
+        println!("Appstate registry: {:?}", state.settings.registry);
+
         Router::new()
             .route("/test", get(test_auth_req_token))
             .route_layer(middleware::from_fn_with_state(
