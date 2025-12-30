@@ -443,6 +443,16 @@ export type PublishCrateOptions = {
   registryBaseUrl?: string;
 
   /**
+   * Whether to apply the crates-io replacement override (as done by several smoke test crates).
+   *
+   * Default: true (keeps behavior consistent with most tests).
+   *
+   * Some tests (e.g. docs generation) require pulling dependencies from real crates.io
+   * and therefore must disable this override.
+   */
+  overrideCratesIo?: boolean;
+
+  /**
    * Token for the registry.
    *
    * Cargo **does not allow** setting `registries.<name>.token` via `--config` for security reasons.
@@ -494,16 +504,19 @@ export async function publishCrate(
     // Cargo blocks `registries.<name>.token` via `--config` for security reasons.
     // We set it via environment variable instead (see below when running cargo).
 
-    // Mirror the crate config: replace crates-io with kellnr cratesio sparse endpoint.
-    // This is important because publishing runs can still touch crates-io for dependency resolution.
-    args.push(
-      "--config",
-      `source.crates-io.replace-with="${registryName}-sparse-cratesio"`,
-    );
-    args.push(
-      "--config",
-      `source.${registryName}-sparse-cratesio.registry="sparse+${baseUrl}/api/v1/cratesio/"`,
-    );
+    // Some tests want to replace crates-io with Kellnr's cratesio sparse endpoint,
+    // others must keep real crates.io (e.g. docs test that depends on crates.io packages).
+    if (options.overrideCratesIo !== false) {
+      // Mirror the crate config: replace crates-io with kellnr cratesio sparse endpoint.
+      args.push(
+        "--config",
+        `source.crates-io.replace-with="${registryName}-sparse-cratesio"`,
+      );
+      args.push(
+        "--config",
+        `source.${registryName}-sparse-cratesio.registry="sparse+${baseUrl}/api/v1/cratesio/"`,
+      );
+    }
 
     // Preserve token-based credential provider behavior as in the crate configs.
     args.push(

@@ -1,0 +1,56 @@
+Updating certificates in /etc/ssl/certs...
+0 added, 0 removed; done.
+Running hooks in /etc/ca-certificates/update.d...
+done.
+2025-12-30T14:01:41.670960Z  INFO kellnr: Starting kellnr
+2025-12-30T14:01:41.688041Z DEBUG migration::m20220101_000003_create_table: Added new column max_version
+2025-12-30T14:01:41.689291Z DEBUG migration::m20220101_000003_create_table: Added new column total_downloads
+2025-12-30T14:01:41.690672Z DEBUG migration::m20220101_000003_create_table: Added new column last_updated
+2025-12-30T14:01:41.690680Z DEBUG migration::m20220101_000003_create_table: Filling new columns
+2025-12-30T14:01:41.691259Z DEBUG migration::m20220101_000003_create_table: Filled new columns
+2025-12-30T14:01:41.693539Z DEBUG migration::m20220101_000004_create_table: Added new column readme
+2025-12-30T14:01:41.695030Z DEBUG migration::m20220101_000004_create_table: Added new column license
+2025-12-30T14:01:41.696172Z DEBUG migration::m20220101_000004_create_table: Added new column license_file
+2025-12-30T14:01:41.697281Z DEBUG migration::m20220101_000004_create_table: Added new column documentation
+2025-12-30T14:01:41.698500Z DEBUG migration::m20220101_000004_create_table: Added new column description
+2025-12-30T14:01:41.699619Z DEBUG migration::m20220101_000004_create_table: Added new column homepage
+2025-12-30T14:01:41.700943Z DEBUG migration::m20220101_000004_create_table: Added new repository homepage
+2025-12-30T14:01:41.700952Z DEBUG migration::m20220101_000004_create_table: Filling new columns
+2025-12-30T14:01:41.701383Z DEBUG migration::m20220101_000004_create_table: Filled new columns
+2025-12-30T14:01:41.713004Z DEBUG migration::m20220101_000006_create_table: Added new column etag
+2025-12-30T14:01:41.720976Z DEBUG migration::m20220101_000009_create_table: Moving cached crates...
+2025-12-30T14:01:41.721180Z DEBUG migration::m20220101_000009_create_table: No cached crates to move...
+2025-12-30T14:01:41.722523Z DEBUG migration::m20220101_0000010_create_table: Column cratesio_crate.max_version does not exist. Creating...
+2025-12-30T14:01:41.724433Z DEBUG migration::m20220101_0000010_create_table: Column cratesio_meta.documentation does not exist. Creating...
+2025-12-30T14:01:41.737375Z DEBUG migration::m20250412_0000012_hash_tokens: Creating unique index on auth_token.token...
+2025-12-30T14:01:41.738452Z DEBUG migration::m20250412_0000012_hash_tokens: Hashing all tokens...
+2025-12-30T14:01:42.500077Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/ version=HTTP/1.1
+2025-12-30T14:01:42.500896Z DEBUG request: tower_http::trace::on_response: finished processing request latency=1 ms status=200 method=GET uri=/ version=HTTP/1.1
+2025-12-30T14:01:42.645495Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:42.645606Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=200 method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:42.648406Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/te/st/test_lib version=HTTP/1.1
+2025-12-30T14:01:42.649181Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=404 method=GET uri=/api/v1/crates/te/st/test_lib version=HTTP/1.1
+2025-12-30T14:01:43.114409Z DEBUG request: tower_http::trace::on_request: started processing request method=PUT uri=/api/v1/crates/new version=HTTP/1.1
+2025-12-30T14:01:43.124245Z DEBUG request: tower_http::trace::on_response: finished processing request latency=9 ms status=200 method=PUT uri=/api/v1/crates/new version=HTTP/1.1
+2025-12-30T14:01:43.125752Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:43.125779Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=200 method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:43.126455Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/te/st/test_lib version=HTTP/1.1
+2025-12-30T14:01:43.126871Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=200 method=GET uri=/api/v1/crates/te/st/test_lib version=HTTP/1.1
+2025-12-30T14:01:43.182415Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:43.182494Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=200 method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:43.184175Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/fo/o-/foo-bar version=HTTP/1.1
+2025-12-30T14:01:43.184778Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=404 method=GET uri=/api/v1/crates/fo/o-/foo-bar version=HTTP/1.1
+2025-12-30T14:01:43.232039Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:43.232108Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=200 method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:43.282261Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/te/st/test_lib version=HTTP/1.1
+2025-12-30T14:01:43.283510Z DEBUG request: tower_http::trace::on_response: finished processing request latency=1 ms status=200 method=GET uri=/api/v1/crates/te/st/test_lib version=HTTP/1.1
+2025-12-30T14:01:43.755175Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:43.755280Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=200 method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:43.886402Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/te/st/test_lib version=HTTP/1.1
+2025-12-30T14:01:43.887482Z DEBUG request: tower_http::trace::on_response: finished processing request latency=1 ms status=200 method=GET uri=/api/v1/crates/te/st/test_lib version=HTTP/1.1
+2025-12-30T14:01:44.222010Z DEBUG request: tower_http::trace::on_request: started processing request method=PUT uri=/api/v1/crates/new version=HTTP/1.1
+2025-12-30T14:01:44.229488Z DEBUG request: tower_http::trace::on_response: finished processing request latency=7 ms status=200 method=PUT uri=/api/v1/crates/new version=HTTP/1.1
+2025-12-30T14:01:44.230943Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:44.230968Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=200 method=GET uri=/api/v1/crates/config.json version=HTTP/1.1
+2025-12-30T14:01:44.231701Z DEBUG request: tower_http::trace::on_request: started processing request method=GET uri=/api/v1/crates/fo/o-/foo-bar version=HTTP/1.1
+2025-12-30T14:01:44.232121Z DEBUG request: tower_http::trace::on_response: finished processing request latency=0 ms status=200 method=GET uri=/api/v1/crates/fo/o-/foo-bar version=HTTP/1.1
