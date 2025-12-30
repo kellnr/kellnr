@@ -164,7 +164,7 @@ checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
 name = "appstate"
-version = "0.1.0"
+version = "5.9.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -421,7 +421,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "auth"
-version = "0.1.0"
+version = "5.9.1"
 dependencies = [
  "appstate",
  "axum",
@@ -1120,7 +1120,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "chrono",
@@ -1801,7 +1801,7 @@ dependencies = [
 
 [[package]]
 name = "error"
-version = "0.1.0"
+version = "5.9.1"
 dependencies = [
  "axum",
  "common",
@@ -3557,7 +3557,7 @@ dependencies = [
 
 [[package]]
 name = "index"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "appstate",
  "axum",
@@ -5370,7 +5370,7 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "registry"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "appstate",
  "auth",
@@ -6555,7 +6555,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "storage"
-version = "0.1.0"
+version = "5.9.1"
 dependencies = [
  "async-trait",
  "bytes",
@@ -7566,7 +7566,7 @@ dependencies = [
 
 [[package]]
 name = "web_ui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "appstate",
  "auth",
@@ -7593,7 +7593,7 @@ dependencies = [
 
 [[package]]
 name = "webhooks"
-version = "0.1.0"
+version = "5.9.1"
 dependencies = [
  "appstate",
  "auth",
