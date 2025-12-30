@@ -105,7 +105,8 @@ jobs:
             f.write(body)
 
           # Write to GitHub Actions outputs
-          with open("GITHUB_OUTPUT","a",encoding="utf-8") as f:
+          import os
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as f:
             f.write(f"tag={tag}\n")
             f.write(f"published_at={published_at}\n")
           PY
