@@ -89,6 +89,7 @@ jobs:
           # Extract fields without jq (runner should already have python3)
           python3 - <<'PY'
           import json
+          import os
 
           with open("release.json","r",encoding="utf-8") as f:
             data = json.load(f)
@@ -105,7 +106,6 @@ jobs:
             f.write(body)
 
           # Write to GitHub Actions outputs
-          import os
           with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as f:
             f.write(f"tag={tag}\n")
             f.write(f"published_at={published_at}\n")
