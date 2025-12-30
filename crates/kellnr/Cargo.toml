@@ -2,7 +2,7 @@
 authors.workspace = true
 edition.workspace = true
 name = "kellnr"
-version = "0.1.0"
+version.workspace = true
 license-file = "../../LICENSE"
 
 [dependencies]
