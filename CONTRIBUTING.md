@@ -157,10 +157,8 @@ As `kellnr` is a multi-repo project, creating a new release involves several ste
     - If settings have changed, update the `values.yaml` file and templates accordingly.
     - Commit the changes and push them to the `main` branch. 
     - Every push to the `main` branch will automatically create a new release in the helm chart repository.
-0. Update the documentation to reflect the new release:
+0. On a successful release of kellnr, a PR for the changelog and rss feed is automatically created.:
     - Navigate to the [kellnr documentation repository](https://github.com/kellnr/website)
-    - Update the [changelog](https://github.com/kellnr/website/blob/main/src/views/ChangelogView.vue) by adding a new entry for the release.
-    - Update the [XSS feed](https://github.com/kellnr/website/blob/main/public/rss.xml) by adding a new item for the release.
     - If needed, update the [documentation](https://github.com/kellnr/website/blob/main/src/views/DocumentationV5View.vue) pages to reflect any new features or changes in the release.
     - Commit the changes and push them to the `main` branch. This will automatically deploy the updated documentation.
 
