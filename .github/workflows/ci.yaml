@@ -256,7 +256,7 @@ jobs:
 
           print(json.dumps({
             "event_type": os.environ["EVENT_TYPE"],
-            "client_payload": payload,
+            "client_payload": payload
           }, ensure_ascii=False))
           PY
           )"
