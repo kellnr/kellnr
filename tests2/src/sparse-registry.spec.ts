@@ -36,8 +36,8 @@ test.describe("sparse registry smoke test", () => {
 
       const crateCargoConfigPath = path.resolve(
         process.cwd(),
-        "test-sparse-registry",
         "crates",
+        "test-sparse-registry",
         "foo-bar",
         ".cargo",
         "config.toml",
@@ -86,7 +86,7 @@ test.describe("sparse registry smoke test", () => {
         await test.step("publish crates", async () => {
           log("Publishing crate: test_lib");
           await publishCrate({
-            cratePath: "tests2/test-sparse-registry/crates/test_lib",
+            cratePath: "tests2/crates/test-sparse-registry/test_lib",
             registry,
             registryBaseUrl: baseUrl,
             registryToken,
@@ -94,7 +94,7 @@ test.describe("sparse registry smoke test", () => {
 
           log("Publishing crate: UpperCase-Name123");
           await publishCrate({
-            cratePath: "tests2/test-sparse-registry/crates/UpperCase-Name123",
+            cratePath: "tests2/crates/test-sparse-registry/UpperCase-Name123",
             registry,
             registryBaseUrl: baseUrl,
             registryToken,
@@ -102,7 +102,7 @@ test.describe("sparse registry smoke test", () => {
 
           log("Publishing crate: foo-bar");
           await publishCrate({
-            cratePath: "tests2/test-sparse-registry/crates/foo-bar",
+            cratePath: "tests2/crates/test-sparse-registry/foo-bar",
             registry,
             registryBaseUrl: baseUrl,
             registryToken,

@@ -36,8 +36,8 @@ test.describe("auth required smoke test", () => {
 
       const crateCargoConfigPath = path.resolve(
         process.cwd(),
-        "test-auth-req",
         "crates",
+        "test-auth-req",
         "foo-bar",
         ".cargo",
         "config.toml",
@@ -86,7 +86,7 @@ test.describe("auth required smoke test", () => {
         await test.step("publish crates", async () => {
           log("Publishing crate: test_lib");
           await publishCrate({
-            cratePath: "tests2/test-auth-req/crates/test_lib",
+            cratePath: "tests2/crates/test-auth-req/test_lib",
             registry,
             registryBaseUrl: baseUrl,
             registryToken,
@@ -94,7 +94,7 @@ test.describe("auth required smoke test", () => {
 
           log("Publishing crate: foo-bar");
           await publishCrate({
-            cratePath: "tests2/test-auth-req/crates/foo-bar",
+            cratePath: "tests2/crates/test-auth-req/foo-bar",
             registry,
             registryBaseUrl: baseUrl,
             registryToken,

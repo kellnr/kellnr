@@ -50,8 +50,8 @@ test.describe("s3 storage smoke test", () => {
     // Extract the registry token from the crate config (same token is used across these test crates)
     const crateCargoConfigPath = path.resolve(
       process.cwd(),
-      "test-s3-storage",
       "crates",
+      "test-s3-storage",
       "foo-bar",
       ".cargo",
       "config.toml",
@@ -61,7 +61,9 @@ test.describe("s3 storage smoke test", () => {
       /kellnr-test\s*=\s*\{[^}]*token\s*=\s*"([^"]+)"[^}]*\}/,
     );
     if (!tokenMatch) {
-      throw new Error(`Failed to extract kellnr-test token from ${crateCargoConfigPath}`);
+      throw new Error(
+        `Failed to extract kellnr-test token from ${crateCargoConfigPath}`,
+      );
     }
     const registryToken = tokenMatch[1];
 
@@ -91,7 +93,12 @@ test.describe("s3 storage smoke test", () => {
           // Build context is the original Lua test folder (tests/test-s3-storage)
           // Dockerfile is tests/test-s3-storage/Dockerfile
           const repoRoot = path.resolve(process.cwd(), "..");
-          const dockerfile = path.resolve(repoRoot, "tests", "test-s3-storage", "Dockerfile");
+          const dockerfile = path.resolve(
+            repoRoot,
+            "tests",
+            "test-s3-storage",
+            "Dockerfile",
+          );
           const contextDir = path.resolve(repoRoot, "tests", "test-s3-storage");
 
           await dockerBuild({
@@ -109,7 +116,9 @@ test.describe("s3 storage smoke test", () => {
 
         await test.step("start minio container", async () => {
           // We do not need host port mapping for minio; Kellnr reaches it via docker network alias "minio".
-          log(`Starting minio container: ${minioContainer} (network=${network})`);
+          log(
+            `Starting minio container: ${minioContainer} (network=${network})`,
+          );
           await dockerRun({
             name: minioContainer,
             image: s3Image,
@@ -125,7 +134,9 @@ test.describe("s3 storage smoke test", () => {
         await withDockerContainer(testInfo, kellnrContainer, async () => {
           await test.step("start kellnr container (S3 enabled)", async () => {
             log(`Starting container: ${kellnrContainer}`);
-            log(`Mapping host port ${hostPort} -> container 8000 (KELLNR_ORIGIN__PORT=${hostPort})`);
+            log(
+              `Mapping host port ${hostPort} -> container 8000 (KELLNR_ORIGIN__PORT=${hostPort})`,
+            );
 
             await dockerRun({
               name: kellnrContainer,
@@ -162,7 +173,7 @@ test.describe("s3 storage smoke test", () => {
           await test.step("publish crates", async () => {
             log("Publishing crate: test_lib");
             await publishCrate({
-              cratePath: "tests2/test-s3-storage/crates/test_lib",
+              cratePath: "tests2/crates/test-s3-storage/test_lib",
               registry,
               registryBaseUrl: baseUrl,
               registryToken,
@@ -170,7 +181,7 @@ test.describe("s3 storage smoke test", () => {
 
             log("Publishing crate: UpperCase-Name123");
             await publishCrate({
-              cratePath: "tests2/test-s3-storage/crates/UpperCase-Name123",
+              cratePath: "tests2/crates/test-s3-storage/UpperCase-Name123",
               registry,
               registryBaseUrl: baseUrl,
               registryToken,
@@ -178,7 +189,7 @@ test.describe("s3 storage smoke test", () => {
 
             log("Publishing crate: foo-bar");
             await publishCrate({
-              cratePath: "tests2/test-s3-storage/crates/foo-bar",
+              cratePath: "tests2/crates/test-s3-storage/foo-bar",
               registry,
               registryBaseUrl: baseUrl,
               registryToken,
@@ -189,7 +200,11 @@ test.describe("s3 storage smoke test", () => {
 
           await test.step("collect logs", async () => {
             log("Attaching docker logs");
-            await writeDockerLogsArtifact(testInfo, kellnrContainer, "kellnr-s3");
+            await writeDockerLogsArtifact(
+              testInfo,
+              kellnrContainer,
+              "kellnr-s3",
+            );
             await writeDockerLogsArtifact(testInfo, minioContainer, "minio");
             log("Docker logs attached");
           });

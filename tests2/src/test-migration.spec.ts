@@ -180,8 +180,8 @@ test.describe("migration smoke test", () => {
     // Extract token from one of the migration crates (it’s the same token used across these test crates)
     const migrationCratesRoot = path.resolve(
       process.cwd(),
-      "test-migration",
       "crates",
+      "test-migration",
     );
     const tokenSourceCrateDir = path.resolve(migrationCratesRoot, "foo-bar");
     const registryToken = extractRegistryTokenFromCrateConfig(
@@ -251,7 +251,7 @@ test.describe("migration smoke test", () => {
 
           log("Publishing crate: test_lib");
           await publishCrate({
-            cratePath: "tests2/test-migration/crates/test_lib",
+            cratePath: "tests2/crates/test-migration/test_lib",
             registry,
             registryBaseUrl: baseUrl,
             registryToken,
@@ -260,7 +260,7 @@ test.describe("migration smoke test", () => {
 
           log("Publishing crate: foo-bar");
           await publishCrate({
-            cratePath: "tests2/test-migration/crates/foo-bar",
+            cratePath: "tests2/crates/test-migration/foo-bar",
             registry,
             registryBaseUrl: baseUrl,
             registryToken,
@@ -311,7 +311,7 @@ test.describe("migration smoke test", () => {
 
           log("Publishing crate: full-toml");
           await publishCrate({
-            cratePath: "tests2/test-migration/crates/full-toml",
+            cratePath: "tests2/crates/test-migration/full-toml",
             registry,
             registryBaseUrl: baseUrl,
             registryToken,

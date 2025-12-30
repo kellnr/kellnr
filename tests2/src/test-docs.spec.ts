@@ -80,11 +80,11 @@ test.describe("docs generation smoke test", () => {
     );
     const dataDirInContainer = "/opt/kdata/";
 
-    // Crate paths under tests2/ (mirrors old tests/ layout)
+    // Crate paths under tests2/
     const fullTomlCrateDir = path.resolve(
       process.cwd(),
-      "test-docs",
       "crates",
+      "test-docs",
       "full-toml",
     );
 
@@ -155,7 +155,7 @@ test.describe("docs generation smoke test", () => {
           log("Publishing crate: full-toml");
 
           await publishCrate({
-            cratePath: "tests2/test-docs/crates/full-toml",
+            cratePath: "tests2/crates/test-docs/full-toml",
             registry,
             registryBaseUrl: baseUrl,
             registryToken,
