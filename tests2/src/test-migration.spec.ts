@@ -3,18 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import {
-  allocateFreeLocalhostPort,
   assertDockerAvailable,
   createBufferedTestLogger,
-  dockerLogs,
-  dockerPull,
-  dockerRun,
-  dockerStop,
   ensureLocalKellnrTestImage,
   publishCrate,
+  restrictToSingleWorkerBecauseFixedPorts,
   waitForHttpOk,
-  writeDockerLogsArtifact,
 } from "./testUtils";
+import { attachContainerLogs, startContainer } from "./lib/docker";
 
 function rimrafSync(p: string) {
   fs.rmSync(p, { recursive: true, force: true });
@@ -52,17 +48,17 @@ function extractRegistryTokenFromCrateConfig(
   return tokenMatch[1];
 }
 
-async function grepErrorsFromContainerLogs(
-  containerName: string,
-): Promise<string> {
+async function grepErrorsFromContainerLogs(logs: string): Promise<string> {
   // We deliberately avoid spawning `grep` to keep this portable; we filter in JS.
-  const logs = await dockerLogs(containerName);
   const lines = logs.split(/\r?\n/);
   const errs = lines.filter((l) => l.includes("ERROR"));
   return errs.join("\n");
 }
 
 test.describe("migration smoke test", () => {
+  // This test relies on stable localhost:8000 URLs (including cratesio proxy download URLs).
+  restrictToSingleWorkerBecauseFixedPorts();
+
   test("migrates data from old image to new image and can publish after upgrade", async ({}, testInfo) => {
     testInfo.setTimeout(20 * 60 * 1000);
 
@@ -155,7 +151,7 @@ test.describe("migration smoke test", () => {
     // Match the Lua test behavior as closely as possible:
     // - old image is pulled
     // - kdata persisted via volume across old -> new container
-    // - both use the same host port and origin port
+    // - both run on fixed localhost:8000 (stable URLs)
     // - crates published to old, then to new
     const registry = process.env.KELLNR_MIGRATION_REGISTRY ?? "kellnr-local";
 
@@ -163,8 +159,8 @@ test.describe("migration smoke test", () => {
     const oldContainer = `kellnr-old-${suffix}`;
     const newContainer = `kellnr-new-${suffix}`;
 
-    // Dynamic port per test for parallel execution. Both old and new containers reuse the same port.
-    const hostPort = await allocateFreeLocalhostPort();
+    // Fixed port setup (Lua-style)
+    const hostPort = 8000;
     const baseUrl = `http://localhost:${hostPort}`;
     const url = baseUrl;
 
@@ -205,9 +201,9 @@ test.describe("migration smoke test", () => {
 
       await test.step("pull old image", async () => {
         log(`Old image: ${oldImage}`);
-        log("Pulling old image...");
-        await dockerPull(oldImage);
-        log("Old image pulled");
+        log(
+          "Skipping explicit docker pull (testcontainers/Docker will pull on-demand if needed)",
+        );
       });
 
       await test.step("prepare kdata dir", async () => {
@@ -218,26 +214,33 @@ test.describe("migration smoke test", () => {
       });
 
       // ---- Run old container ----
+      let startedOld: Awaited<ReturnType<typeof startContainer>> | undefined;
       try {
         await test.step("start old Kellnr container", async () => {
           log(`Starting old container: ${oldContainer}`);
           log(`Mapping host port ${hostPort} -> container 8000`);
           log(`Mounting kdata: ${kdataDir} -> ${kdataMount}`);
 
-          await dockerRun({
-            name: oldContainer,
-            image: oldImage,
-            ports: { [hostPort]: 8000 },
-            env: {
-              KELLNR_LOG__LEVEL: "debug",
-              KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
-              // Required so sparse config.json uses the externally reachable port
-              KELLNR_ORIGIN__PORT: String(hostPort),
-            },
-            extraArgs: ["-v", `${kdataDir}:${kdataMount}`],
-          });
+          startedOld = await startContainer(
+            {
+              name: oldContainer,
+              image: oldImage,
+              ports: { 8000: hostPort },
+              env: {
+                KELLNR_LOG__LEVEL: "debug",
+                KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
 
-          log("Old container started");
+                // Ensure Kellnr generates stable URLs with localhost:8000
+                KELLNR_ORIGIN__PORT: String(hostPort),
+              },
+              bindMounts: {
+                [kdataDir]: kdataMount,
+              },
+            },
+            testInfo,
+          );
+
+          log(`Old container started on ${baseUrl}`);
         });
 
         await test.step("wait for old server readiness", async () => {
@@ -253,18 +256,14 @@ test.describe("migration smoke test", () => {
           await publishCrate({
             cratePath: "tests2/crates/test-migration/test_lib",
             registry,
-            registryBaseUrl: baseUrl,
             registryToken,
-            overrideCratesIo: false,
           });
 
           log("Publishing crate: foo-bar");
           await publishCrate({
             cratePath: "tests2/crates/test-migration/foo-bar",
             registry,
-            registryBaseUrl: baseUrl,
             registryToken,
-            overrideCratesIo: false,
           });
 
           log("Published crates to old version");
@@ -272,32 +271,44 @@ test.describe("migration smoke test", () => {
       } finally {
         await test.step("stop old container", async () => {
           log(`Stopping old container: ${oldContainer}`);
-          await writeDockerLogsArtifact(testInfo, oldContainer, "kellnr-old");
-          await dockerStop(oldContainer);
+          if (startedOld) {
+            await attachContainerLogs(testInfo, startedOld.container, {
+              name: "kellnr-old",
+            });
+            await startedOld.container.stop().catch(() => {});
+          }
           log("Old container stopped");
         });
       }
 
       // ---- Run new container ----
+      let startedNew: Awaited<ReturnType<typeof startContainer>> | undefined;
       try {
         await test.step("start new Kellnr container (with same kdata)", async () => {
           log(`Starting new container: ${newContainer}`);
           log(`Mapping host port ${hostPort} -> container 8000`);
           log(`Reusing kdata: ${kdataDir} -> ${kdataMount}`);
 
-          await dockerRun({
-            name: newContainer,
-            image: resolvedNewImage,
-            ports: { [hostPort]: 8000 },
-            env: {
-              KELLNR_LOG__LEVEL: "debug",
-              KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
-              KELLNR_ORIGIN__PORT: String(hostPort),
-            },
-            extraArgs: ["-v", `${kdataDir}:${kdataMount}`],
-          });
+          startedNew = await startContainer(
+            {
+              name: newContainer,
+              image: resolvedNewImage,
+              ports: { 8000: hostPort },
+              env: {
+                KELLNR_LOG__LEVEL: "debug",
+                KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
 
-          log("New container started");
+                // Ensure Kellnr generates stable URLs with localhost:8000
+                KELLNR_ORIGIN__PORT: String(hostPort),
+              },
+              bindMounts: {
+                [kdataDir]: kdataMount,
+              },
+            },
+            testInfo,
+          );
+
+          log(`New container started on ${baseUrl}`);
         });
 
         await test.step("wait for new server readiness", async () => {
@@ -313,9 +324,7 @@ test.describe("migration smoke test", () => {
           await publishCrate({
             cratePath: "tests2/crates/test-migration/full-toml",
             registry,
-            registryBaseUrl: baseUrl,
             registryToken,
-            overrideCratesIo: false,
           });
 
           log("Published crates to new version");
@@ -345,8 +354,12 @@ test.describe("migration smoke test", () => {
       } finally {
         await test.step("stop new container", async () => {
           log(`Stopping new container: ${newContainer}`);
-          await writeDockerLogsArtifact(testInfo, newContainer, "kellnr-new");
-          await dockerStop(newContainer);
+          if (startedNew) {
+            await attachContainerLogs(testInfo, startedNew.container, {
+              name: "kellnr-new",
+            });
+            await startedNew.container.stop().catch(() => {});
+          }
           log("New container stopped");
         });
       }

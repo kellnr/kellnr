@@ -10,23 +10,21 @@ import { defineConfig, devices } from "@playwright/test";
  *   artifacts (traces/screenshots/videos) especially on retries and failures.
  */
 export default defineConfig({
+  // Several smoke tests rely on binding Kellnr to localhost:8000 (stable cratesio proxy download URLs).
+  // To avoid port conflicts and flakiness, run the whole suite with a single worker.
+  workers: 1,
   testDir: "./src",
 
   // Build the local Kellnr test image exactly once before any workers start.
   globalSetup: "./global-setup.ts",
 
   // Keep CI noise manageable while still being informative.
-  // Tests use dynamic host ports, so they can run in parallel.
-  fullyParallel: true,
+  // These tests bind to localhost:8000, so they must NOT run in parallel.
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
 
   // Retries help when waiting for containers/ports.
   retries: process.env.CI ? 1 : 0,
-
-  // Allow parallel execution.
-  // - Locally: use Playwright default worker count (based on CPU cores)
-  // - In CI: cap to reduce flakiness and resource contention
-  workers: process.env.CI ? 2 : undefined,
 
   timeout: 10 * 60 * 1000, // 10 minutes per test
   expect: {

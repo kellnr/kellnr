@@ -2,22 +2,30 @@ import { test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  allocateFreeLocalhostPort,
   assertDockerAvailable,
   createBufferedTestLogger,
-  dockerBuild,
-  dockerNetworkCreate,
-  dockerNetworkRemove,
-  dockerRun,
-  dockerStop,
   ensureLocalKellnrTestImage,
   publishCrate,
+  restrictToSingleWorkerBecauseFixedPorts,
   waitForHttpOk,
-  withDockerContainer,
-  writeDockerLogsArtifact,
 } from "./testUtils";
+import {
+  attachContainerLogs,
+  buildS3MinioImage,
+  createNetwork,
+  startContainer,
+  startS3MinioContainer,
+  withStartedContainer,
+  withStartedNetwork,
+} from "./lib/docker";
 
 test.describe("s3 storage smoke test", () => {
+  // Match the Lua test setup:
+  // - Kellnr binds to localhost:8000
+  // - crate-local `.cargo/config.toml` can stay static (hardcoded localhost:8000)
+  // - crates.io proxy download URLs are stable
+  restrictToSingleWorkerBecauseFixedPorts();
+
   test("starts kellnr with S3 enabled (minio) and can publish crates", async ({}, testInfo) => {
     testInfo.setTimeout(15 * 60 * 1000);
 
@@ -26,9 +34,9 @@ test.describe("s3 storage smoke test", () => {
 
     // Keep names unique across parallel workers
     const suffix = `${testInfo.workerIndex}-${Date.now()}`;
-    const network = `s3-net-${suffix}`;
-    const minioContainer = `minio-${suffix}`;
-    const kellnrContainer = `kellnr-s3-${suffix}`;
+    const networkBaseName = `s3-net-${suffix}`;
+    const minioBaseName = `minio-${suffix}`;
+    const kellnrBaseName = `kellnr-s3-${suffix}`;
 
     const kellnrImage = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
     const registry = "kellnr-test";
@@ -42,8 +50,8 @@ test.describe("s3 storage smoke test", () => {
     const s3CratesBucket = "kellnr-crates";
     const s3CratesioBucket = "kellnr-cratesio";
 
-    // Kellnr will run on a dynamic host port; tell Kellnr the external port so it generates correct config.json
-    const hostPort = await allocateFreeLocalhostPort();
+    // Use fixed localhost:8000 so Kellnr generates stable URLs.
+    const hostPort = 8000;
     const baseUrl = `http://localhost:${hostPort}`;
     const url = baseUrl;
 
@@ -79,146 +87,121 @@ test.describe("s3 storage smoke test", () => {
         log(`Image ready: ${kellnrImage}`);
       });
 
-      await test.step("create docker network", async () => {
-        log(`Creating docker network: ${network}`);
-        await dockerNetworkCreate(network);
-        log(`Docker network created: ${network}`);
-      });
+      const startedNetwork = await createNetwork(networkBaseName, testInfo);
 
-      // Make sure network is removed even if the test fails early
-      try {
+      await withStartedNetwork(startedNetwork, async (network) => {
         await test.step("build minio image", async () => {
           log(`Building minio image: ${s3Image}`);
 
-          // Build context is the original Lua test folder (tests/test-s3-storage)
-          // Dockerfile is tests/test-s3-storage/Dockerfile
-          const repoRoot = path.resolve(process.cwd(), "..");
-          const dockerfile = path.resolve(
-            repoRoot,
-            "tests",
-            "test-s3-storage",
-            "Dockerfile",
-          );
-          const contextDir = path.resolve(repoRoot, "tests", "test-s3-storage");
-
-          await dockerBuild({
-            tag: s3Image,
-            dockerfile,
-            contextDir,
-            buildArgs: {
-              CRATES_BUCKET: s3CratesBucket,
-              CRATESIO_BUCKET: s3CratesioBucket,
-            },
+          await buildS3MinioImage({
+            imageName: s3Image,
+            cratesBucket: s3CratesBucket,
+            cratesioBucket: s3CratesioBucket,
           });
 
           log(`Minio image built: ${s3Image}`);
         });
 
-        await test.step("start minio container", async () => {
-          // We do not need host port mapping for minio; Kellnr reaches it via docker network alias "minio".
-          log(
-            `Starting minio container: ${minioContainer} (network=${network})`,
-          );
-          await dockerRun({
-            name: minioContainer,
+        const startedMinio = await startS3MinioContainer(
+          {
+            name: minioBaseName,
             image: s3Image,
-            env: {
-              MINIO_ROOT_USER: s3RootUser,
-              MINIO_ROOT_PASSWORD: s3RootPassword,
-            },
-            extraArgs: ["--network", network, "--network-alias", "minio"],
-          });
-          log(`Minio container started: ${minioContainer}`);
-        });
+            network,
+            rootUser: s3RootUser,
+            rootPassword: s3RootPassword,
+          },
+          testInfo,
+        );
 
-        await withDockerContainer(testInfo, kellnrContainer, async () => {
-          await test.step("start kellnr container (S3 enabled)", async () => {
-            log(`Starting container: ${kellnrContainer}`);
-            log(
-              `Mapping host port ${hostPort} -> container 8000 (KELLNR_ORIGIN__PORT=${hostPort})`,
-            );
+        await withStartedContainer(
+          testInfo,
+          startedMinio,
+          async () => {
+            log("Minio container started");
 
-            await dockerRun({
-              name: kellnrContainer,
-              image: kellnrImage,
-              ports: { [hostPort]: 8000 },
-              env: {
-                KELLNR_LOG__LEVEL: "debug",
-                KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
-                KELLNR_PROXY__ENABLED: "true",
+            const startedKellnr = await startContainer(
+              {
+                name: kellnrBaseName,
+                image: kellnrImage,
+                network,
+                // Fixed port mapping (Lua-style): host 8000 -> container 8000
+                ports: { 8000: hostPort },
+                env: {
+                  KELLNR_LOG__LEVEL: "debug",
+                  KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
+                  KELLNR_PROXY__ENABLED: "true",
 
-                KELLNR_S3__ENABLED: "true",
-                KELLNR_S3__ACCESS_KEY: s3RootUser,
-                KELLNR_S3__SECRET_KEY: s3RootPassword,
-                KELLNR_S3__ENDPOINT: s3UrlInDockerNet,
-                KELLNR_S3__ALLOW_HTTP: s3AllowHttp,
-                KELLNR_S3__CRATES_BUCKET: s3CratesBucket,
-                KELLNR_S3__CRATESIO_BUCKET: s3CratesioBucket,
+                  KELLNR_S3__ENABLED: "true",
+                  KELLNR_S3__ACCESS_KEY: s3RootUser,
+                  KELLNR_S3__SECRET_KEY: s3RootPassword,
+                  KELLNR_S3__ENDPOINT: s3UrlInDockerNet,
+                  KELLNR_S3__ALLOW_HTTP: s3AllowHttp,
+                  KELLNR_S3__CRATES_BUCKET: s3CratesBucket,
+                  KELLNR_S3__CRATESIO_BUCKET: s3CratesioBucket,
 
-                // Required for correct sparse index config.json URLs
-                KELLNR_ORIGIN__PORT: String(hostPort),
+                  // Ensure Kellnr generates URLs with localhost:8000 (cratesio proxy download URLs)
+                  KELLNR_ORIGIN__PORT: String(hostPort),
+                },
               },
-              extraArgs: ["--network", network],
-            });
-
-            log(`Container started: ${kellnrContainer}`);
-          });
-
-          await test.step("wait for server readiness", async () => {
-            log(`Waiting for HTTP 200 on ${url}`);
-            await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
-            log("Server ready");
-          });
-
-          await test.step("publish crates", async () => {
-            log("Publishing crate: test_lib");
-            await publishCrate({
-              cratePath: "tests2/crates/test-s3-storage/test_lib",
-              registry,
-              registryBaseUrl: baseUrl,
-              registryToken,
-            });
-
-            log("Publishing crate: UpperCase-Name123");
-            await publishCrate({
-              cratePath: "tests2/crates/test-s3-storage/UpperCase-Name123",
-              registry,
-              registryBaseUrl: baseUrl,
-              registryToken,
-            });
-
-            log("Publishing crate: foo-bar");
-            await publishCrate({
-              cratePath: "tests2/crates/test-s3-storage/foo-bar",
-              registry,
-              registryBaseUrl: baseUrl,
-              registryToken,
-            });
-
-            log("Crate publishing finished");
-          });
-
-          await test.step("collect logs", async () => {
-            log("Attaching docker logs");
-            await writeDockerLogsArtifact(
               testInfo,
-              kellnrContainer,
-              "kellnr-s3",
             );
-            await writeDockerLogsArtifact(testInfo, minioContainer, "minio");
-            log("Docker logs attached");
-          });
-        });
 
-        log("Done");
-      } finally {
-        await test.step("cleanup minio + network", async () => {
-          log("Cleaning up minio container and docker network");
-          await dockerStop(minioContainer);
-          await dockerNetworkRemove(network);
-          log("Cleanup finished");
-        });
-      }
+            await withStartedContainer(
+              testInfo,
+              startedKellnr,
+              async () => {
+                await test.step("wait for server readiness", async () => {
+                  log(`Waiting for HTTP 200 on ${url}`);
+                  await waitForHttpOk(url, {
+                    timeoutMs: 60_000,
+                    intervalMs: 1_000,
+                  });
+                  log("Server ready");
+                });
+
+                await test.step("publish crates", async () => {
+                  log("Publishing crate: test_lib");
+                  await publishCrate({
+                    cratePath: "tests2/crates/test-s3-storage/test_lib",
+                    registry,
+                    registryToken,
+                  });
+
+                  log("Publishing crate: UpperCase-Name123");
+                  await publishCrate({
+                    cratePath:
+                      "tests2/crates/test-s3-storage/UpperCase-Name123",
+                    registry,
+                    registryToken,
+                  });
+
+                  log("Publishing crate: foo-bar");
+                  await publishCrate({
+                    cratePath: "tests2/crates/test-s3-storage/foo-bar",
+                    registry,
+                    registryToken,
+                  });
+
+                  log("Crate publishing finished");
+                });
+
+                await test.step("collect logs", async () => {
+                  log("Attaching docker logs");
+                  await attachContainerLogs(testInfo, startedKellnr.container, {
+                    name: "kellnr-s3",
+                  });
+                  await attachContainerLogs(testInfo, startedMinio.container, {
+                    name: "minio",
+                  });
+                  log("Docker logs attached");
+                });
+              },
+              { alwaysCollectLogs: true },
+            );
+          },
+          { alwaysCollectLogs: true },
+        );
+      });
     } finally {
       await tlog.flush();
     }

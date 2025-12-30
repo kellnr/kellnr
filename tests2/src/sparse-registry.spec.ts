@@ -2,35 +2,45 @@ import { test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  allocateFreeLocalhostPort,
   assertDockerAvailable,
   createBufferedTestLogger,
-  dockerRun,
   ensureLocalKellnrTestImage,
   publishCrate,
   waitForHttpOk,
-  withDockerContainer,
-  writeDockerLogsArtifact,
+  restrictToSingleWorkerBecauseFixedPorts,
 } from "./testUtils";
+import { startContainer, withStartedContainer } from "./lib/docker";
 
 test.describe("sparse registry smoke test", () => {
+  // Lua-style setup:
+  // - Kellnr runs on fixed localhost:8000
+  // - test crates keep their `.cargo/config.toml` pointing at localhost:8000
+  // - crates.io proxy download URLs remain stable
+  //
+  // Because we bind a fixed host port, this suite must not run in parallel.
+  restrictToSingleWorkerBecauseFixedPorts();
+
   test("starts kellnr with proxy enabled and can publish crates", async ({}, testInfo) => {
     testInfo.setTimeout(10 * 60 * 1000);
 
     const tlog = createBufferedTestLogger(testInfo, "sparse-registry");
     const log = tlog.log;
 
+    // Keep names unique across parallel workers
+    const suffix = `${testInfo.workerIndex}-${Date.now()}`;
+
     try {
       await test.step("check prerequisites", async () => {
         await assertDockerAvailable();
         log("Docker is available");
       });
+      const containerBaseName = `kellnr-sparse-registry-${suffix}`;
 
       const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
-      const container = `kellnr-sparse-${testInfo.workerIndex}`;
       const registry = "kellnr-test";
 
-      const hostPort = await allocateFreeLocalhostPort();
+      // Fixed localhost:8000
+      const hostPort = 8000;
       const baseUrl = `http://localhost:${hostPort}`;
       const url = baseUrl;
 
@@ -59,64 +69,59 @@ test.describe("sparse registry smoke test", () => {
         log(`Image ready: ${image}`);
       });
 
-      await withDockerContainer(testInfo, container, async () => {
-        await test.step("start Kellnr container", async () => {
-          log(`Starting container: ${container}`);
-          log(`Mapping host port ${hostPort} -> container 8000`);
-          await dockerRun({
-            name: container,
-            image,
-            ports: { [hostPort]: 8000 },
-            env: {
-              KELLNR_LOG__LEVEL: "debug",
-              KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
-              KELLNR_PROXY__ENABLED: "true",
-              KELLNR_ORIGIN__PORT: String(hostPort),
-            },
-          });
-          log(`Container started: ${container}`);
-        });
+      const started = await startContainer(
+        {
+          name: containerBaseName,
+          image,
+          ports: { 8000: hostPort },
+          env: {
+            KELLNR_LOG__LEVEL: "debug",
+            KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
+            KELLNR_PROXY__ENABLED: "true",
 
-        await test.step("wait for server readiness", async () => {
-          log(`Waiting for HTTP 200 on ${url}`);
-          await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
-          log("Server ready");
-        });
+            // Ensure Kellnr generates URLs with localhost:8000 (cratesio proxy download URLs)
+            KELLNR_ORIGIN__PORT: String(hostPort),
+          },
+        },
+        testInfo,
+      );
 
-        await test.step("publish crates", async () => {
-          log("Publishing crate: test_lib");
-          await publishCrate({
-            cratePath: "tests2/crates/test-sparse-registry/test_lib",
-            registry,
-            registryBaseUrl: baseUrl,
-            registryToken,
+      await withStartedContainer(
+        testInfo,
+        started,
+        async () => {
+          await test.step("wait for server readiness", async () => {
+            log(`Waiting for HTTP 200 on ${url}`);
+            await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
+            log("Server ready");
           });
 
-          log("Publishing crate: UpperCase-Name123");
-          await publishCrate({
-            cratePath: "tests2/crates/test-sparse-registry/UpperCase-Name123",
-            registry,
-            registryBaseUrl: baseUrl,
-            registryToken,
+          await test.step("publish crates", async () => {
+            log("Publishing crate: test_lib");
+            await publishCrate({
+              cratePath: "tests2/crates/test-sparse-registry/test_lib",
+              registry,
+              registryToken,
+            });
+
+            log("Publishing crate: UpperCase-Name123");
+            await publishCrate({
+              cratePath: "tests2/crates/test-sparse-registry/UpperCase-Name123",
+              registry,
+              registryToken,
+            });
+
+            log("Publishing crate: foo-bar");
+            await publishCrate({
+              cratePath: "tests2/crates/test-sparse-registry/foo-bar",
+              registry,
+              registryToken,
+            });
           });
-
-          log("Publishing crate: foo-bar");
-          await publishCrate({
-            cratePath: "tests2/crates/test-sparse-registry/foo-bar",
-            registry,
-            registryBaseUrl: baseUrl,
-            registryToken,
-          });
-
-          log("Crate publishing finished");
-        });
-
-        await test.step("collect logs", async () => {
-          log("Attaching docker logs");
-          await writeDockerLogsArtifact(testInfo, container, "kellnr-sparse");
-          log("Docker logs attached");
-        });
-      });
+        },
+        // Prevent hang on teardown: only collect container logs on failure.
+        { alwaysCollectLogs: false },
+      );
 
       log("Done");
     } finally {

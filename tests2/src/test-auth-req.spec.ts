@@ -2,23 +2,27 @@ import { test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  allocateFreeLocalhostPort,
   assertDockerAvailable,
   createBufferedTestLogger,
-  dockerRun,
   ensureLocalKellnrTestImage,
   publishCrate,
+  restrictToSingleWorkerBecauseFixedPorts,
   waitForHttpOk,
-  withDockerContainer,
-  writeDockerLogsArtifact,
 } from "./testUtils";
+import { startContainer, withStartedContainer } from "./lib/docker";
 
 test.describe("auth required smoke test", () => {
+  // This test relies on stable localhost:8000 URLs (cratesio proxy download URLs).
+  restrictToSingleWorkerBecauseFixedPorts();
+
   test("starts kellnr with auth required and can publish crates", async ({}, testInfo) => {
     testInfo.setTimeout(10 * 60 * 1000);
 
     const tlog = createBufferedTestLogger(testInfo, "test-auth-req");
     const log = tlog.log;
+
+    // Keep names unique across parallel workers
+    const suffix = `${testInfo.workerIndex}-${Date.now()}`;
 
     try {
       await test.step("check prerequisites", async () => {
@@ -27,10 +31,10 @@ test.describe("auth required smoke test", () => {
       });
 
       const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
-      const container = `kellnr-auth-req-${testInfo.workerIndex}`;
       const registry = "kellnr-test";
 
-      const hostPort = await allocateFreeLocalhostPort();
+      // Use fixed localhost:8000 so Kellnr generates stable cratesio proxy download URLs.
+      const hostPort = 8000;
       const baseUrl = `http://localhost:${hostPort}`;
       const url = baseUrl;
 
@@ -59,56 +63,55 @@ test.describe("auth required smoke test", () => {
         log(`Image ready: ${image}`);
       });
 
-      await withDockerContainer(testInfo, container, async () => {
-        await test.step("start Kellnr container (auth required)", async () => {
-          log(`Starting container: ${container}`);
-          log(`Mapping host port ${hostPort} -> container 8000`);
-          await dockerRun({
-            name: container,
-            image,
-            ports: { [hostPort]: 8000 },
-            env: {
-              KELLNR_LOG__LEVEL: "debug",
-              KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
-              KELLNR_REGISTRY__AUTH_REQUIRED: "true",
-              KELLNR_ORIGIN__PORT: String(hostPort),
-            },
-          });
-          log(`Container started: ${container}`);
-        });
+      const containerBaseName = `kellnr-auth-req-${suffix}`;
 
-        await test.step("wait for server readiness", async () => {
-          log(`Waiting for HTTP 200 on ${url}`);
-          await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
-          log("Server ready");
-        });
+      const started = await startContainer(
+        {
+          name: containerBaseName,
+          image,
+          ports: { 8000: hostPort },
+          env: {
+            KELLNR_LOG__LEVEL: "debug",
+            KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
+            KELLNR_REGISTRY__AUTH_REQUIRED: "true",
 
-        await test.step("publish crates", async () => {
-          log("Publishing crate: test_lib");
-          await publishCrate({
-            cratePath: "tests2/crates/test-auth-req/test_lib",
-            registry,
-            registryBaseUrl: baseUrl,
-            registryToken,
+            // Ensure Kellnr generates URLs with localhost:8000 (cratesio proxy download URLs)
+            KELLNR_ORIGIN__PORT: String(hostPort),
+          },
+        },
+        testInfo,
+      );
+
+      await withStartedContainer(
+        testInfo,
+        started,
+        async () => {
+          await test.step("wait for server readiness", async () => {
+            log(`Waiting for HTTP 200 on ${url}`);
+            await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
+            log("Server ready");
           });
 
-          log("Publishing crate: foo-bar");
-          await publishCrate({
-            cratePath: "tests2/crates/test-auth-req/foo-bar",
-            registry,
-            registryBaseUrl: baseUrl,
-            registryToken,
+          await test.step("publish crates", async () => {
+            log("Publishing crate: test_lib");
+            await publishCrate({
+              cratePath: "tests2/crates/test-auth-req/test_lib",
+              registry,
+              registryToken,
+            });
+
+            log("Publishing crate: foo-bar");
+            await publishCrate({
+              cratePath: "tests2/crates/test-auth-req/foo-bar",
+              registry,
+              registryToken,
+            });
+
+            log("Crate publishing finished");
           });
-
-          log("Crate publishing finished");
-        });
-
-        await test.step("collect logs", async () => {
-          log("Attaching docker logs");
-          await writeDockerLogsArtifact(testInfo, container, "kellnr-auth-req");
-          log("Docker logs attached");
-        });
-      });
+        },
+        { alwaysCollectLogs: true },
+      );
 
       log("Done");
     } finally {

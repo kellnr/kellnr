@@ -6,6 +6,7 @@
 .target
 result/
 tests/
+tests2/
 !tests/ca.crt
 *.md
 LICENSE

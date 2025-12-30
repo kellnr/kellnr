@@ -2,16 +2,14 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  allocateFreeLocalhostPort,
   assertDockerAvailable,
   createBufferedTestLogger,
-  dockerRun,
   ensureLocalKellnrTestImage,
   publishCrate,
+  restrictToSingleWorkerBecauseFixedPorts,
   waitForHttpOk,
-  withDockerContainer,
-  writeDockerLogsArtifact,
 } from "./testUtils";
+import { startContainer, withStartedContainer } from "./lib/docker";
 
 function rimrafSync(p: string) {
   fs.rmSync(p, { recursive: true, force: true });
@@ -53,6 +51,10 @@ function extractRegistryTokenFromCrateConfig(crateDir: string): string {
 }
 
 test.describe("docs generation smoke test", () => {
+  // Lua-test-style setup: Kellnr runs on stable localhost:8000, and crate-local `.cargo/config.toml`
+  // can remain static.
+  restrictToSingleWorkerBecauseFixedPorts();
+
   test("generates docs for published crate", async ({}, testInfo) => {
     testInfo.setTimeout(15 * 60 * 1000);
 
@@ -61,13 +63,13 @@ test.describe("docs generation smoke test", () => {
 
     // Unique container + data dir per worker/test
     const suffix = `${testInfo.workerIndex}-${Date.now()}`;
-    const container = `kellnr-docs-${suffix}`;
+    const containerBaseName = `kellnr-docs-${suffix}`;
 
     const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
     const registry = "kellnr-test";
 
-    // Dynamic port per test to allow parallel execution
-    const hostPort = await allocateFreeLocalhostPort();
+    // Use fixed localhost:8000 so Kellnr generates stable URLs.
+    const hostPort = 8000;
     const baseUrl = `http://localhost:${hostPort}`;
     const url = baseUrl;
 
@@ -121,71 +123,63 @@ test.describe("docs generation smoke test", () => {
       const registryToken =
         extractRegistryTokenFromCrateConfig(fullTomlCrateDir);
 
-      await withDockerContainer(testInfo, container, async () => {
-        await test.step("start Kellnr container (docs enabled)", async () => {
-          log(`Starting container: ${container}`);
-          log(`Mapping host port ${hostPort} -> container 8000`);
-          log(`Mounting data dir: ${dataDir} -> ${dataDirInContainer}`);
+      const started = await startContainer(
+        {
+          name: containerBaseName,
+          image,
+          ports: { 8000: hostPort },
+          env: {
+            KELLNR_LOG__LEVEL: "trace",
+            KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
+            KELLNR_DOCS__ENABLED: "true",
 
-          await dockerRun({
-            name: container,
-            image,
-            ports: { [hostPort]: 8000 },
-            env: {
-              KELLNR_LOG__LEVEL: "trace",
-              KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
-              KELLNR_DOCS__ENABLED: "true",
+            // Ensure Kellnr generates URLs with localhost:8000
+            KELLNR_ORIGIN__PORT: String(hostPort),
+          },
+          bindMounts: {
+            [dataDir]: dataDirInContainer,
+          },
+        },
+        testInfo,
+      );
 
-              // Required for correct sparse index config.json URLs
-              KELLNR_ORIGIN__PORT: String(hostPort),
-            },
-            extraArgs: ["-v", `${dataDir}:${dataDirInContainer}`],
+      await withStartedContainer(
+        testInfo,
+        started,
+        async () => {
+          await test.step("wait for server readiness", async () => {
+            log(`Waiting for HTTP 200 on ${url}`);
+            await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
+            log("Server ready");
           });
 
-          log(`Container started: ${container}`);
-        });
+          await test.step("publish full-toml crate", async () => {
+            log("Publishing crate: full-toml");
 
-        await test.step("wait for server readiness", async () => {
-          log(`Waiting for HTTP 200 on ${url}`);
-          await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
-          log("Server ready");
-        });
-
-        await test.step("publish full-toml crate", async () => {
-          log("Publishing crate: full-toml");
-
-          await publishCrate({
-            cratePath: "tests2/crates/test-docs/full-toml",
-            registry,
-            registryBaseUrl: baseUrl,
-            registryToken,
-            overrideCratesIo: false,
+            await publishCrate({
+              cratePath: "tests2/crates/test-docs/full-toml",
+              registry,
+              registryToken,
+            });
           });
 
-          log("Crate publish finished");
-        });
-
-        await test.step("verify docs generated", async () => {
-          log(`Waiting for docs file: ${expectedDocsPath}`);
-
-          await waitForFile(expectedDocsPath, {
-            attempts: 30,
-            delayMs: 2_000,
-            log,
+          await test.step("wait for docs to be generated", async () => {
+            log(`Waiting for docs file: ${expectedDocsPath}`);
+            await waitForFile(expectedDocsPath, {
+              attempts: 60,
+              delayMs: 2_000,
+              log,
+            });
+            log("Docs generated");
           });
 
-          expect(fileExists(expectedDocsPath)).toBeTruthy();
-          log("Docs generated successfully");
-        });
-
-        await test.step("collect logs", async () => {
-          log("Attaching docker logs");
-          await writeDockerLogsArtifact(testInfo, container, "kellnr-docs");
-          log("Docker logs attached");
-        });
-
-        log("Done");
-      });
+          await test.step("verify docs file content", async () => {
+            const contents = fs.readFileSync(expectedDocsPath, "utf8");
+            expect(contents).toContain("full_toml");
+          });
+        },
+        { alwaysCollectLogs: true },
+      );
     } finally {
       // Always remove per-test data directory to avoid accumulation.
       try {

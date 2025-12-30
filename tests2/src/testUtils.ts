@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import net from "node:net";
+
 import { setTimeout as sleep } from "node:timers/promises";
 import { execa, ExecaError, type Options as ExecaOptions } from "execa";
 import { expect, test, type TestInfo } from "@playwright/test";
@@ -14,10 +14,6 @@ function nowIsoNoMs(): string {
     .toISOString()
     .replace(/\.\d{3}Z$/, "Z")
     .replace(/[:]/g, "-");
-}
-
-function isCi(): boolean {
-  return !!process.env.CI;
 }
 
 function playDebug(): boolean {
@@ -181,209 +177,37 @@ export async function execOrThrow(
   return res;
 }
 
-export type DockerRunOptions = {
-  name: string;
-  image: string;
-  ports?: Record<number | string, number | string>; // host->container
-  env?: Record<string, string>;
-  extraArgs?: string[]; // additional docker args before image (e.g. ['--network','s3-net','-v',...])
-  detach?: boolean; // default true
-};
-
-export async function dockerBuild(options: {
-  tag: string;
-  dockerfile?: string; // default: tests/Dockerfile or caller-specified
-  contextDir: string;
-  buildArgs?: Record<string, string>;
-}): Promise<void> {
-  const args: string[] = ["build", "-t", options.tag];
-
-  if (options.dockerfile) args.push("-f", options.dockerfile);
-
-  if (options.buildArgs) {
-    for (const [k, v] of Object.entries(options.buildArgs)) {
-      args.push("--build-arg", `${k}=${v}`);
-    }
-  }
-
-  args.push(options.contextDir);
-
-  await execOrThrow(
-    "docker",
-    args,
-    {},
-    { description: `docker build ${options.tag}` },
-  );
-}
+/**
+ * Docker helpers have been moved to a central library that uses `testcontainers`
+ * (see `src/lib/docker.ts`).
+ *
+ * Keep this module focused on non-docker concerns (logging, HTTP waits, cargo publish, etc.).
+ *
+ * The following legacy Docker CLI helpers were intentionally removed:
+ * - dockerBuild / dockerPull / dockerNetworkCreate / dockerNetworkRemove
+ * - dockerRun / dockerStop / dockerLogs / writeDockerLogsArtifact
+ * - withDockerContainer
+ *
+ * Specs should now use idiomatic `testcontainers` container/network objects directly,
+ * with shared helpers living in the central docker library.
+ */
 
 /**
- * Allocate a free localhost TCP port at the time of allocation.
+ * NOTE:
+ * Docker image existence checks were previously implemented via `docker image inspect`.
+ * With the switch to `testcontainers`, the recommended approach is:
+ * - keep building the shared integration image in Playwright `global-setup.ts`
+ * - let container start failures surface as test errors (they’ll include Docker daemon logs)
  *
- * This is used to run docker containers with dynamic host port mappings so
- * multiple smoke tests can run in parallel without "port already allocated".
- *
- * Note: like any ephemeral-port allocation, there is a small TOCTOU risk
- * between releasing the port and Docker binding it, but in practice it works
- * well for CI and local parallel runs.
+ * If you still want an explicit "ensure image exists" check, implement it in the central
+ * docker library using the Docker API/testcontainers internals so tests don't shell out.
  */
-export async function allocateFreeLocalhostPort(): Promise<number> {
-  return await new Promise<number>((resolve, reject) => {
-    const server = net.createServer();
-
-    server.on("error", (err) => reject(err));
-
-    // Bind to port 0 to let the OS pick an ephemeral free port.
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close(() => reject(new Error("Failed to allocate a TCP port")));
-        return;
-      }
-
-      const port = address.port;
-      server.close((closeErr) => {
-        if (closeErr) {
-          reject(closeErr);
-          return;
-        }
-        resolve(port);
-      });
-    });
-  });
-}
-
-export async function dockerImageExists(image: string): Promise<boolean> {
-  // `docker image inspect` returns non-zero if the image doesn't exist locally
-  const res = await exec("docker", ["image", "inspect", image]);
-  return res.exitCode === 0;
-}
-
-/**
- * Ensures the local Kellnr test image exists. This mirrors the Lua test runner behavior
- * which builds `kellnr-test:local` before running individual tests.
- *
- * By default, it uses:
- * - Dockerfile: tests/Dockerfile
- * - Build context: repo root (../ from tests2)
- * - Build arg: KELLNR_VERSION=local
- */
-export async function ensureLocalKellnrTestImage(image: string): Promise<void> {
-  // globalSetup is responsible for building the shared image once for the whole test run.
-  // Keeping this helper as an existence check makes tests resilient when run standalone.
-  const exists = await dockerImageExists(image);
-  if (exists) return;
-
-  throw new Error(
-    `Docker image not found locally: ${image}. ` +
-      `Run the test suite via Playwright so globalSetup can build it, ` +
-      `or build it manually (e.g. docker build -f tests/Dockerfile -t ${image} ..).`,
-  );
-}
-
-export async function dockerPull(image: string): Promise<void> {
-  await execOrThrow(
-    "docker",
-    ["pull", image],
-    {},
-    { description: `docker pull ${image}` },
-  );
-}
-
-export async function dockerNetworkCreate(name: string): Promise<void> {
-  // Creating twice fails; keep it simple and idempotent.
-  const res = await exec("docker", ["network", "create", name]);
-  if (res.exitCode !== 0) {
-    // If it already exists, fine.
-    const out = `${res.stdout}\n${res.stderr}`;
-    if (!out.toLowerCase().includes("already exists")) {
-      throw new Error(`Failed to create docker network ${name}\n${out}`);
-    }
-  }
-}
-
-export async function dockerNetworkRemove(name: string): Promise<void> {
-  // Removing non-existent networks fails; ignore that case.
-  const res = await exec("docker", ["network", "rm", name]);
-  if (res.exitCode !== 0) {
-    const out = `${res.stdout}\n${res.stderr}`;
-    if (!out.toLowerCase().includes("no such network")) {
-      throw new Error(`Failed to remove docker network ${name}\n${out}`);
-    }
-  }
-}
-
-export async function dockerRun(opts: DockerRunOptions): Promise<void> {
-  const args: string[] = ["run", "--rm", "--name", opts.name];
-
-  if (opts.ports) {
-    for (const [host, container] of Object.entries(opts.ports)) {
-      args.push("-p", `${host}:${container}`);
-    }
-  }
-
-  if (opts.env) {
-    for (const [k, v] of Object.entries(opts.env)) {
-      args.push("-e", `${k}=${v}`);
-    }
-  }
-
-  if (opts.extraArgs?.length) args.push(...opts.extraArgs);
-
-  if (opts.detach ?? true) args.push("-d");
-
-  args.push(opts.image);
-
-  await execOrThrow(
-    "docker",
-    args,
-    {},
-    { description: `docker run ${opts.name}` },
-  );
-}
-
-export async function dockerStop(name: string): Promise<void> {
-  // Ignore stop failures when container doesn't exist (helps cleanup).
-  const res = await exec("docker", ["stop", name]);
-  if (res.exitCode !== 0) {
-    const out = `${res.stdout}\n${res.stderr}`.toLowerCase();
-    if (!out.includes("no such container")) {
-      throw new Error(
-        `Failed to stop container ${name}\n${res.stdout}\n${res.stderr}`,
-      );
-    }
-  }
-}
-
-export async function dockerLogs(name: string): Promise<string> {
-  const res = await exec("docker", ["logs", name]);
-  // docker logs exits non-zero if the container doesn't exist; return best-effort output
-  return [res.stdout, res.stderr].filter(Boolean).join("\n");
-}
-
-export async function writeDockerLogsArtifact(
-  testInfo: TestInfo,
-  containerName: string,
-  filenameBase?: string,
-) {
-  try {
-    const logs = await dockerLogs(containerName);
-    const base = filenameBase ?? containerName;
-    const file = path.resolve(
-      projectTmpDir(testInfo),
-      `${base}.${nowIsoNoMs()}.docker.log`,
-    );
-    fs.writeFileSync(file, logs, "utf8");
-
-    await testInfo.attach(`${base}-docker-logs`, {
-      path: file,
-      contentType: "text/plain",
-    });
-  } catch (e) {
-    log(
-      "error",
-      `Failed to collect docker logs for ${containerName}: ${(e as Error).message}`,
-    );
-  }
+export async function ensureLocalKellnrTestImage(
+  _image: string,
+): Promise<void> {
+  // Intentionally a no-op now. globalSetup owns image creation.
+  // Keeping the function (temporarily) avoids a wide refactor in one step.
+  return;
 }
 
 export async function waitForHttpOk(
@@ -429,30 +253,6 @@ export type PublishCrateOptions = {
   additionalArgs?: string[]; // e.g. ['--no-verify']
 
   /**
-   * Optional: override registry endpoints for this cargo publish invocation.
-   * This is required for parallel smoke tests that run Kellnr on dynamic host ports.
-   *
-   * Example:
-   *   registryBaseUrl: "http://localhost:12345"
-   *
-   * NOTE:
-   * We do **not** rely on CARGO_HOME for this, because the crate-local `.cargo/config.toml`
-   * can still win in practice. Instead we use `cargo --config ...` overrides which have
-   * the highest precedence.
-   */
-  registryBaseUrl?: string;
-
-  /**
-   * Whether to apply the crates-io replacement override (as done by several smoke test crates).
-   *
-   * Default: true (keeps behavior consistent with most tests).
-   *
-   * Some tests (e.g. docs generation) require pulling dependencies from real crates.io
-   * and therefore must disable this override.
-   */
-  overrideCratesIo?: boolean;
-
-  /**
    * Token for the registry.
    *
    * Cargo **does not allow** setting `registries.<name>.token` via `--config` for security reasons.
@@ -487,44 +287,10 @@ export async function publishCrate(
 
   if (options.toolchain) args.push(`+${options.toolchain}`);
 
-  // Force Cargo to ignore crate-local `.cargo/config.toml` by overriding configuration
-  // via CLI `--config`, which has the highest precedence.
-  //
-  // This is necessary for parallel tests where each Kellnr instance runs on a different
-  // dynamic port, but the crates' `.cargo/config.toml` hardcodes `localhost:8000`.
-  if (options.registryBaseUrl) {
-    const baseUrl = options.registryBaseUrl.replace(/\/+$/, "");
-    const registryName = options.registry;
-
-    args.push(
-      "--config",
-      `registries.${registryName}.index="sparse+${baseUrl}/api/v1/crates/"`,
-    );
-
-    // Cargo blocks `registries.<name>.token` via `--config` for security reasons.
-    // We set it via environment variable instead (see below when running cargo).
-
-    // Some tests want to replace crates-io with Kellnr's cratesio sparse endpoint,
-    // others must keep real crates.io (e.g. docs test that depends on crates.io packages).
-    if (options.overrideCratesIo !== false) {
-      // Mirror the crate config: replace crates-io with kellnr cratesio sparse endpoint.
-      args.push(
-        "--config",
-        `source.crates-io.replace-with="${registryName}-sparse-cratesio"`,
-      );
-      args.push(
-        "--config",
-        `source.${registryName}-sparse-cratesio.registry="sparse+${baseUrl}/api/v1/cratesio/"`,
-      );
-    }
-
-    // Preserve token-based credential provider behavior as in the crate configs.
-    args.push(
-      "--config",
-      `registry.global-credential-providers=["cargo:token"]`,
-    );
-  }
-
+  // Lua-style setup:
+  // - Kellnr runs on fixed localhost:8000
+  // - each test crate provides its own `.cargo/config.toml`
+  // Therefore we do not override Cargo configuration here.
   args.push("publish", "--registry", options.registry);
 
   if (options.allowDirty ?? true) args.push("--allow-dirty");
@@ -567,25 +333,15 @@ export function requireEnv(name: string): string {
   return v as string;
 }
 
-export async function withDockerContainer(
-  testInfo: TestInfo,
-  containerName: string,
-  fn: () => Promise<void>,
-  opts?: { alwaysCollectLogs?: boolean },
-): Promise<void> {
-  try {
-    await fn();
-  } catch (e) {
-    await writeDockerLogsArtifact(testInfo, containerName);
-    throw e;
-  } finally {
-    // Best-effort cleanup
-    await dockerStop(containerName);
-    if (opts?.alwaysCollectLogs) {
-      await writeDockerLogsArtifact(testInfo, containerName);
-    }
-  }
-}
+/**
+ * Legacy helper removed: withDockerContainer
+ *
+ * Use `withStartedContainer(...)` from `src/lib/docker.ts` together with
+ * `startContainer(...)` to get:
+ * - deterministic container naming
+ * - automatic stop on teardown
+ * - automatic Playwright log attachments on failure (or always)
+ */
 
 /**
  * A helper to make it explicit that tests using localhost:8000 cannot run in parallel.
