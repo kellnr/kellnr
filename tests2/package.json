@@ -1,0 +1,21 @@
+{
+  "name": "kellnr-smoke-tests",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Playwright Test based smoke/integration tests for Kellnr",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "install:browsers": "playwright install",
+    "install:browsers:with-deps": "playwright install --with-deps"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.2",
+    "execa": "^9.5.1",
+    "typescript": "^5.7.2"
+  }
+}

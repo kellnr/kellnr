@@ -257,6 +257,9 @@
               echo "Lua version: $(lua -v)"
               echo "Docker version: $(docker --version 2>/dev/null || echo 'Docker not available')"
 
+              # Setup Playwright browser dependencies
+              export PLAYWRIGHT_BROWSERS_PATH=0
+
               # Setup custom CA certificate for testing against local Kellnr registries
               export CUSTOM_CERT_DIR="$PWD/.certs"
 
@@ -319,6 +322,47 @@
               jq
               curl
               gnused
+
+              # Playwright Test prerequisites:
+              # - Node.js is already included via commonArgs/nativeBuildInputs
+              # - Browsers are usually installed via `npx playwright install --with-deps` in CI,
+              #   but these packages help when running browsers inside Nix shells on Linux.
+              python3
+            ]
+            ++ lib.optionals stdenv.isLinux [
+              # Common runtime deps for Chromium/WebKit/Firefox when driven by Playwright on Linux
+              alsa-lib
+              at-spi2-atk
+              atk
+              cairo
+              cups
+              dbus
+              expat
+              fontconfig
+              freetype
+              gdk-pixbuf
+              glib
+              gtk3
+              libdrm
+              libnotify
+              libuuid
+              libxkbcommon
+              mesa
+              nspr
+              nss
+              pango
+              xorg.libX11
+              xorg.libXcomposite
+              xorg.libXcursor
+              xorg.libXdamage
+              xorg.libXext
+              xorg.libXfixes
+              xorg.libXi
+              xorg.libXrandr
+              xorg.libXrender
+              xorg.libXtst
+              xorg.libxcb
+              xorg.libxshmfence
             ];
           }
         );
@@ -331,6 +375,36 @@
         apps = {
           default = flake-utils.lib.mkApp {
             drv = hostPackage;
+          };
+
+          tests2 = flake-utils.lib.mkApp {
+            drv = pkgs.writeShellApplication {
+              name = "tests2";
+              runtimeInputs = [
+                pkgs.nodejs_24
+                pkgs.docker
+              ];
+              text = ''
+                set -euo pipefail
+
+                if [ ! -d "tests2" ]; then
+                  echo "tests2/ not found. Run from repository root."
+                  exit 1
+                fi
+
+                # Default image for local runs (mirrors the Lua runner behavior).
+                export KELLNR_TEST_IMAGE="''${KELLNR_TEST_IMAGE:-kellnr-test:local}"
+
+                cd tests2
+
+                if [ ! -d node_modules ]; then
+                  echo "Installing tests2 npm dependencies..."
+                  npm install
+                fi
+
+                npx playwright test
+              '';
+            };
           };
         }
         // builtins.listToAttrs (
