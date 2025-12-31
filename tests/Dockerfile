@@ -26,6 +26,9 @@ ENV TZ=Europe/Berlin
 ARG KELLNR_VERSION="0.0.0-unknown"
 ENV KELLNR_VERSION=$KELLNR_VERSION
 
+# Ensure Cargo always writes build artifacts to a stable path so later stages can reliably copy binaries.
+ENV CARGO_TARGET_DIR=/sources/target
+
 # OS dependencies required to compile Rust + build the embedded UI
 RUN apt update && apt install -y -q --no-install-recommends \
   ca-certificates \
@@ -125,25 +128,7 @@ RUN mkdir -p /opt/kellnr
 RUN rustup component add rust-src
 
 WORKDIR /opt/kellnr
-# Copy the full debug target dir, then locate the kellnr binary in a robust way.
-# This avoids hard-coding a single output path across different Cargo/Workspace configs.
-COPY --from=builder /sources/target/debug/ ./target/debug/
-
-# Assert we actually have the binary and place it at a stable path (/opt/kellnr/kellnr)
-RUN set -eux; \
-    if [ -x "./target/debug/kellnr" ]; then \
-      cp "./target/debug/kellnr" "./kellnr"; \
-    elif [ -x "./target/debug/deps/kellnr" ]; then \
-      cp "./target/debug/deps/kellnr" "./kellnr"; \
-    else \
-      echo "kellnr binary not found under /sources/target/debug (copied to /opt/kellnr/target/debug)"; \
-      echo "Contents of ./target/debug:"; \
-      ls -la ./target/debug || true; \
-      echo "Contents of ./target/debug/deps:"; \
-      ls -la ./target/debug/deps || true; \
-      exit 1; \
-    fi; \
-    chmod +x ./kellnr
+COPY --from=builder /sources/target/debug/kellnr ./kellnr
 
 # Self-contained cert: copy from tests/ (from repo root build context).
 COPY tests/ca.crt /usr/local/share/ca-certificates/ca.crt
