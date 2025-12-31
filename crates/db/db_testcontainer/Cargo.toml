@@ -1,7 +1,9 @@
 [package]
 name = "db_testcontainer"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
 version.workspace = true
-edition = "2024"
 
 [dependencies]
 quote.workspace = true
