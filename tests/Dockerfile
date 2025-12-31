@@ -112,6 +112,20 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/sources/ui/node_modules \
     just build-debug
 
+# Diagnostics: verify where Cargo wrote the binary and what the target tree contains.
+# Keep this right after the build so CI logs show the exact layout.
+RUN set -eux; \
+    echo "=== diagnostics: CARGO_TARGET_DIR ==="; \
+    echo "CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-<unset>}"; \
+    echo "=== diagnostics: /sources/target (top) ==="; \
+    ls -la /sources/target || true; \
+    echo "=== diagnostics: /sources/target/debug ==="; \
+    ls -la /sources/target/debug || true; \
+    echo "=== diagnostics: /sources/target/debug/deps ==="; \
+    ls -la /sources/target/debug/deps || true; \
+    echo "=== diagnostics: find kellnr under /sources/target ==="; \
+    find /sources/target -maxdepth 4 -type f -name 'kellnr' -o -name 'kellnr-*' || true
+
 ##################
 # Runtime image  #
 ##################
