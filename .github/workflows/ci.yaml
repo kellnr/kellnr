@@ -63,32 +63,6 @@ jobs:
       - name: Set up Docker Buildx (enables BuildKit + GHA cache)
         uses: docker/setup-buildx-action@v3
 
-      - name: Debug docker build context inputs (smoke test)
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          echo "=== git info ==="
-          git rev-parse HEAD
-          git status --porcelain
-          git ls-files ui/package.json ui/package-lock.json .dockerignore tests/Dockerfile || true
-
-          echo "=== filesystem check ==="
-          ls -la
-          ls -la ui || true
-          test -f ui/package.json
-          test -f ui/package-lock.json
-
-          echo "=== .dockerignore ==="
-          if [ -f .dockerignore ]; then
-            cat .dockerignore
-          else
-            echo "no .dockerignore"
-          fi
-
-          echo "=== tests/Dockerfile (snippet) ==="
-          sed -n '1,140p' tests/Dockerfile
-
       # Build the kellnr test image once with GitHub Actions cache so subsequent CI runs can reuse layers.
       # This speeds up Rust compilation + UI build baked into the binary.
       - name: Build kellnr-test:local (cached)

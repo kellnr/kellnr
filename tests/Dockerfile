@@ -62,11 +62,14 @@ WORKDIR /sources
 ############################################
 
 # Copy only the UI package inputs first so `npm install` can be cached across backend changes.
-COPY ui/package.json ui/package-lock.json ./ui/
+# We intentionally do NOT commit `ui/package-lock.json` (it must be generated on the build machine).
+COPY ui/package.json ./ui/
 
-# Install UI dependencies into ui/node_modules (cache mount survives across builds with GHA cache).
+# Install UI dependencies into ui/node_modules.
+# If a lockfile exists in the build context (e.g. pre-generated), use `npm ci`.
+# Otherwise generate it on this (Linux) build machine via `npm install`.
 RUN --mount=type=cache,target=/sources/ui/node_modules \
-    cd ui && npm ci
+    cd ui && if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 ############################################################
 # 2) Cache Rust dependencies (Cargo + workspace crates)     #
@@ -88,7 +91,7 @@ COPY crates ./crates
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/sources/target \
-    cargo build --workspace --exclude kellnr --features vendored-openssl
+    cargo build --workspace --exclude kellnr
 
 ############################################
 # 3) Build UI + final debug binary         #
