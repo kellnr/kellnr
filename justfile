@@ -1,6 +1,6 @@
 ############################################
 # Just commands for Kellnr
-# 
+#
 # It's recommended to use the just commands
 # instead of the cargo commands, as they
 # provide additional functionality.
@@ -71,10 +71,10 @@ node2nix: clean-node patch-package
 		--composition ui/nix/default.nix \
 		--output ui/nix/node-package.nix
 
-patch-package: 
+patch-package:
 	jd -o ui/nix/package.json \
 	-p \
-	-f patch ui/nix/package-patch.json ui/package.json || true 
+	-f patch ui/nix/package-patch.json ui/package.json || true
 
 
 ##########################################
@@ -82,7 +82,7 @@ patch-package:
 ##########################################
 
 # Set the target for the ci-release command.
-# The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", 
+# The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
 # "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl".
 # It's used by the Github Actions CI to build the release binary for the specified target.
 target := "x86_64-unknown-linux-gnu"
@@ -95,16 +95,16 @@ ci-release: npm-build
 # release binary for different targets
 ##########################################
 
-x-aarch64-musl: 
+x-aarch64-musl:
 	cross build --target aarch64-unknown-linux-musl --features vendored-openssl
 
-x-aarch64-gnu: 
+x-aarch64-gnu:
 	cross build --target aarch64-unknown-linux-gnu --features vendored-openssl
 
-x-x86_64-musl: 
+x-x86_64-musl:
 	cross build --target x86_64-unknown-linux-musl --features vendored-openssl
 
-x-x86_64-gnu: 
+x-x86_64-gnu:
 	cross build --target x86_64-unknown-linux-gnu --features vendored-openssl
 
 x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu
@@ -125,7 +125,7 @@ has_docker := if `command -v docker > /dev/null 2>&1; echo $?` == "0" { "true" }
 
 test_pgdb := if has_docker == "true" { "cargo nextest run --workspace -E 'test(~postgres_)'" } else { "echo 'ERROR: Docker is not installed. The Postgresql integration tests require Docker'" }
 
-test_smoke := if has_docker == "true" { "cd tests && lua run_tests.lua" } else { "echo 'ERROR: Docker is not installed. The smoke tests require Docker'" }
+test_smoke := if has_docker == "true" { "cd tests && npm install && npx playwright test" } else { "echo 'ERROR: Docker is not installed. The smoke tests require Docker'" }
 
 docker:
 	echo "{{has_docker}}"
