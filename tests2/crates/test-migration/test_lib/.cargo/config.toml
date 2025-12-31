@@ -1,2 +1,0 @@
-[registries]
-kellnr-local = {index = "sparse+http://localhost:8000/api/v1/crates/", token = "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"}

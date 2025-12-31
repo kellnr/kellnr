@@ -254,7 +254,7 @@
               echo "Node.js version: $(node --version)"
               echo "NPM version: $(npm --version)"
               echo "Nixpkgs version: ${nixpkgs.lib.version}"
-              echo "Lua version: $(lua -v)"
+              echo "Playwright: run 'cd tests && npm install && npx playwright test'"
               echo "Docker version: $(docker --version 2>/dev/null || echo 'Docker not available')"
 
               # Setup Playwright browser dependencies
@@ -295,8 +295,7 @@
               alias j=just
               alias lg=lazygit
 
-              # Ensure the script can find modules in the current directory and parent directory
-              export LUA_PATH="./?.lua;../?.lua;$(lua -e 'print(package.path)')"
+              # Playwright tests live in tests/
             ''
             + lib.optionalString stdenv.isDarwin ''
               export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
@@ -314,11 +313,7 @@
               sea-orm-cli
               nixpkgs-fmt
               statix
-              lua5_4
-              lua54Packages.luasocket
-              lua54Packages.luafilesystem
-              lua54Packages.cjson
-              lua54Packages.http
+
               jq
               curl
               gnused
@@ -377,9 +372,9 @@
             drv = hostPackage;
           };
 
-          tests2 = flake-utils.lib.mkApp {
+          tests = flake-utils.lib.mkApp {
             drv = pkgs.writeShellApplication {
-              name = "tests2";
+              name = "tests";
               runtimeInputs = [
                 pkgs.nodejs_24
                 pkgs.docker
@@ -387,20 +382,18 @@
               text = ''
                 set -euo pipefail
 
-                if [ ! -d "tests2" ]; then
-                  echo "tests2/ not found. Run from repository root."
+                if [ ! -d "tests" ]; then
+                  echo "tests/ not found. Run from repository root."
                   exit 1
                 fi
 
-                # Default image for local runs (mirrors the Lua runner behavior).
+                # Default image for local runs.
                 export KELLNR_TEST_IMAGE="''${KELLNR_TEST_IMAGE:-kellnr-test:local}"
 
-                cd tests2
+                cd tests
 
-                if [ ! -d node_modules ]; then
-                  echo "Installing tests2 npm dependencies..."
-                  npm install
-                fi
+                echo "Installing tests npm dependencies..."
+                npm install
 
                 npx playwright test
               '';

@@ -1,8 +1,8 @@
 ##################################################
 #  Docker image for integration tests of Kellnr  #
 #                                                #
-#  Build with:                                   #
-#  docker build -t kellnr-test:local ../         #
+#  Build with (from repo root):                  #
+#  docker build -f tests/Dockerfile -t kellnr-test:local --build-arg KELLNR_VERSION=local . #
 ##################################################
 
 #################
@@ -33,7 +33,8 @@ RUN apt install -y -q --no-install-recommends \
 # Install just command runner
 RUN cargo install just
 
-# Install latest nodejs version with nvm
+# Node is required by `just build-release` in this repository (build scripts / tooling).
+# Keep this identical to the previous test image setup.
 ENV NVM_DIR="/root/.nvm"
 ENV NODE_VERSION="24.5.0"
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash \
@@ -42,7 +43,11 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | b
   && nvm alias default $NODE_VERSION \
   && nvm use $NODE_VERSION
 ENV NODE_PATH="$NVM_DIR/versions/node/$NODE_VERSION/lib/node_modules"
-ENV PATH="$NVM_DIR/versions/node/v$NODE_VERSION/bin:$HOME/.cargo/bin:$PATH"
+ENV PATH="$NVM_DIR/versions/node/v$NODE_VERSION/bin:/root/.cargo/bin:$PATH"
+
+# IMPORTANT:
+# Build context is the *repo root*. This Dockerfile lives in tests/, but we need
+# the Kellnr source tree (justfile, crates, config, etc.) to build the binary.
 COPY . /sources
 
 # Build kellnr
@@ -60,6 +65,8 @@ RUN mkdir -p /opt/kellnr
 RUN rustup component add rust-src
 WORKDIR /opt/kellnr
 COPY --from=builder /sources/target/release/kellnr ./kellnr
+
+# Self-contained cert: copy from tests/ (from repo root build context).
 COPY tests/ca.crt /usr/local/share/ca-certificates/ca.crt
 RUN update-ca-certificates
 

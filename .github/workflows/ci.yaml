@@ -49,7 +49,7 @@ jobs:
         run: nix develop --command just test-pgdb
 
   test-kellnr-smoke:
-    name: Smoke Test
+    name: Smoke Test (Playwright)
     runs-on: ubuntu-24.04
 
     steps:

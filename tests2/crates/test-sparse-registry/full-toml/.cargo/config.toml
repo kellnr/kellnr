@@ -1,7 +1,0 @@
-[registries]
-kellnr-test = {index = "sparse+http://localhost:8000/api/v1/crates/", token = "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"}
-
-[source.crates-io]
-replace-with = "kellnr-test-sparse-cratesio"
-[source.kellnr-test-sparse-cratesio]
-registry = "sparse+http://localhost:8000/api/v1/cratesio/"

@@ -6,10 +6,8 @@
 .target
 result/
 tests/
-tests2/
 !tests/ca.crt
-!tests2/ca.crt
-!tests2/Dockerfile
+!tests/Dockerfile
 *.md
 LICENSE
 deny.toml
