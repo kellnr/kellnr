@@ -1,8 +1,9 @@
 [package]
 name = "settings"
-version.workspace = true
+authors.workspace = true
 edition.workspace = true
-license-file = "../../LICENSE"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 # External dependencies from crates.io

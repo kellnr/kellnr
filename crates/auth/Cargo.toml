@@ -2,10 +2,8 @@
 name = "auth"
 authors.workspace = true
 edition.workspace = true
+license.workspace = true
 version.workspace = true
-license-file = "../../LICENSE"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # Internal dependencies from Kellnr

@@ -1,10 +1,9 @@
 [package]
 name = "index"
-version.workspace = true
+authors.workspace = true
 edition.workspace = true
-license-file = "../../LICENSE"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
