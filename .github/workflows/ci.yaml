@@ -60,6 +60,21 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
+      - name: Set up Docker Buildx (enables BuildKit + GHA cache)
+        uses: docker/setup-buildx-action@v3
+
+      # Build the kellnr test image once with GitHub Actions cache so subsequent CI runs can reuse layers.
+      # This speeds up Rust compilation + UI build baked into the binary.
+      - name: Build kellnr-test:local (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: tests/Dockerfile
+          tags: kellnr-test:local
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Tests
         run: nix develop --command just test-smoke
         env:

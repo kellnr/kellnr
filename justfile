@@ -17,7 +17,11 @@
 check:
 	cargo check
 
-build:
+build: npm-build
+	cargo build --features vendored-openssl
+
+# Debug build that still builds UI assets (binary embeds web resources).
+build-debug: npm-build
 	cargo build --features vendored-openssl
 
 build-release: npm-build

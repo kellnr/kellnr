@@ -6,10 +6,11 @@ import { execa } from "execa";
 async function execOrThrow(
   cmd: string,
   args: string[],
-  opts?: { cwd?: string },
+  opts?: { cwd?: string; env?: NodeJS.ProcessEnv },
 ) {
   const res = await execa(cmd, args, {
     cwd: opts?.cwd,
+    env: opts?.env,
     stdio: "inherit",
   });
   if (res.exitCode !== 0) {
@@ -61,9 +62,17 @@ export default async function globalSetup(_config: FullConfig) {
   // to build the Kellnr binary. The Dockerfile itself copies the CA cert from `tests/ca.crt`.
   const dockerfile = path.resolve(repoRoot, "tests", "Dockerfile");
 
+  // Enable BuildKit for cache mounts in the Dockerfile (RUN --mount=type=cache,...).
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    DOCKER_BUILDKIT: "1",
+    COMPOSE_DOCKER_CLI_BUILD: "1",
+  };
+
   // eslint-disable-next-line no-console
   console.log(`[globalSetup] Building Docker image: ${image}`);
-  // Equivalent to: docker build -f tests/Dockerfile -t <image> --build-arg KELLNR_VERSION=local <repoRoot>
+  // Equivalent to:
+  //   DOCKER_BUILDKIT=1 docker build -f tests/Dockerfile -t <image> --build-arg KELLNR_VERSION=local <repoRoot>
   await execOrThrow(
     "docker",
     [
@@ -76,7 +85,7 @@ export default async function globalSetup(_config: FullConfig) {
       "KELLNR_VERSION=local",
       repoRoot,
     ],
-    { cwd: repoRoot },
+    { cwd: repoRoot, env },
   );
 
   // eslint-disable-next-line no-console

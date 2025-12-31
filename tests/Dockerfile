@@ -1,8 +1,17 @@
 ##################################################
-#  Docker image for integration tests of Kellnr  #
+#  Docker image for integration tests of Kellnr   #
 #                                                #
-#  Build with (from repo root):                  #
-#  docker build -f tests/Dockerfile -t kellnr-test:local --build-arg KELLNR_VERSION=local . #
+#  Goal: maximize cache reuse on CI               #
+#  - Build in debug mode (faster)                 #
+#  - Use BuildKit cache mounts                    #
+#  - Separate dependency-heavy layers             #
+#                                                #
+#  Build with (from repo root):                   #
+#  DOCKER_BUILDKIT=1 docker build                 #
+#    -f tests/Dockerfile                          #
+#    -t kellnr-test:local                         #
+#    --build-arg KELLNR_VERSION=local             #
+#    .                                            #
 ##################################################
 
 #################
@@ -17,8 +26,8 @@ ENV TZ=Europe/Berlin
 ARG KELLNR_VERSION="0.0.0-unknown"
 ENV KELLNR_VERSION=$KELLNR_VERSION
 
-RUN apt update
-RUN apt install -y -q --no-install-recommends \
+# OS dependencies required to compile Rust + build the embedded UI
+RUN apt update && apt install -y -q --no-install-recommends \
   ca-certificates \
   git \
   curl \
@@ -30,11 +39,12 @@ RUN apt install -y -q --no-install-recommends \
   gcc \
   && rm -rf /var/lib/apt/lists/*
 
-# Install just command runner
-RUN cargo install just
+# Install just (cache cargo downloads)
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo install just
 
-# Node is required by `just build-release` in this repository (build scripts / tooling).
-# Keep this identical to the previous test image setup.
+# Node (via nvm) is required because the Rust binary embeds built UI assets.
 ENV NVM_DIR="/root/.nvm"
 ENV NODE_VERSION="24.5.0"
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash \
@@ -45,15 +55,56 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | b
 ENV NODE_PATH="$NVM_DIR/versions/node/$NODE_VERSION/lib/node_modules"
 ENV PATH="$NVM_DIR/versions/node/v$NODE_VERSION/bin:/root/.cargo/bin:$PATH"
 
-# IMPORTANT:
-# Build context is the *repo root*. This Dockerfile lives in tests/, but we need
-# the Kellnr source tree (justfile, crates, config, etc.) to build the binary.
+WORKDIR /sources
+
+############################################
+# 1) Cache NPM dependencies (ui/)          #
+############################################
+
+# Copy only the UI package inputs first so `npm install` can be cached across backend changes.
+COPY ui/package.json ui/package-lock.json ./ui/
+
+# Install UI dependencies into ui/node_modules (cache mount survives across builds with GHA cache).
+RUN --mount=type=cache,target=/sources/ui/node_modules \
+    cd ui && npm ci
+
+############################################################
+# 2) Cache Rust dependencies (Cargo + workspace crates)     #
+############################################################
+
+# Copy top-level cargo files first
+COPY Cargo.toml Cargo.lock ./
+
+# Copy the workspace crates directory (including sources).
+#
+# This is still more cache-friendly than copying the entire repository at once, because it avoids
+# invalidating Rust compilation due to changes outside `crates/` (e.g. `tests/`, `.github/`).
+# Note: changes within `crates/` will still invalidate the following build layer.
+COPY crates ./crates
+
+# Warm Rust caches (debug) to populate /sources/target and cargo caches.
+# IMPORTANT: the `kellnr` crate embeds `ui/dist` at compile time, which does not exist yet here.
+# So we warm caches by compiling the workspace *excluding* `kellnr`.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/sources/target \
+    cargo build --workspace --exclude kellnr --features vendored-openssl
+
+############################################
+# 3) Build UI + final debug binary         #
+############################################
+
+# Now copy the full repository (this invalidates frequently, but earlier layers remain cached).
+# Keep this late so most expensive work stays cacheable.
 COPY . /sources
 
-# Build kellnr
-WORKDIR /sources
-RUN just build-release
-
+# Build UI (uses cached node_modules) and build the final debug binary (uses cached target/cargo).
+# `build-debug` runs `npm-build` then `cargo build` in debug mode.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/sources/target \
+    --mount=type=cache,target=/sources/ui/node_modules \
+    just build-debug
 
 ##################
 # Runtime image  #
@@ -61,10 +112,17 @@ RUN just build-release
 
 FROM rust:slim-bookworm
 
+# Runtime deps for healthcheck + certs
+RUN apt update && apt install -y -q --no-install-recommends \
+  ca-certificates \
+  curl \
+  && rm -rf /var/lib/apt/lists/*
+
 RUN mkdir -p /opt/kellnr
 RUN rustup component add rust-src
+
 WORKDIR /opt/kellnr
-COPY --from=builder /sources/target/release/kellnr ./kellnr
+COPY --from=builder /sources/target/debug/kellnr ./kellnr
 
 # Self-contained cert: copy from tests/ (from repo root build context).
 COPY tests/ca.crt /usr/local/share/ca-certificates/ca.crt
