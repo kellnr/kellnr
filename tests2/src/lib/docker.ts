@@ -193,7 +193,15 @@ export async function buildS3MinioImage(options: {
   cratesioBucket: string;
 }): Promise<void> {
   const repoRoot = path.resolve(process.cwd(), "..");
-  const contextDir = path.resolve(repoRoot, "tests", "test-s3-storage");
+
+  // tests2 is intended to become fully standalone, so we build the MinIO fixture image
+  // from `tests2/fixtures/test-s3-storage` instead of `tests/test-s3-storage`.
+  const contextDir = path.resolve(
+    repoRoot,
+    "tests2",
+    "fixtures",
+    "test-s3-storage",
+  );
   const dockerfile = path.resolve(contextDir, "Dockerfile");
 
   const args = [

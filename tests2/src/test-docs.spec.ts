@@ -9,7 +9,8 @@ import {
   restrictToSingleWorkerBecauseFixedPorts,
   waitForHttpOk,
 } from "./testUtils";
-import { startContainer, withStartedContainer } from "./lib/docker";
+import { startKellnr, withStartedKellnr } from "./lib/kellnr";
+import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 
 function rimrafSync(p: string) {
   fs.rmSync(p, { recursive: true, force: true });
@@ -37,19 +38,6 @@ async function waitForFile(
   throw new Error(`Docs file not generated in time: ${filePath}`);
 }
 
-function extractRegistryTokenFromCrateConfig(crateDir: string): string {
-  const configPath = path.resolve(crateDir, ".cargo", "config.toml");
-  const contents = fs.readFileSync(configPath, "utf8");
-
-  const tokenMatch = contents.match(
-    /kellnr-test\s*=\s*\{[^}]*token\s*=\s*"([^"]+)"[^}]*\}/,
-  );
-  if (!tokenMatch) {
-    throw new Error(`Failed to extract kellnr-test token from ${configPath}`);
-  }
-  return tokenMatch[1];
-}
-
 test.describe("docs generation smoke test", () => {
   // Lua-test-style setup: Kellnr runs on stable localhost:8000, and crate-local `.cargo/config.toml`
   // can remain static.
@@ -67,11 +55,6 @@ test.describe("docs generation smoke test", () => {
 
     const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
     const registry = "kellnr-test";
-
-    // Use fixed localhost:8000 so Kellnr generates stable URLs.
-    const hostPort = 8000;
-    const baseUrl = `http://localhost:${hostPort}`;
-    const url = baseUrl;
 
     // Per-test data directory to mount as /opt/kdata
     const dataDir = path.resolve(
@@ -119,22 +102,19 @@ test.describe("docs generation smoke test", () => {
         fs.mkdirSync(dataDir, { recursive: true });
       });
 
-      // Extract token from crate config (same approach used in other ported tests)
-      const registryToken =
-        extractRegistryTokenFromCrateConfig(fullTomlCrateDir);
+      // Extract token from crate-local `.cargo/config.toml` (single source of truth for Cargo)
+      const registryToken = extractRegistryTokenFromCargoConfig({
+        crateDir: fullTomlCrateDir,
+        registryName: registry,
+      });
 
-      const started = await startContainer(
+      const started = await startKellnr(
         {
           name: containerBaseName,
           image,
-          ports: { 8000: hostPort },
           env: {
-            KELLNR_LOG__LEVEL: "trace",
-            KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
+            // Docs test-specific setting
             KELLNR_DOCS__ENABLED: "true",
-
-            // Ensure Kellnr generates URLs with localhost:8000
-            KELLNR_ORIGIN__PORT: String(hostPort),
           },
           bindMounts: {
             [dataDir]: dataDirInContainer,
@@ -143,13 +123,16 @@ test.describe("docs generation smoke test", () => {
         testInfo,
       );
 
-      await withStartedContainer(
+      await withStartedKellnr(
         testInfo,
         started,
-        async () => {
+        async ({ baseUrl }) => {
           await test.step("wait for server readiness", async () => {
-            log(`Waiting for HTTP 200 on ${url}`);
-            await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
+            log(`Waiting for HTTP 200 on ${baseUrl}`);
+            await waitForHttpOk(baseUrl, {
+              timeoutMs: 60_000,
+              intervalMs: 1_000,
+            });
             log("Server ready");
           });
 

@@ -10,7 +10,13 @@ import {
   restrictToSingleWorkerBecauseFixedPorts,
   waitForHttpOk,
 } from "./testUtils";
-import { attachContainerLogs, startContainer } from "./lib/docker";
+import {
+  attachContainerLogs,
+  startContainer,
+  withStartedContainer,
+} from "./lib/docker";
+import { kellnrDefaults } from "./lib/kellnr";
+import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 
 function rimrafSync(p: string) {
   fs.rmSync(p, { recursive: true, force: true });
@@ -24,29 +30,8 @@ function fileExists(p: string): boolean {
   }
 }
 
-function extractRegistryTokenFromCrateConfig(
-  crateDir: string,
-  registryName: string,
-): string {
-  const configPath = path.resolve(crateDir, ".cargo", "config.toml");
-  const contents = fs.readFileSync(configPath, "utf8");
-
-  // Match lines like:
-  //   kellnr-local = {index = "...", token = "..."}
-  //   kellnr-test  = {index = "...", token = "..."}
-  const escaped = registryName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const tokenRegex = new RegExp(
-    `${escaped}\\s*=\\s*\\{[^}]*token\\s*=\\s*"([^"]+)"[^}]*\\}`,
-  );
-
-  const tokenMatch = contents.match(tokenRegex);
-  if (!tokenMatch) {
-    throw new Error(
-      `Failed to extract ${registryName} token from ${configPath}`,
-    );
-  }
-  return tokenMatch[1];
-}
+// Token extraction is centralized in `src/harness/registry.ts`
+// to keep one source of truth and consistent error messages.
 
 async function grepErrorsFromContainerLogs(logs: string): Promise<string> {
   // We deliberately avoid spawning `grep` to keep this portable; we filter in JS.
@@ -159,10 +144,10 @@ test.describe("migration smoke test", () => {
     const oldContainer = `kellnr-old-${suffix}`;
     const newContainer = `kellnr-new-${suffix}`;
 
-    // Fixed port setup (Lua-style)
-    const hostPort = 8000;
-    const baseUrl = `http://localhost:${hostPort}`;
-    const url = baseUrl;
+    // Fixed localhost:8000 setup (shared helper)
+    const k = kellnrDefaults();
+    const baseUrl = k.baseUrl;
+    const url = k.baseUrl;
 
     // Persisted data directory mounted into /opt/kdata
     const kdataDir = path.resolve(
@@ -180,10 +165,10 @@ test.describe("migration smoke test", () => {
       "test-migration",
     );
     const tokenSourceCrateDir = path.resolve(migrationCratesRoot, "foo-bar");
-    const registryToken = extractRegistryTokenFromCrateConfig(
-      tokenSourceCrateDir,
-      registry,
-    );
+    const registryToken = extractRegistryTokenFromCargoConfig({
+      crateDir: tokenSourceCrateDir,
+      registryName: registry,
+    });
 
     try {
       await test.step("check prerequisites", async () => {
@@ -214,155 +199,117 @@ test.describe("migration smoke test", () => {
       });
 
       // ---- Run old container ----
-      let startedOld: Awaited<ReturnType<typeof startContainer>> | undefined;
-      try {
-        await test.step("start old Kellnr container", async () => {
-          log(`Starting old container: ${oldContainer}`);
-          log(`Mapping host port ${hostPort} -> container 8000`);
-          log(`Mounting kdata: ${kdataDir} -> ${kdataMount}`);
+      const startedOld = await startContainer(
+        {
+          name: oldContainer,
+          image: oldImage,
+          ports: k.ports,
+          env: {
+            ...k.env,
+          },
+          bindMounts: {
+            [kdataDir]: kdataMount,
+          },
+        },
+        testInfo,
+      );
 
-          startedOld = await startContainer(
-            {
-              name: oldContainer,
-              image: oldImage,
-              ports: { 8000: hostPort },
-              env: {
-                KELLNR_LOG__LEVEL: "debug",
-                KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
-
-                // Ensure Kellnr generates stable URLs with localhost:8000
-                KELLNR_ORIGIN__PORT: String(hostPort),
-              },
-              bindMounts: {
-                [kdataDir]: kdataMount,
-              },
-            },
-            testInfo,
-          );
-
-          log(`Old container started on ${baseUrl}`);
-        });
-
-        await test.step("wait for old server readiness", async () => {
-          log(`Waiting for HTTP 200 on ${url}`);
-          await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
-          log("Old server ready");
-        });
-
-        await test.step("publish crates to old version", async () => {
-          log("Publishing crates to old version...");
-
-          log("Publishing crate: test_lib");
-          await publishCrate({
-            cratePath: "tests2/crates/test-migration/test_lib",
-            registry,
-            registryToken,
+      await withStartedContainer(
+        testInfo,
+        startedOld,
+        async () => {
+          await test.step("wait for old server readiness", async () => {
+            log(`Waiting for HTTP 200 on ${url}`);
+            await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
+            log("Old server ready");
           });
 
-          log("Publishing crate: foo-bar");
-          await publishCrate({
-            cratePath: "tests2/crates/test-migration/foo-bar",
-            registry,
-            registryToken,
-          });
+          await test.step("publish crates to old version", async () => {
+            log("Publishing crates to old version...");
 
-          log("Published crates to old version");
-        });
-      } finally {
-        await test.step("stop old container", async () => {
-          log(`Stopping old container: ${oldContainer}`);
-          if (startedOld) {
-            await attachContainerLogs(testInfo, startedOld.container, {
-              name: "kellnr-old",
+            log("Publishing crate: test_lib");
+            await publishCrate({
+              cratePath: "tests2/crates/test-migration/test_lib",
+              registry,
+              registryToken,
             });
-            await startedOld.container.stop().catch(() => {});
-          }
-          log("Old container stopped");
-        });
-      }
+
+            log("Publishing crate: foo-bar");
+            await publishCrate({
+              cratePath: "tests2/crates/test-migration/foo-bar",
+              registry,
+              registryToken,
+            });
+
+            log("Published crates to old version");
+          });
+        },
+        { alwaysCollectLogs: true },
+      );
 
       // ---- Run new container ----
-      let startedNew: Awaited<ReturnType<typeof startContainer>> | undefined;
-      try {
-        await test.step("start new Kellnr container (with same kdata)", async () => {
-          log(`Starting new container: ${newContainer}`);
-          log(`Mapping host port ${hostPort} -> container 8000`);
-          log(`Reusing kdata: ${kdataDir} -> ${kdataMount}`);
+      const startedNew = await startContainer(
+        {
+          name: newContainer,
+          image: resolvedNewImage,
+          ports: k.ports,
+          env: {
+            ...k.env,
+          },
+          bindMounts: {
+            [kdataDir]: kdataMount,
+          },
+        },
+        testInfo,
+      );
 
-          startedNew = await startContainer(
-            {
-              name: newContainer,
-              image: resolvedNewImage,
-              ports: { 8000: hostPort },
-              env: {
-                KELLNR_LOG__LEVEL: "debug",
-                KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
-
-                // Ensure Kellnr generates stable URLs with localhost:8000
-                KELLNR_ORIGIN__PORT: String(hostPort),
-              },
-              bindMounts: {
-                [kdataDir]: kdataMount,
-              },
-            },
-            testInfo,
-          );
-
-          log(`New container started on ${baseUrl}`);
-        });
-
-        await test.step("wait for new server readiness", async () => {
-          log(`Waiting for HTTP 200 on ${url}`);
-          await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
-          log("New server ready");
-        });
-
-        await test.step("publish crate to new version", async () => {
-          log("Publishing crates to new version...");
-
-          log("Publishing crate: full-toml");
-          await publishCrate({
-            cratePath: "tests2/crates/test-migration/full-toml",
-            registry,
-            registryToken,
+      await withStartedContainer(
+        testInfo,
+        startedNew,
+        async () => {
+          await test.step("wait for new server readiness", async () => {
+            log(`Waiting for HTTP 200 on ${url}`);
+            await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
+            log("New server ready");
           });
 
-          log("Published crates to new version");
-        });
+          await test.step("publish crate to new version", async () => {
+            log("Publishing crates to new version...");
 
-        await test.step("check logs for ERROR entries", async () => {
-          log("Checking container logs for ERROR lines...");
-          const oldErrs = await grepErrorsFromContainerLogs(oldContainer);
-          const newErrs = await grepErrorsFromContainerLogs(newContainer);
-
-          if (oldErrs.trim()) {
-            log("ERROR lines found in old container logs:");
-            log(oldErrs);
-          } else {
-            log("No ERROR lines found in old container logs");
-          }
-
-          if (newErrs.trim()) {
-            log("ERROR lines found in new container logs:");
-            log(newErrs);
-          } else {
-            log("No ERROR lines found in new container logs");
-          }
-
-          // This mirrors the Lua test: it prints errors but does not fail based on them.
-        });
-      } finally {
-        await test.step("stop new container", async () => {
-          log(`Stopping new container: ${newContainer}`);
-          if (startedNew) {
-            await attachContainerLogs(testInfo, startedNew.container, {
-              name: "kellnr-new",
+            log("Publishing crate: full-toml");
+            await publishCrate({
+              cratePath: "tests2/crates/test-migration/full-toml",
+              registry,
+              registryToken,
             });
-            await startedNew.container.stop().catch(() => {});
-          }
-          log("New container stopped");
-        });
-      }
+
+            log("Published crates to new version");
+          });
+
+          await test.step("check logs for ERROR entries", async () => {
+            log("Checking container logs for ERROR lines...");
+            const oldErrs = await grepErrorsFromContainerLogs(oldContainer);
+            const newErrs = await grepErrorsFromContainerLogs(newContainer);
+
+            if (oldErrs.trim()) {
+              log("ERROR lines found in old container logs:");
+              log(oldErrs);
+            } else {
+              log("No ERROR lines found in old container logs");
+            }
+
+            if (newErrs.trim()) {
+              log("ERROR lines found in new container logs:");
+              log(newErrs);
+            } else {
+              log("No ERROR lines found in new container logs");
+            }
+
+            // This mirrors the Lua test: it prints errors but does not fail based on them.
+          });
+        },
+        { alwaysCollectLogs: true },
+      );
 
       log("Done");
     } finally {

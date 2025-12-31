@@ -3,13 +3,19 @@ import path from "node:path";
 import process from "node:process";
 import { execa } from "execa";
 
-async function execOrThrow(cmd: string, args: string[], opts?: { cwd?: string }) {
+async function execOrThrow(
+  cmd: string,
+  args: string[],
+  opts?: { cwd?: string },
+) {
   const res = await execa(cmd, args, {
     cwd: opts?.cwd,
     stdio: "inherit",
   });
   if (res.exitCode !== 0) {
-    throw new Error(`Command failed: ${cmd} ${args.join(" ")} (exitCode=${res.exitCode})`);
+    throw new Error(
+      `Command failed: ${cmd} ${args.join(" ")} (exitCode=${res.exitCode})`,
+    );
   }
 }
 
@@ -50,14 +56,28 @@ export default async function globalSetup(_config: FullConfig) {
   }
 
   const repoRoot = repoRootFromTests2();
-  const dockerfile = path.resolve(repoRoot, "tests", "Dockerfile");
+
+  // Build using the *repo root* as Docker build context.
+  // The Dockerfile lives in tests2/ but must see the whole repo (justfile, crates, config, etc.)
+  // to build the Kellnr binary. The Dockerfile itself copies the CA cert from `tests2/ca.crt`
+  // so tests2 can become self-contained and `tests/` can be removed later.
+  const dockerfile = path.resolve(repoRoot, "tests2", "Dockerfile");
 
   // eslint-disable-next-line no-console
   console.log(`[globalSetup] Building Docker image: ${image}`);
-  // Equivalent to: docker build -f tests/Dockerfile -t <image> --build-arg KELLNR_VERSION=local <repoRoot>
+  // Equivalent to: docker build -f tests2/Dockerfile -t <image> --build-arg KELLNR_VERSION=local <repoRoot>
   await execOrThrow(
     "docker",
-    ["build", "-f", dockerfile, "-t", image, "--build-arg", "KELLNR_VERSION=local", repoRoot],
+    [
+      "build",
+      "-f",
+      dockerfile,
+      "-t",
+      image,
+      "--build-arg",
+      "KELLNR_VERSION=local",
+      repoRoot,
+    ],
     { cwd: repoRoot },
   );
 

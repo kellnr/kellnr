@@ -1,5 +1,4 @@
 import { test } from "@playwright/test";
-import fs from "node:fs";
 import path from "node:path";
 import {
   assertDockerAvailable,
@@ -9,7 +8,9 @@ import {
   restrictToSingleWorkerBecauseFixedPorts,
   waitForHttpOk,
 } from "./testUtils";
-import { startContainer, withStartedContainer } from "./lib/docker";
+import { withStartedContainer } from "./lib/docker";
+import { startKellnr, type StartedKellnr } from "./lib/kellnr";
+import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 
 test.describe("auth required smoke test", () => {
   // This test relies on stable localhost:8000 URLs (cratesio proxy download URLs).
@@ -33,29 +34,17 @@ test.describe("auth required smoke test", () => {
       const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
       const registry = "kellnr-test";
 
-      // Use fixed localhost:8000 so Kellnr generates stable cratesio proxy download URLs.
-      const hostPort = 8000;
-      const baseUrl = `http://localhost:${hostPort}`;
-      const url = baseUrl;
-
-      const crateCargoConfigPath = path.resolve(
+      const tokenSourceCrateDir = path.resolve(
         process.cwd(),
         "crates",
         "test-auth-req",
         "foo-bar",
-        ".cargo",
-        "config.toml",
       );
-      const crateCargoConfig = fs.readFileSync(crateCargoConfigPath, "utf8");
-      const tokenMatch = crateCargoConfig.match(
-        /kellnr-test\s*=\s*\{[^}]*token\s*=\s*"([^"]+)"[^}]*\}/,
-      );
-      if (!tokenMatch) {
-        throw new Error(
-          `Failed to extract kellnr-test token from ${crateCargoConfigPath}`,
-        );
-      }
-      const registryToken = tokenMatch[1];
+
+      const registryToken = extractRegistryTokenFromCargoConfig({
+        crateDir: tokenSourceCrateDir,
+        registryName: registry,
+      });
 
       await test.step("ensure Kellnr test image exists (build if missing)", async () => {
         log(`Using image: ${image}`);
@@ -63,20 +52,12 @@ test.describe("auth required smoke test", () => {
         log(`Image ready: ${image}`);
       });
 
-      const containerBaseName = `kellnr-auth-req-${suffix}`;
-
-      const started = await startContainer(
+      const startedKellnr: StartedKellnr = await startKellnr(
         {
-          name: containerBaseName,
+          name: `kellnr-auth-req-${suffix}`,
           image,
-          ports: { 8000: hostPort },
           env: {
-            KELLNR_LOG__LEVEL: "debug",
-            KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
             KELLNR_REGISTRY__AUTH_REQUIRED: "true",
-
-            // Ensure Kellnr generates URLs with localhost:8000 (cratesio proxy download URLs)
-            KELLNR_ORIGIN__PORT: String(hostPort),
           },
         },
         testInfo,
@@ -84,11 +65,14 @@ test.describe("auth required smoke test", () => {
 
       await withStartedContainer(
         testInfo,
-        started,
+        startedKellnr.started,
         async () => {
           await test.step("wait for server readiness", async () => {
-            log(`Waiting for HTTP 200 on ${url}`);
-            await waitForHttpOk(url, { timeoutMs: 60_000, intervalMs: 1_000 });
+            log(`Waiting for HTTP 200 on ${startedKellnr.baseUrl}`);
+            await waitForHttpOk(startedKellnr.baseUrl, {
+              timeoutMs: 60_000,
+              intervalMs: 1_000,
+            });
             log("Server ready");
           });
 

@@ -1,5 +1,4 @@
 import { test } from "@playwright/test";
-import fs from "node:fs";
 import path from "node:path";
 import {
   assertDockerAvailable,
@@ -13,11 +12,12 @@ import {
   attachContainerLogs,
   buildS3MinioImage,
   createNetwork,
-  startContainer,
   startS3MinioContainer,
   withStartedContainer,
   withStartedNetwork,
 } from "./lib/docker";
+import { startKellnr } from "./lib/kellnr";
+import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 
 test.describe("s3 storage smoke test", () => {
   // Match the Lua test setup:
@@ -50,30 +50,20 @@ test.describe("s3 storage smoke test", () => {
     const s3CratesBucket = "kellnr-crates";
     const s3CratesioBucket = "kellnr-cratesio";
 
-    // Use fixed localhost:8000 so Kellnr generates stable URLs.
-    const hostPort = 8000;
-    const baseUrl = `http://localhost:${hostPort}`;
-    const url = baseUrl;
+    // Base URL is provided by the shared Kellnr start helper (keeps localhost:8000 convention centralized).
 
-    // Extract the registry token from the crate config (same token is used across these test crates)
-    const crateCargoConfigPath = path.resolve(
+    // Extract the registry token from a crate-local `.cargo/config.toml`
+    // (same token is used across these test crates).
+    const tokenSourceCrateDir = path.resolve(
       process.cwd(),
       "crates",
       "test-s3-storage",
       "foo-bar",
-      ".cargo",
-      "config.toml",
     );
-    const crateCargoConfig = fs.readFileSync(crateCargoConfigPath, "utf8");
-    const tokenMatch = crateCargoConfig.match(
-      /kellnr-test\s*=\s*\{[^}]*token\s*=\s*"([^"]+)"[^}]*\}/,
-    );
-    if (!tokenMatch) {
-      throw new Error(
-        `Failed to extract kellnr-test token from ${crateCargoConfigPath}`,
-      );
-    }
-    const registryToken = tokenMatch[1];
+    const registryToken = extractRegistryTokenFromCargoConfig({
+      crateDir: tokenSourceCrateDir,
+      registryName: registry,
+    });
 
     try {
       await test.step("check prerequisites", async () => {
@@ -119,16 +109,12 @@ test.describe("s3 storage smoke test", () => {
           async () => {
             log("Minio container started");
 
-            const startedKellnr = await startContainer(
+            const startedKellnr = await startKellnr(
               {
                 name: kellnrBaseName,
                 image: kellnrImage,
                 network,
-                // Fixed port mapping (Lua-style): host 8000 -> container 8000
-                ports: { 8000: hostPort },
                 env: {
-                  KELLNR_LOG__LEVEL: "debug",
-                  KELLNR_LOG__LEVEL_WEB_SERVER: "debug",
                   KELLNR_PROXY__ENABLED: "true",
 
                   KELLNR_S3__ENABLED: "true",
@@ -138,9 +124,6 @@ test.describe("s3 storage smoke test", () => {
                   KELLNR_S3__ALLOW_HTTP: s3AllowHttp,
                   KELLNR_S3__CRATES_BUCKET: s3CratesBucket,
                   KELLNR_S3__CRATESIO_BUCKET: s3CratesioBucket,
-
-                  // Ensure Kellnr generates URLs with localhost:8000 (cratesio proxy download URLs)
-                  KELLNR_ORIGIN__PORT: String(hostPort),
                 },
               },
               testInfo,
@@ -148,11 +131,11 @@ test.describe("s3 storage smoke test", () => {
 
             await withStartedContainer(
               testInfo,
-              startedKellnr,
+              startedKellnr.started,
               async () => {
                 await test.step("wait for server readiness", async () => {
-                  log(`Waiting for HTTP 200 on ${url}`);
-                  await waitForHttpOk(url, {
+                  log(`Waiting for HTTP 200 on ${startedKellnr.baseUrl}`);
+                  await waitForHttpOk(startedKellnr.baseUrl, {
                     timeoutMs: 60_000,
                     intervalMs: 1_000,
                   });
