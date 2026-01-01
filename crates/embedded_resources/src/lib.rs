@@ -8,7 +8,7 @@ use mime_guess::from_path;
 use std::borrow::Cow;
 use tracing::warn;
 
-static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../ui/dist");
+static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
 
 fn cache_control_for_path(path: &str) -> &'static str {
     // For SPAs, avoid caching `index.html` aggressively so deploys update quickly.

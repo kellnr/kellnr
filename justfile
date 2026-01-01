@@ -29,8 +29,6 @@ clippy:
 run: npm-build build
 	cargo run
 
-clean:
-	cargo clean
 
 test: npm-build # Run all tests which do NOT require Docker
 	cargo nextest run --workspace -E 'not test(~postgres_)'
@@ -43,6 +41,9 @@ test-pgdb: npm-build # Run Postgresql integration tests which require Docker
 
 test-all: test test-pgdb test-smoke
 
+clean:
+	cargo clean
+
 clean-node:
 	rm -rf ui/node_modules
 	rm -rf ui/package-lock.json
@@ -53,7 +54,9 @@ npm-dev:
 	cd ui && npm run dev
 
 npm-build: npm-install
-	cd ui && npm run build
+  cd ui && npm run build
+  rm -rf crates/embedded_resources/static/*
+  cp -r ui/dist/* crates/embedded_resources/static/
 
 npm-install:
 	cd ui && npm install

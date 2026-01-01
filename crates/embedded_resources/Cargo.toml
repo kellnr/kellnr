@@ -5,6 +5,11 @@ edition.workspace = true
 license.workspace = true
 version.workspace = true
 
+# Include the static web resources in the crate package.
+# The resources are built into the binary at compile time.
+# The CI copies the static resources into the "static" folder before publishing the crate.
+include = ["src/**", "static/**", "Cargo.toml"]
+
 [dependencies]
 # Internal dependencies from Kellnr
 
