@@ -1,7 +1,7 @@
 use tokio::{
     io::AsyncWriteExt,
     net::TcpListener,
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::mpsc::{Receiver, Sender, channel},
     task::JoinHandle,
 };
 

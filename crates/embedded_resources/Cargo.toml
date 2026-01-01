@@ -1,0 +1,19 @@
+[package]
+name = "embedded_resources"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+# Internal dependencies from Kellnr
+
+# External dependencies from crates.io
+include_dir.workspace = true
+axum.workspace = true
+tracing.workspace = true
+bytes.workspace = true
+mime_guess.workspace = true
+
+[lints]
+workspace = true

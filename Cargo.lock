@@ -1757,6 +1757,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded_resources"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "bytes",
+ "include_dir",
+ "mime_guess",
+ "tracing",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3757,14 +3768,12 @@ dependencies = [
  "auth",
  "axum",
  "axum-extra",
- "bytes",
  "common",
  "db",
  "docs",
+ "embedded_resources",
  "flume 0.12.0",
- "include_dir",
  "index",
- "mime_guess",
  "moka",
  "openssl",
  "registry",

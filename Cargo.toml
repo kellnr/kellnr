@@ -28,6 +28,7 @@ settings = { path = "./crates/settings" }
 storage = { path = "./crates/storage" }
 web_ui = { path = "./crates/web_ui" }
 webhooks = { path = "./crates/webhooks" }
+embedded_resources = { path = "./crates/embedded_resources" }
 
 # External dependencies from crates.io
 async-trait = "0.1.89"
