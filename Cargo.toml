@@ -1,14 +1,14 @@
 [workspace]
+default-members = ["crates/kellnr"]
 exclude = ["crates/test_data"]
 members = ["crates/*", "crates/db/entity", "crates/db/migration"]
-default-members = ["crates/kellnr"]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 authors = ["kellnr.io"]
 edition = "2024"
+license = "MIT"
 version = "5.9.1"
-license-file = "LICENSE"
 
 [workspace.dependencies]
 # Internal dependencies from Kellnr

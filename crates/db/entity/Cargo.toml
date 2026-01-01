@@ -1,12 +1,10 @@
 [package]
 name = "entity"
-version.workspace = true
-edition.workspace = true
 publish = false
-
-[lib]
-name = "entity"
-path = "src/lib.rs"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 sea-orm.workspace = true
