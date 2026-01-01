@@ -42,6 +42,8 @@ fn serve_embedded_asset(path: &str) -> Response<Body> {
     }
 }
 
+// Handler has to be async to fit into axum routing, even though we don't do any async work here.
+#[allow(clippy::unused_async)]
 pub async fn embedded_static_handler(uri: Uri) -> Response<Body> {
     let path = uri.path();
 
