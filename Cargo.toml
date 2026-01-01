@@ -7,7 +7,7 @@ resolver = "3"
 [workspace.package]
 authors = ["kellnr.io"]
 edition = "2024"
-license = "MIT"
+license ="MIT OR Apache-2.0"
 version = "5.9.1"
 
 [workspace.dependencies]
