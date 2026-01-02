@@ -163,19 +163,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
-name = "appstate"
-version = "5.9.1"
-dependencies = [
- "axum",
- "axum-extra",
- "common",
- "db",
- "flume 0.12.0",
- "settings",
- "storage",
-]
-
-[[package]]
 name = "ar_archive_writer"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -418,24 +405,6 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
-
-[[package]]
-name = "auth"
-version = "5.9.1"
-dependencies = [
- "appstate",
- "axum",
- "base64 0.22.1",
- "db",
- "hyper",
- "mockall",
- "rand 0.9.2",
- "serde",
- "settings",
- "tokio",
- "tower",
- "tracing",
-]
 
 [[package]]
 name = "autocfg"
@@ -1119,24 +1088,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
-name = "common"
-version = "5.9.1"
-dependencies = [
- "axum",
- "chrono",
- "rand 0.9.2",
- "regex",
- "reqwest",
- "sea-orm",
- "semver",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "compression-codecs"
 version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1499,35 +1450,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "db"
-version = "5.9.1"
-dependencies = [
- "chrono",
- "common",
- "db_testcontainer",
- "entity",
- "migration",
- "mockall",
- "rm_rf",
- "sea-orm",
- "serde",
- "serde_json",
- "settings",
- "sha256",
- "testcontainers",
- "thiserror 2.0.17",
- "tokio",
-]
-
-[[package]]
-name = "db_testcontainer"
-version = "5.9.1"
-dependencies = [
- "quote",
- "syn 2.0.111",
-]
-
-[[package]]
 name = "dbus"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1652,34 +1574,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "docs"
-version = "5.9.1"
-dependencies = [
- "appstate",
- "auth",
- "axum",
- "cargo",
- "common",
- "db",
- "error",
- "flate2",
- "fs_extra",
- "http-body-util",
- "hyper",
- "registry",
- "serde",
- "serde_json",
- "settings",
- "storage",
- "tar",
- "thiserror 2.0.17",
- "tokio",
- "tower",
- "tracing",
- "zip",
-]
-
-[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1757,30 +1651,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "embedded_resources"
-version = "5.9.1"
-dependencies = [
- "axum",
- "bytes",
- "include_dir",
- "mime_guess",
- "tracing",
-]
-
-[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "entity"
-version = "5.9.1"
-dependencies = [
- "sea-orm",
 ]
 
 [[package]]
@@ -1808,18 +1684,6 @@ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "error"
-version = "5.9.1"
-dependencies = [
- "axum",
- "common",
- "db",
- "serde",
- "storage",
- "zip",
 ]
 
 [[package]]
@@ -3567,30 +3431,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "index"
-version = "5.9.1"
-dependencies = [
- "appstate",
- "axum",
- "chrono",
- "common",
- "db",
- "flume 0.12.0",
- "http-body-util",
- "hyper",
- "mockall",
- "moka",
- "reqwest",
- "serde",
- "serde_json",
- "settings",
- "storage",
- "tokio",
- "tower",
- "tracing",
-]
-
-[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3764,27 +3604,318 @@ dependencies = [
 name = "kellnr"
 version = "5.9.1"
 dependencies = [
- "appstate",
- "auth",
  "axum",
  "axum-extra",
- "common",
- "db",
- "docs",
- "embedded_resources",
  "flume 0.12.0",
- "index",
+ "kellnr-appstate",
+ "kellnr-auth",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-docs",
+ "kellnr-embedded_resources",
+ "kellnr-index",
+ "kellnr-registry",
+ "kellnr-settings",
+ "kellnr-storage",
+ "kellnr-web_ui",
+ "kellnr-webhooks",
  "moka",
  "openssl",
- "registry",
- "settings",
- "storage",
  "tokio",
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "web_ui",
- "webhooks",
+]
+
+[[package]]
+name = "kellnr-appstate"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "flume 0.12.0",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-settings",
+ "kellnr-storage",
+]
+
+[[package]]
+name = "kellnr-auth"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "hyper",
+ "kellnr-appstate",
+ "kellnr-db",
+ "kellnr-settings",
+ "mockall",
+ "rand 0.9.2",
+ "serde",
+ "tokio",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "kellnr-common"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "chrono",
+ "rand 0.9.2",
+ "regex",
+ "reqwest",
+ "sea-orm",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "kellnr-db"
+version = "5.9.1"
+dependencies = [
+ "chrono",
+ "kellnr-common",
+ "kellnr-db_testcontainer",
+ "kellnr-entity",
+ "kellnr-migration",
+ "kellnr-settings",
+ "mockall",
+ "rm_rf",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "sha256",
+ "testcontainers",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
+name = "kellnr-db_testcontainer"
+version = "5.9.1"
+dependencies = [
+ "quote",
+ "syn 2.0.111",
+]
+
+[[package]]
+name = "kellnr-docs"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "cargo",
+ "flate2",
+ "fs_extra",
+ "http-body-util",
+ "hyper",
+ "kellnr-appstate",
+ "kellnr-auth",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-error",
+ "kellnr-registry",
+ "kellnr-settings",
+ "kellnr-storage",
+ "serde",
+ "serde_json",
+ "tar",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower",
+ "tracing",
+ "zip",
+]
+
+[[package]]
+name = "kellnr-embedded_resources"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "bytes",
+ "include_dir",
+ "mime_guess",
+ "tracing",
+]
+
+[[package]]
+name = "kellnr-entity"
+version = "5.9.1"
+dependencies = [
+ "sea-orm",
+]
+
+[[package]]
+name = "kellnr-error"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-storage",
+ "serde",
+ "zip",
+]
+
+[[package]]
+name = "kellnr-index"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "chrono",
+ "flume 0.12.0",
+ "http-body-util",
+ "hyper",
+ "kellnr-appstate",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-settings",
+ "kellnr-storage",
+ "mockall",
+ "moka",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "kellnr-migration"
+version = "5.9.1"
+dependencies = [
+ "async-std",
+ "chrono",
+ "kellnr-common",
+ "kellnr-settings",
+ "sea-orm",
+ "sea-orm-migration",
+ "sea-query",
+ "serde",
+ "serde_json",
+ "sha256",
+ "tracing",
+]
+
+[[package]]
+name = "kellnr-minio_testcontainer"
+version = "5.9.1"
+dependencies = [
+ "quote",
+ "syn 2.0.111",
+]
+
+[[package]]
+name = "kellnr-registry"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "chrono",
+ "http-body-util",
+ "hyper",
+ "kellnr-appstate",
+ "kellnr-auth",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-error",
+ "kellnr-settings",
+ "kellnr-storage",
+ "kellnr-webhooks",
+ "mockall",
+ "rand 0.9.2",
+ "reqwest",
+ "rm_rf",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "kellnr-settings"
+version = "5.9.1"
+dependencies = [
+ "config",
+ "serde",
+ "serde_json",
+ "toml 0.9.10+spec-1.1.0",
+ "tracing",
+]
+
+[[package]]
+name = "kellnr-storage"
+version = "5.9.1"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "kellnr-common",
+ "kellnr-minio_testcontainer",
+ "kellnr-settings",
+ "moka",
+ "object_store",
+ "sha256",
+ "testcontainers",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
+name = "kellnr-web_ui"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "cookie",
+ "http-body-util",
+ "hyper",
+ "kellnr-appstate",
+ "kellnr-auth",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-docs",
+ "kellnr-registry",
+ "kellnr-settings",
+ "kellnr-storage",
+ "mockall",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "time",
+ "tokio",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "kellnr-webhooks"
+version = "5.9.1"
+dependencies = [
+ "axum",
+ "chrono",
+ "hyper",
+ "kellnr-appstate",
+ "kellnr-auth",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-error",
+ "kellnr-settings",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower",
+ "tracing",
 ]
 
 [[package]]
@@ -4043,23 +4174,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "migration"
-version = "5.9.1"
-dependencies = [
- "async-std",
- "chrono",
- "common",
- "sea-orm",
- "sea-orm-migration",
- "sea-query",
- "serde",
- "serde_json",
- "settings",
- "sha256",
- "tracing",
-]
-
-[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4080,14 +4194,6 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
-
-[[package]]
-name = "minio_testcontainer"
-version = "5.9.1"
-dependencies = [
- "quote",
- "syn 2.0.111",
-]
 
 [[package]]
 name = "miniz_oxide"
@@ -5378,35 +5484,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
-name = "registry"
-version = "5.9.1"
-dependencies = [
- "appstate",
- "auth",
- "axum",
- "chrono",
- "common",
- "db",
- "error",
- "http-body-util",
- "hyper",
- "mockall",
- "rand 0.9.2",
- "reqwest",
- "rm_rf",
- "serde",
- "serde_json",
- "settings",
- "storage",
- "thiserror 2.0.17",
- "tokio",
- "tower",
- "tracing",
- "url",
- "webhooks",
-]
-
-[[package]]
 name = "rend"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6165,17 +6242,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "settings"
-version = "5.9.1"
-dependencies = [
- "config",
- "serde",
- "serde_json",
- "toml 0.9.10+spec-1.1.0",
- "tracing",
-]
-
-[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6561,23 +6627,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "storage"
-version = "5.9.1"
-dependencies = [
- "async-trait",
- "bytes",
- "common",
- "minio_testcontainer",
- "moka",
- "object_store",
- "settings",
- "sha256",
- "testcontainers",
- "thiserror 2.0.17",
- "tokio",
-]
 
 [[package]]
 name = "stringprep"
@@ -7571,55 +7620,6 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "web_ui"
-version = "5.9.1"
-dependencies = [
- "appstate",
- "auth",
- "axum",
- "axum-extra",
- "common",
- "cookie",
- "db",
- "docs",
- "http-body-util",
- "hyper",
- "mockall",
- "registry",
- "reqwest",
- "serde",
- "serde_json",
- "settings",
- "storage",
- "time",
- "tokio",
- "tower",
- "tracing",
-]
-
-[[package]]
-name = "webhooks"
-version = "5.9.1"
-dependencies = [
- "appstate",
- "auth",
- "axum",
- "chrono",
- "common",
- "db",
- "error",
- "hyper",
- "reqwest",
- "serde",
- "serde_json",
- "settings",
- "thiserror 2.0.17",
- "tokio",
- "tower",
- "tracing",
 ]
 
 [[package]]

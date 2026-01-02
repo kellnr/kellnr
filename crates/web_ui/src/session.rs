@@ -2,7 +2,7 @@ use crate::error::RouteError;
 use axum::{RequestPartsExt, extract::State};
 use axum::{extract::Request, http::request::Parts, middleware::Next, response::Response};
 use axum_extra::extract::PrivateCookieJar;
-use settings::constants;
+use kellnr_settings::constants;
 
 pub trait Name {
     fn name(&self) -> String;
@@ -68,12 +68,12 @@ impl MaybeUser {
     }
 }
 
-impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
+impl axum::extract::FromRequestParts<kellnr_appstate::AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &appstate::AppStateData,
+        state: &kellnr_appstate::AppStateData,
     ) -> Result<Self, Self::Rejection> {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
         let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
@@ -90,12 +90,12 @@ impl axum::extract::FromRequestParts<appstate::AppStateData> for MaybeUser {
     }
 }
 
-impl axum::extract::OptionalFromRequestParts<appstate::AppStateData> for MaybeUser {
+impl axum::extract::OptionalFromRequestParts<kellnr_appstate::AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &appstate::AppStateData,
+        state: &kellnr_appstate::AppStateData,
     ) -> Result<Option<Self>, Self::Rejection> {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
         let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
@@ -115,7 +115,7 @@ impl axum::extract::OptionalFromRequestParts<appstate::AppStateData> for MaybeUs
 /// Middleware that checks if a user is logged in when `settings.registry.auth_required` is `true`
 /// If the user is not logged in, a 401 is returned.
 pub async fn session_auth_when_required(
-    State(state): State<appstate::AppStateData>,
+    State(state): State<kellnr_appstate::AppStateData>,
     jar: PrivateCookieJar,
     request: Request,
     next: Next,
@@ -141,17 +141,17 @@ pub async fn session_auth_when_required(
 mod session_tests {
     use super::*;
     use crate::test_helper::encode_cookies;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::{Router, body::Body, routing::get};
     use axum_extra::extract::cookie::Key;
-    use db::DbProvider;
-    use db::{error::DbError, mock::MockDb};
+    use kellnr_db::DbProvider;
+    use kellnr_db::{kellnr_error::DbError, mock::MockDb};
     use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
     use std::{result, sync::Arc};
-    use storage::cached_crate_storage::DynStorage;
-    use storage::fs_storage::FSStorage;
-    use storage::kellnr_crate_storage::KellnrCrateStorage;
+    use kellnr_storage::cached_crate_storage::DynStorage;
+    use kellnr_storage::fs_storage::FSStorage;
+    use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use tower::ServiceExt;
 
     async fn admin_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
@@ -167,7 +167,7 @@ mod session_tests {
     async fn any_endpoint(_user: MaybeUser) {}
 
     fn app(db: Arc<dyn DbProvider>) -> Router {
-        let settings = settings::test_settings();
+        let settings = kellnr_settings::test_settings();
         let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         Router::new()
             .route("/admin", get(admin_endpoint))
@@ -178,7 +178,7 @@ mod session_tests {
                 signing_key: Key::from(crate::test_helper::TEST_KEY),
                 crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
                 settings: Arc::new(settings),
-                ..appstate::test_state()
+                ..kellnr_appstate::test_state()
             })
     }
 
@@ -417,15 +417,15 @@ mod session_tests {
 mod auth_middleware_tests {
     use super::*;
     use crate::test_helper::encode_cookies;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::middleware::from_fn_with_state;
     use axum::{Router, body::Body, routing::get};
     use axum_extra::extract::cookie::Key;
-    use db::DbProvider;
-    use db::{error::DbError, mock::MockDb};
+    use kellnr_db::DbProvider;
+    use kellnr_db::{kellnr_error::DbError, mock::MockDb};
     use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
-    use settings::Settings;
+    use kellnr_settings::Settings;
     use std::sync::Arc;
     use tower::ServiceExt;
 
@@ -435,13 +435,13 @@ mod auth_middleware_tests {
             db,
             signing_key: Key::from(crate::test_helper::TEST_KEY),
             settings: Arc::new(Settings {
-                registry: settings::Registry {
+                registry: kellnr_settings::Registry {
                     auth_required: true,
-                    ..settings::Registry::default()
+                    ..kellnr_settings::Registry::default()
                 },
                 ..settings
             }),
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))
@@ -459,7 +459,7 @@ mod auth_middleware_tests {
             db,
             signing_key: Key::from(crate::test_helper::TEST_KEY),
             settings: Arc::new(settings),
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))

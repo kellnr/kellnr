@@ -4,12 +4,12 @@ use crate::m20220101_000005_create_table_entities::{
 };
 use crate::old_index_metadata::OldIndexDep;
 use crate::old_index_metadata::OldIndexMetadata;
-use common::index_metadata::metadata_path;
-use common::version::Version;
+use kellnr_common::index_metadata::metadata_path;
+use kellnr_common::version::Version;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use sea_orm_migration::prelude::*;
 use serde::{Deserialize, Serialize};
-use settings::{Settings, get_settings};
+use kellnr_settings::{Settings, get_settings};
 use std::collections::HashMap;
 use tracing::{debug, error};
 

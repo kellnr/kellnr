@@ -1,5 +1,5 @@
 use crate::m20220101_000006_create_table_entities::{crate_index, krate};
-use common::index_metadata::IndexMetadata;
+use kellnr_common::index_metadata::IndexMetadata;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use sea_orm_migration::prelude::*;
 use tracing::debug;

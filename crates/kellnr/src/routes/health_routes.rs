@@ -1,4 +1,4 @@
-use appstate::AppStateData;
+use kellnr_appstate::AppStateData;
 use axum::{Router, routing::get};
 
 /// Health check route

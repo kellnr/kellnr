@@ -1,4 +1,4 @@
-use error::api_error::ApiError;
+use kellnr_error::api_error::ApiError;
 use hyper::StatusCode;
 use thiserror::Error;
 

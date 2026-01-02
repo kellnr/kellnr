@@ -1,10 +1,10 @@
-use appstate::DbState;
-use auth::token;
+use kellnr_appstate::DbState;
+use kellnr_auth::token;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use common::webhook::Webhook;
-use error::api_error::{ApiError, ApiResult};
+use kellnr_common::webhook::Webhook;
+use kellnr_error::api_error::{ApiError, ApiResult};
 
 use crate::types;
 
@@ -98,14 +98,14 @@ pub async fn test_webhook(
 
 #[cfg(test)]
 mod endpoint_tests {
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::Router;
     use axum::body::{Body, to_bytes};
     use axum::http::Request;
     use axum::response::Response;
     use axum::routing::{delete, get, post};
-    use common::webhook::WebhookEvent;
-    use db::{ConString, Database, DbProvider, SqliteConString};
+    use kellnr_common::webhook::WebhookEvent;
+    use kellnr_db::{ConString, Database, DbProvider, SqliteConString};
     use hyper::header;
     use serde::de::DeserializeOwned;
     use std::sync::Arc;
@@ -382,7 +382,7 @@ mod endpoint_tests {
 
         let state = AppStateData {
             db: db.clone(),
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
 
         let routes = Router::new()

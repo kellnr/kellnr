@@ -5,17 +5,17 @@ use axum::{
 
 #[derive(Debug)]
 pub enum RouteError {
-    DbError(db::error::DbError),
+    DbError(kellnr_db::error::DbError),
     InsufficientPrivileges,
     Status(StatusCode),
     AuthenticationFailure,
     UserNotFound(String),
 }
 
-impl From<db::error::DbError> for RouteError {
-    fn from(err: db::error::DbError) -> Self {
+impl From<kellnr_db::error::DbError> for RouteError {
+    fn from(err: kellnr_db::error::DbError) -> Self {
         match err {
-            db::error::DbError::PasswordMismatch => Self::AuthenticationFailure,
+            kellnr_db::error::DbError::PasswordMismatch => Self::AuthenticationFailure,
             _ => Self::DbError(err),
         }
     }

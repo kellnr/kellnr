@@ -1,4 +1,4 @@
-use error::api_error::ApiError;
+use kellnr_error::api_error::ApiError;
 use hyper::StatusCode;
 use thiserror::Error;
 
@@ -9,7 +9,7 @@ pub enum DocsError {
     #[error("Crate with version does not exist: {0}-{1}")]
     CrateDoesNotExist(String, String),
     #[error("Database error: {0}")]
-    DatabaseError(#[from] db::error::DbError),
+    DatabaseError(#[from] kellnr_db::error::DbError),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("Failed to copy directory: {0}")]

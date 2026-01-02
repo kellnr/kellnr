@@ -1,5 +1,5 @@
 [package]
-name = "storage"
+name = "kellnr-storage"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,9 +7,9 @@ version.workspace = true
 
 [dependencies]
 # Internal dependencies
-common.workspace = true
-minio_testcontainer.workspace = true
-settings.workspace = true
+kellnr-common.workspace = true
+kellnr-minio_testcontainer.workspace = true
+kellnr-settings.workspace = true
 
 # External dependencies
 async-trait.workspace = true

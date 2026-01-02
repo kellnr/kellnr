@@ -6,7 +6,7 @@ use object_store::{
     aws::{AmazonS3, AmazonS3Builder},
     path::Path,
 };
-use settings::Settings;
+use kellnr_settings::Settings;
 
 pub struct S3Storage(AmazonS3);
 

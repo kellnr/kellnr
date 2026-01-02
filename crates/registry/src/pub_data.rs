@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use crate::registry_error::RegistryError;
-use appstate::AppStateData;
+use kellnr_appstate::AppStateData;
 use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
 use axum::http::Request;
-use common::publish_metadata::PublishMetadata;
-use error::api_error::ApiError;
+use kellnr_common::publish_metadata::PublishMetadata;
+use kellnr_error::api_error::ApiError;
 use serde::Deserialize;
-use settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
+use kellnr_settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
 
 #[derive(Debug, Deserialize)]
 pub struct EmptyCrateData {
@@ -85,12 +85,12 @@ impl FromRequest<AppStateData, Body> for PubData {
 #[cfg(test)]
 mod bin_tests {
     use crate::pub_data::PubData;
-    use common::original_name::OriginalName;
-    use common::publish_metadata::PublishMetadata;
-    use common::version::Version;
-    use settings::Settings;
+    use kellnr_common::original_name::OriginalName;
+    use kellnr_common::publish_metadata::PublishMetadata;
+    use kellnr_common::version::Version;
+    use kellnr_settings::Settings;
     use std::{convert::TryFrom, path::Path};
-    use storage::{
+    use kellnr_storage::{
         cached_crate_storage::DynStorage, fs_storage::FSStorage,
         kellnr_crate_storage::KellnrCrateStorage,
     };
@@ -109,14 +109,14 @@ mod bin_tests {
     impl TestData {
         fn from(data_dir: &str) -> TestData {
             let settings = Settings {
-                registry: settings::Registry {
+                registry: kellnr_settings::Registry {
                     data_dir: data_dir.to_owned(),
                     session_age_seconds: 60,
-                    ..settings::Registry::default()
+                    ..kellnr_settings::Registry::default()
                 },
-                setup: settings::Setup {
+                setup: kellnr_settings::Setup {
                     admin_pwd: String::new(),
-                    ..settings::Setup::default()
+                    ..kellnr_settings::Setup::default()
                 },
                 ..Settings::default()
             };

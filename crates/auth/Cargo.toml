@@ -1,5 +1,5 @@
 [package]
-name = "auth"
+name = "kellnr-auth"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,9 +7,9 @@ version.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
-appstate.workspace = true
-db.workspace = true
-settings.workspace = true
+kellnr-appstate.workspace = true
+kellnr-db.workspace = true
+kellnr-settings.workspace = true
 
 # External dependencies from crates.io
 axum.workspace = true

@@ -1,11 +1,11 @@
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
-use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
-use db::DbProvider;
+use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
+use kellnr_db::DbProvider;
 use flume::Sender;
-use settings::Settings;
+use kellnr_settings::Settings;
 use std::sync::Arc;
-use storage::{
+use kellnr_storage::{
     cached_crate_storage::DynStorage, cratesio_crate_storage::CratesIoCrateStorage,
     fs_storage::FSStorage, kellnr_crate_storage::KellnrCrateStorage,
 };
@@ -32,9 +32,9 @@ pub struct AppStateData {
 }
 
 pub fn test_state() -> AppStateData {
-    let db = Arc::new(db::mock::MockDb::new());
+    let db = Arc::new(kellnr_db::mock::MockDb::new());
     let signing_key = Key::generate();
-    let settings = Arc::new(settings::test_settings());
+    let settings = Arc::new(kellnr_settings::test_settings());
     let kellnr_storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
     let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, kellnr_storage));
     let cratesio_storage = Arc::new(CratesIoCrateStorage::new(

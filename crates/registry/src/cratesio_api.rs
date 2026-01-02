@@ -1,18 +1,18 @@
 use crate::{registry_error::RegistryError, search_params::SearchParams};
-use appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
+use kellnr_appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
 use axum::{
     extract::{Path, Request, State},
     http::StatusCode,
     middleware::Next,
     response::Response,
 };
-use common::{
+use kellnr_common::{
     cratesio_downloader::{CLIENT, download_crate},
     cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData},
     original_name::OriginalName,
     version::Version,
 };
-use error::api_error::ApiResult;
+use kellnr_error::api_error::ApiResult;
 use reqwest::Url;
 use tracing::{error, trace, warn};
 
@@ -86,20 +86,20 @@ pub async fn download(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::body::Body;
     use axum::http::Request;
     use axum::routing::get;
     use axum::{Router, middleware};
-    use common::util::generate_rand_string;
-    use db::mock::MockDb;
+    use kellnr_common::util::generate_rand_string;
+    use kellnr_db::mock::MockDb;
     use http_body_util::BodyExt;
-    use settings::Settings;
+    use kellnr_settings::Settings;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use storage::cached_crate_storage::DynStorage;
-    use storage::cratesio_crate_storage::CratesIoCrateStorage;
-    use storage::fs_storage::FSStorage;
+    use kellnr_storage::cached_crate_storage::DynStorage;
+    use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
+    use kellnr_storage::fs_storage::FSStorage;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -220,14 +220,14 @@ mod tests {
 
     fn get_settings() -> Settings {
         Settings {
-            registry: settings::Registry {
+            registry: kellnr_settings::Registry {
                 data_dir: "/tmp/".to_string() + &generate_rand_string(10),
                 session_age_seconds: 10,
-                ..settings::Registry::default()
+                ..kellnr_settings::Registry::default()
             },
-            proxy: settings::Proxy {
+            proxy: kellnr_settings::Proxy {
                 enabled: true,
-                ..settings::Proxy::default()
+                ..kellnr_settings::Proxy::default()
             },
             ..Settings::default()
         }
@@ -260,7 +260,7 @@ mod tests {
             settings: settings.into(),
             cratesio_storage: cs.into(),
             db: Arc::<MockDb>::new(db),
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
 
         let routes = Router::new()

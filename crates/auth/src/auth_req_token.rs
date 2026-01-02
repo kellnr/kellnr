@@ -10,7 +10,7 @@ use tracing::warn;
 ///
 /// If the user is not logged in, a 401 is returned.
 pub async fn cargo_auth_when_required(
-    State(state): State<appstate::AppStateData>,
+    State(state): State<kellnr_appstate::AppStateData>,
     request: Request,
     next: Next,
 ) -> Response {
@@ -48,16 +48,16 @@ pub async fn cargo_auth_when_required(
 #[cfg(test)]
 mod test {
     use super::*;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use axum::routing::get;
     use axum::{Router, middleware};
-    use db::User;
-    use db::error::DbError;
-    use db::mock::MockDb;
+    use kellnr_db::User;
+    use kellnr_db::error::DbError;
+    use kellnr_db::mock::MockDb;
     use mockall::predicate::*;
-    use settings::Settings;
+    use kellnr_settings::Settings;
     use std::sync::Arc;
     use tower::ServiceExt;
 
@@ -121,9 +121,9 @@ mod test {
 
     fn test_settings(auth_required: bool) -> Settings {
         Settings {
-            registry: settings::Registry {
+            registry: kellnr_settings::Registry {
                 auth_required,
-                ..settings::Registry::default()
+                ..kellnr_settings::Registry::default()
             },
             ..Settings::default()
         }
@@ -153,7 +153,7 @@ mod test {
         let state = AppStateData {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
 
         println!("Appstate registry: {:?}", state.settings.registry);
@@ -171,15 +171,15 @@ mod test {
 #[cfg(test)]
 mod auth_middleware_tests {
     use super::*;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::body::Body;
     use axum::middleware::from_fn_with_state;
     use axum::{Router, http::StatusCode, routing::get};
-    use db::DbProvider;
-    use db::{error::DbError, mock::MockDb};
+    use kellnr_db::DbProvider;
+    use kellnr_db::{kellnr_error::DbError, mock::MockDb};
     use hyper::{Request, header};
     use mockall::predicate::*;
-    use settings::Settings;
+    use kellnr_settings::Settings;
     use std::sync::Arc;
     use tower::ServiceExt;
 
@@ -188,13 +188,13 @@ mod auth_middleware_tests {
         let state = AppStateData {
             db,
             settings: Arc::new(Settings {
-                registry: settings::Registry {
+                registry: kellnr_settings::Registry {
                     auth_required: true,
-                    ..settings::Registry::default()
+                    ..kellnr_settings::Registry::default()
                 },
                 ..settings
             }),
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
 
         Router::new()
@@ -209,7 +209,7 @@ mod auth_middleware_tests {
         let state = AppStateData {
             db,
             settings: Arc::new(settings),
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))

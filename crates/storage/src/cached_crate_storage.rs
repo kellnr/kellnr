@@ -1,8 +1,8 @@
 use crate::{storage::Storage, storage_error::StorageError};
-use common::original_name::OriginalName;
-use common::version::Version;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::version::Version;
 use moka::future::Cache;
-use settings::Settings;
+use kellnr_settings::Settings;
 use std::{path::PathBuf, sync::Arc};
 
 pub type CrateCache = Cache<String, Vec<u8>>;

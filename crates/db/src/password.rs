@@ -1,4 +1,4 @@
-use common::util::generate_rand_string;
+use kellnr_common::util::generate_rand_string;
 
 const SALT_LENGTH: usize = 10;
 

@@ -1,10 +1,10 @@
-use appstate::AppStateData;
+use kellnr_appstate::AppStateData;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use db::DbProvider;
+use kellnr_db::DbProvider;
 use rand::distr::Alphanumeric;
 use rand::{Rng, rng};
 use serde::Deserialize;

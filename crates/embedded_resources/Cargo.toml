@@ -1,5 +1,5 @@
 [package]
-name = "embedded_resources"
+name = "kellnr-embedded_resources"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true

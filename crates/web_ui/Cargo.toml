@@ -1,5 +1,5 @@
 [package]
-name = "web_ui"
+name = "kellnr-web_ui"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,14 +7,14 @@ version.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
-appstate.workspace = true
-auth.workspace = true
-common.workspace = true
-db.workspace = true
-docs.workspace = true
-registry.workspace = true
-settings.workspace = true
-storage.workspace = true
+kellnr-appstate.workspace = true
+kellnr-auth.workspace = true
+kellnr-common.workspace = true
+kellnr-db.workspace = true
+kellnr-docs.workspace = true
+kellnr-registry.workspace = true
+kellnr-settings.workspace = true
+kellnr-storage.workspace = true
 
 # External dependencies from crates.io
 axum-extra.workspace = true

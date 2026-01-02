@@ -5,8 +5,8 @@ pub mod doc_queue_response;
 pub mod docs_error;
 pub mod upload_response;
 
-use common::version::Version;
-use settings::Settings;
+use kellnr_common::version::Version;
+use kellnr_settings::Settings;
 use std::convert::TryFrom;
 use std::path::Path;
 

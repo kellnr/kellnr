@@ -1,4 +1,4 @@
-use common::normalized_name::NormalizedName;
+use kellnr_common::normalized_name::NormalizedName;
 use std::path::PathBuf;
 
 #[derive(Eq, PartialEq, Debug)]
@@ -9,8 +9,8 @@ pub struct DocQueueEntry {
     pub path: PathBuf,
 }
 
-impl From<entity::doc_queue::Model> for DocQueueEntry {
-    fn from(dqm: entity::doc_queue::Model) -> Self {
+impl From<kellnr_entity::doc_queue::Model> for DocQueueEntry {
+    fn from(dqm: kellnr_entity::doc_queue::Model) -> Self {
         Self {
             id: dqm.id,
             normalized_name: NormalizedName::from_unchecked(dqm.krate),

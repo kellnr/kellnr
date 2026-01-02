@@ -31,7 +31,7 @@ pub fn db_test(_attr: TokenStream, stream: TokenStream) -> TokenStream {
         #vis async fn #sqlite_fn_name() {
             use std::path;
             use std::ops::Add;
-            use common::util::generate_rand_string;
+            use kellnr_common::util::generate_rand_string;
 
             let path = path::PathBuf::from("/tmp").join(generate_rand_string(8).add(".db"));
             let con_string = db::SqliteConString {

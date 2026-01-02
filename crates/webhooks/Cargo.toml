@@ -1,5 +1,5 @@
 [package]
-name = "webhooks"
+name = "kellnr-webhooks"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,11 +7,11 @@ version.workspace = true
 
 [dependencies]
 # Internal dependencies
-appstate.workspace = true
-auth.workspace = true
-common.workspace = true
-db.workspace = true
-error.workspace = true
+kellnr-appstate.workspace = true
+kellnr-auth.workspace = true
+kellnr-common.workspace = true
+kellnr-db.workspace = true
+kellnr-error.workspace = true
 
 # External dependencies
 axum.workspace = true
@@ -25,7 +25,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 hyper.workspace = true
-settings.workspace = true
+kellnr-settings.workspace = true
 tower.workspace = true
 
 [lints]

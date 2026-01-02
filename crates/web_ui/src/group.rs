@@ -1,10 +1,10 @@
 use crate::error::RouteError;
 use crate::session::MaybeUser;
-use appstate::DbState;
+use kellnr_appstate::DbState;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use db::{self, Group};
+use kellnr_db::{self, Group};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]

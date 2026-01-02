@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use settings::{Protocol, Settings};
+use kellnr_settings::{Protocol, Settings};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct ConfigJson {
@@ -67,7 +67,7 @@ impl From<(&Settings, &str, bool)> for ConfigJson {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use settings::Protocol;
+    use kellnr_settings::Protocol;
 
     #[test]
     fn test_config_json_to_json_http() {

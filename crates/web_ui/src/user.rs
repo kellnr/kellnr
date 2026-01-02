@@ -1,18 +1,18 @@
 use crate::error::RouteError;
 use crate::session::MaybeUser;
-use appstate::{AppState, DbState};
-use auth::token;
+use kellnr_appstate::{AppState, DbState};
+use kellnr_auth::token;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
-use common::util::generate_rand_string;
+use kellnr_common::util::generate_rand_string;
 use cookie::time;
-use db::password::generate_salt;
-use db::{self, AuthToken, User};
+use kellnr_db::password::generate_salt;
+use kellnr_db::{self, AuthToken, User};
 use serde::{Deserialize, Serialize};
-use settings::constants::{COOKIE_SESSION_ID, COOKIE_SESSION_USER};
+use kellnr_settings::constants::{COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {

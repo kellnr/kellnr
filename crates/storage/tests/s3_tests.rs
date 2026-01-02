@@ -1,14 +1,14 @@
-use common::original_name::OriginalName;
-use common::publish_metadata::PublishMetadata;
-use common::version::Version;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::publish_metadata::PublishMetadata;
+use kellnr_common::version::Version;
 use minio_testcontainer::*;
-use settings::Settings;
-use settings::s3::S3;
+use kellnr_settings::Settings;
+use kellnr_settings::s3::S3;
 use std::convert::TryFrom;
 use std::sync::Arc;
-use storage::cached_crate_storage::DynStorage;
-use storage::kellnr_crate_storage::KellnrCrateStorage;
-use storage::s3_storage::S3Storage;
+use kellnr_storage::cached_crate_storage::DynStorage;
+use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+use kellnr_storage::s3_storage::S3Storage;
 mod image;
 
 struct TestS3Storage {
@@ -18,14 +18,14 @@ struct TestS3Storage {
 impl TestS3Storage {
     fn from(data_dir: &str, url: &str) -> TestS3Storage {
         let settings = Settings {
-            registry: settings::Registry {
+            registry: kellnr_settings::Registry {
                 data_dir: data_dir.to_owned(),
                 session_age_seconds: 60,
-                ..settings::Registry::default()
+                ..kellnr_settings::Registry::default()
             },
-            setup: settings::Setup {
+            setup: kellnr_settings::Setup {
                 admin_pwd: String::new(),
-                ..settings::Setup::default()
+                ..kellnr_settings::Setup::default()
             },
             s3: S3 {
                 enabled: true,

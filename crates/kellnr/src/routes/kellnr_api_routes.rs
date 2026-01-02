@@ -1,13 +1,13 @@
-use appstate::AppStateData;
-use auth::auth_req_token;
+use kellnr_appstate::AppStateData;
+use kellnr_auth::auth_req_token;
 use axum::{
     Router,
     extract::DefaultBodyLimit,
     middleware,
     routing::{delete, get, put},
 };
-use index::kellnr_prefetch_api;
-use registry::kellnr_api;
+use kellnr_index::kellnr_prefetch_api;
+use kellnr_registry::kellnr_api;
 
 /// Creates the kellnr API routes
 pub fn create_routes(state: AppStateData, max_crate_size: usize) -> Router<AppStateData> {

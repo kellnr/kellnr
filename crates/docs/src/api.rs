@@ -3,17 +3,17 @@ use crate::doc_queue_response::DocQueueResponse;
 use crate::docs_error::DocsError;
 use crate::upload_response::DocUploadResponse;
 use crate::{compute_doc_url, get_latest_version_with_doc};
-use appstate::{AppState, DbState, SettingsState};
-use auth::token::Token;
+use kellnr_appstate::{AppState, DbState, SettingsState};
+use kellnr_auth::token::Token;
 use axum::{
     Json,
     extract::{Path, State},
     response::Redirect,
 };
-use common::original_name::OriginalName;
-use common::version::Version;
-use error::api_error::ApiResult;
-use registry::kellnr_api::check_ownership;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::version::Version;
+use kellnr_error::api_error::ApiResult;
+use kellnr_registry::kellnr_api::check_ownership;
 
 pub async fn docs_in_queue(State(db): DbState) -> ApiResult<Json<DocQueueResponse>> {
     let doc = db.get_doc_queue().await?;
@@ -94,14 +94,14 @@ fn crate_does_not_exist(
 mod tests {
     use super::*;
     use crate::doc_queue_response::DocQueueEntryResponse;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::routing::get;
-    use common::normalized_name::NormalizedName;
-    use db::mock::MockDb;
-    use db::{DbProvider, DocQueueEntry};
+    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_db::mock::MockDb;
+    use kellnr_db::{DbProvider, DocQueueEntry};
     use http_body_util::BodyExt;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -157,7 +157,7 @@ mod tests {
             .route("/queue", get(docs_in_queue))
             .with_state(AppStateData {
                 db,
-                ..appstate::test_state()
+                ..kellnr_appstate::test_state()
             })
     }
 }
