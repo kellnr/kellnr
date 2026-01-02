@@ -1,7 +1,7 @@
 use appstate::AppStateData;
 use axum::{
-    routing::{delete, get, post},
     Router,
+    routing::{delete, get, post},
 };
 
 /// Creates the webhook routes
