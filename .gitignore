@@ -31,7 +31,7 @@ obj/
 .idea/
 
 # Other
-static/
+**/static/
 nohup.out
 
 */kellnr_bin/kellnr_aarch64
