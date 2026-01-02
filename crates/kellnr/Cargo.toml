@@ -16,9 +16,9 @@ kellnr-index.workspace = true
 kellnr-registry.workspace = true
 kellnr-settings.workspace = true
 kellnr-storage.workspace = true
-kellnr-web_ui.workspace = true
+kellnr-web-ui.workspace = true
 kellnr-webhooks.workspace = true
-kellnr-embedded_resources.workspace = true
+kellnr-embedded-resources.workspace = true
 
 # External dependencies from crates.io
 axum-extra.workspace = true

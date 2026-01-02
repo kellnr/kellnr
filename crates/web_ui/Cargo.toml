@@ -1,5 +1,5 @@
 [package]
-name = "kellnr-web_ui"
+name = "kellnr-web-ui"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true

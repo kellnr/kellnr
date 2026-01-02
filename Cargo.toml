@@ -16,19 +16,19 @@ kellnr-appstate = { path = "./crates/appstate" }
 kellnr-auth = { path = "./crates/auth" }
 kellnr-common = { path = "./crates/common" }
 kellnr-db = { path = "./crates/db" }
-kellnr-db_testcontainer = { path = "./crates/db/db_testcontainer" }
+kellnr-db-testcontainer = { path = "./crates/db/db_testcontainer" }
 kellnr-docs = { path = "./crates/docs" }
 kellnr-entity = { path = "./crates/db/entity" }
 kellnr-error = { path = "./crates/error" }
 kellnr-index = { path = "./crates/index" }
 kellnr-migration = { path = "./crates/db/migration" }
-kellnr-minio_testcontainer = { path = "./crates/storage/minio_testcontainer" }
+kellnr-minio-testcontainer = { path = "./crates/storage/minio_testcontainer" }
 kellnr-registry = { path = "./crates/registry" }
 kellnr-settings = { path = "./crates/settings" }
 kellnr-storage = { path = "./crates/storage" }
-kellnr-web_ui = { path = "./crates/web_ui" }
+kellnr-web-ui = { path = "./crates/web_ui" }
 kellnr-webhooks = { path = "./crates/webhooks" }
-kellnr-embedded_resources = { path = "./crates/embedded_resources" }
+kellnr-embedded-resources = { path = "./crates/embedded_resources" }
 
 # External dependencies from crates.io
 async-trait = "0.1.89"

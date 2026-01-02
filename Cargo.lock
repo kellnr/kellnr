@@ -3612,12 +3612,12 @@ dependencies = [
  "kellnr-common",
  "kellnr-db",
  "kellnr-docs",
- "kellnr-embedded_resources",
+ "kellnr-embedded-resources",
  "kellnr-index",
  "kellnr-registry",
  "kellnr-settings",
  "kellnr-storage",
- "kellnr-web_ui",
+ "kellnr-web-ui",
  "kellnr-webhooks",
  "moka",
  "openssl",
@@ -3682,7 +3682,7 @@ version = "5.9.1"
 dependencies = [
  "chrono",
  "kellnr-common",
- "kellnr-db_testcontainer",
+ "kellnr-db-testcontainer",
  "kellnr-entity",
  "kellnr-migration",
  "kellnr-settings",
@@ -3698,7 +3698,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kellnr-db_testcontainer"
+name = "kellnr-db-testcontainer"
 version = "5.9.1"
 dependencies = [
  "quote",
@@ -3734,7 +3734,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kellnr-embedded_resources"
+name = "kellnr-embedded-resources"
 version = "5.9.1"
 dependencies = [
  "axum",
@@ -3805,7 +3805,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kellnr-minio_testcontainer"
+name = "kellnr-minio-testcontainer"
 version = "5.9.1"
 dependencies = [
  "quote",
@@ -3859,7 +3859,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "kellnr-common",
- "kellnr-minio_testcontainer",
+ "kellnr-minio-testcontainer",
  "kellnr-settings",
  "moka",
  "object_store",
@@ -3870,7 +3870,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kellnr-web_ui"
+name = "kellnr-web-ui"
 version = "5.9.1"
 dependencies = [
  "axum",

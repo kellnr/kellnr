@@ -1,5 +1,5 @@
 [package]
-name = "kellnr-minio_testcontainer"
+name = "kellnr-minio-testcontainer"
 autotests = false
 publish = false
 authors.workspace = true

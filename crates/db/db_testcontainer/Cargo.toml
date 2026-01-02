@@ -1,5 +1,5 @@
 [package]
-name = "kellnr-db_testcontainer"
+name = "kellnr-db-testcontainer"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
