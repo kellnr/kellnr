@@ -55,9 +55,9 @@ npm-dev:
 
 npm-build: npm-install
   cd ui && npm run build
-  mkdir -p crates/embedded_resources/static
-  rm -rf crates/embedded_resources/static/*
-  cp -r ui/dist/* crates/embedded_resources/static/
+  mkdir -p crates/embedded-resources/static
+  rm -rf crates/embedded-resources/static/*
+  cp -r ui/dist/* crates/embedded-resources/static/
 
 npm-install:
 	cd ui && npm install
