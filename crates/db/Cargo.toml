@@ -1,5 +1,5 @@
 [package]
-name = "db"
+name = "kellnr-db"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,11 +7,11 @@ version.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
-common.workspace = true
-db_testcontainer.workspace = true
-entity.workspace = true
-migration.workspace = true
-settings.workspace = true
+kellnr-common.workspace = true
+kellnr-db-testcontainer.workspace = true
+kellnr-entity.workspace = true
+kellnr-migration.workspace = true
+kellnr-settings.workspace = true
 
 # External dependencies from crates.io
 chrono.workspace = true

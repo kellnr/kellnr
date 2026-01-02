@@ -1,9 +1,9 @@
-use appstate::AppStateData;
+use kellnr_appstate::AppStateData;
 use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
 use axum::http::Request;
-use error::api_error::{ApiError, ApiResult};
-use registry::registry_error::RegistryError;
+use kellnr_error::api_error::{ApiError, ApiResult};
+use kellnr_registry::registry_error::RegistryError;
 use std::io::Cursor;
 use std::path::Path;
 use zip::ZipArchive;

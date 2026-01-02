@@ -1,4 +1,4 @@
-use db::DocQueueEntry;
+use kellnr_db::DocQueueEntry;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -29,7 +29,7 @@ impl From<Vec<DocQueueEntry>> for DocQueueResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::normalized_name::NormalizedName;
+    use kellnr_common::normalized_name::NormalizedName;
     use std::path::PathBuf;
 
     #[test]

@@ -1,5 +1,5 @@
 [package]
-name = "settings"
+name = "kellnr-settings"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true

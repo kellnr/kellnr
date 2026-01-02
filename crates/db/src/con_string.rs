@@ -1,5 +1,5 @@
 use crate::password::generate_salt;
-use settings::Settings;
+use kellnr_settings::Settings;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::time::Duration;

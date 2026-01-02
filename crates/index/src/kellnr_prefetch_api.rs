@@ -1,12 +1,12 @@
 use super::config_json::ConfigJson;
-use appstate::{DbState, SettingsState};
+use kellnr_appstate::{DbState, SettingsState};
 use axum::{
     Json,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
 };
-use common::{normalized_name::NormalizedName, original_name::OriginalName, prefetch::Prefetch};
-use db::DbProvider;
+use kellnr_common::{normalized_name::NormalizedName, original_name::OriginalName, prefetch::Prefetch};
+use kellnr_db::DbProvider;
 use std::sync::Arc;
 
 #[allow(clippy::unused_async)] // part of the router
@@ -57,18 +57,18 @@ fn needs_update(headers: &HeaderMap, prefetch: &Prefetch) -> bool {
 mod tests {
     use super::*;
     use crate::config_json::ConfigJson;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::{
         Router,
         body::Body,
         http::{Request, header},
         routing::get,
     };
-    use db::error::DbError;
-    use db::mock::MockDb;
+    use kellnr_db::error::DbError;
+    use kellnr_db::mock::MockDb;
     use http_body_util::BodyExt;
     use mockall::predicate::*;
-    use settings::{Protocol, Settings};
+    use kellnr_settings::{Protocol, Settings};
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -157,7 +157,7 @@ mod tests {
 
     fn app() -> Router {
         let settings = Settings {
-            origin: settings::Origin {
+            origin: kellnr_settings::Origin {
                 protocol: Protocol::Http,
                 hostname: "test.api.com".to_string(),
                 port: 1234,
@@ -190,7 +190,7 @@ mod tests {
         let state = AppStateData {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
 
         Router::new()

@@ -1,4 +1,4 @@
-use common::webhook::{Webhook, WebhookEvent};
+use kellnr_common::webhook::{Webhook, WebhookEvent};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -30,5 +30,5 @@ pub struct GetAllWebhooksResponse(pub Vec<Webhook>);
 #[derive(Error, Debug)]
 pub enum WebhookError {
     #[error("Database error: {0}")]
-    DatabaseError(#[from] db::error::DbError),
+    DatabaseError(#[from] kellnr_db::error::DbError),
 }

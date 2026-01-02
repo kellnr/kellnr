@@ -1,7 +1,7 @@
 use crate::sea_orm::ActiveValue::Set;
 use crate::sea_orm::{ActiveModelTrait, EntityTrait};
 use chrono::NaiveDateTime;
-use common::version::Version;
+use kellnr_common::version::Version;
 use sea_orm_migration::prelude::*;
 use tracing::debug;
 

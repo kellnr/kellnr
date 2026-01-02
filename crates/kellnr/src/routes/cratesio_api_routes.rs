@@ -1,8 +1,8 @@
-use appstate::AppStateData;
-use auth::auth_req_token;
+use kellnr_appstate::AppStateData;
+use kellnr_auth::auth_req_token;
 use axum::{Router, middleware, routing::get};
-use index::cratesio_prefetch_api;
-use registry::cratesio_api;
+use kellnr_index::cratesio_prefetch_api;
+use kellnr_registry::cratesio_api;
 
 /// Creates the crates.io API routes
 pub fn create_routes(state: AppStateData) -> Router<AppStateData> {

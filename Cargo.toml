@@ -12,23 +12,23 @@ version = "5.9.1"
 
 [workspace.dependencies]
 # Internal dependencies from Kellnr
-appstate = { path = "./crates/appstate" }
-auth = { path = "./crates/auth" }
-common = { path = "./crates/common" }
-db = { path = "./crates/db" }
-db_testcontainer = { path = "./crates/db/db_testcontainer" }
-docs = { path = "./crates/docs" }
-entity = { path = "./crates/db/entity" }
-error = { path = "./crates/error" }
-index = { path = "./crates/index" }
-migration = { path = "./crates/db/migration" }
-minio_testcontainer = { path = "./crates/storage/minio_testcontainer" }
-registry = { path = "./crates/registry" }
-settings = { path = "./crates/settings" }
-storage = { path = "./crates/storage" }
-web_ui = { path = "./crates/web_ui" }
-webhooks = { path = "./crates/webhooks" }
-embedded_resources = { path = "./crates/embedded_resources" }
+kellnr-appstate = { path = "./crates/appstate" }
+kellnr-auth = { path = "./crates/auth" }
+kellnr-common = { path = "./crates/common" }
+kellnr-db = { path = "./crates/db" }
+kellnr-db-testcontainer = { path = "./crates/db/db-testcontainer" }
+kellnr-docs = { path = "./crates/docs" }
+kellnr-entity = { path = "./crates/db/entity" }
+kellnr-error = { path = "./crates/error" }
+kellnr-index = { path = "./crates/index" }
+kellnr-migration = { path = "./crates/db/migration" }
+kellnr-minio-testcontainer = { path = "./crates/storage/minio-testcontainer" }
+kellnr-registry = { path = "./crates/registry" }
+kellnr-settings = { path = "./crates/settings" }
+kellnr-storage = { path = "./crates/storage" }
+kellnr-web-ui = { path = "./crates/web-ui" }
+kellnr-webhooks = { path = "./crates/webhooks" }
+kellnr-embedded-resources = { path = "./crates/embedded-resources" }
 
 # External dependencies from crates.io
 async-trait = "0.1.89"

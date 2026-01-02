@@ -1,24 +1,24 @@
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
-use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
-use common::crate_overview::CrateOverview;
-use common::index_metadata::IndexMetadata;
-use common::normalized_name::NormalizedName;
-use common::original_name::OriginalName;
-use common::prefetch::Prefetch;
-use common::publish_metadata::{PublishMetadata, RegistryDep};
-use common::version::Version;
-use common::webhook::{Webhook, WebhookEvent};
-use db::password::hash_pwd;
-use db::provider::PrefetchState;
-use db::{DbProvider, DocQueueEntry, User, test_utils::*};
-use db_testcontainer::db_test;
+use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
+use kellnr_common::crate_overview::CrateOverview;
+use kellnr_common::index_metadata::IndexMetadata;
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::prefetch::Prefetch;
+use kellnr_common::publish_metadata::{PublishMetadata, RegistryDep};
+use kellnr_common::version::Version;
+use kellnr_common::webhook::{Webhook, WebhookEvent};
+use kellnr_db::password::hash_pwd;
+use kellnr_db::provider::PrefetchState;
+use kellnr_db::{DbProvider, DocQueueEntry, User, test_utils::*};
+use kellnr_db_testcontainer::db_test;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 mod image;
 
 #[db_test]
-async fn get_total_unique_crates_returns_number_of_unique_crates(test_db: &db::Database) {
+async fn get_total_unique_crates_returns_number_of_unique_crates(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
         test_db,
@@ -54,7 +54,7 @@ async fn get_total_unique_crates_returns_number_of_unique_crates(test_db: &db::D
 }
 
 #[db_test]
-async fn get_total_crate_versions_returns_number_of_crate_versions(test_db: &db::Database) {
+async fn get_total_crate_versions_returns_number_of_crate_versions(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
         test_db,
@@ -90,7 +90,7 @@ async fn get_total_crate_versions_returns_number_of_crate_versions(test_db: &db:
 }
 
 #[db_test]
-async fn get_total_downloads_returns_number_of_total_downloads(test_db: &db::Database) {
+async fn get_total_downloads_returns_number_of_total_downloads(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let id1 = test_add_crate(
         test_db,
@@ -172,7 +172,7 @@ async fn get_total_downloads_returns_number_of_total_downloads(test_db: &db::Dat
 }
 
 #[db_test]
-async fn get_top_crates_downloads_returns_top_crates_with_downloads(test_db: &db::Database) {
+async fn get_top_crates_downloads_returns_top_crates_with_downloads(test_db: &kellnr_db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let crate_id = test_add_crate(
         test_db,
@@ -211,7 +211,7 @@ async fn get_top_crates_downloads_returns_top_crates_with_downloads(test_db: &db
 }
 
 #[db_test]
-async fn increase_download_counter_works(test_db: &db::Database) {
+async fn increase_download_counter_works(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
         test_db,
@@ -318,7 +318,7 @@ async fn increase_download_counter_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_max_version_from_id(test_db: &db::Database) {
+async fn get_max_version_from_id(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
@@ -356,7 +356,7 @@ async fn get_max_version_from_id(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_max_version_from_name(test_db: &db::Database) {
+async fn get_max_version_from_name(test_db: &kellnr_db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
     test_add_crate(
@@ -396,7 +396,7 @@ async fn get_max_version_from_name(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_crate_summaries_works(test_db: &db::Database) {
+async fn get_crate_summaries_works(test_db: &kellnr_db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 11, 22, 12).unwrap();
     test_add_crate(
@@ -479,7 +479,7 @@ async fn get_crate_summaries_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_crate_versions_returns_all_versions(test_db: &db::Database) {
+async fn get_crate_versions_returns_all_versions(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
         test_db,
@@ -522,7 +522,7 @@ async fn get_crate_versions_returns_all_versions(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_crate_versions_with_yanked_version(test_db: &db::Database) {
+async fn get_crate_versions_with_yanked_version(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
         test_db,
@@ -565,7 +565,7 @@ async fn get_crate_versions_with_yanked_version(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_crate_versions_for_nonexistant_crate(test_db: &db::Database) {
+async fn get_crate_versions_for_nonexistant_crate(test_db: &kellnr_db::Database) {
     let outcome = test_db
         .get_crate_versions(&NormalizedName::from_unchecked_str("crate1"))
         .await
@@ -575,7 +575,7 @@ async fn get_crate_versions_for_nonexistant_crate(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_add_crate_meta_and_read_meta(test_db: &db::Database) {
+async fn test_add_crate_meta_and_read_meta(test_db: &kellnr_db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 11, 22, 12).unwrap();
     let crate_id = test_add_crate(
@@ -608,7 +608,7 @@ async fn test_add_crate_meta_and_read_meta(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn is_owner_true(test_db: &db::Database) {
+async fn is_owner_true(test_db: &kellnr_db::Database) {
     test_add_crate(
         test_db,
         "mycrate",
@@ -631,7 +631,7 @@ async fn is_owner_true(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn is_owner_false(test_db: &db::Database) {
+async fn is_owner_false(test_db: &kellnr_db::Database) {
     test_add_crate(
         test_db,
         "mycrate",
@@ -654,7 +654,7 @@ async fn is_owner_false(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn delete_owner_valid_owner(test_db: &db::Database) {
+async fn delete_owner_valid_owner(test_db: &kellnr_db::Database) {
     test_add_crate(
         test_db,
         "mycrate",
@@ -676,7 +676,7 @@ async fn delete_owner_valid_owner(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_add_crate_duplicate(test_db: &db::Database) {
+async fn test_add_crate_duplicate(test_db: &kellnr_db::Database) {
     test_add_crate(
         test_db,
         "mycrate",
@@ -705,7 +705,7 @@ async fn test_add_crate_duplicate(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_add_crate_different_user(test_db: &db::Database) {
+async fn test_add_crate_different_user(test_db: &kellnr_db::Database) {
     test_db
         .add_user("user", "123", "123", false, false)
         .await
@@ -726,7 +726,7 @@ async fn test_add_crate_different_user(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_add_empty_crate(test_db: &db::Database) {
+async fn test_add_empty_crate(test_db: &kellnr_db::Database) {
     let created = Utc::now();
     test_db.add_empty_crate("mycrate", &created).await.unwrap();
 
@@ -736,7 +736,7 @@ async fn test_add_empty_crate(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_add_empty_crate_exists(test_db: &db::Database) {
+async fn test_add_empty_crate_exists(test_db: &kellnr_db::Database) {
     let created = Utc::now();
 
     // add a crate with version first
@@ -757,7 +757,7 @@ async fn test_add_empty_crate_exists(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_user_from_token_works(test_db: &db::Database) {
+async fn get_user_from_token_works(test_db: &kellnr_db::Database) {
     test_db
         .add_auth_token("test1", "mytoken1", "admin")
         .await
@@ -769,7 +769,7 @@ async fn get_user_from_token_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_auth_tokens_returns_all_tokens(test_db: &db::Database) {
+async fn get_auth_tokens_returns_all_tokens(test_db: &kellnr_db::Database) {
     test_db
         .add_auth_token("test1", "mytoken1", "admin")
         .await
@@ -788,7 +788,7 @@ async fn get_auth_tokens_returns_all_tokens(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn auth_token_insert_and_read(test_db: &db::Database) {
+async fn auth_token_insert_and_read(test_db: &kellnr_db::Database) {
     test_db
         .add_auth_token("test", "mytoken", "admin")
         .await
@@ -799,7 +799,7 @@ async fn auth_token_insert_and_read(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn auth_token_insert_and_delete(test_db: &db::Database) {
+async fn auth_token_insert_and_delete(test_db: &kellnr_db::Database) {
     test_db
         .add_auth_token("test", "mytoken", "admin")
         .await
@@ -811,7 +811,7 @@ async fn auth_token_insert_and_delete(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_user_from_token_no_token(test_db: &db::Database) {
+async fn get_user_from_token_no_token(test_db: &kellnr_db::Database) {
     test_db
         .add_auth_token("test", "mytoken", "admin")
         .await
@@ -821,7 +821,7 @@ async fn get_user_from_token_no_token(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn add_auth_token_no_user(test_db: &db::Database) {
+async fn add_auth_token_no_user(test_db: &kellnr_db::Database) {
     assert!(
         test_db
             .add_auth_token("test", "mytoken", "nouser")
@@ -831,7 +831,7 @@ async fn add_auth_token_no_user(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn delete_user_with_sessions(test_db: &db::Database) {
+async fn delete_user_with_sessions(test_db: &kellnr_db::Database) {
     test_db
         .add_user("user", "pwd", "salt", false, false)
         .await
@@ -847,7 +847,7 @@ async fn delete_user_with_sessions(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn add_user_works(test_db: &db::Database) {
+async fn add_user_works(test_db: &kellnr_db::Database) {
     test_db
         .add_user("user", "pwd", "salt", false, false)
         .await
@@ -866,7 +866,7 @@ async fn add_user_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn add_user_duplicate(test_db: &db::Database) {
+async fn add_user_duplicate(test_db: &kellnr_db::Database) {
     test_db
         .add_user("user", "pwd", "salt", false, false)
         .await
@@ -881,7 +881,7 @@ async fn add_user_duplicate(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_users_works(test_db: &db::Database) {
+async fn get_users_works(test_db: &kellnr_db::Database) {
     test_db
         .add_user("user", "123", "abc", false, false)
         .await
@@ -895,26 +895,26 @@ async fn get_users_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_user_existing_user(test_db: &db::Database) {
+async fn get_user_existing_user(test_db: &kellnr_db::Database) {
     let users = test_db.get_user("admin").await.unwrap();
 
     assert_eq!("admin", users.name);
 }
 
 #[db_test]
-async fn get_user_no_user(test_db: &db::Database) {
+async fn get_user_no_user(test_db: &kellnr_db::Database) {
     assert!(test_db.get_user("no_user").await.is_err());
 }
 
 #[db_test]
-async fn change_pwd_works(test_db: &db::Database) {
+async fn change_pwd_works(test_db: &kellnr_db::Database) {
     test_db.change_pwd("admin", "abc").await.unwrap();
 
     assert!(test_db.authenticate_user("admin", "abc").await.is_ok());
 }
 
 #[db_test]
-async fn is_crate_group_user_works(test_db: &db::Database) {
+async fn is_crate_group_user_works(test_db: &kellnr_db::Database) {
     let group = "group";
     let user = "user";
     test_db
@@ -943,7 +943,7 @@ async fn is_crate_group_user_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn clean_db_after_time(test_db: &db::Database) {
+async fn clean_db_after_time(test_db: &kellnr_db::Database) {
     test_db
         .add_session_token("admin", "session_token")
         .await
@@ -961,7 +961,7 @@ async fn clean_db_after_time(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn delete_session_token_works(test_db: &db::Database) {
+async fn delete_session_token_works(test_db: &kellnr_db::Database) {
     test_db
         .add_session_token("admin", "session_token")
         .await
@@ -976,7 +976,7 @@ async fn delete_session_token_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn delete_session_token_no_token(test_db: &db::Database) {
+async fn delete_session_token_no_token(test_db: &kellnr_db::Database) {
     test_db
         .add_session_token("admin", "session_token")
         .await
@@ -990,7 +990,7 @@ async fn delete_session_token_no_token(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_name_valid_user_and_token(test_db: &db::Database) {
+async fn get_name_valid_user_and_token(test_db: &kellnr_db::Database) {
     test_db
         .add_session_token("admin", "session_token")
         .await
@@ -1001,12 +1001,12 @@ async fn get_name_valid_user_and_token(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_session_no_session_in_db(test_db: &db::Database) {
+async fn get_session_no_session_in_db(test_db: &kellnr_db::Database) {
     assert!(test_db.validate_session("no_session_token").await.is_err());
 }
 
 #[db_test]
-async fn bootstrap_db_inserts_admin(test_db: &db::Database) {
+async fn bootstrap_db_inserts_admin(test_db: &kellnr_db::Database) {
     let admin = test_db.get_user("admin").await.unwrap();
     assert_eq!(1, admin.id);
     assert_eq!("admin", admin.name);
@@ -1019,22 +1019,22 @@ async fn bootstrap_db_inserts_admin(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn authenticate_user_valid(test_db: &db::Database) {
+async fn authenticate_user_valid(test_db: &kellnr_db::Database) {
     assert!(test_db.authenticate_user("admin", "123").await.is_ok());
 }
 
 #[db_test]
-async fn authenticate_user_unknown_user(test_db: &db::Database) {
+async fn authenticate_user_unknown_user(test_db: &kellnr_db::Database) {
     assert!(test_db.authenticate_user("unknown", "123").await.is_err());
 }
 
 #[db_test]
-async fn authenticate_user_wrong_pwd(test_db: &db::Database) {
+async fn authenticate_user_wrong_pwd(test_db: &kellnr_db::Database) {
     assert!(test_db.authenticate_user("admin", "abc").await.is_err());
 }
 
 #[db_test]
-async fn crate_version_exists_with_existing_version(test_db: &db::Database) {
+async fn crate_version_exists_with_existing_version(test_db: &kellnr_db::Database) {
     let id = test_add_crate(
         test_db,
         "foobar",
@@ -1052,7 +1052,7 @@ async fn crate_version_exists_with_existing_version(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn crate_version_exists_with_no_existing_version(test_db: &db::Database) {
+async fn crate_version_exists_with_no_existing_version(test_db: &kellnr_db::Database) {
     let id = test_add_crate(
         test_db,
         "foobar",
@@ -1067,7 +1067,7 @@ async fn crate_version_exists_with_no_existing_version(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_total_unique_crates_returns_correct_number(test_db: &db::Database) {
+async fn get_total_unique_crates_returns_correct_number(test_db: &kellnr_db::Database) {
     let _ = test_add_crate(
         test_db,
         "foobar",
@@ -1092,7 +1092,7 @@ async fn get_total_unique_crates_returns_correct_number(test_db: &db::Database) 
 }
 
 #[db_test]
-async fn add_and_get_doc_queue_entries(test_db: &db::Database) {
+async fn add_and_get_doc_queue_entries(test_db: &kellnr_db::Database) {
     test_db
         .add_doc_queue(
             &NormalizedName::from_unchecked("my_crate".to_string()),
@@ -1134,7 +1134,7 @@ async fn add_and_get_doc_queue_entries(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn delete_doc_queue_entry(test_db: &db::Database) {
+async fn delete_doc_queue_entry(test_db: &kellnr_db::Database) {
     test_db
         .add_doc_queue(
             &NormalizedName::from_unchecked("my_crate".to_string()),
@@ -1170,7 +1170,7 @@ async fn delete_doc_queue_entry(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn delete_crate_one_of_multiple_versions(test_db: &db::Database) {
+async fn delete_crate_one_of_multiple_versions(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
         test_db,
@@ -1222,7 +1222,7 @@ async fn delete_crate_one_of_multiple_versions(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn delete_crate_max_version(test_db: &db::Database) {
+async fn delete_crate_max_version(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
         test_db,
@@ -1277,7 +1277,7 @@ async fn delete_crate_max_version(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn delete_crate_only_versions(test_db: &db::Database) {
+async fn delete_crate_only_versions(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
         test_db,
@@ -1309,7 +1309,7 @@ async fn delete_crate_only_versions(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn search_in_crate_name_found_match(test_db: &db::Database) {
+async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created_string = created.format("%Y-%m-%d %H:%M:%S").to_string();
     test_add_crate_with_downloads(
@@ -1422,7 +1422,7 @@ async fn search_in_crate_name_found_match(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_crate_overview_list(test_db: &db::Database) {
+async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created_string = created.format("%Y-%m-%d %H:%M:%S").to_string();
     test_add_crate_with_downloads(
@@ -1515,7 +1515,7 @@ async fn get_crate_overview_list(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn add_crate_and_get_crate_data(test_db: &db::Database) {
+async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created_string = created.format("%Y-%m-%d %H:%M:%S").to_string();
     let pm1_v1 = PublishMetadata {
@@ -1928,7 +1928,7 @@ async fn add_crate_and_get_crate_data(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn update_docs_link(test_db: &db::Database) {
+async fn update_docs_link(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let pm = PublishMetadata::minimal("crate1", "1.0.0");
     test_db
@@ -1966,7 +1966,7 @@ async fn update_docs_link(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_prefetch_data_with_minimal_data(test_db: &db::Database) {
+async fn get_prefetch_data_with_minimal_data(test_db: &kellnr_db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
     test_add_crate(
@@ -2002,7 +2002,7 @@ async fn get_prefetch_data_with_minimal_data(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn get_prefetch_data_with_full_data(test_db: &db::Database) {
+async fn get_prefetch_data_with_full_data(test_db: &kellnr_db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
     let created3 = Utc.with_ymd_and_hms(2020, 10, 9, 13, 18, 00).unwrap();
@@ -2133,7 +2133,7 @@ async fn get_prefetch_data_with_full_data(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn delete_updates_etag(test_db: &db::Database) {
+async fn delete_updates_etag(test_db: &kellnr_db::Database) {
     let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 13, 18, 00).unwrap();
     let pm1 = PublishMetadata {
@@ -2227,7 +2227,7 @@ async fn delete_updates_etag(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn is_cratesio_cache_up_to_date_not_found(test_db: &db::Database) {
+async fn is_cratesio_cache_up_to_date_not_found(test_db: &kellnr_db::Database) {
     let prefetch_state = test_db
         .is_cratesio_cache_up_to_date(
             &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
@@ -2241,7 +2241,7 @@ async fn is_cratesio_cache_up_to_date_not_found(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &db::Database) {
+async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &kellnr_db::Database) {
     test_db
         .add_cratesio_prefetch_data(
             &OriginalName::from_unchecked("crate".to_string()),
@@ -2276,7 +2276,7 @@ async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn is_cratesio_cache_up_to_date_needs_update(test_db: &db::Database) {
+async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database) {
     let indices1 = vec![IndexMetadata {
         name: "crate".to_string(),
         vers: "1.0.0".to_string(),
@@ -2386,7 +2386,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn un_yank_crate(test_db: &db::Database) {
+async fn un_yank_crate(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
         test_db,
@@ -2444,7 +2444,7 @@ async fn un_yank_crate(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_get_last_updated_crate_works(test_db: &db::Database) {
+async fn test_get_last_updated_crate_works(test_db: &kellnr_db::Database) {
     let created1 = DateTime::parse_from_rfc3339("2021-01-01T00:00:00Z").unwrap();
     let created1 = DateTime::<Utc>::from(created1);
 
@@ -2490,14 +2490,14 @@ async fn test_get_last_updated_crate_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_get_last_updated_crate_empty(test_db: &db::Database) {
+async fn test_get_last_updated_crate_empty(test_db: &kellnr_db::Database) {
     let last_updated = test_db.get_last_updated_crate().await.unwrap();
 
     assert_eq!(None, last_updated);
 }
 
 #[db_test]
-async fn test_get_total_unique_cached_crates_works(test_db: &db::Database) {
+async fn test_get_total_unique_cached_crates_works(test_db: &kellnr_db::Database) {
     test_add_cached_crate(test_db, "my_crate", "1.0.0")
         .await
         .unwrap();
@@ -2516,7 +2516,7 @@ async fn test_get_total_unique_cached_crates_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_get_total_cached_crate_versions_works(test_db: &db::Database) {
+async fn test_get_total_cached_crate_versions_works(test_db: &kellnr_db::Database) {
     test_add_cached_crate(test_db, "my_crate", "1.0.0")
         .await
         .unwrap();
@@ -2535,7 +2535,7 @@ async fn test_get_total_cached_crate_versions_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_get_total_cached_downloads_works(test_db: &db::Database) {
+async fn test_get_total_cached_downloads_works(test_db: &kellnr_db::Database) {
     test_add_cached_crate_with_downloads(test_db, "my_crate", "1.0.0", 10)
         .await
         .unwrap();
@@ -2554,7 +2554,7 @@ async fn test_get_total_cached_downloads_works(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_add_crate_rollback(test_db: &db::Database) {
+async fn test_add_crate_rollback(test_db: &kellnr_db::Database) {
     test_add_crate(
         test_db,
         "mycrate",
@@ -2586,7 +2586,7 @@ async fn test_add_crate_rollback(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_delete_crate_rollback(test_db: &db::Database) {
+async fn test_delete_crate_rollback(test_db: &kellnr_db::Database) {
     let version = Version::try_from("1.0.0").unwrap();
     let crate_id = test_add_crate(test_db, "mycrate", "admin", &version, &Utc::now())
         .await
@@ -2605,7 +2605,7 @@ async fn test_delete_crate_rollback(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_register_webhook(test_db: &db::Database) {
+async fn test_register_webhook(test_db: &kellnr_db::Database) {
     let webhook = Webhook {
         id: None,
         event: WebhookEvent::CrateYank,
@@ -2624,7 +2624,7 @@ async fn test_register_webhook(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_delete_webhook(test_db: &db::Database) {
+async fn test_delete_webhook(test_db: &kellnr_db::Database) {
     let webhook = Webhook {
         id: None,
         event: WebhookEvent::CrateYank,
@@ -2641,7 +2641,7 @@ async fn test_delete_webhook(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_get_all_webhooks(test_db: &db::Database) {
+async fn test_get_all_webhooks(test_db: &kellnr_db::Database) {
     let mut ids = vec![];
     for i in 0..10 {
         ids.push(
@@ -2670,7 +2670,7 @@ async fn test_get_all_webhooks(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_add_webhook_queue(test_db: &db::Database) {
+async fn test_add_webhook_queue(test_db: &kellnr_db::Database) {
     let webhook = Webhook {
         id: None,
         event: WebhookEvent::CrateUpdate,
@@ -2700,7 +2700,7 @@ async fn test_add_webhook_queue(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_get_pending_webhook_queue_entries(test_db: &db::Database) {
+async fn test_get_pending_webhook_queue_entries(test_db: &kellnr_db::Database) {
     let webhook = Webhook {
         id: None,
         event: WebhookEvent::CrateUpdate,
@@ -2745,7 +2745,7 @@ async fn test_get_pending_webhook_queue_entries(test_db: &db::Database) {
 }
 
 #[db_test]
-async fn test_delete_webhook_queue(test_db: &db::Database) {
+async fn test_delete_webhook_queue(test_db: &kellnr_db::Database) {
     let webhook = Webhook {
         id: None,
         event: WebhookEvent::CrateUpdate,

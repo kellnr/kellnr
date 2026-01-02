@@ -4,23 +4,23 @@ use crate::tables::init_database;
 use crate::{AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User, error::DbError};
 use crate::{ConString, DocQueueEntry};
 use chrono::{DateTime, Utc};
-use common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
-use common::crate_overview::CrateOverview;
-use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
-use common::index_metadata::{IndexDep, IndexMetadata};
-use common::normalized_name::NormalizedName;
-use common::original_name::OriginalName;
-use common::prefetch::Prefetch;
-use common::publish_metadata::PublishMetadata;
-use common::version::Version;
-use common::webhook::{Webhook, WebhookEvent, WebhookQueue};
-use entity::{
+use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
+use kellnr_common::crate_overview::CrateOverview;
+use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
+use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::prefetch::Prefetch;
+use kellnr_common::publish_metadata::PublishMetadata;
+use kellnr_common::version::Version;
+use kellnr_common::webhook::{Webhook, WebhookEvent, WebhookQueue};
+use kellnr_entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
     cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate, owner,
     prelude::*, session, user, webhook, webhook_queue,
 };
-use migration::iden::{
+use kellnr_migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
 };
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};

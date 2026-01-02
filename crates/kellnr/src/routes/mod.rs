@@ -1,11 +1,11 @@
-use appstate::AppStateData;
+use kellnr_appstate::AppStateData;
 use axum::{
     Router, middleware,
     routing::{get, get_service},
 };
-use embedded_resources::embedded_static_handler;
+use kellnr_embedded_resources::embedded_static_handler;
 use tower_http::services::ServeDir;
-use web_ui::session;
+use kellnr_web_ui::session;
 
 mod crate_access_routes;
 mod cratesio_api_routes;
@@ -29,7 +29,7 @@ pub fn create_router(
     );
 
     Router::new()
-        .route("/me", get(registry::kellnr_api::me))
+        .route("/me", get(kellnr_registry::kellnr_api::me))
         .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
         .nest("/api/v1/user", user_routes::create_routes())
         .nest("/api/v1/group", group_routes::create_routes())

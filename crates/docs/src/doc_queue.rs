@@ -5,15 +5,15 @@ use cargo::{
     ops::{self, CompileOptions, DocOptions, OutputFormat},
     util::command_prelude::CompileMode,
 };
-use common::{original_name::OriginalName, version::Version};
-use db::{DbProvider, DocQueueEntry};
+use kellnr_common::{original_name::OriginalName, version::Version};
+use kellnr_db::{DbProvider, DocQueueEntry};
 use flate2::read::GzDecoder;
 use fs_extra::dir::{CopyOptions, copy};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use storage::kellnr_crate_storage::KellnrCrateStorage;
+use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use tar::Archive;
 use tokio::fs::{create_dir_all, remove_dir_all};
 use tracing::error;

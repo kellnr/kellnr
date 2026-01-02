@@ -1,5 +1,5 @@
 [package]
-name = "migration"
+name = "kellnr-migration"
 publish = false
 authors.workspace = true
 edition.workspace = true
@@ -8,8 +8,8 @@ version.workspace = true
 
 [dependencies]
 # Internal dependencies
-common.workspace = true
-settings.workspace = true
+kellnr-common.workspace = true
+kellnr-settings.workspace = true
 
 # External dependencies
 async-std = { version = "^1", features = ["attributes", "tokio1"] }

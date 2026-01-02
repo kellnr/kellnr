@@ -1,14 +1,14 @@
-use appstate::AppStateData;
+use kellnr_appstate::AppStateData;
 use axum_extra::extract::cookie::Key;
-use common::cratesio_prefetch_msg::CratesioPrefetchMsg;
-use db::{ConString, Database, DbProvider, PgConString, SqliteConString};
-use index::cratesio_prefetch_api::{
+use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
+use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
+use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
 use moka::future::Cache;
-use settings::{LogFormat, Settings};
+use kellnr_settings::{LogFormat, Settings};
 use std::{net::SocketAddr, sync::Arc, time::Duration};
-use storage::{
+use kellnr_storage::{
     cached_crate_storage::DynStorage, cratesio_crate_storage::CratesIoCrateStorage,
     fs_storage::FSStorage, kellnr_crate_storage::KellnrCrateStorage, s3_storage::S3Storage,
 };
@@ -20,7 +20,7 @@ mod routes;
 
 #[tokio::main]
 async fn main() {
-    let settings: Arc<Settings> = settings::get_settings().expect("Cannot read config").into();
+    let settings: Arc<Settings> = kellnr_settings::get_settings().expect("Cannot read config").into();
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber
@@ -133,7 +133,7 @@ async fn init_docs_hosting(
         .await
         .expect("Failed to create docs directory.");
     if settings.docs.enabled {
-        docs::doc_queue::doc_extraction_queue(db, cs, settings.docs_path());
+        kellnr_docs::doc_queue::doc_extraction_queue(db, cs, settings.docs_path());
     }
 }
 
@@ -158,5 +158,5 @@ fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
 }
 
 fn init_webhook_service(db: Arc<dyn DbProvider + 'static>) {
-    webhooks::run_webhook_service(db);
+    kellnr_webhooks::run_webhook_service(db);
 }

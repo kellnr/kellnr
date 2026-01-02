@@ -1,18 +1,18 @@
 use crate::error::RouteError;
 use crate::session::MaybeUser;
-use appstate::{AppState, DbState, SettingsState};
+use kellnr_appstate::{AppState, DbState, SettingsState};
 use axum::{
     Json,
     extract::{Query, State},
     http::StatusCode,
 };
-use common::crate_data::CrateData;
-use common::crate_overview::CrateOverview;
-use common::normalized_name::NormalizedName;
-use common::original_name::OriginalName;
-use common::version::Version;
-use db::error::DbError;
-use settings::{Settings, compile_time_config};
+use kellnr_common::crate_data::CrateData;
+use kellnr_common::crate_overview::CrateOverview;
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::version::Version;
+use kellnr_db::error::DbError;
+use kellnr_settings::{Settings, compile_time_config};
 use tracing::error;
 
 #[allow(clippy::unused_async)] // part of the router
@@ -169,7 +169,7 @@ pub async fn delete_version(
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
-    if let Err(e) = docs::delete(&name, &version, &state.settings).await {
+    if let Err(e) = kellnr_docs::delete(&name, &version, &state.settings).await {
         error!("Failed to delete crate from docs: {e}");
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
@@ -204,7 +204,7 @@ pub async fn delete_crate(
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
 
-        if let Err(e) = docs::delete(&name, &cm.version, &state.settings).await {
+        if let Err(e) = kellnr_docs::delete(&name, &cm.version, &state.settings).await {
             error!("Failed to delete crate from docs: {e}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
@@ -340,25 +340,25 @@ pub async fn build_rustdoc(
 mod tests {
     use super::*;
     use crate::test_helper::encode_cookies;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::Router;
     use axum::body::Body;
     use axum::routing::{get, post};
     use axum_extra::extract::cookie::Key;
-    use common::crate_data::{CrateRegistryDep, CrateVersionData};
-    use db::User;
-    use db::error::DbError;
-    use db::mock::MockDb;
+    use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
+    use kellnr_db::User;
+    use kellnr_db::error::DbError;
+    use kellnr_db::mock::MockDb;
     use http_body_util::BodyExt;
     use hyper::{Request, header};
     use mockall::predicate::*;
-    use settings::Settings;
-    use settings::{Postgresql, constants};
+    use kellnr_settings::Settings;
+    use kellnr_settings::{Postgresql, constants};
     use std::collections::BTreeMap;
     use std::sync::Arc;
-    use storage::cached_crate_storage::DynStorage;
-    use storage::fs_storage::FSStorage;
-    use storage::kellnr_crate_storage::KellnrCrateStorage;
+    use kellnr_storage::cached_crate_storage::DynStorage;
+    use kellnr_storage::fs_storage::FSStorage;
+    use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -413,7 +413,7 @@ mod tests {
         let result_state = serde_json::from_slice::<Settings>(&result_msg).unwrap();
 
         // Set the password to empty string because it is not serialized
-        let tmp = settings::test_settings();
+        let tmp = kellnr_settings::test_settings();
         let psq = Postgresql {
             pwd: String::default(),
             ..tmp.postgresql
@@ -1204,7 +1204,7 @@ mod tests {
     }
 
     fn test_deps() -> (Settings, DynStorage) {
-        let settings = settings::test_settings();
+        let settings = kellnr_settings::test_settings();
         let storage = FSStorage::new(&settings.crates_path()).unwrap();
         let storage = Box::new(storage) as DynStorage;
         (settings, storage)
@@ -1226,7 +1226,7 @@ mod tests {
                 signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings),
                 crate_storage: Arc::new(crate_storage),
-                ..appstate::test_state()
+                ..kellnr_appstate::test_state()
             })
     }
 }

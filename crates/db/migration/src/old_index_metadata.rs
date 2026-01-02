@@ -1,4 +1,4 @@
-use common::version::Version;
+use kellnr_common::version::Version;
 use sea_orm::DbErr;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

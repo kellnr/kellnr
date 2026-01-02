@@ -4,23 +4,23 @@ use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
 use crate::{crate_group, crate_user, crate_version};
-use appstate::AppState;
-use appstate::DbState;
-use auth::token;
+use kellnr_appstate::AppState;
+use kellnr_appstate::DbState;
+use kellnr_auth::token;
 use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Redirect;
 use chrono::Utc;
-use common::normalized_name::NormalizedName;
-use common::original_name::OriginalName;
-use common::search_result;
-use common::search_result::{Crate, SearchResult};
-use common::version::Version;
-use common::webhook::WebhookEvent;
-use db::DbProvider;
-use error::api_error::{ApiError, ApiResult};
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::search_result;
+use kellnr_common::search_result::{Crate, SearchResult};
+use kellnr_common::version::Version;
+use kellnr_common::webhook::WebhookEvent;
+use kellnr_db::DbProvider;
+use kellnr_error::api_error::{ApiError, ApiResult};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tracing::warn;
@@ -432,7 +432,7 @@ pub async fn publish(
         return Err(e.into());
     }
 
-    webhooks::notify_crate(
+    kellnr_webhooks::notify_crate(
         if id.is_none() {
             WebhookEvent::CrateAdd
         } else {
@@ -473,7 +473,7 @@ pub async fn yank(
 
     db.yank_crate(&crate_name, &version).await?;
 
-    webhooks::notify_crate(
+    kellnr_webhooks::notify_crate(
         WebhookEvent::CrateYank,
         &Utc::now(),
         &crate_name,
@@ -500,7 +500,7 @@ pub async fn unyank(
 
     db.unyank_crate(&crate_name, &version).await?;
 
-    webhooks::notify_crate(
+    kellnr_webhooks::notify_crate(
         WebhookEvent::CrateUnyank,
         &Utc::now(),
         &crate_name,
@@ -515,27 +515,27 @@ pub async fn unyank(
 #[cfg(test)]
 mod reg_api_tests {
     use super::*;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::http::StatusCode;
     use axum::routing::{delete, get, put};
-    use db::mock::MockDb;
-    use db::{ConString, Database, SqliteConString, test_utils};
-    use error::api_error::ErrorDetails;
+    use kellnr_db::mock::MockDb;
+    use kellnr_db::{ConString, Database, SqliteConString, test_utils};
+    use kellnr_error::api_error::ErrorDetails;
     use http_body_util::BodyExt;
     use hyper::header;
     use mockall::predicate::*;
     use rand::Rng;
     use rand::distr::Alphanumeric;
     use rand::rng;
-    use settings::Settings;
+    use kellnr_settings::Settings;
     use std::iter;
     use std::path::PathBuf;
-    use storage::cached_crate_storage::DynStorage;
-    use storage::fs_storage::FSStorage;
-    use storage::kellnr_crate_storage::KellnrCrateStorage;
+    use kellnr_storage::cached_crate_storage::DynStorage;
+    use kellnr_storage::fs_storage::FSStorage;
+    use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use tokio::fs::read;
     use tower::ServiceExt;
 
@@ -1532,10 +1532,10 @@ mod reg_api_tests {
 
     fn get_settings() -> Settings {
         Settings {
-            registry: settings::Registry {
+            registry: kellnr_settings::Registry {
                 data_dir: "/tmp/".to_string() + &generate_rand_string(10),
                 session_age_seconds: 10,
-                ..settings::Registry::default()
+                ..kellnr_settings::Registry::default()
             },
             ..Settings::default()
         }
@@ -1610,7 +1610,7 @@ mod reg_api_tests {
             db: Arc::new(db),
             settings: settings.into(),
             crate_storage: cs.into(),
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
 
         let routes = Router::new()
@@ -1634,7 +1634,7 @@ mod reg_api_tests {
             .route("/api/v1/crates", get(search))
             .with_state(AppStateData {
                 db,
-                ..appstate::test_state()
+                ..kellnr_appstate::test_state()
             })
     }
 }

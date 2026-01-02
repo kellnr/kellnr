@@ -1,6 +1,6 @@
 use crate::compute_doc_url;
-use common::original_name::OriginalName;
-use common::version::Version;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::version::Version;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

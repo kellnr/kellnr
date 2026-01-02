@@ -1,4 +1,4 @@
-use migration::{Migrator, MigratorTrait};
+use kellnr_migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
 
 pub async fn init_database(

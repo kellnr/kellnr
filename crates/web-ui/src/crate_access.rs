@@ -1,11 +1,11 @@
 use crate::error::RouteError;
 use crate::session::MaybeUser;
-use appstate::DbState;
+use kellnr_appstate::DbState;
 use axum::Json;
 use axum::extract::{Path, State};
-use common::original_name::OriginalName;
-use registry::crate_group::{CrateGroup, CrateGroupList};
-use registry::crate_user::{CrateUser, CrateUserList};
+use kellnr_common::original_name::OriginalName;
+use kellnr_registry::crate_group::{CrateGroup, CrateGroupList};
+use kellnr_registry::crate_user::{CrateUser, CrateUserList};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

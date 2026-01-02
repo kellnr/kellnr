@@ -3,8 +3,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use common::original_name::NameError;
-use common::version::VersionError;
+use kellnr_common::original_name::NameError;
+use kellnr_common::version::VersionError;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use zip::result::ZipError;
@@ -108,14 +108,14 @@ impl Display for ApiError {
     }
 }
 
-impl From<db::error::DbError> for ApiError {
-    fn from(e: db::error::DbError) -> Self {
+impl From<kellnr_db::error::DbError> for ApiError {
+    fn from(e: kellnr_db::error::DbError) -> Self {
         ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
 
-impl From<storage::storage_error::StorageError> for ApiError {
-    fn from(e: storage::storage_error::StorageError) -> Self {
+impl From<kellnr_storage::storage_error::StorageError> for ApiError {
+    fn from(e: kellnr_storage::storage_error::StorageError) -> Self {
         ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR)
     }
 }

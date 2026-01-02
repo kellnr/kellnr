@@ -1,9 +1,9 @@
-use appstate::AppStateData;
+use kellnr_appstate::AppStateData;
 use axum::{
     Router,
     routing::{delete, get, post},
 };
-use web_ui::user;
+use kellnr_web_ui::user;
 
 /// Creates the user routes
 pub fn create_routes() -> Router<AppStateData> {

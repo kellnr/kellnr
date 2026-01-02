@@ -1,24 +1,24 @@
 use super::config_json::ConfigJson;
-use appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
+use kellnr_appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
-use common::cratesio_downloader::download_crate;
-use common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
-use common::index_metadata::IndexMetadata;
-use common::normalized_name::NormalizedName;
-use common::original_name::OriginalName;
-use common::prefetch::Prefetch;
-use common::version::Version;
-use db::DbProvider;
-use db::provider::PrefetchState;
+use kellnr_common::cratesio_downloader::download_crate;
+use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
+use kellnr_common::index_metadata::IndexMetadata;
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::prefetch::Prefetch;
+use kellnr_common::version::Version;
+use kellnr_db::DbProvider;
+use kellnr_db::provider::PrefetchState;
 use hyper::StatusCode;
 use moka::future::Cache;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::Deserialize;
 use std::sync::Arc;
 use std::time::Duration;
-use storage::cratesio_crate_storage::CratesIoCrateStorage;
+use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use tracing::{debug, error, trace, warn};
 
 pub static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
@@ -580,16 +580,16 @@ fn crate_sub_path(name: &NormalizedName) -> String {
 mod tests {
     use super::*;
     use crate::config_json::ConfigJson;
-    use appstate::AppStateData;
+    use kellnr_appstate::AppStateData;
     use axum::{
         Router,
         body::Body,
         http::{Request, header},
         routing::get,
     };
-    use db::mock::MockDb;
+    use kellnr_db::mock::MockDb;
     use http_body_util::BodyExt;
-    use settings::{Protocol, Settings};
+    use kellnr_settings::{Protocol, Settings};
     use std::mem;
     use tower::ServiceExt;
 
@@ -677,7 +677,7 @@ mod tests {
 
     fn app() -> Router {
         let settings = Settings {
-            origin: settings::Origin {
+            origin: kellnr_settings::Origin {
                 protocol: Protocol::Http,
                 hostname: "test.api.com".to_string(),
                 port: 1234,
@@ -716,7 +716,7 @@ mod tests {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
             cratesio_prefetch_sender: sender,
-            ..appstate::test_state()
+            ..kellnr_appstate::test_state()
         };
 
         Router::new()

@@ -1,5 +1,5 @@
 [package]
-name = "entity"
+name = "kellnr-entity"
 publish = false
 authors.workspace = true
 edition.workspace = true
