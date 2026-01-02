@@ -145,7 +145,7 @@ mod session_tests {
     use axum::{Router, body::Body, routing::get};
     use axum_extra::extract::cookie::Key;
     use kellnr_db::DbProvider;
-    use kellnr_db::{kellnr_error::DbError, mock::MockDb};
+    use kellnr_db::{error::DbError, mock::MockDb};
     use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
     use std::{result, sync::Arc};
@@ -422,7 +422,7 @@ mod auth_middleware_tests {
     use axum::{Router, body::Body, routing::get};
     use axum_extra::extract::cookie::Key;
     use kellnr_db::DbProvider;
-    use kellnr_db::{kellnr_error::DbError, mock::MockDb};
+    use kellnr_db::{error::DbError, mock::MockDb};
     use hyper::{Request, StatusCode, header};
     use mockall::predicate::*;
     use kellnr_settings::Settings;

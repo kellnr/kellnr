@@ -176,7 +176,7 @@ mod auth_middleware_tests {
     use axum::middleware::from_fn_with_state;
     use axum::{Router, http::StatusCode, routing::get};
     use kellnr_db::DbProvider;
-    use kellnr_db::{kellnr_error::DbError, mock::MockDb};
+    use kellnr_db::{error::DbError, mock::MockDb};
     use hyper::{Request, header};
     use mockall::predicate::*;
     use kellnr_settings::Settings;

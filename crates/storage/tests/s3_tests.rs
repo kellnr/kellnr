@@ -1,7 +1,7 @@
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
-use minio_testcontainer::*;
+use kellnr_minio_testcontainer::*;
 use kellnr_settings::Settings;
 use kellnr_settings::s3::S3;
 use std::convert::TryFrom;
