@@ -1,6 +1,7 @@
+use axum::routing::get;
+use axum::{Router, middleware};
 use kellnr_appstate::AppStateData;
 use kellnr_auth::auth_req_token;
-use axum::{Router, middleware, routing::get};
 use kellnr_index::cratesio_prefetch_api;
 use kellnr_registry::cratesio_api;
 

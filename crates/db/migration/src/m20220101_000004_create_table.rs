@@ -1,11 +1,12 @@
+use kellnr_common::index_metadata::metadata_path;
+use kellnr_common::version::Version;
+use kellnr_settings::{Settings, get_settings};
+use sea_orm_migration::prelude::*;
+use tracing::{debug, error};
+
 use crate::old_index_metadata::OldIndexMetadata;
 use crate::sea_orm::ActiveValue::Set;
 use crate::sea_orm::{ActiveModelTrait, EntityTrait};
-use kellnr_common::index_metadata::metadata_path;
-use kellnr_common::version::Version;
-use sea_orm_migration::prelude::*;
-use kellnr_settings::{Settings, get_settings};
-use tracing::{debug, error};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;

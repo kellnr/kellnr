@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use kellnr_common::crate_overview::CrateOverview;
@@ -10,11 +13,10 @@ use kellnr_common::version::Version;
 use kellnr_common::webhook::{Webhook, WebhookEvent};
 use kellnr_db::password::hash_pwd;
 use kellnr_db::provider::PrefetchState;
-use kellnr_db::{DbProvider, DocQueueEntry, User, test_utils::*};
+use kellnr_db::test_utils::*;
+use kellnr_db::{DbProvider, DocQueueEntry, User};
 use kellnr_db_testcontainer::db_test;
 use serde_json::json;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
 mod image;
 
 #[db_test]

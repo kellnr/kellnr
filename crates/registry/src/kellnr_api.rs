@@ -1,18 +1,13 @@
-use crate::pub_data::{EmptyCrateData, PubData};
-use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
-use crate::registry_error::RegistryError;
-use crate::search_params::SearchParams;
-use crate::yank_success::YankSuccess;
-use crate::{crate_group, crate_user, crate_version};
-use kellnr_appstate::AppState;
-use kellnr_appstate::DbState;
-use kellnr_auth::token;
+use std::convert::TryFrom;
+use std::sync::Arc;
+
 use axum::Json;
-use axum::extract::Path;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Redirect;
 use chrono::Utc;
+use kellnr_appstate::{AppState, DbState};
+use kellnr_auth::token;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::search_result;
@@ -21,9 +16,14 @@ use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use kellnr_error::api_error::{ApiError, ApiResult};
-use std::convert::TryFrom;
-use std::sync::Arc;
 use tracing::warn;
+
+use crate::pub_data::{EmptyCrateData, PubData};
+use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
+use crate::registry_error::RegistryError;
+use crate::search_params::SearchParams;
+use crate::yank_success::YankSuccess;
+use crate::{crate_group, crate_user, crate_version};
 
 pub async fn check_ownership(
     crate_name: &NormalizedName,
@@ -514,30 +514,30 @@ pub async fn unyank(
 
 #[cfg(test)]
 mod reg_api_tests {
-    use super::*;
-    use kellnr_appstate::AppStateData;
+    use std::iter;
+    use std::path::PathBuf;
+
     use axum::Router;
     use axum::body::Body;
-    use axum::http::Request;
-    use axum::http::StatusCode;
+    use axum::http::{Request, StatusCode};
     use axum::routing::{delete, get, put};
+    use http_body_util::BodyExt;
+    use hyper::header;
+    use kellnr_appstate::AppStateData;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{ConString, Database, SqliteConString, test_utils};
     use kellnr_error::api_error::ErrorDetails;
-    use http_body_util::BodyExt;
-    use hyper::header;
-    use mockall::predicate::*;
-    use rand::Rng;
-    use rand::distr::Alphanumeric;
-    use rand::rng;
     use kellnr_settings::Settings;
-    use std::iter;
-    use std::path::PathBuf;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+    use mockall::predicate::*;
+    use rand::distr::Alphanumeric;
+    use rand::{Rng, rng};
     use tokio::fs::read;
     use tower::ServiceExt;
+
+    use super::*;
 
     const TOKEN: &str = "854DvwSlUwEHtIo3kWy6x7UCPKHfzCmy";
     const NON_ADMIN_TOKEN: &str = "g8kfzxSrMswNOVio5kBoTEFBBVm3fRS7";

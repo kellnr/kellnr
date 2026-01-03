@@ -1,8 +1,6 @@
-use crate::password::{generate_salt, hash_pwd, hash_token};
-use crate::provider::{DbResult, PrefetchState};
-use crate::tables::init_database;
-use crate::{AuthToken, CrateMeta, CrateSummary, DbProvider, Group, User, error::DbError};
-use crate::{ConString, DocQueueEntry};
+use std::collections::BTreeMap;
+use std::path::Path;
+
 use chrono::{DateTime, Utc};
 use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use kellnr_common::crate_overview::CrateOverview;
@@ -14,25 +12,32 @@ use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
 use kellnr_common::webhook::{Webhook, WebhookEvent, WebhookQueue};
+use kellnr_entity::prelude::*;
 use kellnr_entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
     cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate, owner,
-    prelude::*, session, user, webhook, webhook_queue,
+    session, user, webhook, webhook_queue,
 };
 use kellnr_migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
 };
+use sea_orm::entity::prelude::Uuid;
+use sea_orm::prelude::async_trait::async_trait;
+use sea_orm::query::{QueryOrder, QuerySelect, TransactionTrait};
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
     FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
-    entity::prelude::Uuid,
-    prelude::async_trait::async_trait,
-    query::{QueryOrder, QuerySelect, TransactionTrait},
 };
-use std::collections::BTreeMap;
-use std::path::Path;
+
+use crate::error::DbError;
+use crate::password::{generate_salt, hash_pwd, hash_token};
+use crate::provider::{DbResult, PrefetchState};
+use crate::tables::init_database;
+use crate::{
+    AuthToken, ConString, CrateMeta, CrateSummary, DbProvider, DocQueueEntry, Group, User,
+};
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 

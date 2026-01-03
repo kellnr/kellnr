@@ -1,20 +1,18 @@
-use crate::{registry_error::RegistryError, search_params::SearchParams};
+use axum::extract::{Path, Request, State};
+use axum::http::StatusCode;
+use axum::middleware::Next;
+use axum::response::Response;
 use kellnr_appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
-use axum::{
-    extract::{Path, Request, State},
-    http::StatusCode,
-    middleware::Next,
-    response::Response,
-};
-use kellnr_common::{
-    cratesio_downloader::{CLIENT, download_crate},
-    cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData},
-    original_name::OriginalName,
-    version::Version,
-};
+use kellnr_common::cratesio_downloader::{CLIENT, download_crate};
+use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData};
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::version::Version;
 use kellnr_error::api_error::ApiResult;
 use reqwest::Url;
 use tracing::{error, trace, warn};
+
+use crate::registry_error::RegistryError;
+use crate::search_params::SearchParams;
 
 /// Middleware that checks if the crates.io proxy is enabled.
 /// If not, a 404 is returned.
@@ -85,22 +83,24 @@ pub async fn download(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use kellnr_appstate::AppStateData;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
     use axum::body::Body;
     use axum::http::Request;
     use axum::routing::get;
     use axum::{Router, middleware};
+    use http_body_util::BodyExt;
+    use kellnr_appstate::AppStateData;
     use kellnr_common::util::generate_rand_string;
     use kellnr_db::mock::MockDb;
-    use http_body_util::BodyExt;
     use kellnr_settings::Settings;
-    use std::path::PathBuf;
-    use std::sync::Arc;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use tower::ServiceExt;
+
+    use super::*;
 
     #[tokio::test]
     async fn download_not_existing_package() {

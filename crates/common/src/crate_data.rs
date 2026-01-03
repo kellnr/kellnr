@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+
 use crate::index_metadata::IndexDep;
 use crate::publish_metadata::RegistryDep;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrateData {

@@ -1,8 +1,6 @@
+use axum::Router;
+use axum::routing::{delete, get, post};
 use kellnr_appstate::AppStateData;
-use axum::{
-    Router,
-    routing::{delete, get, post},
-};
 
 /// Creates the webhook routes
 pub fn create_routes() -> Router<AppStateData> {

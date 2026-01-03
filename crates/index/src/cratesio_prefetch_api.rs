@@ -1,8 +1,11 @@
-use super::config_json::ConfigJson;
-use kellnr_appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
+use std::sync::Arc;
+use std::time::Duration;
+
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
+use hyper::StatusCode;
+use kellnr_appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
 use kellnr_common::cratesio_downloader::download_crate;
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use kellnr_common::index_metadata::IndexMetadata;
@@ -12,14 +15,13 @@ use kellnr_common::prefetch::Prefetch;
 use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
-use hyper::StatusCode;
+use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use moka::future::Cache;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::Deserialize;
-use std::sync::Arc;
-use std::time::Duration;
-use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use tracing::{debug, error, trace, warn};
+
+use super::config_json::ConfigJson;
 
 pub static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 pub static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
@@ -578,20 +580,20 @@ fn crate_sub_path(name: &NormalizedName) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::mem;
+
+    use axum::Router;
+    use axum::body::Body;
+    use axum::http::{Request, header};
+    use axum::routing::get;
+    use http_body_util::BodyExt;
+    use kellnr_appstate::AppStateData;
+    use kellnr_db::mock::MockDb;
+    use kellnr_settings::{Protocol, Settings};
+    use tower::ServiceExt;
+
     use super::*;
     use crate::config_json::ConfigJson;
-    use kellnr_appstate::AppStateData;
-    use axum::{
-        Router,
-        body::Body,
-        http::{Request, header},
-        routing::get,
-    };
-    use kellnr_db::mock::MockDb;
-    use http_body_util::BodyExt;
-    use kellnr_settings::{Protocol, Settings};
-    use std::mem;
-    use tower::ServiceExt;
 
     #[tokio::test]
     async fn fetch_cratesio_description_works() {

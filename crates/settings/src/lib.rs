@@ -15,14 +15,11 @@ pub mod setup;
 
 pub use docs::Docs;
 pub use local::Local;
-pub use log::LogFormat;
-pub use log::LogLevel;
+pub use log::{LogFormat, LogLevel};
 pub use origin::Origin;
 pub use postgresql::Postgresql;
 pub use protocol::Protocol;
 pub use proxy::Proxy;
 pub use registry::Registry;
-pub use settings::Settings;
-pub use settings::get_settings;
-pub use settings::test_settings;
+pub use settings::{Settings, get_settings, test_settings};
 pub use setup::Setup;

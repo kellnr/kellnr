@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
-use kellnr_common::{normalized_name::NormalizedName, version::Version, webhook::WebhookEvent};
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::version::Version;
+use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use serde_json::json;
 

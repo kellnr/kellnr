@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use chrono::{DateTime, TimeDelta, Utc};
 use kellnr_common::webhook::WebhookQueue;
 use kellnr_db::DbProvider;
-use std::sync::Arc;
 
 use crate::types::WebhookError;
 
@@ -105,16 +106,14 @@ mod service_tests {
     use std::sync::Arc;
 
     use chrono::Utc;
-    use kellnr_common::{
-        normalized_name::NormalizedName,
-        version::Version,
-        webhook::{Webhook, WebhookEvent},
-    };
+    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_common::version::Version;
+    use kellnr_common::webhook::{Webhook, WebhookEvent};
     use kellnr_db::{ConString, Database, DbProvider, SqliteConString};
 
-    use crate::{notify_crate, tests::get_test_listener};
-
     use super::*;
+    use crate::notify_crate;
+    use crate::tests::get_test_listener;
 
     #[tokio::test]
     async fn test_handle_queue_send_ok() {

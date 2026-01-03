@@ -1,19 +1,18 @@
+use axum::Json;
+use axum::extract::{Path, State};
+use axum::response::Redirect;
+use kellnr_appstate::{AppState, DbState, SettingsState};
+use kellnr_auth::token::Token;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::version::Version;
+use kellnr_error::api_error::ApiResult;
+use kellnr_registry::kellnr_api::check_ownership;
+
 use crate::doc_archive::DocArchive;
 use crate::doc_queue_response::DocQueueResponse;
 use crate::docs_error::DocsError;
 use crate::upload_response::DocUploadResponse;
 use crate::{compute_doc_url, get_latest_version_with_doc};
-use kellnr_appstate::{AppState, DbState, SettingsState};
-use kellnr_auth::token::Token;
-use axum::{
-    Json,
-    extract::{Path, State},
-    response::Redirect,
-};
-use kellnr_common::original_name::OriginalName;
-use kellnr_common::version::Version;
-use kellnr_error::api_error::ApiResult;
-use kellnr_registry::kellnr_api::check_ownership;
 
 pub async fn docs_in_queue(State(db): DbState) -> ApiResult<Json<DocQueueResponse>> {
     let doc = db.get_doc_queue().await?;
@@ -92,20 +91,22 @@ fn crate_does_not_exist(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::doc_queue_response::DocQueueEntryResponse;
-    use kellnr_appstate::AppStateData;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
     use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
     use axum::routing::get;
+    use http_body_util::BodyExt;
+    use kellnr_appstate::AppStateData;
     use kellnr_common::normalized_name::NormalizedName;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{DbProvider, DocQueueEntry};
-    use http_body_util::BodyExt;
-    use std::path::PathBuf;
-    use std::sync::Arc;
     use tower::ServiceExt;
+
+    use super::*;
+    use crate::doc_queue_response::DocQueueEntryResponse;
 
     #[tokio::test]
     async fn doc_in_queue_returns_queue_entries() {

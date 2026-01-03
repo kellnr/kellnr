@@ -1,5 +1,6 @@
-use kellnr_common::normalized_name::NormalizedName;
 use std::path::PathBuf;
+
+use kellnr_common::normalized_name::NormalizedName;
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct DocQueueEntry {

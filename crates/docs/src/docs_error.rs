@@ -1,5 +1,5 @@
-use kellnr_error::api_error::ApiError;
 use hyper::StatusCode;
+use kellnr_error::api_error::ApiError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

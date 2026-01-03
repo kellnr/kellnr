@@ -1,4 +1,6 @@
-use crate::{normalized_name::NormalizedName, original_name::OriginalName, version::Version};
+use crate::normalized_name::NormalizedName;
+use crate::original_name::OriginalName;
+use crate::version::Version;
 
 pub struct InsertData {
     pub name: OriginalName,

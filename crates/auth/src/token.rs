@@ -1,15 +1,16 @@
-use kellnr_appstate::AppStateData;
+use std::iter;
+use std::sync::Arc;
+
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use kellnr_appstate::AppStateData;
 use kellnr_db::DbProvider;
 use rand::distr::Alphanumeric;
 use rand::{Rng, rng};
 use serde::Deserialize;
-use std::iter;
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Token {

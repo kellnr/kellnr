@@ -1,7 +1,8 @@
-use crate::sea_orm::ActiveValue::Set;
-use crate::sea_orm::{ActiveModelTrait, EntityTrait};
 use sea_orm_migration::prelude::*;
 use tracing::debug;
+
+use crate::sea_orm::ActiveValue::Set;
+use crate::sea_orm::{ActiveModelTrait, EntityTrait};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;

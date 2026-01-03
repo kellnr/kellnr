@@ -1,13 +1,15 @@
-use super::config_json::ConfigJson;
-use kellnr_appstate::{DbState, SettingsState};
-use axum::{
-    Json,
-    extract::{Path, State},
-    http::{HeaderMap, StatusCode},
-};
-use kellnr_common::{normalized_name::NormalizedName, original_name::OriginalName, prefetch::Prefetch};
-use kellnr_db::DbProvider;
 use std::sync::Arc;
+
+use axum::Json;
+use axum::extract::{Path, State};
+use axum::http::{HeaderMap, StatusCode};
+use kellnr_appstate::{DbState, SettingsState};
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::prefetch::Prefetch;
+use kellnr_db::DbProvider;
+
+use super::config_json::ConfigJson;
 
 #[allow(clippy::unused_async)] // part of the router
 pub async fn config_kellnr(State(settings): SettingsState) -> Json<ConfigJson> {
@@ -55,21 +57,20 @@ fn needs_update(headers: &HeaderMap, prefetch: &Prefetch) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::config_json::ConfigJson;
+    use axum::Router;
+    use axum::body::Body;
+    use axum::http::{Request, header};
+    use axum::routing::get;
+    use http_body_util::BodyExt;
     use kellnr_appstate::AppStateData;
-    use axum::{
-        Router,
-        body::Body,
-        http::{Request, header},
-        routing::get,
-    };
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
-    use http_body_util::BodyExt;
-    use mockall::predicate::*;
     use kellnr_settings::{Protocol, Settings};
+    use mockall::predicate::*;
     use tower::ServiceExt;
+
+    use super::*;
+    use crate::config_json::ConfigJson;
 
     #[tokio::test]
     async fn config_returns_config_json() {

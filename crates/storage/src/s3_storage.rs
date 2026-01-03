@@ -1,12 +1,12 @@
-use crate::{storage::Storage, storage_error::StorageError};
 use async_trait::async_trait;
 use bytes::Bytes;
-use object_store::{
-    ObjectStore, ObjectStoreExt, PutMode,
-    aws::{AmazonS3, AmazonS3Builder},
-    path::Path,
-};
 use kellnr_settings::Settings;
+use object_store::aws::{AmazonS3, AmazonS3Builder};
+use object_store::path::Path;
+use object_store::{ObjectStore, ObjectStoreExt, PutMode};
+
+use crate::storage::Storage;
+use crate::storage_error::StorageError;
 
 pub struct S3Storage(AmazonS3);
 

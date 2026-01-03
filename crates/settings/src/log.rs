@@ -1,6 +1,8 @@
-use crate::deserialize_with::DeserializeWith;
-use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt::Display;
+
+use serde::{Deserialize, Deserializer, Serialize};
+
+use crate::deserialize_with::DeserializeWith;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(default)]
@@ -137,8 +139,9 @@ impl From<LogLevel> for tracing::level_filters::LevelFilter {
 
 #[cfg(test)]
 mod log_format_tests {
-    use super::*;
     use serde::Deserialize;
+
+    use super::*;
 
     #[derive(Debug, Deserialize)]
     struct Settings {
@@ -189,8 +192,9 @@ mod log_format_tests {
 
 #[cfg(test)]
 mod log_level_tests {
-    use super::*;
     use serde::Deserialize;
+
+    use super::*;
 
     #[derive(Debug, Deserialize)]
     struct Settings {

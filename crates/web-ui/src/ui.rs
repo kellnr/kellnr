@@ -1,11 +1,7 @@
-use crate::error::RouteError;
-use crate::session::MaybeUser;
+use axum::Json;
+use axum::extract::{Query, State};
+use axum::http::StatusCode;
 use kellnr_appstate::{AppState, DbState, SettingsState};
-use axum::{
-    Json,
-    extract::{Query, State},
-    http::StatusCode,
-};
 use kellnr_common::crate_data::CrateData;
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::normalized_name::NormalizedName;
@@ -14,6 +10,9 @@ use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
 use kellnr_settings::{Settings, compile_time_config};
 use tracing::error;
+
+use crate::error::RouteError;
+use crate::session::MaybeUser;
 
 #[allow(clippy::unused_async)] // part of the router
 pub async fn settings(
@@ -338,28 +337,29 @@ pub async fn build_rustdoc(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::test_helper::encode_cookies;
-    use kellnr_appstate::AppStateData;
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
     use axum::Router;
     use axum::body::Body;
     use axum::routing::{get, post};
     use axum_extra::extract::cookie::Key;
+    use http_body_util::BodyExt;
+    use hyper::{Request, header};
+    use kellnr_appstate::AppStateData;
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
     use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
-    use http_body_util::BodyExt;
-    use hyper::{Request, header};
-    use mockall::predicate::*;
-    use kellnr_settings::Settings;
-    use kellnr_settings::{Postgresql, constants};
-    use std::collections::BTreeMap;
-    use std::sync::Arc;
+    use kellnr_settings::{Postgresql, Settings, constants};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+    use mockall::predicate::*;
     use tower::ServiceExt;
+
+    use super::*;
+    use crate::test_helper::encode_cookies;
 
     #[tokio::test]
     async fn settings_no_admin_returns_unauthorized() {

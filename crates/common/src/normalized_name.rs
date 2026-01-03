@@ -1,5 +1,6 @@
-use crate::original_name::OriginalName;
 use std::fmt;
+
+use crate::original_name::OriginalName;
 
 /// Index name is a lowercase version of the crate name
 

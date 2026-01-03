@@ -1,5 +1,7 @@
-use rand::{Rng, distr::Alphanumeric, rng};
 use std::iter;
+
+use rand::distr::Alphanumeric;
+use rand::{Rng, rng};
 
 pub fn generate_rand_string(length: usize) -> String {
     let mut rng = rng();

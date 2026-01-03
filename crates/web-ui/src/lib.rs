@@ -7,8 +7,9 @@ pub mod user;
 
 #[cfg(test)]
 mod test_helper {
-    use cookie::{Cookie, CookieJar};
     use std::borrow::Cow;
+
+    use cookie::{Cookie, CookieJar};
 
     pub(crate) const TEST_KEY: &[u8] = &[1; 64];
 

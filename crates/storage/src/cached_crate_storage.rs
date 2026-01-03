@@ -1,9 +1,13 @@
-use crate::{storage::Storage, storage_error::StorageError};
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
-use moka::future::Cache;
 use kellnr_settings::Settings;
-use std::{path::PathBuf, sync::Arc};
+use moka::future::Cache;
+
+use crate::storage::Storage;
+use crate::storage_error::StorageError;
 
 pub type CrateCache = Cache<String, Vec<u8>>;
 pub type DynStorage = Box<dyn Storage + Send + Sync>;

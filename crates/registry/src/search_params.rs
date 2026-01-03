@@ -1,7 +1,11 @@
-use axum::{RequestPartsExt, extract::Query, http::request::Parts};
-use kellnr_common::original_name::OriginalName;
+use std::collections::HashMap;
+use std::convert::TryFrom;
+
+use axum::RequestPartsExt;
+use axum::extract::Query;
+use axum::http::request::Parts;
 use hyper::StatusCode;
-use std::{collections::HashMap, convert::TryFrom};
+use kellnr_common::original_name::OriginalName;
 
 pub struct SearchParams {
     pub q: OriginalName,

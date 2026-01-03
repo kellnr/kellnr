@@ -1,13 +1,13 @@
-use crate::{
-    publish_metadata::{PublishMetadata, RegistryDep},
-    version::Version,
-};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Write};
 use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
+
+use crate::publish_metadata::{PublishMetadata, RegistryDep};
+use crate::version::Version;
 
 // This Metadata struct defined here is the one saved in the index.
 // It is different to the one send by Cargo to the registry.

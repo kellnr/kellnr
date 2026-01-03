@@ -1,8 +1,10 @@
-use crate::password::generate_salt;
-use kellnr_settings::Settings;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+use kellnr_settings::Settings;
+
+use crate::password::generate_salt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ConString {

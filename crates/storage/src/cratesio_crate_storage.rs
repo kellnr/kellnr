@@ -1,6 +1,8 @@
-use crate::cached_crate_storage::{CachedCrateStorage, DynStorage};
-use kellnr_settings::Settings;
 use std::ops::{Deref, DerefMut};
+
+use kellnr_settings::Settings;
+
+use crate::cached_crate_storage::{CachedCrateStorage, DynStorage};
 
 pub struct CratesIoCrateStorage(CachedCrateStorage);
 

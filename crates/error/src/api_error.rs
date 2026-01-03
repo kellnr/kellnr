@@ -1,12 +1,11 @@
-use axum::{
-    Json,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
+use std::fmt::Display;
+
+use axum::Json;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use kellnr_common::original_name::NameError;
 use kellnr_common::version::VersionError;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
 use zip::result::ZipError;
 
 pub type ApiResult<T> = Result<T, ApiError>;

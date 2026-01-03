@@ -1,9 +1,11 @@
-use crate::normalized_name::NormalizedName;
-use regex::Regex;
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Deref;
+
+use regex::Regex;
 use thiserror::Error;
+
+use crate::normalized_name::NormalizedName;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Hash)]
 pub struct OriginalName(String);
