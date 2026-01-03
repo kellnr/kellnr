@@ -1,13 +1,9 @@
+use axum::extract::DefaultBodyLimit;
+use axum::routing::{get, post, put};
+use axum::{Router, middleware};
 use kellnr_appstate::AppStateData;
-use axum::{
-    Router,
-    extract::DefaultBodyLimit,
-    middleware,
-    routing::{get, post, put},
-};
 use kellnr_docs::api;
-use kellnr_web_ui::session;
-use kellnr_web_ui::ui;
+use kellnr_web_ui::{session, ui};
 
 /// Creates the docs UI routes
 pub fn create_ui_routes(state: AppStateData) -> Router<AppStateData> {

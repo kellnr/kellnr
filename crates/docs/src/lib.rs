@@ -5,10 +5,11 @@ pub mod doc_queue_response;
 pub mod docs_error;
 pub mod upload_response;
 
-use kellnr_common::version::Version;
-use kellnr_settings::Settings;
 use std::convert::TryFrom;
 use std::path::Path;
+
+use kellnr_common::version::Version;
+use kellnr_settings::Settings;
 
 pub fn get_latest_doc_url(crate_name: &str, settings: &Settings) -> Option<String> {
     let version = get_latest_version_with_doc(crate_name, settings);

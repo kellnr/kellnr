@@ -1,6 +1,8 @@
-use crate::index_metadata::IndexDep;
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
+
+use serde::{Deserialize, Serialize};
+
+use crate::index_metadata::IndexDep;
 
 // The Metadata struct defined here is the one send by Cargo to the registry.
 // It is different to the one saved in the index!

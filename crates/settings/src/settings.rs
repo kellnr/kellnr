@@ -1,7 +1,9 @@
+use std::convert::TryFrom;
+use std::env;
+use std::path::{Path, PathBuf};
+
 use config::{Config, ConfigError, Environment, File};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::{convert::TryFrom, env, path::Path};
 
 use crate::compile_time_config;
 use crate::docs::Docs;

@@ -1,18 +1,23 @@
-use kellnr_appstate::AppStateData;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
+
 use axum_extra::extract::cookie::Key;
+use kellnr_appstate::AppStateData;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
-use moka::future::Cache;
 use kellnr_settings::{LogFormat, Settings};
-use std::{net::SocketAddr, sync::Arc, time::Duration};
-use kellnr_storage::{
-    cached_crate_storage::DynStorage, cratesio_crate_storage::CratesIoCrateStorage,
-    fs_storage::FSStorage, kellnr_crate_storage::KellnrCrateStorage, s3_storage::S3Storage,
-};
-use tokio::{fs::create_dir_all, net::TcpListener};
+use kellnr_storage::cached_crate_storage::DynStorage;
+use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
+use kellnr_storage::fs_storage::FSStorage;
+use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+use kellnr_storage::s3_storage::S3Storage;
+use moka::future::Cache;
+use tokio::fs::create_dir_all;
+use tokio::net::TcpListener;
 use tracing::info;
 use tracing_subscriber::fmt::format;
 
@@ -20,7 +25,9 @@ mod routes;
 
 #[tokio::main]
 async fn main() {
-    let settings: Arc<Settings> = kellnr_settings::get_settings().expect("Cannot read config").into();
+    let settings: Arc<Settings> = kellnr_settings::get_settings()
+        .expect("Cannot read config")
+        .into();
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber

@@ -1,5 +1,6 @@
-use crate::deserialize_with::DeserializeWith;
 use serde::{Deserialize, Deserializer, Serialize};
+
+use crate::deserialize_with::DeserializeWith;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Protocol {
@@ -57,8 +58,9 @@ impl Serialize for Protocol {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde::Deserialize;
+
+    use super::*;
 
     #[test]
     fn test_protocol_display() {

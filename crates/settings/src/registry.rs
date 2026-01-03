@@ -1,5 +1,6 @@
-use crate::compile_time_config;
 use serde::{Deserialize, Serialize};
+
+use crate::compile_time_config;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(default)]

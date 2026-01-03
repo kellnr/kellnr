@@ -1,9 +1,7 @@
-use tokio::{
-    io::AsyncWriteExt,
-    net::TcpListener,
-    sync::mpsc::{Receiver, Sender, channel},
-    task::JoinHandle,
-};
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpListener;
+use tokio::sync::mpsc::{Receiver, Sender, channel};
+use tokio::task::JoinHandle;
 
 pub(crate) struct TestListener {
     handle: JoinHandle<()>,

@@ -1,8 +1,9 @@
-use crate::m20220101_000006_create_table_entities::{crate_index, krate};
 use kellnr_common::index_metadata::IndexMetadata;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use sea_orm_migration::prelude::*;
 use tracing::debug;
+
+use crate::m20220101_000006_create_table_entities::{crate_index, krate};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;

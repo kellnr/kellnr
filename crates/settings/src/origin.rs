@@ -1,5 +1,6 @@
-use crate::protocol::Protocol;
 use serde::{Deserialize, Serialize};
+
+use crate::protocol::Protocol;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(default)]

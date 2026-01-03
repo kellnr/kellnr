@@ -1,5 +1,7 @@
-use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta, error::DbError};
+use std::path::Path;
+
 use chrono::{DateTime, Utc};
+use crate_meta::CrateMeta;
 use kellnr_common::crate_data::CrateData;
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
@@ -10,9 +12,10 @@ use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
 use kellnr_common::webhook::{Webhook, WebhookEvent, WebhookQueue};
-use crate_meta::CrateMeta;
 use sea_orm::prelude::async_trait::async_trait;
-use std::path::Path;
+
+use crate::error::DbError;
+use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta};
 
 pub type DbResult<T> = Result<T, DbError>;
 #[derive(Debug, PartialEq, Eq)]
@@ -185,10 +188,11 @@ pub trait DbProvider: Send + Sync {
 }
 
 pub mod mock {
-    use super::*;
     use chrono::DateTime;
     use mockall::predicate::*;
     use mockall::*;
+
+    use super::*;
 
     mock! {
           pub Db {}

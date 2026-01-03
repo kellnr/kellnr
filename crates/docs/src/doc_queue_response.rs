@@ -28,9 +28,11 @@ impl From<Vec<DocQueueEntry>> for DocQueueResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use kellnr_common::normalized_name::NormalizedName;
     use std::path::PathBuf;
+
+    use kellnr_common::normalized_name::NormalizedName;
+
+    use super::*;
 
     #[test]
     fn doc_queue_response_from_doc_queue_entry() {

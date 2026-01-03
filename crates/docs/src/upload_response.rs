@@ -1,7 +1,8 @@
-use crate::compute_doc_url;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use serde::{Deserialize, Serialize};
+
+use crate::compute_doc_url;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DocUploadResponse {
@@ -24,8 +25,9 @@ impl DocUploadResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::convert::TryFrom;
+
+    use super::*;
 
     #[test]
     fn create_new_doc_upload_response_works() {

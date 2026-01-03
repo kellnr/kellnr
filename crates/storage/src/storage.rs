@@ -1,6 +1,7 @@
-use crate::storage_error::StorageError;
 use async_trait::async_trait;
 use bytes::Bytes;
+
+use crate::storage_error::StorageError;
 
 #[async_trait]
 pub trait Storage {

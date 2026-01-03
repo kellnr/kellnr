@@ -1,11 +1,10 @@
-use axum::{
-    body::Body,
-    http::{Response, StatusCode, Uri, header},
-};
+use std::borrow::Cow;
+
+use axum::body::Body;
+use axum::http::{Response, StatusCode, Uri, header};
 use bytes::Bytes;
 use include_dir::{Dir, include_dir};
 use mime_guess::from_path;
-use std::borrow::Cow;
 use tracing::warn;
 
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");

@@ -1,8 +1,6 @@
+use axum::routing::{delete, get};
+use axum::{Router, middleware};
 use kellnr_appstate::AppStateData;
-use axum::{
-    Router, middleware,
-    routing::{delete, get},
-};
 use kellnr_web_ui::{session, ui};
 
 /// Creates the UI API routes (JSON endpoints used by the web frontend).

@@ -13,17 +13,14 @@ mod tables;
 mod user;
 
 // Re-exports
-pub use crate::database::{Database, test_utils};
 pub use auth_token::AuthToken;
-pub use con_string::AdminUser;
-pub use con_string::ConString;
-pub use con_string::PgConString;
-pub use con_string::SqliteConString;
+pub use con_string::{AdminUser, ConString, PgConString, SqliteConString};
 pub use crate_meta::CrateMeta;
 pub use crate_summary::CrateSummary;
 pub use doc_queue_entry::DocQueueEntry;
 pub use group::Group;
 pub use krate::Crate;
-pub use provider::DbProvider;
-pub use provider::mock;
+pub use provider::{DbProvider, mock};
 pub use user::User;
+
+pub use crate::database::{Database, test_utils};

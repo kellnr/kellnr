@@ -1,11 +1,9 @@
+use axum::routing::{get, get_service};
+use axum::{Router, middleware};
 use kellnr_appstate::AppStateData;
-use axum::{
-    Router, middleware,
-    routing::{get, get_service},
-};
 use kellnr_embedded_resources::embedded_static_handler;
-use tower_http::services::ServeDir;
 use kellnr_web_ui::session;
+use tower_http::services::ServeDir;
 
 mod crate_access_routes;
 mod cratesio_api_routes;

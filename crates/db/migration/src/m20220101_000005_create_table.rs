@@ -1,17 +1,18 @@
+use std::collections::HashMap;
+
+use kellnr_common::index_metadata::metadata_path;
+use kellnr_common::version::Version;
+use kellnr_settings::{Settings, get_settings};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm_migration::prelude::*;
+use serde::{Deserialize, Serialize};
+use tracing::{debug, error};
+
 use crate::m20220101_000005_create_table_entities::{
     crate_author, crate_author_to_crate, crate_category, crate_category_to_crate, crate_index,
     crate_keyword, crate_keyword_to_crate, crate_meta, krate,
 };
-use crate::old_index_metadata::OldIndexDep;
-use crate::old_index_metadata::OldIndexMetadata;
-use kellnr_common::index_metadata::metadata_path;
-use kellnr_common::version::Version;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
-use sea_orm_migration::prelude::*;
-use serde::{Deserialize, Serialize};
-use kellnr_settings::{Settings, get_settings};
-use std::collections::HashMap;
-use tracing::{debug, error};
+use crate::old_index_metadata::{OldIndexDep, OldIndexMetadata};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;

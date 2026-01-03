@@ -1,10 +1,11 @@
-use kellnr_common::version::Version;
-use sea_orm::DbErr;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
+use kellnr_common::version::Version;
+use sea_orm::DbErr;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OldIndexMetadata {

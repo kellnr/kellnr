@@ -1,22 +1,23 @@
-use crate::{compute_doc_url, docs_error::DocsError};
-use cargo::{
-    GlobalContext,
-    core::{Workspace, resolver::CliFeatures},
-    ops::{self, CompileOptions, DocOptions, OutputFormat},
-    util::command_prelude::CompileMode,
-};
-use kellnr_common::{original_name::OriginalName, version::Version};
-use kellnr_db::{DbProvider, DocQueueEntry};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use cargo::GlobalContext;
+use cargo::core::Workspace;
+use cargo::core::resolver::CliFeatures;
+use cargo::ops::{self, CompileOptions, DocOptions, OutputFormat};
+use cargo::util::command_prelude::CompileMode;
 use flate2::read::GzDecoder;
 use fs_extra::dir::{CopyOptions, copy};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::version::Version;
+use kellnr_db::{DbProvider, DocQueueEntry};
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use tar::Archive;
 use tokio::fs::{create_dir_all, remove_dir_all};
 use tracing::error;
+
+use crate::compute_doc_url;
+use crate::docs_error::DocsError;
 
 pub fn doc_extraction_queue(
     db: Arc<dyn DbProvider>,

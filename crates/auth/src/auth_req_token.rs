@@ -1,10 +1,11 @@
-use crate::token::Token;
 use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::HeaderValue;
 use axum::middleware::Next;
 use axum::response::Response;
 use tracing::warn;
+
+use crate::token::Token;
 
 /// Middleware that checks if a cargo token is provided when `settings.registry.auth_required` is `true`.
 ///
@@ -47,19 +48,21 @@ pub async fn cargo_auth_when_required(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use kellnr_appstate::AppStateData;
+    use std::sync::Arc;
+
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use axum::routing::get;
     use axum::{Router, middleware};
+    use kellnr_appstate::AppStateData;
     use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
-    use mockall::predicate::*;
     use kellnr_settings::Settings;
-    use std::sync::Arc;
+    use mockall::predicate::*;
     use tower::ServiceExt;
+
+    use super::*;
 
     #[tokio::test]
     async fn no_auth_required() {
@@ -170,18 +173,23 @@ mod test {
 
 #[cfg(test)]
 mod auth_middleware_tests {
-    use super::*;
-    use kellnr_appstate::AppStateData;
-    use axum::body::Body;
-    use axum::middleware::from_fn_with_state;
-    use axum::{Router, http::StatusCode, routing::get};
-    use kellnr_db::DbProvider;
-    use kellnr_db::{error::DbError, mock::MockDb};
-    use hyper::{Request, header};
-    use mockall::predicate::*;
-    use kellnr_settings::Settings;
     use std::sync::Arc;
+
+    use axum::Router;
+    use axum::body::Body;
+    use axum::http::StatusCode;
+    use axum::middleware::from_fn_with_state;
+    use axum::routing::get;
+    use hyper::{Request, header};
+    use kellnr_appstate::AppStateData;
+    use kellnr_db::DbProvider;
+    use kellnr_db::error::DbError;
+    use kellnr_db::mock::MockDb;
+    use kellnr_settings::Settings;
+    use mockall::predicate::*;
     use tower::ServiceExt;
+
+    use super::*;
 
     fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();

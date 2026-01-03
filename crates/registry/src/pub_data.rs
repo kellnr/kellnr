@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
-use crate::registry_error::RegistryError;
-use kellnr_appstate::AppStateData;
 use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
 use axum::http::Request;
+use kellnr_appstate::AppStateData;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_error::api_error::ApiError;
-use serde::Deserialize;
 use kellnr_settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
+use serde::Deserialize;
+
+use crate::registry_error::RegistryError;
 
 #[derive(Debug, Deserialize)]
 pub struct EmptyCrateData {
@@ -84,16 +85,18 @@ impl FromRequest<AppStateData, Body> for PubData {
 
 #[cfg(test)]
 mod bin_tests {
-    use crate::pub_data::PubData;
+    use std::convert::TryFrom;
+    use std::path::Path;
+
     use kellnr_common::original_name::OriginalName;
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_common::version::Version;
     use kellnr_settings::Settings;
-    use std::{convert::TryFrom, path::Path};
-    use kellnr_storage::{
-        cached_crate_storage::DynStorage, fs_storage::FSStorage,
-        kellnr_crate_storage::KellnrCrateStorage,
-    };
+    use kellnr_storage::cached_crate_storage::DynStorage;
+    use kellnr_storage::fs_storage::FSStorage;
+    use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+
+    use crate::pub_data::PubData;
 
     struct TestData {
         settings: Settings,

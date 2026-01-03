@@ -1,8 +1,6 @@
+use axum::Router;
+use axum::routing::{delete, get, post};
 use kellnr_appstate::AppStateData;
-use axum::{
-    Router,
-    routing::{delete, get, post},
-};
 use kellnr_web_ui::user;
 
 /// Creates the user routes

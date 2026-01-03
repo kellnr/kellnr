@@ -1,14 +1,12 @@
-use crate::{
-    cached_crate_storage::{CachedCrateStorage, DynStorage},
-    storage_error::StorageError,
-};
+use std::ops::{Deref, DerefMut};
+use std::path::{Path, PathBuf};
+
 use kellnr_common::util::generate_rand_string;
 use kellnr_settings::Settings;
-use std::{
-    ops::{Deref, DerefMut},
-    path::{Path, PathBuf},
-};
 use tokio::fs::DirBuilder;
+
+use crate::cached_crate_storage::{CachedCrateStorage, DynStorage};
+use crate::storage_error::StorageError;
 
 pub struct KellnrCrateStorage(CachedCrateStorage);
 

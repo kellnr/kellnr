@@ -1,8 +1,6 @@
+use axum::Router;
+use axum::routing::{delete, get, put};
 use kellnr_appstate::AppStateData;
-use axum::{
-    Router,
-    routing::{delete, get, put},
-};
 use kellnr_web_ui::crate_access;
 
 /// Creates the crate access routes

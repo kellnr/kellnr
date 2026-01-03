@@ -1,5 +1,6 @@
+use axum::Router;
+use axum::routing::get;
 use kellnr_appstate::AppStateData;
-use axum::{Router, routing::get};
 
 /// Health check route
 pub fn create_routes() -> Router<AppStateData> {

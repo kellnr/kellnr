@@ -1,11 +1,8 @@
+use axum::extract::DefaultBodyLimit;
+use axum::routing::{delete, get, put};
+use axum::{Router, middleware};
 use kellnr_appstate::AppStateData;
 use kellnr_auth::auth_req_token;
-use axum::{
-    Router,
-    extract::DefaultBodyLimit,
-    middleware,
-    routing::{delete, get, put},
-};
 use kellnr_index::kellnr_prefetch_api;
 use kellnr_registry::kellnr_api;
 

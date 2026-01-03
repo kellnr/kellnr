@@ -1,11 +1,12 @@
+use std::convert::TryFrom;
+use std::sync::Arc;
+
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
 use kellnr_minio_testcontainer::*;
 use kellnr_settings::Settings;
 use kellnr_settings::s3::S3;
-use std::convert::TryFrom;
-use std::sync::Arc;
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::s3_storage::S3Storage;

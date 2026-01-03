@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use tracing::error;
 
 use reqwest::{Client, ClientBuilder, StatusCode};
+use tracing::error;
 
 pub static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
     let mut headers = reqwest::header::HeaderMap::new();

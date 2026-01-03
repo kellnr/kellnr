@@ -1,14 +1,15 @@
+use std::sync::Arc;
+
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
+use flume::Sender;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_db::DbProvider;
-use flume::Sender;
 use kellnr_settings::Settings;
-use std::sync::Arc;
-use kellnr_storage::{
-    cached_crate_storage::DynStorage, cratesio_crate_storage::CratesIoCrateStorage,
-    fs_storage::FSStorage, kellnr_crate_storage::KellnrCrateStorage,
-};
+use kellnr_storage::cached_crate_storage::DynStorage;
+use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
+use kellnr_storage::fs_storage::FSStorage;
+use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 
 pub type AppState = axum::extract::State<AppStateData>;
 

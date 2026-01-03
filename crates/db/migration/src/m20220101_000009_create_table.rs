@@ -1,9 +1,10 @@
-use crate::sea_orm::ActiveValue::Set;
-use crate::sea_orm::{ActiveModelTrait, EntityTrait};
+use kellnr_settings::{Settings, get_settings};
 use sea_orm::{ModelTrait, Related};
 use sea_orm_migration::prelude::*;
-use kellnr_settings::{Settings, get_settings};
 use tracing::debug;
+
+use crate::sea_orm::ActiveValue::Set;
+use crate::sea_orm::{ActiveModelTrait, EntityTrait};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;

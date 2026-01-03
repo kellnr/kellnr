@@ -1,8 +1,12 @@
-use crate::error::RouteError;
-use axum::{RequestPartsExt, extract::State};
-use axum::{extract::Request, http::request::Parts, middleware::Next, response::Response};
+use axum::RequestPartsExt;
+use axum::extract::{Request, State};
+use axum::http::request::Parts;
+use axum::middleware::Next;
+use axum::response::Response;
 use axum_extra::extract::PrivateCookieJar;
 use kellnr_settings::constants;
+
+use crate::error::RouteError;
 
 pub trait Name {
     fn name(&self) -> String;
@@ -139,20 +143,26 @@ pub async fn session_auth_when_required(
 
 #[cfg(test)]
 mod session_tests {
-    use super::*;
-    use crate::test_helper::encode_cookies;
-    use kellnr_appstate::AppStateData;
-    use axum::{Router, body::Body, routing::get};
+    use std::result;
+    use std::sync::Arc;
+
+    use axum::Router;
+    use axum::body::Body;
+    use axum::routing::get;
     use axum_extra::extract::cookie::Key;
-    use kellnr_db::DbProvider;
-    use kellnr_db::{error::DbError, mock::MockDb};
     use hyper::{Request, StatusCode, header};
-    use mockall::predicate::*;
-    use std::{result, sync::Arc};
+    use kellnr_appstate::AppStateData;
+    use kellnr_db::DbProvider;
+    use kellnr_db::error::DbError;
+    use kellnr_db::mock::MockDb;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+    use mockall::predicate::*;
     use tower::ServiceExt;
+
+    use super::*;
+    use crate::test_helper::encode_cookies;
 
     async fn admin_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
         user.assert_admin()?;
@@ -415,19 +425,24 @@ mod session_tests {
 
 #[cfg(test)]
 mod auth_middleware_tests {
+    use std::sync::Arc;
+
+    use axum::Router;
+    use axum::body::Body;
+    use axum::middleware::from_fn_with_state;
+    use axum::routing::get;
+    use axum_extra::extract::cookie::Key;
+    use hyper::{Request, StatusCode, header};
+    use kellnr_appstate::AppStateData;
+    use kellnr_db::DbProvider;
+    use kellnr_db::error::DbError;
+    use kellnr_db::mock::MockDb;
+    use kellnr_settings::Settings;
+    use mockall::predicate::*;
+    use tower::ServiceExt;
+
     use super::*;
     use crate::test_helper::encode_cookies;
-    use kellnr_appstate::AppStateData;
-    use axum::middleware::from_fn_with_state;
-    use axum::{Router, body::Body, routing::get};
-    use axum_extra::extract::cookie::Key;
-    use kellnr_db::DbProvider;
-    use kellnr_db::{error::DbError, mock::MockDb};
-    use hyper::{Request, StatusCode, header};
-    use mockall::predicate::*;
-    use kellnr_settings::Settings;
-    use std::sync::Arc;
-    use tower::ServiceExt;
 
     fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();

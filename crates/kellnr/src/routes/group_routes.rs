@@ -1,8 +1,6 @@
+use axum::Router;
+use axum::routing::{delete, get, post, put};
 use kellnr_appstate::AppStateData;
-use axum::{
-    Router,
-    routing::{delete, get, post, put},
-};
 use kellnr_web_ui::group;
 
 /// Creates the group routes
