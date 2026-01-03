@@ -1,3 +1,16 @@
+#!/usr/bin/env just --justfile
+
+# How to call the current just executable. Note that just_executable() may have `\` in Windows paths, so we need to quote it.
+just := quote(just_executable())
+
+# if running in CI, treat warnings as errors by setting RUSTFLAGS and RUSTDOCFLAGS to '-D warnings' unless they are already set
+# Use `CI=true just ci-test` to run the same tests as in GitHub CI.
+# Use `just env-info` to see the current values of RUSTFLAGS and RUSTDOCFLAGS
+ci_mode := if env('CI', '') != '' {'1'} else {''}
+export RUSTFLAGS := env('RUSTFLAGS', if ci_mode == '1' {'-D warnings'} else {''})
+export RUSTDOCFLAGS := env('RUSTDOCFLAGS', if ci_mode == '1' {'-D warnings'} else {''})
+export RUST_BACKTRACE := env('RUST_BACKTRACE', if ci_mode == '1' {'1'} else {'0'})
+
 ############################################
 # Just commands for Kellnr
 #
@@ -12,41 +25,58 @@
 ##########################################
 
 @_default:
-    {{just_executable()}} --list
+    {{just}} --list
 
+# Print environment info
+env-info:
+    @echo "Running {{if ci_mode == '1' {'in CI mode'} else {'in dev mode'} }} on {{os()}} / {{arch()}}"
+    @echo "PWD {{justfile_directory()}}"
+    {{just}} --version
+    rustc --version
+    cargo --version
+    rustup --version
+    @echo "RUSTFLAGS='$RUSTFLAGS'"
+    @echo "RUSTDOCFLAGS='$RUSTDOCFLAGS'"
+    @echo "RUST_BACKTRACE='$RUST_BACKTRACE'"
+
+# Quick compile without building a binary
 check:
-	cargo check
+    cargo check
 
+# Build the project
 build:
-	cargo build --features vendored-openssl
+    cargo build --features vendored-openssl
 
 build-release: npm-build
-	cargo build --release --features vendored-openssl
+    cargo build --release --features vendored-openssl
 
 clippy:
   cargo clippy --workspace --all-targets --all-features
 
 run: npm-build build
-	cargo run
+    cargo run
 
+# Run all tests which do NOT require Docker
+test: npm-build
+    cargo nextest run --workspace -E 'not test(~postgres_)'
 
-test: npm-build # Run all tests which do NOT require Docker
-	cargo nextest run --workspace -E 'not test(~postgres_)'
+# Run the smoke tests which require Docker
+test-smoke:
+    {{test_smoke}}
 
-test-smoke: # Run the smoke tests which require Docker
-	{{test_smoke}}
-
-test-pgdb: npm-build # Run Postgresql integration tests which require Docker
-	{{test_pgdb}}
+# Run Postgresql integration tests which require Docker
+test-pgdb: npm-build
+    {{test_pgdb}}
 
 test-all: test test-pgdb test-smoke
 
+# Clean all build artifacts
 clean:
-	cargo clean
+    cargo clean
 
 clean-node:
-	rm -rf ui/node_modules
-	rm -rf ui/package-lock.json
+    rm -rf ui/node_modules
+    rm -rf ui/package-lock.json
 
 clean-all: clean clean-node
 
@@ -63,16 +93,16 @@ fmt:
     fi
 
 npm-dev:
-	cd ui && npm run dev
+    cd ui && npm run dev
 
 npm-build: npm-install
-  cd ui && npm run build
-  mkdir -p crates/embedded-resources/static
-  rm -rf crates/embedded-resources/static/*
-  cp -r ui/dist/* crates/embedded-resources/static/
+    cd ui && npm run build
+    mkdir -p crates/embedded-resources/static
+    rm -rf crates/embedded-resources/static/*
+    cp -r ui/dist/* crates/embedded-resources/static/
 
 npm-install:
-	cd ui && npm install
+    cd ui && npm install
 
 ##########################################
 # Commands used by the Nix package manager
@@ -81,16 +111,17 @@ npm-install:
 # Used to create the needed Nix expressions for the Node.js dependencies.
 # Run this command everytime you edit the ui/package.json file.
 node2nix: clean-node patch-package
-	node2nix --development \
-		--input ui/nix/package.json \
-		--node-env ui/nix/node-env.nix \
-		--composition ui/nix/default.nix \
-		--output ui/nix/node-package.nix
+    node2nix \
+        --development \
+        --input ui/nix/package.json \
+        --node-env ui/nix/node-env.nix \
+        --composition ui/nix/default.nix \
+        --output ui/nix/node-package.nix
 
 patch-package:
-	jd -o ui/nix/package.json \
-	-p \
-	-f patch ui/nix/package-patch.json ui/package.json || true
+    jd -o ui/nix/package.json \
+       -p \
+       -f patch ui/nix/package-patch.json ui/package.json || true
 
 
 ##########################################
@@ -104,7 +135,7 @@ patch-package:
 target := "x86_64-unknown-linux-gnu"
 
 ci-release: npm-build
-        cross build --release --target {{target}} --features vendored-openssl
+    cross build --release --target {{target}} --features vendored-openssl
 
 ##########################################
 # Commands for cross-rs to build the
@@ -112,16 +143,16 @@ ci-release: npm-build
 ##########################################
 
 x-aarch64-musl:
-	cross build --target aarch64-unknown-linux-musl --features vendored-openssl
+    cross build --target aarch64-unknown-linux-musl --features vendored-openssl
 
 x-aarch64-gnu:
-	cross build --target aarch64-unknown-linux-gnu --features vendored-openssl
+    cross build --target aarch64-unknown-linux-gnu --features vendored-openssl
 
 x-x86_64-musl:
-	cross build --target x86_64-unknown-linux-musl --features vendored-openssl
+    cross build --target x86_64-unknown-linux-musl --features vendored-openssl
 
 x-x86_64-gnu:
-	cross build --target x86_64-unknown-linux-gnu --features vendored-openssl
+    cross build --target x86_64-unknown-linux-gnu --features vendored-openssl
 
 x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu
 
@@ -144,4 +175,4 @@ test_pgdb := if has_docker == "true" { "cargo nextest run --workspace -E 'test(~
 test_smoke := if has_docker == "true" { "cd tests && npm install && npx playwright test" } else { "echo 'ERROR: Docker is not installed. The smoke tests require Docker'" }
 
 docker:
-	echo "{{has_docker}}"
+    echo "{{has_docker}}"
