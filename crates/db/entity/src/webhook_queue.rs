@@ -2,6 +2,7 @@
 
 use sea_orm::Set;
 use sea_orm::entity::prelude::*;
+use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "webhook_queue")]

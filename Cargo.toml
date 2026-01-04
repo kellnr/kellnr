@@ -9,26 +9,32 @@ authors = ["kellnr.io"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 version = "5.9.1"
+description = "Kellnr is a self-hosted registry for Rust crates with support for rustdocs and crates.io caching."
+homepage = "https://kellnr.io/"
+repository = "https://github.com/kellnr/kellnr"
+documentation = "https://kellnr.io/documentation"
+readme = "README.md"
+keywords = ["cargo", "registry", "crates-io", "self-hosted"]
 
 [workspace.dependencies]
 # Internal dependencies from Kellnr
-kellnr-appstate = { path = "./crates/appstate" }
-kellnr-auth = { path = "./crates/auth" }
-kellnr-common = { path = "./crates/common" }
-kellnr-db = { path = "./crates/db" }
-kellnr-db-testcontainer = { path = "./crates/db/db-testcontainer" }
-kellnr-docs = { path = "./crates/docs" }
-kellnr-entity = { path = "./crates/db/entity" }
-kellnr-error = { path = "./crates/error" }
-kellnr-index = { path = "./crates/index" }
-kellnr-migration = { path = "./crates/db/migration" }
-kellnr-minio-testcontainer = { path = "./crates/storage/minio-testcontainer" }
-kellnr-registry = { path = "./crates/registry" }
-kellnr-settings = { path = "./crates/settings" }
-kellnr-storage = { path = "./crates/storage" }
-kellnr-web-ui = { path = "./crates/web-ui" }
-kellnr-webhooks = { path = "./crates/webhooks" }
-kellnr-embedded-resources = { path = "./crates/embedded-resources" }
+kellnr-appstate = { version = "5.9.1", path = "./crates/appstate" }
+kellnr-auth = { version = "5.9.1", path = "./crates/auth" }
+kellnr-common = { version = "5.9.1", path = "./crates/common" }
+kellnr-db = { version = "5.9.1", path = "./crates/db" }
+kellnr-db-testcontainer = { version = "5.9.1", path = "./crates/db/db-testcontainer" }
+kellnr-docs = { version = "5.9.1", path = "./crates/docs" }
+kellnr-entity = { version = "5.9.1", path = "./crates/db/entity" }
+kellnr-error = { version = "5.9.1", path = "./crates/error" }
+kellnr-index = { version = "5.9.1", path = "./crates/index" }
+kellnr-migration = { version = "5.9.1", path = "./crates/db/migration" }
+kellnr-minio-testcontainer = { version = "5.9.1", path = "./crates/storage/minio-testcontainer" }
+kellnr-registry = { version = "5.9.1", path = "./crates/registry" }
+kellnr-settings = { version = "5.9.1", path = "./crates/settings" }
+kellnr-storage = { version = "5.9.1", path = "./crates/storage" }
+kellnr-web-ui = { version = "5.9.1", path = "./crates/web-ui" }
+kellnr-webhooks = { version = "5.9.1", path = "./crates/webhooks" }
+kellnr-embedded-resources = { version = "5.9.1", path = "./crates/embedded-resources" }
 
 # External dependencies from crates.io
 async-trait = "0.1.89"
@@ -75,6 +81,9 @@ tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["json", "fmt"] }
 url = "2.5.4"
 zip = "7.0.0"
+uuid = { version = "1.19.0", features = ["v4"] }
+
+
 
 [profile.release]
 lto = "thin"

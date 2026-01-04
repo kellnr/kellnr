@@ -4,6 +4,11 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
 
 [dependencies]
 # Internal dependencies from Kellnr
@@ -32,6 +37,7 @@ tracing.workspace = true
 moka.workspace = true
 
 [features]
+default = ["vendored-openssl"]
 vendored-openssl = ["openssl/vendored"]
 
 # Ignore openssl in cargo machete, else
