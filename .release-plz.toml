@@ -3,13 +3,12 @@
 changelog_update = false
 
 # disable API breaking changes checks. For a binary like kellnr, it is not possible
-# to automatically check for API breaking changes, as no API is exposed. Breaking changes can 
+# to automatically check for API breaking changes, as no API is exposed. Breaking changes can
 # happen if for example a migration cannot be applied anymore, but this cannot be detected automatically.
 semver_check = false
 
-# Do not publish the binary to crates.io
-# Publishing kellnr to crates.io is not possible as the project depends on external non-rust 
-# tooling that is not available when users try to build the crate from crates.io.
+# Do not publish the binary to crates.io a.t.m.
+# This is something for later.
 publish = false
 
 # Release only if the release PR is merged, not on every push to main
