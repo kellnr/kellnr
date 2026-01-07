@@ -271,19 +271,19 @@ const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
 const changeCrateAccessStatus = ref("")
 const changeCrateAccessMsg = ref("")
-  const crateGroupsForCrate = ref([])
-  const crateGroups = ref<string[]>([])
-  const crateGroupName = ref("")
+const crateGroupsForCrate = ref([])
+const crateGroups = ref<string[]>([])
+const crateGroupName = ref("")
 
-  const availableCrateGroups = computed(() => {
-    const assigned = new Set(
-      (crateGroupsForCrate.value as Array<{ name?: unknown }>).
-        map((g) => (typeof g?.name === "string" ? g.name : ""))
-        .filter((n) => n.length > 0)
-    )
+const availableCrateGroups = computed(() => {
+  const assigned = new Set(
+    (crateGroupsForCrate.value as Array<{ name?: unknown }>).
+      map((g) => (typeof g?.name === "string" ? g.name : ""))
+      .filter((n) => n.length > 0)
+  )
 
-    return crateGroups.value.filter((name) => !assigned.has(name))
-  })
+  return crateGroups.value.filter((name) => !assigned.has(name))
+})
 const addCrateGroupStatus = ref("")
 const addCrateGroupMsg = ref("")
 const deleteCrateGroupStatus = ref("")
