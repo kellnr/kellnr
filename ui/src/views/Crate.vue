@@ -275,15 +275,20 @@ const crateGroupsForCrate = ref([])
 const crateGroups = ref<string[]>([])
 const crateGroupName = ref("")
 
-// Helper function to extract valid string names from objects
-function extractNames(items: Array<{ name?: unknown }>): string[] {
+/**
+ * Extracts valid non-empty string names from an array of objects.
+ * Filters out items with non-string, null, undefined, or empty names.
+ * @param items - Array of objects with optional name properties
+ * @returns Array of valid non-empty string names
+ */
+function extractNames(items: Array<{ name?: string | null | undefined }>): string[] {
   return items
     .map((item) => (typeof item?.name === "string" ? item.name : ""))
     .filter((name) => name.length > 0)
 }
 
 const availableCrateGroups = computed(() => {
-  const assigned = new Set(extractNames(crateGroupsForCrate.value as Array<{ name?: unknown }>))
+  const assigned = new Set(extractNames(crateGroupsForCrate.value as Array<{ name?: string | null | undefined }>))
   return crateGroups.value.filter((name) => !assigned.has(name))
 })
 const addCrateGroupStatus = ref("")
