@@ -271,7 +271,11 @@ const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
 const changeCrateAccessStatus = ref("")
 const changeCrateAccessMsg = ref("")
-const crateGroupsForCrate = ref([])
+
+// Type for objects with an optional name property
+type NamedObject = { name?: string | null | undefined }
+
+const crateGroupsForCrate = ref<NamedObject[]>([])
 const crateGroups = ref<string[]>([])
 const crateGroupName = ref("")
 
@@ -281,14 +285,14 @@ const crateGroupName = ref("")
  * @param items - Array of objects with optional name properties
  * @returns Array of valid non-empty string names
  */
-function extractNames(items: Array<{ name?: string | null | undefined }>): string[] {
+function extractNames(items: NamedObject[]): string[] {
   return items
     .map((item) => (typeof item?.name === "string" ? item.name : ""))
     .filter((name) => name.length > 0)
 }
 
 const availableCrateGroups = computed(() => {
-  const assigned = new Set(extractNames(crateGroupsForCrate.value as Array<{ name?: string | null | undefined }>))
+  const assigned = new Set(extractNames(crateGroupsForCrate.value))
   return crateGroups.value.filter((name) => !assigned.has(name))
 })
 const addCrateGroupStatus = ref("")
