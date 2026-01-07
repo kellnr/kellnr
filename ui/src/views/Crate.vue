@@ -271,19 +271,19 @@ const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
 const changeCrateAccessStatus = ref("")
 const changeCrateAccessMsg = ref("")
-  const crateGroupsForCrate = ref([])
-  const crateGroups = ref<string[]>([])
-  const crateGroupName = ref("")
+const crateGroupsForCrate = ref([])
+const crateGroups = ref<string[]>([])
+const crateGroupName = ref("")
 
-  const availableCrateGroups = computed(() => {
-    const assigned = new Set(
-      (crateGroupsForCrate.value as Array<{ name?: unknown }>).
-        map((g) => (typeof g?.name === "string" ? g.name : ""))
-        .filter((n) => n.length > 0)
-    )
+const availableCrateGroups = computed(() => {
+  const assigned = new Set(
+    (crateGroupsForCrate.value as Array<{ name?: unknown }>).
+      map((g) => (typeof g?.name === "string" ? g.name : ""))
+      .filter((n) => n.length > 0)
+  )
 
-    return crateGroups.value.filter((name) => !assigned.has(name))
-  })
+  return crateGroups.value.filter((name) => !assigned.has(name))
+})
 const addCrateGroupStatus = ref("")
 const addCrateGroupMsg = ref("")
 const deleteCrateGroupStatus = ref("")
@@ -491,22 +491,22 @@ function getCrateGroupsForCrate() {
     });
 }
 
-  async function getAllCrateGroups() {
-    // disable caching to get updated token list
-    try {
-      // @ts-expect-error TS doesn't recognize cache option
-      const res = await axios.get(LIST_GROUPS, { cache: false })
-      if (res.status == 200) {
-        // LIST_GROUPS returns: [{"name":"group1"},{"name":"group2"}]
-        crateGroups.value = (res.data ?? [])
-          .map((g: { name?: unknown }) => (typeof g?.name === "string" ? g.name : ""))
-          .filter((name: string) => name.length > 0)
-      }
-    } catch (error) {
-      console.log(error);
-      crateGroups.value = []
+async function getAllCrateGroups() {
+  // disable caching to get updated token list
+  try {
+    // @ts-expect-error TS doesn't recognize cache option
+    const res = await axios.get(LIST_GROUPS, { cache: false })
+    if (res.status == 200) {
+      // LIST_GROUPS returns: [{"name":"group1"},{"name":"group2"}]
+      crateGroups.value = (res.data ?? [])
+        .map((g: { name?: unknown }) => (typeof g?.name === "string" ? g.name : ""))
+        .filter((name: string) => name.length > 0)
     }
+  } catch (error) {
+    console.log(error);
+    crateGroups.value = []
   }
+}
 
 function deleteVersion(crate: string, version: string) {
   if (confirm('Delete "' + crate + '" version "' + version + '"?')) {
