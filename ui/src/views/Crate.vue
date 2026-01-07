@@ -287,7 +287,7 @@ const crateGroupName = ref("")
  */
 function extractNames(items: NamedObject[]): string[] {
   return items
-    .filter((item): item is { name: string } => typeof item?.name === 'string' && item.name.length > 0)
+    .filter((item): item is { name: string } => typeof item.name === 'string' && item.name.length > 0)
     .map(item => item.name)
 }
 
