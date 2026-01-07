@@ -273,7 +273,7 @@ const changeCrateAccessStatus = ref("")
 const changeCrateAccessMsg = ref("")
 
 // Type for objects with an optional name property
-type NamedObject = { name?: string | null | undefined }
+type NamedObject = { name?: string | null }
 
 const crateGroupsForCrate = ref<NamedObject[]>([])
 const crateGroups = ref<string[]>([])
@@ -287,8 +287,8 @@ const crateGroupName = ref("")
  */
 function extractNames(items: NamedObject[]): string[] {
   return items
-    .map((item) => (typeof item?.name === "string" ? item.name : ""))
-    .filter((name) => name.length > 0)
+    .filter((item): item is { name: string } => typeof item?.name === 'string' && item.name.length > 0)
+    .map(item => item.name)
 }
 
 const availableCrateGroups = computed(() => {
