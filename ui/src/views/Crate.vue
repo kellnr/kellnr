@@ -275,13 +275,15 @@ const crateGroupsForCrate = ref([])
 const crateGroups = ref<string[]>([])
 const crateGroupName = ref("")
 
-const availableCrateGroups = computed(() => {
-  const assigned = new Set(
-    (crateGroupsForCrate.value as Array<{ name?: unknown }>).
-      map((g) => (typeof g?.name === "string" ? g.name : ""))
-      .filter((n) => n.length > 0)
-  )
+// Helper function to extract valid string names from objects
+function extractNames(items: Array<{ name?: unknown }>): string[] {
+  return items
+    .map((item) => (typeof item?.name === "string" ? item.name : ""))
+    .filter((name) => name.length > 0)
+}
 
+const availableCrateGroups = computed(() => {
+  const assigned = new Set(extractNames(crateGroupsForCrate.value as Array<{ name?: unknown }>))
   return crateGroups.value.filter((name) => !assigned.has(name))
 })
 const addCrateGroupStatus = ref("")
@@ -498,9 +500,7 @@ async function getAllCrateGroups() {
     const res = await axios.get(LIST_GROUPS, { cache: false })
     if (res.status == 200) {
       // LIST_GROUPS returns: [{"name":"group1"},{"name":"group2"}]
-      crateGroups.value = (res.data ?? [])
-        .map((g: { name?: unknown }) => (typeof g?.name === "string" ? g.name : ""))
-        .filter((name: string) => name.length > 0)
+      crateGroups.value = extractNames(res.data ?? [])
     }
   } catch (error) {
     console.log(error);
