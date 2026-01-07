@@ -99,8 +99,7 @@
                   @click:close="changeCrateAccessStatus = ''">
                   {{ changeCrateAccessMsg }}
                 </v-alert>
-
-                <v-btn color="primary" type="submit">
+                <v-btn color="primary" type="submit" class="mt-2">
                   Change crate access rules
                 </v-btn>
               </v-form>
@@ -139,7 +138,7 @@
                   {{ addCrateUserMsg }}
                 </v-alert>
 
-                <v-btn color="primary" type="submit">
+                <v-btn color="primary" type="submit" class="mt-2">
                   Add
                 </v-btn>
               </v-form>
@@ -169,16 +168,23 @@
               <v-divider class="my-4"></v-divider>
 
               <h3 class="text-h5 mb-3">Add crate group</h3>
-                <v-form @submit.prevent="addCrateGroup">
-                  <v-select v-model="crateGroupName" :items="availableCrateGroups" label="Select Group" prepend-icon="mdi-account-group" variant="outlined" density="comfortable" class="mb-2">
-                  </v-select>
+              <v-form @submit.prevent="addCrateGroup">
+                <v-select
+                  v-model="crateGroupName"
+                  :items="availableCrateGroups"
+                  label="Select Group"
+                  prepend-icon="mdi-account-group"
+                  variant="outlined"
+                  density="comfortable"
+                  class="mb-2"
+                />
 
                 <v-alert v-if="addCrateGroupStatus" :type="addCrateGroupStatus === 'Success' ? 'success' : 'error'"
-                  closable @click:close="addCrateGroupStatus = ''" class="my-2">
+                  closable @click:close="addCrateGroupStatus = ''" class="mt-4">
                   {{ addCrateGroupMsg }}
                 </v-alert>
 
-                <v-btn color="primary" type="submit">
+                <v-btn color="primary" type="submit" class="mt-2">
                   Add
                 </v-btn>
               </v-form>
