@@ -472,7 +472,7 @@ function deleteCrateGroup(name: string) {
 }
 
 function getCrateGroupsForCrate() {
-  // disable caching to get updated token list
+  // disable caching to get updated group list
   axios
     // @ts-expect-error TS doesn't recognize cache option
     .get(CRATE_GROUPS(crate.value.name), { cache: false })
@@ -487,7 +487,7 @@ function getCrateGroupsForCrate() {
 }
 
 async function getAllCrateGroups() {
-  // disable caching to get updated token list
+  // disable caching to get updated group list
   try {
     // @ts-expect-error TS doesn't recognize cache option
     const res = await axios.get(LIST_GROUPS, { cache: false })
