@@ -242,7 +242,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import { defaultCrateData, defaultCrateAccessData, defaultCrateVersionData } from "../types/crate_data";
-import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
+import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep, CrateGroup } from "../types/crate_data";
 import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_GROUPS, CRATE_GROUP, CRATE_ACCESS_DATA, LIST_GROUPS } from "../remote-routes";
 import { useStore } from "../store/store";
 
@@ -271,18 +271,13 @@ const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
 const changeCrateAccessStatus = ref("")
 const changeCrateAccessMsg = ref("")
-const crateGroupsForCrate = ref([])
-const crateGroups = ref<string[]>([])
+const crateGroupsForCrate = ref<CrateGroup[]>([])
+const crateGroups = ref<CrateGroup[]>([])
 const crateGroupName = ref("")
 
 const availableCrateGroups = computed(() => {
-  const assigned = new Set(
-    (crateGroupsForCrate.value as Array<{ name?: unknown }>).
-      map((g) => (typeof g?.name === "string" ? g.name : ""))
-      .filter((n) => n.length > 0)
-  )
-
-  return crateGroups.value.filter((name) => !assigned.has(name))
+  const assigned = new Set(crateGroupsForCrate.value.map((g) => g.name))
+  return crateGroups.value.filter((group) => !assigned.has(group.name)).map((group) => group.name)
 })
 const addCrateGroupStatus = ref("")
 const addCrateGroupMsg = ref("")
@@ -477,7 +472,7 @@ function deleteCrateGroup(name: string) {
 }
 
 function getCrateGroupsForCrate() {
-  // disable caching to get updated token list
+  // disable caching to get updated group list
   axios
     // @ts-expect-error TS doesn't recognize cache option
     .get(CRATE_GROUPS(crate.value.name), { cache: false })
@@ -492,15 +487,13 @@ function getCrateGroupsForCrate() {
 }
 
 async function getAllCrateGroups() {
-  // disable caching to get updated token list
+  // disable caching to get updated group list
   try {
     // @ts-expect-error TS doesn't recognize cache option
     const res = await axios.get(LIST_GROUPS, { cache: false })
     if (res.status == 200) {
       // LIST_GROUPS returns: [{"name":"group1"},{"name":"group2"}]
-      crateGroups.value = (res.data ?? [])
-        .map((g: { name?: unknown }) => (typeof g?.name === "string" ? g.name : ""))
-        .filter((name: string) => name.length > 0)
+      crateGroups.value = res.data ?? []
     }
   } catch (error) {
     console.log(error);
