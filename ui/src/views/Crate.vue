@@ -99,8 +99,7 @@
                   @click:close="changeCrateAccessStatus = ''">
                   {{ changeCrateAccessMsg }}
                 </v-alert>
-
-                <v-btn color="primary" type="submit">
+                <v-btn color="primary" type="submit" class="mt-2">
                   Change crate access rules
                 </v-btn>
               </v-form>
@@ -139,7 +138,7 @@
                   {{ addCrateUserMsg }}
                 </v-alert>
 
-                <v-btn color="primary" type="submit">
+                <v-btn color="primary" type="submit" class="mt-2">
                   Add
                 </v-btn>
               </v-form>
@@ -151,7 +150,7 @@
             <v-card-title>Crate groups</v-card-title>
             <v-card-text>
               <v-list>
-                <v-list-item v-for="group in crateGroups" :key="group.name">
+                <v-list-item v-for="group in crateGroupsForCrate" :key="group.name">
                   <v-list-item-title>{{ group.name }}</v-list-item-title>
                   <template v-slot:append>
                     <v-btn color="error" variant="text" size="small" @click="deleteCrateGroup(group.name)">
@@ -170,15 +169,22 @@
 
               <h3 class="text-h5 mb-3">Add crate group</h3>
               <v-form @submit.prevent="addCrateGroup">
-                <v-text-field v-model="crateGroupName" placeholder="Groupname" prepend-icon="mdi-account-group"
-                  variant="outlined" density="comfortable"></v-text-field>
+                <v-select
+                  v-model="crateGroupName"
+                  :items="availableCrateGroups"
+                  label="Select Group"
+                  prepend-icon="mdi-account-group"
+                  variant="outlined"
+                  density="comfortable"
+                  class="mb-2"
+                />
 
                 <v-alert v-if="addCrateGroupStatus" :type="addCrateGroupStatus === 'Success' ? 'success' : 'error'"
-                  closable @click:close="addCrateGroupStatus = ''" class="my-2">
+                  closable @click:close="addCrateGroupStatus = ''" class="mt-4">
                   {{ addCrateGroupMsg }}
                 </v-alert>
 
-                <v-btn color="primary" type="submit">
+                <v-btn color="primary" type="submit" class="mt-2">
                   Add
                 </v-btn>
               </v-form>
@@ -242,8 +248,8 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import { defaultCrateData, defaultCrateAccessData, defaultCrateVersionData } from "../types/crate_data";
-import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
-import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_GROUPS, CRATE_GROUP, CRATE_ACCESS_DATA } from "../remote-routes";
+import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep, CrateGroup } from "../types/crate_data";
+import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_GROUPS, CRATE_GROUP, CRATE_ACCESS_DATA, LIST_GROUPS } from "../remote-routes";
 import { useStore } from "../store/store";
 
 dayjs.extend(relativeTime);
@@ -271,8 +277,14 @@ const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
 const changeCrateAccessStatus = ref("")
 const changeCrateAccessMsg = ref("")
-const crateGroups = ref([])
+const crateGroupsForCrate = ref<CrateGroup[]>([])
+const crateGroups = ref<CrateGroup[]>([])
 const crateGroupName = ref("")
+
+const availableCrateGroups = computed(() => {
+  const assigned = new Set(crateGroupsForCrate.value.map((g) => g.name))
+  return crateGroups.value.filter((group) => !assigned.has(group.name)).map((group) => group.name)
+})
 const addCrateGroupStatus = ref("")
 const addCrateGroupMsg = ref("")
 const deleteCrateGroupStatus = ref("")
@@ -412,7 +424,7 @@ function addCrateGroup() {
         addCrateGroupStatus.value = "Success";
         addCrateGroupMsg.value = "Crate group successfully added.";
         // Update group list
-        getCrateGroups();
+        getCrateGroupsForCrate();
       }
     })
     .catch((error) => {
@@ -444,7 +456,7 @@ function deleteCrateGroup(name: string) {
           deleteCrateGroupStatus.value = "Success";
           deleteCrateGroupMsg.value = "Crate group successfully deleted.";
           // Update group list
-          getCrateGroups();
+          getCrateGroupsForCrate();
         }
       })
       .catch((error) => {
@@ -465,19 +477,34 @@ function deleteCrateGroup(name: string) {
   }
 }
 
-function getCrateGroups() {
-  // disable caching to get updated token list
+function getCrateGroupsForCrate() {
+  // disable caching to get updated group list
   axios
     // @ts-expect-error TS doesn't recognize cache option
     .get(CRATE_GROUPS(crate.value.name), { cache: false })
     .then((res) => {
       if (res.status == 200) {
-        crateGroups.value = res.data.groups;
+        crateGroupsForCrate.value = res.data.groups;
       }
     })
     .catch((error) => {
       console.log(error);
     });
+}
+
+async function getAllCrateGroups() {
+  // disable caching to get updated group list
+  try {
+    // @ts-expect-error TS doesn't recognize cache option
+    const res = await axios.get(LIST_GROUPS, { cache: false })
+    if (res.status == 200) {
+      // LIST_GROUPS returns: [{"name":"group1"},{"name":"group2"}]
+      crateGroups.value = res.data ?? []
+    }
+  } catch (error) {
+    console.log(error);
+    crateGroups.value = []
+  }
 }
 
 function deleteVersion(crate: string, version: string) {
@@ -670,13 +697,14 @@ watch(route, () => {
 })
 
 // Watch for tab changes to load data when needed
-watch(tab, (newTab) => {
-  if (newTab === 'crateSettings') {
-    getCrateAccessData();
-    getCrateUsers();
-    getCrateGroups();
-  }
-})
+  watch(tab, (newTab) => {
+    if (newTab === 'crateSettings') {
+      getCrateAccessData();
+      getCrateUsers();
+      getCrateGroupsForCrate();
+      getAllCrateGroups();
+    }
+  })
 </script>
 
 <style>
