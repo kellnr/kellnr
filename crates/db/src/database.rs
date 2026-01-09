@@ -28,7 +28,7 @@ use sea_orm::query::{QueryOrder, QuerySelect, TransactionTrait};
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
+    ExprTrait, FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
 };
 
 use crate::error::DbError;
