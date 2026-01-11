@@ -3884,6 +3884,7 @@ version = "5.9.1"
 dependencies = [
  "axum",
  "chrono",
+ "cookie",
  "http-body-util",
  "hyper",
  "kellnr-appstate",

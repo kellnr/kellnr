@@ -20,9 +20,15 @@ use kellnr_error::api_error::{ApiError, ApiResult};
 use tracing::warn;
 
 use crate::pub_data::{EmptyCrateData, PubData};
+
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
+
+#[cfg(test)]
+#[path = "test_cookie_helper.rs"]
+mod test_cookie_helper;
+
 use crate::yank_success::YankSuccess;
 use crate::{crate_group, crate_user, crate_version};
 
@@ -582,6 +588,7 @@ mod reg_api_tests {
     use kellnr_db::mock::MockDb;
     use kellnr_db::{ConString, Database, SqliteConString, test_utils};
     use kellnr_error::api_error::ErrorDetails;
+
     use kellnr_settings::Settings;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
@@ -637,10 +644,11 @@ mod reg_api_tests {
             .await
             .unwrap();
 
+        let status = r.status();
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
 
         assert_eq!(
-            0,
+            1,
             kellnr
                 .db
                 .get_crate_owners(&NormalizedName::from_unchecked("test_lib".to_string()))
@@ -648,8 +656,13 @@ mod reg_api_tests {
                 .unwrap()
                 .len()
         );
-        let owners = serde_json::from_slice::<crate_user::CrateUserResponse>(&result_msg).unwrap();
-        assert!(owners.ok);
+
+        assert_eq!(status, StatusCode::CONFLICT);
+        let owners = serde_json::from_slice::<ErrorDetails>(&result_msg).unwrap();
+        assert_eq!(
+            "ERROR: A crate must have at least one owner",
+            owners.errors[0].detail
+        );
     }
 
     #[tokio::test]
@@ -697,6 +710,406 @@ mod reg_api_tests {
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         let owners = serde_json::from_slice::<crate_user::CrateUserResponse>(&result_msg).unwrap();
         assert!(owners.ok);
+    }
+
+    #[tokio::test]
+    async fn add_owner_single_valid_owner() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        kellnr
+            .db
+            .add_user("user", "123", "123", false, false)
+            .await
+            .unwrap();
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/test_lib/owners/user")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+
+        let owners = kellnr
+            .db
+            .get_crate_owners(&NormalizedName::from_unchecked("test_lib".to_string()))
+            .await
+            .unwrap();
+        assert_eq!(2, owners.len());
+    }
+
+    #[tokio::test]
+    async fn remove_owner_single_last_owner_is_rejected() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::delete("/api/v1/crates/test_lib/owners/admin")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn add_owner_single_non_owner_is_forbidden() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        // publish crate as admin
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // create regular user and token
+        kellnr
+            .db
+            .add_user("user", "123", "123", false, false)
+            .await
+            .unwrap();
+        kellnr
+            .db
+            .add_auth_token("user token", "user_token", "user")
+            .await
+            .unwrap();
+
+        // try to add an owner as non-owner
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/test_lib/owners/admin")
+                    .header(header::AUTHORIZATION, "user_token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn remove_owner_single_non_owner_is_forbidden() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        // publish crate as admin
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // create regular user and token
+        kellnr
+            .db
+            .add_user("user", "123", "123", false, false)
+            .await
+            .unwrap();
+        kellnr
+            .db
+            .add_auth_token("user token", "user_token", "user")
+            .await
+            .unwrap();
+
+        // try to remove the owner as non-owner
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::delete("/api/v1/crates/test_lib/owners/admin")
+                    .header(header::AUTHORIZATION, "user_token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn add_owner_bulk_non_owner_is_forbidden() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        // publish crate as admin
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // create regular user and token
+        kellnr
+            .db
+            .add_user("user", "123", "123", false, false)
+            .await
+            .unwrap();
+        kellnr
+            .db
+            .add_auth_token("user token", "user_token", "user")
+            .await
+            .unwrap();
+
+        let add_owner = crate_user::CrateUserRequest {
+            users: vec!["admin".to_string()],
+        };
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/test_lib/owners")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, "user_token")
+                    .body(Body::from(serde_json::to_string(&add_owner).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn remove_owner_bulk_non_owner_is_forbidden() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        // publish crate as admin
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // create regular user and token
+        kellnr
+            .db
+            .add_user("user", "123", "123", false, false)
+            .await
+            .unwrap();
+        kellnr
+            .db
+            .add_auth_token("user token", "user_token", "user")
+            .await
+            .unwrap();
+
+        let del_owner = crate_user::CrateUserRequest {
+            users: vec!["admin".to_string()],
+        };
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::delete("/api/v1/crates/test_lib/owners")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, "user_token")
+                    .body(Body::from(serde_json::to_string(&del_owner).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn add_owner_single_non_owner_session_is_unauthorized() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        // publish crate as admin
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // create regular user
+        kellnr
+            .db
+            .add_user("user", "123", "123", false, false)
+            .await
+            .unwrap();
+
+        // create a session token and store it in DB
+        kellnr.db.add_session_token("user", "1234").await.unwrap();
+
+        // create signed cookie header
+        let cookie_header = test_cookie_helper::cookies::encode_cookies([(
+            kellnr_settings::constants::COOKIE_SESSION_ID,
+            "1234",
+        )]);
+
+        // try to add owner via session as non-owner
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/test_lib/owners/admin")
+                    .header(header::COOKIE, cookie_header)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn remove_owner_single_non_owner_session_is_unauthorized() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        // publish crate as admin
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // create regular user
+        kellnr
+            .db
+            .add_user("user", "123", "123", false, false)
+            .await
+            .unwrap();
+
+        // create a session token and store it in DB
+        kellnr.db.add_session_token("user", "1234").await.unwrap();
+
+        let cookie_header = test_cookie_helper::cookies::encode_cookies([(
+            kellnr_settings::constants::COOKIE_SESSION_ID,
+            "1234",
+        )]);
+
+        // try to remove owner via session as non-owner
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::delete("/api/v1/crates/test_lib/owners/admin")
+                    .header(header::COOKIE, cookie_header)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
@@ -1672,6 +2085,8 @@ mod reg_api_tests {
             .route("/{crate_name}/owners", delete(remove_owner))
             .route("/{crate_name}/owners", put(add_owner))
             .route("/{crate_name}/owners", get(list_owners))
+            .route("/{crate_name}/owners/{user}", delete(remove_owner_single))
+            .route("/{crate_name}/owners/{user}", put(add_owner_single))
             .route("/", get(search))
             .route("/{package}/{version}/download", get(download))
             .route("/new_empty", put(add_empty_crate))
