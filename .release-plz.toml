@@ -10,15 +10,5 @@ semver_check = false
 # Release only if the release PR is merged, not on every push to main
 release_always = false
 
-[[package]]
-name = "kellnr-minio-testcontainer"
-publish = false # Dev dependency for testing, do not publish
-
-[[package]]
-name = "kellnr-db-testcontainer"
-publish = false # Dev dependency for testing, do not publish
-
-[[package]]
-name = "kellnr-embedded-resources"
-publish_allow_dirty = true # Generated code from npm, allow dirty working directory
-
+# Publishing is done in the usual CI pipeline, not via release-plz
+publish = false

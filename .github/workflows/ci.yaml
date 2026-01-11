@@ -186,8 +186,6 @@ jobs:
     if: github.event_name == 'release'
     needs:
       - build-and-push-image
-    permissions:
-      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -206,12 +204,9 @@ jobs:
       - name: Build static resources
         run: just npm-build
 
-      - name: Run release-plz
-        uses: release-plz/action@v0.5
-        with:
-          command: release
+      - name: Cargo Release
+        run: cargo publish --allow-dirty # because of built static resources
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   dispatch-helm:
