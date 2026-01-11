@@ -23,11 +23,8 @@ export const CRATE_ACCESS_DATA = (crate_name: string) => `./api/v1/crate_access/
 export const CRATE_GROUPS = (crate_name: string) => `./api/v1/crate_access/${encodeURIComponent(crate_name)}/groups`;
 export const CRATE_GROUP = (crate_name: string, name: string) => `./api/v1/crate_access/${encodeURIComponent(crate_name)}/groups/${encodeURIComponent(name)}`;
 
-
 export const CRATE_OWNERS = (crate_name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/owners`;
 export const CRATE_OWNER = (crate_name: string, name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/owners/${encodeURIComponent(name)}`;
-export const CRATE_OWNERS_SET = (crate_name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/owners`;
-
 
 export const CRATE_DATA = "./api/v1/ui/crate_data";
 export const CRATESIO_DATA = "./api/v1/ui/cratesio_data";

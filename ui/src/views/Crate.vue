@@ -295,7 +295,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import { defaultCrateData, defaultCrateAccessData, defaultCrateVersionData } from "../types/crate_data";
 import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep, CrateGroup } from "../types/crate_data";
-import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_GROUPS, CRATE_GROUP, CRATE_ACCESS_DATA, LIST_GROUPS, CRATE_OWNERS, CRATE_OWNER, CRATE_OWNERS_SET } from "../remote-routes";
+import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_GROUPS, CRATE_GROUP, CRATE_ACCESS_DATA, LIST_GROUPS, CRATE_OWNERS, CRATE_OWNER } from "../remote-routes";
 
 import { useStore } from "../store/store";
 

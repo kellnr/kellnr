@@ -1006,7 +1006,7 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
-    async fn add_owner_single_non_owner_session_is_unauthorized() {
+    async fn add_owner_single_non_owner_session_is_forbidden() {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
 
@@ -1060,7 +1060,7 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
-    async fn remove_owner_single_non_owner_session_is_unauthorized() {
+    async fn remove_owner_single_non_owner_session_is_forbidden() {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
 
