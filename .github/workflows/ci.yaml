@@ -175,8 +175,8 @@ jobs:
         run: chmod u+x build_and_push.sh && ./build_and_push.sh $IMAGE $RELEASE_VERSION
         working-directory: docker
 
-  crate-io-release:
-    name: Release to Crate.io
+  crates-io-release:
+    name: Release to crates.io
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     needs:
@@ -198,7 +198,7 @@ jobs:
       - name: Setup Rust
         uses: hecrj/setup-rust-action@v2
 
-      - name: Build static ressources
+      - name: Build static resources
         run: just npm-build
 
       - name: Run release-plz
