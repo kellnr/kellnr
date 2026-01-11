@@ -183,9 +183,9 @@ jobs:
   crates-io-release:
     name: Release to crates.io
     runs-on: ubuntu-latest
-    # if: github.event_name == 'release'
-    # needs:
-    #   - build-and-push-image
+    if: github.event_name == 'release'
+    needs:
+      - build-and-push-image
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
@@ -206,56 +206,56 @@ jobs:
       - name: Build static resources
         run: just npm-build
 
-      # - name: Publish kellnr-common
-      #   run: cargo publish -p kellnr-common
-      #
-      # - name: Publish kellnr-settings
-      #   run: cargo publish -p kellnr-settings
-      #
-      # - name: Publish kellnr-entity
-      #   run: cargo publish -p kellnr-entity
-      #
-      # - name: Publish kellnr-migration
-      #   run: cargo publish -p kellnr-migration
+      - name: Publish kellnr-common
+        run: cargo publish -p kellnr-common
 
-      # - name: Publish kellnr-minio-testcontainer
-      #   run: cargo publish -p kellnr-minio-testcontainer
-      #
-      # - name: Publish kellnr-storage
-      #   run: cargo publish -p kellnr-storage
+      - name: Publish kellnr-settings
+        run: cargo publish -p kellnr-settings
 
-      # - name: Publish kellnr-db-testcontainer
-      #   run: cargo publish -p kellnr-db-testcontainer
+      - name: Publish kellnr-entity
+        run: cargo publish -p kellnr-entity
 
-      # - name: Publish kellnr-db
-      #   run: cargo publish -p kellnr-db
+      - name: Publish kellnr-migration
+        run: cargo publish -p kellnr-migration
 
-      # - name: Publish kellnr-appstate
-      #   run: cargo publish -p kellnr-appstate
-      #
-      # - name: Publish kellnr-embedded-resources
-      #   run: cargo publish -p kellnr-embedded-resources --allow-dirty # because of built static resources
+      - name: Publish kellnr-minio-testcontainer
+        run: cargo publish -p kellnr-minio-testcontainer
 
-      # - name: Publish kellnr-auth
-      #   run: cargo publish -p kellnr-auth
-      #
-      # - name: Publish kellnr-error
-      #   run: cargo publish -p kellnr-error
+      - name: Publish kellnr-storage
+        run: cargo publish -p kellnr-storage
 
-      # - name: Publish kellnr-webhooks
-      #   run: cargo publish -p kellnr-webhooks
+      - name: Publish kellnr-db-testcontainer
+        run: cargo publish -p kellnr-db-testcontainer
 
-      # - name: Publish kellnr-registry
-      #   run: cargo publish -p kellnr-registry
-      #
-      # - name: Publish kellnr-index
-      #   run: cargo publish -p kellnr-index
+      - name: Publish kellnr-db
+        run: cargo publish -p kellnr-db
 
-      # - name: Publish kellnr-docs
-      #   run: cargo publish -p kellnr-docs
-      #
-      # - name: Publish kellnr-web-ui
-      #   run: cargo publish -p kellnr-web-ui
+      - name: Publish kellnr-appstate
+        run: cargo publish -p kellnr-appstate
+
+      - name: Publish kellnr-embedded-resources
+        run: cargo publish -p kellnr-embedded-resources --allow-dirty # because of built static resources
+
+      - name: Publish kellnr-auth
+        run: cargo publish -p kellnr-auth
+
+      - name: Publish kellnr-error
+        run: cargo publish -p kellnr-error
+
+      - name: Publish kellnr-webhooks
+        run: cargo publish -p kellnr-webhooks
+
+      - name: Publish kellnr-registry
+        run: cargo publish -p kellnr-registry
+
+      - name: Publish kellnr-index
+        run: cargo publish -p kellnr-index
+
+      - name: Publish kellnr-docs
+        run: cargo publish -p kellnr-docs
+
+      - name: Publish kellnr-web-ui
+        run: cargo publish -p kellnr-web-ui
 
       - name: Publish kellnr
         run: cargo publish -p kellnr
