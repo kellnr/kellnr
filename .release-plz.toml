@@ -7,9 +7,18 @@ changelog_update = false
 # happen if for example a migration cannot be applied anymore, but this cannot be detected automatically.
 semver_check = false
 
-# Do not publish the binary to crates.io a.t.m.
-# This is something for later.
-publish = false
-
 # Release only if the release PR is merged, not on every push to main
 release_always = false
+
+[[package]]
+name = "kellnr-minio-testcontainer"
+publish = false # Dev dependency for testing, do not publish
+
+[[package]]
+name = "kellnr-db-testcontainer"
+publish = false # Dev dependency for testing, do not publish
+
+[[package]]
+name = "kellnr-embedded-resources"
+publish_allow_dirty = true # Generated code from npm, allow dirty working directory
+
