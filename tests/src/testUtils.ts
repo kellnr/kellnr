@@ -105,8 +105,9 @@ export function createBufferedTestLogger(
     // eslint-disable-next-line no-console
     console.log(
       [header, ...lines, footer].filter(Boolean).join("\n") +
-        (lines.length ? "\n" : "\n"),
+      (lines.length ? "\n" : "\n"),
     );
+
 
     // Always attach as well (useful in CI artifacts / HTML report).
     await attach();
@@ -170,9 +171,10 @@ export async function execOrThrow(
 
     throw new Error(
       `Command failed${desc}: ${res.cmd}\n` +
-        `exitCode=${res.exitCode}\n` +
-        (combined ? `output:\n${combined}\n` : ""),
+      `exitCode=${res.exitCode}\n` +
+      (combined ? `output:\n${combined}\n` : ""),
     );
+
   }
   return res;
 }
@@ -360,3 +362,138 @@ export async function assertDockerAvailable(): Promise<void> {
   }
   if (playDebug()) log("debug", `docker version ok`);
 }
+
+export async function fetchLatestReleasedKellnrImage(): Promise<string> {
+  const image = "ghcr.io/kellnr/kellnr";
+  const repo = "kellnr/kellnr";
+
+  type Version = { major: number; minor: number; patch: number; pre?: string };
+
+  const parseVersion = (raw: string): Version | null => {
+    // tags are semver: x.y.z, optionally prefixed with v,
+    // optionally with prerelease: x.y.z-rc.1 / -beta.2 / -rc1
+    const s = raw.startsWith("v") ? raw.slice(1) : raw;
+    const m = s.match(
+      /^([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z.-]+))?$/,
+    );
+    if (!m) return null;
+    return {
+      major: Number(m[1]),
+      minor: Number(m[2]),
+      patch: Number(m[3]),
+      pre: m[4],
+    };
+  };
+
+  const cmpVersion = (a: Version, b: Version): number => {
+    if (a.major !== b.major) return a.major - b.major;
+    if (a.minor !== b.minor) return a.minor - b.minor;
+    if (a.patch !== b.patch) return a.patch - b.patch;
+
+    // SemVer precedence: stable > prerelease
+    const aPre = a.pre;
+    const bPre = b.pre;
+    if (!aPre && bPre) return 1;
+    if (aPre && !bPre) return -1;
+    if (!aPre && !bPre) return 0;
+
+    // SemVer prerelease precedence:
+    // - compare dot-separated identifiers
+    // - numeric identifiers are compared numerically
+    // - numeric identifiers have lower precedence than non-numeric
+    // - if equal so far, shorter identifier list has higher precedence
+    const splitIds = (pre: string): Array<string | number> =>
+      pre.split(".").map((id) => (/^[0-9]+$/.test(id) ? Number(id) : id));
+
+    const aIds = splitIds(aPre!);
+    const bIds = splitIds(bPre!);
+
+    const len = Math.min(aIds.length, bIds.length);
+    for (let i = 0; i < len; i++) {
+      const ai = aIds[i];
+      const bi = bIds[i];
+      if (ai === bi) continue;
+
+      const aIsNum = typeof ai === "number";
+      const bIsNum = typeof bi === "number";
+
+      if (aIsNum && !bIsNum) return -1;
+      if (!aIsNum && bIsNum) return 1;
+
+      if (aIsNum && bIsNum) return (ai as number) - (bi as number);
+      return String(ai).localeCompare(String(bi));
+    }
+
+    if (aIds.length !== bIds.length) return aIds.length < bIds.length ? 1 : -1;
+    return 0;
+  };
+
+  const fetchGhcrToken = async (): Promise<string | null> => {
+    // Anonymous pull token is usually sufficient and avoids GitHub API rate limits.
+    const tokenUrl = `https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`;
+    const res = await fetch(tokenUrl, {
+      headers: { "user-agent": "kellnr-tests/1.0" },
+    });
+    if (!res.ok) return null;
+
+    const data = (await res.json().catch(() => null)) as any;
+    return typeof data?.token === "string" ? data.token : null;
+  };
+
+  const token = await fetchGhcrToken();
+
+  const tagsUrl = `https://ghcr.io/v2/${repo}/tags/list?n=1000`;
+  const headers: Record<string, string> = {
+    "user-agent": "kellnr-tests/1.0",
+    accept: "application/json",
+  };
+  if (token) headers.authorization = `Bearer ${token}`;
+
+  const res = await fetch(tagsUrl, { headers });
+  const bodyText = await res.text();
+
+  if (!res.ok) {
+    throw new Error(
+      `GHCR tags request failed while fetching ${image} tags. ` +
+      `Status: ${res.status}. Body prefix: ${bodyText.slice(0, 200)}`,
+    );
+
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(bodyText);
+  } catch {
+    throw new Error(
+      `Failed to parse JSON response from GHCR tags endpoint. Response prefix: ${bodyText.slice(0, 200)}`,
+    );
+  }
+
+  const tags = (payload as any)?.tags;
+  if (!Array.isArray(tags)) {
+    throw new Error(
+      `Unexpected GHCR tags response shape. Response prefix: ${bodyText.slice(0, 200)}`,
+    );
+  }
+
+  // Filter to semver-like tags, ignore "latest"
+  const versionTags = tags
+    .filter((t: unknown): t is string => typeof t === "string")
+    .filter((t) => t !== "latest")
+    .map((t) => ({ tag: t, v: parseVersion(t) }))
+    .filter((x) => x.v !== null) as Array<{ tag: string; v: Version }>;
+
+  if (versionTags.length === 0) {
+    throw new Error(
+      `No semver-like tags found on ${image} (excluding "latest").`,
+    );
+
+  }
+
+  versionTags.sort((a, b) => cmpVersion(a.v, b.v));
+  const best = versionTags[versionTags.length - 1].tag;
+  const bestNoV = best.startsWith("v") ? best.slice(1) : best;
+
+  return `${image}:${bestNoV}`;
+}
+
