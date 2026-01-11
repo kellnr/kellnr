@@ -224,8 +224,8 @@ jobs:
       # - name: Publish kellnr-storage
       #   run: cargo publish -p kellnr-storage
 
-      - name: Publish kellnr-db-testcontainer
-        run: cargo publish -p kellnr-db-testcontainer
+      # - name: Publish kellnr-db-testcontainer
+      #   run: cargo publish -p kellnr-db-testcontainer
 
       - name: Publish kellnr-db
         run: cargo publish -p kellnr-db
