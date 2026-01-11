@@ -236,11 +236,11 @@ jobs:
       # - name: Publish kellnr-embedded-resources
       #   run: cargo publish -p kellnr-embedded-resources --allow-dirty # because of built static resources
 
-      - name: Publish kellnr-auth
-        run: cargo publish -p kellnr-auth
-
-      - name: Publish kellnr-error
-        run: cargo publish -p kellnr-error
+      # - name: Publish kellnr-auth
+      #   run: cargo publish -p kellnr-auth
+      #
+      # - name: Publish kellnr-error
+      #   run: cargo publish -p kellnr-error
 
       - name: Publish kellnr-webhooks
         run: cargo publish -p kellnr-webhooks
