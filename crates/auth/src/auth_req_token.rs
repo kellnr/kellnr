@@ -1,4 +1,6 @@
+use axum::RequestPartsExt;
 use axum::body::Body;
+
 use axum::extract::{Request, State};
 use axum::http::HeaderValue;
 use axum::middleware::Next;
@@ -10,6 +12,9 @@ use crate::token::Token;
 /// Middleware that checks if a cargo token is provided when `settings.registry.auth_required` is `true`.
 ///
 /// If the user is not logged in, a 401 is returned.
+///
+/// Note: For endpoints that should accept both cargo tokens (CLI) and session cookies (Web UI),
+/// use `token_or_session_auth_when_required` instead.
 pub async fn cargo_auth_when_required(
     State(state): State<kellnr_appstate::AppStateData>,
     request: Request,
@@ -46,8 +51,64 @@ pub async fn cargo_auth_when_required(
     }
 }
 
+/// Middleware that allows *either* cargo token auth (Authorization header) *or* web session auth
+/// (signed session cookie) when `settings.registry.auth_required` is `true`.
+///
+/// This is intended for endpoints that are used by both the cargo CLI and the web UI.
+pub async fn token_or_session_auth_when_required(
+    State(state): State<kellnr_appstate::AppStateData>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if !state.settings.registry.auth_required {
+        return next.run(request).await;
+    }
+
+    // 1) Try cargo token auth.
+    if Token::from_header(request.headers(), &state.db)
+        .await
+        .is_ok()
+    {
+        return next.run(request).await;
+    }
+
+    // 2) Try session cookie auth (signed cookie).
+    // Note: extracting `PrivateCookieJar` from a full request consumes the request.
+    // We therefore extract it from parts and then reconstruct the request.
+    let (mut parts, body) = request.into_parts();
+
+    let jar: axum_extra::extract::PrivateCookieJar = match parts.extract_with_state(&state).await {
+        Ok(j) => j,
+        Err(_) => return unauthorized_www_authenticate(),
+    };
+
+    let Some(cookie) = jar.get(kellnr_settings::constants::COOKIE_SESSION_ID) else {
+        return unauthorized_www_authenticate();
+    };
+
+    if state.db.validate_session(cookie.value()).await.is_ok() {
+        let request = Request::from_parts(parts, body);
+        return next.run(request).await;
+    }
+
+    unauthorized_www_authenticate()
+}
+
+fn unauthorized_www_authenticate() -> Response {
+    // Forge the response to handle www-authenticate header.
+    // See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/WWW-Authenticate
+    let mut response = Response::new(Body::empty());
+    *response.status_mut() = axum::http::StatusCode::UNAUTHORIZED;
+    response.headers_mut().insert(
+        "WWW-Authenticate",
+        HeaderValue::from_static("Basic, Bearer"),
+    );
+    response
+}
+
 #[cfg(test)]
 mod test {
+
     use std::sync::Arc;
 
     use axum::body::Body;

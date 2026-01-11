@@ -106,6 +106,51 @@
             </v-card-text>
           </v-card>
 
+          <!-- Crate Owners -->
+          <v-card class="mb-4" elevation="1">
+            <v-card-title>Crate owners</v-card-title>
+            <v-card-text>
+              <v-alert v-if="!canManageOwners()" type="info" variant="tonal" class="mb-4">
+                Only existing crate owners or admins can add/remove crate owners.
+              </v-alert>
+
+              <v-list>
+                <v-list-item v-for="owner in crateOwners" :key="owner.login">
+                  <v-list-item-title>{{ owner.login }}</v-list-item-title>
+                  <template v-slot:append>
+                    <v-btn :disabled="!canManageOwners()" color="error" variant="text" size="small"
+                      @click="deleteCrateOwner(owner.login)">
+                      Delete
+                    </v-btn>
+                  </template>
+                </v-list-item>
+              </v-list>
+
+              <v-alert v-if="deleteCrateOwnerStatus"
+                :type="deleteCrateOwnerStatus === 'Success' ? 'success' : 'error'" closable
+                @click:close="deleteCrateOwnerStatus = ''" class="mt-4">
+                {{ deleteCrateOwnerMsg }}
+              </v-alert>
+
+              <v-divider class="my-4"></v-divider>
+
+              <h3 class="text-h5 mb-3">Add crate owner</h3>
+              <v-form @submit.prevent="addCrateOwner">
+                <v-text-field v-model="crateOwnerName" placeholder="Username" prepend-icon="mdi-account-star"
+                  variant="outlined" density="comfortable" :disabled="!canManageOwners()"></v-text-field>
+
+                <v-alert v-if="addCrateOwnerStatus" :type="addCrateOwnerStatus === 'Success' ? 'success' : 'error'"
+                  closable @click:close="addCrateOwnerStatus = ''" class="my-2">
+                  {{ addCrateOwnerMsg }}
+                </v-alert>
+
+                <v-btn :disabled="!canManageOwners()" color="primary" type="submit" class="mt-2">
+                  Add
+                </v-btn>
+              </v-form>
+            </v-card-text>
+          </v-card>
+
           <!-- Crate Users -->
           <v-card class="mb-4" elevation="1">
             <v-card-title>Crate users</v-card-title>
@@ -144,6 +189,7 @@
               </v-form>
             </v-card-text>
           </v-card>
+
 
           <!-- Crate Groups -->
           <v-card class="mb-4" elevation="1">
@@ -249,7 +295,8 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import { defaultCrateData, defaultCrateAccessData, defaultCrateVersionData } from "../types/crate_data";
 import type { CrateData, CrateAccessData, CrateVersionData, CrateRegistryDep, CrateGroup } from "../types/crate_data";
-import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_GROUPS, CRATE_GROUP, CRATE_ACCESS_DATA, LIST_GROUPS } from "../remote-routes";
+import { CRATE_DATA, CRATE_DELETE_VERSION, CRATE_DELETE_ALL, DOCS_BUILD, CRATE_USERS, CRATE_USER, CRATE_GROUPS, CRATE_GROUP, CRATE_ACCESS_DATA, LIST_GROUPS, CRATE_OWNERS, CRATE_OWNER, CRATE_OWNERS_SET } from "../remote-routes";
+
 import { useStore } from "../store/store";
 
 dayjs.extend(relativeTime);
@@ -277,9 +324,19 @@ const deleteCrateUserStatus = ref("")
 const deleteCrateUserMsg = ref("")
 const changeCrateAccessStatus = ref("")
 const changeCrateAccessMsg = ref("")
+
+// Owners management
+const crateOwners = ref<{ login: string }[]>([])
+const crateOwnerName = ref("")
+const addCrateOwnerStatus = ref("")
+const addCrateOwnerMsg = ref("")
+const deleteCrateOwnerStatus = ref("")
+const deleteCrateOwnerMsg = ref("")
+
 const crateGroupsForCrate = ref<CrateGroup[]>([])
 const crateGroups = ref<CrateGroup[]>([])
 const crateGroupName = ref("")
+
 
 const availableCrateGroups = computed(() => {
   const assigned = new Set(crateGroupsForCrate.value.map((g) => g.name))
@@ -342,7 +399,8 @@ const sortedOwners = computed(() => {
 
 function addCrateUser() {
   axios
-    .put(CRATE_USER(crate.value.name, crateUserName.value))
+    .put(CRATE_USER(crate.value.name, crateUserName.value), null, { withCredentials: true })
+
     .then((res) => {
       if (res.status == 200) {
         addCrateUserStatus.value = "Success";
@@ -374,7 +432,8 @@ function addCrateUser() {
 function deleteCrateUser(name: string) {
   if (confirm('Delete crate user "' + name + '"?')) {
     axios
-      .delete(CRATE_USER(crate.value.name, name))
+      .delete(CRATE_USER(crate.value.name, name), { withCredentials: true })
+
       .then((res) => {
         if (res.status == 200) {
           deleteCrateUserStatus.value = "Success";
@@ -405,7 +464,8 @@ function getCrateUsers() {
   // disable caching to get updated token list
   axios
     // @ts-expect-error TS doesn't recognize cache option
-    .get(CRATE_USERS(crate.value.name), { cache: false })
+    .get(CRATE_USERS(crate.value.name), { cache: false, withCredentials: true })
+
     .then((res) => {
       if (res.status == 200) {
         crateUsers.value = res.data.users;
@@ -416,9 +476,120 @@ function getCrateUsers() {
     });
 }
 
+function canManageOwners(): boolean {
+  return store.loggedInUserIsAdmin || (crateOwners.value ?? []).some((o) => o.login === store.loggedInUser)
+}
+
+function getCrateOwners() {
+  axios
+    // @ts-expect-error TS doesn't recognize cache option
+    .get(CRATE_OWNERS(crate.value.name), { cache: false, withCredentials: true })
+
+    .then((res) => {
+      if (res.status == 200) {
+        crateOwners.value = res.data.users ?? []
+
+        // Keep crate metadata in sync so the About tab and other owner-based UI (e.g. Build docs)
+        // updates immediately without a full crate reload.
+        crate.value.owners = (crateOwners.value ?? []).map((o) => o.login)
+      }
+    })
+    .catch((error) => {
+      console.log(error)
+      crateOwners.value = []
+      crate.value.owners = []
+    })
+}
+
+
+function addCrateOwner() {
+  if (!canManageOwners()) {
+    addCrateOwnerStatus.value = "Error"
+    addCrateOwnerMsg.value = "Not allowed. Only existing owners or admins can add owners."
+    return
+  }
+
+  axios
+    .put(CRATE_OWNER(crate.value.name, crateOwnerName.value), null, { withCredentials: true })
+
+    .then((res) => {
+      if (res.status == 200) {
+        addCrateOwnerStatus.value = "Success"
+        addCrateOwnerMsg.value = "Crate owner successfully added."
+        crateOwnerName.value = ""
+        getCrateOwners()
+
+      }
+    })
+    .catch((error) => {
+      if (error.response) {
+        addCrateOwnerStatus.value = "Error"
+
+        if (error.response.status == 401) {
+          addCrateOwnerMsg.value = "Unauthorized. Login first."
+          router.push("/login")
+        } else if (error.response.status == 403) {
+          addCrateOwnerMsg.value = "Not allowed. Only existing owners or admins can add owners."
+        } else if (error.response.status == 404) {
+          addCrateOwnerMsg.value = "User not found. Did you provide an existing user name?"
+        } else {
+          addCrateOwnerMsg.value = "Crate owner could not be added."
+        }
+      }
+    })
+
+}
+
+function deleteCrateOwner(name: string) {
+  if (!canManageOwners()) {
+    deleteCrateOwnerStatus.value = "Error"
+    deleteCrateOwnerMsg.value = "Not allowed. Only existing owners or admins can remove owners."
+    return
+  }
+
+  // Client-side guard: never allow removing the last owner.
+  if ((crateOwners.value?.length ?? 0) <= 1) {
+    deleteCrateOwnerStatus.value = "Error"
+    deleteCrateOwnerMsg.value = "A crate must have at least one owner."
+    return
+  }
+
+  if (confirm('Delete crate owner "' + name + '"?')) {
+    axios
+      .delete(CRATE_OWNER(crate.value.name, name), { withCredentials: true })
+
+      .then((res) => {
+        if (res.status == 200) {
+          deleteCrateOwnerStatus.value = "Success"
+          deleteCrateOwnerMsg.value = "Crate owner successfully deleted."
+          getCrateOwners()
+
+        }
+      })
+      .catch((error) => {
+        if (error.response) {
+          deleteCrateOwnerStatus.value = "Error"
+          if (error.response.status == 401) {
+            deleteCrateOwnerMsg.value = "Unauthorized. Login first."
+            router.push("/login")
+          } else if (error.response.status == 403) {
+            deleteCrateOwnerMsg.value = "Not allowed. Only existing owners or admins can remove owners."
+          } else if (error.response.status == 409) {
+            deleteCrateOwnerMsg.value = "A crate must have at least one owner."
+          } else {
+            deleteCrateOwnerMsg.value = "Crate owner could not be deleted."
+          }
+        }
+      })
+  }
+}
+
+
+
 function addCrateGroup() {
   axios
-    .put(CRATE_GROUP(crate.value.name, crateGroupName.value))
+    .put(CRATE_GROUP(crate.value.name, crateGroupName.value), null, { withCredentials: true })
+
     .then((res) => {
       if (res.status == 200) {
         addCrateGroupStatus.value = "Success";
@@ -450,7 +621,8 @@ function addCrateGroup() {
 function deleteCrateGroup(name: string) {
   if (confirm('Delete crate group "' + name + '"?')) {
     axios
-      .delete(CRATE_GROUP(crate.value.name, name))
+      .delete(CRATE_GROUP(crate.value.name, name), { withCredentials: true })
+
       .then((res) => {
         if (res.status == 200) {
           deleteCrateGroupStatus.value = "Success";
@@ -481,7 +653,8 @@ function getCrateGroupsForCrate() {
   // disable caching to get updated group list
   axios
     // @ts-expect-error TS doesn't recognize cache option
-    .get(CRATE_GROUPS(crate.value.name), { cache: false })
+    .get(CRATE_GROUPS(crate.value.name), { cache: false, withCredentials: true })
+
     .then((res) => {
       if (res.status == 200) {
         crateGroupsForCrate.value = res.data.groups;
@@ -564,9 +737,11 @@ function changeTab(newTab: string) {
   if (newTab === "crateSettings") {
     getCrateAccessData();
     getCrateUsers();
+    getCrateOwners();
   }
   tab.value = newTab;
 }
+
 
 function sortByName(deps: Array<CrateRegistryDep>) {
   return deps.sort((a, b) => {
@@ -627,7 +802,8 @@ function getCrateAccessData() {
   // disable caching to get updated token list
   axios
     // @ts-expect-error TS doesn't recognize cache option
-    .get(CRATE_ACCESS_DATA(crate.value.name), { cache: false })
+    .get(CRATE_ACCESS_DATA(crate.value.name), { cache: false, withCredentials: true })
+
     .then((response) => {
       crate_access.value = response.data;
       is_download_restricted.value = crate_access.value.download_restricted;
@@ -643,7 +819,8 @@ function setCrateAccessData() {
   }
 
   axios
-    .put(CRATE_ACCESS_DATA(crate.value.name), putData)
+    .put(CRATE_ACCESS_DATA(crate.value.name), putData, { withCredentials: true })
+
     .then((res) => {
       if (res.status == 200) {
         changeCrateAccessStatus.value = "Success";
@@ -701,10 +878,12 @@ watch(route, () => {
     if (newTab === 'crateSettings') {
       getCrateAccessData();
       getCrateUsers();
+      getCrateOwners();
       getCrateGroupsForCrate();
       getAllCrateGroups();
     }
   })
+
 </script>
 
 <style>

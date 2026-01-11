@@ -3709,6 +3709,7 @@ name = "kellnr-auth"
 version = "5.9.1"
 dependencies = [
  "axum",
+ "axum-extra",
  "base64 0.22.1",
  "hyper",
  "kellnr-appstate",

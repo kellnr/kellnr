@@ -7,7 +7,8 @@ use axum::http::StatusCode;
 use axum::response::Redirect;
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
-use kellnr_auth::token;
+use kellnr_auth::{maybe_user, token};
+
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::search_result;
@@ -27,18 +28,18 @@ use crate::{crate_group, crate_user, crate_version};
 
 pub async fn check_ownership(
     crate_name: &NormalizedName,
-    token: &token::Token,
+    user: &maybe_user::MaybeUser,
     db: &Arc<dyn DbProvider>,
 ) -> Result<(), ApiError> {
-    if token.is_admin || db.is_owner(crate_name, &token.user).await? {
+    if user.is_admin || db.is_owner(crate_name, &user.name).await? {
         Ok(())
     } else {
         Err(RegistryError::NotOwner.into())
     }
 }
 
-pub fn check_can_modify(token: &token::Token) -> Result<(), ApiError> {
-    if !token.is_admin && token.is_read_only {
+pub fn check_can_modify(user: &maybe_user::MaybeUser) -> Result<(), ApiError> {
+    if !user.is_admin && user.is_read_only {
         Err(RegistryError::ReadOnlyModify.into())
     } else {
         Ok(())
@@ -76,7 +77,7 @@ pub async fn me() -> Redirect {
 }
 
 pub async fn remove_owner(
-    token: token::Token,
+    user: maybe_user::MaybeUser,
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<crate_user::CrateUserRequest>,
@@ -84,10 +85,17 @@ pub async fn remove_owner(
     // Check if user is read-only and can't remove an owner.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token)?;
+    check_can_modify(&user)?;
 
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
+
+    // Never allow removing the last owner.
+    let owners = db.get_crate_owners(&crate_name).await?;
+    let owners_to_remove = input.users.len();
+    if owners.len().saturating_sub(owners_to_remove) == 0 {
+        return Err(RegistryError::LastOwner.into());
+    }
 
     for user in &input.users {
         db.delete_owner(&crate_name, user).await?;
@@ -98,18 +106,41 @@ pub async fn remove_owner(
     )))
 }
 
+pub async fn remove_owner_single(
+    user: maybe_user::MaybeUser,
+    State(db): DbState,
+    Path((crate_name, removed_user)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
+    check_can_modify(&user)?;
+
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &user, &db).await?;
+
+    // Never allow removing the last owner.
+    let owners = db.get_crate_owners(&crate_name).await?;
+    if owners.len() <= 1 {
+        return Err(RegistryError::LastOwner.into());
+    }
+
+    db.delete_owner(&crate_name, &removed_user).await?;
+
+    Ok(Json(crate_user::CrateUserResponse::from(
+        "Removed owner from crate.",
+    )))
+}
+
 pub async fn remove_crate_user(
-    token: token::Token,
+    user: maybe_user::MaybeUser,
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, String)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     // Check if user is read-only and can't remove a crate user.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token)?;
+    check_can_modify(&user)?;
 
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
 
     db.delete_crate_user(&crate_name, &name).await?;
     Ok(Json(crate_user::CrateUserResponse::from(
@@ -118,12 +149,12 @@ pub async fn remove_crate_user(
 }
 
 pub async fn remove_crate_group(
-    token: token::Token,
+    user: maybe_user::MaybeUser,
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, String)>,
 ) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
 
     db.delete_crate_group(&crate_name, &name).await?;
     Ok(Json(crate_group::CrateGroupResponse::from(
@@ -132,7 +163,7 @@ pub async fn remove_crate_group(
 }
 
 pub async fn add_owner(
-    token: token::Token,
+    user: maybe_user::MaybeUser,
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<crate_user::CrateUserRequest>,
@@ -140,10 +171,10 @@ pub async fn add_owner(
     // Check if user is read-only and can't add owners.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token)?;
+    check_can_modify(&user)?;
 
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
 
     for user in &input.users {
         db.add_owner(&crate_name, user).await?;
@@ -151,6 +182,23 @@ pub async fn add_owner(
 
     Ok(Json(crate_user::CrateUserResponse::from(
         "Added owners to crate.",
+    )))
+}
+
+pub async fn add_owner_single(
+    user: maybe_user::MaybeUser,
+    State(db): DbState,
+    Path((crate_name, added_user)): Path<(OriginalName, String)>,
+) -> ApiResult<Json<crate_user::CrateUserResponse>> {
+    check_can_modify(&user)?;
+
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &user, &db).await?;
+
+    db.add_owner(&crate_name, &added_user).await?;
+
+    Ok(Json(crate_user::CrateUserResponse::from(
+        "Added owner to crate.",
     )))
 }
 
@@ -175,17 +223,17 @@ pub async fn list_owners(
 }
 
 pub async fn add_crate_user(
-    token: token::Token,
+    user: maybe_user::MaybeUser,
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, String)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     // Check if user is read-only and can't add a crate user.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token)?;
+    check_can_modify(&user)?;
 
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
 
     if !db.is_crate_user(&crate_name, &name).await? {
         db.add_crate_user(&crate_name, &name).await?;
@@ -197,12 +245,12 @@ pub async fn add_crate_user(
 }
 
 pub async fn list_crate_users(
-    token: token::Token,
+    user: maybe_user::MaybeUser,
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> ApiResult<Json<crate_user::CrateUserList>> {
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
 
     let users: Vec<crate_user::CrateUser> = db
         .get_crate_users(&crate_name)
@@ -219,12 +267,12 @@ pub async fn list_crate_users(
 }
 
 pub async fn add_crate_group(
-    token: token::Token,
+    user: maybe_user::MaybeUser,
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, String)>,
 ) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
 
     if !db.is_crate_group(&crate_name, &name).await? {
         db.add_crate_group(&crate_name, &name).await?;
@@ -236,12 +284,12 @@ pub async fn add_crate_group(
 }
 
 pub async fn list_crate_groups(
-    token: token::Token,
+    user: maybe_user::MaybeUser,
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> ApiResult<Json<crate_group::CrateGroupList>> {
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
 
     let groups: Vec<crate_group::CrateGroup> = db
         .get_crate_groups(&crate_name)
@@ -358,10 +406,13 @@ pub async fn publish(
     let orig_name = OriginalName::try_from(&pub_data.metadata.name)?;
     let normalized_name = orig_name.to_normalized();
 
+    let token_user = token.user.clone();
+    let user = maybe_user::MaybeUser::from_token(token);
+
     // Check if user is read-only and can't publish (upload) crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token)?;
+    check_can_modify(&user)?;
 
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed push a new version.
@@ -369,7 +420,8 @@ pub async fn publish(
     let id = db.get_crate_id(&normalized_name).await?;
     match (id, settings.registry.new_crates_restricted) {
         (Some(id), _) => {
-            check_ownership(&normalized_name, &token, &db).await?;
+            check_ownership(&normalized_name, &user, &db).await?;
+
             if db.crate_version_exists(id, &pub_data.metadata.vers).await? {
                 return Err(RegistryError::CrateExists(
                     pub_data.metadata.name,
@@ -379,10 +431,11 @@ pub async fn publish(
             }
         }
         (None, true) => {
-            if !token.is_admin {
+            if !user.is_admin {
                 return Err(RegistryError::NewCratesRestricted.into());
             }
         }
+
         _ => (),
     }
 
@@ -424,7 +477,7 @@ pub async fn publish(
 
     // Add crate to DB
     if let Err(e) = db
-        .add_crate(&pub_data.metadata, &cksum, &created, &token.user)
+        .add_crate(&pub_data.metadata, &cksum, &created, &token_user)
         .await
     {
         // On DB error rollback storage insert and bail.
@@ -466,10 +519,11 @@ pub async fn yank(
     // Check if user is read-only and can't yank crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token)?;
+    let user = maybe_user::MaybeUser::from_token(token);
+    check_can_modify(&user)?;
 
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
 
     db.yank_crate(&crate_name, &version).await?;
 
@@ -493,10 +547,11 @@ pub async fn unyank(
     // Check if user is read-only and can't unyank crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&token)?;
+    let user = maybe_user::MaybeUser::from_token(token);
+    check_can_modify(&user)?;
 
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &token, &db).await?;
+    check_ownership(&crate_name, &user, &db).await?;
 
     db.unyank_crate(&crate_name, &version).await?;
 

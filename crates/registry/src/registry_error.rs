@@ -36,7 +36,10 @@ pub enum RegistryError {
     ReadOnlyModify,
     #[error("New crates publishing has been restricted")]
     NewCratesRestricted,
+    #[error("A crate must have at least one owner")]
+    LastOwner,
 }
+
 
 impl From<RegistryError> for ApiError {
     fn from(e: RegistryError) -> Self {
@@ -46,7 +49,9 @@ impl From<RegistryError> for ApiError {
             RegistryError::NotOwner | RegistryError::NotCrateUser => {
                 ApiError::from_err(&e, StatusCode::FORBIDDEN)
             }
+            RegistryError::LastOwner => ApiError::from_err(&e, StatusCode::CONFLICT),
             _ => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
         }
     }
 }
+
