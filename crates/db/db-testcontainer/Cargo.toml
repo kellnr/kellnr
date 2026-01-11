@@ -8,7 +8,6 @@ description.workspace = true
 homepage.workspace = true
 repository.workspace = true
 documentation.workspace = true
-publish = false # Dev dependency for testing, do not publish
 
 [dependencies]
 quote.workspace = true

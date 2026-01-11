@@ -15,6 +15,7 @@ kellnr-common.workspace = true
 kellnr-entity.workspace = true
 kellnr-migration.workspace = true
 kellnr-settings.workspace = true
+kellnr-db-testcontainer.workspace = true
 
 # External dependencies from crates.io
 chrono.workspace = true
@@ -29,7 +30,6 @@ thiserror.workspace = true
 rm_rf.workspace = true
 testcontainers.workspace = true
 tokio.workspace = true
-kellnr-db-testcontainer.workspace = true
 
 [lints]
 workspace = true
