@@ -82,3 +82,7 @@ export type CrateAccessData = {
 export const defaultCrateAccessData : CrateAccessData = {
     is_download_restricted: true,
 }
+
+export interface CrateGroup {
+    name: string;
+}
