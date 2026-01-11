@@ -251,11 +251,11 @@ jobs:
       # - name: Publish kellnr-index
       #   run: cargo publish -p kellnr-index
 
-      - name: Publish kellnr-docs
-        run: cargo publish -p kellnr-docs
-
-      - name: Publish kellnr-web-ui
-        run: cargo publish -p kellnr-web-ui
+      # - name: Publish kellnr-docs
+      #   run: cargo publish -p kellnr-docs
+      #
+      # - name: Publish kellnr-web-ui
+      #   run: cargo publish -p kellnr-web-ui
 
       - name: Publish kellnr
         run: cargo publish -p kellnr
