@@ -103,7 +103,7 @@ patch-package:
 # It's used by the Github Actions CI to build the release binary for the specified target.
 target := "x86_64-unknown-linux-gnu"
 
-ci-release: npm-build
+ci-release: clean-all npm-build
         cross build --release --target {{target}} --features vendored-openssl
 
 ##########################################
