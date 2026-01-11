@@ -8,6 +8,7 @@ use kellnr_registry::kellnr_api;
 
 /// Creates the kellnr API routes
 pub fn create_routes(state: AppStateData, max_crate_size: usize) -> Router<AppStateData> {
+
     Router::new()
         .route("/config.json", get(kellnr_prefetch_api::config_kellnr))
         .route(
@@ -21,6 +22,15 @@ pub fn create_routes(state: AppStateData, max_crate_size: usize) -> Router<AppSt
         .route("/{crate_name}/owners", delete(kellnr_api::remove_owner))
         .route("/{crate_name}/owners", put(kellnr_api::add_owner))
         .route("/{crate_name}/owners", get(kellnr_api::list_owners))
+        .route(
+            "/{crate_name}/owners/{user}",
+            delete(kellnr_api::remove_owner_single),
+        )
+        .route(
+            "/{crate_name}/owners/{user}",
+            put(kellnr_api::add_owner_single),
+        )
+
         .route(
             "/{crate_name}/crate_users/{user}",
             delete(kellnr_api::remove_crate_user),
@@ -61,8 +71,10 @@ pub fn create_routes(state: AppStateData, max_crate_size: usize) -> Router<AppSt
         .route("/new_empty", put(kellnr_api::add_empty_crate))
         .route("/{crate_name}/{version}/yank", delete(kellnr_api::yank))
         .route("/{crate_name}/{version}/unyank", put(kellnr_api::unyank))
+        // Accept either cargo token auth (cargo CLI) or session cookie auth (web UI)
         .route_layer(middleware::from_fn_with_state(
             state,
-            auth_req_token::cargo_auth_when_required,
+            auth_req_token::token_or_session_auth_when_required,
         ))
 }
+

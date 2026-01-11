@@ -60,7 +60,9 @@ pub async fn publish_docs(
 
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed to push the docs.
-    check_ownership(&normalized_name, &token, &db).await?;
+    let user = kellnr_auth::maybe_user::MaybeUser::from_token(token);
+    check_ownership(&normalized_name, &user, &db).await?;
+
 
     let doc_path = settings.docs_path().join(&*package).join(crate_version);
 

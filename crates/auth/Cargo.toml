@@ -16,11 +16,13 @@ kellnr-db.workspace = true
 kellnr-settings.workspace = true
 
 # External dependencies from crates.io
+axum-extra.workspace = true
 axum.workspace = true
 base64.workspace = true
 rand.workspace = true
 serde.workspace = true
 tracing.workspace = true
+
 
 [dev-dependencies]
 hyper.workspace = true

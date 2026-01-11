@@ -33,11 +33,13 @@ tracing.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+cookie.workspace = true
 mockall.workspace = true
 rand.workspace = true
 rm_rf.workspace = true
 tokio.workspace = true
 tower.workspace = true
+
 
 [lints]
 workspace = true
