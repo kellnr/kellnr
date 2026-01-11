@@ -242,8 +242,8 @@ jobs:
       # - name: Publish kellnr-error
       #   run: cargo publish -p kellnr-error
 
-      - name: Publish kellnr-webhooks
-        run: cargo publish -p kellnr-webhooks
+      # - name: Publish kellnr-webhooks
+      #   run: cargo publish -p kellnr-webhooks
 
       - name: Publish kellnr-registry
         run: cargo publish -p kellnr-registry
