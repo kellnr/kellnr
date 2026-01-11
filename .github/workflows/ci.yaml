@@ -245,11 +245,11 @@ jobs:
       # - name: Publish kellnr-webhooks
       #   run: cargo publish -p kellnr-webhooks
 
-      - name: Publish kellnr-registry
-        run: cargo publish -p kellnr-registry
-
-      - name: Publish kellnr-index
-        run: cargo publish -p kellnr-index
+      # - name: Publish kellnr-registry
+      #   run: cargo publish -p kellnr-registry
+      #
+      # - name: Publish kellnr-index
+      #   run: cargo publish -p kellnr-index
 
       - name: Publish kellnr-docs
         run: cargo publish -p kellnr-docs
