@@ -13,6 +13,7 @@ documentation.workspace = true
 # Internal dependencies
 kellnr-common.workspace = true
 kellnr-settings.workspace = true
+kellnr-minio-testcontainer.workspace = true
 
 # External dependencies
 async-trait.workspace = true
@@ -24,7 +25,6 @@ thiserror.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
-kellnr-minio-testcontainer.workspace = true
 testcontainers.workspace = true
 tokio.workspace = true
 

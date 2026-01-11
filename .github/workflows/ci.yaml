@@ -206,31 +206,26 @@ jobs:
       - name: Build static resources
         run: just npm-build
 
-      - name: Publish kellnr-common
-        run: cargo publish -p kellnr-common
+      # - name: Publish kellnr-common
+      #   run: cargo publish -p kellnr-common
+      #
+      # - name: Publish kellnr-settings
+      #   run: cargo publish -p kellnr-settings
+      #
+      # - name: Publish kellnr-entity
+      #   run: cargo publish -p kellnr-entity
+      #
+      # - name: Publish kellnr-migration
+      #   run: cargo publish -p kellnr-migration
 
-      - name: Publish kellnr-settings
-        run: cargo publish -p kellnr-settings
-
-      - name: Publish kellnr-entity
-        run: cargo publish -p kellnr-entity
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish kellnr-migration
-        run: cargo publish -p kellnr-migration
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish kellnr-minio-testcontainer
+        run: cargo publish -p kellnr-minio-testcontainer
 
       - name: Publish kellnr-storage
         run: cargo publish -p kellnr-storage
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish kellnr-db
         run: cargo publish -p kellnr-db
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish kellnr-appstate
         run: cargo publish -p kellnr-appstate
