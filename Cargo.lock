@@ -3672,7 +3672,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -3699,7 +3699,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-appstate"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -3712,7 +3712,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-auth"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -3731,7 +3731,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-common"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "chrono",
@@ -3749,7 +3749,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-db"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "chrono",
  "kellnr-common",
@@ -3770,7 +3770,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-db-testcontainer"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "quote",
  "syn 2.0.114",
@@ -3778,7 +3778,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-docs"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "cargo",
@@ -3806,7 +3806,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-embedded-resources"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "bytes",
@@ -3817,7 +3817,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-entity"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "sea-orm",
  "uuid",
@@ -3825,7 +3825,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-error"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "kellnr-common",
@@ -3837,7 +3837,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-index"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "chrono",
@@ -3861,7 +3861,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-migration"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "async-std",
  "chrono",
@@ -3878,7 +3878,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-minio-testcontainer"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "quote",
  "syn 2.0.114",
@@ -3886,7 +3886,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-registry"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "chrono",
@@ -3916,7 +3916,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-settings"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "config",
  "serde",
@@ -3927,7 +3927,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-storage"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3944,7 +3944,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-web-ui"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -3971,7 +3971,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-webhooks"
-version = "5.10.0"
+version = "5.10.1"
 dependencies = [
  "axum",
  "chrono",
