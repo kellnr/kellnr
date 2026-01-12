@@ -1,7 +1,7 @@
 ##################
 # Builder image  #
 ##################
-FROM alpine:3.22 AS builder
+FROM alpine:3.23 AS builder
 
 ARG ADMINPWD=admin
 ENV INSTALLDIR=/opt
@@ -19,7 +19,7 @@ RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh |
 ##################
 # Runtime image  #
 ##################
-FROM alpine:3.22
+FROM alpine:3.23
 
 ENV INSTALLDIR=/opt
 ENV DATADIR=/opt/kdata
