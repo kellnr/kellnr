@@ -2,7 +2,7 @@
 # Runtime image  #
 ##################
 
-FROM rust:slim-bookworm
+FROM rust:slim-trixie
 
 ARG ADMINPWD=admin
 ENV INSTALLDIR=/opt
