@@ -80,14 +80,18 @@ tower-http = { version = "0.6.8", features = ["fs", "trace"] }
 tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["json", "fmt"] }
 url = "2.5.8"
-zip = "7.0.0"
+zip = "6.0.0"
+
 uuid = { version = "1.19.0", features = ["v4"] }
+
+
 
 
 
 [profile.release]
 lto = "thin"
 strip = true
+
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
