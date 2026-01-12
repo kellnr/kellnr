@@ -9,7 +9,7 @@
 #  Build image  #
 #################
 
-FROM rust:slim-bookworm AS builder
+FROM rust:slim-trixie AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Berlin
@@ -59,7 +59,7 @@ RUN just build-release
 # Runtime image  #
 ##################
 
-FROM rust:slim-bookworm
+FROM rust:slim-trixie
 
 RUN mkdir -p /opt/kellnr
 RUN rustup component add rust-src
