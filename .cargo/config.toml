@@ -3,5 +3,7 @@
 [target.armv7-unknown-linux-gnueabihf]
 linker = "arm-linux-gnueabihf-gcc"
 
-#[target.aarch64-unknown-linux-gnu]
-#linker = "aarch64-linux-gnu-gcc"
+[target.aarch64-apple-darwin]
+# Disable dynamic linking on Apple ARM, as it can lead to strange issues, where the libstd is not found at runtime.
+# E.g.: "Library not loaded: @rpath/libstd-2b33e6fee276550d.dylib"
+rustflags = ["-C", "prefer-dynamic=no"]
