@@ -86,8 +86,55 @@
 
         <!-- Settings Tab -->
         <template v-if="tab === 'crateSettings'">
+
+
+          <!-- Crate Owners -->
           <v-card class="mb-4" elevation="1">
-            <v-card-title class="d-flex align-center text-h6 py-4">
+            <v-card-title>Crate owners</v-card-title>
+            <v-card-text>
+              <v-alert v-if="!canManageOwners()" type="info" variant="tonal" class="mb-4">
+                Only existing crate owners or admins can add/remove crate owners.
+              </v-alert>
+
+              <v-list>
+                <v-list-item v-for="owner in crateOwners" :key="owner.login">
+                  <v-list-item-title>{{ owner.login }}</v-list-item-title>
+                  <template v-slot:append>
+                    <v-btn :disabled="!canManageOwners()" color="error" variant="text" size="small"
+                      @click="deleteCrateOwner(owner.login)">
+                      Delete
+                    </v-btn>
+                  </template>
+                </v-list-item>
+              </v-list>
+
+              <v-alert v-if="deleteCrateOwnerStatus" :type="deleteCrateOwnerStatus === 'Success' ? 'success' : 'error'"
+                closable @click:close="deleteCrateOwnerStatus = ''" class="mt-4">
+                {{ deleteCrateOwnerMsg }}
+              </v-alert>
+
+              <v-divider class="my-4"></v-divider>
+
+              <h3 class="text-h5 mb-3">Add crate owner</h3>
+              <v-form @submit.prevent="addCrateOwner">
+                <v-text-field v-model="crateOwnerName" placeholder="Username" prepend-icon="mdi-account-star"
+                  variant="outlined" density="comfortable" :disabled="!canManageOwners()"></v-text-field>
+
+                <v-alert v-if="addCrateOwnerStatus" :type="addCrateOwnerStatus === 'Success' ? 'success' : 'error'"
+                  closable @click:close="addCrateOwnerStatus = ''" class="my-2">
+                  {{ addCrateOwnerMsg }}
+                </v-alert>
+
+                <v-btn :disabled="!canManageOwners()" color="primary" type="submit" class="mt-2">
+                  Add
+                </v-btn>
+              </v-form>
+            </v-card-text>
+          </v-card>
+
+
+          <v-card class="mb-4" elevation="1">
+            <v-card-title class="d-flex align-center">
               Access control
             </v-card-title>
             <v-card-text class="pt-0">
@@ -100,7 +147,9 @@
                       label="Crate users only are allowed to download"></v-checkbox>
                     <p class="text-body-2 mb-4">
                       If enabled, only users added as crate users are allowed to download this crate.<br />
-                      Attention: This feature requires that <i>kellnr</i> is started with <i>auth_required = true</i>
+                      Attention: This feature requires that <i>kellnr</i> is started with <i>auth_required = true</i>.
+                      If this
+                      is not set, <i>cargo</i> fails to download the crate as it does not send an authentication token.
                     </p>
                     <v-alert v-if="changeCrateAccessStatus"
                       :type="changeCrateAccessStatus === 'Success' ? 'success' : 'error'" closable
@@ -193,50 +242,6 @@
                   </v-form>
                 </v-card-text>
               </v-card>
-            </v-card-text>
-          </v-card>
-
-          <!-- Crate Owners -->
-          <v-card class="mb-4" elevation="1">
-            <v-card-title>Crate owners</v-card-title>
-            <v-card-text>
-              <v-alert v-if="!canManageOwners()" type="info" variant="tonal" class="mb-4">
-                Only existing crate owners or admins can add/remove crate owners.
-              </v-alert>
-
-              <v-list>
-                <v-list-item v-for="owner in crateOwners" :key="owner.login">
-                  <v-list-item-title>{{ owner.login }}</v-list-item-title>
-                  <template v-slot:append>
-                    <v-btn :disabled="!canManageOwners()" color="error" variant="text" size="small"
-                      @click="deleteCrateOwner(owner.login)">
-                      Delete
-                    </v-btn>
-                  </template>
-                </v-list-item>
-              </v-list>
-
-              <v-alert v-if="deleteCrateOwnerStatus" :type="deleteCrateOwnerStatus === 'Success' ? 'success' : 'error'"
-                closable @click:close="deleteCrateOwnerStatus = ''" class="mt-4">
-                {{ deleteCrateOwnerMsg }}
-              </v-alert>
-
-              <v-divider class="my-4"></v-divider>
-
-              <h3 class="text-h5 mb-3">Add crate owner</h3>
-              <v-form @submit.prevent="addCrateOwner">
-                <v-text-field v-model="crateOwnerName" placeholder="Username" prepend-icon="mdi-account-star"
-                  variant="outlined" density="comfortable" :disabled="!canManageOwners()"></v-text-field>
-
-                <v-alert v-if="addCrateOwnerStatus" :type="addCrateOwnerStatus === 'Success' ? 'success' : 'error'"
-                  closable @click:close="addCrateOwnerStatus = ''" class="my-2">
-                  {{ addCrateOwnerMsg }}
-                </v-alert>
-
-                <v-btn :disabled="!canManageOwners()" color="primary" type="submit" class="mt-2">
-                  Add
-                </v-btn>
-              </v-form>
             </v-card-text>
           </v-card>
 
