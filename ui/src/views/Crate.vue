@@ -86,25 +86,7 @@
 
         <!-- Settings Tab -->
         <template v-if="tab === 'crateSettings'">
-          <!-- Crate Access -->
-          <v-card class="mb-4" elevation="1">
-            <v-card-title>Crate access</v-card-title>
-            <v-card-text>
-              <v-form @submit.prevent="setCrateAccessData">
-                <v-checkbox v-model="is_download_restricted"
-                  label="Crate users only are allowed to download"></v-checkbox>
 
-                <v-alert v-if="changeCrateAccessStatus"
-                  :type="changeCrateAccessStatus === 'Success' ? 'success' : 'error'" closable
-                  @click:close="changeCrateAccessStatus = ''">
-                  {{ changeCrateAccessMsg }}
-                </v-alert>
-                <v-btn color="primary" type="submit" class="mt-2">
-                  Change crate access rules
-                </v-btn>
-              </v-form>
-            </v-card-text>
-          </v-card>
 
           <!-- Crate Owners -->
           <v-card class="mb-4" elevation="1">
@@ -126,9 +108,8 @@
                 </v-list-item>
               </v-list>
 
-              <v-alert v-if="deleteCrateOwnerStatus"
-                :type="deleteCrateOwnerStatus === 'Success' ? 'success' : 'error'" closable
-                @click:close="deleteCrateOwnerStatus = ''" class="mt-4">
+              <v-alert v-if="deleteCrateOwnerStatus" :type="deleteCrateOwnerStatus === 'Success' ? 'success' : 'error'"
+                closable @click:close="deleteCrateOwnerStatus = ''" class="mt-4">
                 {{ deleteCrateOwnerMsg }}
               </v-alert>
 
@@ -151,91 +132,120 @@
             </v-card-text>
           </v-card>
 
-          <!-- Crate Users -->
+
           <v-card class="mb-4" elevation="1">
-            <v-card-title>Crate users</v-card-title>
-            <v-card-text>
-              <v-list>
-                <v-list-item v-for="user in crateUsers" :key="user.login">
-                  <v-list-item-title>{{ user.login }}</v-list-item-title>
-                  <template v-slot:append>
-                    <v-btn color="error" variant="text" size="small" @click="deleteCrateUser(user.login)">
-                      Delete
+            <v-card-title class="d-flex align-center">
+              Access control
+            </v-card-title>
+            <v-card-text class="pt-0">
+              <!-- Crate Access -->
+              <v-card class="mb-4" elevation="1">
+                <v-card-title>Crate access</v-card-title>
+                <v-card-text>
+                  <v-form @submit.prevent="setCrateAccessData">
+                    <v-checkbox v-model="is_download_restricted"
+                      label="Crate users only are allowed to download"></v-checkbox>
+                    <p class="text-body-2 mb-4">
+                      If enabled, only users added as crate users are allowed to download this crate.<br />
+                      Attention: This feature requires that <i>kellnr</i> is started with <i>auth_required = true</i>.
+                      If this
+                      is not set, <i>cargo</i> fails to download the crate as it does not send an authentication token.
+                    </p>
+                    <v-alert v-if="changeCrateAccessStatus"
+                      :type="changeCrateAccessStatus === 'Success' ? 'success' : 'error'" closable
+                      @click:close="changeCrateAccessStatus = ''">
+                      {{ changeCrateAccessMsg }}
+                    </v-alert>
+                    <v-btn color="primary" type="submit" class="mt-2">
+                      Change crate access rules
                     </v-btn>
-                  </template>
-                </v-list-item>
-              </v-list>
+                  </v-form>
+                </v-card-text>
+              </v-card>
 
-              <v-alert v-if="deleteCrateUserStatus" :type="deleteCrateUserStatus === 'Success' ? 'success' : 'error'"
-                closable @click:close="deleteCrateUserStatus = ''" class="mt-4">
-                {{ deleteCrateUserMsg }}
-              </v-alert>
+              <!-- Crate Users -->
+              <v-card class="mb-4" elevation="1">
+                <v-card-title>Crate users</v-card-title>
+                <v-card-text>
+                  <v-list>
+                    <v-list-item v-for="user in crateUsers" :key="user.login">
+                      <v-list-item-title>{{ user.login }}</v-list-item-title>
+                      <template v-slot:append>
+                        <v-btn color="error" variant="text" size="small" @click="deleteCrateUser(user.login)">
+                          Delete
+                        </v-btn>
+                      </template>
+                    </v-list-item>
+                  </v-list>
 
-              <v-divider class="my-4"></v-divider>
+                  <v-alert v-if="deleteCrateUserStatus"
+                    :type="deleteCrateUserStatus === 'Success' ? 'success' : 'error'" closable
+                    @click:close="deleteCrateUserStatus = ''" class="mt-4">
+                    {{ deleteCrateUserMsg }}
+                  </v-alert>
 
-              <h3 class="text-h5 mb-3">Add crate user</h3>
-              <v-form @submit.prevent="addCrateUser">
-                <v-text-field v-model="crateUserName" placeholder="Username" prepend-icon="mdi-account"
-                  variant="outlined" density="comfortable"></v-text-field>
+                  <v-divider class="my-4"></v-divider>
 
-                <v-alert v-if="addCrateUserStatus" :type="addCrateUserStatus === 'Success' ? 'success' : 'error'"
-                  closable @click:close="addCrateUserStatus = ''" class="my-2">
-                  {{ addCrateUserMsg }}
-                </v-alert>
+                  <h3 class="text-h5 mb-3">Add crate user</h3>
+                  <v-form @submit.prevent="addCrateUser">
+                    <v-text-field v-model="crateUserName" placeholder="Username" prepend-icon="mdi-account"
+                      variant="outlined" density="comfortable"></v-text-field>
 
-                <v-btn color="primary" type="submit" class="mt-2">
-                  Add
-                </v-btn>
-              </v-form>
+                    <v-alert v-if="addCrateUserStatus" :type="addCrateUserStatus === 'Success' ? 'success' : 'error'"
+                      closable @click:close="addCrateUserStatus = ''" class="my-2">
+                      {{ addCrateUserMsg }}
+                    </v-alert>
+
+                    <v-btn color="primary" type="submit" class="mt-2">
+                      Add
+                    </v-btn>
+                  </v-form>
+                </v-card-text>
+              </v-card>
+
+              <!-- Crate Groups -->
+              <v-card class="mb-0" elevation="1">
+                <v-card-title>Crate groups</v-card-title>
+                <v-card-text>
+                  <v-list>
+                    <v-list-item v-for="group in crateGroupsForCrate" :key="group.name">
+                      <v-list-item-title>{{ group.name }}</v-list-item-title>
+                      <template v-slot:append>
+                        <v-btn color="error" variant="text" size="small" @click="deleteCrateGroup(group.name)">
+                          Delete
+                        </v-btn>
+                      </template>
+                    </v-list-item>
+                  </v-list>
+
+                  <v-alert v-if="deleteCrateGroupStatus"
+                    :type="deleteCrateGroupStatus === 'Success' ? 'success' : 'error'" closable
+                    @click:close="deleteCrateGroupStatus = ''" class="mt-4">
+                    {{ deleteCrateGroupMsg }}
+                  </v-alert>
+
+                  <v-divider class="my-4"></v-divider>
+
+                  <h3 class="text-h5 mb-3">Add crate group</h3>
+                  <v-form @submit.prevent="addCrateGroup">
+                    <v-select v-model="crateGroupName" :items="availableCrateGroups" label="Select Group"
+                      prepend-icon="mdi-account-group" variant="outlined" density="comfortable" class="mb-2" />
+
+                    <v-alert v-if="addCrateGroupStatus" :type="addCrateGroupStatus === 'Success' ? 'success' : 'error'"
+                      closable @click:close="addCrateGroupStatus = ''" class="mt-4">
+                      {{ addCrateGroupMsg }}
+                    </v-alert>
+
+                    <v-btn color="primary" type="submit" class="mt-2">
+                      Add
+                    </v-btn>
+                  </v-form>
+                </v-card-text>
+              </v-card>
             </v-card-text>
           </v-card>
 
 
-          <!-- Crate Groups -->
-          <v-card class="mb-4" elevation="1">
-            <v-card-title>Crate groups</v-card-title>
-            <v-card-text>
-              <v-list>
-                <v-list-item v-for="group in crateGroupsForCrate" :key="group.name">
-                  <v-list-item-title>{{ group.name }}</v-list-item-title>
-                  <template v-slot:append>
-                    <v-btn color="error" variant="text" size="small" @click="deleteCrateGroup(group.name)">
-                      Delete
-                    </v-btn>
-                  </template>
-                </v-list-item>
-              </v-list>
-
-              <v-alert v-if="deleteCrateGroupStatus" :type="deleteCrateGroupStatus === 'Success' ? 'success' : 'error'"
-                closable @click:close="deleteCrateGroupStatus = ''" class="mt-4">
-                {{ deleteCrateGroupMsg }}
-              </v-alert>
-
-              <v-divider class="my-4"></v-divider>
-
-              <h3 class="text-h5 mb-3">Add crate group</h3>
-              <v-form @submit.prevent="addCrateGroup">
-                <v-select
-                  v-model="crateGroupName"
-                  :items="availableCrateGroups"
-                  label="Select Group"
-                  prepend-icon="mdi-account-group"
-                  variant="outlined"
-                  density="comfortable"
-                  class="mb-2"
-                />
-
-                <v-alert v-if="addCrateGroupStatus" :type="addCrateGroupStatus === 'Success' ? 'success' : 'error'"
-                  closable @click:close="addCrateGroupStatus = ''" class="mt-4">
-                  {{ addCrateGroupMsg }}
-                </v-alert>
-
-                <v-btn color="primary" type="submit" class="mt-2">
-                  Add
-                </v-btn>
-              </v-form>
-            </v-card-text>
-          </v-card>
         </template>
 
         <!-- Admin Tab -->
@@ -874,15 +884,15 @@ watch(route, () => {
 })
 
 // Watch for tab changes to load data when needed
-  watch(tab, (newTab) => {
-    if (newTab === 'crateSettings') {
-      getCrateAccessData();
-      getCrateUsers();
-      getCrateOwners();
-      getCrateGroupsForCrate();
-      getAllCrateGroups();
-    }
-  })
+watch(tab, (newTab) => {
+  if (newTab === 'crateSettings') {
+    getCrateAccessData();
+    getCrateUsers();
+    getCrateOwners();
+    getCrateGroupsForCrate();
+    getAllCrateGroups();
+  }
+})
 
 </script>
 
