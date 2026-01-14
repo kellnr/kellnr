@@ -93,7 +93,10 @@
               <v-form @submit.prevent="setCrateAccessData">
                 <v-checkbox v-model="is_download_restricted"
                   label="Crate users only are allowed to download"></v-checkbox>
-
+                <p class="text-body-2 mb-4">
+                  If enabled, only users added as crate users are allowed to download this crate.<br />
+                  Attention: This feature requires that <i>kellnr</i> is started with <i>auth_required = true</i>
+                </p>
                 <v-alert v-if="changeCrateAccessStatus"
                   :type="changeCrateAccessStatus === 'Success' ? 'success' : 'error'" closable
                   @click:close="changeCrateAccessStatus = ''">
@@ -126,9 +129,8 @@
                 </v-list-item>
               </v-list>
 
-              <v-alert v-if="deleteCrateOwnerStatus"
-                :type="deleteCrateOwnerStatus === 'Success' ? 'success' : 'error'" closable
-                @click:close="deleteCrateOwnerStatus = ''" class="mt-4">
+              <v-alert v-if="deleteCrateOwnerStatus" :type="deleteCrateOwnerStatus === 'Success' ? 'success' : 'error'"
+                closable @click:close="deleteCrateOwnerStatus = ''" class="mt-4">
                 {{ deleteCrateOwnerMsg }}
               </v-alert>
 
@@ -215,15 +217,8 @@
 
               <h3 class="text-h5 mb-3">Add crate group</h3>
               <v-form @submit.prevent="addCrateGroup">
-                <v-select
-                  v-model="crateGroupName"
-                  :items="availableCrateGroups"
-                  label="Select Group"
-                  prepend-icon="mdi-account-group"
-                  variant="outlined"
-                  density="comfortable"
-                  class="mb-2"
-                />
+                <v-select v-model="crateGroupName" :items="availableCrateGroups" label="Select Group"
+                  prepend-icon="mdi-account-group" variant="outlined" density="comfortable" class="mb-2" />
 
                 <v-alert v-if="addCrateGroupStatus" :type="addCrateGroupStatus === 'Success' ? 'success' : 'error'"
                   closable @click:close="addCrateGroupStatus = ''" class="mt-4">
@@ -874,15 +869,15 @@ watch(route, () => {
 })
 
 // Watch for tab changes to load data when needed
-  watch(tab, (newTab) => {
-    if (newTab === 'crateSettings') {
-      getCrateAccessData();
-      getCrateUsers();
-      getCrateOwners();
-      getCrateGroupsForCrate();
-      getAllCrateGroups();
-    }
-  })
+watch(tab, (newTab) => {
+  if (newTab === 'crateSettings') {
+    getCrateAccessData();
+    getCrateUsers();
+    getCrateOwners();
+    getCrateGroupsForCrate();
+    getAllCrateGroups();
+  }
+})
 
 </script>
 
