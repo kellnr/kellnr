@@ -177,6 +177,91 @@
                     </div>
                   </td>
                 </tr>
+                <tr>
+                  <td class="text-subtitle-2">Token Cache Enabled</td>
+                  <td>
+                    <v-chip :color="settings.registry.token_cache_enabled ? 'success' : 'grey'" size="small"
+                      text-color="white">
+                      {{ settings.registry.token_cache_enabled ? 'true' : 'false' }}
+                    </v-chip>
+                  </td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">registry.token_cache_enabled</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_REGISTRY__TOKEN_CACHE_ENABLED</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-subtitle-2">Token Cache TTL (seconds)</td>
+                  <td>{{ formatValue(settings.registry.token_cache_ttl_seconds) }}</td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">registry.token_cache_ttl_seconds</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_REGISTRY__TOKEN_CACHE_TTL_SECONDS</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-subtitle-2">Token Cache Max Capacity</td>
+                  <td>{{ formatValue(settings.registry.token_cache_max_capacity) }}</td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">registry.token_cache_max_capacity</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_REGISTRY__TOKEN_CACHE_MAX_CAPACITY</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-subtitle-2">Token DB Retry Count</td>
+                  <td>{{ formatValue(settings.registry.token_db_retry_count) }}</td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">registry.token_db_retry_count</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_REGISTRY__TOKEN_DB_RETRY_COUNT</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-subtitle-2">Token DB Retry Delay (ms)</td>
+                  <td>{{ formatValue(settings.registry.token_db_retry_delay_ms) }}</td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">registry.token_db_retry_delay_ms</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_REGISTRY__TOKEN_DB_RETRY_DELAY_MS</span>
+                    </div>
+                  </td>
+                </tr>
               </tbody>
             </v-table>
           </v-expansion-panel-text>

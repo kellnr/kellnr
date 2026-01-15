@@ -53,6 +53,13 @@ export type Registry = {
   max_db_connections: number
   auth_required: boolean
   required_crate_fields: string[]
+  new_crates_restricted: boolean
+  allow_ownerless_crates: boolean
+  token_cache_enabled: boolean
+  token_cache_ttl_seconds: number
+  token_cache_max_capacity: number
+  token_db_retry_count: number
+  token_db_retry_delay_ms: number
 }
 
 export type S3 = {
@@ -104,7 +111,14 @@ export const emptySettings: Settings = {
     max_crate_size: 0,
     max_db_connections: 0,
     auth_required: false,
-    required_crate_fields: []
+    required_crate_fields: [],
+    new_crates_restricted: false,
+    allow_ownerless_crates: false,
+    token_cache_enabled: true,
+    token_cache_ttl_seconds: 1800,
+    token_cache_max_capacity: 10000,
+    token_db_retry_count: 3,
+    token_db_retry_delay_ms: 100
   },
   s3: {
     enabled: false,
