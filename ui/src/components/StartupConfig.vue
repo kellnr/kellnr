@@ -161,6 +161,22 @@
                     </div>
                   </td>
                 </tr>
+                <tr>
+                  <td class="text-subtitle-2">Allow ownerless crates</td>
+                  <td>{{ formatValue(settings.registry.allow_ownerless_crates) }}</td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">registry.allow_ownerless_crates</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_REGISTRY__ALLOW_OWNERLESS_CRATES</span>
+                    </div>
+                  </td>
+                </tr>
               </tbody>
             </v-table>
           </v-expansion-panel-text>
