@@ -81,7 +81,7 @@ async fn main() {
     init_webhook_service(db.clone());
 
     let data_dir = settings.registry.data_dir.clone();
-    let signing_key = Key::generate();
+    let signing_key = init_cookie_signing_key(&settings);
     let max_docs_size = settings.docs.max_size;
     let max_crate_size = settings.registry.max_crate_size as usize;
     let route_path_prefix = settings.origin.path.trim().to_owned();
@@ -105,6 +105,17 @@ async fn main() {
         .await
         .unwrap_or_else(|_| panic!("Failed to bind to {addr}"));
     axum::serve(listener, app).await.unwrap();
+}
+
+fn init_cookie_signing_key(settings: &Settings) -> Key {
+    // Either take the provided signing key or generate a random one.
+    // A provided key can be shared between multiple instances of kellnr to
+    // allow UI authentication in multi-instance scenarios.
+    if let Some(key) = &settings.registry.cookie_signing_key {
+        Key::try_from(key.as_bytes()).expect("Failed to create cookie signing key from provided settings. The key has to be at least 64 bytes long.")
+    } else {
+        Key::generate()
+    }
 }
 
 fn init_tracing(settings: &Settings) {
