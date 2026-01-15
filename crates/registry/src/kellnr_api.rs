@@ -99,8 +99,8 @@ pub async fn remove_owner(
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &user, db).await?;
 
-    // Never allow removing the last owner.
     if !settings.registry.allow_ownerless_crates {
+        // Never allow removing the last owner.
         let owners = db.get_crate_owners(&crate_name).await?;
         let owners_to_remove = input.users.len();
         if owners.len().saturating_sub(owners_to_remove) == 0 {
@@ -131,7 +131,7 @@ pub async fn remove_owner_single(
     check_ownership(&crate_name, &user, db).await?;
 
     if !settings.registry.allow_ownerless_crates {
-    // Never allow removing the last owner.
+        // Never allow removing the last owner.
         let owners = db.get_crate_owners(&crate_name).await?;
         if owners.len() <= 1 {
             return Err(RegistryError::LastOwner.into());
