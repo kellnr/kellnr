@@ -12,6 +12,7 @@ documentation.workspace = true
 [dependencies]
 # External dependencies from crates.io
 axum.workspace = true
+moka.workspace = true
 chrono.workspace = true
 rand.workspace = true
 regex.workspace = true

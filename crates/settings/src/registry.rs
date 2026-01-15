@@ -14,6 +14,11 @@ pub struct Registry {
     pub required_crate_fields: Vec<String>,
     pub new_crates_restricted: bool,
     pub allow_ownerless_crates: bool,
+    pub token_cache_enabled: bool,
+    pub token_cache_ttl_seconds: u64,
+    pub token_cache_max_capacity: u64,
+    pub token_db_retry_count: u32,
+    pub token_db_retry_delay_ms: u64,
 }
 
 impl Default for Registry {
@@ -28,6 +33,11 @@ impl Default for Registry {
             required_crate_fields: Vec::new(),
             new_crates_restricted: false,
             allow_ownerless_crates: false,
+            token_cache_enabled: true,
+            token_cache_ttl_seconds: 1800,
+            token_cache_max_capacity: 10000,
+            token_db_retry_count: 3,
+            token_db_retry_delay_ms: 100,
         }
     }
 }
