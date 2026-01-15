@@ -93,6 +93,72 @@ def _clean_line(line: str) -> str:
     return s.strip()
 
 
+# Example supported lines:
+# * ci: Add pipeline ... by @secana in https://github.com/kellnr/kellnr/pull/904
+# * build(deps-dev): bump globals ... by @dependabot[bot] in https://github.com/.../pull/925
+_RELEASE_NOTE_ITEM_RE = re.compile(
+    r"^(?P<subject>.+?)\s+by\s+@(?P<author>[^\s]+)\s+in\s+(?P<url>https?://\S+)$",
+    re.IGNORECASE,
+)
+
+_CONVENTIONAL_TYPE_SCOPE_RE = re.compile(
+    r"^(?P<type>feat|fix|perf|refactor|docs|style|test|build|ci|chore|revert)"
+    r"(?:\((?P<scope>[^)]+)\))?"  # optional scope
+    r"(?P<breaking>!)?:\s+"  # optional breaking marker
+    r"(?P<title>.+)$",
+    re.IGNORECASE,
+)
+
+
+def _parse_release_note_item(line: str) -> Dict[str, str] | None:
+    """Parse a GitHub release-note bullet line into parts.
+
+    Returns None when the line doesn't match the expected pattern.
+    """
+    m = _RELEASE_NOTE_ITEM_RE.match(line.strip())
+    if not m:
+        return None
+
+    subject = m.group("subject").strip()
+    author = m.group("author").strip()
+    url = m.group("url").strip()
+
+    out: Dict[str, str] = {
+        "subject": subject,
+        "author": author,
+        "url": url,
+    }
+
+    cm = _CONVENTIONAL_TYPE_SCOPE_RE.match(subject)
+    if cm:
+        out["type"] = (cm.group("type") or "").lower()
+        out["scope"] = (cm.group("scope") or "").lower()
+        out["title"] = (cm.group("title") or "").strip()
+
+    pr = re.search(r"/pull/(\d+)(?:\D|$)", url)
+    if pr:
+        out["pr"] = pr.group(1)
+
+    return out
+
+
+def _is_dependabot_deps_entry(parsed: Dict[str, str]) -> bool:
+    """True for Dependabot dependency update entries we want to omit."""
+    author = (parsed.get("author") or "").lower()
+    typ = (parsed.get("type") or "").lower()
+    scope = (parsed.get("scope") or "").lower()
+
+    if not author.startswith("dependabot"):
+        return False
+
+    # Omit only dependency bump entries (build(deps...), build(deps-dev...), ...)
+    if typ == "build" and scope.startswith("deps"):
+        return True
+
+    return False
+
+
+
 _CONVENTIONAL_PREFIX_RE = re.compile(
     r"^(feat|fix|perf|refactor|docs|style|test|build|ci|chore|revert)(\(.+\))?!?:\s+\S+",
     re.IGNORECASE,
@@ -162,13 +228,18 @@ def _bucket_for(line: str) -> str:
 
 
 def _extract_items(body: str) -> List[str]:
-    """
-    Extract list-like items from the release body.
+    """Extract Conventional-Commit-like entries from the release body.
 
-    Strategy:
-    - Prefer explicit list bullets / numbered lists.
-    - Also accept non-bullet conventional-commit lines.
-    - If nothing extracted, fall back to all non-empty non-heading lines.
+    Accepted inputs:
+    - Bullet/numbered list lines ("* ...", "- ...", "1. ...") that, after cleaning,
+      start with a Conventional Commit prefix (e.g. "feat:", "fix(ui):").
+    - Non-bullet lines that already start with a Conventional Commit prefix.
+
+    Everything else is excluded (e.g. "Full Changelog" links, prose paragraphs).
+
+    Filtering:
+    - Omit Dependabot dependency bump entries like:
+      "build(deps): ... by @dependabot[bot] in https://.../pull/123"
     """
     lines = body.splitlines()
 
@@ -179,33 +250,34 @@ def _extract_items(body: str) -> List[str]:
         if _is_heading(raw):
             continue
 
+        cleaned = ""
         if re.match(r"^\s*[-*]\s+\S", raw) or re.match(r"^\s*\d+\.\s+\S", raw):
-            candidates.append(_clean_line(raw))
+            cleaned = _clean_line(raw)
+        else:
+            cleaned = raw.strip()
+
+        # Only accept conventional-commit-like entries.
+        if not _looks_like_conventional_commit(cleaned):
             continue
 
-        txt = raw.strip()
-        if _looks_like_conventional_commit(txt):
-            candidates.append(_clean_line(txt))
+        candidates.append(cleaned)
 
-    if not candidates:
-        for raw in lines:
-            if not raw.strip():
-                continue
-            if _is_heading(raw):
-                continue
-            candidates.append(_clean_line(raw))
-
-    # de-duplicate while preserving order
+    # Apply filtering + de-duplicate while preserving order
     seen = set()
     out: List[str] = []
     for item in candidates:
-        if not item:
+        parsed = _parse_release_note_item(item)
+        if parsed and _is_dependabot_deps_entry(parsed):
             continue
+
         if item in seen:
             continue
         seen.add(item)
         out.append(item)
+
     return out
+
+
 
 
 def build_payload(
