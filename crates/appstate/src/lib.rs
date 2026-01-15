@@ -3,6 +3,7 @@ use std::sync::Arc;
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use flume::Sender;
+use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_db::DbProvider;
 use kellnr_settings::Settings;
@@ -20,6 +21,7 @@ pub type CrateStorageState = axum::extract::State<Arc<KellnrCrateStorage>>;
 pub type CrateIoStorageState = axum::extract::State<Arc<CratesIoCrateStorage>>;
 pub type SigningKeyState = axum::extract::State<Key>;
 pub type CratesIoPrefetchSenderState = axum::extract::State<Sender<CratesioPrefetchMsg>>;
+pub type TokenCacheState = axum::extract::State<Arc<TokenCacheManager>>;
 
 #[derive(Clone, FromRef)]
 pub struct AppStateData {
@@ -30,6 +32,7 @@ pub struct AppStateData {
     pub crate_storage: Arc<KellnrCrateStorage>,
     pub cratesio_storage: Arc<CratesIoCrateStorage>,
     pub cratesio_prefetch_sender: Sender<CratesioPrefetchMsg>,
+    pub token_cache: Arc<TokenCacheManager>,
 }
 
 pub fn test_state() -> AppStateData {
@@ -43,6 +46,7 @@ pub fn test_state() -> AppStateData {
         Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage,
     ));
     let (cratesio_prefetch_sender, _) = flume::unbounded();
+    let token_cache = Arc::new(TokenCacheManager::new(false, 60, 1000));
     AppStateData {
         db,
         signing_key,
@@ -50,5 +54,6 @@ pub fn test_state() -> AppStateData {
         crate_storage,
         cratesio_storage,
         cratesio_prefetch_sender,
+        token_cache,
     }
 }

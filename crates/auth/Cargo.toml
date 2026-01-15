@@ -12,6 +12,7 @@ documentation.workspace = true
 [dependencies]
 # Internal dependencies from Kellnr
 kellnr-appstate.workspace = true
+kellnr-common.workspace = true
 kellnr-db.workspace = true
 kellnr-settings.workspace = true
 
@@ -21,13 +22,14 @@ axum.workspace = true
 base64.workspace = true
 rand.workspace = true
 serde.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 
 
 [dev-dependencies]
 hyper.workspace = true
 mockall.workspace = true
-tokio.workspace = true
+sea-orm.workspace = true
 tower.workspace = true
 
 [lints]

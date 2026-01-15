@@ -9,6 +9,7 @@ use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
+use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_settings::{LogFormat, Settings};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
@@ -85,6 +86,11 @@ async fn main() {
     let max_docs_size = settings.docs.max_size;
     let max_crate_size = settings.registry.max_crate_size as usize;
     let route_path_prefix = settings.origin.path.trim().to_owned();
+    let token_cache = Arc::new(TokenCacheManager::new(
+        settings.registry.token_cache_enabled,
+        settings.registry.token_cache_ttl_seconds,
+        settings.registry.token_cache_max_capacity,
+    ));
     let state = AppStateData {
         db,
         signing_key,
@@ -92,6 +98,7 @@ async fn main() {
         crate_storage,
         cratesio_storage,
         cratesio_prefetch_sender,
+        token_cache,
     };
 
     // Create router using the route module
