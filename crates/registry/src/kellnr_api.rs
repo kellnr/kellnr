@@ -1117,7 +1117,6 @@ mod reg_api_tests {
 
         assert_eq!(r.status(), StatusCode::FORBIDDEN);
     }
-  
 
     #[tokio::test]
     async fn add_owner_single_non_owner_session_is_forbidden() {
