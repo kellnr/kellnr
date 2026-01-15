@@ -13,6 +13,7 @@ pub struct Registry {
     pub auth_required: bool,
     pub required_crate_fields: Vec<String>,
     pub new_crates_restricted: bool,
+    pub cookie_signing_key: Option<String>,
 }
 
 impl Default for Registry {
@@ -26,6 +27,7 @@ impl Default for Registry {
             auth_required: false,
             required_crate_fields: Vec::new(),
             new_crates_restricted: false,
+            cookie_signing_key: None,
         }
     }
 }
