@@ -84,7 +84,7 @@ pub async fn me() -> Redirect {
 
 pub async fn remove_owner(
     user: maybe_user::MaybeUser,
-    State(db): DbState,
+    state: AppState,
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<crate_user::CrateUserRequest>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
@@ -93,14 +93,19 @@ pub async fn remove_owner(
     // their read-only status.
     check_can_modify(&user)?;
 
+    let settings = &state.settings;
+    let db = &state.db;
+
     let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &user, &db).await?;
+    check_ownership(&crate_name, &user, db).await?;
 
     // Never allow removing the last owner.
-    let owners = db.get_crate_owners(&crate_name).await?;
-    let owners_to_remove = input.users.len();
-    if owners.len().saturating_sub(owners_to_remove) == 0 {
-        return Err(RegistryError::LastOwner.into());
+    if !settings.registry.allow_ownerless_crates {
+        let owners = db.get_crate_owners(&crate_name).await?;
+        let owners_to_remove = input.users.len();
+        if owners.len().saturating_sub(owners_to_remove) == 0 {
+            return Err(RegistryError::LastOwner.into());
+        }
     }
 
     for user in &input.users {
@@ -114,18 +119,23 @@ pub async fn remove_owner(
 
 pub async fn remove_owner_single(
     user: maybe_user::MaybeUser,
-    State(db): DbState,
+    state: AppState,
     Path((crate_name, removed_user)): Path<(OriginalName, String)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     check_can_modify(&user)?;
 
-    let crate_name = crate_name.to_normalized();
-    check_ownership(&crate_name, &user, &db).await?;
+    let settings = &state.settings;
+    let db = &state.db;
 
+    let crate_name = crate_name.to_normalized();
+    check_ownership(&crate_name, &user, db).await?;
+
+    if !settings.registry.allow_ownerless_crates {
     // Never allow removing the last owner.
-    let owners = db.get_crate_owners(&crate_name).await?;
-    if owners.len() <= 1 {
-        return Err(RegistryError::LastOwner.into());
+        let owners = db.get_crate_owners(&crate_name).await?;
+        if owners.len() <= 1 {
+            return Err(RegistryError::LastOwner.into());
+        }
     }
 
     db.delete_owner(&crate_name, &removed_user).await?;
@@ -606,8 +616,9 @@ mod reg_api_tests {
     const RO_TOKEN: &str = "lJh6orU1Ye376ApXJR8I7V9gI3V6UZWU";
     const RO_ADMIN_TOKEN: &str = "GUOMPlZwN1kliXRW5wJ0ixh54NqYlE6X";
 
+    // Test that removal of the last owner is prevented with default settings.
     #[tokio::test]
-    async fn remove_owner_valid_owner() {
+    async fn remove_owner_valid_owner_is_rejected() {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
 
@@ -663,6 +674,61 @@ mod reg_api_tests {
             "ERROR: A crate must have at least one owner",
             owners.errors[0].detail
         );
+    }
+
+    // Test that removal of the last owner is possible
+    // when `allow_ownerless_crate` setting is enabled.
+    #[tokio::test]
+    async fn remove_owner_valid_owner_is_accepted() {
+        let mut settings = get_settings();
+        settings.registry.allow_ownerless_crates = true;
+        let kellnr = TestKellnr::new(settings).await;
+
+        // Use valid crate publish data to test.
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let del_owner = crate_user::CrateUserRequest {
+            users: vec!["admin".to_string()],
+        };
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::delete("/api/v1/crates/test_lib/owners")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(serde_json::to_string(&del_owner).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let status = r.status();
+
+        assert!(
+            kellnr
+                .db
+                .get_crate_owners(&NormalizedName::from_unchecked("test_lib".to_string()))
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        assert_eq!(status, StatusCode::OK);
     }
 
     #[tokio::test]
@@ -761,6 +827,7 @@ mod reg_api_tests {
         assert_eq!(2, owners.len());
     }
 
+    // Test that removal of the last owner is prevented with default settings.
     #[tokio::test]
     async fn remove_owner_single_last_owner_is_rejected() {
         let settings = get_settings();
@@ -797,6 +864,52 @@ mod reg_api_tests {
         assert_eq!(r.status(), StatusCode::CONFLICT);
     }
 
+    // Test that removal of the last owner is possible
+    // when `allow_ownerless_crate` setting is enabled.
+    #[tokio::test]
+    async fn remove_owner_single_last_owner_is_accepted() {
+        let mut settings = get_settings();
+        settings.registry.allow_ownerless_crates = true;
+        let kellnr = TestKellnr::new(settings).await;
+
+        let valid_pub_package = read("../test_data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::delete("/api/v1/crates/test_lib/owners/admin")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+
+        let owners = kellnr
+            .db
+            .get_crate_owners(&NormalizedName::from_unchecked("test_lib".to_string()))
+            .await
+            .unwrap();
+        assert!(owners.is_empty());
+    }
+  
     #[tokio::test]
     async fn add_owner_single_non_owner_is_forbidden() {
         let settings = get_settings();
@@ -1004,6 +1117,7 @@ mod reg_api_tests {
 
         assert_eq!(r.status(), StatusCode::FORBIDDEN);
     }
+  
 
     #[tokio::test]
     async fn add_owner_single_non_owner_session_is_forbidden() {
