@@ -63,7 +63,6 @@ pub async fn publish_docs(
     let user = kellnr_auth::maybe_user::MaybeUser::from_token(token);
     check_ownership(&normalized_name, &user, &db).await?;
 
-
     let doc_path = settings.docs_path().join(&*package).join(crate_version);
 
     let _ = tokio::task::spawn_blocking(move || docs.extract(&doc_path))

@@ -8,7 +8,6 @@ use axum::response::Redirect;
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
 use kellnr_auth::{maybe_user, token};
-
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::search_result;
@@ -20,7 +19,6 @@ use kellnr_error::api_error::{ApiError, ApiResult};
 use tracing::warn;
 
 use crate::pub_data::{EmptyCrateData, PubData};
-
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
@@ -598,7 +596,6 @@ mod reg_api_tests {
     use kellnr_db::mock::MockDb;
     use kellnr_db::{ConString, Database, SqliteConString, test_utils};
     use kellnr_error::api_error::ErrorDetails;
-
     use kellnr_settings::Settings;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
@@ -909,7 +906,7 @@ mod reg_api_tests {
             .unwrap();
         assert!(owners.is_empty());
     }
-  
+
     #[tokio::test]
     async fn add_owner_single_non_owner_is_forbidden() {
         let settings = get_settings();

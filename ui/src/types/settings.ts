@@ -43,6 +43,8 @@ export type Proxy = {
   enabled: boolean
   num_threads: number
   download_on_update: boolean
+  url: string
+  index: string
 }
 
 export type Registry = {
@@ -95,7 +97,9 @@ export const emptySettings: Settings = {
   proxy: {
     enabled: false,
     num_threads: 0,
-    download_on_update: false
+    download_on_update: false,
+    url: "",
+    index: ""
   },
   registry: {
     data_dir: "",

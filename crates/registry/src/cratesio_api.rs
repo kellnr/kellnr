@@ -50,6 +50,7 @@ pub async fn download(
     Path((name, version)): Path<(OriginalName, Version)>,
     State(crate_storage): CrateIoStorageState,
     State(sender): CratesIoPrefetchSenderState,
+    State(settings): SettingsState,
 ) -> Result<Vec<u8>, StatusCode> {
     trace!("Downloading crate: {name} ({version})");
 
@@ -64,7 +65,7 @@ pub async fn download(
 
         Ok(file)
     } else {
-        let crate_data = download_crate(&name, &version).await?;
+        let crate_data = download_crate(&name, &version, &settings.proxy.url).await?;
 
         let _save = crate_storage
             .put(&name, &version, crate_data.clone())

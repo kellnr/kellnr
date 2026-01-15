@@ -64,6 +64,8 @@ async fn main() {
         recv: cratesio_prefetch_receiver.clone(),
         download_on_update: settings.proxy.download_on_update,
         storage: cratesio_storage.clone(),
+        url: settings.proxy.url.clone(),
+        index: settings.proxy.index.clone(),
     };
 
     init_cratesio_prefetch_thread(

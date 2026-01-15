@@ -40,7 +40,6 @@ pub enum RegistryError {
     LastOwner,
 }
 
-
 impl From<RegistryError> for ApiError {
     fn from(e: RegistryError) -> Self {
         match e {
@@ -54,4 +53,3 @@ impl From<RegistryError> for ApiError {
         }
     }
 }
-

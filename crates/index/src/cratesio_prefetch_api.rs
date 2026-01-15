@@ -48,8 +48,9 @@ pub async fn prefetch_cratesio(
     headers: HeaderMap,
     State(db): DbState,
     State(sender): CratesIoPrefetchSenderState,
+    State(settings): SettingsState,
 ) -> Result<Prefetch, StatusCode> {
-    internal_prefetch_cratesio(name, headers, &db, &sender).await
+    internal_prefetch_cratesio(name, headers, &db, &settings.proxy.index, &sender).await
 }
 
 pub async fn prefetch_len2_cratesio(
@@ -57,8 +58,9 @@ pub async fn prefetch_len2_cratesio(
     headers: HeaderMap,
     State(db): DbState,
     State(sender): CratesIoPrefetchSenderState,
+    State(settings): SettingsState,
 ) -> Result<Prefetch, StatusCode> {
-    internal_prefetch_cratesio(name, headers, &db, &sender).await
+    internal_prefetch_cratesio(name, headers, &db, &settings.proxy.index, &sender).await
 }
 
 pub fn init_cratesio_prefetch_thread(
@@ -68,13 +70,7 @@ pub fn init_cratesio_prefetch_thread(
 ) {
     // Threads that takes messages to update the crates.io index
     for _ in 0..num_threads {
-        let args = CratesIoPrefetchArgs {
-            db: args.db.clone(),
-            cache: args.cache.clone(),
-            recv: args.recv.clone(),
-            download_on_update: args.download_on_update,
-            storage: args.storage.clone(),
-        };
+        let args = args.clone();
 
         tokio::spawn(async move {
             cratesio_prefetch_thread(args).await;
@@ -92,6 +88,7 @@ async fn internal_prefetch_cratesio(
     name: OriginalName,
     headers: HeaderMap,
     db: &Arc<dyn DbProvider>,
+    index_url: &Url,
     sender: &flume::Sender<CratesioPrefetchMsg>,
 ) -> Result<Prefetch, StatusCode> {
     let if_modified_since = headers
@@ -128,7 +125,7 @@ async fn internal_prefetch_cratesio(
             trace!("Prefetching {name} from crates.io cache: Up to Date");
             Err(StatusCode::NOT_MODIFIED)
         }
-        PrefetchState::NotFound => Ok(fetch_cratesio_prefetch(name, sender).await?),
+        PrefetchState::NotFound => Ok(fetch_cratesio_prefetch(name, index_url, sender).await?),
     }
 }
 
@@ -199,17 +196,20 @@ async fn fetch_cratesio_description(name: &str) -> Result<Option<String>, Status
     Ok(desc.krate.description)
 }
 
+#[derive(Clone)]
 pub struct CratesIoPrefetchArgs {
     pub db: Arc<dyn DbProvider>,
     pub cache: Cache<OriginalName, String>,
     pub recv: flume::Receiver<CratesioPrefetchMsg>,
     pub download_on_update: bool,
+    pub url: Url,
+    pub index: Url,
     pub storage: Arc<CratesIoCrateStorage>,
 }
 
 async fn cratesio_prefetch_thread(args: CratesIoPrefetchArgs) -> ! {
     loop {
-        match handle_cratesio_prefetch_msg(&args.cache, &args.recv, &args.db).await {
+        match handle_cratesio_prefetch_msg(&args.cache, &args.recv, &args.db, &args.index).await {
             UpdateNeeded::Update(data) => {
                 if let Err(e) = args
                     .db
@@ -255,7 +255,7 @@ async fn predownload_crate(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) {
         }
         Ok(false) => {
             trace!("Downloading version {} for crate {}", idx.vers, idx.name);
-            match download_crate(&idx.name, &idx.vers).await {
+            match download_crate(&idx.name, &idx.vers, &args.url).await {
                 Ok(crate_data) => {
                     if let Err(e) = args
                         .storage
@@ -369,6 +369,7 @@ async fn handle_cratesio_prefetch_msg(
     cache: &Cache<OriginalName, String>,
     channel: &flume::Receiver<CratesioPrefetchMsg>,
     db: &Arc<dyn DbProvider>,
+    index_url: &Url,
 ) -> UpdateNeeded {
     match channel.recv_async().await {
         Ok(CratesioPrefetchMsg::Insert(msg)) => {
@@ -387,7 +388,7 @@ async fn handle_cratesio_prefetch_msg(
                 cache
                     .insert(msg.name.clone(), chrono::Utc::now().to_rfc3339())
                     .await;
-                fetch_index_data(msg).await.into()
+                fetch_index_data(msg, index_url).await.into()
             }
         }
         Ok(CratesioPrefetchMsg::IncDownloadCnt(msg)) => {
@@ -407,15 +408,12 @@ async fn handle_cratesio_prefetch_msg(
     }
 }
 
-async fn fetch_index_data(msg: UpdateData) -> Option<PrefetchData> {
+async fn fetch_index_data(msg: UpdateData, index_url: &Url) -> Option<PrefetchData> {
     let name = &msg.name;
     let etag = &msg.etag;
     let last_modified = &msg.last_modified;
 
-    let url = match Url::parse("https://index.crates.io/")
-        .unwrap()
-        .join(&crate_sub_path(&name.to_normalized()))
-    {
+    let url = match index_url.join(&crate_sub_path(&name.to_normalized())) {
         Ok(url) => url,
         Err(e) => {
             error!("Could not parse crates.io url for {name}: {e}");
@@ -493,10 +491,10 @@ async fn fetch_index_data(msg: UpdateData) -> Option<PrefetchData> {
 
 async fn fetch_cratesio_prefetch(
     name: OriginalName,
+    index_url: &Url,
     sender: &flume::Sender<CratesioPrefetchMsg>,
 ) -> Result<Prefetch, StatusCode> {
-    let url = Url::parse("https://index.crates.io/")
-        .unwrap()
+    let url = index_url
         .join(&crate_sub_path(&name.to_normalized()))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
