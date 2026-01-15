@@ -1,12 +1,8 @@
 name: kellnr-ci
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
-      - devel
   release:
     types:
       - published
