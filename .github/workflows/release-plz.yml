@@ -41,6 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    if: ${{ github.repository_owner == 'kellnr' }}
     steps:
       - &checkout
         name: Checkout repository
