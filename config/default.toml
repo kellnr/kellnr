@@ -43,6 +43,8 @@ auth_required = false
 required_crate_fields = []
 # Disallows new crate publishing by the users.
 new_crates_restricted = false
+# Prevents last crate owner removal, if set to false.
+allow_ownerless_crates = false
 
 [docs]
 # Enable or disable automatic rustdoc generation for uploaded crates
