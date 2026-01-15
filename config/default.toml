@@ -62,6 +62,10 @@ num_threads = 20
 # If enabled, crates will be downloaded and cached periodically in the background, instead
 # of only on demand.
 download_on_update = false
+# The proxy URL used to download crates from.
+url = "https://static.crates.io/crates/"
+# The index URL used to fetch crate information.
+index = "https://index.crates.io/"
 
 [log]
 # Set the log level to "trace", "debug", "info", "warn", or "error".

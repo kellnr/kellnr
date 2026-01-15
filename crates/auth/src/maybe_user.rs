@@ -6,7 +6,6 @@ use axum_extra::extract::PrivateCookieJar;
 use kellnr_appstate::AppStateData;
 use kellnr_settings::constants;
 
-
 use crate::token;
 
 #[derive(Debug, Clone)]
@@ -39,7 +38,10 @@ impl MaybeUser {
 impl FromRequestParts<AppStateData> for MaybeUser {
     type Rejection = StatusCode;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppStateData) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
         // 1) Prefer cargo token auth if present
         if let Ok(t) = token::Token::from_request_parts(parts, state).await {
             return Ok(Self::from_token(t));

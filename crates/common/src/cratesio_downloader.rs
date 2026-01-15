@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use reqwest::{Client, ClientBuilder, StatusCode};
+use reqwest::{Client, ClientBuilder, StatusCode, Url};
 use tracing::error;
 
 pub static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
@@ -29,6 +29,9 @@ pub enum DownloadCrateError {
 
     #[error("Failed to parse response: {0}")]
     CannotParseResponse(reqwest::Error),
+
+    #[error("Failed to parse URL: {0}")]
+    CannotParseUrl(#[from] url::ParseError),
 }
 
 impl From<DownloadCrateError> for StatusCode {
@@ -36,15 +39,20 @@ impl From<DownloadCrateError> for StatusCode {
         match error {
             DownloadCrateError::NotFound => StatusCode::NOT_FOUND,
             DownloadCrateError::NotOk(status) => status,
-            DownloadCrateError::Unexpected(_) | DownloadCrateError::CannotParseResponse(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            DownloadCrateError::Unexpected(_)
+            | DownloadCrateError::CannotParseResponse(_)
+            | DownloadCrateError::CannotParseUrl(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
-pub async fn download_crate(name: &str, version: &str) -> Result<Arc<[u8]>, DownloadCrateError> {
-    let target = format!("https://static.crates.io/crates/{name}/{version}/download");
+pub async fn download_crate(
+    name: &str,
+    version: &str,
+    url: &Url,
+) -> Result<Arc<[u8]>, DownloadCrateError> {
+    let path = format!("{name}/{version}/download");
+    let target = url.join(&path)?;
 
     let res = match CLIENT.get(target).send().await {
         Ok(resp) if resp.status() == 404 => Err(DownloadCrateError::NotFound),

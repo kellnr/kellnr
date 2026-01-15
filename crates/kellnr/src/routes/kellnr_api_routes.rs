@@ -8,7 +8,6 @@ use kellnr_registry::kellnr_api;
 
 /// Creates the kellnr API routes
 pub fn create_routes(state: AppStateData, max_crate_size: usize) -> Router<AppStateData> {
-
     Router::new()
         .route("/config.json", get(kellnr_prefetch_api::config_kellnr))
         .route(
@@ -30,7 +29,6 @@ pub fn create_routes(state: AppStateData, max_crate_size: usize) -> Router<AppSt
             "/{crate_name}/owners/{user}",
             put(kellnr_api::add_owner_single),
         )
-
         .route(
             "/{crate_name}/crate_users/{user}",
             delete(kellnr_api::remove_crate_user),
@@ -77,4 +75,3 @@ pub fn create_routes(state: AppStateData, max_crate_size: usize) -> Router<AppSt
             auth_req_token::token_or_session_auth_when_required,
         ))
 }
-

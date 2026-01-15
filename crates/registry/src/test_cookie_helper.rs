@@ -9,7 +9,6 @@ pub(crate) mod cookies {
     // Match the key used in tests that set `AppStateData.signing_key`.
     pub(crate) const TEST_KEY: &[u8] = &[1; 64];
 
-
     pub(crate) fn encode_cookies<
         const N: usize,
         K: Into<Cow<'static, str>>,

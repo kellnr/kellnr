@@ -477,6 +477,38 @@
                     </div>
                   </td>
                 </tr>
+                <tr>
+                  <td class="text-subtitle-2">Proxy URL</td>
+                  <td>{{ formatValue(settings.proxy.url) }}</td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">proxy.url</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_PROXY__URL</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-subtitle-2">Proxy Index URL</td>
+                  <td>{{ formatValue(settings.proxy.index) }}</td>
+                  <td>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="deep-purple-darken-1" text-color="white"
+                        class="config-chip">TOML</v-chip>
+                      <span class="config-value">proxy.index</span>
+                    </div>
+                    <div class="config-ref">
+                      <v-chip label size="small" color="teal-darken-1" text-color="white"
+                        class="config-chip">ENV</v-chip>
+                      <span class="config-value">KELLNR_PROXY__INDEX</span>
+                    </div>
+                  </td>
+                </tr>
               </tbody>
             </v-table>
           </v-expansion-panel-text>
