@@ -61,8 +61,6 @@ jobs:
 
       - name: Tests
         run: nix develop --command just test-smoke
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-kellnr:
     name: Kellnr Build
