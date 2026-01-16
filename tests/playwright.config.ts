@@ -67,7 +67,8 @@ export default defineConfig({
 
   projects: enableUITests
     ? [
-        // UI tests run in multiple browsers
+        // UI tests run in multiple browsers - sequentially to avoid port conflicts
+        // Each browser project depends on the previous one to ensure serial execution
         {
           name: "chromium",
           use: { ...devices["Desktop Chrome"] },
@@ -77,11 +78,13 @@ export default defineConfig({
           name: "firefox",
           use: { ...devices["Desktop Firefox"] },
           testMatch: /ui-.*\.spec\.ts/,
+          dependencies: ["chromium"],
         },
         {
           name: "webkit",
           use: { ...devices["Desktop Safari"] },
           testMatch: /ui-.*\.spec\.ts/,
+          dependencies: ["firefox"],
         },
       ]
     : [
