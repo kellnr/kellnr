@@ -1,16 +1,30 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Playwright Test config for Kellnr smoke/integration tests.
+ * Playwright Test config for Kellnr smoke/integration tests and UI tests.
+ *
+ * Test Types:
+ * - Smoke tests: API + Docker orchestration tests (no browser needed)
+ * - UI tests: Browser-based tests using Page Object Model
+ *
+ * Running tests:
+ * - `npm test` - runs smoke tests only (default)
+ * - `PLAYWRIGHT_UI=1 npm test` - runs UI tests in Chromium, Firefox, and WebKit
+ * - `npm test -- --project=chromium` - runs UI tests in Chromium only
+ * - `npm test -- --grep "ui-"` - runs only UI test files
+ * - `npm test -- --grep-invert "ui-"` - runs only smoke tests
  *
  * Notes:
- * - These tests are primarily "API + Docker orchestration" today, so we keep
- *   browser projects optional/disabled by default (can be enabled later).
+ * - All tests bind to localhost:8000, so they must run serially (single worker)
  * - The reporter is configured to be CI-friendly and provide good debugging
- *   artifacts (traces/screenshots/videos) especially on retries and failures.
+ *   artifacts (traces/screenshots/videos) especially on retries and failures
  */
+
+// Determine which projects to enable based on environment
+const enableUITests = !!process.env.PLAYWRIGHT_UI;
+
 export default defineConfig({
-  // Several smoke tests rely on binding Kellnr to localhost:8000 (stable cratesio proxy download URLs).
+  // All tests rely on binding Kellnr to localhost:8000 (stable cratesio proxy download URLs).
   // To avoid port conflicts and flakiness, run the whole suite with a single worker.
   workers: 1,
   testDir: "./src",
@@ -40,7 +54,6 @@ export default defineConfig({
 
   // Default "use" options are shared by all projects.
   use: {
-    // If/when you add UI tests, Playwright will respect these by default.
     baseURL: process.env.KELLNR_BASE_URL ?? "http://localhost:8000",
 
     // Best practice for debugging flaky integration tests:
@@ -52,27 +65,30 @@ export default defineConfig({
     headless: true,
   },
 
-  // Optional browser projects (disabled by default in CI until you actually add UI tests).
-  // You can enable them later by setting PLAYWRIGHT_UI=1 (or by editing this file).
-  projects: process.env.PLAYWRIGHT_UI
+  projects: enableUITests
     ? [
+        // UI tests run in multiple browsers
         {
           name: "chromium",
           use: { ...devices["Desktop Chrome"] },
+          testMatch: /ui-.*\.spec\.ts/,
         },
         {
           name: "firefox",
           use: { ...devices["Desktop Firefox"] },
+          testMatch: /ui-.*\.spec\.ts/,
         },
         {
           name: "webkit",
           use: { ...devices["Desktop Safari"] },
+          testMatch: /ui-.*\.spec\.ts/,
         },
       ]
     : [
-        // Default "project" used for API + orchestration tests. No browser needed.
+        // Default: smoke tests only (no browser needed)
         {
           name: "smoke",
+          testIgnore: /ui-.*\.spec\.ts/,
         },
       ],
 
