@@ -1,5 +1,8 @@
 name: kellnr-ci
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
