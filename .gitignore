@@ -5,7 +5,7 @@ target/
 result/
 result
 
-# Playwright smoke tests (tests) - temp dirs and artifacts
+# Playwright UI tests (tests/) - temp dirs and artifacts
 tests/tmp/
 tests/test-results/
 tests/playwright-report/

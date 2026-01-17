@@ -33,9 +33,6 @@ run: npm-build build
 test: npm-build # Run all tests which do NOT require Docker
 	cargo nextest run --workspace -E 'not test(~postgres_)'
 
-test-smoke: # Run the smoke tests which require Docker
-	{{test_smoke}}
-
 test-ui: # Run Playwright UI tests (requires Docker)
 	{{test_ui_chromium}}
 
@@ -57,7 +54,7 @@ test-ui-headed: # Run Playwright UI tests with browser visible (requires Docker)
 test-pgdb: npm-build # Run Postgresql integration tests which require Docker
 	{{test_pgdb}}
 
-test-all: test test-pgdb test-smoke test-ui
+test-all: test test-pgdb test-ui
 
 clean:
 	cargo clean
@@ -160,8 +157,6 @@ alias tuic := test-ui-chromium
 has_docker := if `command -v docker > /dev/null 2>&1; echo $?` == "0" { "true" } else { "false" }
 
 test_pgdb := if has_docker == "true" { "cargo nextest run --workspace -E 'test(~postgres_)'" } else { "echo 'ERROR: Docker is not installed. The Postgresql integration tests require Docker'" }
-
-test_smoke := if has_docker == "true" { "cd tests && npm install && npx playwright test" } else { "echo 'ERROR: Docker is not installed. The smoke tests require Docker'" }
 
 test_ui_all_browsers := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 
