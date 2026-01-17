@@ -158,15 +158,15 @@ has_docker := if `command -v docker > /dev/null 2>&1; echo $?` == "0" { "true" }
 
 test_pgdb := if has_docker == "true" { "cargo nextest run --workspace -E 'test(~postgres_)'" } else { "echo 'ERROR: Docker is not installed. The Postgresql integration tests require Docker'" }
 
-test_ui_all_browsers := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_all_browsers := if has_docker == "true" { "cd tests && npm install && npx playwright install --with-deps && PLAYWRIGHT_UI=1 npx playwright test" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 
-test_ui_chromium := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=chromium" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_chromium := if has_docker == "true" { "cd tests && npm install && npx playwright install --with-deps && PLAYWRIGHT_UI=1 npx playwright test --project=chromium" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 
-test_ui_firefox := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=firefox" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_firefox := if has_docker == "true" { "cd tests && npm install && npx playwright install --with-deps && PLAYWRIGHT_UI=1 npx playwright test --project=firefox" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 
-test_ui_webkit := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=webkit" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_webkit := if has_docker == "true" { "cd tests && npm install && npx playwright install --with-deps && PLAYWRIGHT_UI=1 npx playwright test --project=webkit" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 
-test_ui_headed := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --headed" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_headed := if has_docker == "true" { "cd tests && npm install && npx playwright install --with-deps && PLAYWRIGHT_UI=1 npx playwright test --headed" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 
 docker:
 	echo "{{has_docker}}"

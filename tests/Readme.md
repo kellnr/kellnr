@@ -29,20 +29,13 @@ All tests verify both backend functionality AND UI accessibility through browser
 Optional:
 - Nix development shell via the repo `flake.nix`
 
-## Install Node dependencies
-
-From the repository root:
-
-```bash
-cd tests
-npm install
-```
+**Note**: Playwright browsers are automatically installed when running tests via justfile commands. No manual installation needed!
 
 ## Running the tests
 
 ### From Repository Root (Recommended)
 
-Use the justfile commands:
+Use the justfile commands (these automatically install browsers):
 
 ```bash
 # Fast: Run in Chromium only (default, ~5-8 minutes)
@@ -62,9 +55,17 @@ just test-ui-headed
 
 ### From tests/ Directory
 
+**Note**: If running npm directly (not via justfile), install browsers first:
+
 ```bash
 cd tests
+npm install
+npx playwright install --with-deps
+```
 
+Then run tests:
+
+```bash
 # Chromium only (fast, recommended for development)
 npm test
 
