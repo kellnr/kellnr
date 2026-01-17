@@ -114,7 +114,7 @@ jobs:
         run: echo $KELLNR_PACKAGE
 
       - name: Package Config
-        uses: montudor/action-zip@v0.1.1
+        uses: montudor/action-zip@v1.0.0
         with:
           args: zip -qq -r ${{ env.KELLNR_PACKAGE }} config
 
