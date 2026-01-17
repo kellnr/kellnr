@@ -17,24 +17,24 @@ kellnr-auth.workspace = true
 kellnr-common.workspace = true
 kellnr-db.workspace = true
 kellnr-docs.workspace = true
+kellnr-embedded-resources.workspace = true
 kellnr-index.workspace = true
 kellnr-registry.workspace = true
 kellnr-settings.workspace = true
 kellnr-storage.workspace = true
 kellnr-web-ui.workspace = true
 kellnr-webhooks.workspace = true
-kellnr-embedded-resources.workspace = true
 
 # External dependencies from crates.io
 axum-extra.workspace = true
 axum.workspace = true
 flume.workspace = true
+moka.workspace = true
 openssl = { version = "0.10", optional = true } # Not needed directly but for cross-compilation with the vendored-openssl feature
 tokio.workspace = true
 tower-http.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
-moka.workspace = true
 
 [features]
 default = ["vendored-openssl"]
