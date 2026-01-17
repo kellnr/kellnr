@@ -1,27 +1,28 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Playwright Test config for Kellnr smoke/integration tests and UI tests.
+ * Playwright Test config for Kellnr UI tests.
  *
- * Test Types:
- * - Smoke tests: API + Docker orchestration tests (no browser needed)
- * - UI tests: Browser-based tests using Page Object Model
+ * All tests are browser-based UI tests using Page Object Model.
  *
  * Running tests:
- * - `npm test` - runs smoke tests only (default)
+ * - `npm test` - runs UI tests in Chromium only (default, fast)
  * - `PLAYWRIGHT_UI=1 npm test` - runs UI tests in Chromium, Firefox, and WebKit
  * - `npm test -- --project=chromium` - runs UI tests in Chromium only
- * - `npm test -- --grep "ui-"` - runs only UI test files
- * - `npm test -- --grep-invert "ui-"` - runs only smoke tests
+ * - `npm test -- --project=firefox` - runs UI tests in Firefox only
+ * - `npm test -- --project=webkit` - runs UI tests in WebKit only
  *
  * Notes:
  * - All tests bind to localhost:8000, so they must run serially (single worker)
  * - The reporter is configured to be CI-friendly and provide good debugging
  *   artifacts (traces/screenshots/videos) especially on retries and failures
+ * - Each test file uses a shared Kellnr container to minimize startup overhead
  */
 
-// Determine which projects to enable based on environment
-const enableUITests = !!process.env.PLAYWRIGHT_UI;
+// Determine which browsers to test based on environment
+// Default: Chromium only (fast)
+// PLAYWRIGHT_UI=1: All browsers (Chromium, Firefox, WebKit)
+const enableAllBrowsers = !!process.env.PLAYWRIGHT_UI;
 
 export default defineConfig({
   // All tests rely on binding Kellnr to localhost:8000 (stable cratesio proxy download URLs).
@@ -65,9 +66,9 @@ export default defineConfig({
     headless: true,
   },
 
-  projects: enableUITests
+  projects: enableAllBrowsers
     ? [
-        // UI tests run in multiple browsers - sequentially to avoid port conflicts
+        // Run in all browsers - sequentially to avoid port conflicts
         // Each browser project depends on the previous one to ensure serial execution
         {
           name: "chromium",
@@ -88,10 +89,11 @@ export default defineConfig({
         },
       ]
     : [
-        // Default: smoke tests only (no browser needed)
+        // Default: Chromium only (fast)
         {
-          name: "smoke",
-          testIgnore: /ui-.*\.spec\.ts/,
+          name: "chromium",
+          use: { ...devices["Desktop Chrome"] },
+          testMatch: /ui-.*\.spec\.ts/,
         },
       ],
 

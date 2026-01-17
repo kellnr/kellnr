@@ -63,8 +63,9 @@ export class CratePage extends BasePage {
     super(page);
 
     // Header - h1 is the crate name, version is sibling generic div, description is paragraph
-    this.crateTitle = page.locator("h1");
-    this.crateVersion = page.locator("h1").locator("+ div, + span, + generic").first();
+    // Use more specific selector to avoid matching h1 elements in markdown content
+    this.crateTitle = page.locator("h1.text-h3");
+    this.crateVersion = page.locator("h1.text-h3").locator("+ div, + span, + generic").first();
     // Description is a paragraph near the h1 in the main content area
     this.crateDescription = page.locator("main p").first();
 
@@ -100,7 +101,8 @@ export class CratePage extends BasePage {
     this.copyButton = page.locator('button[aria-label*="copy"], .mdi-content-copy').first();
     this.versionDownloads = page.locator("text=Version Downloads").locator("..");
     this.totalDownloads = page.locator("text=Total Downloads").locator("..");
-    this.openDocsButton = page.getByRole("button", { name: /Open Documentation|Add Documentation/i });
+    // "Open documentation" is a clickable div, not a button
+    this.openDocsButton = page.locator('div.cursor-pointer:has-text("Open documentation"), a:has-text("Open documentation")');
     this.buildDocsButton = page.getByRole("button", { name: /Build|Rebuild/i });
 
     // Settings tab
