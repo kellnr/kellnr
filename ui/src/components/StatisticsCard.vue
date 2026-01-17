@@ -1,12 +1,14 @@
 <template>
   <v-card
     class="statistics-card ma-2"
+    :class="{ 'clickable': props.onClick }"
     :style="cardStyle"
     elevation="3"
     rounded="lg"
     height="120"
-    :ripple="true"
-    :data-testid="`stat-card-${textToTestId(text)}`">
+    :ripple="!!props.onClick"
+    :data-testid="`stat-card-${textToTestId(text)}`"
+    @click="handleClick">
     <v-card-text class="d-flex flex-column justify-space-between h-100 pa-4" :class="textColorClass">
       <div class="d-flex justify-space-between align-center">
         <span class="text-h3 font-weight-bold" data-testid="stat-value">{{ num }}</span>
@@ -33,7 +35,15 @@ const props = defineProps<{
   backgroundColor?: string;
   gradientColor?: string;
   category?: string;
+  onClick?: () => void;
 }>();
+
+// Handle card click
+function handleClick() {
+  if (props.onClick) {
+    props.onClick();
+  }
+}
 
 // Get current theme
 const theme = useTheme();
@@ -205,6 +215,11 @@ function textToTestId(text: number | string): string {
   transition: all 0.3s ease;
   overflow: hidden;
   position: relative;
+  cursor: default;
+}
+
+.statistics-card.clickable {
+  cursor: pointer !important;
 }
 
 .statistics-card:hover {

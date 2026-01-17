@@ -6,7 +6,7 @@ All tests verify both backend functionality AND UI accessibility through browser
 
 ## Test Suite Overview
 
-**39 UI tests across 9 test files:**
+**44 UI tests across 10 test files:**
 
 | Test File | Tests | What It Verifies |
 |-----------|-------|------------------|
@@ -14,6 +14,7 @@ All tests verify both backend functionality AND UI accessibility through browser
 | `ui-crate-with-data.spec.ts` | 5 | Crate display, navigation, statistics, admin features |
 | `ui-crates.spec.ts` | 7 | Crates page, search, filters, empty states |
 | `ui-docs.spec.ts` | 2 | Documentation generation + UI link verification |
+| `ui-landing-stats.spec.ts` | 5 | Landing page statistics cards clickability |
 | `ui-login.spec.ts` | 6 | Login/logout, auth, form validation, protected routes |
 | `ui-migration.spec.ts` | 1 | Database migration + UI accessibility |
 | `ui-navigation.spec.ts` | 7 | Header nav, theme toggle, routing, branding |
@@ -100,8 +101,8 @@ These tests expect:
 
 ## Test Execution Times
 
-- **Chromium only** (`npm test`): ~5-8 minutes for all 39 tests
-- **All browsers** (`PLAYWRIGHT_UI=1 npm test`): ~15-20 minutes for 117 tests
+- **Chromium only** (`npm test`): ~5-8 minutes for all 44 tests
+- **All browsers** (`PLAYWRIGHT_UI=1 npm test`): ~15-20 minutes for 132 tests
 
 ## Architecture
 
