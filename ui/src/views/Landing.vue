@@ -45,7 +45,7 @@
       <v-row class="justify-center mb-8">
         <v-col cols="12" sm="6" md="4" xl="3">
           <statistics-card :num="statistics.num_crates" icon="mdi-package-variant-closed" :text="'Total Crates'"
-            category="primary"></statistics-card>
+            category="primary" :onClick="navigateToCrates"></statistics-card>
         </v-col>
         <v-col cols="12" sm="6" md="4" xl="3">
           <statistics-card :num="statistics.num_crate_versions" icon="mdi-tag-outline" :text="'Total Versions'"
@@ -57,7 +57,8 @@
         </v-col>
         <v-col v-if="statistics.last_updated_crate" cols="12" sm="6" md="4" xl="3">
           <statistics-card :num="statistics.last_updated_crate[0]" icon="mdi-calendar-clock"
-            :text="'Updated ' + statistics.last_updated_crate[1]" category="secondary"></statistics-card>
+            :text="'Updated ' + statistics.last_updated_crate[1]" category="secondary"
+            :onClick="() => navigateToCrate(statistics.last_updated_crate[0])"></statistics-card>
         </v-col>
       </v-row>
 
@@ -103,7 +104,7 @@
 
         <v-col cols="12" sm="6" md="4">
           <statistics-card :num="statistics.num_proxy_crates" icon="mdi-package-variant" :text="'Cached Crates'"
-            category="cached"></statistics-card>
+            category="cached" :onClick="navigateToCachedCrates"></statistics-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <statistics-card :num="statistics.num_proxy_crate_versions" icon="mdi-tag-outline" :text="'Cached Versions'"
@@ -126,10 +127,12 @@ import StatisticsCard from '../components/StatisticsCard.vue';
 import type { Statistics } from '../types/statistics';
 import router from '../router';
 import { useTheme } from 'vuetify';
+import { useStore } from '../store/store';
 
 const statistics = ref<Statistics>();
 const searchText = ref("");
 const theme = useTheme();
+const store = useStore();
 
 onBeforeMount(() => {
   axios.get(STATISTICS).then((response) => {
@@ -141,6 +144,23 @@ function searchCrates() {
   if (searchText.value.length > 0) {
     router.push({ path: '/crates', query: { search: searchText.value } });
   }
+}
+
+// Navigate to crates page
+function navigateToCrates() {
+  store.searchCache = false;
+  router.push({ path: '/crates' });
+}
+
+// Navigate to crates page with proxy enabled
+function navigateToCachedCrates() {
+  store.searchCache = true;
+  router.push({ path: '/crates' });
+}
+
+// Navigate to specific crate page
+function navigateToCrate(crateName: string) {
+  router.push({ name: 'Crate', query: { name: crateName } });
 }
 </script>
 
