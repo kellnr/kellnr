@@ -1,13 +1,20 @@
 <template>
-  <v-card class="statistics-card ma-2" :style="cardStyle" elevation="3" rounded="lg" height="120" :ripple="true">
+  <v-card
+    class="statistics-card ma-2"
+    :style="cardStyle"
+    elevation="3"
+    rounded="lg"
+    height="120"
+    :ripple="true"
+    :data-testid="`stat-card-${textToTestId(text)}`">
     <v-card-text class="d-flex flex-column justify-space-between h-100 pa-4" :class="textColorClass">
       <div class="d-flex justify-space-between align-center">
-        <span class="text-h3 font-weight-bold">{{ num }}</span>
+        <span class="text-h3 font-weight-bold" data-testid="stat-value">{{ num }}</span>
         <v-avatar :color="getIconBgColor" size="56" class="elevation-1">
           <v-icon :color="getIconColor" :icon="icon" size="large"></v-icon>
         </v-avatar>
       </div>
-      <div class="text-subtitle-1 font-weight-medium mt-2">
+      <div class="text-subtitle-1 font-weight-medium mt-2" data-testid="stat-label">
         {{ text }}
       </div>
     </v-card-text>
@@ -185,6 +192,11 @@ function darkenColor(color: string): string {
     return color.replace(/^#/, '#0');
   }
   return color;
+}
+
+// Helper function to convert text to test ID format
+function textToTestId(text: number | string): string {
+  return String(text).toLowerCase().replace(/\s+/g, '-');
 }
 </script>
 

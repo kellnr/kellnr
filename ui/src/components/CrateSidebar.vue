@@ -8,14 +8,14 @@
 
     <v-card-text class="pt-0">
       <!-- Install Section -->
-      <div class="sidebar-section">
+      <div class="sidebar-section" data-testid="install-section">
         <div class="d-flex align-center mb-2">
           <v-icon color="primary" size="small" class="me-2">mdi-code-braces</v-icon>
           <span class="text-subtitle-1 font-weight-medium">Install</span>
         </div>
 
         <div class="d-flex align-center copy-container mt-1">
-          <div class="copy-text text-body-2">{{ crateName }} = "{{ version }}"</div>
+          <div class="copy-text text-body-2" data-testid="install-snippet">{{ crateName }} = "{{ version }}"</div>
           <v-tooltip text="Copy to clipboard">
             <template v-slot:activator="{ props }">
               <v-btn v-bind="props" icon variant="text" density="comfortable" color="primary"

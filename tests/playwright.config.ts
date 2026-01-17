@@ -1,16 +1,31 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Playwright Test config for Kellnr smoke/integration tests.
+ * Playwright Test config for Kellnr UI tests.
+ *
+ * All tests are browser-based UI tests using Page Object Model.
+ *
+ * Running tests:
+ * - `npm test` - runs UI tests in Chromium only (default, fast)
+ * - `PLAYWRIGHT_UI=1 npm test` - runs UI tests in Chromium, Firefox, and WebKit
+ * - `npm test -- --project=chromium` - runs UI tests in Chromium only
+ * - `npm test -- --project=firefox` - runs UI tests in Firefox only
+ * - `npm test -- --project=webkit` - runs UI tests in WebKit only
  *
  * Notes:
- * - These tests are primarily "API + Docker orchestration" today, so we keep
- *   browser projects optional/disabled by default (can be enabled later).
+ * - All tests bind to localhost:8000, so they must run serially (single worker)
  * - The reporter is configured to be CI-friendly and provide good debugging
- *   artifacts (traces/screenshots/videos) especially on retries and failures.
+ *   artifacts (traces/screenshots/videos) especially on retries and failures
+ * - Each test file uses a shared Kellnr container to minimize startup overhead
  */
+
+// Determine which browsers to test based on environment
+// Default: Chromium only (fast)
+// PLAYWRIGHT_UI=1: All browsers (Chromium, Firefox, WebKit)
+const enableAllBrowsers = !!process.env.PLAYWRIGHT_UI;
+
 export default defineConfig({
-  // Several smoke tests rely on binding Kellnr to localhost:8000 (stable cratesio proxy download URLs).
+  // All tests rely on binding Kellnr to localhost:8000 (stable cratesio proxy download URLs).
   // To avoid port conflicts and flakiness, run the whole suite with a single worker.
   workers: 1,
   testDir: "./src",
@@ -26,9 +41,9 @@ export default defineConfig({
   // Retries help when waiting for containers/ports.
   retries: process.env.CI ? 1 : 0,
 
-  timeout: 10 * 60 * 1000, // 10 minutes per test
+  timeout: 30 * 1000, // 30 seconds per test
   expect: {
-    timeout: 30 * 1000,
+    timeout: 30 * 1000, // 30 seconds for assertions
   },
 
   // Reporters:
@@ -40,7 +55,6 @@ export default defineConfig({
 
   // Default "use" options are shared by all projects.
   use: {
-    // If/when you add UI tests, Playwright will respect these by default.
     baseURL: process.env.KELLNR_BASE_URL ?? "http://localhost:8000",
 
     // Best practice for debugging flaky integration tests:
@@ -52,27 +66,34 @@ export default defineConfig({
     headless: true,
   },
 
-  // Optional browser projects (disabled by default in CI until you actually add UI tests).
-  // You can enable them later by setting PLAYWRIGHT_UI=1 (or by editing this file).
-  projects: process.env.PLAYWRIGHT_UI
+  projects: enableAllBrowsers
     ? [
+        // Run in all browsers - sequentially to avoid port conflicts
+        // Each browser project depends on the previous one to ensure serial execution
         {
           name: "chromium",
           use: { ...devices["Desktop Chrome"] },
+          testMatch: /ui-.*\.spec\.ts/,
         },
         {
           name: "firefox",
           use: { ...devices["Desktop Firefox"] },
+          testMatch: /ui-.*\.spec\.ts/,
+          dependencies: ["chromium"],
         },
         {
           name: "webkit",
           use: { ...devices["Desktop Safari"] },
+          testMatch: /ui-.*\.spec\.ts/,
+          dependencies: ["firefox"],
         },
       ]
     : [
-        // Default "project" used for API + orchestration tests. No browser needed.
+        // Default: Chromium only (fast)
         {
-          name: "smoke",
+          name: "chromium",
+          use: { ...devices["Desktop Chrome"] },
+          testMatch: /ui-.*\.spec\.ts/,
         },
       ],
 
