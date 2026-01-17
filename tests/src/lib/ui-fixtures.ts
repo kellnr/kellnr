@@ -14,6 +14,7 @@ import {
   HeaderComponent,
   CratesPage,
   LandingPage,
+  CratePage,
 } from "../pages";
 import { startKellnr, type StartedKellnr } from "./kellnr";
 import { withStartedContainer } from "./docker";
@@ -42,6 +43,8 @@ export type UITestFixtures = {
   cratesPage: CratesPage;
   /** Pre-configured LandingPage instance */
   landingPage: LandingPage;
+  /** Pre-configured CratePage instance */
+  cratePage: CratePage;
 };
 
 /**
@@ -74,6 +77,11 @@ export const test = base.extend<UITestFixtures>({
   landingPage: async ({ page }, use) => {
     const landingPage = new LandingPage(page);
     await use(landingPage);
+  },
+
+  cratePage: async ({ page }, use) => {
+    const cratePage = new CratePage(page);
+    await use(cratePage);
   },
 });
 

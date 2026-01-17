@@ -97,7 +97,8 @@ export class CratesPage extends BasePage {
     } catch {
       // Loading might be too fast to catch
     }
-    await this.page.waitForTimeout(200); // Small buffer for Vue reactivity
+    // Give Vue more time to update the DOM after state changes (e.g., proxy toggle)
+    await this.page.waitForTimeout(500);
   }
 
   /**
@@ -127,13 +128,14 @@ export class CratesPage extends BasePage {
    * Get crate names from visible cards.
    */
   async getCrateNames(): Promise<string[]> {
-    const cards = this.page.locator("crate-card");
+    const cards = this.page.locator(".crate-card");
     const count = await cards.count();
     const names: string[] = [];
 
     for (let i = 0; i < count; i++) {
       const card = cards.nth(i);
-      const title = await card.locator(".v-card-title").textContent();
+      // The crate name is in a div with text-h5 class
+      const title = await card.locator(".text-h5").textContent();
       if (title) {
         names.push(title.trim());
       }
@@ -146,7 +148,7 @@ export class CratesPage extends BasePage {
    * Click on a crate card by name.
    */
   async clickCrate(crateName: string): Promise<void> {
-    const card = this.page.locator("crate-card").filter({
+    const card = this.page.locator(".crate-card").filter({
       hasText: crateName,
     });
     await card.click();
@@ -156,7 +158,7 @@ export class CratesPage extends BasePage {
    * Check if a specific crate is visible in the list.
    */
   async hasCrate(crateName: string): Promise<boolean> {
-    const card = this.page.locator("crate-card").filter({
+    const card = this.page.locator(".crate-card").filter({
       hasText: crateName,
     });
     return await card.isVisible();

@@ -36,8 +36,11 @@ test: npm-build # Run all tests which do NOT require Docker
 test-smoke: # Run the smoke tests which require Docker
 	{{test_smoke}}
 
-test-ui: # Run Playwright UI tests in all browsers (requires Docker)
-	{{test_ui}}
+test-ui: # Run Playwright UI tests (requires Docker)
+	{{test_ui_chromium}}
+
+test-ui-all-browser: # Run Playwright UI tests in all browsers (requires Docker)
+	{{test_ui_all_browsers}}
 
 test-ui-chromium: # Run Playwright UI tests in Chromium only (requires Docker)
 	{{test_ui_chromium}}
@@ -160,7 +163,7 @@ test_pgdb := if has_docker == "true" { "cargo nextest run --workspace -E 'test(~
 
 test_smoke := if has_docker == "true" { "cd tests && npm install && npx playwright test" } else { "echo 'ERROR: Docker is not installed. The smoke tests require Docker'" }
 
-test_ui := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_all_browsers := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 
 test_ui_chromium := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=chromium" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 

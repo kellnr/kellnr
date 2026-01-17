@@ -26,16 +26,14 @@ export class LandingPage extends BasePage {
     this.searchInput = page.getByPlaceholder("Search for crates");
     this.loadingIndicator = page.locator(".v-progress-circular");
 
-    // Statistics cards - identified by their labels
-    this.totalCratesCard = page.locator("text=Total Crates").locator("..");
-    this.totalVersionsCard = page.locator("text=Total Versions").locator("..");
-    this.totalDownloadsCard = page
-      .locator("text=Total Downloads")
-      .locator("..");
+    // Statistics cards - using data-testid for reliable selection
+    this.totalCratesCard = page.getByTestId("stat-card-total-crates");
+    this.totalVersionsCard = page.getByTestId("stat-card-total-versions");
+    this.totalDownloadsCard = page.getByTestId("stat-card-total-downloads");
 
     // Sections
     this.topCratesSection = page.locator("text=Top Downloaded Crates");
-    this.cachedCratesSection = page.locator("text=Cached Crates");
+    this.cachedCratesSection = page.getByRole("heading", { name: "Cached Crates" });
   }
 
   /**
@@ -49,8 +47,10 @@ export class LandingPage extends BasePage {
   /**
    * Wait for statistics to load.
    */
-  async waitForStatistics(timeout: number = 10000): Promise<void> {
+  async waitForStatistics(timeout: number = 15000): Promise<void> {
     await this.loadingIndicator.waitFor({ state: "hidden", timeout });
+    // Also wait for at least one statistics card to be visible with content
+    await this.totalCratesCard.waitFor({ state: "visible", timeout });
   }
 
   /**
@@ -82,10 +82,10 @@ export class LandingPage extends BasePage {
    */
   async getTotalCratesCount(): Promise<number | null> {
     try {
-      const card = this.page.locator(".statistics-card, .v-card").filter({
-        hasText: "Total Crates",
-      });
-      const numText = await card.locator(".text-h4, .text-h5").first().textContent();
+      // Wait for the card to be visible
+      await this.totalCratesCard.waitFor({ state: "visible", timeout: 10000 });
+      // Use the stat-value test ID to get the number
+      const numText = await this.totalCratesCard.getByTestId("stat-value").textContent();
       return numText ? parseInt(numText.replace(/,/g, ""), 10) : null;
     } catch {
       return null;
@@ -97,10 +97,10 @@ export class LandingPage extends BasePage {
    */
   async getTotalVersionsCount(): Promise<number | null> {
     try {
-      const card = this.page.locator(".statistics-card, .v-card").filter({
-        hasText: "Total Versions",
-      });
-      const numText = await card.locator(".text-h4, .text-h5").first().textContent();
+      // Wait for the card to be visible
+      await this.totalVersionsCard.waitFor({ state: "visible", timeout: 10000 });
+      // Use the stat-value test ID to get the number
+      const numText = await this.totalVersionsCard.getByTestId("stat-value").textContent();
       return numText ? parseInt(numText.replace(/,/g, ""), 10) : null;
     } catch {
       return null;
@@ -112,10 +112,10 @@ export class LandingPage extends BasePage {
    */
   async getTotalDownloadsCount(): Promise<number | null> {
     try {
-      const card = this.page.locator(".statistics-card, .v-card").filter({
-        hasText: "Total Downloads",
-      });
-      const numText = await card.locator(".text-h4, .text-h5").first().textContent();
+      // Wait for the card to be visible
+      await this.totalDownloadsCard.waitFor({ state: "visible", timeout: 10000 });
+      // Use the stat-value test ID to get the number
+      const numText = await this.totalDownloadsCard.getByTestId("stat-value").textContent();
       return numText ? parseInt(numText.replace(/,/g, ""), 10) : null;
     } catch {
       return null;

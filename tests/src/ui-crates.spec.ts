@@ -6,198 +6,187 @@
  * - Search functionality
  * - Crates proxy toggle
  * - Empty state when no crates
+ *
+ * Performance: All tests share a single Kellnr container instance.
  */
 
-import { test, expect, withKellnrUI } from "./lib/ui-fixtures";
+import { test, expect } from "./lib/ui-fixtures";
 import { CratesPage } from "./pages";
-import { restrictToSingleWorkerBecauseFixedPorts } from "./testUtils";
+import {
+  restrictToSingleWorkerBecauseFixedPorts,
+  waitForHttpOk,
+  assertDockerAvailable,
+} from "./testUtils";
+import { startKellnr, type StartedKellnr } from "./lib/kellnr";
 
 test.describe("Crates Page UI Tests", () => {
   // These tests use fixed localhost:8000 port
   restrictToSingleWorkerBecauseFixedPorts();
 
-  test("crates page displays correctly", async ({ page }, testInfo) => {
-    testInfo.setTimeout(5 * 60 * 1000);
+  let started: StartedKellnr;
+  let baseUrl: string;
 
-    await withKellnrUI(testInfo, { name: "crates-display" }, async (baseUrl) => {
-      const cratesPage = new CratesPage(page);
+  test.beforeAll(async () => {
+    // Container setup needs more time than default timeout
+    test.setTimeout(120_000); // 2 minutes for setup
 
-      await test.step("navigate to crates page", async () => {
-        await page.goto(`${baseUrl}/crates`);
-        await cratesPage.waitForPageLoad();
-      });
+    await assertDockerAvailable();
+    console.log("[setup] Docker is available");
 
-      await test.step("verify crates page elements", async () => {
-        // Search input should be visible
-        await expect(cratesPage.searchInput).toBeVisible();
+    const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
+    const suffix = `${Date.now()}`;
 
-        // Crates proxy switch should be visible
-        await expect(cratesPage.cratesProxySwitch).toBeVisible();
-      });
+    started = await startKellnr(
+      {
+        name: `kellnr-crates-${suffix}`,
+        image,
+        env: {
+          // No special config needed for crates page tests
+        },
+      },
+      { title: "crates" } as any
+    );
 
-      await test.step("wait for crates to load", async () => {
-        await cratesPage.waitForSearchResults();
+    baseUrl = started.baseUrl;
 
-        // Fresh instance should show empty state (no crates published yet)
-        const hasNoCrates = await cratesPage.hasNoCrates();
-        // This could be true (no crates) or false (has crates) depending on state
-        // Just verify the page loaded without errors
-        expect(await cratesPage.isLoading()).toBe(false);
-      });
+    console.log(`[setup] Waiting for HTTP 200 on ${baseUrl}`);
+    await waitForHttpOk(baseUrl, {
+      timeoutMs: 60_000,
+      intervalMs: 1_000,
     });
+    console.log("[setup] Server ready");
+    console.log("[setup] Done");
   });
 
-  test("empty state shown when no crates", async ({ page }, testInfo) => {
-    testInfo.setTimeout(5 * 60 * 1000);
-
-    await withKellnrUI(testInfo, { name: "crates-empty" }, async (baseUrl) => {
-      const cratesPage = new CratesPage(page);
-
-      await test.step("navigate to crates page", async () => {
-        await page.goto(`${baseUrl}/crates`);
-        await cratesPage.waitForSearchResults();
-      });
-
-      await test.step("verify empty state", async () => {
-        // Fresh Kellnr instance should have no crates
-        const hasNoCrates = await cratesPage.hasNoCrates();
-        expect(hasNoCrates).toBe(true);
-
-        // Empty state should mention documentation
-        const emptyMessage = page.getByText("No crates found");
-        await expect(emptyMessage).toBeVisible();
-      });
-    });
+  test.afterAll(async () => {
+    if (started) {
+      console.log("[teardown] Stopping container");
+      await started.started.container.stop();
+    }
   });
 
-  test("search input accepts text", async ({ page }, testInfo) => {
-    testInfo.setTimeout(5 * 60 * 1000);
+  test("crates page displays correctly", async ({ page }) => {
+    const cratesPage = new CratesPage(page);
 
-    await withKellnrUI(testInfo, { name: "crates-search-input" }, async (baseUrl) => {
-      const cratesPage = new CratesPage(page);
+    await page.goto(`${baseUrl}/crates`);
+    await cratesPage.waitForPageLoad();
 
-      await test.step("navigate to crates page", async () => {
-        await page.goto(`${baseUrl}/crates`);
-        await cratesPage.waitForPageLoad();
-      });
+    // Search input should be visible
+    await expect(cratesPage.searchInput).toBeVisible();
 
-      await test.step("type in search input", async () => {
-        await cratesPage.searchInput.fill("test-crate");
-        const value = await cratesPage.getSearchText();
-        expect(value).toBe("test-crate");
-      });
+    // Crates proxy switch should be visible
+    await expect(cratesPage.cratesProxySwitch).toBeVisible();
 
-      await test.step("clear search input", async () => {
-        await cratesPage.searchInput.clear();
-        const value = await cratesPage.getSearchText();
-        expect(value).toBe("");
-      });
-    });
+    // Wait for crates to load
+    await cratesPage.waitForSearchResults();
+
+    // Fresh instance should show empty state (no crates published yet)
+    // Just verify the page loaded without errors
+    expect(await cratesPage.isLoading()).toBe(false);
   });
 
-  test("search via URL query parameter", async ({ page }, testInfo) => {
-    testInfo.setTimeout(5 * 60 * 1000);
+  test("empty state shown when no crates", async ({ page }) => {
+    const cratesPage = new CratesPage(page);
 
-    await withKellnrUI(testInfo, { name: "crates-search-url" }, async (baseUrl) => {
-      const cratesPage = new CratesPage(page);
+    await page.goto(`${baseUrl}/crates`);
+    await cratesPage.waitForSearchResults();
 
-      await test.step("navigate to crates page with search query", async () => {
-        await page.goto(`${baseUrl}/crates?search=my-crate`);
-        await cratesPage.waitForPageLoad();
-      });
+    // Fresh Kellnr instance should have no crates
+    const hasNoCrates = await cratesPage.hasNoCrates();
+    expect(hasNoCrates).toBe(true);
 
-      await test.step("verify search input is pre-filled", async () => {
-        const value = await cratesPage.getSearchText();
-        expect(value).toBe("my-crate");
-      });
-    });
+    // Empty state should mention documentation
+    const emptyMessage = page.getByText("No crates found");
+    await expect(emptyMessage).toBeVisible();
   });
 
-  test("crates proxy toggle can be switched", async ({ page }, testInfo) => {
-    testInfo.setTimeout(5 * 60 * 1000);
+  test("search input accepts text", async ({ page }) => {
+    const cratesPage = new CratesPage(page);
 
-    await withKellnrUI(testInfo, { name: "crates-proxy-toggle" }, async (baseUrl) => {
-      const cratesPage = new CratesPage(page);
+    await page.goto(`${baseUrl}/crates`);
+    await cratesPage.waitForPageLoad();
 
-      await test.step("navigate to crates page", async () => {
-        await page.goto(`${baseUrl}/crates`);
-        await cratesPage.waitForSearchResults();
-      });
+    // Type in search input
+    await cratesPage.searchInput.fill("test-crate");
+    const value = await cratesPage.getSearchText();
+    expect(value).toBe("test-crate");
 
-      await test.step("get initial proxy state", async () => {
-        const initialState = await cratesPage.isCratesProxyEnabled();
-
-        // Toggle the switch
-        await cratesPage.toggleCratesProxy();
-
-        // Verify state changed
-        const newState = await cratesPage.isCratesProxyEnabled();
-        expect(newState).not.toBe(initialState);
-      });
-    });
+    // Clear search input
+    await cratesPage.searchInput.clear();
+    const clearedValue = await cratesPage.getSearchText();
+    expect(clearedValue).toBe("");
   });
 
-  test("search triggers when pressing enter", async ({ page }, testInfo) => {
-    testInfo.setTimeout(5 * 60 * 1000);
+  test("search via URL query parameter", async ({ page }) => {
+    const cratesPage = new CratesPage(page);
 
-    await withKellnrUI(testInfo, { name: "crates-search-enter" }, async (baseUrl) => {
-      const cratesPage = new CratesPage(page);
+    await page.goto(`${baseUrl}/crates?search=my-crate`);
+    await cratesPage.waitForPageLoad();
 
-      await test.step("navigate to crates page", async () => {
-        await page.goto(`${baseUrl}/crates`);
-        await cratesPage.waitForSearchResults();
-      });
-
-      await test.step("enter search query and press enter", async () => {
-        // Type search query
-        await cratesPage.searchInput.fill("nonexistent-crate-xyz");
-
-        // Press enter to search
-        await cratesPage.searchInput.press("Enter");
-
-        // Wait for search to complete
-        await cratesPage.waitForSearchResults();
-      });
-
-      await test.step("verify search completed", async () => {
-        // Should show empty results for nonexistent crate
-        const hasNoCrates = await cratesPage.hasNoCrates();
-        expect(hasNoCrates).toBe(true);
-      });
-    });
+    // Verify search input is pre-filled
+    const value = await cratesPage.getSearchText();
+    expect(value).toBe("my-crate");
   });
 
-  test("page shows loading indicator while fetching", async ({ page }, testInfo) => {
-    testInfo.setTimeout(5 * 60 * 1000);
+  test("crates proxy toggle can be switched", async ({ page }) => {
+    const cratesPage = new CratesPage(page);
 
-    await withKellnrUI(testInfo, { name: "crates-loading" }, async (baseUrl) => {
-      await test.step("intercept API to delay response", async () => {
-        // Add a delay to the crates API to observe loading state
-        await page.route("**/api/crates*", async (route) => {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          await route.continue();
-        });
-      });
+    await page.goto(`${baseUrl}/crates`);
+    await cratesPage.waitForSearchResults();
 
-      await test.step("navigate and observe loading", async () => {
-        // Start navigation
-        const navigationPromise = page.goto(`${baseUrl}/crates`);
+    // Get initial proxy state
+    const initialState = await cratesPage.isCratesProxyEnabled();
 
-        // Check for loading indicator (may be quick)
-        await page.waitForTimeout(100);
+    // Toggle the switch
+    await cratesPage.toggleCratesProxy();
 
-        // Complete navigation
-        await navigationPromise;
-      });
+    // Verify state changed
+    const newState = await cratesPage.isCratesProxyEnabled();
+    expect(newState).not.toBe(initialState);
+  });
 
-      await test.step("verify loading completes", async () => {
-        const cratesPage = new CratesPage(page);
-        await cratesPage.waitForSearchResults();
+  test("search triggers when pressing enter", async ({ page }) => {
+    const cratesPage = new CratesPage(page);
 
-        // Loading should be done
-        const isLoading = await cratesPage.isLoading();
-        expect(isLoading).toBe(false);
-      });
+    await page.goto(`${baseUrl}/crates`);
+    await cratesPage.waitForSearchResults();
+
+    // Type search query
+    await cratesPage.searchInput.fill("nonexistent-crate-xyz");
+
+    // Press enter to search
+    await cratesPage.searchInput.press("Enter");
+
+    // Wait for search to complete
+    await cratesPage.waitForSearchResults();
+
+    // Should show empty results for nonexistent crate
+    const hasNoCrates = await cratesPage.hasNoCrates();
+    expect(hasNoCrates).toBe(true);
+  });
+
+  test("page shows loading indicator while fetching", async ({ page }) => {
+    // Add a delay to the crates API to observe loading state
+    await page.route("**/api/crates*", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await route.continue();
     });
+
+    // Start navigation
+    const navigationPromise = page.goto(`${baseUrl}/crates`);
+
+    // Check for loading indicator (may be quick)
+    await page.waitForTimeout(100);
+
+    // Complete navigation
+    await navigationPromise;
+
+    // Verify loading completes
+    const cratesPage = new CratesPage(page);
+    await cratesPage.waitForSearchResults();
+
+    // Loading should be done
+    const isLoading = await cratesPage.isLoading();
+    expect(isLoading).toBe(false);
   });
 });

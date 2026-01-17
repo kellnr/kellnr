@@ -40,9 +40,9 @@ export default defineConfig({
   // Retries help when waiting for containers/ports.
   retries: process.env.CI ? 1 : 0,
 
-  timeout: 10 * 60 * 1000, // 10 minutes per test
+  timeout: 30 * 1000, // 30 seconds per test
   expect: {
-    timeout: 30 * 1000,
+    timeout: 30 * 1000, // 30 seconds for assertions
   },
 
   // Reporters:
