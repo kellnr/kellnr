@@ -12,10 +12,10 @@ documentation.workspace = true
 [dependencies]
 # Internal dependencies from Kellnr
 kellnr-common.workspace = true
+kellnr-db-testcontainer.workspace = true
 kellnr-entity.workspace = true
 kellnr-migration.workspace = true
 kellnr-settings.workspace = true
-kellnr-db-testcontainer.workspace = true
 
 # External dependencies from crates.io
 chrono.workspace = true

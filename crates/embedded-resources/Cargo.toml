@@ -15,14 +15,11 @@ documentation.workspace = true
 include = ["src/**", "static/**", "Cargo.toml"]
 
 [dependencies]
-# Internal dependencies from Kellnr
-
-# External dependencies from crates.io
-include_dir.workspace = true
 axum.workspace = true
-tracing.workspace = true
 bytes.workspace = true
+include_dir.workspace = true
 mime_guess.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

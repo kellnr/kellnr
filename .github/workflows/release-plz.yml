@@ -11,26 +11,21 @@ jobs:
     name: Release-plz PR
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'kellnr' }}
-    permissions:
-      contents: write
-      pull-requests: write
+    permissions: { contents: write, pull-requests: write }
     concurrency:
       group: release-plz-${{ github.ref }}
       cancel-in-progress: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+        with: { fetch-depth: 0, persist-credentials: false }
 
       - name: Setup Rust
         uses: hecrj/setup-rust-action@v2
 
       - name: Run release-plz
         uses: release-plz/action@v0.5
-        with:
-          command: release-pr
+        with: { command: release-pr }
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -39,23 +34,17 @@ jobs:
   release-plz-release:
     name: Release-plz release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: { contents: write }
     if: ${{ github.repository_owner == 'kellnr' }}
     steps:
-      - &checkout
-        name: Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - &install-rust
-        name: Install Rust toolchain
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz
         uses: release-plz/action@v0.5
-        with:
-          command: release
+        with: { command: release }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
