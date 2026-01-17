@@ -47,8 +47,8 @@ jobs:
       - name: Tests
         run: nix develop --command just test-pgdb
 
-  test-kellnr-smoke:
-    name: Smoke Test (Playwright)
+  test-kellnr-ui:
+    name: UI Tests (Playwright)
     runs-on: ubuntu-24.04
 
     steps:
@@ -60,7 +60,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Tests
-        run: nix develop --command just test-smoke
+        run: nix develop --command just test-ui
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -149,7 +149,7 @@ jobs:
       - build-kellnr
       - test-kellnr
       - test-kellnr-pgdb
-      - test-kellnr-smoke
+      - test-kellnr-ui
     permissions:
       packages: write
       contents: read
