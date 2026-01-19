@@ -1,11 +1,6 @@
-name: kellnr-ci
+name: Release
+
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   release:
     types:
       - published
@@ -17,10 +12,12 @@ permissions:
   contents: read
 
 jobs:
-  test-kellnr:
-    name: Unit Tests
+  test:
+    name: Run Tests
     runs-on: ubuntu-24.04
-
+    strategy:
+      matrix:
+        test-type: [unit, pgdb, ui]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -28,41 +25,18 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
 
-      - name: Tests
-        run: nix develop --command just test
-
-  test-kellnr-pgdb:
-    name: Postgresql Tests
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - uses: cachix/install-nix-action@v31
-        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
-
-      - name: Tests
-        run: nix develop --command just test-pgdb
-
-  test-kellnr-ui:
-    name: UI Tests (Playwright)
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - uses: cachix/install-nix-action@v31
-        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
-
-      - name: Tests
-        run: nix develop --command just test-ui
+      - name: Run ${{ matrix.test-type }} tests
+        run: |
+          case "${{ matrix.test-type }}" in
+            unit) nix develop --command just test ;;
+            pgdb) nix develop --command just test-pgdb ;;
+            ui) nix develop --command just test-ui ;;
+          esac
 
   build-kellnr:
-    name: Kellnr Build
-    if: github.event_name == 'release'
+    name: Build Binaries
     runs-on: ubuntu-24.04
+    needs: [test]
     permissions: { contents: write }
     strategy:
       matrix:
@@ -97,14 +71,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install cross-rs
-        run: cargo install cross
+        uses: taiki-e/install-action@v2
+        with: { tool: cross }
 
       - name: Extract Version
         run: |
           echo "KELLNR_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
           echo $KELLNR_VERSION
 
-      - name: Build Release {{ matrix.target }}
+      - name: Build Release ${{ matrix.target }}
         run: just target=${{ matrix.target }} ci-release
 
       - name: Set Package Name
@@ -135,14 +110,9 @@ jobs:
           tag: ${{ github.ref }}
 
   build-and-push-image:
-    name: Build and Push Image
-    if: github.event_name == 'release'
+    name: Build and Push Docker Image
     runs-on: ubuntu-24.04
-    needs:
-      - build-kellnr
-      - test-kellnr
-      - test-kellnr-pgdb
-      - test-kellnr-ui
+    needs: [build-kellnr]
     permissions:
       packages: write
       contents: read
@@ -173,9 +143,8 @@ jobs:
         working-directory: docker
 
   crates-io-release:
-    name: Release to crates.io
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
+    name: Publish to crates.io
+    runs-on: ubuntu-24.04
     needs: [build-and-push-image]
     steps:
       - name: Checkout repository
@@ -199,66 +168,10 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      # - name: Publish kellnr-common
-      #   run: cargo publish -p kellnr-common
-      #
-      # - name: Publish kellnr-settings
-      #   run: cargo publish -p kellnr-settings
-      #
-      # - name: Publish kellnr-entity
-      #   run: cargo publish -p kellnr-entity
-      #
-      # - name: Publish kellnr-migration
-      #   run: cargo publish -p kellnr-migration
-      #
-      # - name: Publish kellnr-minio-testcontainer
-      #   run: cargo publish -p kellnr-minio-testcontainer
-      #
-      # - name: Publish kellnr-storage
-      #   run: cargo publish -p kellnr-storage
-      #
-      # - name: Publish kellnr-db-testcontainer
-      #   run: cargo publish -p kellnr-db-testcontainer
-      #
-      # - name: Publish kellnr-db
-      #   run: cargo publish -p kellnr-db
-      #
-      # - name: Publish kellnr-appstate
-      #   run: cargo publish -p kellnr-appstate
-      #
-      # - name: Publish kellnr-embedded-resources
-      #   run: cargo publish -p kellnr-embedded-resources --allow-dirty # because of built static resources
-      #
-      # - name: Publish kellnr-auth
-      #   run: cargo publish -p kellnr-auth
-      #
-      # - name: Publish kellnr-error
-      #   run: cargo publish -p kellnr-error
-      #
-      # - name: Publish kellnr-webhooks
-      #   run: cargo publish -p kellnr-webhooks
-      #
-      # - name: Publish kellnr-registry
-      #   run: cargo publish -p kellnr-registry
-      #
-      # - name: Publish kellnr-index
-      #   run: cargo publish -p kellnr-index
-      #
-      # - name: Publish kellnr-docs
-      #   run: cargo publish -p kellnr-docs
-      #
-      # - name: Publish kellnr-web-ui
-      #   run: cargo publish -p kellnr-web-ui
-      #
-      # - name: Publish kellnr
-      #   run: cargo publish -p kellnr
-
   dispatch-helm:
-    name: Dispatch Helm Update
-    if: github.event_name == 'release'
+    name: Update Helm Chart
     runs-on: ubuntu-24.04
-    needs:
-      - build-and-push-image
+    needs: [build-and-push-image]
     steps:
       - name: Extract Version
         run: |
@@ -290,11 +203,9 @@ jobs:
             -d "{\"event_type\":\"$EVENT_TYPE\",\"client_payload\":{\"version\":\"$VERSION\",\"tag\":\"$TAG\",\"source_repo\":\"$GITHUB_REPOSITORY\"}}"
 
   dispatch-website:
-    name: Dispatch Website Release Notes
-    if: github.event_name == 'release'
+    name: Update Website Release Notes
     runs-on: ubuntu-24.04
-    needs:
-      - build-and-push-image
+    needs: [build-and-push-image]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
