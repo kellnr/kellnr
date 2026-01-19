@@ -1,9 +1,7 @@
 <template>
-  <v-card class="mx-auto readme-container" variant="text">
-    <v-card-text>
-      <div class="markdown-body" v-html="markedReadme"></div>
-    </v-card-text>
-  </v-card>
+  <div class="readme-wrapper">
+    <div class="markdown-body" v-html="markedReadme"></div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -56,84 +54,117 @@ watchEffect(() => {
 });
 </script>
 
-<style>
-.markdown-body {
-  font-family: inherit;
+<style scoped>
+.readme-wrapper {
+  padding: 24px;
+  color: rgb(var(--v-theme-on-surface));
 }
 
-.markdown-body pre {
-  border-radius: 4px;
+.markdown-body {
+  font-family: inherit;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.markdown-body :deep(pre) {
+  border-radius: 8px;
   margin: 16px 0;
   padding: 16px;
   overflow-x: auto;
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgb(var(--v-theme-outline));
 }
 
-.markdown-body code:not(pre code) {
+.markdown-body :deep(code:not(pre code)) {
   color: inherit;
   padding: 0.2em 0.4em;
-  border-radius: 3px;
+  border-radius: 4px;
   font-size: 0.9em;
-  background-color: rgba(175, 184, 193, 0.2);
+  background: rgb(var(--v-theme-surface-variant));
 }
 
-.markdown-body h1,
-.markdown-body h2,
-.markdown-body h3,
-.markdown-body h4,
-.markdown-body h5,
-.markdown-body h6 {
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4),
+.markdown-body :deep(h5),
+.markdown-body :deep(h6) {
   margin-top: 24px;
   margin-bottom: 16px;
   font-weight: 600;
   line-height: 1.25;
+  color: rgb(var(--v-theme-on-surface));
 }
 
-.markdown-body h1 {
+.markdown-body :deep(h1) {
   font-size: 2em;
 }
 
-.markdown-body h2 {
+.markdown-body :deep(h2) {
   font-size: 1.5em;
 }
 
-.markdown-body h3 {
+.markdown-body :deep(h3) {
   font-size: 1.25em;
 }
 
-.markdown-body p {
+.markdown-body :deep(p) {
   margin-bottom: 16px;
 }
 
-.markdown-body img {
+.markdown-body :deep(img) {
   max-width: 100%;
   height: auto;
 }
 
-.markdown-body table {
+.markdown-body :deep(table) {
   border-collapse: collapse;
   width: 100%;
   margin-bottom: 16px;
 }
 
-.markdown-body table th,
-.markdown-body table td {
-  border: 1px solid;
+.markdown-body :deep(table th),
+.markdown-body :deep(table td) {
+  border: 1px solid rgb(var(--v-theme-outline));
   padding: 6px 13px;
 }
 
-/* Make the readme container responsive */
-.readme-container {
-  width: 100%;
-  max-width: 960px;
-  margin: 0 auto;
+.markdown-body :deep(a) {
+  color: rgb(var(--v-theme-primary));
+}
+
+.markdown-body :deep(blockquote) {
+  margin: 16px 0;
+  padding: 0 16px;
+  border-left: 4px solid rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin-bottom: 16px;
+  padding-left: 24px;
+}
+
+.markdown-body :deep(li) {
+  margin-bottom: 4px;
+}
+
+.markdown-body :deep(hr) {
+  border: none;
+  border-top: 1px solid rgb(var(--v-theme-outline));
+  margin: 24px 0;
 }
 
 @media (max-width: 600px) {
+  .readme-wrapper {
+    padding: 16px;
+  }
+
   .markdown-body {
     font-size: 14px;
   }
 
-  .markdown-body pre {
+  .markdown-body :deep(pre) {
     padding: 8px;
   }
 }

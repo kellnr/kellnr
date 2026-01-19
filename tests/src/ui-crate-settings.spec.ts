@@ -120,16 +120,16 @@ test.describe("Crate Settings UI Tests", () => {
     await cratePage.clickTab("settings");
     await page.waitForTimeout(500);
 
-    // Verify owners list is displayed
-    const ownersCard = page.locator(".v-card").filter({ hasText: "Crate owners" });
+    // Verify owners list is displayed - new UI uses settings-card with settings-header
+    const ownersCard = page.locator(".settings-card").filter({ hasText: "Crate Owners" });
     await expect(ownersCard).toBeVisible();
 
-    // There should be at least one owner (the publisher)
-    const ownersList = ownersCard.locator(".v-list");
+    // There should be at least one owner (the publisher) - new UI uses settings-list
+    const ownersList = ownersCard.locator(".settings-list");
     await expect(ownersList).toBeVisible();
 
-    // Verify add owner form is visible
-    const addOwnerSection = page.locator("h3").filter({ hasText: "Add crate owner" });
+    // Verify add owner form is visible - new UI uses settings-form-header
+    const addOwnerSection = page.locator(".settings-form-header").filter({ hasText: "Add crate owner" });
     await expect(addOwnerSection).toBeVisible();
 
     // Add button should be visible
@@ -154,30 +154,29 @@ test.describe("Crate Settings UI Tests", () => {
     await cratePage.clickTab("settings");
     await page.waitForTimeout(500);
 
-    // Verify access control section is displayed
-    // Main access control card - look for the title
-    const accessControlTitle = page.locator(".v-card-title").filter({ hasText: "Access control" });
-    await expect(accessControlTitle).toBeVisible();
+    // Verify access control section is displayed - new UI uses settings-card
+    const accessControlCard = page.locator(".settings-card").filter({ hasText: "Access Control" });
+    await expect(accessControlCard).toBeVisible();
 
-    // Crate access subsection - look for the specific title
-    const crateAccessTitle = page.locator(".v-card-title").filter({ hasText: /^Crate access$/ });
-    await expect(crateAccessTitle).toBeVisible();
+    // Download Restrictions subsection - look for the subsection header
+    const downloadRestrictionsSection = page.locator(".settings-subsection-header").filter({ hasText: "Download Restrictions" });
+    await expect(downloadRestrictionsSection).toBeVisible();
 
     // Crate users subsection
-    const crateUsersTitle = page.locator(".v-card-title").filter({ hasText: /^Crate users$/ });
-    await expect(crateUsersTitle).toBeVisible();
+    const crateUsersSection = page.locator(".settings-subsection-header").filter({ hasText: "Crate Users" });
+    await expect(crateUsersSection).toBeVisible();
 
     // Crate groups subsection
-    const crateGroupsTitle = page.locator(".v-card-title").filter({ hasText: /^Crate groups$/ });
-    await expect(crateGroupsTitle).toBeVisible();
+    const crateGroupsSection = page.locator(".settings-subsection-header").filter({ hasText: "Crate Groups" });
+    await expect(crateGroupsSection).toBeVisible();
 
-    // Verify download restriction checkbox exists
-    const checkbox = page.getByLabel("Crate users only are allowed to download");
+    // Verify download restriction checkbox exists - new label text
+    const checkbox = page.getByLabel("Restrict downloads to crate users only");
     await expect(checkbox).toBeVisible();
 
-    // Verify change access rules button exists
-    const changeButton = page.getByRole("button", { name: "Change crate access rules" });
-    await expect(changeButton).toBeVisible();
+    // Verify save changes button exists - new UI has "Save Changes" instead
+    const saveButton = page.getByRole("button", { name: "Save Changes" });
+    await expect(saveButton).toBeVisible();
   });
 
   test("admin can delete a crate version", async ({ page }) => {
@@ -201,13 +200,13 @@ test.describe("Crate Settings UI Tests", () => {
     await expect(cratePage.deleteVersionButton).toBeVisible();
     await expect(cratePage.deleteCrateButton).toBeVisible();
 
-    // Verify warning is displayed
-    const warning = page.locator(".v-alert").filter({ hasText: "Warning" });
+    // Verify warning is displayed - new text mentions "yanking"
+    const warning = page.locator(".v-alert").filter({ hasText: "yanking" });
     await expect(warning).toBeVisible();
 
-    // Warning should mention breaking dependencies
+    // Warning should mention yanking as an alternative
     const warningText = await warning.textContent();
-    expect(warningText).toContain("breaks all crates that depend on it");
+    expect(warningText).toContain("yanking");
 
     // Delete the crate version
     // Set up dialog handler before clicking

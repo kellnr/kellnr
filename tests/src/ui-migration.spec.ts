@@ -269,7 +269,7 @@ test.describe("Migration UI Tests", () => {
           await cratePage.clickTab("dependencies");
           await page.waitForTimeout(500);
 
-          const testLibDep = page.locator("h3").filter({ hasText: "test_lib" });
+          const testLibDep = page.locator(".dep-name").filter({ hasText: "test_lib" });
           await expect(testLibDep).toBeVisible();
           console.log("[migration] ✓ Dependencies preserved");
 

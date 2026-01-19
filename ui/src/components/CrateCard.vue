@@ -1,74 +1,71 @@
 <template>
-  <v-card class="crate-card mb-4 rounded-lg transition-swing clickable-card" elevation="2" :color="'primary-lighten-5'"
-    variant="elevated" hover @mouseover="isHovered = true" @mouseleave="isHovered = false" @click="navigateToCrate">
+  <v-card class="crate-card mb-3" elevation="0" rounded="lg" @click="navigateToCrate">
     <v-card-text class="pa-4">
-      <v-row no-gutters>
+      <div class="d-flex align-start">
         <!-- Origin Logo -->
-        <v-col cols="auto" class="mr-4 origin-column">
-          <v-avatar :color="'primary-lighten-4'" size="52" class="elevation-1 mr-2" :class="{ 'scale-up': isHovered }">
+        <div class="logo-container mr-4">
+          <v-avatar size="48" class="crate-logo">
             <v-img v-if="props.isCache" :src="store.cargoSmallLogo" alt="Crates.io logo" />
             <v-img v-else :src="store.kellnrSmallLogo" alt="Kellnr logo" />
           </v-avatar>
-        </v-col>
+        </div>
 
-        <!-- Title and Description Section -->
-        <v-col>
-          <div class="d-flex flex-wrap align-center mb-2">
-            <div class="text-h5 font-weight-bold me-2">
-              {{ crate }}
+        <!-- Main Content -->
+        <div class="flex-grow-1 min-width-0">
+          <!-- Header Row: Name + Version + Stats -->
+          <div class="d-flex flex-wrap align-center justify-space-between mb-2">
+            <div class="d-flex align-center flex-wrap crate-header">
+              <span class="crate-name font-weight-bold me-3">{{ crate }}</span>
+              <v-chip size="small" variant="tonal" color="primary" class="version-chip">
+                v{{ version }}
+              </v-chip>
             </div>
-            <v-chip size="small" color="primary" variant="flat" class="ml-1 mt-1" :class="{ 'elevated': isHovered }">
-              v{{ version }}
-            </v-chip>
+
+            <!-- Stats Row -->
+            <div class="d-flex align-center stats-row">
+              <v-tooltip location="top" text="Downloads">
+                <template v-slot:activator="{ props: tooltipProps }">
+                  <div class="stat-item" v-bind="tooltipProps">
+                    <v-icon icon="mdi-download" size="x-small" class="stat-icon" />
+                    <span class="stat-value">{{ formatNumber(downloads) }}</span>
+                  </div>
+                </template>
+              </v-tooltip>
+
+              <v-tooltip location="top" text="Last updated">
+                <template v-slot:activator="{ props: tooltipProps }">
+                  <div class="stat-item" v-bind="tooltipProps">
+                    <v-icon icon="mdi-calendar-outline" size="x-small" class="stat-icon" />
+                    <span class="stat-value">{{ humanizedLastUpdated }}</span>
+                  </div>
+                </template>
+              </v-tooltip>
+
+              <div class="doc-link-wrapper">
+                <a v-if="docLink && docLink.length > 0" :href="docLink" class="doc-button" target="_blank" @click.stop>
+                  <v-icon icon="mdi-file-document-outline" size="small" />
+                  <span>Documentation</span>
+                </a>
+                <button v-else class="doc-button" @click.stop="goToPublishDocs">
+                  <v-icon icon="mdi-file-document-outline" size="small" />
+                  <span>Documentation</span>
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="text-body-1 text-truncate-3 crate-description">
+
+          <!-- Description -->
+          <p class="crate-description mb-0">
             {{ desc || "No description available" }}
-          </div>
-        </v-col>
-
-        <!-- Statistics Section -->
-        <v-col cols="12" sm="auto" class="mt-3 mt-sm-0">
-          <div class="d-flex flex-wrap gap-4 justify-sm-end">
-            <v-tooltip location="top" text="Downloads">
-              <template v-slot:activator="{ props: tooltipProps }">
-                <div class="d-flex align-center stat-item" v-bind="tooltipProps">
-                  <v-icon icon="mdi-cloud-download" size="small" class="mr-2"
-                    :color="isHovered ? 'primary' : undefined" />
-                  <span class="text-body-2 font-weight-medium">{{ formatNumber(downloads) }}</span>
-                </div>
-              </template>
-            </v-tooltip>
-
-            <v-tooltip location="top" text="Last updated">
-              <template v-slot:activator="{ props: tooltipProps }">
-                <div class="d-flex align-center stat-item" v-bind="tooltipProps">
-                  <v-icon icon="mdi-calendar" size="small" class="mr-2" :color="isHovered ? 'primary' : undefined" />
-                  <span class="text-body-2 font-weight-medium">{{ humanizedLastUpdated }}</span>
-                </div>
-              </template>
-            </v-tooltip>
-
-            <div class="d-flex align-center stat-item">
-              <v-icon icon="mdi-book-open-variant" size="small" class="mr-2"
-                :color="isHovered ? 'primary' : undefined" />
-              <a v-if="docLink" v-bind:href="docLink" class="text-decoration-none text-body-2 font-weight-medium"
-                target="_blank" @click.stop>
-                Documentation
-              </a>
-              <router-link v-if="!docLink" class="text-decoration-none text-body-2 font-weight-medium" to="/publishdocs"
-                @click.stop>
-                Documentation
-              </router-link>
-            </div>
-          </div>
-        </v-col>
-      </v-row>
+          </p>
+        </div>
+      </div>
     </v-card-text>
   </v-card>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
@@ -79,7 +76,6 @@ dayjs.extend(relativeTime);
 dayjs.extend(utc);
 const store = useStore();
 const router = useRouter();
-const isHovered = ref(false);
 
 const props = defineProps<{
   crate: string
@@ -114,65 +110,126 @@ function navigateToCrate() {
     });
   }
 }
+
+// Navigate to publish docs page
+function goToPublishDocs() {
+  router.push({ name: 'PublishDocs' });
+}
 </script>
 
 <style scoped>
-.origin-column {
-  border-right: 1px solid rgba(0, 0, 0, 0.12);
-  padding-right: 16px;
-}
-
-.text-truncate-3 {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.gap-4 {
-  gap: 16px;
-}
-
 .crate-card {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  overflow: hidden;
   cursor: pointer;
-  position: relative;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline));
+  transition: all 0.2s ease;
 }
 
 .crate-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1) !important;
+  background: rgba(var(--v-theme-primary), 0.04);
+  border-color: rgb(var(--v-theme-primary));
 }
 
-.crate-card:hover::after {
-  opacity: 1;
+.min-width-0 {
+  min-width: 0;
 }
 
-.clickable-card {
-  user-select: none;
+.logo-container {
+  flex-shrink: 0;
+}
+
+.crate-logo {
+  background: rgba(var(--v-theme-primary), 0.1);
+}
+
+.crate-header {
+  gap: 8px;
+}
+
+.crate-name {
+  font-size: 1.125rem;
+  color: rgb(var(--v-theme-on-surface));
+  word-break: break-word;
+}
+
+.version-chip {
+  font-size: 0.75rem;
+  font-weight: 500;
+  height: 22px;
 }
 
 .crate-description {
+  font-size: 0.875rem;
   line-height: 1.5;
-  max-height: 4.5em;
+  color: rgb(var(--v-theme-on-surface-variant));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.stats-row {
+  gap: 20px;
+  flex-shrink: 0;
 }
 
 .stat-item {
-  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.scale-up {
-  transform: scale(1.05);
+.stat-icon {
+  color: rgb(var(--v-theme-primary));
+  opacity: 0.7;
 }
 
-.elevated {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.stat-value {
+  font-size: 0.9rem;
+  color: rgb(var(--v-theme-on-surface));
+  font-weight: 500;
 }
 
-/* Dark mode adjustments */
-:deep(.v-theme--dark) .origin-column {
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+/* Documentation Button */
+.doc-link-wrapper {
+  margin-left: 4px;
+}
+
+.doc-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(var(--v-theme-primary), 0.1);
+  color: rgb(var(--v-theme-primary));
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.doc-button:hover {
+  background: rgba(var(--v-theme-primary), 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .stats-row {
+    width: 100%;
+    margin-top: 8px;
+    justify-content: flex-start;
+  }
+
+  .crate-header {
+    width: 100%;
+  }
+
+  .doc-button {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+  }
 }
 </style>
