@@ -23,13 +23,13 @@ export class LoginPage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    // Use label-based selectors for Vuetify text fields
-    this.usernameInput = page.getByLabel("User");
-    this.passwordInput = page.getByLabel("Password");
+    // Use placeholder-based selectors for the custom login form
+    this.usernameInput = page.getByPlaceholder("Enter your username");
+    this.passwordInput = page.getByPlaceholder("Enter your password");
     this.rememberMeCheckbox = page.getByLabel("Remember me");
-    this.confirmButton = page.getByRole("button", { name: "Confirm" });
-    // Sign In is rendered as v-card-title (not a semantic heading)
-    this.signInTitle = page.locator(".v-card-title").filter({ hasText: "Sign In" });
+    this.confirmButton = page.getByRole("button", { name: "Sign In" });
+    // Title is now an h1 with class login-title
+    this.signInTitle = page.locator(".login-title");
     this.alertMessage = page.locator(".v-alert");
   }
 

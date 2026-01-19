@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject } from 'vue';
+import { computed } from 'vue';
 import { useTheme } from 'vuetify';
 
 const props = defineProps<{
@@ -80,9 +80,9 @@ const cardStyle = computed(() => {
       case 'bronze':
         return { background: 'linear-gradient(135deg, #bf360c 0%, #d84315 100%)' };
       case 'cached':
-        return { background: 'linear-gradient(135deg, #1a237e 0%, #283593 100%)' };
+        return { background: 'linear-gradient(135deg, #1B2838 0%, #243447 100%)' };
       default:
-        return { background: 'linear-gradient(135deg, #212121 0%, #424242 100%)' };
+        return { background: 'linear-gradient(135deg, #1B2838 0%, #243447 100%)' };
     }
   }
 
@@ -109,9 +109,9 @@ const cardStyle = computed(() => {
     case 'bronze':
       return { background: 'linear-gradient(135deg, #fff3e0 0%, #ffcc80 100%)' };
     case 'cached':
-      return { background: 'linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%)' };
+      return { background: 'linear-gradient(135deg, #EEF2F6 0%, #E4E9EE 100%)' };
     default:
-      return { background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)' };
+      return { background: 'linear-gradient(135deg, #EEF2F6 0%, #E4E9EE 100%)' };
   }
 });
 

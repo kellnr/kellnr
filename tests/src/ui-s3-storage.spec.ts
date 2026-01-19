@@ -236,7 +236,7 @@ test.describe("S3 Storage UI Tests", () => {
     await page.waitForTimeout(500);
 
     // Verify test_lib dependency is shown
-    const testLibDep = page.locator("h3").filter({ hasText: "test_lib" });
+    const testLibDep = page.locator(".dep-name").filter({ hasText: "test_lib" });
     await expect(testLibDep).toBeVisible();
   });
 

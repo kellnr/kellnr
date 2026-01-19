@@ -134,8 +134,8 @@ export class CratesPage extends BasePage {
 
     for (let i = 0; i < count; i++) {
       const card = cards.nth(i);
-      // The crate name is in a div with text-h5 class
-      const title = await card.locator(".text-h5").textContent();
+      // The crate name is in a span with crate-name class
+      const title = await card.locator(".crate-name").textContent();
       if (title) {
         names.push(title.trim());
       }

@@ -1,40 +1,33 @@
 <template>
-  <v-card class="mb-2" rounded="lg" hover @click="openCratePage">
-    <v-row no-gutters>
-      <!-- Left Column with Name, Version, and Source -->
-      <v-col cols="12" sm="3" class="border-r">
-        <v-card-item>
-          <!-- Name and Version on same line -->
-          <div class="d-flex align-center flex-wrap">
-            <h3 class="text-body-1 font-weight-bold me-2">{{ name }}</h3>
-            <span class="text-primary font-weight-medium">{{ version }}</span>
-          </div>
+  <div class="dependency-item" @click="openCratePage">
+    <div class="dep-main">
+      <!-- Left: Name, Version, Source -->
+      <div class="dep-info">
+        <div class="dep-header">
+          <span class="dep-name">{{ name }}</span>
+          <span class="dep-version">{{ version }}</span>
+        </div>
+        <div class="dep-source">
+          <span class="source-badge" :class="isCratesIoDep(registry) ? 'crates-io' : 'kellnr'">
+            <v-icon :icon="isCratesIoDep(registry) ? 'mdi-package-variant' : 'mdi-package-variant-closed'" size="x-small" class="me-1"></v-icon>
+            {{ isCratesIoDep(registry) ? 'crates.io' : 'kellnr' }}
+          </span>
+        </div>
+      </div>
 
-          <!-- Source Indicator below name/version -->
-          <div class="mt-2">
-            <v-chip size="small" variant="flat" :color="isCratesIoDep(registry) ? 'warning' : 'primary'"
-              :prepend-icon="isCratesIoDep(registry) ? 'mdi-package-variant' : 'mdi-package-variant-closed'"
-              density="comfortable">
-              {{ isCratesIoDep(registry) ? 'crates.io' : 'kellnr' }}
-            </v-chip>
-          </div>
-        </v-card-item>
-      </v-col>
+      <!-- Right: Description -->
+      <div class="dep-description">
+        <span v-if="fetched_desc">{{ fetched_desc }}</span>
+        <span v-else class="loading-state">
+          <v-progress-circular indeterminate size="14" width="2" color="primary" class="me-2"></v-progress-circular>
+          Loading...
+        </span>
+      </div>
+    </div>
 
-      <!-- Description Column -->
-      <v-col cols="12" sm="9">
-        <v-card-item>
-          <v-card-text class="text-body-2">
-            <div v-if="fetched_desc">{{ fetched_desc }}</div>
-            <div v-else class="text-italic">
-              <v-progress-circular indeterminate size="16" width="2" color="primary" class="me-2"></v-progress-circular>
-              Loading description...
-            </div>
-          </v-card-text>
-        </v-card-item>
-      </v-col>
-    </v-row>
-  </v-card>
+    <!-- Chevron indicator -->
+    <v-icon icon="mdi-chevron-right" size="small" class="dep-chevron"></v-icon>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -137,14 +130,146 @@ watch(route, () => {
 </script>
 
 <style scoped>
-.border-r {
-  border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+.dependency-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-@media (max-width: 600px) {
-  .border-r {
-    border-right: none;
-    border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+.dependency-item:hover {
+  background: rgb(var(--v-theme-surface));
+  border-color: rgb(var(--v-theme-primary));
+}
+
+.dependency-item:last-child {
+  margin-bottom: 0;
+}
+
+.dep-main {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.dep-info {
+  flex-shrink: 0;
+  min-width: 180px;
+  max-width: 220px;
+}
+
+.dep-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.dep-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.dep-version {
+  font-size: 15px;
+  font-weight: 500;
+  color: rgb(var(--v-theme-primary));
+  font-family: 'Roboto Mono', monospace;
+}
+
+.dep-source {
+  display: flex;
+}
+
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.source-badge.crates-io {
+  background: rgba(255, 152, 0, 0.15);
+  color: rgb(var(--v-theme-warning));
+}
+
+.source-badge.kellnr {
+  background: rgba(var(--v-theme-primary), 0.15);
+  color: rgb(var(--v-theme-primary));
+}
+
+.dep-description {
+  flex: 1;
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgb(var(--v-theme-on-surface-variant));
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.loading-state {
+  display: inline-flex;
+  align-items: center;
+  font-style: italic;
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.dep-chevron {
+  flex-shrink: 0;
+  color: rgb(var(--v-theme-on-surface-variant));
+  margin-left: 12px;
+  opacity: 0.5;
+  transition: all 0.2s ease;
+}
+
+.dependency-item:hover .dep-chevron {
+  opacity: 1;
+  color: rgb(var(--v-theme-primary));
+  transform: translateX(2px);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .dep-main {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .dep-info {
+    min-width: auto;
+    max-width: none;
+  }
+
+  .dep-description {
+    -webkit-line-clamp: 3;
+  }
+}
+
+@media (max-width: 480px) {
+  .dependency-item {
+    padding: 10px 12px;
+  }
+
+  .dep-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 }
 </style>

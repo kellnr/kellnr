@@ -27,13 +27,14 @@ export class LandingPage extends BasePage {
     this.loadingIndicator = page.locator(".v-progress-circular");
 
     // Statistics cards - using data-testid for reliable selection
-    this.totalCratesCard = page.getByTestId("stat-card-total-crates");
-    this.totalVersionsCard = page.getByTestId("stat-card-total-versions");
-    this.totalDownloadsCard = page.getByTestId("stat-card-total-downloads");
+    // HeroStatCard uses textToTestId: "Total Crates" -> "hero-stat-total-crates"
+    this.totalCratesCard = page.getByTestId("hero-stat-total-crates");
+    this.totalVersionsCard = page.getByTestId("hero-stat-total-versions");
+    this.totalDownloadsCard = page.getByTestId("hero-stat-total-downloads");
 
     // Sections
-    this.topCratesSection = page.locator("text=Top Downloaded Crates");
-    this.cachedCratesSection = page.getByRole("heading", { name: "Cached Crates" });
+    this.topCratesSection = page.locator("text=Top Downloaded");
+    this.cachedCratesSection = page.locator(".section-divider-text").filter({ hasText: "Crates.io Proxy Cache" });
   }
 
   /**
@@ -140,7 +141,7 @@ export class LandingPage extends BasePage {
    * Check if the Kellnr logo/branding is visible.
    */
   async hasKellnrBranding(): Promise<boolean> {
-    const branding = this.page.locator("text=Kellnr Crates");
+    const branding = this.page.locator("text=Welcome to Kellnr");
     return await branding.isVisible();
   }
 }

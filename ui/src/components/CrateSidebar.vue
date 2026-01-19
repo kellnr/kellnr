@@ -162,16 +162,19 @@ function buildDocs() {
 <style scoped>
 /* Enhanced Sidebar Styling */
 .sidebar-card {
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline));
 }
 
 .sidebar-header {
-  background-color: var(--v-theme-surface-variant);
-  color: var(--v-theme-on-surface-variant);
+  background: rgb(var(--v-theme-surface-variant));
+  color: rgb(var(--v-theme-on-surface));
   padding-top: 16px;
   padding-bottom: 16px;
   font-weight: 500;
+  border-bottom: 1px solid rgb(var(--v-theme-outline));
 }
 
 .sidebar-section {
@@ -184,16 +187,17 @@ function buildDocs() {
   word-wrap: break-word;
   overflow-wrap: break-word;
   white-space: normal;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 /* Copy button and container styling */
 .copy-container {
   position: relative;
   padding: 8px 12px;
-  background-color: var(--v-theme-surface-variant);
-  border-radius: 4px;
+  background: rgb(var(--v-theme-surface-variant));
+  border-radius: 6px;
   min-height: 36px;
-  border: 1px solid var(--v-theme-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline));
   width: 100%;
 }
 
@@ -203,6 +207,8 @@ function buildDocs() {
   overflow-wrap: break-word;
   max-width: calc(100% - 36px);
   padding-right: 8px;
+  font-family: 'Roboto Mono', monospace;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .copy-btn {
@@ -223,32 +229,22 @@ function buildDocs() {
 .download-label {
   min-width: 60px;
   font-weight: 500;
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
 .download-number {
   font-weight: normal;
   word-break: break-all;
   overflow-wrap: break-word;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .cursor-pointer {
   cursor: pointer;
 }
 
-/* Dark mode specific overrides */
-:deep(.v-theme--dark) .copy-container {
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-:deep(.v-theme--dark) .sidebar-content {
-  color: var(--v-theme-on-surface);
-}
-
-:deep(.v-theme--dark) .download-label {
-  color: var(--v-theme-on-surface-variant);
-}
-
-:deep(.v-theme--dark) .download-number {
-  color: var(--v-theme-on-surface);
+/* Section titles */
+.text-subtitle-1 {
+  color: rgb(var(--v-theme-on-surface));
 }
 </style>
