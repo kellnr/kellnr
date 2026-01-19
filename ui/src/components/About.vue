@@ -1,127 +1,117 @@
 <template>
-  <div class="about-content pa-4">
+  <div class="about-content">
     <!-- Basic Information Section -->
-    <div class="basic-info mb-5">
-      <div class="d-flex flex-wrap">
-        <!-- Repository -->
-        <div v-if="crate.repository" class="info-item">
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-github" color="grey-darken-1" size="small" class="me-2"></v-icon>
-            <span class="info-label">Repository:</span>
-            <a :href="crate.repository" target="_blank" class="external-link ms-2">
-              {{ crate.repository }}
-              <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
-            </a>
-          </div>
+    <div v-if="crate.repository || crate.homepage || selectedVersion.license || selectedVersion.yanked === true" class="basic-info-section">
+      <!-- Repository -->
+      <div v-if="crate.repository" class="info-row">
+        <div class="info-icon-wrapper">
+          <v-icon icon="mdi-github" size="small"></v-icon>
         </div>
+        <span class="info-label">Repository</span>
+        <a :href="crate.repository" target="_blank" class="external-link">
+          {{ crate.repository }}
+          <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
+        </a>
+      </div>
 
-        <!-- Homepage -->
-        <div v-if="crate.homepage" class="info-item">
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-link-variant" color="blue" size="small" class="me-2"></v-icon>
-            <span class="info-label">Homepage:</span>
-            <a :href="crate.homepage" target="_blank" class="external-link ms-2">
-              {{ crate.homepage }}
-              <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
-            </a>
-          </div>
+      <!-- Homepage -->
+      <div v-if="crate.homepage" class="info-row">
+        <div class="info-icon-wrapper">
+          <v-icon icon="mdi-link-variant" size="small"></v-icon>
         </div>
+        <span class="info-label">Homepage</span>
+        <a :href="crate.homepage" target="_blank" class="external-link">
+          {{ crate.homepage }}
+          <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
+        </a>
+      </div>
 
-        <!-- License -->
-        <div v-if="selectedVersion.license" class="info-item">
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-scale-balance" color="indigo" size="small" class="me-2"></v-icon>
-            <span class="info-label">License:</span>
-            <v-chip size="x-small" color="indigo" variant="flat" class="ms-2">
-              {{ selectedVersion.license }}
-            </v-chip>
-          </div>
+      <!-- License -->
+      <div v-if="selectedVersion.license" class="info-row">
+        <div class="info-icon-wrapper">
+          <v-icon icon="mdi-scale-balance" size="small"></v-icon>
         </div>
+        <span class="info-label">License</span>
+        <span class="info-badge license-badge">{{ selectedVersion.license }}</span>
+      </div>
 
-        <!-- Status (Yanked) -->
-        <div v-if="selectedVersion.yanked === true" class="info-item">
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-alert-circle" color="error" size="small" class="me-2"></v-icon>
-            <span class="info-label">Status:</span>
-            <v-chip size="x-small" color="error" variant="flat" class="ms-2">Yanked</v-chip>
-          </div>
+      <!-- Status (Yanked) -->
+      <div v-if="selectedVersion.yanked === true" class="info-row">
+        <div class="info-icon-wrapper error">
+          <v-icon icon="mdi-alert-circle" size="small"></v-icon>
         </div>
+        <span class="info-label">Status</span>
+        <span class="info-badge error-badge">Yanked</span>
       </div>
     </div>
 
     <!-- Main Content Grid -->
     <div class="metadata-grid">
       <!-- Authors Section -->
-      <div v-if="crate.authors && crate.authors.length > 0" class="section-container">
+      <div v-if="crate.authors && crate.authors.length > 0" class="section-card">
         <div class="section-header">
-          <v-icon icon="mdi-account-multiple" color="purple" class="me-2"></v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Authors</span>
+          <v-icon icon="mdi-account-multiple" size="small" class="section-icon"></v-icon>
+          <span class="section-title">Authors</span>
           <span class="count-badge">{{ crate.authors.length }}</span>
         </div>
-
         <div class="section-content">
-          <span v-for="(author, i) in crate.authors" :key="`author-${i}`" class="compact-chip purple">
+          <span v-for="(author, i) in crate.authors" :key="`author-${i}`" class="item-chip">
             {{ author }}
           </span>
         </div>
       </div>
 
       <!-- Owners Section -->
-      <div v-if="sortedOwners.length > 0" class="section-container">
+      <div v-if="sortedOwners.length > 0" class="section-card">
         <div class="section-header">
-          <v-icon icon="mdi-shield-account" color="deep-orange" class="me-2"></v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Owners</span>
+          <v-icon icon="mdi-shield-account" size="small" class="section-icon"></v-icon>
+          <span class="section-title">Owners</span>
           <span class="count-badge">{{ sortedOwners.length }}</span>
         </div>
-
         <div class="section-content">
-          <span v-for="(owner, i) in sortedOwners" :key="`owner-${i}`" class="compact-chip deep-orange"
-            :class="{ 'current-user': owner === 'secana' }">
+          <span v-for="(owner, i) in sortedOwners" :key="`owner-${i}`" class="item-chip">
             {{ owner }}
           </span>
         </div>
       </div>
 
       <!-- Categories Section -->
-      <div v-if="crate.categories && crate.categories.length > 0" class="section-container">
+      <div v-if="crate.categories && crate.categories.length > 0" class="section-card">
         <div class="section-header">
-          <v-icon icon="mdi-folder-multiple" color="teal" class="me-2"></v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Categories</span>
+          <v-icon icon="mdi-folder-multiple" size="small" class="section-icon"></v-icon>
+          <span class="section-title">Categories</span>
           <span class="count-badge">{{ crate.categories.length }}</span>
         </div>
-
         <div class="section-content">
-          <span v-for="(category, i) in crate.categories" :key="`category-${i}`" class="compact-chip teal">
+          <span v-for="(category, i) in crate.categories" :key="`category-${i}`" class="item-chip">
             {{ category }}
           </span>
         </div>
       </div>
 
       <!-- Keywords Section -->
-      <div v-if="crate.keywords && crate.keywords.length > 0" class="section-container">
+      <div v-if="crate.keywords && crate.keywords.length > 0" class="section-card">
         <div class="section-header">
-          <v-icon icon="mdi-tag-multiple" color="green" class="me-2"></v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Keywords</span>
+          <v-icon icon="mdi-tag-multiple" size="small" class="section-icon"></v-icon>
+          <span class="section-title">Keywords</span>
           <span class="count-badge">{{ crate.keywords.length }}</span>
         </div>
-
         <div class="section-content">
-          <span v-for="(keyword, i) in crate.keywords" :key="`keyword-${i}`" class="compact-chip green">
+          <span v-for="(keyword, i) in crate.keywords" :key="`keyword-${i}`" class="item-chip">
             {{ keyword }}
           </span>
         </div>
       </div>
 
       <!-- Features Section -->
-      <div v-if="flattenedFeatures.length > 0" class="section-container features-section">
+      <div v-if="flattenedFeatures.length > 0" class="section-card features-section">
         <div class="section-header">
-          <v-icon icon="mdi-widgets" color="amber-darken-2" class="me-2"></v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Features</span>
+          <v-icon icon="mdi-widgets" size="small" class="section-icon"></v-icon>
+          <span class="section-title">Features</span>
           <span class="count-badge">{{ flattenedFeatures.length }}</span>
         </div>
-
         <div class="section-content">
-          <span v-for="(feature, i) in flattenedFeatures" :key="`feature-${i}`" class="compact-chip amber">
+          <span v-for="(feature, i) in flattenedFeatures" :key="`feature-${i}`" class="item-chip feature-chip">
             {{ feature }}
           </span>
         </div>
@@ -156,33 +146,57 @@ defineProps({
 
 <style scoped>
 .about-content {
-  background-color: var(--v-theme-surface);
-  border-radius: 4px;
+  padding: 24px;
+  color: rgb(var(--v-theme-on-surface));
 }
 
-.info-item {
-  padding: 4px 16px 4px 0;
-  margin-right: 16px;
-  margin-bottom: 4px;
-  white-space: nowrap;
+/* Basic Information Section */
+.basic-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+  background: rgb(var(--v-theme-surface-variant));
+  border-radius: 8px;
+  border: 1px solid rgb(var(--v-theme-outline));
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.info-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-primary));
+}
+
+.info-icon-wrapper.error {
+  color: rgb(var(--v-theme-error));
 }
 
 .info-label {
   font-weight: 500;
-  color: var(--v-theme-on-surface-variant);
-  margin-right: 4px;
+  color: rgb(var(--v-theme-on-surface-variant));
+  min-width: 80px;
 }
 
 .external-link {
   display: inline-flex;
   align-items: center;
-  color: var(--v-theme-primary);
+  color: rgb(var(--v-theme-primary));
   text-decoration: none;
   transition: opacity 0.2s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 240px;
+  word-break: break-all;
 }
 
 .external-link:hover {
@@ -190,128 +204,114 @@ defineProps({
   text-decoration: underline;
 }
 
+.info-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.license-badge {
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
+}
+
+.error-badge {
+  background: rgba(var(--v-theme-error), 0.12);
+  color: rgb(var(--v-theme-error));
+}
+
+/* Metadata Grid */
 .metadata-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
 }
 
-.section-container {
-  margin-bottom: 8px;
+.section-card {
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 8px;
+  padding: 16px;
 }
 
 .section-header {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--v-theme-outline-variant);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgb(var(--v-theme-outline));
+}
+
+.section-icon {
+  color: rgb(var(--v-theme-primary));
+  margin-right: 8px;
+}
+
+.section-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .count-badge {
-  background-color: var(--v-theme-surface-variant);
-  color: var(--v-theme-on-surface-variant);
-  font-size: 12px;
-  padding: 0 6px;
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
   border-radius: 10px;
-  margin-left: 8px;
-  min-width: 20px;
-  text-align: center;
+  margin-left: auto;
 }
 
 .section-content {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
-.compact-chip {
+.item-chip {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface));
+  border: 1px solid rgb(var(--v-theme-outline));
+  transition: all 0.2s ease;
+}
+
+.item-chip:hover {
+  border-color: rgb(var(--v-theme-primary));
+}
+
+.feature-chip {
+  font-family: 'Roboto Mono', monospace;
   font-size: 12px;
-  line-height: 20px;
-  white-space: nowrap;
-}
-
-.compact-chip.purple {
-  background-color: rgba(156, 39, 176, 0.12);
-  color: rgb(123, 31, 162);
-}
-
-.compact-chip.deep-orange {
-  background-color: rgba(230, 74, 25, 0.12);
-  color: rgb(191, 54, 12);
-}
-
-.compact-chip.teal {
-  background-color: rgba(0, 150, 136, 0.12);
-  color: rgb(0, 121, 107);
-}
-
-.compact-chip.green {
-  background-color: rgba(76, 175, 80, 0.12);
-  color: rgb(46, 125, 50);
-}
-
-.compact-chip.amber {
-  background-color: rgba(255, 193, 7, 0.12);
-  color: rgb(255, 111, 0);
-}
-
-.current-user {
-  background-color: rgba(230, 74, 25, 0.2);
-  font-weight: 500;
-  border: 1px solid rgba(230, 74, 25, 0.3);
 }
 
 .features-section {
   grid-column: 1 / -1;
 }
 
-/* Dark mode adjustments */
-:deep(.v-theme--dark) .compact-chip.purple {
-  background-color: rgba(156, 39, 176, 0.15);
-  color: rgb(186, 104, 200);
-}
-
-:deep(.v-theme--dark) .compact-chip.deep-orange {
-  background-color: rgba(230, 74, 25, 0.15);
-  color: rgb(255, 112, 67);
-}
-
-:deep(.v-theme--dark) .compact-chip.teal {
-  background-color: rgba(0, 150, 136, 0.15);
-  color: rgb(77, 182, 172);
-}
-
-:deep(.v-theme--dark) .compact-chip.green {
-  background-color: rgba(76, 175, 80, 0.15);
-  color: rgb(129, 199, 132);
-}
-
-:deep(.v-theme--dark) .compact-chip.amber {
-  background-color: rgba(255, 193, 7, 0.15);
-  color: rgb(255, 202, 40);
-}
-
-:deep(.v-theme--dark) .current-user {
-  background-color: rgba(255, 112, 67, 0.25);
-  border: 1px solid rgba(255, 112, 67, 0.4);
-}
-
+/* Responsive */
 @media (max-width: 600px) {
+  .about-content {
+    padding: 16px;
+  }
+
+  .basic-info-section {
+    padding: 12px;
+  }
+
   .metadata-grid {
     grid-template-columns: 1fr;
   }
 
-  .external-link {
-    max-width: 200px;
-  }
-
-  .info-item {
-    padding: 4px 8px 4px 0;
-    margin-right: 8px;
+  .info-label {
+    min-width: 70px;
   }
 }
 </style>

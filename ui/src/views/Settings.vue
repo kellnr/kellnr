@@ -1,86 +1,138 @@
 <template>
-  <v-container fluid class="pa-0">
+  <v-container fluid class="pa-4 pa-md-6">
     <v-row>
-      <!-- Left sidebar with increased width -->
+      <!-- Left sidebar -->
       <v-col cols="12" md="4" lg="3">
-        <v-card class="mb-4">
-          <v-card-title class="text-h5 font-weight-bold">
-            Settings
-          </v-card-title>
+        <v-card class="sidebar-card" elevation="0">
+          <div class="sidebar-header">
+            <v-icon icon="mdi-cog" size="small" color="primary" class="me-3"></v-icon>
+            <span class="text-h6 font-weight-bold">Settings</span>
+          </div>
 
-          <v-divider></v-divider>
-
-          <v-list nav>
-            <v-list-item @click="clickShowChangePwd" :active="showChangePwd" color="primary" class="py-2">
+          <v-list nav class="pa-2">
+            <v-list-item
+              @click="clickShowChangePwd"
+              :active="showChangePwd"
+              color="primary"
+              rounded="lg"
+              class="mb-1"
+            >
               <template v-slot:prepend>
-                <v-icon>mdi-key</v-icon>
+                <div class="nav-icon-wrapper" :class="{ active: showChangePwd }">
+                  <v-icon icon="mdi-key" size="small"></v-icon>
+                </div>
               </template>
-              <v-list-item-title>Change Password</v-list-item-title>
+              <v-list-item-title class="text-body-1 font-weight-medium">Change Password</v-list-item-title>
+              <template v-slot:append>
+                <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
+              </template>
             </v-list-item>
 
-            <v-list-item @click="clickShowAuthToken" :active="showAuthToken" color="primary" class="py-2">
+            <v-list-item
+              @click="clickShowAuthToken"
+              :active="showAuthToken"
+              color="primary"
+              rounded="lg"
+              class="mb-1"
+            >
               <template v-slot:prepend>
-                <v-icon>mdi-shield-key</v-icon>
+                <div class="nav-icon-wrapper" :class="{ active: showAuthToken }">
+                  <v-icon icon="mdi-shield-key" size="small"></v-icon>
+                </div>
               </template>
-              <v-list-item-title>Authentication Tokens</v-list-item-title>
+              <v-list-item-title class="text-body-1 font-weight-medium">Authentication Tokens</v-list-item-title>
+              <template v-slot:append>
+                <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
+              </template>
             </v-list-item>
 
-            <v-list-item v-if="store.loggedInUserIsAdmin" @click="clickShowUserMgmt" :active="showUserMgmt"
-              color="primary" class="py-2">
-              <template v-slot:prepend>
-                <v-icon>mdi-account-multiple</v-icon>
-              </template>
-              <v-list-item-title>User Management</v-list-item-title>
-            </v-list-item>
+            <template v-if="store.loggedInUserIsAdmin">
+              <v-list-subheader class="text-overline mt-2">Administration</v-list-subheader>
 
-            <v-list-item v-if="store.loggedInUserIsAdmin" @click="clickShowGroupMgmt" :active="showGroupMgmt"
-              color="primary" class="py-2">
-              <template v-slot:prepend>
-                <v-icon>mdi-account-group</v-icon>
-              </template>
-              <v-list-item-title>Group Management</v-list-item-title>
-            </v-list-item>
+              <v-list-item
+                @click="clickShowUserMgmt"
+                :active="showUserMgmt"
+                color="primary"
+                rounded="lg"
+                class="mb-1"
+              >
+                <template v-slot:prepend>
+                  <div class="nav-icon-wrapper" :class="{ active: showUserMgmt }">
+                    <v-icon icon="mdi-account-multiple" size="small"></v-icon>
+                  </div>
+                </template>
+                <v-list-item-title class="text-body-1 font-weight-medium">User Management</v-list-item-title>
+                <template v-slot:append>
+                  <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
+                </template>
+              </v-list-item>
 
-            <v-list-item v-if="store.loggedInUserIsAdmin" @click="clickShowStartupConfig" :active="showStartupConfig"
-              color="primary" class="py-2">
-              <template v-slot:prepend>
-                <v-icon>mdi-cog</v-icon>
-              </template>
-              <v-list-item-title>Startup Config</v-list-item-title>
-            </v-list-item>
+              <v-list-item
+                @click="clickShowGroupMgmt"
+                :active="showGroupMgmt"
+                color="primary"
+                rounded="lg"
+                class="mb-1"
+              >
+                <template v-slot:prepend>
+                  <div class="nav-icon-wrapper" :class="{ active: showGroupMgmt }">
+                    <v-icon icon="mdi-account-group" size="small"></v-icon>
+                  </div>
+                </template>
+                <v-list-item-title class="text-body-1 font-weight-medium">Group Management</v-list-item-title>
+                <template v-slot:append>
+                  <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
+                </template>
+              </v-list-item>
+
+              <v-list-item
+                @click="clickShowStartupConfig"
+                :active="showStartupConfig"
+                color="primary"
+                rounded="lg"
+              >
+                <template v-slot:prepend>
+                  <div class="nav-icon-wrapper" :class="{ active: showStartupConfig }">
+                    <v-icon icon="mdi-tune" size="small"></v-icon>
+                  </div>
+                </template>
+                <v-list-item-title class="text-body-1 font-weight-medium">Startup Config</v-list-item-title>
+                <template v-slot:append>
+                  <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
+                </template>
+              </v-list-item>
+            </template>
           </v-list>
         </v-card>
       </v-col>
 
-      <!-- Content area with adjusted width -->
+      <!-- Content area -->
       <v-col cols="12" md="8" lg="9">
-        <v-card>
-          <v-card-text class="pa-4">
-            <!-- Change Password Section -->
-            <div v-if="showChangePwd">
-              <change-password></change-password>
-            </div>
+        <v-card class="content-card" elevation="0">
+          <!-- Change Password Section -->
+          <div v-if="showChangePwd">
+            <change-password></change-password>
+          </div>
 
-            <!-- Auth Token Section -->
-            <div v-if="showAuthToken">
-              <auth-token></auth-token>
-            </div>
+          <!-- Auth Token Section -->
+          <div v-if="showAuthToken">
+            <auth-token></auth-token>
+          </div>
 
-            <!-- User Management Section -->
-            <div v-if="showUserMgmt">
-              <user-mgmt></user-mgmt>
-            </div>
+          <!-- User Management Section -->
+          <div v-if="showUserMgmt">
+            <user-mgmt></user-mgmt>
+          </div>
 
-            <!-- Group Management Section -->
-            <div v-if="showGroupMgmt">
-              <group-mgmt></group-mgmt>
-            </div>
+          <!-- Group Management Section -->
+          <div v-if="showGroupMgmt">
+            <group-mgmt></group-mgmt>
+          </div>
 
-            <!-- Startup Config Section -->
-            <div v-if="showStartupConfig">
-              <startup-config></startup-config>
-            </div>
-          </v-card-text>
+          <!-- Startup Config Section -->
+          <div v-if="showStartupConfig">
+            <startup-config></startup-config>
+          </div>
         </v-card>
       </v-col>
     </v-row>
@@ -138,14 +190,68 @@ function clickShowStartupConfig() {
 </script>
 
 <style scoped>
-/* Force word wrapping on v-list-item-title to ensure they don't overflow */
-:deep(.v-list-item-title) {
-  white-space: normal;
-  word-break: break-word;
+/* Sidebar Card */
+.sidebar-card {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-/* Ensure the list items have enough height for the wrapped text */
-:deep(.v-list-item) {
-  min-height: 48px;
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  background: rgba(var(--v-theme-primary), 0.05);
+  border-bottom: 1px solid rgb(var(--v-theme-outline));
+}
+
+/* Nav Icon Wrapper */
+.nav-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
+  margin-right: 4px;
+  transition: all 0.2s ease;
+}
+
+.nav-icon-wrapper.active {
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+}
+
+/* Nav Chevron */
+.nav-chevron {
+  opacity: 0.3;
+  transition: opacity 0.2s ease;
+}
+
+.v-list-item:hover .nav-chevron {
+  opacity: 0.7;
+}
+
+.v-list-item--active .nav-chevron {
+  opacity: 1;
+}
+
+/* Content Card */
+.content-card {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 12px;
+  min-height: 400px;
+  overflow: hidden;
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+  .sidebar-card {
+    margin-bottom: 16px;
+  }
 }
 </style>

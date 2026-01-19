@@ -1,20 +1,20 @@
 <template>
-  <v-container v-if="crate != null" class="pa-0">
+  <v-container v-if="crate != null" class="pa-0 crate-container">
     <!-- Title Section -->
-    <v-card class="mb-4" elevation="1">
-      <v-card-title class="d-flex flex-wrap align-baseline">
-        <h1 class="text-h3 font-weight-bold me-3 text-break">{{ crate.name }}</h1>
-        <span class="text-h5">{{ selected_version.version }}</span>
+    <v-card class="mb-4 title-card" elevation="0">
+      <v-card-title class="d-flex flex-wrap align-baseline pa-5">
+        <h1 class="text-h3 font-weight-bold me-3 text-break crate-title">{{ crate.name }}</h1>
+        <span class="text-h5 version-text">{{ selected_version.version }}</span>
       </v-card-title>
 
-      <v-card-text v-if="crate.description != null">
-        <p>{{ crate.description }}</p>
+      <v-card-text v-if="crate.description != null" class="pt-0 px-5 pb-5">
+        <p class="description-text mb-0">{{ crate.description }}</p>
       </v-card-text>
     </v-card>
 
     <!-- Tab Navigation -->
-    <v-card class="mb-4" elevation="1">
-      <v-tabs v-model="tab" color="primary" grow slider-color="primary">
+    <v-card class="mb-4 tabs-card" elevation="0">
+      <v-tabs v-model="tab" color="primary" grow slider-color="primary" class="crate-tabs">
         <v-tab v-if="selected_version.readme" value="readme">Readme</v-tab>
         <v-tab value="meta">About</v-tab>
         <v-tab value="deps">Dependencies</v-tab>
@@ -36,12 +36,12 @@
       <!-- Main Content Area -->
       <v-col cols="12" md="9" order="2" order-md="1">
         <!-- Readme Tab -->
-        <v-card v-if="tab === 'readme'" class="mb-4" elevation="1">
+        <v-card v-if="tab === 'readme'" class="mb-4 content-card" elevation="0">
           <Readme :readme="selected_version.readme"></Readme>
         </v-card>
 
         <!-- Versions Tab -->
-        <v-card v-if="tab === 'versions'" class="mb-4" elevation="1">
+        <v-card v-if="tab === 'versions'" class="mb-4 content-card" elevation="0">
           <v-card-text>
             <Version v-for="version in crate.versions" :key="version.version" :name="crate.name"
               :version="version.version" :last_updated="version.created" :downloads="version.downloads.toString()" />
@@ -51,7 +51,7 @@
         <!-- Dependencies Tab -->
         <template v-if="tab === 'deps'">
           <!-- Normal Dependencies -->
-          <v-card v-if="sortedDeps.length > 0" class="mb-4" elevation="1">
+          <v-card v-if="sortedDeps.length > 0" class="mb-4 content-card" elevation="0">
             <v-card-title>Dependencies</v-card-title>
             <v-card-text>
               <Dependency v-for="dep in sortedDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
@@ -60,7 +60,7 @@
           </v-card>
 
           <!-- Dev Dependencies -->
-          <v-card v-if="sortedDevDeps.length > 0" class="mb-4" elevation="1">
+          <v-card v-if="sortedDevDeps.length > 0" class="mb-4 content-card" elevation="0">
             <v-card-title>Development Dependencies</v-card-title>
             <v-card-text>
               <Dependency v-for="dep in sortedDevDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
@@ -69,7 +69,7 @@
           </v-card>
 
           <!-- Build Dependencies -->
-          <v-card v-if="sortedBuildDeps.length > 0" class="mb-4" elevation="1">
+          <v-card v-if="sortedBuildDeps.length > 0" class="mb-4 content-card" elevation="0">
             <v-card-title>Build Dependencies</v-card-title>
             <v-card-text>
               <Dependency v-for="dep in sortedBuildDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
@@ -79,202 +79,235 @@
         </template>
 
         <!-- About (Meta) Tab -->
-        <v-card v-if="tab === 'meta'" class="mb-4" elevation="1">
+        <v-card v-if="tab === 'meta'" class="mb-4 content-card" elevation="0">
           <About :crate="crate" :selected-version="selected_version" :flattened-features="flattenedFeatures"
             :sorted-owners="sortedOwners" />
         </v-card>
 
         <!-- Settings Tab -->
         <template v-if="tab === 'crateSettings'">
-
-
           <!-- Crate Owners -->
-          <v-card class="mb-4" elevation="1">
-            <v-card-title>Crate owners</v-card-title>
-            <v-card-text>
+          <v-card class="mb-4 content-card settings-card" elevation="0">
+            <div class="settings-header">
+              <v-icon icon="mdi-shield-account" size="small" class="settings-icon"></v-icon>
+              <span class="settings-title">Crate Owners</span>
+              <span class="settings-count">{{ crateOwners.length }}</span>
+            </div>
+            <v-card-text class="settings-content">
               <v-alert v-if="!canManageOwners()" type="info" variant="tonal" class="mb-4">
                 Only existing crate owners or admins can add/remove crate owners.
               </v-alert>
 
-              <v-list>
-                <v-list-item v-for="owner in crateOwners" :key="owner.login">
-                  <v-list-item-title>{{ owner.login }}</v-list-item-title>
-                  <template v-slot:append>
-                    <v-btn :disabled="!canManageOwners()" color="error" variant="text" size="small"
-                      @click="deleteCrateOwner(owner.login)">
-                      Delete
-                    </v-btn>
-                  </template>
-                </v-list-item>
-              </v-list>
+              <div v-if="crateOwners.length > 0" class="settings-list">
+                <div v-for="owner in crateOwners" :key="owner.login" class="settings-list-item">
+                  <div class="settings-list-item-info">
+                    <v-icon icon="mdi-account" size="small" class="me-3"></v-icon>
+                    <span class="settings-list-item-name">{{ owner.login }}</span>
+                  </div>
+                  <v-btn :disabled="!canManageOwners()" color="error" variant="tonal" size="small"
+                    @click="deleteCrateOwner(owner.login)">
+                    <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                    Remove
+                  </v-btn>
+                </div>
+              </div>
+              <p v-else class="text-body-2 text-disabled mb-0">No owners assigned yet.</p>
 
               <v-alert v-if="deleteCrateOwnerStatus" :type="deleteCrateOwnerStatus === 'Success' ? 'success' : 'error'"
                 closable @click:close="deleteCrateOwnerStatus = ''" class="mt-4">
                 {{ deleteCrateOwnerMsg }}
               </v-alert>
 
-              <v-divider class="my-4"></v-divider>
-
-              <h3 class="text-h5 mb-3">Add crate owner</h3>
-              <v-form @submit.prevent="addCrateOwner">
-                <v-text-field v-model="crateOwnerName" placeholder="Username" prepend-icon="mdi-account-star"
-                  variant="outlined" density="comfortable" :disabled="!canManageOwners()"></v-text-field>
-
+              <div class="settings-form-section">
+                <div class="settings-form-header">
+                  <v-icon icon="mdi-account-plus" size="small" class="me-2"></v-icon>
+                  <span>Add crate owner</span>
+                </div>
+                <v-form @submit.prevent="addCrateOwner" class="settings-form">
+                  <v-text-field v-model="crateOwnerName" placeholder="Enter username" prepend-inner-icon="mdi-account-star"
+                    variant="outlined" density="comfortable" :disabled="!canManageOwners()" hide-details class="settings-input"></v-text-field>
+                  <v-btn :disabled="!canManageOwners()" color="primary" type="submit" variant="flat">
+                    <v-icon icon="mdi-plus" size="small" class="me-1"></v-icon>
+                    Add
+                  </v-btn>
+                </v-form>
                 <v-alert v-if="addCrateOwnerStatus" :type="addCrateOwnerStatus === 'Success' ? 'success' : 'error'"
-                  closable @click:close="addCrateOwnerStatus = ''" class="my-2">
+                  closable @click:close="addCrateOwnerStatus = ''" class="mt-3">
                   {{ addCrateOwnerMsg }}
                 </v-alert>
-
-                <v-btn :disabled="!canManageOwners()" color="primary" type="submit" class="mt-2">
-                  Add
-                </v-btn>
-              </v-form>
+              </div>
             </v-card-text>
           </v-card>
 
-
-          <v-card class="mb-4" elevation="1">
-            <v-card-title class="d-flex align-center">
-              Access control
-            </v-card-title>
-            <v-card-text class="pt-0">
-              <!-- Crate Access -->
-              <v-card class="mb-4" elevation="1">
-                <v-card-title>Crate access</v-card-title>
-                <v-card-text>
-                  <v-form @submit.prevent="setCrateAccessData">
-                    <v-checkbox v-model="is_download_restricted"
-                      label="Crate users only are allowed to download"></v-checkbox>
-                    <p class="text-body-2 mb-4">
-                      If enabled, only users added as crate users are allowed to download this crate.<br />
-                      Attention: This feature requires that <i>kellnr</i> is started with <i>auth_required = true</i>.
-                      If this
-                      is not set, <i>cargo</i> fails to download the crate as it does not send an authentication token.
-                    </p>
-                    <v-alert v-if="changeCrateAccessStatus"
-                      :type="changeCrateAccessStatus === 'Success' ? 'success' : 'error'" closable
-                      @click:close="changeCrateAccessStatus = ''">
-                      {{ changeCrateAccessMsg }}
-                    </v-alert>
-                    <v-btn color="primary" type="submit" class="mt-2">
-                      Change crate access rules
-                    </v-btn>
-                  </v-form>
-                </v-card-text>
-              </v-card>
+          <!-- Access Control -->
+          <v-card class="mb-4 content-card settings-card" elevation="0">
+            <div class="settings-header">
+              <v-icon icon="mdi-lock-outline" size="small" class="settings-icon"></v-icon>
+              <span class="settings-title">Access Control</span>
+            </div>
+            <v-card-text class="settings-content">
+              <!-- Crate Access Rules -->
+              <div class="settings-subsection">
+                <div class="settings-subsection-header">
+                  <v-icon icon="mdi-shield-lock" size="x-small" class="me-2"></v-icon>
+                  <span>Download Restrictions</span>
+                </div>
+                <v-form @submit.prevent="setCrateAccessData">
+                  <v-checkbox v-model="is_download_restricted" hide-details
+                    label="Restrict downloads to crate users only" class="settings-checkbox"></v-checkbox>
+                  <p class="settings-help-text">
+                    When enabled, only users explicitly added as crate users can download this crate.
+                    Requires <code>auth_required = true</code> in kellnr configuration.
+                  </p>
+                  <v-alert v-if="changeCrateAccessStatus"
+                    :type="changeCrateAccessStatus === 'Success' ? 'success' : 'error'" closable
+                    @click:close="changeCrateAccessStatus = ''" class="mb-3">
+                    {{ changeCrateAccessMsg }}
+                  </v-alert>
+                  <v-btn color="primary" type="submit" variant="flat" size="small">
+                    <v-icon icon="mdi-content-save" size="small" class="me-1"></v-icon>
+                    Save Changes
+                  </v-btn>
+                </v-form>
+              </div>
 
               <!-- Crate Users -->
-              <v-card class="mb-4" elevation="1">
-                <v-card-title>Crate users</v-card-title>
-                <v-card-text>
-                  <v-list>
-                    <v-list-item v-for="user in crateUsers" :key="user.login">
-                      <v-list-item-title>{{ user.login }}</v-list-item-title>
-                      <template v-slot:append>
-                        <v-btn color="error" variant="text" size="small" @click="deleteCrateUser(user.login)">
-                          Delete
-                        </v-btn>
-                      </template>
-                    </v-list-item>
-                  </v-list>
+              <div class="settings-subsection">
+                <div class="settings-subsection-header">
+                  <v-icon icon="mdi-account-multiple" size="x-small" class="me-2"></v-icon>
+                  <span>Crate Users</span>
+                  <span class="settings-count-small">{{ crateUsers.length }}</span>
+                </div>
 
-                  <v-alert v-if="deleteCrateUserStatus"
-                    :type="deleteCrateUserStatus === 'Success' ? 'success' : 'error'" closable
-                    @click:close="deleteCrateUserStatus = ''" class="mt-4">
-                    {{ deleteCrateUserMsg }}
-                  </v-alert>
-
-                  <v-divider class="my-4"></v-divider>
-
-                  <h3 class="text-h5 mb-3">Add crate user</h3>
-                  <v-form @submit.prevent="addCrateUser">
-                    <v-text-field v-model="crateUserName" placeholder="Username" prepend-icon="mdi-account"
-                      variant="outlined" density="comfortable"></v-text-field>
-
-                    <v-alert v-if="addCrateUserStatus" :type="addCrateUserStatus === 'Success' ? 'success' : 'error'"
-                      closable @click:close="addCrateUserStatus = ''" class="my-2">
-                      {{ addCrateUserMsg }}
-                    </v-alert>
-
-                    <v-btn color="primary" type="submit" class="mt-2">
-                      Add
+                <div v-if="crateUsers.length > 0" class="settings-list compact">
+                  <div v-for="user in crateUsers" :key="user.login" class="settings-list-item">
+                    <div class="settings-list-item-info">
+                      <v-icon icon="mdi-account" size="small" class="me-3"></v-icon>
+                      <span class="settings-list-item-name">{{ user.login }}</span>
+                    </div>
+                    <v-btn color="error" variant="text" size="small" @click="deleteCrateUser(user.login)">
+                      <v-icon icon="mdi-close" size="small"></v-icon>
                     </v-btn>
-                  </v-form>
-                </v-card-text>
-              </v-card>
+                  </div>
+                </div>
+                <p v-else class="text-body-2 text-disabled mb-4">No users assigned yet.</p>
+
+                <v-alert v-if="deleteCrateUserStatus"
+                  :type="deleteCrateUserStatus === 'Success' ? 'success' : 'error'" closable
+                  @click:close="deleteCrateUserStatus = ''" class="mb-3">
+                  {{ deleteCrateUserMsg }}
+                </v-alert>
+
+                <v-form @submit.prevent="addCrateUser" class="settings-form inline">
+                  <v-text-field v-model="crateUserName" placeholder="Enter username" prepend-inner-icon="mdi-account"
+                    variant="outlined" density="compact" hide-details class="settings-input"></v-text-field>
+                  <v-btn color="primary" type="submit" variant="tonal" size="small">
+                    <v-icon icon="mdi-plus" size="small"></v-icon>
+                  </v-btn>
+                </v-form>
+                <v-alert v-if="addCrateUserStatus" :type="addCrateUserStatus === 'Success' ? 'success' : 'error'"
+                  closable @click:close="addCrateUserStatus = ''" class="mt-3">
+                  {{ addCrateUserMsg }}
+                </v-alert>
+              </div>
 
               <!-- Crate Groups -->
-              <v-card class="mb-0" elevation="1">
-                <v-card-title>Crate groups</v-card-title>
-                <v-card-text>
-                  <v-list>
-                    <v-list-item v-for="group in crateGroupsForCrate" :key="group.name">
-                      <v-list-item-title>{{ group.name }}</v-list-item-title>
-                      <template v-slot:append>
-                        <v-btn color="error" variant="text" size="small" @click="deleteCrateGroup(group.name)">
-                          Delete
-                        </v-btn>
-                      </template>
-                    </v-list-item>
-                  </v-list>
+              <div class="settings-subsection last">
+                <div class="settings-subsection-header">
+                  <v-icon icon="mdi-account-group" size="x-small" class="me-2"></v-icon>
+                  <span>Crate Groups</span>
+                  <span class="settings-count-small">{{ crateGroupsForCrate.length }}</span>
+                </div>
 
-                  <v-alert v-if="deleteCrateGroupStatus"
-                    :type="deleteCrateGroupStatus === 'Success' ? 'success' : 'error'" closable
-                    @click:close="deleteCrateGroupStatus = ''" class="mt-4">
-                    {{ deleteCrateGroupMsg }}
-                  </v-alert>
-
-                  <v-divider class="my-4"></v-divider>
-
-                  <h3 class="text-h5 mb-3">Add crate group</h3>
-                  <v-form @submit.prevent="addCrateGroup">
-                    <v-select v-model="crateGroupName" :items="availableCrateGroups" label="Select Group"
-                      prepend-icon="mdi-account-group" variant="outlined" density="comfortable" class="mb-2" />
-
-                    <v-alert v-if="addCrateGroupStatus" :type="addCrateGroupStatus === 'Success' ? 'success' : 'error'"
-                      closable @click:close="addCrateGroupStatus = ''" class="mt-4">
-                      {{ addCrateGroupMsg }}
-                    </v-alert>
-
-                    <v-btn color="primary" type="submit" class="mt-2">
-                      Add
+                <div v-if="crateGroupsForCrate.length > 0" class="settings-list compact">
+                  <div v-for="group in crateGroupsForCrate" :key="group.name" class="settings-list-item">
+                    <div class="settings-list-item-info">
+                      <v-icon icon="mdi-account-group" size="small" class="me-3"></v-icon>
+                      <span class="settings-list-item-name">{{ group.name }}</span>
+                    </div>
+                    <v-btn color="error" variant="text" size="small" @click="deleteCrateGroup(group.name)">
+                      <v-icon icon="mdi-close" size="small"></v-icon>
                     </v-btn>
-                  </v-form>
-                </v-card-text>
-              </v-card>
+                  </div>
+                </div>
+                <p v-else class="text-body-2 text-disabled mb-4">No groups assigned yet.</p>
+
+                <v-alert v-if="deleteCrateGroupStatus"
+                  :type="deleteCrateGroupStatus === 'Success' ? 'success' : 'error'" closable
+                  @click:close="deleteCrateGroupStatus = ''" class="mb-3">
+                  {{ deleteCrateGroupMsg }}
+                </v-alert>
+
+                <v-form @submit.prevent="addCrateGroup" class="settings-form inline">
+                  <v-select v-model="crateGroupName" :items="availableCrateGroups" label="Select group"
+                    prepend-inner-icon="mdi-account-group" variant="outlined" density="compact" hide-details class="settings-input" />
+                  <v-btn color="primary" type="submit" variant="tonal" size="small">
+                    <v-icon icon="mdi-plus" size="small"></v-icon>
+                  </v-btn>
+                </v-form>
+                <v-alert v-if="addCrateGroupStatus" :type="addCrateGroupStatus === 'Success' ? 'success' : 'error'"
+                  closable @click:close="addCrateGroupStatus = ''" class="mt-3">
+                  {{ addCrateGroupMsg }}
+                </v-alert>
+              </div>
             </v-card-text>
           </v-card>
-
-
         </template>
 
         <!-- Admin Tab -->
-        <v-card v-if="tab === 'administrate'" class="mb-4" elevation="1">
-          <v-card-title>Delete Crate Version</v-card-title>
-          <v-card-text>
-            <v-alert type="error" variant="tonal" class="mb-4">
-              <strong>Warning:</strong> Deleting a crate version breaks all crates that depend on it!
+        <v-card v-if="tab === 'administrate'" class="mb-4 content-card admin-card" elevation="0">
+          <div class="admin-header">
+            <v-icon icon="mdi-shield-alert" size="small" class="admin-icon"></v-icon>
+            <span class="admin-title">Danger Zone</span>
+          </div>
+          <v-card-text class="admin-content">
+            <v-alert type="warning" variant="tonal" class="mb-5 admin-alert">
+              <div class="admin-alert-content">
+                <v-icon icon="mdi-lightbulb-outline" size="small" class="me-2"></v-icon>
+                <span>
+                  Consider <a href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" target="_blank" class="admin-link">yanking</a>
+                  the crate instead of deleting it. Yanking prevents new dependencies but doesn't break existing ones.
+                </span>
+              </div>
             </v-alert>
 
-            <p class="mb-4">
-              Instead of deleting the crate, think about
-              <a href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" class="text-primary">yanking</a> it
-              instead,
-              which does not break crates that depend on it.
-            </p>
-
-            <v-row>
-              <v-col>
-                <v-btn color="error" @click="deleteVersion(crate.name, selected_version.version)">
+            <div class="admin-actions">
+              <!-- Delete Version -->
+              <div class="admin-action-card destructive">
+                <div class="admin-action-info">
+                  <div class="admin-action-header">
+                    <v-icon icon="mdi-tag-remove" size="small" class="admin-action-icon"></v-icon>
+                    <span class="admin-action-title">Delete Version</span>
+                  </div>
+                  <p class="admin-action-desc">
+                    Permanently delete version <code>{{ selected_version.version }}</code> of this crate.
+                    This action cannot be undone.
+                  </p>
+                </div>
+                <v-btn color="error" variant="flat" @click="deleteVersion(crate.name, selected_version.version)">
+                  <v-icon icon="mdi-delete-outline" size="small" class="me-2"></v-icon>
                   Delete Version
                 </v-btn>
-              </v-col>
-              <v-col>
-                <v-btn color="error" @click="deleteCrate(crate.name)">
+              </div>
+
+              <!-- Delete Entire Crate -->
+              <div class="admin-action-card destructive">
+                <div class="admin-action-info">
+                  <div class="admin-action-header">
+                    <v-icon icon="mdi-delete-forever" size="small" class="admin-action-icon"></v-icon>
+                    <span class="admin-action-title">Delete Entire Crate</span>
+                  </div>
+                  <p class="admin-action-desc">
+                    Permanently delete <strong>all versions</strong> of <code>{{ crate.name }}</code>.
+                    This will break all crates that depend on it.
+                  </p>
+                </div>
+                <v-btn color="error" variant="flat" @click="deleteCrate(crate.name)">
+                  <v-icon icon="mdi-delete-forever" size="small" class="me-2"></v-icon>
                   Delete Crate
                 </v-btn>
-              </v-col>
-            </v-row>
+              </div>
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -896,8 +929,421 @@ watch(tab, (newTab) => {
 
 </script>
 
-<style>
+<style scoped>
+.crate-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
 .text-break {
   word-break: break-word;
+}
+
+/* Title Card */
+.title-card {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline));
+}
+
+.crate-title {
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.version-text {
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.description-text {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* Tabs Card */
+.tabs-card {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline));
+  overflow: hidden;
+}
+
+.crate-tabs {
+  background: transparent;
+}
+
+.crate-tabs :deep(.v-tab) {
+  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Content Cards */
+.content-card {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 8px;
+}
+
+:deep(.v-card-title) {
+  color: rgb(var(--v-theme-on-surface));
+}
+
+:deep(.v-card-text) {
+  color: rgb(var(--v-theme-on-surface));
+}
+
+/* List items in settings */
+:deep(.v-list) {
+  background: transparent;
+}
+
+:deep(.v-list-item) {
+  border-radius: 8px;
+}
+
+:deep(.v-list-item:hover) {
+  background: rgb(var(--v-theme-surface-variant));
+}
+
+/* Alerts */
+:deep(.v-alert) {
+  border-radius: 8px;
+}
+
+/* Form fields */
+:deep(.v-text-field) {
+  margin-bottom: 8px;
+}
+
+/* Nested cards in settings */
+.nested-card {
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 8px;
+}
+
+/* Settings Card Styles */
+.settings-card {
+  overflow: hidden;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  background: rgb(var(--v-theme-surface-variant));
+  border-bottom: 1px solid rgb(var(--v-theme-outline));
+}
+
+.settings-icon {
+  color: rgb(var(--v-theme-primary));
+  margin-right: 12px;
+}
+
+.settings-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.settings-count {
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: 12px;
+  margin-left: auto;
+}
+
+.settings-content {
+  padding: 20px !important;
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.settings-list.compact {
+  margin-bottom: 12px;
+}
+
+.settings-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.settings-list-item:hover {
+  border-color: rgb(var(--v-theme-primary));
+}
+
+.settings-list-item-info {
+  display: flex;
+  align-items: center;
+}
+
+.settings-list-item-info .v-icon {
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.settings-list-item-name {
+  font-weight: 500;
+  font-size: 15px;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.settings-form-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgb(var(--v-theme-outline));
+}
+
+.settings-form-header {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  font-size: 14px;
+  color: rgb(var(--v-theme-on-surface-variant));
+  margin-bottom: 12px;
+}
+
+.settings-form-header .v-icon {
+  color: rgb(var(--v-theme-primary));
+}
+
+.settings-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.settings-form.inline {
+  align-items: center;
+}
+
+.settings-input {
+  flex: 1;
+}
+
+.settings-input :deep(.v-field) {
+  margin-bottom: 0;
+}
+
+.settings-subsection {
+  padding: 20px;
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.settings-subsection.last {
+  margin-bottom: 0;
+}
+
+.settings-subsection-header {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 14px;
+  color: rgb(var(--v-theme-on-surface));
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgb(var(--v-theme-outline));
+}
+
+.settings-subsection-header .v-icon {
+  color: rgb(var(--v-theme-primary));
+}
+
+.settings-count-small {
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+.settings-checkbox {
+  margin-bottom: 8px;
+}
+
+.settings-checkbox :deep(.v-label) {
+  font-size: 14px;
+}
+
+.settings-help-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgb(var(--v-theme-on-surface-variant));
+  margin-bottom: 16px;
+  padding-left: 32px;
+}
+
+.settings-help-text code {
+  background: rgb(var(--v-theme-surface));
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Roboto Mono', monospace;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .settings-form {
+    flex-direction: column;
+  }
+
+  .settings-form.inline {
+    flex-direction: row;
+  }
+
+  .settings-input {
+    width: 100%;
+  }
+}
+
+/* Admin Card Styles */
+.admin-card {
+  overflow: hidden;
+  border-color: rgba(var(--v-theme-error), 0.3) !important;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  background: rgba(var(--v-theme-error), 0.08);
+  border-bottom: 1px solid rgba(var(--v-theme-error), 0.2);
+}
+
+.admin-icon {
+  color: rgb(var(--v-theme-error));
+  margin-right: 12px;
+}
+
+.admin-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: rgb(var(--v-theme-error));
+}
+
+.admin-content {
+  padding: 20px !important;
+}
+
+.admin-alert {
+  border-radius: 8px;
+}
+
+.admin-alert-content {
+  display: flex;
+  align-items: flex-start;
+}
+
+.admin-alert-content .v-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.admin-link {
+  color: rgb(var(--v-theme-primary));
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.admin-link:hover {
+  text-decoration: underline;
+}
+
+.admin-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-action-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.admin-action-card:hover {
+  border-color: rgba(var(--v-theme-error), 0.5);
+}
+
+.admin-action-card.destructive {
+  background: rgba(var(--v-theme-error), 0.05);
+  border-color: rgba(var(--v-theme-error), 0.3);
+}
+
+.admin-action-card.destructive:hover {
+  border-color: rgb(var(--v-theme-error));
+  background: rgba(var(--v-theme-error), 0.08);
+}
+
+.admin-action-info {
+  flex: 1;
+}
+
+.admin-action-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.admin-action-icon {
+  color: rgb(var(--v-theme-error));
+  margin-right: 10px;
+}
+
+.admin-action-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.admin-action-desc {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgb(var(--v-theme-on-surface-variant));
+  margin: 0;
+}
+
+.admin-action-desc code {
+  background: rgb(var(--v-theme-surface));
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Roboto Mono', monospace;
+  color: rgb(var(--v-theme-primary));
+}
+
+/* Responsive Admin */
+@media (max-width: 768px) {
+  .admin-action-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-action-card .v-btn {
+    width: 100%;
+  }
 }
 </style>

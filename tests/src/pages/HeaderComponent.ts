@@ -28,8 +28,9 @@ export class HeaderComponent extends BasePage {
     super(page);
 
     this.appBar = page.locator(".v-app-bar");
-    // Logo is a router-link containing the kellnr text
-    this.logo = page.locator(".v-app-bar-title").getByRole("link");
+    // Logo is now a non-clickable span with the kellnr text
+    // Use Home link for navigation instead
+    this.logo = page.locator(".v-app-bar-title .logo-text");
 
     // Desktop navigation links - scoped to app bar to avoid mobile drawer duplicates
     // The desktop nav is in a div with class "d-none d-md-flex"
@@ -37,6 +38,7 @@ export class HeaderComponent extends BasePage {
     this.searchNavLink = desktopNav.getByRole("link", { name: "Search" });
     this.settingsNavLink = desktopNav.getByRole("button", { name: "Settings" });
     this.docQueueNavLink = desktopNav.getByRole("link", { name: "Doc Queue" });
+    // Help link was removed from navigation
     this.helpNavLink = desktopNav.getByRole("link", { name: "Help" });
 
     // Theme toggle button - look for button with weather icon
@@ -54,10 +56,13 @@ export class HeaderComponent extends BasePage {
   }
 
   /**
-   * Click the logo to navigate to the home page.
+   * Navigate to home page via the Home link in navigation.
+   * Note: The logo is no longer clickable, so we use the Home nav link.
    */
   async clickLogo(): Promise<void> {
-    await this.logo.click();
+    // Use Home navigation button (v-btn with to="/") instead of clicking logo (which is now non-clickable)
+    const homeLink = this.appBar.locator(".d-none.d-md-flex").locator("a, button").filter({ hasText: "Home" });
+    await homeLink.click();
     // Wait for Vue Router navigation to complete
     await this.page.waitForURL("**/", { timeout: 5000 }).catch(() => {
       // URL might already be at root or navigation might be hash-based

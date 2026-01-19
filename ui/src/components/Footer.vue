@@ -1,22 +1,26 @@
 <template>
-  <v-footer fixed class="footer-container py-1 px-2">
-    <div class="d-flex align-center justify-space-between w-100">
-      <!-- Brand and Version - Always Inline -->
-      <div class="d-flex align-center">
-        <v-icon icon="mdi-package-variant-closed" color="primary" class="me-1" size="small" />
-        <span class="text-subtitle-2 me-1">kellnr</span>
-        <span class="text-caption text-medium-emphasis">v{{ version }}</span>
+  <v-footer fixed class="footer-container">
+    <div class="footer-content">
+      <!-- Brand and Version -->
+      <div class="brand-section">
+        <v-icon icon="mdi-package-variant-closed" class="brand-icon" size="small" />
+        <span class="brand-name">kellnr</span>
+        <span class="version-text">v{{ version }}</span>
       </div>
 
-      <!-- Links - Always Horizontal -->
-      <div>
-        <v-btn-group variant="text" density="compact">
-          <v-btn v-for="(link, index) in links" :key="index" :href="link.url" target="_blank" rel="noopener noreferrer"
-            size="x-small" density="comfortable" class="link-btn">
-            <v-icon :icon="link.icon" size="small" />
-            <span class="link-text">{{ link.text }}</span>
-          </v-btn>
-        </v-btn-group>
+      <!-- Links -->
+      <div class="links-section">
+        <a
+          v-for="(link, index) in links"
+          :key="index"
+          :href="link.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link"
+        >
+          <v-icon :icon="link.icon" size="small" />
+          <span class="link-text">{{ link.text }}</span>
+        </a>
       </div>
     </div>
   </v-footer>
@@ -26,10 +30,6 @@
 import { ref, onMounted } from "vue";
 import axios from "axios";
 import { VERSION } from "../remote-routes";
-import { useDisplay } from "vuetify";
-
-// Get viewport size
-const display = useDisplay();
 
 // Version state
 const version = ref("");
@@ -67,23 +67,83 @@ onMounted(() => {
 
 <style scoped>
 .footer-container {
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgb(var(--v-theme-surface)) !important;
+  border-top: 1px solid rgb(var(--v-theme-outline));
   position: sticky;
   bottom: 0;
   z-index: 5;
   min-height: 48px !important;
   max-height: 48px;
-  overflow: hidden;
-  background-color: var(--v-theme-surface);
+  padding: 0 16px;
 }
 
-.link-btn {
-  padding: 0 8px !important;
+.footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+}
+
+.brand-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brand-icon {
+  color: rgb(var(--v-theme-primary));
+}
+
+.brand-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.version-text {
+  font-size: 0.75rem;
+  color: rgb(var(--v-theme-on-surface-variant));
+  padding: 2px 6px;
+  background: rgba(var(--v-theme-primary), 0.08);
+  border-radius: 4px;
+}
+
+.links-section {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  color: rgb(var(--v-theme-on-surface-variant));
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.footer-link:hover {
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
+}
+
+.footer-link .v-icon {
+  font-size: 16px;
+  opacity: 0.8;
+}
+
+.footer-link:hover .v-icon {
+  opacity: 1;
 }
 
 .link-text {
   display: none;
-  margin-left: 4px;
 }
 
 /* Show text labels on medium screens and up */
@@ -91,9 +151,15 @@ onMounted(() => {
   .link-text {
     display: inline;
   }
+}
 
-  .link-btn {
-    padding: 0 12px !important;
+@media (max-width: 600px) {
+  .footer-container {
+    padding: 0 12px;
+  }
+
+  .footer-link {
+    padding: 6px 8px;
   }
 }
 </style>

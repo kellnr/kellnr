@@ -163,16 +163,16 @@ test.describe("Landing Page Statistics Cards UI Tests", () => {
     await page.goto(baseUrl);
     await landingPage.waitForStatistics();
 
-    // Get the Last Updated card (purple card with updated time)
-    const lastUpdatedCard = page.locator('[data-testid^="stat-card-updated"]');
+    // Get the Last Updated card - new UI uses RecentCrateCard component
+    const lastUpdatedCard = page.getByTestId("recent-crate-card");
     await expect(lastUpdatedCard).toBeVisible();
 
     // Verify it has pointer cursor
     await expect(lastUpdatedCard).toHaveCSS("cursor", "pointer");
 
-    // Get the crate name from the card (it's the number/stat-value)
+    // Get the crate name from the card (it's in the .crate-name element)
     const crateName = await lastUpdatedCard
-      .getByTestId("stat-value")
+      .locator(".crate-name")
       .textContent();
     expect(crateName).toBeTruthy();
 

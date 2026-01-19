@@ -171,8 +171,8 @@ test.describe("Crate Views with Data", () => {
     await page.waitForTimeout(500);
 
     // Check for normal dependencies - foo-bar depends on test_lib
-    // Look for the h3 heading in the dependencies section
-    const testLibDep = page.locator("h3").filter({ hasText: "test_lib" });
+    // Look for the dependency name in the dependencies section
+    const testLibDep = page.locator(".dep-name").filter({ hasText: "test_lib" });
     await expect(testLibDep).toBeVisible();
 
     // Verify Versions tab
@@ -262,12 +262,12 @@ test.describe("Crate Views with Data", () => {
     await cratePage.clickTab("settings");
     await page.waitForTimeout(500);
 
-    // Should see crate owners section
-    const ownersCard = page.locator(".v-card").filter({ hasText: "Crate owners" });
+    // Should see crate owners section - new UI uses settings-card
+    const ownersCard = page.locator(".settings-card").filter({ hasText: "Crate Owners" });
     await expect(ownersCard).toBeVisible();
 
-    // Should see access control section
-    const accessCard = page.locator(".v-card").filter({ hasText: "Access control" });
+    // Should see access control section - new UI uses settings-card
+    const accessCard = page.locator(".settings-card").filter({ hasText: "Access Control" });
     await expect(accessCard).toBeVisible();
 
     // Open Admin tab and verify content
@@ -278,8 +278,8 @@ test.describe("Crate Views with Data", () => {
     await expect(cratePage.deleteVersionButton).toBeVisible();
     await expect(cratePage.deleteCrateButton).toBeVisible();
 
-    // Should see warning about deleting
-    const warning = page.locator(".v-alert").filter({ hasText: "Warning" });
+    // Should see warning about deleting - new text mentions "yanking"
+    const warning = page.locator(".v-alert").filter({ hasText: "yanking" });
     await expect(warning).toBeVisible();
   });
 });
