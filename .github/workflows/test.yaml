@@ -1,0 +1,62 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  test-kellnr:
+    name: Unit Tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+
+      - name: Tests
+        run: nix develop --command just test
+
+  test-kellnr-pgdb:
+    name: Postgresql Tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+
+      - name: Tests
+        run: nix develop --command just test-pgdb
+
+  test-kellnr-ui:
+    name: UI Tests (Playwright)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+
+      - name: Tests
+        run: nix develop --command just test-ui

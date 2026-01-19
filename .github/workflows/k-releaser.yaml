@@ -1,0 +1,52 @@
+name: k-releaser
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Release unpublished packages.
+  k-releaser-release:
+    name: k-releaser release
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'kellnr' }} # Do not run on forks
+    permissions:
+      contents: write
+    steps:
+      - &checkout
+        name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - &install-rust
+        name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run k-releaser
+        uses: secana/k-releaser@v1
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.K_RELEASER_TOKEN }}
+
+  # Create a PR with the new versions and changelog, preparing the next release.
+  k-releaser-pr:
+    name: k-releaser PR
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'kellnr' }} # Do not run on forks
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: k-releaser-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - *checkout
+      - *install-rust
+      - name: Run k-releaser
+        uses: secana/k-releaser@v1
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.K_RELEASER_TOKEN }}

@@ -107,3 +107,7 @@ missing_panics_doc = "allow" # 10
 cast_possible_wrap = "allow" # 10
 if_not_else = "allow" # 8
 too_many_lines = "allow" # 6
+
+[[workspace.metadata.k-releaser.package]]
+name = "kellnr-embedded-resources"
+publish_allow_dirty = true
