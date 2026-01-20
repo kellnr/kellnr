@@ -494,10 +494,10 @@
 
 <script setup lang="ts">
 import { onBeforeMount, ref } from "vue";
-import axios from "axios";
 import { emptySettings } from "../types/settings";
 import type { Settings } from "../types/settings";
-import { SETTINGS } from "../remote-routes";
+import { settingsService } from "../services";
+import { isSuccess } from "../services/api";
 
 const settings = ref<Settings>(emptySettings);
 
@@ -505,22 +505,18 @@ onBeforeMount(() => {
   getStartupConfig();
 });
 
-function getStartupConfig() {
-  axios
-    .get(SETTINGS)
-    .then((res) => {
-      settings.value = res.data;
-    })
-    .catch((err) => {
-      console.log(err);
-    });
+async function getStartupConfig() {
+  const result = await settingsService.getSettings();
+  if (isSuccess(result)) {
+    settings.value = result.data;
+  }
 }
 
-function formatValue(value: any): string {
+function formatValue(value: unknown): string {
   if (value === null || value === undefined) return '-';
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : '-';
-  return value.toString() || '-';
+  return String(value) || '-';
 }
 </script>
 

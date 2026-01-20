@@ -6,4 +6,6 @@ export type CrateOverview = {
     description?: string
     documentation?: string
     is_kellnr: boolean
+    /** Alias for !is_kellnr - indicates if this is from crates.io cache */
+    is_cache?: boolean
 }

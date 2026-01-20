@@ -4,7 +4,7 @@
     <div class="section-header">
       <v-icon icon="mdi-account-group" size="small" color="primary" class="me-3"></v-icon>
       <span class="text-h6 font-weight-bold">{{ editingGroup ? `Edit Group: ${editingGroup}` : 'Group Management' }}</span>
-      <span v-if="!editingGroup && items.length > 0" class="group-count">{{ items.length }}</span>
+      <span v-if="!editingGroup && groups.length > 0" class="group-count">{{ groups.length }}</span>
       <v-btn v-if="editingGroup" variant="text" size="small" class="ms-auto" @click="cancelEditGroup">
         <v-icon icon="mdi-arrow-left" size="small" class="me-1"></v-icon>
         Back
@@ -20,26 +20,26 @@
         </p>
 
         <!-- Groups List -->
-        <div v-if="items.length > 0" class="groups-section mb-6">
+        <div v-if="groups.length > 0" class="groups-section mb-6">
           <div class="subsection-header">
             <v-icon icon="mdi-folder-account" size="x-small" class="me-2" color="primary"></v-icon>
             <span class="text-body-2 font-weight-medium">Existing Groups</span>
           </div>
 
           <div class="group-list">
-            <div v-for="item in items" :key="item.name" class="group-item">
+            <div v-for="group in groups" :key="group.name" class="group-item">
               <div class="group-info">
                 <div class="group-avatar">
                   <v-icon icon="mdi-account-group" size="small"></v-icon>
                 </div>
-                <span class="group-name">{{ item.name }}</span>
+                <span class="group-name">{{ group.name }}</span>
               </div>
               <div class="group-actions">
                 <v-btn
                   color="primary"
                   variant="tonal"
                   size="small"
-                  @click="editGroup(item.name)"
+                  @click="startEditGroup(group.name)"
                 >
                   <v-icon icon="mdi-pencil-outline" size="small" class="me-1"></v-icon>
                   Edit
@@ -49,7 +49,7 @@
                   color="error"
                   variant="tonal"
                   size="small"
-                  @click="promptDeleteGroup(item.name)"
+                  @click="handleDeleteGroup(group.name)"
                 >
                   <v-icon icon="mdi-delete-outline" size="small"></v-icon>
                 </v-btn>
@@ -70,10 +70,10 @@
             <span class="text-body-2 font-weight-medium">Create New Group</span>
           </div>
 
-          <v-form @submit.prevent="addGroup" class="add-group-form">
+          <v-form @submit.prevent="handleAddGroup" class="add-group-form">
             <div class="form-row">
               <v-text-field
-                v-model="name"
+                v-model="newGroupName"
                 placeholder="Enter group name"
                 prepend-inner-icon="mdi-account-group-outline"
                 variant="outlined"
@@ -89,14 +89,14 @@
           </v-form>
 
           <v-alert
-            v-if="addGroupStatus"
-            :type="addGroupStatus === 'Success' ? 'success' : 'error'"
+            v-if="addGroupStatus.hasStatus"
+            :type="addGroupStatus.isSuccess ? 'success' : 'error'"
             variant="tonal"
             class="mt-4"
             closable
-            @click:close="addGroupStatus = ''"
+            @click:close="addGroupStatus.clear()"
           >
-            {{ addGroupMsg }}
+            {{ addGroupStatus.message }}
           </v-alert>
         </div>
       </template>
@@ -108,22 +108,22 @@
           <div class="subsection-header">
             <v-icon icon="mdi-account-multiple" size="x-small" class="me-2" color="primary"></v-icon>
             <span class="text-body-2 font-weight-medium">Group Members</span>
-            <span class="member-count">{{ groupUsers.length }}</span>
+            <span class="member-count">{{ groupMembers.length }}</span>
           </div>
 
-          <div v-if="groupUsers.length > 0" class="member-list">
-            <div v-for="user in groupUsers" :key="user.name" class="member-item">
+          <div v-if="groupMembers.length > 0" class="member-list">
+            <div v-for="member in groupMembers" :key="member.name" class="member-item">
               <div class="member-info">
                 <div class="member-avatar">
                   <v-icon icon="mdi-account" size="small"></v-icon>
                 </div>
-                <span class="member-name">{{ user.name }}</span>
+                <span class="member-name">{{ member.name }}</span>
               </div>
               <v-btn
                 color="error"
                 variant="text"
                 size="small"
-                @click="promptDeleteGroupUser(user.name)"
+                @click="handleRemoveMember(member.name)"
               >
                 <v-icon icon="mdi-close" size="small"></v-icon>
               </v-btn>
@@ -136,14 +136,14 @@
           </div>
 
           <v-alert
-            v-if="deleteUserStatus"
-            :type="deleteUserStatus === 'Success' ? 'success' : 'error'"
+            v-if="memberStatus.hasStatus"
+            :type="memberStatus.isSuccess ? 'success' : 'error'"
             variant="tonal"
             class="mt-4"
             closable
-            @click:close="deleteUserStatus = ''"
+            @click:close="memberStatus.clear()"
           >
-            {{ deleteUserMsg }}
+            {{ memberStatus.message }}
           </v-alert>
         </div>
 
@@ -154,10 +154,10 @@
             <span class="text-body-2 font-weight-medium">Add Member</span>
           </div>
 
-          <v-form @submit.prevent="addGroupUser" class="add-member-form">
+          <v-form @submit.prevent="handleAddMember" class="add-member-form">
             <div class="form-row">
               <v-select
-                v-model="groupUserName"
+                v-model="selectedUser"
                 :items="availableUsers"
                 item-title="name"
                 item-value="name"
@@ -173,7 +173,7 @@
                 color="primary"
                 type="submit"
                 size="large"
-                :disabled="!groupUserName || availableUsers.length === 0"
+                :disabled="!selectedUser || availableUsers.length === 0"
               >
                 <v-icon icon="mdi-account-plus" size="small" class="me-2"></v-icon>
                 Add
@@ -185,50 +185,39 @@
               All users are already members of this group.
             </p>
           </v-form>
-
-          <v-alert
-            v-if="addUserStatus"
-            :type="addUserStatus === 'Success' ? 'success' : 'error'"
-            variant="tonal"
-            class="mt-4"
-            closable
-            @click:close="addUserStatus = ''"
-          >
-            {{ addUserMsg }}
-          </v-alert>
         </div>
       </template>
     </div>
 
     <!-- Snackbar for notifications -->
     <v-snackbar
-      v-model="showChangeGroupStatus"
-      :color="changeGroupStatus === 'Success' ? 'success' : 'error'"
-      timeout="5000"
+      v-model="notification.snackbar.show"
+      :color="notification.snackbar.color"
+      :timeout="notification.snackbar.timeout"
       location="bottom"
     >
-      {{ changeGroupMsg }}
+      {{ notification.snackbar.message }}
       <template v-slot:actions>
-        <v-btn variant="text" @click="clearChangeGroupStatus">Close</v-btn>
+        <v-btn variant="text" @click="notification.close()">Close</v-btn>
       </template>
     </v-snackbar>
 
     <!-- Confirmation Dialog -->
-    <v-dialog v-model="confirmDialog" max-width="450">
+    <v-dialog v-model="dialog.isOpen" max-width="450">
       <v-card class="confirm-dialog">
         <div class="dialog-header">
           <v-icon icon="mdi-alert-circle" color="warning" size="small" class="me-3"></v-icon>
-          <span class="text-h6 font-weight-bold">{{ confirmTitle }}</span>
+          <span class="text-h6 font-weight-bold">{{ dialog.title }}</span>
         </div>
 
         <v-card-text class="pa-5">
-          <p class="text-body-1 mb-0">{{ confirmMessage }}</p>
+          <p class="text-body-1 mb-0">{{ dialog.message }}</p>
         </v-card-text>
 
         <v-card-actions class="pa-4 pt-0">
           <v-spacer></v-spacer>
-          <v-btn variant="text" @click="confirmDialog = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" @click="confirmAction">Confirm</v-btn>
+          <v-btn variant="text" @click="dialog.cancel()">Cancel</v-btn>
+          <v-btn :color="dialog.confirmColor" variant="flat" @click="dialog.confirm()">Confirm</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -236,247 +225,150 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, ref, computed } from "vue";
-import {
-  ADD_GROUP,
-  LIST_GROUPS,
-  DELETE_GROUP,
-  GROUP_USER,
-  GROUP_USERS,
-  LIST_USERS,
-} from "../remote-routes";
-import axios from "axios";
-import { useRouter } from "vue-router";
+import { onBeforeMount, ref, computed } from "vue"
+import { useStatusMessage, useConfirmCallback, useNotification } from "../composables"
+import { groupService, userService } from "../services"
+import { isSuccess } from "../services/api"
+import type { Group, GroupUser } from "../types/group"
+import type { User } from "../types/user"
 
-const router = useRouter();
-const addGroupStatus = ref("");
-const addGroupMsg = ref("");
-const addUserStatus = ref("");
-const addUserMsg = ref("");
-const deleteUserStatus = ref("");
-const deleteUserMsg = ref("");
-const changeGroupStatus = ref("");
-const changeGroupMsg = ref("");
-const showChangeGroupStatus = ref(false);
-const items = ref([]);
-const users = ref([]);
-const groupUsers = ref([]);
-const groupUserName = ref("");
-const name = ref("");
-const editingGroup = ref("");
+// State
+const groups = ref<Group[]>([])
+const allUsers = ref<User[]>([])
+const groupMembers = ref<GroupUser[]>([])
+const newGroupName = ref("")
+const editingGroup = ref("")
+const selectedUser = ref("")
 
-// Confirmation dialog
-const confirmDialog = ref(false);
-const confirmTitle = ref("");
-const confirmMessage = ref("");
-const confirmAction = ref(() => { });
+// Composables
+const addGroupStatus = useStatusMessage()
+const memberStatus = useStatusMessage()
+const { dialog, showConfirm } = useConfirmCallback()
+const notification = useNotification()
 
+// Computed
 const availableUsers = computed(() => {
-  return users.value.filter(
-    (user) => !groupUsers.value.some((groupUser) => groupUser.name === user.name)
-  );
-});
+  const memberNames = new Set(groupMembers.value.map(m => m.name))
+  return allUsers.value.filter(user => !memberNames.has(user.name))
+})
 
+// Lifecycle
 onBeforeMount(() => {
-  getGroups();
-  getUsers();
-});
+  loadGroups()
+  loadAllUsers()
+})
 
-function clearChangeGroupStatus() {
-  showChangeGroupStatus.value = false;
-  setTimeout(() => {
-    changeGroupStatus.value = "";
-    changeGroupMsg.value = "";
-  }, 300);
+// Load groups from API
+async function loadGroups() {
+  const result = await groupService.getGroups()
+  if (isSuccess(result)) {
+    groups.value = result.data
+  }
 }
 
-function editGroup(groupName) {
-  editingGroup.value = groupName;
-  groupUserName.value = "";
-  getGroupUsers();
+// Load all users from API
+async function loadAllUsers() {
+  const result = await userService.getUsers()
+  if (isSuccess(result)) {
+    allUsers.value = result.data
+  }
 }
 
-function cancelEditGroup() {
-  editingGroup.value = "";
-  groupUserName.value = "";
-  groupUsers.value = [];
+// Load group members
+async function loadGroupMembers() {
+  if (!editingGroup.value) return
+
+  const result = await groupService.getGroupUsers(editingGroup.value)
+  if (isSuccess(result)) {
+    groupMembers.value = result.data.users
+  }
 }
 
-function addGroup() {
-  const postData = {
-    name: name.value,
-  };
+// Add a new group
+async function handleAddGroup() {
+  const name = newGroupName.value.trim()
+  if (!name) return
 
-  axios
-    .post(ADD_GROUP, postData)
-    .then((res) => {
-      if (res.status == 200) {
-        addGroupStatus.value = "Success";
-        addGroupMsg.value = "Group successfully created.";
-        // Clear the form
-        name.value = "";
-        // Update group list
-        getGroups();
-      }
-    })
-    .catch((error) => {
-      if (error.response) {
-        addGroupStatus.value = "Error";
-        addGroupMsg.value = "Group could not be created.";
+  addGroupStatus.clear()
 
-        if (error.response.status == 404) {
-          // "Unauthorized. Login first."
-          router.push("/login");
-        } else if (error.response.status == 400) {
-          addGroupMsg.value = "Invalid group name";
-        } else if (error.response.status == 500) {
-          addGroupMsg.value = "Group could not be created";
-        } else {
-          addGroupMsg.value = "Unknown error";
-        }
-      }
-    });
+  const result = await groupService.createGroup(name)
+
+  if (isSuccess(result)) {
+    addGroupStatus.setSuccess("Group successfully created.")
+    newGroupName.value = ""
+    await loadGroups()
+  } else {
+    addGroupStatus.setError(result.error.message)
+  }
 }
 
-function getGroups() {
-  axios
-    .get(LIST_GROUPS, { cache: false })
-    .then((res) => {
-      if (res.status == 200) {
-        items.value = res.data;
-      }
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
-
-function getUsers() {
-  axios
-    .get(LIST_USERS, { cache: false })
-    .then((res) => {
-      if (res.status == 200) {
-        users.value = res.data;
-      }
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
-
-function promptDeleteGroup(name: string) {
-  confirmTitle.value = "Delete Group";
-  confirmMessage.value = `Are you sure you want to delete group "${name}"? This action cannot be undone.`;
-  confirmAction.value = () => deleteGroup(name);
-  confirmDialog.value = true;
-}
-
-function deleteGroup(name: string) {
-  axios
-    .delete(DELETE_GROUP(name))
-    .then((res) => {
-      if (res.status == 200) {
-        changeGroupStatus.value = "Success";
-        changeGroupMsg.value = `Group "${name}" deleted`;
-        showChangeGroupStatus.value = true;
-        confirmDialog.value = false;
-        getGroups();
-      }
-    })
-    .catch((error) => {
-      changeGroupStatus.value = "Error";
-      if (error.response.status == 404) {
-        // "Unauthorized. Login first."
-        router.push("/login");
-      } else if (error.response.status == 500) {
-        changeGroupMsg.value = "Group could not be deleted";
+// Delete a group with confirmation
+function handleDeleteGroup(name: string) {
+  showConfirm({
+    title: "Delete Group",
+    message: `Are you sure you want to delete group "${name}"? This action cannot be undone.`,
+    confirmColor: "error",
+    onConfirm: async () => {
+      const result = await groupService.deleteGroup(name)
+      if (isSuccess(result)) {
+        notification.showSuccess(`Group "${name}" deleted`)
+        await loadGroups()
       } else {
-        changeGroupMsg.value = "Unknown error";
+        notification.showError(result.error.message)
       }
-      showChangeGroupStatus.value = true;
-      confirmDialog.value = false;
-    });
+    }
+  })
 }
 
-function addGroupUser() {
-  if (!groupUserName.value) return;
-
-  axios
-    .put(GROUP_USER(editingGroup.value, groupUserName.value))
-    .then((res) => {
-      if (res.status == 200) {
-        addUserStatus.value = "Success";
-        addUserMsg.value = "Member added to group.";
-        // Clear selection and update user list
-        groupUserName.value = "";
-        getGroupUsers();
-      }
-    })
-    .catch((error) => {
-      if (error.response) {
-        addUserStatus.value = "Error";
-        addUserMsg.value = "Member could not be added.";
-
-        if (error.response.status == 404) {
-          // "Unauthorized. Login first."
-          router.push("/login");
-        } else if (error.response.status == 500) {
-          addUserMsg.value = "Member could not be added";
-        } else {
-          addUserMsg.value = "Unknown error";
-        }
-      }
-    });
+// Start editing a group
+function startEditGroup(groupName: string) {
+  editingGroup.value = groupName
+  selectedUser.value = ""
+  memberStatus.clear()
+  loadGroupMembers()
 }
 
-function promptDeleteGroupUser(name: string) {
-  confirmTitle.value = "Remove Member";
-  confirmMessage.value = `Are you sure you want to remove "${name}" from this group?`;
-  confirmAction.value = () => deleteGroupUser(name);
-  confirmDialog.value = true;
+// Cancel editing
+function cancelEditGroup() {
+  editingGroup.value = ""
+  selectedUser.value = ""
+  groupMembers.value = []
+  memberStatus.clear()
 }
 
-function deleteGroupUser(name: string) {
-  axios
-    .delete(GROUP_USER(editingGroup.value, name))
-    .then((res) => {
-      if (res.status == 200) {
-        deleteUserStatus.value = "Success";
-        deleteUserMsg.value = "Member removed from group.";
-        confirmDialog.value = false;
-        // Update user list
-        getGroupUsers();
-      }
-    })
-    .catch((error) => {
-      if (error.response) {
-        deleteUserStatus.value = "Error";
-        deleteUserMsg.value = "Member could not be removed.";
-        confirmDialog.value = false;
+// Add a member to the group
+async function handleAddMember() {
+  if (!selectedUser.value || !editingGroup.value) return
 
-        if (error.response.status == 404) {
-          // "Unauthorized. Login first."
-          router.push("/login");
-        } else if (error.response.status == 500) {
-          deleteUserMsg.value = "Member could not be removed";
-        } else {
-          deleteUserMsg.value = "Unknown error";
-        }
-      }
-    });
+  memberStatus.clear()
+
+  const result = await groupService.addGroupUser(editingGroup.value, selectedUser.value)
+
+  if (isSuccess(result)) {
+    memberStatus.setSuccess("Member added to group.")
+    selectedUser.value = ""
+    await loadGroupMembers()
+  } else {
+    memberStatus.setError(result.error.message)
+  }
 }
 
-function getGroupUsers() {
-  axios
-    .get(GROUP_USERS(editingGroup.value), { cache: false })
-    .then((res) => {
-      if (res.status == 200) {
-        groupUsers.value = res.data.users;
+// Remove a member from the group with confirmation
+function handleRemoveMember(userName: string) {
+  showConfirm({
+    title: "Remove Member",
+    message: `Are you sure you want to remove "${userName}" from this group?`,
+    confirmColor: "error",
+    onConfirm: async () => {
+      const result = await groupService.removeGroupUser(editingGroup.value, userName)
+      if (isSuccess(result)) {
+        memberStatus.setSuccess("Member removed from group.")
+        await loadGroupMembers()
+      } else {
+        memberStatus.setError(result.error.message)
       }
-    })
-    .catch((error) => {
-      console.log(error);
-    });
+    }
+  })
 }
 </script>
 

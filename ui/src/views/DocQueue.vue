@@ -51,24 +51,21 @@
 </template>
 
 <script setup lang="ts">
-import axios from "axios"
 import { onMounted, onUnmounted, ref, computed } from "vue"
 import type { DocQueueItem } from "../types/doc_queue_item"
 import DocQueueItemCard from "../components/DocQueueItemCard.vue"
-import { DOCS_QUEUE } from "../remote-routes"
+import { crateService } from "../services"
+import { isSuccess } from "../services/api"
 
 const queue = ref<Array<DocQueueItem>>([])
 const emptyQueue = computed(() => queue.value.length === 0)
 let intervalId: ReturnType<typeof setInterval> | undefined
 
-function getQueueItems() {
-  axios.get(`${DOCS_QUEUE}?_=${Date.now()}`) // Use timestamp to avoid caching
-    .then(response => {
-      queue.value = response.data.queue ?? []
-    })
-    .catch(error => {
-      console.log(error)
-    })
+async function getQueueItems() {
+  const result = await crateService.getDocsQueue()
+  if (isSuccess(result)) {
+    queue.value = result.data ?? []
+  }
 }
 
 onMounted(() => {

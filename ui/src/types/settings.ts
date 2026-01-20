@@ -1,3 +1,7 @@
+export type Version = {
+  version: string
+}
+
 export type Settings = {
   docs: Docs
   local: Local

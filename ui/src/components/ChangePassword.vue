@@ -12,11 +12,11 @@
         Update your password to keep your account secure. Choose a strong password that you don't use elsewhere.
       </p>
 
-      <v-form @submit.prevent="changePwd">
+      <v-form @submit.prevent="handleChangePassword">
         <div class="mb-4">
           <label class="text-body-2 font-weight-medium d-block mb-2">Current Password</label>
           <v-text-field
-            v-model="old_pwd"
+            v-model="oldPassword"
             type="password"
             variant="outlined"
             density="comfortable"
@@ -33,7 +33,7 @@
         <div class="mb-4">
           <label class="text-body-2 font-weight-medium d-block mb-2">New Password</label>
           <v-text-field
-            v-model="new_pwd1"
+            v-model="newPassword1"
             type="password"
             variant="outlined"
             density="comfortable"
@@ -47,7 +47,7 @@
         <div class="mb-5">
           <label class="text-body-2 font-weight-medium d-block mb-2">Confirm New Password</label>
           <v-text-field
-            v-model="new_pwd2"
+            v-model="newPassword2"
             type="password"
             variant="outlined"
             density="comfortable"
@@ -59,14 +59,14 @@
         </div>
 
         <v-alert
-          v-if="pwdChangeStatus"
-          :type="pwdChangeStatus === 'Success' ? 'success' : 'error'"
+          v-if="status.hasStatus"
+          :type="status.isSuccess ? 'success' : 'error'"
           closable
           variant="tonal"
-          @update:model-value="pwdChangeStatus = ''"
+          @click:close="status.clear()"
           class="mb-5"
         >
-          {{ pwdChangeMsg }}
+          {{ status.message }}
         </v-alert>
 
         <v-divider class="mb-5"></v-divider>
@@ -86,69 +86,54 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
-import axios from "axios";
-import { CHANGE_PWD } from "../remote-routes";
+import { ref } from "vue"
+import { useStatusMessage } from "../composables"
+import { userService } from "../services"
+import { isSuccess } from "../services/api"
 
-const loading = ref(false);
-const pwdChangeStatus = ref("");
-const pwdChangeMsg = ref("");
-const old_pwd = ref("");
-const new_pwd1 = ref("");
-const new_pwd2 = ref("");
+// State
+const loading = ref(false)
+const oldPassword = ref("")
+const newPassword1 = ref("")
+const newPassword2 = ref("")
 
-// Simplified validation rules
+// Composables
+const status = useStatusMessage()
+
+// Validation rules
 const rules = {
   required: (v: string) => !!v || 'Field is required',
-  passwordMatch: (v: string) => v === new_pwd1.value || 'Passwords do not match'
-};
+  passwordMatch: (v: string) => v === newPassword1.value || 'Passwords do not match'
+}
 
-function changePwd() {
+// Handle password change
+async function handleChangePassword() {
   // Check if passwords match before sending to server
-  if (new_pwd1.value !== new_pwd2.value) {
-    pwdChangeStatus.value = "Error";
-    pwdChangeMsg.value = "New passwords do not match";
-    return;
+  if (newPassword1.value !== newPassword2.value) {
+    status.setError("New passwords do not match")
+    return
   }
 
-  loading.value = true;
-  const postData = {
-    old_pwd: old_pwd.value,
-    new_pwd1: new_pwd1.value,
-    new_pwd2: new_pwd2.value,
-  };
+  loading.value = true
+  status.clear()
 
-  axios
-    .post(CHANGE_PWD, postData)
-    .then((res) => {
-      if (res.status == 200) {
-        pwdChangeMsg.value = "Password changed successfully";
-        pwdChangeStatus.value = "Success";
-        // Reset form on success
-        old_pwd.value = "";
-        new_pwd1.value = "";
-        new_pwd2.value = "";
-      }
-    })
-    .catch((error) => {
-      pwdChangeStatus.value = "Error";
-      if (error.response) {
-        if (error.response.status == 400) {
-          pwdChangeMsg.value = "Old password is incorrect or passwords do not match";
-        } else if (error.response.status == 404) {
-          pwdChangeMsg.value = "Unauthorized. Please login first.";
-        } else if (error.response.status == 500) {
-          pwdChangeMsg.value = "Internal server error";
-        } else {
-          pwdChangeMsg.value = "Unknown error";
-        }
-      } else {
-        pwdChangeMsg.value = "Network error. Please try again.";
-      }
-    })
-    .finally(() => {
-      loading.value = false;
-    });
+  const result = await userService.changePassword(
+    oldPassword.value,
+    newPassword1.value,
+    newPassword2.value
+  )
+
+  loading.value = false
+
+  if (isSuccess(result)) {
+    status.setSuccess("Password changed successfully")
+    // Reset form on success
+    oldPassword.value = ""
+    newPassword1.value = ""
+    newPassword2.value = ""
+  } else {
+    status.setError(result.error.message)
+  }
 }
 </script>
 

@@ -42,45 +42,16 @@ export const useStore = defineStore('store', {
             this.loggedInUserIsAdmin = false
         },
         toggleTheme() {
+            // Toggle theme state - Vuetify and highlight.js themes are handled by ThemeToggle component
             if (this.theme === 'light') {
                 this.theme = 'dark'
                 this.kellnrSmallLogo = 'img/kellnr-logo-small-dark.png'
                 this.currentBackgroundImage = this.darkBackgroundImage
-                // Update Vuetify theme dynamically
-                this.updateVuetifyTheme('dark')
             } else {
                 this.theme = 'light'
                 this.cargoSmallLogo = 'img/cargo-logo-small-light.png'
                 this.kellnrSmallLogo = 'img/kellnr-logo-small-light.png'
                 this.currentBackgroundImage = this.lightBackgroundImage
-                // Update Vuetify theme dynamically
-                this.updateVuetifyTheme('light')
-            }
-
-            // Toggle highlight.js theme
-            this.toggleHighlightTheme()
-        },
-        updateVuetifyTheme(theme: string) {
-            // Access Vuetify instance and update theme
-            const vuetify = document.querySelector('html')?.getAttribute('data-vue-app')
-                ? (window as any)?.$vuetify
-                : null;
-
-            if (vuetify && vuetify.theme) {
-                vuetify.theme.global.name.value = theme;
-            }
-        },
-        toggleHighlightTheme() {
-            // Toggle between highlight.js themes
-            const isDark = this.theme === 'dark';
-
-            // Select all highlight.js style links
-            const hlLight = document.querySelector('link[href*="highlight.js/styles/github.css"]');
-            const hlDark = document.querySelector('link[href*="highlight.js/styles/github-dark.css"]');
-
-            if (hlLight && hlDark) {
-                hlLight.setAttribute('disabled', isDark.toString());
-                hlDark.setAttribute('disabled', (!isDark).toString());
             }
         }
     },

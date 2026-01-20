@@ -4,7 +4,7 @@
     <div class="section-header">
       <v-icon icon="mdi-shield-key" size="small" color="primary" class="me-3"></v-icon>
       <span class="text-h6 font-weight-bold">Authentication Tokens</span>
-      <span v-if="items.length > 0" class="token-count">{{ items.length }}</span>
+      <span v-if="tokens.length > 0" class="token-count">{{ tokens.length }}</span>
     </div>
 
     <!-- Content -->
@@ -15,23 +15,23 @@
       </p>
 
       <!-- Existing Tokens -->
-      <div v-if="items.length > 0" class="tokens-section mb-6">
+      <div v-if="tokens.length > 0" class="tokens-section mb-6">
         <div class="subsection-header">
           <v-icon icon="mdi-key-chain" size="x-small" class="me-2" color="primary"></v-icon>
           <span class="text-body-2 font-weight-medium">Active Tokens</span>
         </div>
 
         <div class="token-list">
-          <div v-for="item in items" :key="item.name" class="token-item">
+          <div v-for="token in tokens" :key="token.id" class="token-item">
             <div class="token-info">
               <v-icon icon="mdi-key" size="small" class="me-3 token-icon"></v-icon>
-              <span class="token-name">{{ item.name }}</span>
+              <span class="token-name">{{ token.name }}</span>
             </div>
             <v-btn
               size="small"
               color="error"
               variant="tonal"
-              @click="showDeleteDialog(item.name, item.id)"
+              @click="handleDeleteToken(token)"
             >
               <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
               Delete
@@ -52,10 +52,10 @@
           <span class="text-body-2 font-weight-medium">Create New Token</span>
         </div>
 
-        <v-form @submit.prevent="addToken" class="token-form">
+        <v-form @submit.prevent="handleCreateToken" class="token-form">
           <div class="form-row">
             <v-text-field
-              v-model="name"
+              v-model="tokenName"
               placeholder="Enter a descriptive name for the token"
               prepend-inner-icon="mdi-tag-outline"
               variant="outlined"
@@ -66,7 +66,7 @@
             <v-btn
               color="primary"
               type="submit"
-              :loading="loading"
+              :loading="createLoading"
               size="large"
             >
               <v-icon icon="mdi-plus" size="small" class="me-2"></v-icon>
@@ -77,21 +77,21 @@
 
         <!-- Token Created Alert -->
         <v-alert
-          v-if="addTokenStatus === 'Success'"
+          v-if="createStatus.isSuccess"
           type="success"
           variant="tonal"
           closable
-          @update:model-value="addTokenStatus = ''"
+          @click:close="createStatus.clear()"
           class="mt-4"
         >
           <div class="token-created">
             <div class="d-flex align-center mb-2">
               <v-icon icon="mdi-check-circle" size="small" class="me-2"></v-icon>
-              <span class="font-weight-medium">{{ addTokenMsg }}</span>
+              <span class="font-weight-medium">{{ createStatus.message }}</span>
             </div>
 
-            <div v-if="addedToken" class="token-display">
-              <code class="token-value">{{ addedToken }}</code>
+            <div v-if="createdTokenValue" class="token-display">
+              <code class="token-value">{{ createdTokenValue }}</code>
               <v-btn
                 color="primary"
                 variant="flat"
@@ -107,29 +107,29 @@
 
         <!-- Error Alert -->
         <v-alert
-          v-if="addTokenStatus === 'Error'"
+          v-if="createStatus.isError"
           type="error"
           variant="tonal"
           closable
-          @update:model-value="addTokenStatus = ''"
+          @click:close="createStatus.clear()"
           class="mt-4"
         >
-          {{ addTokenMsg }}
+          {{ createStatus.message }}
         </v-alert>
       </div>
     </div>
 
     <!-- Delete Confirmation Dialog -->
-    <v-dialog v-model="deleteDialog" max-width="450">
+    <v-dialog v-model="dialog.isOpen" max-width="450">
       <v-card class="delete-dialog">
         <div class="dialog-header">
           <v-icon icon="mdi-alert-circle" color="error" size="small" class="me-3"></v-icon>
-          <span class="text-h6 font-weight-bold">Delete Token</span>
+          <span class="text-h6 font-weight-bold">{{ dialog.title }}</span>
         </div>
 
         <v-card-text class="pa-5">
           <p class="text-body-1 mb-2">
-            Are you sure you want to delete the token "<strong>{{ tokenToDelete.name }}</strong>"?
+            {{ dialog.message }}
           </p>
           <p class="text-body-2 text-medium-emphasis mb-0">
             Any applications using this token will no longer be able to authenticate.
@@ -138,10 +138,10 @@
 
         <v-card-actions class="pa-4 pt-0">
           <v-spacer></v-spacer>
-          <v-btn variant="text" @click="deleteDialog = false">
+          <v-btn variant="text" @click="dialog.cancel()">
             Cancel
           </v-btn>
-          <v-btn color="error" variant="flat" @click="confirmDeleteToken">
+          <v-btn color="error" variant="flat" @click="dialog.confirm()">
             <v-icon icon="mdi-delete" size="small" class="me-1"></v-icon>
             Delete Token
           </v-btn>
@@ -152,119 +152,88 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, ref } from "vue";
-import axios from "axios";
-import { useRouter } from "vue-router";
-import { ADD_TOKEN, DELETE_TOKEN, LIST_TOKENS } from "../remote-routes";
+import { onBeforeMount, ref } from "vue"
+import { useStatusMessage, useConfirmCallback } from "../composables"
+import { tokenService } from "../services"
+import { isSuccess } from "../services/api"
+import type { Token } from "../types/token"
 
-const addTokenStatus = ref("");
-const addTokenMsg = ref("");
-const addedToken = ref("");
-const items = ref([]);
-const name = ref("");
-const loading = ref(false);
-const router = useRouter();
+// State
+const tokens = ref<Token[]>([])
+const tokenName = ref("")
+const createdTokenValue = ref("")
+const createLoading = ref(false)
 
-// Variables for delete dialog
-const deleteDialog = ref(false);
-const tokenToDelete = ref({ name: '', id: 0 });
+// Composables
+const createStatus = useStatusMessage()
+const { dialog, showConfirm } = useConfirmCallback()
 
+// Lifecycle
 onBeforeMount(() => {
-  getTokens();
-});
+  loadTokens()
+})
 
-function copyToken() {
-  navigator.clipboard.writeText(addedToken.value)
-    .then(() => {
-      // Optionally provide feedback that the token was copied
-      const originalMessage = addTokenMsg.value;
-      addTokenMsg.value = "Token copied to clipboard!";
-      setTimeout(() => {
-        addTokenMsg.value = originalMessage;
-      }, 2000);
-    })
-    .catch(err => {
-      console.error('Failed to copy token: ', err);
-    });
+// Load tokens from API
+async function loadTokens() {
+  const result = await tokenService.getTokens()
+  if (isSuccess(result)) {
+    tokens.value = result.data
+  }
 }
 
-function addToken() {
-  if (!name.value.trim()) {
-    addTokenStatus.value = "Error";
-    addTokenMsg.value = "Please enter a name for the token";
-    return;
+// Create a new token
+async function handleCreateToken() {
+  const name = tokenName.value.trim()
+  if (!name) {
+    createStatus.setError("Please enter a name for the token")
+    return
   }
 
-  loading.value = true;
-  const postData = {
-    name: name.value,
-  };
+  createLoading.value = true
+  createStatus.clear()
 
-  axios
-    .post(ADD_TOKEN, postData)
-    .then((res) => {
-      if (res.status == 200) {
-        addedToken.value = res.data["token"];
-        addTokenMsg.value =
-          "Token created! Copy and save it now — it won't be shown again.";
-        addTokenStatus.value = "Success";
-        name.value = ""; // Clear the input field
-        // update shown token list
-        getTokens();
-      }
-    })
-    .catch((error) => {
-      if (error.response) {
-        addTokenStatus.value = "Error";
-        if (error.response.status == 404) {
-          // "Unauthorized. Login first."
-          router.push("/login");
-        } else if (error.response.status == 500) {
-          addTokenMsg.value = "Token could not be created";
-        } else {
-          addTokenMsg.value = "Unknown error";
-        }
-      }
-    })
-    .finally(() => {
-      loading.value = false;
-    });
+  const result = await tokenService.createToken(name)
+
+  createLoading.value = false
+
+  if (isSuccess(result)) {
+    createdTokenValue.value = result.data.token
+    createStatus.setSuccess("Token created! Copy and save it now — it won't be shown again.")
+    tokenName.value = ""
+    await loadTokens()
+  } else {
+    createStatus.setError(result.error.message)
+  }
 }
 
-function getTokens() {
-  axios
-    .get(LIST_TOKENS, { cache: false })
-    .then((res) => {
-      if (res.status == 200) {
-        items.value = res.data;
+// Handle delete token with confirmation
+function handleDeleteToken(token: Token) {
+  showConfirm({
+    title: "Delete Token",
+    message: `Are you sure you want to delete the token "${token.name}"?`,
+    confirmColor: "error",
+    onConfirm: async () => {
+      const result = await tokenService.deleteToken(token.id)
+      if (isSuccess(result)) {
+        await loadTokens()
       }
-    })
-    .catch((error) => {
-      console.log(error);
-    });
+    }
+  })
 }
 
-// Show the delete dialog and store token info
-function showDeleteDialog(name: string, id: number) {
-  tokenToDelete.value = { name, id };
-  deleteDialog.value = true;
-}
-
-// Perform the actual deletion when confirmed
-function confirmDeleteToken() {
-  axios
-    .delete(DELETE_TOKEN(tokenToDelete.value.id))
+// Copy token to clipboard
+function copyToken() {
+  navigator.clipboard.writeText(createdTokenValue.value)
     .then(() => {
-      // Update shown token list
-      getTokens();
-      // Close the dialog
-      deleteDialog.value = false;
+      const originalMessage = createStatus.message.value
+      createStatus.setSuccess("Token copied to clipboard!")
+      setTimeout(() => {
+        createStatus.setSuccess(originalMessage)
+      }, 2000)
     })
-    .catch((error) => {
-      console.log(error);
-      // Close the dialog
-      deleteDialog.value = false;
-    });
+    .catch(err => {
+      console.error("Failed to copy token:", err)
+    })
 }
 </script>
 

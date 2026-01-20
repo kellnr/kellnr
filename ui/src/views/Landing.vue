@@ -141,44 +141,45 @@
 </template>
 
 <script setup lang="ts">
-import axios from 'axios';
-import { onBeforeMount, ref } from "vue";
-import { STATISTICS } from '../remote-routes';
-import StatisticsCard from '../components/StatisticsCard.vue';
-import HeroStatCard from '../components/HeroStatCard.vue';
-import RecentCrateCard from '../components/RecentCrateCard.vue';
-import type { Statistics } from '../types/statistics';
-import router from '../router';
-import { useStore } from '../store/store';
+import { onBeforeMount, ref } from "vue"
+import StatisticsCard from '../components/StatisticsCard.vue'
+import HeroStatCard from '../components/HeroStatCard.vue'
+import RecentCrateCard from '../components/RecentCrateCard.vue'
+import type { Statistics } from '../types/statistics'
+import { crateService } from '../services'
+import { isSuccess } from '../services/api'
+import router from '../router'
+import { useStore } from '../store/store'
 
-const statistics = ref<Statistics>();
-const searchText = ref("");
-const store = useStore();
+const statistics = ref<Statistics>()
+const searchText = ref("")
+const store = useStore()
 
-onBeforeMount(() => {
-  axios.get(STATISTICS).then((response) => {
-    statistics.value = response.data;
-  });
-});
+onBeforeMount(async () => {
+  const result = await crateService.getStatistics()
+  if (isSuccess(result)) {
+    statistics.value = result.data
+  }
+})
 
 function searchCrates() {
   if (searchText.value.length > 0) {
-    router.push({ path: '/crates', query: { search: searchText.value } });
+    router.push({ path: '/crates', query: { search: searchText.value } })
   }
 }
 
 function navigateToCrates() {
-  store.searchCache = false;
-  router.push({ path: '/crates' });
+  store.searchCache = false
+  router.push({ path: '/crates' })
 }
 
 function navigateToCachedCrates() {
-  store.searchCache = true;
-  router.push({ path: '/crates' });
+  store.searchCache = true
+  router.push({ path: '/crates' })
 }
 
 function navigateToCrate(crateName: string) {
-  router.push({ name: 'Crate', query: { name: crateName } });
+  router.push({ name: 'Crate', query: { name: crateName } })
 }
 </script>
 

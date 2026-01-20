@@ -6,7 +6,7 @@
         <v-col cols="12" md="8" lg="6" class="pr-md-4">
           <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined" density="comfortable"
             hide-details prepend-inner-icon="mdi-magnify" color="primary"
-            @keyup.enter="searchCrates(searchText)" class="search-field" rounded="lg"></v-text-field>
+            @keyup.enter="handleSearch(searchText)" class="search-field" rounded="lg"></v-text-field>
         </v-col>
 
         <v-col cols="12" md="4" lg="6" class="mt-3 mt-md-0 d-flex align-center">
@@ -67,168 +67,154 @@
 
 <script setup lang="ts">
 import { onBeforeMount, onMounted, ref, nextTick } from "vue"
-import axios from "axios"
 import CrateCard from "../components/CrateCard.vue"
-import type { CrateOverview } from "../types/crate_overview";
-import { CRATES, SEARCH } from "../remote-routes";
-import { useRouter } from "vue-router";
-import { useStore } from "../store/store";
+import type { CrateOverview } from "../types/crate_overview"
+import { crateService } from "../services"
+import { isSuccess } from "../services/api"
+import { useRouter } from "vue-router"
+import { useStore } from "../store/store"
 
 // Constants
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 20
 
 // State
-const crates = ref<Array<CrateOverview>>([]);
-const currentPage = ref(0);
-const isLoading = ref(false);
-const allLoaded = ref(false);
-const searchText = ref("");
-const scrollContainer = ref<HTMLElement | null>(null);
-const router = useRouter();
-const store = useStore();
+const crates = ref<CrateOverview[]>([])
+const currentPage = ref(0)
+const isLoading = ref(false)
+const allLoaded = ref(false)
+const searchText = ref("")
+const scrollContainer = ref<HTMLElement | null>(null)
+const router = useRouter()
+const store = useStore()
 
 // Initial setup
 onBeforeMount(() => {
   if (router.currentRoute.value.query.search) {
-    searchText.value = router.currentRoute.value.query.search as string;
-    searchCrates(searchText.value);
+    searchText.value = router.currentRoute.value.query.search as string
+    handleSearch(searchText.value)
   }
-});
+})
 
 onMounted(() => {
   if (searchText.value === "") {
-    loadMoreCrates();
+    loadMoreCrates()
   }
 
   // Add resize event listener to handle window size changes
-  window.addEventListener('resize', updateContainerHeight);
+  window.addEventListener('resize', updateContainerHeight)
   // Initial height setup
-  updateContainerHeight();
-});
+  updateContainerHeight()
+})
 
 // Update container height to fill available space
 function updateContainerHeight() {
   nextTick(() => {
     if (scrollContainer.value) {
-      const headerHeight = document.querySelector('.v-card.pa-3.ma-3')?.clientHeight || 0;
-      const headerMargin = 24; // 3 * 8px (ma-3)
+      const headerHeight = document.querySelector('.v-card.pa-3.ma-3')?.clientHeight || 0
+      const headerMargin = 24 // 3 * 8px (ma-3)
 
       // Calculate and set the height of the scrollable container
-      const windowHeight = window.innerHeight;
-      const footerHeight = 48; // Height of the footer if present
-      const availableHeight = windowHeight - headerHeight - headerMargin - footerHeight - 16;
+      const windowHeight = window.innerHeight
+      const footerHeight = 48 // Height of the footer if present
+      const availableHeight = windowHeight - headerHeight - headerMargin - footerHeight - 16
 
-      scrollContainer.value.style.height = `${Math.max(300, availableHeight)}px`;
+      scrollContainer.value.style.height = `${Math.max(300, availableHeight)}px`
     }
-  });
+  })
 }
 
 // Load more crates for infinite scrolling
-function loadMoreCrates() {
-  if (isLoading.value || allLoaded.value) return;
+async function loadMoreCrates() {
+  if (isLoading.value || allLoaded.value) return
 
-  isLoading.value = true;
+  isLoading.value = true
 
-  axios
-    .get(CRATES, {
-      params: {
-        page: currentPage.value,
-        page_size: ITEMS_PER_PAGE,
-        cache: store.searchCache
-      },
-    })
-    .then((response) => {
-      const newCrates = response.data.crates;
+  const result = await crateService.getCrates(
+    currentPage.value,
+    ITEMS_PER_PAGE,
+    store.searchCache
+  )
 
-      // Add crates to the list
-      crates.value = [...crates.value, ...newCrates];
+  isLoading.value = false
 
-      // Increment page for next load
-      currentPage.value = response.data.page + 1;
+  if (isSuccess(result)) {
+    const newCrates = result.data.crates
 
-      // Check if we've loaded all available crates
-      if (newCrates.length < ITEMS_PER_PAGE) {
-        allLoaded.value = true;
-      }
-    })
-    .catch((error) => {
-      console.error("Error loading crates:", error);
-    })
-    .finally(() => {
-      isLoading.value = false;
-    });
+    // Add crates to the list
+    crates.value = [...crates.value, ...newCrates]
+
+    // Increment page for next load
+    currentPage.value = result.data.page + 1
+
+    // Check if we've loaded all available crates
+    if (newCrates.length < ITEMS_PER_PAGE) {
+      allLoaded.value = true
+    }
+  }
 }
 
 // Handle scroll event for infinite scrolling
 function handleScroll(event: Event) {
-  const target = event.target as HTMLElement;
+  const target = event.target as HTMLElement
 
   // If we're in search mode, don't use infinite scroll
-  if (searchText.value !== "") return;
+  if (searchText.value !== "") return
 
   // Calculate if we're near the bottom (within 200px)
-  const scrollTop = target.scrollTop;
-  const scrollHeight = target.scrollHeight;
-  const clientHeight = target.clientHeight;
+  const scrollTop = target.scrollTop
+  const scrollHeight = target.scrollHeight
+  const clientHeight = target.clientHeight
 
-  const scrollBottom = scrollHeight - scrollTop - clientHeight;
-  const isNearBottom = scrollBottom < 200;
+  const scrollBottom = scrollHeight - scrollTop - clientHeight
+  const isNearBottom = scrollBottom < 200
 
   if (isNearBottom && !isLoading.value && !allLoaded.value) {
-    console.log('Near bottom, loading more crates');
-    loadMoreCrates();
+    loadMoreCrates()
   }
 }
 
 // Refresh crates (used when changing filters)
 function refreshCrates() {
-  crates.value = [];
-  currentPage.value = 0;
-  allLoaded.value = false;
+  crates.value = []
+  currentPage.value = 0
+  allLoaded.value = false
 
   // Reset scroll position
   if (scrollContainer.value) {
-    scrollContainer.value.scrollTop = 0;
+    scrollContainer.value.scrollTop = 0
   }
 
-  loadMoreCrates();
+  loadMoreCrates()
 }
 
 // Search crates by name
-function searchCrates(searchText: string) {
-  const searchQuery = searchText.trim();
+async function handleSearch(query: string) {
+  const searchQuery = query.trim()
 
   if (!searchQuery) {
-    refreshCrates();
-    return;
+    refreshCrates()
+    return
   }
 
-  isLoading.value = true;
-  allLoaded.value = false;
+  isLoading.value = true
+  allLoaded.value = false
 
   // Reset scroll position
   if (scrollContainer.value) {
-    scrollContainer.value.scrollTop = 0;
+    scrollContainer.value.scrollTop = 0
   }
 
-  axios
-    .get(SEARCH, {
-      params: {
-        name: searchQuery,
-        cache: store.searchCache
-      }
-    })
-    .then((res) => {
-      crates.value = res.data.crates;
-      allLoaded.value = true; // Search results are all loaded at once
-    })
-    .catch(() => {
-      crates.value = [];
-      allLoaded.value = true;
-    })
-    .finally(() => {
-      isLoading.value = false;
-    });
+  const result = await crateService.searchCrates(searchQuery, store.searchCache)
+
+  isLoading.value = false
+
+  if (isSuccess(result)) {
+    crates.value = result.data.crates
+    allLoaded.value = true // Search results are all loaded at once
+  } else {
+    crates.value = []
+    allLoaded.value = true
+  }
 }
 </script>
 
