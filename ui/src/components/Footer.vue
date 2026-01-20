@@ -28,8 +28,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import axios from "axios";
-import { VERSION } from "../remote-routes";
+import { settingsService } from "../services";
+import { isSuccess } from "../services/api";
 
 // Version state
 const version = ref("");
@@ -53,15 +53,11 @@ const links = [
   }
 ];
 
-onMounted(() => {
-  axios
-    .get(VERSION)
-    .then((res) => {
-      version.value = res.data.version;
-    })
-    .catch((err) => {
-      console.error("Failed to fetch version:", err);
-    });
+onMounted(async () => {
+  const result = await settingsService.getVersion();
+  if (isSuccess(result)) {
+    version.value = result.data.version;
+  }
 });
 </script>
 

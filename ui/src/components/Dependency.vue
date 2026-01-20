@@ -32,11 +32,10 @@
 
 <script setup lang="ts">
 import { onBeforeMount, ref, watch } from "vue";
-import axios from "axios";
-import { useStore } from "../store/store"
 import { useRoute, useRouter } from "vue-router";
-import type { CrateData } from "../types/crate_data";
-import { CRATE_DATA, CRATESIO_DATA, CRATESIO_LINK } from "../remote-routes";
+import { crateService } from "../services";
+import { isSuccess } from "../services/api";
+import { CRATESIO_LINK } from "../remote-routes";
 
 const props = defineProps<{
   name: string
@@ -48,11 +47,10 @@ const props = defineProps<{
 const fetched_desc = ref("")
 const route = useRoute()
 const router = useRouter()
-const store = useStore()
 
 onBeforeMount(() => {
   if (!props.desc) {
-    setDesc(props.name, props.version, props.registry);
+    setDesc(props.name, props.registry);
   } else {
     fetched_desc.value = props.desc
   }
@@ -66,39 +64,27 @@ function isCratesIoDep(registry: string | undefined) {
   return registry === "https://github.com/rust-lang/crates.io-index";
 }
 
-function setDescFromCratesIo(crate: string) {
-  axios
-    .get(CRATESIO_DATA, {
-      params: { name: crate },
-    })
-    .then((response) => {
-      fetched_desc.value = response.data.crate.description;
-    })
-    .catch((error) => {
-      console.log(error);
-      fetched_desc.value = "Cannot fetch description.";
-    });
+async function setDescFromCratesIo(crate: string) {
+  const result = await crateService.getCratesIoData(crate);
+  if (isSuccess(result) && result.data) {
+    // The crates.io response wraps crate data in a 'crate' property
+    const data = result.data as unknown as { crate: { description: string } };
+    fetched_desc.value = data.crate?.description ?? "No description available";
+  } else {
+    fetched_desc.value = "Cannot fetch description.";
+  }
 }
 
-function setDescFromKellnr(crate: string) {
-  axios
-    .get(CRATE_DATA, {
-      params: { name: crate },
-    })
-    .then((response) => {
-      let crateData: CrateData = response.data;
-      if (crateData) {
-        fetched_desc.value = crateData.description == null ? "No description set" : crateData.description;
-      } else {
-        fetched_desc.value = "Cannot fetch description.";
-      }
-    })
-    .catch(() => {
-      fetched_desc.value = "Cannot fetch description.";
-    });
+async function setDescFromKellnr(crate: string) {
+  const result = await crateService.getCrateData(crate);
+  if (isSuccess(result) && result.data) {
+    fetched_desc.value = result.data.description ?? "No description set";
+  } else {
+    fetched_desc.value = "Cannot fetch description.";
+  }
 }
 
-function setDesc(crate: string, version: string, registry: string | undefined) {
+function setDesc(crate: string, registry: string | undefined) {
   if (isCratesIoDep(registry)) {
     setDescFromCratesIo(crate);
   } else {
@@ -125,7 +111,7 @@ function openCratePage() {
 // Watches route changes and reloads the data.
 // Needed, if the query parameter "name=crate" changes.
 watch(route, () => {
-  setDesc(props.name, props.version, props.registry)
+  setDesc(props.name, props.registry)
 })
 </script>
 

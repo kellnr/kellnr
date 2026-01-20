@@ -1,21 +1,17 @@
-import { VERSION } from "../remote-routes";
-import axios from "axios"
+import { settingsService } from "../services"
+import { isSuccess } from "../services/api"
 
 
 export async function auth_required(): Promise<boolean> {
   // Check if authentication is required
   // to view crates. -> "auth_required = true" in Kellnr settings.
-  return axios.get(VERSION).then(() => {
+  const result = await settingsService.getVersion()
+
+  if (isSuccess(result)) {
     // no auth required
     return false
-  }).catch((error) => {
-    if (error.response.status === 401) {
-      // auth required
-      return true
-    }
-    else {
-      // unknown error
-      return true
-    }
-  })
+  }
+
+  // If we get a 401 or any error, assume auth is required
+  return true
 }

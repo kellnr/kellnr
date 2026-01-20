@@ -4,7 +4,7 @@
     <div class="section-header">
       <v-icon icon="mdi-account-multiple" size="small" color="primary" class="me-3"></v-icon>
       <span class="text-h6 font-weight-bold">User Management</span>
-      <span v-if="items.length > 0" class="user-count">{{ items.length }}</span>
+      <span v-if="users.length > 0" class="user-count">{{ users.length }}</span>
     </div>
 
     <!-- Content -->
@@ -14,25 +14,25 @@
       </p>
 
       <!-- User List -->
-      <div v-if="items.length > 0" class="users-section mb-6">
+      <div v-if="users.length > 0" class="users-section mb-6">
         <div class="subsection-header">
           <v-icon icon="mdi-account-group" size="x-small" class="me-2" color="primary"></v-icon>
           <span class="text-body-2 font-weight-medium">Registered Users</span>
         </div>
 
         <div class="user-list">
-          <div v-for="item in items" :key="item.name" class="user-item">
+          <div v-for="user in users" :key="user.name" class="user-item">
             <div class="user-info">
-              <div class="user-avatar" :class="{ admin: item.is_admin }">
-                <v-icon :icon="item.is_admin ? 'mdi-shield-account' : 'mdi-account'" size="small"></v-icon>
+              <div class="user-avatar" :class="{ admin: user.is_admin }">
+                <v-icon :icon="user.is_admin ? 'mdi-shield-account' : 'mdi-account'" size="small"></v-icon>
               </div>
               <div class="user-details">
-                <span class="user-name">{{ item.name }}</span>
+                <span class="user-name">{{ user.name }}</span>
                 <div class="user-badges">
-                  <span class="role-badge" :class="item.is_admin ? 'admin' : 'user'">
-                    {{ item.is_admin ? 'Admin' : 'User' }}
+                  <span class="role-badge" :class="user.is_admin ? 'admin' : 'user'">
+                    {{ user.is_admin ? 'Admin' : 'User' }}
                   </span>
-                  <span v-if="item.is_read_only" class="role-badge readonly">
+                  <span v-if="user.is_read_only" class="role-badge readonly">
                     Read-only
                   </span>
                 </div>
@@ -40,20 +40,20 @@
             </div>
             <div class="user-actions">
               <v-btn
-                :color="item.is_read_only ? 'info' : 'default'"
+                :color="user.is_read_only ? 'info' : 'default'"
                 variant="tonal"
                 size="small"
-                @click="set_read_only(item.name, !item.is_read_only, item)"
+                @click="handleToggleReadOnly(user)"
               >
-                <v-icon :icon="item.is_read_only ? 'mdi-lock-open-outline' : 'mdi-lock-outline'" size="small" class="me-1"></v-icon>
-                {{ item.is_read_only ? 'Unlock' : 'Lock' }}
+                <v-icon :icon="user.is_read_only ? 'mdi-lock-open-outline' : 'mdi-lock-outline'" size="small" class="me-1"></v-icon>
+                {{ user.is_read_only ? 'Unlock' : 'Lock' }}
               </v-btn>
 
               <v-btn
                 color="warning"
                 variant="tonal"
                 size="small"
-                @click="resetPwd(item.name)"
+                @click="handleResetPassword(user.name)"
               >
                 <v-icon icon="mdi-key-outline" size="small" class="me-1"></v-icon>
                 Reset
@@ -63,7 +63,7 @@
                 color="error"
                 variant="tonal"
                 size="small"
-                @click="deleteUser(item.name)"
+                @click="handleDeleteUser(user.name)"
               >
                 <v-icon icon="mdi-delete-outline" size="small"></v-icon>
               </v-btn>
@@ -84,12 +84,12 @@
           <span class="text-body-2 font-weight-medium">Add New User</span>
         </div>
 
-        <v-form @submit.prevent="addUser" class="add-user-form">
+        <v-form @submit.prevent="handleAddUser" class="add-user-form">
           <div class="form-grid">
             <div class="form-field">
               <label class="field-label">Username</label>
               <v-text-field
-                v-model="name"
+                v-model="newUserName"
                 placeholder="Enter username"
                 prepend-inner-icon="mdi-account-outline"
                 variant="outlined"
@@ -101,7 +101,7 @@
             <div class="form-field">
               <label class="field-label">Password</label>
               <v-text-field
-                v-model="pwd1"
+                v-model="newUserPwd1"
                 placeholder="Enter password"
                 prepend-inner-icon="mdi-lock-outline"
                 type="password"
@@ -114,7 +114,7 @@
             <div class="form-field">
               <label class="field-label">Confirm Password</label>
               <v-text-field
-                v-model="pwd2"
+                v-model="newUserPwd2"
                 placeholder="Confirm password"
                 prepend-inner-icon="mdi-lock-check-outline"
                 type="password"
@@ -127,7 +127,7 @@
 
           <div class="form-options">
             <v-checkbox
-              v-model="is_admin"
+              v-model="newUserIsAdmin"
               label="Administrator"
               hide-details
               density="compact"
@@ -142,7 +142,7 @@
             </v-checkbox>
 
             <v-checkbox
-              v-model="is_read_only"
+              v-model="newUserIsReadOnly"
               label="Read-only"
               hide-details
               density="compact"
@@ -158,14 +158,14 @@
           </div>
 
           <v-alert
-            v-if="addUserStatus"
-            :type="addUserStatus === 'Success' ? 'success' : 'error'"
+            v-if="addStatus.hasStatus"
+            :type="addStatus.isSuccess ? 'success' : 'error'"
             variant="tonal"
             class="mt-4"
             closable
-            @click:close="addUserStatus = ''"
+            @click:close="addStatus.clear()"
           >
-            {{ addUserMsg }}
+            {{ addStatus.message }}
           </v-alert>
 
           <div class="form-actions">
@@ -180,33 +180,33 @@
 
     <!-- Snackbar for notifications -->
     <v-snackbar
-      v-model="showChangeUserStatus"
-      :color="changeUserStatus === 'Success' ? 'success' : 'error'"
-      timeout="5000"
+      v-model="notification.snackbar.show"
+      :color="notification.snackbar.color"
+      :timeout="notification.snackbar.timeout"
       location="bottom"
     >
-      {{ changeUserMsg }}
+      {{ notification.snackbar.message }}
       <template v-slot:actions>
-        <v-btn variant="text" @click="clearChangeUserStatus">Close</v-btn>
+        <v-btn variant="text" @click="notification.close()">Close</v-btn>
       </template>
     </v-snackbar>
 
     <!-- Confirmation Dialog -->
-    <v-dialog v-model="confirmDialog" max-width="450">
+    <v-dialog v-model="dialog.isOpen" max-width="450">
       <v-card class="confirm-dialog">
         <div class="dialog-header">
           <v-icon icon="mdi-alert-circle" color="warning" size="small" class="me-3"></v-icon>
-          <span class="text-h6 font-weight-bold">{{ confirmTitle }}</span>
+          <span class="text-h6 font-weight-bold">{{ dialog.title }}</span>
         </div>
 
         <v-card-text class="pa-5">
-          <p class="text-body-1 mb-0">{{ confirmMessage }}</p>
+          <p class="text-body-1 mb-0">{{ dialog.message }}</p>
         </v-card-text>
 
         <v-card-actions class="pa-4 pt-0">
           <v-spacer></v-spacer>
-          <v-btn variant="text" @click="confirmDialog = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" @click="confirmAction">Confirm</v-btn>
+          <v-btn variant="text" @click="dialog.cancel()">Cancel</v-btn>
+          <v-btn :color="dialog.confirmColor" variant="flat" @click="dialog.confirm()">Confirm</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -215,201 +215,122 @@
 
 <script setup lang="ts">
 import { onBeforeMount, ref } from 'vue'
-import { ADD_USER, DELETE_USER, LIST_USERS, RESET_PWD, USER_READ_ONLY } from "../remote-routes";
-import axios from "axios";
-import { useRouter } from "vue-router";
+import { useStatusMessage, useConfirmCallback, useNotification } from "../composables"
+import { userService } from "../services"
+import { isSuccess } from "../services/api"
+import type { User } from "../types/user"
 
-const router = useRouter();
-const addUserStatus = ref("")
-const addUserMsg = ref("")
-const changeUserStatus = ref("")
-const changeUserMsg = ref("")
-const showChangeUserStatus = ref(false)
-const items = ref([])
-const name = ref("")
-const pwd1 = ref("")
-const pwd2 = ref("")
-const is_admin = ref(false)
-const is_read_only = ref(false)
+// State
+const users = ref<User[]>([])
+const newUserName = ref("")
+const newUserPwd1 = ref("")
+const newUserPwd2 = ref("")
+const newUserIsAdmin = ref(false)
+const newUserIsReadOnly = ref(false)
 
-// Confirmation dialog
-const confirmDialog = ref(false)
-const confirmTitle = ref("")
-const confirmMessage = ref("")
-const confirmAction = ref(() => { })
+// Composables
+const addStatus = useStatusMessage()
+const { dialog, showConfirm } = useConfirmCallback()
+const notification = useNotification()
 
+// Lifecycle
 onBeforeMount(() => {
-  getUsers()
+  loadUsers()
 })
 
-function clearChangeUserStatus() {
-  showChangeUserStatus.value = false
-  setTimeout(() => {
-    changeUserStatus.value = ""
-    changeUserMsg.value = ""
-  }, 300)
+// Load users from API
+async function loadUsers() {
+  const result = await userService.getUsers()
+  if (isSuccess(result)) {
+    users.value = result.data
+  }
 }
 
-function addUser() {
-  const postData = {
-    name: name.value,
-    pwd1: pwd1.value,
-    pwd2: pwd2.value,
-    is_admin: is_admin.value,
-    is_read_only: is_read_only.value
-  };
+// Add a new user
+async function handleAddUser() {
+  addStatus.clear()
 
-  axios
-    .post(ADD_USER, postData)
-    .then((res) => {
-      if (res.status == 200) {
-        addUserStatus.value = "Success";
-        addUserMsg.value = "User successfully added.";
-        // Clear form
-        name.value = "";
-        pwd1.value = "";
-        pwd2.value = "";
-        is_admin.value = false;
-        is_read_only.value = false;
-        // Update user list
-        getUsers();
+  const result = await userService.addUser({
+    name: newUserName.value,
+    pwd1: newUserPwd1.value,
+    pwd2: newUserPwd2.value,
+    is_admin: newUserIsAdmin.value,
+    is_read_only: newUserIsReadOnly.value,
+  })
+
+  if (isSuccess(result)) {
+    addStatus.setSuccess("User successfully added.")
+    // Clear form
+    newUserName.value = ""
+    newUserPwd1.value = ""
+    newUserPwd2.value = ""
+    newUserIsAdmin.value = false
+    newUserIsReadOnly.value = false
+    await loadUsers()
+  } else {
+    addStatus.setError(result.error.message)
+  }
+}
+
+// Delete a user with confirmation
+function handleDeleteUser(name: string) {
+  showConfirm({
+    title: "Delete User",
+    message: `Are you sure you want to delete user "${name}"? This action cannot be undone.`,
+    confirmColor: "error",
+    onConfirm: async () => {
+      const result = await userService.deleteUser(name)
+      if (isSuccess(result)) {
+        notification.showSuccess(`User "${name}" deleted`)
+        await loadUsers()
+      } else {
+        notification.showError(result.error.message)
       }
-    })
-    .catch((error) => {
-      if (error.response) {
-        addUserStatus.value = "Error";
-        addUserMsg.value = "User could not be added.";
+    }
+  })
+}
 
-        if (error.response.status == 404) {
-          // "Unauthorized. Login first."
-          router.push("/login");
-        } else if (error.response.status == 400) {
-          addUserMsg.value = "Passwords do not match";
-        } else if (error.response.status == 500) {
-          addUserMsg.value = "User could not be added";
-        } else {
-          addUserMsg.value = "Unknown error";
-        }
+// Reset a user's password with confirmation
+function handleResetPassword(name: string) {
+  showConfirm({
+    title: "Reset Password",
+    message: `Are you sure you want to reset the password for "${name}"?`,
+    confirmColor: "warning",
+    onConfirm: async () => {
+      const result = await userService.resetPassword(name)
+      if (isSuccess(result)) {
+        notification.showSuccess(
+          `Password for "${name}" reset to "${result.data.new_pwd}". Notify the user to change the password on the next login.`
+        )
+      } else {
+        notification.showError(result.error.message)
       }
-    });
+    }
+  })
 }
 
-function getUsers() {
-  axios
-    .get(LIST_USERS, { cache: false })
-    .then((res) => {
-      if (res.status == 200) {
-        items.value = res.data;
+// Toggle read-only status with confirmation
+function handleToggleReadOnly(user: User) {
+  const newState = !user.is_read_only
+  const actionText = newState ? "read-only" : "unlocked"
+
+  showConfirm({
+    title: "Change Read-only Status",
+    message: newState
+      ? `Make "${user.name}" read-only? They will only be able to view crates.`
+      : `Remove read-only restriction from "${user.name}"?`,
+    confirmColor: "primary",
+    onConfirm: async () => {
+      const result = await userService.setReadOnly(user.name, newState)
+      if (isSuccess(result)) {
+        // Update local state
+        user.is_read_only = newState
+        notification.showSuccess(`"${user.name}" is now ${actionText}`)
+      } else {
+        notification.showError(result.error.message)
       }
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
-
-function deleteUser(name: string) {
-  confirmTitle.value = "Delete User";
-  confirmMessage.value = `Are you sure you want to delete user "${name}"? This action cannot be undone.`;
-  confirmAction.value = () => {
-    axios
-      .delete(DELETE_USER(name))
-      .then((res) => {
-        if (res.status == 200) {
-          changeUserStatus.value = "Success";
-          changeUserMsg.value = `User "${name}" deleted`;
-          showChangeUserStatus.value = true;
-          confirmDialog.value = false;
-          getUsers();
-        }
-      })
-      .catch((error) => {
-        changeUserStatus.value = "Error";
-        if (error.response.status == 404) {
-          // "Unauthorized. Login first."
-          router.push("/login");
-        } else if (error.response.status == 500) {
-          changeUserMsg.value = "User could not be deleted";
-        } else {
-          changeUserMsg.value = "Unknown error";
-        }
-        showChangeUserStatus.value = true;
-        confirmDialog.value = false;
-      });
-  };
-  confirmDialog.value = true;
-}
-
-function resetPwd(name: string) {
-  confirmTitle.value = "Reset Password";
-  confirmMessage.value = `Are you sure you want to reset the password for "${name}"?`;
-  confirmAction.value = () => {
-    axios
-      .post(RESET_PWD(name))
-      .then((res) => {
-        if (res.status == 200) {
-          changeUserStatus.value = "Success";
-          changeUserMsg.value =
-            `Password for "${name}" reset to "${res.data["new_pwd"]}".
-            Notify the user to change the password on the next login.`;
-          showChangeUserStatus.value = true;
-          confirmDialog.value = false;
-        }
-      })
-      .catch((error) => {
-        changeUserStatus.value = "Error";
-        if (error.response.status == 404) {
-          // "Unauthorized. Login first."
-          router.push("/login");
-        } else if (error.response.status == 500) {
-          changeUserMsg.value = "Password could not be reset";
-        } else {
-          changeUserMsg.value = "Unknown error";
-        }
-        showChangeUserStatus.value = true;
-        confirmDialog.value = false;
-      });
-  };
-  confirmDialog.value = true;
-}
-
-function set_read_only(name: string, state: boolean, item: any) {
-  confirmTitle.value = "Change Read-only Status";
-  confirmMessage.value = state
-    ? `Make "${name}" read-only? They will only be able to view crates.`
-    : `Remove read-only restriction from "${name}"?`;
-
-  confirmAction.value = () => {
-    axios
-      .post(USER_READ_ONLY(name), { state: state })
-      .then((res) => {
-        if (res.status == 200) {
-          changeUserStatus.value = "Success";
-          if (state) {
-            changeUserMsg.value = `"${name}" was made read-only`;
-            item.is_read_only = true; // update UI
-          } else {
-            changeUserMsg.value = `Removed read-only from "${name}"`;
-            item.is_read_only = false; // update UI
-          }
-          showChangeUserStatus.value = true;
-          confirmDialog.value = false;
-        }
-      })
-      .catch((error) => {
-        changeUserStatus.value = "Error";
-        if (error.response.status == 404) {
-          // "Unauthorized. Login first."
-          router.push("/login");
-        } else if (error.response.status == 500) {
-          changeUserMsg.value = "Read-only status could not be modified";
-        } else {
-          changeUserMsg.value = "Unknown error";
-        }
-        showChangeUserStatus.value = true;
-        confirmDialog.value = false;
-      });
-  };
-  confirmDialog.value = true;
+    }
+  })
 }
 </script>
 

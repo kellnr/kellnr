@@ -11,14 +11,14 @@
 
           <v-list nav class="pa-2">
             <v-list-item
-              @click="clickShowChangePwd"
-              :active="showChangePwd"
+              @click="activeTab = 'password'"
+              :active="activeTab === 'password'"
               color="primary"
               rounded="lg"
               class="mb-1"
             >
               <template v-slot:prepend>
-                <div class="nav-icon-wrapper" :class="{ active: showChangePwd }">
+                <div class="nav-icon-wrapper" :class="{ active: activeTab === 'password' }">
                   <v-icon icon="mdi-key" size="small"></v-icon>
                 </div>
               </template>
@@ -29,14 +29,14 @@
             </v-list-item>
 
             <v-list-item
-              @click="clickShowAuthToken"
-              :active="showAuthToken"
+              @click="activeTab = 'tokens'"
+              :active="activeTab === 'tokens'"
               color="primary"
               rounded="lg"
               class="mb-1"
             >
               <template v-slot:prepend>
-                <div class="nav-icon-wrapper" :class="{ active: showAuthToken }">
+                <div class="nav-icon-wrapper" :class="{ active: activeTab === 'tokens' }">
                   <v-icon icon="mdi-shield-key" size="small"></v-icon>
                 </div>
               </template>
@@ -50,14 +50,14 @@
               <v-list-subheader class="text-overline mt-2">Administration</v-list-subheader>
 
               <v-list-item
-                @click="clickShowUserMgmt"
-                :active="showUserMgmt"
+                @click="activeTab = 'users'"
+                :active="activeTab === 'users'"
                 color="primary"
                 rounded="lg"
                 class="mb-1"
               >
                 <template v-slot:prepend>
-                  <div class="nav-icon-wrapper" :class="{ active: showUserMgmt }">
+                  <div class="nav-icon-wrapper" :class="{ active: activeTab === 'users' }">
                     <v-icon icon="mdi-account-multiple" size="small"></v-icon>
                   </div>
                 </template>
@@ -68,14 +68,14 @@
               </v-list-item>
 
               <v-list-item
-                @click="clickShowGroupMgmt"
-                :active="showGroupMgmt"
+                @click="activeTab = 'groups'"
+                :active="activeTab === 'groups'"
                 color="primary"
                 rounded="lg"
                 class="mb-1"
               >
                 <template v-slot:prepend>
-                  <div class="nav-icon-wrapper" :class="{ active: showGroupMgmt }">
+                  <div class="nav-icon-wrapper" :class="{ active: activeTab === 'groups' }">
                     <v-icon icon="mdi-account-group" size="small"></v-icon>
                   </div>
                 </template>
@@ -86,13 +86,13 @@
               </v-list-item>
 
               <v-list-item
-                @click="clickShowStartupConfig"
-                :active="showStartupConfig"
+                @click="activeTab = 'config'"
+                :active="activeTab === 'config'"
                 color="primary"
                 rounded="lg"
               >
                 <template v-slot:prepend>
-                  <div class="nav-icon-wrapper" :class="{ active: showStartupConfig }">
+                  <div class="nav-icon-wrapper" :class="{ active: activeTab === 'config' }">
                     <v-icon icon="mdi-tune" size="small"></v-icon>
                   </div>
                 </template>
@@ -109,30 +109,11 @@
       <!-- Content area -->
       <v-col cols="12" md="8" lg="9">
         <v-card class="content-card" elevation="0">
-          <!-- Change Password Section -->
-          <div v-if="showChangePwd">
-            <change-password></change-password>
-          </div>
-
-          <!-- Auth Token Section -->
-          <div v-if="showAuthToken">
-            <auth-token></auth-token>
-          </div>
-
-          <!-- User Management Section -->
-          <div v-if="showUserMgmt">
-            <user-mgmt></user-mgmt>
-          </div>
-
-          <!-- Group Management Section -->
-          <div v-if="showGroupMgmt">
-            <group-mgmt></group-mgmt>
-          </div>
-
-          <!-- Startup Config Section -->
-          <div v-if="showStartupConfig">
-            <startup-config></startup-config>
-          </div>
+          <change-password v-if="activeTab === 'password'" />
+          <auth-token v-if="activeTab === 'tokens'" />
+          <user-mgmt v-if="activeTab === 'users'" />
+          <group-mgmt v-if="activeTab === 'groups'" />
+          <startup-config v-if="activeTab === 'config'" />
         </v-card>
       </v-col>
     </v-row>
@@ -148,45 +129,10 @@ import StartupConfig from "../components/StartupConfig.vue";
 import { useStore } from "../store/store";
 import { ref } from "vue";
 
-const showChangePwd = ref(true)
-const showAuthToken = ref(false)
-const showUserMgmt = ref(false)
-const showGroupMgmt = ref(false)
-const showStartupConfig = ref(false)
+type SettingsTab = 'password' | 'tokens' | 'users' | 'groups' | 'config'
+
+const activeTab = ref<SettingsTab>('password')
 const store = useStore()
-
-function showNothing() {
-  showChangePwd.value = false;
-  showAuthToken.value = false;
-  showUserMgmt.value = false;
-  showGroupMgmt.value = false;
-  showStartupConfig.value = false;
-}
-
-function clickShowChangePwd() {
-  showNothing();
-  showChangePwd.value = true;
-}
-
-function clickShowAuthToken() {
-  showNothing();
-  showAuthToken.value = true;
-}
-
-function clickShowUserMgmt() {
-  showNothing();
-  showUserMgmt.value = true;
-}
-
-function clickShowGroupMgmt() {
-  showNothing();
-  showGroupMgmt.value = true;
-}
-
-function clickShowStartupConfig() {
-  showNothing();
-  showStartupConfig.value = true;
-}
 </script>
 
 <style scoped>

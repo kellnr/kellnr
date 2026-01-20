@@ -11,15 +11,15 @@
 
           <!-- Form -->
           <v-card-text class="pa-6 pt-2">
-            <v-form ref="form" @submit.prevent="submit" v-model="isFormValid">
+            <v-form ref="form" @submit.prevent="handleLogin" v-model="isFormValid">
               <div class="input-group">
                 <label class="input-label">Username</label>
                 <v-text-field
-                  v-model="user"
+                  v-model="username"
                   placeholder="Enter your username"
                   prepend-inner-icon="mdi-account-outline"
                   variant="outlined"
-                  :rules="userRules"
+                  :rules="usernameRules"
                   required
                   density="comfortable"
                   class="login-input"
@@ -30,7 +30,7 @@
               <div class="input-group">
                 <label class="input-label">Password</label>
                 <v-text-field
-                  v-model="pwd"
+                  v-model="password"
                   placeholder="Enter your password"
                   prepend-inner-icon="mdi-lock-outline"
                   type="password"
@@ -52,16 +52,16 @@
               />
 
               <v-alert
-                v-if="loginStatus"
-                :type="loginStatus === 'Success' ? 'success' : 'error'"
+                v-if="status.hasStatus"
+                :type="status.isSuccess ? 'success' : 'error'"
                 class="mt-4"
                 density="compact"
                 variant="tonal"
                 closable
                 rounded="lg"
-                @click:close="loginStatus = ''"
+                @click:close="status.clear()"
               >
-                {{ loginStatusMsg }}
+                {{ status.message }}
               </v-alert>
 
               <v-btn
@@ -70,6 +70,7 @@
                 type="submit"
                 block
                 :disabled="!isFormValid"
+                :loading="loading"
                 class="login-button mt-6"
                 rounded="lg"
               >
@@ -85,70 +86,74 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import axios from "axios";
-import { useStore } from "../store/store";
-import { LOGIN } from "../remote-routes";
-import router from "../router";
+import { onMounted, ref } from "vue"
+import { useStore } from "../store/store"
+import { useStatusMessage } from "../composables"
+import { userService } from "../services"
+import { isSuccess } from "../services/api"
+import router from "../router"
 
-const form = ref(null);
-const isFormValid = ref(false);
-const loginStatusMsg = ref("");
-const loginStatus = ref(""); // "", "Error", "Success"
-const user = ref("");
-const pwd = ref("");
-const store = useStore();
+// State
+const form = ref(null)
+const isFormValid = ref(false)
+const loading = ref(false)
+const username = ref("")
+const password = ref("")
+const store = useStore()
+
+// Composables
+const status = useStatusMessage()
 
 // Validation rules
-const userRules = [
+const usernameRules = [
   (v: string) => !!v || 'Username is required',
-];
+]
 
 const passwordRules = [
   (v: string) => !!v || 'Password is required',
-];
+]
 
+// Lifecycle
 onMounted(() => {
   if (store.rememberMe && store.rememberMeUser !== null) {
-    user.value = store.rememberMeUser;
+    username.value = store.rememberMeUser
   }
-});
+})
 
-function submit() {
+// Handle login
+async function handleLogin() {
   if (!isFormValid.value) {
-    return; // Don't submit if form is not valid
+    return
   }
 
-  const postData = { user: user.value, pwd: pwd.value };
-  axios
-    .post(LOGIN, postData)
-    .then((res) => {
-      if (res.status == 200) {
-        loginStatusMsg.value = "Login successful";
-        loginStatus.value = "Success";
-        store.login(res.data);
-        if (store.rememberMe) {
-          store.rememberMeUser = user.value;
-        }
-        if (router.currentRoute.value.query["redirect"] === "settings") {
-          router.push("/settings");
-        } else {
-          router.push("/");
-        }
-      }
-    })
-    .catch((error) => {
-      if (error.response) {
-        loginStatus.value = "Error";
-        if (error.response.status == 401) {
-          loginStatusMsg.value = "Wrong user or password";
-        } else if (error.response.status == 500) {
-          loginStatusMsg.value = "Internal server error";
-        } else {
-          loginStatusMsg.value = "Unknown error";
-        }
-      }
-    });
+  loading.value = true
+  status.clear()
+
+  const result = await userService.login({
+    user: username.value,
+    pwd: password.value,
+    remember_me: store.rememberMe
+  })
+
+  loading.value = false
+
+  if (isSuccess(result)) {
+    status.setSuccess("Login successful")
+    store.login(result.data)
+
+    if (store.rememberMe) {
+      store.rememberMeUser = username.value
+    }
+
+    // Redirect based on query parameter
+    if (router.currentRoute.value.query["redirect"] === "settings") {
+      router.push("/settings")
+    } else {
+      router.push("/")
+    }
+  } else {
+    status.setError(result.error.message)
+  }
 }
 </script>
 

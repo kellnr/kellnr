@@ -25,15 +25,13 @@
 
 <script setup lang="ts">
 import { onBeforeMount, ref } from 'vue'
-import axios from "axios";
 import { useRouter } from "vue-router";
 import { useStore } from "../store/store"
-import { LOGIN_STATE, LOGOUT } from "../remote-routes";
-import { useDisplay } from "vuetify";
+import { userService } from "../services";
+import { isSuccess } from "../services/api";
 
 const router = useRouter()
 const store = useStore()
-const display = useDisplay()
 
 // Loading state
 const isLoading = ref(false)
@@ -54,59 +52,38 @@ onBeforeMount(() => {
   getLoginStatus()
 })
 
-function logOut() {
+async function logOut() {
   isLoading.value = true
 
-  axios
-    .get(LOGOUT)
-    .then((res) => {
-      if (res.status == 200) {
-        store.logout();
-        router.push("/");
-        showNotification("Successfully logged out")
-      }
-    })
-    .catch((error) => {
-      let errorMessage = "Logout failed: Unknown error"
-
-      if (error.response) {
-        if (error.response.status == 500) {
-          errorMessage = "Logout failed: Internal server error"
-        }
-      }
-
-      console.log(errorMessage)
-      showNotification(errorMessage, true)
-    })
-    .finally(() => {
-      isLoading.value = false
-    });
+  try {
+    const result = await userService.logout()
+    if (isSuccess(result)) {
+      store.logout()
+      router.push("/")
+      showNotification("Successfully logged out")
+    } else {
+      showNotification(result.error || "Logout failed", true)
+    }
+  } finally {
+    isLoading.value = false
+  }
 }
 
-function getLoginStatus() {
+async function getLoginStatus() {
   isLoading.value = true
 
-  axios
-    .get(LOGIN_STATE)
-    .then((res) => {
-      if (res.status == 200) {
-        if (res.data.is_logged_in) {
-          store.login(res.data)
-          showNotification(`Welcome back, ${store.loggedInUser}!`)
-        } else {
-          store.logout()
-        }
+  try {
+    const result = await userService.getLoginState()
+    if (isSuccess(result) && result.data) {
+      if (result.data.is_logged_in) {
+        store.login(result.data)
+        showNotification(`Welcome back, ${store.loggedInUser}!`)
+      } else {
+        store.logout()
       }
-    })
-    .catch((error) => {
-      if (error.response) {
-        const errorMessage = "Failed to get login status"
-        console.log(errorMessage)
-        showNotification(errorMessage, true)
-      }
-    })
-    .finally(() => {
-      isLoading.value = false
-    });
+    }
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
