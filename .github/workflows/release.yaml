@@ -109,6 +109,32 @@ jobs:
           asset_name: ${{ env.KELLNR_ASSET }}
           tag: ${{ github.ref }}
 
+  crates-io-release:
+    name: Publish to crates.io
+    runs-on: ubuntu-24.04
+    needs: [test]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with: { fetch-depth: 0, persist-credentials: false }
+
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with: { tool: just }
+
+      - name: Setup Rust
+        uses: hecrj/setup-rust-action@v2
+
+      - name: Build static resources
+        run: just npm-build
+
+      - name: Publish to crates.io
+        uses: secana/k-releaser@v1
+        with:
+          command: publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
   build-and-push-image:
     name: Build and Push Docker Image
     runs-on: ubuntu-24.04
@@ -141,32 +167,6 @@ jobs:
       - name: Docker Build & Push
         run: chmod u+x build_and_push.sh && ./build_and_push.sh $IMAGE $RELEASE_VERSION
         working-directory: docker
-
-  crates-io-release:
-    name: Publish to crates.io
-    runs-on: ubuntu-24.04
-    needs: [build-and-push-image]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with: { fetch-depth: 0, persist-credentials: false }
-
-      - name: Install Just
-        uses: taiki-e/install-action@v2
-        with: { tool: just }
-
-      - name: Setup Rust
-        uses: hecrj/setup-rust-action@v2
-
-      - name: Build static resources
-        run: just npm-build
-
-      - name: Publish to crates.io
-        uses: secana/k-releaser@v1
-        with:
-          command: publish
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   dispatch-helm:
     name: Update Helm Chart
