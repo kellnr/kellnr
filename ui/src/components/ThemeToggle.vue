@@ -7,7 +7,6 @@
 
 <script setup lang="ts">
 import { useStore } from '../store/store';
-import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { useTheme } from 'vuetify';
 

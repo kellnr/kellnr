@@ -65,6 +65,16 @@ const routes = [
     meta: {
       requiresAuth: true,
     }
+  },
+  {
+    path: '/me',
+    name: 'Me',
+    redirect: () => {
+      return { path: '/settings', query: { tab: 'tokens' } }
+    },
+    meta: {
+      requiresAuth: true,
+    }
   }
 ]
 
@@ -80,13 +90,13 @@ router.beforeEach(async (to) => {
   const store = useStore();
 
   // Check if the "auth_required" setting is enabled in Kellnr.
-  // If it is enabled, the user must be authenticated to view any page, exept the login page.
+  // If it is enabled, the user must be authenticated to view any page, except the login page.
   // If the user is not authenticated, he will be redirected to the login page.
   if (await auth_required()) {
     if (to.matched.some(record => record.meta.requiresAuth)) {
       if (!store.loggedIn) {
         console.debug("Auth required. Redirecting to login page.");
-        return { name: 'Login' }
+        return { name: 'Login', query: { redirect: to.fullPath } }
       }
       else {
         console.debug("Auth required. User is authenticated.");

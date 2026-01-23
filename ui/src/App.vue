@@ -25,11 +25,10 @@ import { useStore } from './store/store';
 import { onMounted, computed, watch, onBeforeMount } from 'vue';
 import Header from './components/Header.vue';
 import Footer from './components/Footer.vue';
-import { useTheme, useDisplay } from 'vuetify';
+import { useTheme } from 'vuetify';
 
 const store = useStore();
 const vuetifyTheme = useTheme();
-const display = useDisplay();
 
 // Create a direct reference to the background image URL
 const bgImage = computed(() => {

@@ -27,7 +27,6 @@ pub fn create_router(
     );
 
     Router::new()
-        .route("/me", get(kellnr_registry::kellnr_api::me))
         .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
         .nest("/api/v1/user", user_routes::create_routes())
         .nest("/api/v1/group", group_routes::create_routes())

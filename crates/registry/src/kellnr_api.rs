@@ -4,7 +4,6 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Redirect;
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
 use kellnr_auth::{maybe_user, token};
@@ -73,11 +72,6 @@ pub async fn check_download_auth(
     } else {
         Err(RegistryError::NotCrateUser.into())
     }
-}
-
-#[expect(clippy::unused_async)] // part of the router
-pub async fn me() -> Redirect {
-    Redirect::to("/login")
 }
 
 pub async fn remove_owner(

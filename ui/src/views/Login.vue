@@ -145,9 +145,10 @@ async function handleLogin() {
       store.rememberMeUser = username.value
     }
 
-    // Redirect based on query parameter
-    if (router.currentRoute.value.query["redirect"] === "settings") {
-      router.push("/settings")
+    // Redirect based on query parameter (validate to prevent open redirect)
+    const redirectTo = router.currentRoute.value.query["redirect"] as string | undefined
+    if (redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//')) {
+      router.push(redirectTo)
     } else {
       router.push("/")
     }
