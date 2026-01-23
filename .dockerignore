@@ -10,6 +10,5 @@ tests/
 !tests/Dockerfile
 *.md
 LICENSE
-deny.toml
 flake.*
 ui/node_modules/
