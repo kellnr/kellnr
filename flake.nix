@@ -302,63 +302,65 @@
               export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
             '';
 
-            packages = with pkgs; [
-              rust-analyzer
-              cargo-nextest
-              cargo-machete
-              lazygit
-              just
-              node2nix
-              jd-diff-patch
-              sea-orm-cli
-              nixpkgs-fmt
-              statix
+            packages =
+              with pkgs;
+              [
+                rust-analyzer
+                cargo-nextest
+                cargo-machete
+                lazygit
+                just
+                node2nix
+                jd-diff-patch
+                sea-orm-cli
+                nixpkgs-fmt
+                statix
 
-              jq
-              curl
-              gnused
+                jq
+                curl
+                gnused
 
-              # Playwright Test prerequisites:
-              # - Node.js is already included via commonArgs/nativeBuildInputs
-              # - Browsers are usually installed via `npx playwright install --with-deps` in CI,
-              #   but these packages help when running browsers inside Nix shells on Linux.
-              python3
-            ]
-            ++ lib.optionals stdenv.isLinux [
-              # Common runtime deps for Chromium/WebKit/Firefox when driven by Playwright on Linux
-              alsa-lib
-              at-spi2-atk
-              atk
-              cairo
-              cups
-              dbus
-              expat
-              fontconfig
-              freetype
-              gdk-pixbuf
-              glib
-              gtk3
-              libdrm
-              libnotify
-              libuuid
-              libxkbcommon
-              mesa
-              nspr
-              nss
-              pango
-              xorg.libX11
-              xorg.libXcomposite
-              xorg.libXcursor
-              xorg.libXdamage
-              xorg.libXext
-              xorg.libXfixes
-              xorg.libXi
-              xorg.libXrandr
-              xorg.libXrender
-              xorg.libXtst
-              xorg.libxcb
-              xorg.libxshmfence
-            ];
+                # Playwright Test prerequisites:
+                # - Node.js is already included via commonArgs/nativeBuildInputs
+                # - Browsers are usually installed via `npx playwright install --with-deps` in CI,
+                #   but these packages help when running browsers inside Nix shells on Linux.
+                python3
+              ]
+              ++ lib.optionals stdenv.isLinux [
+                # Common runtime deps for Chromium/WebKit/Firefox when driven by Playwright on Linux
+                alsa-lib
+                at-spi2-atk
+                atk
+                cairo
+                cups
+                dbus
+                expat
+                fontconfig
+                freetype
+                gdk-pixbuf
+                glib
+                gtk3
+                libdrm
+                libnotify
+                libuuid
+                libxkbcommon
+                mesa
+                nspr
+                nss
+                pango
+                xorg.libX11
+                xorg.libXcomposite
+                xorg.libXcursor
+                xorg.libXdamage
+                xorg.libXext
+                xorg.libXfixes
+                xorg.libXi
+                xorg.libXrandr
+                xorg.libXrender
+                xorg.libXtst
+                xorg.libxcb
+                xorg.libxshmfence
+              ];
           }
         );
 
