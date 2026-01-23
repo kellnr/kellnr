@@ -18,6 +18,7 @@ mod m20220101_000005_create_table;
 mod m20220101_000005_create_table_entities;
 mod m20220101_000006_create_table;
 mod m20220101_000006_create_table_entities;
+mod m20220101_000006_index_metadata;
 mod m20220101_000007_create_table;
 mod m20220101_000007_create_table_entities;
 mod m20220101_000008_create_table;
@@ -33,6 +34,8 @@ mod m20250412_0000012_hash_tokens_entities;
 mod m20250414_102510_add_unique_indices;
 mod m20250911_000001_cratesio_indices;
 mod m20250923_095440_webhooks;
+mod m20260122_000001_add_pubtime;
+
 mod old_index_metadata;
 
 pub struct Migrator;
@@ -58,6 +61,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250414_102510_add_unique_indices::Migration),
             Box::new(m20250911_000001_cratesio_indices::Migration),
             Box::new(m20250923_095440_webhooks::Migration),
+            Box::new(m20260122_000001_add_pubtime::Migration),
         ]
     }
 }

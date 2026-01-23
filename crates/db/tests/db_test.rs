@@ -1992,15 +1992,16 @@ async fn get_prefetch_data_with_minimal_data(test_db: &kellnr_db::Database) {
 
     let prefetch_data = test_db.get_prefetch_data("crate").await.unwrap();
 
-    assert_eq!(
-        "8723f3d52d131ea686ea8e517c7f1deac5585fdcc19186f373f88a263119f83b",
-        prefetch_data.etag
-    );
+    // etag changes with pubtime (set to Utc::now()), so just verify it's not empty
+    assert!(!prefetch_data.etag.is_empty());
     assert_eq!(
         created2.format("%Y-%m-%d %H:%M:%S").to_string(),
         prefetch_data.last_modified
     );
-    assert_eq!(185, prefetch_data.data.len());
+    // data length varies with pubtime, just verify data is present and can be parsed
+    assert!(!prefetch_data.data.is_empty());
+    let json_str = String::from_utf8(prefetch_data.data).unwrap();
+    assert!(json_str.contains(r#""name":"crate""#));
 }
 
 #[db_test]
@@ -2123,15 +2124,20 @@ async fn get_prefetch_data_with_full_data(test_db: &kellnr_db::Database) {
 
     let prefetch_data = test_db.get_prefetch_data("crate").await.unwrap();
 
-    assert_eq!(921, prefetch_data.data.len());
+    // data length and etag vary with pubtime (set to Utc::now()), just verify data is present
+    assert!(!prefetch_data.data.is_empty());
     assert_eq!(
         created3.format("%Y-%m-%d %H:%M:%S").to_string(),
         prefetch_data.last_modified
     );
-    assert_eq!(
-        "bd18a71d56aff9f39c05a9c819d0363b6d6e917f961a49c126ade402667d8568",
-        prefetch_data.etag
-    );
+    // etag changes with pubtime, so just verify it's not empty
+    assert!(!prefetch_data.etag.is_empty());
+    // Verify the data contains expected crate info
+    let json_str = String::from_utf8(prefetch_data.data).unwrap();
+    assert!(json_str.contains(r#""name":"crate""#));
+    assert!(json_str.contains(r#""vers":"1.0.0""#));
+    assert!(json_str.contains(r#""vers":"2.0.0""#));
+    assert!(json_str.contains(r#""vers":"3.0.0""#));
 }
 
 #[db_test]
@@ -2258,6 +2264,7 @@ async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &kellnr_db::Database) 
                 features: BTreeMap::default(),
                 yanked: false,
                 links: None,
+                pubtime: None,
                 v: Some(1),
                 features2: None,
             }],
@@ -2287,6 +2294,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
         features: BTreeMap::default(),
         yanked: false,
         links: None,
+        pubtime: None,
         v: Some(1),
         features2: None,
     }];
@@ -2309,6 +2317,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
             features: BTreeMap::default(),
             yanked: true,
             links: None,
+            pubtime: None,
             v: Some(1),
             features2: None,
         },
@@ -2320,6 +2329,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
             features: BTreeMap::default(),
             yanked: false,
             links: None,
+            pubtime: None,
             v: Some(1),
             features2: None,
         },
@@ -2773,4 +2783,54 @@ async fn test_delete_webhook_queue(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
     assert!(entries.is_empty());
+}
+
+#[db_test]
+async fn pubtime_stored_and_serialized_correctly(test_db: &kellnr_db::Database) {
+    // Add a crate - pubtime will be set to current time by IndexMetadata::from_reg_meta
+    let created = Utc.with_ymd_and_hms(2025, 1, 2, 9, 5, 7).unwrap();
+    test_add_crate(
+        test_db,
+        "testcrate",
+        "admin",
+        &Version::from_unchecked_str("1.0.0"),
+        &created,
+    )
+    .await
+    .unwrap();
+
+    // Retrieve the prefetch data
+    let prefetch_data = test_db.get_prefetch_data("testcrate").await.unwrap();
+
+    // Convert the bytes to string
+    let json_str = String::from_utf8(prefetch_data.data).unwrap();
+
+    // Verify pubtime is present in JSON
+    assert!(
+        json_str.contains(r#""pubtime":""#),
+        "Expected pubtime field to be present in JSON: {json_str}"
+    );
+
+    // Verify pubtime does NOT contain fractional seconds (no dot after seconds)
+    // Valid: "pubtime":"2025-01-02T09:05:07Z"
+    // Invalid: "pubtime":"2025-01-02T09:05:07.123456Z"
+    assert!(
+        !json_str.contains(r".000") || !json_str.contains("pubtime"),
+        "pubtime should not contain fractional seconds, got: {json_str}"
+    );
+
+    // Deserialize and verify the pubtime value is preserved
+    let deserialized: IndexMetadata = serde_json::from_str(&json_str).unwrap();
+    assert!(
+        deserialized.pubtime.is_some(),
+        "Expected pubtime to be Some after deserialization"
+    );
+
+    // Verify the deserialized pubtime can be formatted back to the same format
+    let pubtime = deserialized.pubtime.unwrap();
+    let formatted = pubtime.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    assert!(
+        json_str.contains(&format!(r#""pubtime":"{formatted}""#)),
+        "Expected pubtime '{formatted}' in JSON: {json_str}"
+    );
 }

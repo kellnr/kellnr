@@ -4,6 +4,7 @@ use crate::compile_time_config;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Registry {
     pub data_dir: String,
     pub session_age_seconds: u64,

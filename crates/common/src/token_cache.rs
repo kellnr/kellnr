@@ -14,7 +14,7 @@ pub struct TokenCacheManager {
 }
 
 impl TokenCacheManager {
-    /// Creates a new TokenCacheManager.
+    /// Creates a new `TokenCacheManager`.
     ///
     /// # Arguments
     /// * `enabled` - Whether caching is enabled
@@ -49,7 +49,7 @@ impl TokenCacheManager {
         }
     }
 
-    pub async fn invalidate_all(&self) {
+    pub fn invalidate_all(&self) {
         if let Some(cache) = &self.cache {
             cache.invalidate_all();
         }
@@ -129,7 +129,7 @@ mod tests {
         assert!(cache.get("token1").await.is_some());
         assert!(cache.get("token2").await.is_some());
 
-        cache.invalidate_all().await;
+        cache.invalidate_all();
 
         // Note: moka's invalidate_all is async internally and may not be immediately visible
         // In production use, entries will be invalidated lazily

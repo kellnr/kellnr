@@ -9,8 +9,8 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use kellnr_appstate::AppStateData;
 use kellnr_common::token_cache::{CachedTokenData, TokenCacheManager};
-use kellnr_db::error::DbError;
 use kellnr_db::DbProvider;
+use kellnr_db::error::DbError;
 use kellnr_settings::Settings;
 use rand::distr::Alphanumeric;
 use rand::{Rng, rng};
@@ -187,7 +187,13 @@ impl FromRequestParts<AppStateData> for Token {
         parts: &mut Parts,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        Self::extract_token(&parts.headers, &state.db, &state.token_cache, &state.settings).await
+        Self::extract_token(
+            &parts.headers,
+            &state.db,
+            &state.token_cache,
+            &state.settings,
+        )
+        .await
     }
 }
 
@@ -198,7 +204,14 @@ impl FromRequestParts<AppStateData> for OptionToken {
         parts: &mut Parts,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        match Token::extract_token(&parts.headers, &state.db, &state.token_cache, &state.settings).await {
+        match Token::extract_token(
+            &parts.headers,
+            &state.db,
+            &state.token_cache,
+            &state.settings,
+        )
+        .await
+        {
             Ok(token) => Ok(OptionToken::Some(token)),
             Err(StatusCode::UNAUTHORIZED) => Ok(OptionToken::None),
             Err(status_code) => Err(status_code),
@@ -213,12 +226,14 @@ pub struct NewTokenReqData {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
     use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use mockall::predicate::*;
-    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use super::*;
 
     fn test_user() -> User {
         User {

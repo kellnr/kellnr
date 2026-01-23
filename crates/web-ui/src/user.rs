@@ -31,7 +31,7 @@ pub async fn add_token(
     db.add_auth_token(&auth_token.name, &token, user.name())
         .await?;
 
-    cache.invalidate_all().await;
+    cache.invalidate_all();
 
     Ok(NewTokenResponse {
         name: auth_token.name.clone(),
@@ -70,7 +70,7 @@ pub async fn delete_token(
 
     db.delete_auth_token(id).await?;
 
-    cache.invalidate_all().await;
+    cache.invalidate_all();
 
     Ok(())
 }
@@ -114,7 +114,7 @@ pub async fn read_only(
 
     db.change_read_only_state(&name, ro_state.state).await?;
 
-    cache.invalidate_all().await;
+    cache.invalidate_all();
 
     Ok(())
 }
@@ -129,7 +129,7 @@ pub async fn delete(
 
     db.delete_user(&name).await?;
 
-    cache.invalidate_all().await;
+    cache.invalidate_all();
 
     Ok(())
 }
@@ -319,7 +319,7 @@ pub async fn add(
     )
     .await?;
 
-    cache.invalidate_all().await;
+    cache.invalidate_all();
 
     Ok(())
 }
@@ -327,6 +327,7 @@ pub async fn add(
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+
     use axum::Router;
     use axum::body::Body;
     use axum::routing::post;
@@ -334,9 +335,9 @@ mod tests {
     use hyper::{Request, header};
     use kellnr_appstate::AppStateData;
     use kellnr_common::token_cache::{CachedTokenData, TokenCacheManager};
-    use kellnr_db::mock::MockDb;
     use kellnr_db::AuthToken;
     use kellnr_db::error::DbError;
+    use kellnr_db::mock::MockDb;
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
@@ -344,12 +345,14 @@ mod tests {
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use mockall::predicate::*;
     use tower::ServiceExt;
-    use crate::test_helper::{encode_cookies, TEST_KEY};
+
     use super::*;
+    use crate::test_helper::{TEST_KEY, encode_cookies};
 
     fn test_state_with_cache(mock_db: MockDb, cache: Arc<TokenCacheManager>) -> AppStateData {
         let settings = Arc::new(kellnr_settings::test_settings());
-        let kellnr_storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+        let kellnr_storage =
+            Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, kellnr_storage));
         let cratesio_storage = Arc::new(CratesIoCrateStorage::new(
             &settings,
@@ -372,14 +375,16 @@ mod tests {
     async fn test_add_token_invalidates_cache() {
         // Pre-populate cache with a token
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        cache.insert(
-            "existing_token".to_string(),
-            CachedTokenData {
-                user: "test_user".to_string(),
-                is_admin: false,
-                is_read_only: false,
-            },
-        ).await;
+        cache
+            .insert(
+                "existing_token".to_string(),
+                CachedTokenData {
+                    user: "test_user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                },
+            )
+            .await;
 
         // Verify token is cached
         assert!(cache.get("existing_token").await.is_some());
@@ -402,7 +407,10 @@ mod tests {
         let response = app
             .oneshot(
                 Request::post("/add_token")
-                    .header(header::COOKIE, encode_cookies([(COOKIE_SESSION_ID, "session")]))
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(r#"{"name":"new_token"}"#))
                     .unwrap(),
@@ -410,7 +418,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(response.status().is_success(), "Expected success but got {}", response.status());
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
 
         // Verify cache was invalidated
         assert!(cache.get("existing_token").await.is_none());
@@ -419,14 +431,16 @@ mod tests {
     #[tokio::test]
     async fn test_delete_token_invalidates_cache() {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        cache.insert(
-            "token_to_keep".to_string(),
-            CachedTokenData {
-                user: "test_user".to_string(),
-                is_admin: false,
-                is_read_only: false,
-            },
-        ).await;
+        cache
+            .insert(
+                "token_to_keep".to_string(),
+                CachedTokenData {
+                    user: "test_user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                },
+            )
+            .await;
 
         assert!(cache.get("token_to_keep").await.is_some());
 
@@ -435,10 +449,13 @@ mod tests {
             .expect_validate_session()
             .times(1)
             .returning(|_| Ok(("test_user".to_string(), false)));
-        mock_db
-            .expect_get_auth_tokens()
-            .times(1)
-            .returning(|_| Ok(vec![AuthToken::new(1, "token".to_string(), "secret".to_string())]));
+        mock_db.expect_get_auth_tokens().times(1).returning(|_| {
+            Ok(vec![AuthToken::new(
+                1,
+                "token".to_string(),
+                "secret".to_string(),
+            )])
+        });
         mock_db
             .expect_delete_auth_token()
             .times(1)
@@ -453,14 +470,21 @@ mod tests {
         let response = app
             .oneshot(
                 Request::delete("/delete_token/1")
-                    .header(header::COOKIE, encode_cookies([(COOKIE_SESSION_ID, "session")]))
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        assert!(response.status().is_success(), "Expected success but got {}", response.status());
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
 
         // Verify cache was invalidated
         assert!(cache.get("token_to_keep").await.is_none());
@@ -469,14 +493,16 @@ mod tests {
     #[tokio::test]
     async fn test_delete_user_invalidates_cache() {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        cache.insert(
-            "user_token".to_string(),
-            CachedTokenData {
-                user: "user_to_delete".to_string(),
-                is_admin: false,
-                is_read_only: false,
-            },
-        ).await;
+        cache
+            .insert(
+                "user_token".to_string(),
+                CachedTokenData {
+                    user: "user_to_delete".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                },
+            )
+            .await;
 
         assert!(cache.get("user_token").await.is_some());
 
@@ -484,7 +510,7 @@ mod tests {
         mock_db
             .expect_validate_session()
             .times(1)
-            .returning(|_| Ok(("admin".to_string(), true)));  // Must be admin
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
         mock_db
             .expect_delete_user()
             .times(1)
@@ -499,14 +525,21 @@ mod tests {
         let response = app
             .oneshot(
                 Request::delete("/delete/user_to_delete")
-                    .header(header::COOKIE, encode_cookies([(COOKIE_SESSION_ID, "session")]))
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        assert!(response.status().is_success(), "Expected success but got {}", response.status());
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
 
         // Verify cache was invalidated
         assert!(cache.get("user_token").await.is_none());
@@ -515,14 +548,16 @@ mod tests {
     #[tokio::test]
     async fn test_read_only_change_invalidates_cache() {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        cache.insert(
-            "user_token".to_string(),
-            CachedTokenData {
-                user: "target_user".to_string(),
-                is_admin: false,
-                is_read_only: false,  // Currently NOT read-only
-            },
-        ).await;
+        cache
+            .insert(
+                "user_token".to_string(),
+                CachedTokenData {
+                    user: "target_user".to_string(),
+                    is_admin: false,
+                    is_read_only: false, // Currently NOT read-only
+                },
+            )
+            .await;
 
         assert!(cache.get("user_token").await.is_some());
 
@@ -530,7 +565,7 @@ mod tests {
         mock_db
             .expect_validate_session()
             .times(1)
-            .returning(|_| Ok(("admin".to_string(), true)));  // Must be admin
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
         mock_db
             .expect_change_read_only_state()
             .times(1)
@@ -545,7 +580,10 @@ mod tests {
         let response = app
             .oneshot(
                 Request::post("/read_only/target_user")
-                    .header(header::COOKIE, encode_cookies([(COOKIE_SESSION_ID, "session")]))
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(r#"{"state":true}"#))
                     .unwrap(),
@@ -553,7 +591,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(response.status().is_success(), "Expected success but got {}", response.status());
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
 
         // Verify cache was invalidated - important because is_read_only permission changed
         assert!(cache.get("user_token").await.is_none());
@@ -562,14 +604,16 @@ mod tests {
     #[tokio::test]
     async fn test_add_user_invalidates_cache() {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        cache.insert(
-            "existing_token".to_string(),
-            CachedTokenData {
-                user: "existing_user".to_string(),
-                is_admin: false,
-                is_read_only: false,
-            },
-        ).await;
+        cache
+            .insert(
+                "existing_token".to_string(),
+                CachedTokenData {
+                    user: "existing_user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                },
+            )
+            .await;
 
         assert!(cache.get("existing_token").await.is_some());
 
@@ -577,16 +621,14 @@ mod tests {
         mock_db
             .expect_validate_session()
             .times(1)
-            .returning(|_| Ok(("admin".to_string(), true)));  // Must be admin
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
         mock_db
             .expect_add_user()
             .times(1)
             .returning(|_, _, _, _, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/add", post(add))
-            .with_state(state);
+        let app = Router::new().route("/add", post(add)).with_state(state);
 
         let response = app
             .oneshot(
@@ -599,7 +641,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(response.status().is_success(), "Expected success but got {}", response.status());
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
 
         // Verify cache was invalidated
         assert!(cache.get("existing_token").await.is_none());
@@ -609,14 +655,16 @@ mod tests {
     async fn test_cache_not_invalidated_on_db_failure() {
         // Verify cache is NOT invalidated when DB operation fails
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        cache.insert(
-            "existing_token".to_string(),
-            CachedTokenData {
-                user: "test_user".to_string(),
-                is_admin: false,
-                is_read_only: false,
-            },
-        ).await;
+        cache
+            .insert(
+                "existing_token".to_string(),
+                CachedTokenData {
+                    user: "test_user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                },
+            )
+            .await;
 
         assert!(cache.get("existing_token").await.is_some());
 
@@ -628,9 +676,11 @@ mod tests {
         mock_db
             .expect_add_auth_token()
             .times(1)
-            .returning(|_, _, _| Err(DbError::InitializationError(
-                "Connection timeout".to_string()
-            )));
+            .returning(|_, _, _| {
+                Err(DbError::InitializationError(
+                    "Connection timeout".to_string(),
+                ))
+            });
 
         let state = test_state_with_cache(mock_db, cache.clone());
         let app = Router::new()
@@ -640,7 +690,10 @@ mod tests {
         let response = app
             .oneshot(
                 Request::post("/add_token")
-                    .header(header::COOKIE, encode_cookies([(COOKIE_SESSION_ID, "session")]))
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(r#"{"name":"new_token"}"#))
                     .unwrap(),
