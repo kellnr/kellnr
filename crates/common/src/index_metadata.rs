@@ -2,7 +2,39 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Write};
 use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+mod pubtime_format {
+    use chrono::{DateTime, Utc};
+    use serde::{self, Deserialize, Deserializer, Serializer};
+
+    const FORMAT: &str = "%Y-%m-%dT%H:%M:%SZ";
+
+    #[allow(clippy::ref_option)] // signature required by serde's `with` attribute
+    pub fn serialize<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match date {
+            Some(dt) => serializer.serialize_str(&dt.format(FORMAT).to_string()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: Option<String> = Option::deserialize(deserializer)?;
+        match s {
+            Some(s) => DateTime::parse_from_rfc3339(&s)
+                .map(|dt| Some(dt.with_timezone(&Utc)))
+                .map_err(serde::de::Error::custom),
+            None => Ok(None),
+        }
+    }
+}
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -12,7 +44,7 @@ use crate::version::Version;
 // This Metadata struct defined here is the one saved in the index.
 // It is different to the one send by Cargo to the registry.
 // See: https://doc.rust-lang.org/cargo/reference/registries.html#index-format
-// Crates.io implementation: https://github.com/rust-lang/crates.io/blob/master/cargo-registry-index/lib.rs
+// Crates.io implementation: https://github.com/rust-lang/crates.io/blob/main/crates/crates_io_index/data.rs
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct IndexMetadata {
@@ -40,6 +72,13 @@ pub struct IndexMetadata {
     // specified. This field is optional and defaults to null.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<String>,
+    // The time the package was published
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "pubtime_format"
+    )]
+    pub pubtime: Option<DateTime<Utc>>,
     // An unsigned 32-bit integer value indicating the schema version of this
     // entry.
     //
@@ -152,6 +191,7 @@ impl IndexMetadata {
                 .map(IndexDep::from)
                 .collect(),
             cksum: cksum.to_string(),
+            pubtime: Some(Utc::now()),
             features: registry_metadata.features.clone(),
             yanked: false,
             links: registry_metadata.links.clone(),
@@ -169,6 +209,7 @@ impl IndexMetadata {
             features: BTreeMap::default(),
             yanked: false,
             links: None,
+            pubtime: None,
             v: Some(1),
             features2: None,
         }
@@ -424,5 +465,92 @@ mod tests {
             metadata_path(&PathBuf::from("ip"), name),
             Path::new("ip").join("fo").join("o_").join("foo_bar")
         );
+    }
+
+    #[test]
+    fn pubtime_serializes_without_fractional_seconds() {
+        use chrono::TimeZone;
+
+        let pubtime = Utc.with_ymd_and_hms(2025, 1, 2, 9, 5, 7).unwrap();
+        let metadata = IndexMetadata {
+            name: "test".to_string(),
+            vers: "1.0.0".to_string(),
+            deps: vec![],
+            cksum: "abc123".to_string(),
+            features: BTreeMap::new(),
+            yanked: false,
+            links: None,
+            pubtime: Some(pubtime),
+            v: Some(1),
+            features2: None,
+        };
+
+        let json = metadata.to_json().unwrap();
+
+        // Verify format is exactly "2025-01-02T09:05:07Z" (zero-padded, no fractional seconds)
+        assert!(
+            json.contains(r#""pubtime":"2025-01-02T09:05:07Z""#),
+            "Expected pubtime to be serialized as '2025-01-02T09:05:07Z', got: {json}"
+        );
+    }
+
+    #[test]
+    fn pubtime_none_is_omitted_from_serialization() {
+        let metadata = IndexMetadata {
+            name: "test".to_string(),
+            vers: "1.0.0".to_string(),
+            deps: vec![],
+            cksum: "abc123".to_string(),
+            features: BTreeMap::new(),
+            yanked: false,
+            links: None,
+            pubtime: None,
+            v: Some(1),
+            features2: None,
+        };
+
+        let json = metadata.to_json().unwrap();
+
+        assert!(
+            !json.contains("pubtime"),
+            "Expected pubtime to be omitted when None, got: {json}"
+        );
+    }
+
+    #[test]
+    fn pubtime_deserializes_from_rfc3339() {
+        use chrono::{Datelike, Timelike};
+
+        let json = r#"{"name":"test","vers":"1.0.0","deps":[],"cksum":"abc","features":{},"yanked":false,"pubtime":"2025-01-02T09:05:07Z","v":1}"#;
+
+        let metadata: IndexMetadata = serde_json::from_str(json).unwrap();
+
+        assert!(metadata.pubtime.is_some());
+        let pubtime = metadata.pubtime.unwrap();
+        assert_eq!(pubtime.year(), 2025);
+        assert_eq!(pubtime.month(), 1);
+        assert_eq!(pubtime.day(), 2);
+        assert_eq!(pubtime.hour(), 9);
+        assert_eq!(pubtime.minute(), 5);
+        assert_eq!(pubtime.second(), 7);
+    }
+
+    #[test]
+    fn pubtime_deserializes_from_rfc3339_with_fractional_seconds() {
+        use chrono::{Datelike, Timelike};
+
+        // Should also handle input with fractional seconds (from crates.io or other sources)
+        let json = r#"{"name":"test","vers":"1.0.0","deps":[],"cksum":"abc","features":{},"yanked":false,"pubtime":"2025-01-02T09:05:07.123456Z","v":1}"#;
+
+        let metadata: IndexMetadata = serde_json::from_str(json).unwrap();
+
+        assert!(metadata.pubtime.is_some());
+        let pubtime = metadata.pubtime.unwrap();
+        assert_eq!(pubtime.year(), 2025);
+        assert_eq!(pubtime.month(), 1);
+        assert_eq!(pubtime.day(), 2);
+        assert_eq!(pubtime.hour(), 9);
+        assert_eq!(pubtime.minute(), 5);
+        assert_eq!(pubtime.second(), 7);
     }
 }

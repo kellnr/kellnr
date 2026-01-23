@@ -5,11 +5,11 @@ use std::time::Duration;
 use axum_extra::extract::cookie::Key;
 use kellnr_appstate::AppStateData;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
+use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
-use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_settings::{LogFormat, Settings};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;

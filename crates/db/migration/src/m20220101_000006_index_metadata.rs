@@ -1,0 +1,224 @@
+use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter, Write};
+use std::path::{Path, PathBuf};
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+// This Metadata struct defined here is the one saved in the index.
+// It is different to the one send by Cargo to the registry.
+// See: https://doc.rust-lang.org/cargo/reference/registries.html#index-format
+// Crates.io implementation: https://github.com/rust-lang/crates.io/blob/main/crates/crates_io_index/data.rs
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct IndexMetadata {
+    // The name of the package.
+    // This must only contain alphanumeric, `-`, or `_` characters.
+    pub name: String,
+    // The version of the package this row is describing.
+    // This must be a valid version number according to the Semantic
+    // Versioning 2.0.0 spec at https://semver.org/.
+    pub vers: String,
+    // Array of direct dependencies of the package.
+    pub deps: Vec<IndexDep>,
+    // A SHA256 checksum of the `.crate` file.
+    pub cksum: String,
+    // Set of features defined for the package.
+    // Each feature maps to an array of features or dependencies it enables.
+    // #[serde(
+    //     skip_serializing_if = "Option::is_none",
+    //     serialize_with = "option_sorted_map"
+    // )]
+    pub features: BTreeMap<String, Vec<String>>,
+    // Boolean of whether or not this version has been yanked.
+    pub yanked: bool,
+    // The `links` string value from the package's manifest, or null if not
+    // specified. This field is optional and defaults to null.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub links: Option<String>,
+    // An unsigned 32-bit integer value indicating the schema version of this
+    // entry.
+    //
+    // If this not specified, it should be interpreted as the default of 1.
+    //
+    // Cargo (starting with version 1.51) will ignore versions it does not
+    // recognize. This provides a method to safely introduce changes to index
+    // entries and allow older versions of cargo to ignore newer entries it
+    // doesn't understand. Versions older than 1.51 ignore this field, and
+    // thus may misinterpret the meaning of the index entry.
+    //
+    // The current values are:
+    //
+    // * 1: The schema as documented here, not including newer additions.
+    //      This is honored in Rust version 1.51 and newer.
+    // * 2: The addition of the `features2` field.
+    //      This is honored in Rust version 1.60 and newer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub v: Option<u32>,
+    // This optional field contains features with new, extended syntax.
+    // Specifically, namespaced features (`dep:`) and weak dependencies
+    // (`pkg?/feat`).
+    //
+    // This is separated from `features` because versions older than 1.19
+    // will fail to load due to not being able to parse the new syntax, even
+    // with a `Cargo.lock` file.
+    //
+    // Cargo will merge any values listed here with the "features" field.
+    //
+    // If this field is included, the "v" field should be set to at least 2.
+    //
+    // Registries are not required to use this field for extended feature
+    // syntax, they are allowed to include those in the "features" field.
+    // Using this is only necessary if the registry wants to support cargo
+    // versions older than 1.19, which in practice is only crates.io since
+    // those older versions do not support other registries.
+    // "features2": {
+    // "serde": ["dep:serde", "chrono?/serde"]
+    // }
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub features2: Option<BTreeMap<String, Vec<String>>>,
+}
+
+impl IndexMetadata {
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self)
+    }
+
+    pub fn metadata_path(&self, index_path: &Path) -> PathBuf {
+        metadata_path(index_path, &self.name)
+    }
+
+    pub fn serialize_indices(indices: &[IndexMetadata]) -> Result<String, serde_json::Error> {
+        let indices = indices
+            .iter()
+            .map(serde_json::to_string)
+            .collect::<Result<Vec<_>, serde_json::Error>>()?;
+        let mut index = String::new();
+        for (i, ix) in indices.iter().enumerate() {
+            if i == indices.len() - 1 {
+                write!(&mut index, "{ix}").unwrap();
+            } else {
+                writeln!(&mut index, "{ix}").unwrap();
+            }
+        }
+        Ok(index)
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct IndexDep {
+    // Name of the dependency.
+    // If the dependency is renamed from the original package name,
+    // this is the new name. The original package name is stored in
+    // the `package` field.
+    pub name: String,
+    // The SemVer requirement for this dependency.
+    // This must be a valid version requirement defined at
+    // https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html.
+    pub req: String,
+    // Array of features (as strings) enabled for this dependency.
+    pub features: Vec<String>,
+    // Boolean of whether or not this is an optional dependency.
+    pub optional: bool,
+    // Boolean of whether or not default features are enabled.
+    pub default_features: bool,
+    // The target platform for the dependency.
+    // null if not a target dependency.
+    // Otherwise, a string such as "cfg(windows)".
+    pub target: Option<String>,
+    // The dependency kind.
+    // "dev", "build", or "normal".
+    // Note: this is a required field, but a small number of entries
+    // exist in the crates.io index with either a missing or null
+    // `kind` field due to implementation bugs.
+    pub kind: Option<DependencyKind>,
+    // The URL of the index of the registry where this dependency is
+    // from as a string. If not specified or null, it is assumed the
+    // dependency is in the current registry.
+    pub registry: Option<String>,
+    // If the dependency is renamed, this is a string of the actual
+    // package name. If not specified or null, this dependency is not
+    // renamed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub enum DependencyKind {
+    Normal,
+    Build,
+    Dev,
+    Other(String),
+}
+
+impl<'de> Deserialize<'de> for DependencyKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "normal" => Ok(DependencyKind::Normal),
+            "build" => Ok(DependencyKind::Build),
+            "dev" => Ok(DependencyKind::Dev),
+            _ => Ok(DependencyKind::Other(s)),
+        }
+    }
+}
+
+impl Serialize for DependencyKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            DependencyKind::Normal => serializer.serialize_str("normal"),
+            DependencyKind::Build => serializer.serialize_str("build"),
+            DependencyKind::Dev => serializer.serialize_str("dev"),
+            DependencyKind::Other(s) => serializer.serialize_str(s),
+        }
+    }
+}
+
+impl Display for DependencyKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DependencyKind::Normal => write!(f, "normal"),
+            DependencyKind::Build => write!(f, "build"),
+            DependencyKind::Dev => write!(f, "dev"),
+            DependencyKind::Other(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+impl From<String> for DependencyKind {
+    fn from(kind: String) -> Self {
+        match kind.as_str() {
+            "normal" => DependencyKind::Normal,
+            "build" => DependencyKind::Build,
+            "dev" => DependencyKind::Dev,
+            _ => DependencyKind::Other(kind),
+        }
+    }
+}
+
+pub fn metadata_path(index_path: &Path, name: &str) -> PathBuf {
+    if name.len() == 1 {
+        index_path.join("1").join(name.to_lowercase())
+    } else if name.len() == 2 {
+        index_path.join("2").join(name.to_lowercase())
+    } else if name.len() == 3 {
+        let first_char = &name[0..1].to_lowercase();
+        index_path
+            .join("3")
+            .join(first_char)
+            .join(name.to_lowercase())
+    } else {
+        let first_two = &name[0..2].to_lowercase();
+        let second_two = &name[2..4].to_lowercase();
+        index_path
+            .join(first_two)
+            .join(second_two)
+            .join(name.to_lowercase())
+    }
+}
