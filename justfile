@@ -26,6 +26,14 @@ build-release: npm-build
 clippy:
   cargo clippy --workspace --all-targets --all-features
 
+# Run clippy and fail on first warning (for CI)
+clippy-deny:
+  cargo clippy --workspace --all-targets --all-features -- --deny warnings
+
+# Check formatting without modifying files (for CI)
+fmt-check:
+  cargo fmt --all -- --check
+
 run: npm-build build
 	cargo run
 
