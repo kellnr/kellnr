@@ -58,17 +58,26 @@ function fixDataDirOwnership(dirPath: string): void {
     return;
   }
 
-  // Check if the directory is already owned by current user
+  // Check if files inside the directory are owned by current user
+  // The directory itself may be owned by the test, but files inside are created by Docker
   try {
-    const stat = fs.statSync(dirPath);
-    if (stat.uid === uid) {
-      console.log("[migration] Data directory already owned by current user, no fix needed");
+    const entries = fs.readdirSync(dirPath);
+    if (entries.length === 0) {
+      console.log("[migration] Data directory is empty, no fix needed");
       return;
     }
-    console.log(`[migration] Data directory owned by uid ${stat.uid}, current user is ${uid}`);
-  } catch {
-    console.log("[migration] Could not stat data directory, skipping ownership fix");
-    return;
+
+    // Check ownership of first file/subdirectory inside
+    const firstEntry = path.join(dirPath, entries[0]);
+    const stat = fs.statSync(firstEntry);
+    if (stat.uid === uid) {
+      console.log("[migration] Data directory contents already owned by current user, no fix needed");
+      return;
+    }
+    console.log(`[migration] Data directory contents owned by uid ${stat.uid}, current user is ${uid}`);
+  } catch (e) {
+    console.log(`[migration] Could not check data directory contents: ${e}`);
+    // Continue anyway - try the chown
   }
 
   try {
