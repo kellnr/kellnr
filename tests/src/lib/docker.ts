@@ -105,6 +105,12 @@ export type StartContainerOptions = {
    * Optional labels (handy for debugging / cleanup).
    */
   labels?: Record<string, string>;
+
+  /**
+   * Run container as specific user (e.g. "1000:1000" or "runner").
+   * Useful for ensuring files created in bind mounts are owned by the host user.
+   */
+  user?: string;
 };
 
 export type Started = {
@@ -430,6 +436,10 @@ export async function startContainer(
     if (options.networkAliases?.length) {
       container = container.withNetworkAliases(...options.networkAliases);
     }
+  }
+
+  if (options.user) {
+    container = container.withUser(options.user);
   }
 
   if (options.waitFor) {
