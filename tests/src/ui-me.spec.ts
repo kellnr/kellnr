@@ -4,49 +4,47 @@
  * Tests the flow: cargo login tells users to visit /me to get a token.
  * - When logged in: /me should show the token management page
  * - When not logged in: /me should redirect to login, then back to tokens
+ *
+ * Performance: All tests share a single local Kellnr instance.
  */
 
 import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
 import { LoginPage, HeaderComponent } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
-  waitForHttpOk,
-  assertDockerAvailable,
-  createBeforeAllTestInfo,
+  assertKellnrBinaryExists,
 } from "./testUtils";
-import { startKellnr, type StartedKellnr } from "./lib/kellnr";
+import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 
 test.describe("/me Route Tests (cargo login flow)", () => {
   restrictToSingleWorkerBecauseFixedPorts();
 
-  let started: StartedKellnr;
+  let started: StartedLocalKellnr;
   let baseUrl: string;
 
   test.beforeAll(async () => {
-    test.setTimeout(120_000);
-    await assertDockerAvailable();
+    test.setTimeout(60_000);
 
-    const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
+    assertKellnrBinaryExists();
+    console.log("[setup] Kellnr binary is available");
+
     const suffix = `${Date.now()}`;
 
-    started = await startKellnr(
-      {
-        name: `kellnr-me-${suffix}`,
-        image,
-        env: {
-          KELLNR_REGISTRY__AUTH_REQUIRED: "true",
-        },
+    started = await startLocalKellnr({
+      name: `kellnr-me-${suffix}`,
+      env: {
+        KELLNR_REGISTRY__AUTH_REQUIRED: "true",
       },
-      createBeforeAllTestInfo("me-route")
-    );
+    });
 
     baseUrl = started.baseUrl;
-    await waitForHttpOk(baseUrl, { timeoutMs: 60_000, intervalMs: 1_000 });
+    console.log(`[setup] Server ready at ${baseUrl}`);
   });
 
   test.afterAll(async () => {
     if (started) {
-      await started.started.container.stop();
+      console.log("[teardown] Stopping Kellnr process");
+      await started.stop();
     }
   });
 

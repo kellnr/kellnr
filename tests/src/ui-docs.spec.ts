@@ -7,25 +7,20 @@
  * - Verifies docs files exist on disk
  * - Verifies docs link is clickable in the UI and opens in new tab
  *
- * Performance: Uses a single Kellnr container for the test.
+ * Performance: Uses a single local Kellnr instance for the test.
  */
 
 import { test, expect } from "./lib/ui-fixtures";
 import { CratePage } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
-  waitForHttpOk,
-  assertDockerAvailable,
+  assertKellnrBinaryExists,
   publishCrate,
 } from "./testUtils";
-import { startKellnr, type StartedKellnr } from "./lib/kellnr";
+import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 import fs from "node:fs";
 import path from "node:path";
-
-function rimrafSync(p: string) {
-  fs.rmSync(p, { recursive: true, force: true });
-}
 
 function fileExists(p: string): boolean {
   try {
@@ -53,33 +48,31 @@ test.describe("Documentation Generation UI Tests", () => {
   // These tests use fixed localhost:8000 port
   restrictToSingleWorkerBecauseFixedPorts();
 
-  let started: StartedKellnr;
+  let started: StartedLocalKellnr;
   let baseUrl: string;
-  let dataDir: string;
   let expectedDocsPath: string;
 
-  test.beforeAll(async ({}, testInfo) => {
-    // Container setup needs more time than default timeout
+  test.beforeAll(async () => {
+    // Docs generation needs more time
     test.setTimeout(15 * 60 * 1000); // 15 minutes for docs generation
 
-    await assertDockerAvailable();
-    console.log("[setup] Docker is available");
+    assertKellnrBinaryExists();
+    console.log("[setup] Kellnr binary is available");
 
-    const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
     const suffix = `${Date.now()}`;
 
-    // Per-test data directory to mount as /opt/kdata
-    dataDir = path.resolve(
-      process.cwd(),
-      "tmp",
-      "ui-test-docs",
-      `data-${suffix}`,
-    );
-    const dataDirInContainer = "/opt/kdata/";
+    started = await startLocalKellnr({
+      name: `kellnr-ui-docs-${suffix}`,
+      env: {
+        KELLNR_DOCS__ENABLED: "true",
+      },
+    });
 
-    // Expected docs path on the host
+    baseUrl = started.baseUrl;
+
+    // Expected docs path in the local Kellnr data directory
     expectedDocsPath = path.resolve(
-      dataDir,
+      started.dataDir,
       "docs",
       "full-toml",
       "1.0.0",
@@ -88,32 +81,8 @@ test.describe("Documentation Generation UI Tests", () => {
       "index.html",
     );
 
-    console.log("[setup] Preparing data directory");
-    rimrafSync(dataDir);
-    fs.mkdirSync(dataDir, { recursive: true });
-
-    started = await startKellnr(
-      {
-        name: `kellnr-ui-docs-${suffix}`,
-        image,
-        env: {
-          KELLNR_DOCS__ENABLED: "true",
-        },
-        bindMounts: {
-          [dataDir]: dataDirInContainer,
-        },
-      },
-      testInfo
-    );
-
-    baseUrl = started.baseUrl;
-
-    console.log(`[setup] Waiting for HTTP 200 on ${baseUrl}`);
-    await waitForHttpOk(baseUrl, {
-      timeoutMs: 60_000,
-      intervalMs: 1_000,
-    });
-    console.log("[setup] Server ready");
+    console.log(`[setup] Server ready at ${baseUrl}`);
+    console.log(`[setup] Data directory: ${started.dataDir}`);
 
     // Publish crate with docs
     const registry = "kellnr-test";
@@ -148,15 +117,8 @@ test.describe("Documentation Generation UI Tests", () => {
 
   test.afterAll(async () => {
     if (started) {
-      console.log("[teardown] Stopping container");
-      await started.started.container.stop();
-    }
-
-    // Cleanup data directory
-    try {
-      rimrafSync(dataDir);
-    } catch {
-      // best-effort
+      console.log("[teardown] Stopping Kellnr process");
+      await started.stop();
     }
   });
 

@@ -1,16 +1,12 @@
 /**
- * Thin helpers for Kellnr smoke tests.
+ * Kellnr configuration helpers for tests.
  *
- * Goal: keep the "fixed localhost:8000" convention in one place, so specs stay small
- * and consistent without introducing a DSL.
+ * Provides default configuration values for the fixed localhost:8000 convention
+ * used across all tests.
  */
 
 import process from "node:process";
-import type { TestInfo } from "@playwright/test";
-import type { BeforeAllTestInfo } from "../testUtils";
 import type { PortBindings } from "./docker";
-import type { Started, StartedNetwork } from "./docker";
-import { startContainer, withStartedContainer } from "./docker";
 
 export type KellnrDefaults = {
   /**
@@ -25,7 +21,7 @@ export type KellnrDefaults = {
   baseUrl: string;
 
   /**
-   * Environment variables that should be applied to *every* Kellnr container in tests.
+   * Environment variables that should be applied to every Kellnr instance in tests.
    *
    * Tests can extend or override these by spreading:
    *   env: { ...k.env, KELLNR_PROXY__ENABLED: "true" }
@@ -74,95 +70,4 @@ export function kellnrDefaults(options?: {
       KELLNR_ORIGIN__PORT: String(hostPort),
     },
   };
-}
-
-export type StartKellnrOptions = {
-  /**
-   * Name prefix used for the container name. A unique suffix is added by docker helpers.
-   */
-  name: string;
-
-  /**
-   * Docker image to run.
-   * Defaults to `KELLNR_TEST_IMAGE` or `kellnr-test:local`.
-   */
-  image?: string;
-
-  /**
-   * Extra environment variables applied on top of `kellnrDefaults().env`.
-   */
-  env?: Record<string, string>;
-
-  /**
-   * Bind mounts (hostPath -> containerPath).
-   */
-  bindMounts?: Record<string, string>;
-
-  /**
-   * Attach the container to a started docker network (e.g. S3/MinIO tests).
-   */
-  network?: StartedNetwork;
-
-  /**
-   * Optional docker network aliases.
-   */
-  networkAliases?: string[];
-
-  /**
-   * Extra labels for debugging/housekeeping.
-   */
-  labels?: Record<string, string>;
-
-  /**
-   * Override default baseUrl/log-level defaults (rare).
-   */
-  defaults?: Parameters<typeof kellnrDefaults>[0];
-};
-
-export type StartedKellnr = {
-  started: Started;
-  baseUrl: string;
-};
-
-export async function startKellnr(
-  options: StartKellnrOptions,
-  testInfo: TestInfo | BeforeAllTestInfo,
-): Promise<StartedKellnr> {
-  const k = kellnrDefaults(options.defaults);
-
-  const image =
-    options.image ?? process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
-
-  const started = await startContainer(
-    {
-      name: options.name,
-      image,
-      ports: k.ports,
-      env: {
-        ...k.env,
-        ...(options.env ?? {}),
-      },
-      bindMounts: options.bindMounts,
-      network: options.network,
-      networkAliases: options.networkAliases,
-      labels: options.labels,
-    },
-    testInfo,
-  );
-
-  return { started, baseUrl: k.baseUrl };
-}
-
-export async function withStartedKellnr<T>(
-  testInfo: TestInfo,
-  startedKellnr: StartedKellnr,
-  fn: (ctx: { baseUrl: string }) => Promise<T>,
-  opts?: { alwaysCollectLogs?: boolean },
-): Promise<T> {
-  return await withStartedContainer(
-    testInfo,
-    startedKellnr.started,
-    async () => await fn({ baseUrl: startedKellnr.baseUrl }),
-    opts,
-  );
 }

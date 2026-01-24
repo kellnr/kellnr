@@ -3,12 +3,10 @@
  *
  * Provides:
  * - Extended test with page object fixtures
- * - Kellnr container lifecycle management
- * - Common test utilities
+ * - Common test utilities and helpers
  */
 
 import { test as base, expect, type Page } from "@playwright/test";
-import type { TestInfo } from "@playwright/test";
 import {
   LoginPage,
   HeaderComponent,
@@ -16,13 +14,6 @@ import {
   LandingPage,
   CratePage,
 } from "../pages";
-import { startKellnr, type StartedKellnr } from "./kellnr";
-import { withStartedContainer } from "./docker";
-import {
-  createBufferedTestLogger,
-  waitForHttpOk,
-  assertDockerAvailable,
-} from "../testUtils";
 
 /**
  * Default admin credentials for Kellnr.
@@ -86,87 +77,6 @@ export const test = base.extend<UITestFixtures>({
 });
 
 export { expect };
-
-/**
- * Helper to run a UI test with a Kellnr container.
- *
- * This handles:
- * - Starting the Kellnr container
- * - Waiting for HTTP readiness
- * - Cleaning up on test completion
- * - Logging and artifact collection
- *
- * Usage:
- *   test("my ui test", async ({ page }, testInfo) => {
- *     await withKellnrUI(testInfo, {}, async (baseUrl) => {
- *       await page.goto(baseUrl);
- *       // ... test code
- *     });
- *   });
- */
-export async function withKellnrUI<T>(
-  testInfo: TestInfo,
-  options: {
-    /** Name prefix for the container */
-    name?: string;
-    /** Additional environment variables */
-    env?: Record<string, string>;
-    /** Enable auth required mode */
-    authRequired?: boolean;
-  },
-  fn: (baseUrl: string) => Promise<T>,
-): Promise<T> {
-  const tlog = createBufferedTestLogger(
-    testInfo,
-    options.name ?? "kellnr-ui-test",
-  );
-  const log = tlog.log;
-
-  try {
-    await assertDockerAvailable();
-    log("Docker is available");
-
-    const suffix = `${testInfo.workerIndex}-${Date.now()}`;
-    const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
-
-    const env: Record<string, string> = {
-      ...options.env,
-    };
-
-    if (options.authRequired) {
-      env.KELLNR_REGISTRY__AUTH_REQUIRED = "true";
-    }
-
-    log(`Starting Kellnr container with image: ${image}`);
-
-    const startedKellnr: StartedKellnr = await startKellnr(
-      {
-        name: `kellnr-ui-${options.name ?? "test"}-${suffix}`,
-        image,
-        env,
-      },
-      testInfo,
-    );
-
-    return await withStartedContainer(
-      testInfo,
-      startedKellnr.started,
-      async () => {
-        log(`Waiting for HTTP 200 on ${startedKellnr.baseUrl}`);
-        await waitForHttpOk(startedKellnr.baseUrl, {
-          timeoutMs: 60_000,
-          intervalMs: 1_000,
-        });
-        log("Server ready");
-
-        return await fn(startedKellnr.baseUrl);
-      },
-      { alwaysCollectLogs: true },
-    );
-  } finally {
-    await tlog.flush();
-  }
-}
 
 /**
  * Helper to login with default admin credentials.

@@ -6,7 +6,7 @@ All tests verify both backend functionality AND UI accessibility through browser
 
 ## Test Suite Overview
 
-**44 UI tests across 10 test files:**
+**53 UI tests across 12 test files:**
 
 | Test File | Tests | What It Verifies |
 |-----------|-------|------------------|
@@ -16,16 +16,18 @@ All tests verify both backend functionality AND UI accessibility through browser
 | `ui-docs.spec.ts` | 2 | Documentation generation + UI link verification |
 | `ui-landing-stats.spec.ts` | 5 | Landing page statistics cards clickability |
 | `ui-login.spec.ts` | 6 | Login/logout, auth, form validation, protected routes |
+| `ui-me.spec.ts` | 4 | /me route, cargo login flow, token management |
 | `ui-migration.spec.ts` | 1 | Database migration + UI accessibility |
 | `ui-navigation.spec.ts` | 7 | Header nav, theme toggle, routing, branding |
 | `ui-proxy-crates.spec.ts` | 3 | Proxy toggle, cached crates, statistics |
 | `ui-s3-storage.spec.ts` | 4 | S3 storage backend + UI verification |
+| `ui-user-management.spec.ts` | 5 | User management, admin promotion/demotion |
 
 ## Prerequisites
 
-- Docker installed and running
 - Node.js and npm
-- A Rust toolchain (for building Kellnr test image)
+- A Rust toolchain (for building Kellnr)
+- Docker (only for S3 and migration tests)
 
 Optional:
 - Nix development shell via the repo `flake.nix`
@@ -39,10 +41,10 @@ Optional:
 Use the justfile commands (these automatically install browsers):
 
 ```bash
-# Fast: Run in Chromium only (default, ~5-8 minutes)
+# Fast: Run in Chromium only (default)
 just test-ui
 
-# Comprehensive: Run in all 3 browsers (~15-20 minutes)
+# Comprehensive: Run in all 3 browsers
 just test-ui-all-browser
 
 # Individual browsers
@@ -90,19 +92,12 @@ npm test -- --debug
 
 ## Environment Variables
 
-These tests expect:
-
-- `KELLNR_TEST_IMAGE` (optional, default: `kellnr-test:local`)
-  - Docker image to test
-- `KELLNR_BASE_URL` (optional, default: `http://localhost:8000`)
-- `PLAYWRIGHT_UI=1` (optional)
-  - Enables all 3 browsers (Chromium, Firefox, WebKit)
-  - Without this flag: Chromium only (faster)
-
-## Test Execution Times
-
-- **Chromium only** (`npm test`): ~5-8 minutes for all 44 tests
-- **All browsers** (`PLAYWRIGHT_UI=1 npm test`): ~15-20 minutes for 132 tests
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KELLNR_SKIP_BUILD` | - | Set to `1` to skip building Kellnr (use existing binary) |
+| `KELLNR_BINARY_PATH` | `target/debug/kellnr` | Path to Kellnr binary |
+| `KELLNR_BASE_URL` | `http://localhost:8000` | Base URL for tests |
+| `PLAYWRIGHT_UI` | - | Set to `1` to enable all browsers (Chromium, Firefox, WebKit) |
 
 ## Architecture
 
@@ -120,20 +115,26 @@ tests/src/
 │   └── NavigationPage.ts
 ├── lib/                 # Test infrastructure
 │   ├── ui-fixtures.ts   # Playwright fixtures
-│   ├── docker.ts        # Docker container helpers
-│   ├── kellnr.ts        # Kellnr-specific helpers
+│   ├── local.ts         # Local Kellnr process management
+│   ├── docker.ts        # Docker container helpers (S3, migration)
+│   ├── kellnr.ts        # Kellnr configuration helpers
 │   └── registry.ts      # Cargo registry helpers
 └── ui-*.spec.ts         # Test specifications
 ```
 
-### Shared Container Pattern
+### Shared Local Process Pattern
 
-Each test file uses a shared Kellnr container for all its tests to minimize overhead:
-- Container started once in `beforeAll`
-- All tests in the file use the same container
-- Container stopped in `afterAll`
+Each test file starts a local Kellnr process that is shared by all tests in that file:
+- Kellnr binary built once in `globalSetup` via `just npm-build && just build`
+- Each test file spawns its own Kellnr process in `beforeAll`
+- All tests in the file use the same process
+- Process stopped and data directory cleaned up in `afterAll`
 
-This reduces ~20+ container starts to just 9 (one per test file).
+Data isolation is achieved via unique directories: `/tmp/kellnr-test-ui/<uuid>/`
+
+**Exceptions:**
+- **S3 tests**: Use Docker for MinIO container, local Kellnr connects to it
+- **Migration tests**: Use Docker for old Kellnr version, local for new version
 
 ## Notes on Ports / Parallelism
 
@@ -152,7 +153,7 @@ When a test fails:
 1. **Check console output** - Playwright provides clear failure traces
 2. **View HTML report** - `npx playwright show-report`
 3. **Inspect artifacts** - Screenshots, videos, traces attached on failure
-4. **Check Docker logs** - Attached as Playwright artifacts
+4. **Check Kellnr logs** - Located in the test data directory (logged to console on failure)
 
 Artifacts are stored in:
 - `tests/test-results/` - Test run artifacts
@@ -181,27 +182,37 @@ npm test -- ui-docs.spec.ts --debug
    - Add test IDs (`data-testid`) to UI components when needed
    - Use page object methods instead of raw selectors
 
-3. **Use shared container pattern**:
+3. **Use shared local process pattern**:
    ```typescript
+   import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
+   import { restrictToSingleWorkerBecauseFixedPorts, assertKellnrBinaryExists } from "./testUtils";
+
    test.describe("My Feature Tests", () => {
      restrictToSingleWorkerBecauseFixedPorts();
 
-     let started: StartedKellnr;
+     let started: StartedLocalKellnr;
      let baseUrl: string;
 
-     test.beforeAll(async ({}, testInfo) => {
-       started = await startKellnr({...}, testInfo);
+     test.beforeAll(async () => {
+       assertKellnrBinaryExists();
+       started = await startLocalKellnr({
+         name: "my-feature-test",
+         env: {
+           // Optional: test-specific environment variables
+         },
+       });
        baseUrl = started.baseUrl;
      });
 
      test.afterAll(async () => {
        if (started) {
-         await started.started.container.stop();
+         await started.stop();
        }
      });
 
      test("my test", async ({ page }) => {
-       // Use baseUrl and page object
+       await page.goto(`${baseUrl}/some-page`);
+       // Use page object methods
      });
    });
    ```

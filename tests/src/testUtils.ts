@@ -379,6 +379,42 @@ export async function assertDockerAvailable(): Promise<void> {
   if (playDebug()) log("debug", `docker version ok`);
 }
 
+/**
+ * Assert that the Kellnr binary exists and is executable.
+ * This should be called before starting tests that use local Kellnr.
+ */
+export function assertKellnrBinaryExists(): void {
+  const binaryPath = getKellnrBinaryPath();
+  if (!fs.existsSync(binaryPath)) {
+    throw new Error(
+      `Kellnr binary not found at ${binaryPath}. ` +
+        `Run 'just npm-build && just build' first, or set KELLNR_BINARY_PATH.`,
+    );
+  }
+
+  // Check if executable (on Unix systems)
+  try {
+    fs.accessSync(binaryPath, fs.constants.X_OK);
+  } catch {
+    throw new Error(`Kellnr binary at ${binaryPath} is not executable.`);
+  }
+
+  if (playDebug()) log("debug", `kellnr binary ok at ${binaryPath}`);
+}
+
+/**
+ * Get the path to the Kellnr binary.
+ * Can be overridden via KELLNR_BINARY_PATH environment variable.
+ */
+export function getKellnrBinaryPath(): string {
+  if (process.env.KELLNR_BINARY_PATH) {
+    return process.env.KELLNR_BINARY_PATH;
+  }
+  // Default: debug build at repo root
+  const repoRoot = repoRootFromTests();
+  return path.resolve(repoRoot, "target", "debug", "kellnr");
+}
+
 export async function fetchLatestReleasedKellnrImage(): Promise<string> {
   const image = "ghcr.io/kellnr/kellnr";
   const repo = "kellnr/kellnr";

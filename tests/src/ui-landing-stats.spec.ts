@@ -7,18 +7,17 @@
  * - Clicking "Last Updated" card navigates to the specific crate page
  * - Non-clickable cards don't have cursor pointer styling
  *
- * Performance: All tests share a single Kellnr container instance.
+ * Performance: All tests share a single local Kellnr instance.
  */
 
 import { test, expect } from "./lib/ui-fixtures";
 import { LandingPage, CratesPage, CratePage } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
-  waitForHttpOk,
-  assertDockerAvailable,
+  assertKellnrBinaryExists,
   publishCrate,
 } from "./testUtils";
-import { startKellnr, type StartedKellnr } from "./lib/kellnr";
+import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 import path from "node:path";
 
@@ -26,39 +25,28 @@ test.describe("Landing Page Statistics Cards UI Tests", () => {
   // These tests use fixed localhost:8000 port
   restrictToSingleWorkerBecauseFixedPorts();
 
-  let started: StartedKellnr;
+  let started: StartedLocalKellnr;
   let baseUrl: string;
 
-  test.beforeAll(async ({}, testInfo) => {
-    // Container setup needs more time than default timeout
-    test.setTimeout(120_000); // 2 minutes for setup
+  test.beforeAll(async () => {
+    // Setup needs more time for publishing crates
+    test.setTimeout(120_000);
 
-    await assertDockerAvailable();
-    console.log("[setup] Docker is available");
+    assertKellnrBinaryExists();
+    console.log("[setup] Kellnr binary is available");
 
-    const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
     const suffix = `${Date.now()}`;
 
-    started = await startKellnr(
-      {
-        name: `kellnr-landing-stats-${suffix}`,
-        image,
-        env: {
-          // Enable proxy for cached crates tests
-          KELLNR_PROXY__ENABLED: "true",
-        },
+    started = await startLocalKellnr({
+      name: `kellnr-landing-stats-${suffix}`,
+      env: {
+        // Enable proxy for cached crates tests
+        KELLNR_PROXY__ENABLED: "true",
       },
-      testInfo
-    );
+    });
 
     baseUrl = started.baseUrl;
-
-    console.log(`[setup] Waiting for HTTP 200 on ${baseUrl}`);
-    await waitForHttpOk(baseUrl, {
-      timeoutMs: 60_000,
-      intervalMs: 1_000,
-    });
-    console.log("[setup] Server ready");
+    console.log(`[setup] Server ready at ${baseUrl}`);
 
     // Publish a test crate to ensure we have data
     const registry = "kellnr-test";
@@ -86,8 +74,8 @@ test.describe("Landing Page Statistics Cards UI Tests", () => {
 
   test.afterAll(async () => {
     if (started) {
-      console.log("[teardown] Stopping container");
-      await started.started.container.stop();
+      console.log("[teardown] Stopping Kellnr process");
+      await started.stop();
     }
   });
 
