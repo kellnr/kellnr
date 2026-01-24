@@ -69,9 +69,9 @@ const routes = [
   {
     path: '/me',
     name: 'Me',
-    redirect: () => {
-      return { path: '/settings', query: { tab: 'tokens' } }
-    },
+    // Use Settings component - the beforeEach guard handles auth,
+    // and if authenticated, redirects to /settings?tab=tokens
+    component: Settings,
     meta: {
       requiresAuth: true,
     }
@@ -89,22 +89,27 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const store = useStore();
 
+  // Handle /me route first - it always redirects somewhere
+  if (to.path === '/me') {
+    if (store.loggedIn) {
+      // Logged in - go to settings tokens tab
+      return { path: '/settings', query: { tab: 'tokens' } }
+    } else {
+      // Not logged in - go to login with redirect flag
+      return { name: 'Login', query: { redirect: 'me' } }
+    }
+  }
+
   // Check if the "auth_required" setting is enabled in Kellnr.
   // If it is enabled, the user must be authenticated to view any page, except the login page.
   // If the user is not authenticated, he will be redirected to the login page.
   if (await auth_required()) {
     if (to.matched.some(record => record.meta.requiresAuth)) {
       if (!store.loggedIn) {
-        console.debug("Auth required. Redirecting to login page.");
-        return { name: 'Login', query: { redirect: to.fullPath } }
-      }
-      else {
-        console.debug("Auth required. User is authenticated.");
+        const redirectFlag = to.path === '/settings' ? 'settings' : undefined
+        return { name: 'Login', query: redirectFlag ? { redirect: redirectFlag } : {} }
       }
     }
-  }
-  else {
-    console.debug("Auth not required.");
   }
 });
 

@@ -101,15 +101,16 @@ test.describe("/me Route Tests (cargo login flow)", () => {
     await page.goto(`${baseUrl}/me`);
     await expect(page).toHaveURL(/\/login/);
 
-    // Verify the redirect query param is set
+    // Verify the redirect query param is set to 'me'
     const url = new URL(page.url());
-    expect(url.searchParams.get("redirect")).toMatch(/\/me|\/settings/);
+    const redirectParam = url.searchParams.get("redirect");
+    expect(redirectParam).toBe("me");
 
     // Login
     await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
 
-    // Should redirect back to settings with tokens tab
-    await expect(page).toHaveURL(/\/settings/, { timeout: 10000 });
+    // Should redirect back to settings with tokens tab in URL
+    await expect(page).toHaveURL(/\/settings.*tab=tokens/, { timeout: 10000 });
     await expect(page.locator("span:text('Authentication Tokens')")).toBeVisible();
   });
 
