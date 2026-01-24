@@ -6,6 +6,22 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { execa, ExecaError, type Options as ExecaOptions } from "execa";
 import { expect, test, type TestInfo } from "@playwright/test";
 
+/**
+ * Minimal TestInfo-like type for use in beforeAll hooks where full TestInfo is unavailable.
+ * Provides the subset of properties needed by container startup helpers.
+ */
+export type BeforeAllTestInfo = Pick<TestInfo, "title"> & {
+  workerIndex?: number;
+};
+
+/**
+ * Create a minimal TestInfo-like object for use in beforeAll hooks.
+ * This avoids `as any` casts while satisfying the container helpers' requirements.
+ */
+export function createBeforeAllTestInfo(title: string): BeforeAllTestInfo {
+  return { title, workerIndex: 0 };
+}
+
 type LogLevel = "info" | "debug" | "error";
 
 function nowIsoNoMs(): string {

@@ -128,10 +128,19 @@ import GroupMgmt from "../components/GroupMgmt.vue";
 import StartupConfig from "../components/StartupConfig.vue";
 import { useStore } from "../store/store";
 import { ref } from "vue";
+import { useRoute } from "vue-router";
 
 type SettingsTab = 'password' | 'tokens' | 'users' | 'groups' | 'config'
 
-const activeTab = ref<SettingsTab>('password')
+const route = useRoute()
+
+function getInitialTab(): SettingsTab {
+  const tab = route.query.tab as string | undefined
+  const validTabs: SettingsTab[] = ['password', 'tokens', 'users', 'groups', 'config']
+  return validTabs.includes(tab as SettingsTab) ? (tab as SettingsTab) : 'password'
+}
+
+const activeTab = ref<SettingsTab>(getInitialTab())
 const store = useStore()
 </script>
 

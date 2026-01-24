@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { TestInfo } from "@playwright/test";
+import type { BeforeAllTestInfo } from "../testUtils";
 import { execa } from "execa";
 import {
   GenericContainer,
@@ -136,7 +137,7 @@ function testsRoot(): string {
   return path.resolve(process.cwd());
 }
 
-function projectTmpDir(testInfo: TestInfo): string {
+function projectTmpDir(testInfo: TestInfo | BeforeAllTestInfo): string {
   const dir = path.resolve(
     testsRoot(),
     "tmp",
@@ -150,7 +151,7 @@ function projectTmpDir(testInfo: TestInfo): string {
  * Produce a stable-ish, unique Docker container name.
  * Docker names must be unique on a daemon; even across workers.
  */
-export function uniqueContainerName(base: string, testInfo?: TestInfo): string {
+export function uniqueContainerName(base: string, testInfo?: TestInfo | BeforeAllTestInfo): string {
   const slug = sluggifyForName(base);
   const worker = testInfo ? `w${testInfo.workerIndex}` : "w?";
   return `${slug}-${worker}-${Date.now()}`;
@@ -163,7 +164,7 @@ export function uniqueContainerName(base: string, testInfo?: TestInfo): string {
  */
 export async function createNetwork(
   name: string,
-  testInfo?: TestInfo,
+  testInfo?: TestInfo | BeforeAllTestInfo,
 ): Promise<StartedNetwork> {
   const netName = uniqueContainerName(name, testInfo);
 
@@ -364,7 +365,7 @@ async function startStreamingContainerLogs(options: {
  */
 export async function startContainer(
   options: StartContainerOptions,
-  testInfo: TestInfo,
+  testInfo: TestInfo | BeforeAllTestInfo,
 ): Promise<Started> {
   const name = uniqueContainerName(options.name, testInfo);
 
@@ -490,7 +491,7 @@ export async function startS3MinioContainer(
     rootUser: string;
     rootPassword: string;
   },
-  testInfo?: TestInfo,
+  testInfo?: TestInfo | BeforeAllTestInfo,
 ): Promise<Started> {
   return await startContainer(
     {

@@ -145,8 +145,15 @@ async function handleLogin() {
       store.rememberMeUser = username.value
     }
 
-    // Redirect based on query parameter
-    if (router.currentRoute.value.query["redirect"] === "settings") {
+    // Redirect based on query parameter flag
+    const redirectParam = router.currentRoute.value.query["redirect"]
+    // Handle both string and array cases from Vue Router
+    const redirect = Array.isArray(redirectParam) ? redirectParam[0] : redirectParam
+
+    if (redirect === "me") {
+      // From /me route (cargo login flow) - go to settings tokens tab
+      router.push("/settings?tab=tokens")
+    } else if (redirect === "settings") {
       router.push("/settings")
     } else {
       router.push("/")

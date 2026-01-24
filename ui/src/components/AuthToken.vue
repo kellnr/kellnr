@@ -120,7 +120,7 @@
     </div>
 
     <!-- Delete Confirmation Dialog -->
-    <v-dialog v-model="dialogIsOpen" max-width="450">
+    <v-dialog v-model="dialogOpen" max-width="450">
       <v-card class="delete-dialog">
         <div class="dialog-header">
           <v-icon icon="mdi-alert-circle" color="error" size="small" class="me-3"></v-icon>
@@ -152,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, ref } from "vue"
+import { onBeforeMount, ref, computed } from "vue"
 import { useStatusMessage, useConfirmCallback } from "../composables"
 import { tokenService } from "../services"
 import { isSuccess } from "../services/api"
@@ -167,7 +167,12 @@ const createLoading = ref(false)
 // Composables
 const createStatus = useStatusMessage()
 const { dialog, showConfirm } = useConfirmCallback()
-const dialogIsOpen = dialog.isOpen  // Destructure to make it a top-level ref for v-model
+
+// Computed wrapper for dialog.isOpen to properly handle ref unwrapping in v-model
+const dialogOpen = computed({
+  get: () => dialog.isOpen.value,
+  set: (val: boolean) => { dialog.isOpen.value = val }
+})
 
 // Lifecycle
 onBeforeMount(() => {

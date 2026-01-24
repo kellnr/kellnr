@@ -26,7 +26,7 @@ admin_token = "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"
 data_dir = "/opt/kdata"
 # Seconds until a user is logged out automatically after inactivity in the UI
 session_age_seconds = 28800
-# Number of crates to cache in-memory. If set to 0, the cache is disabled. 
+# Number of crates to cache in-memory. If set to 0, the cache is disabled.
 cache_size = 1000
 # Max size of a crate that can be uploaded to Kellnr in MB
 max_crate_size = 10
