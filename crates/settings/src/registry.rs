@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::compile_time_config;
 
 fn default_data_dir() -> String {
-    compile_time_config::KELLNR_DATA_DIR.to_string()
+    compile_time_config::KELLNR_COMPTIME__DATA_DIR.to_string()
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]

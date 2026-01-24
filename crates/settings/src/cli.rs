@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::PathBuf;
 
 use clap::Parser;
 use clap_serde_derive::ClapSerde;
@@ -19,6 +19,10 @@ use crate::setup::Setup;
 #[derive(Parser)]
 #[command(name = "kellnr", version, about)]
 pub struct Cli {
+    /// Path to configuration file
+    #[arg(id = "config", short = 'c', long = "config")]
+    pub config_file: Option<PathBuf>,
+
     #[command(flatten)]
     pub local: <Local as ClapSerde>::Opt,
 
@@ -60,21 +64,15 @@ pub struct Cli {
 pub fn get_settings_with_cli() -> Result<Settings, ConfigError> {
     let cli = Cli::parse();
 
-    // Determine config path (compile-time > fallbacks)
-    let config_path = if Path::new(compile_time_config::KELLNR_CONFIG_DIR).exists() {
-        Some(Path::new(compile_time_config::KELLNR_CONFIG_DIR))
-    } else if Path::new("./config").exists() {
-        Some(Path::new("./config"))
-    } else if Path::new("../config").exists() {
-        Some(Path::new("../config"))
-    } else if Path::new("../../config").exists() {
-        Some(Path::new("../../config"))
-    } else {
-        None
-    };
+    // Config file priority: CLI > env var > compile-time > None
+    let env_config_file = std::env::var("KELLNR_CONFIG_FILE").ok();
+    let config_file: Option<PathBuf> = cli
+        .config_file
+        .or(env_config_file.map(PathBuf::from))
+        .or(compile_time_config::KELLNR_COMPTIME__CONFIG_FILE.map(PathBuf::from));
 
-    // Load settings from files + env
-    let mut settings = Settings::try_from(config_path)?;
+    // Load settings from file + env
+    let mut settings = Settings::try_from(config_file.as_deref())?;
 
     // Merge CLI args (highest priority)
     settings.local = Local::from(settings.local).merge(cli.local);

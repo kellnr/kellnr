@@ -76,14 +76,14 @@ jobs:
 
       - name: Extract Version
         run: |
-          echo "KELLNR_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-          echo $KELLNR_VERSION
+          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo $KELLNR_COMPTIME__VERSION
 
       - name: Build Release ${{ matrix.target }}
         run: just target=${{ matrix.target }} ci-release
 
       - name: Set Package Name
-        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_VERSION.zip" >> $GITHUB_ENV
+        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_COMPTIME__VERSION.zip" >> $GITHUB_ENV
 
       - name: Print Package Name
         run: echo $KELLNR_PACKAGE

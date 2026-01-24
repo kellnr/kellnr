@@ -32,7 +32,7 @@ pub struct KellnrVersion {
 #[allow(clippy::unused_async)] // part of the router
 pub async fn kellnr_version() -> Json<KellnrVersion> {
     Json(KellnrVersion {
-        version: compile_time_config::KELLNR_VERSION.to_string(),
+        version: compile_time_config::KELLNR_COMPTIME__VERSION.to_string(),
     })
 }
 
