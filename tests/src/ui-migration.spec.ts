@@ -37,119 +37,46 @@ function rimrafSync(p: string) {
 }
 
 /**
- * Debug helper: print directory contents with permissions and ownership.
- */
-function debugPrintDirContents(dirPath: string, label: string): void {
-  console.log(`\n[DEBUG] === ${label} ===`);
-  console.log(`[DEBUG] Directory: ${dirPath}`);
-
-  try {
-    // Check if directory exists
-    if (!fs.existsSync(dirPath)) {
-      console.log(`[DEBUG] Directory does not exist!`);
-      return;
-    }
-
-    // Get directory stats
-    const dirStat = fs.statSync(dirPath);
-    console.log(`[DEBUG] Dir mode: ${dirStat.mode.toString(8)}, uid: ${dirStat.uid}, gid: ${dirStat.gid}`);
-
-    // List contents with ls -la
-    try {
-      const lsOutput = execSync(`ls -la "${dirPath}"`, { encoding: "utf-8" });
-      console.log(`[DEBUG] Contents:\n${lsOutput}`);
-    } catch (e) {
-      console.log(`[DEBUG] ls -la failed: ${e}`);
-    }
-
-    // Recursively list all files
-    try {
-      const findOutput = execSync(`find "${dirPath}" -type f | head -20`, { encoding: "utf-8" });
-      console.log(`[DEBUG] Files (first 20):\n${findOutput}`);
-    } catch (e) {
-      console.log(`[DEBUG] find failed: ${e}`);
-    }
-
-    // Show ownership of first few files
-    try {
-      const lsRecursive = execSync(`ls -laR "${dirPath}" | head -50`, { encoding: "utf-8" });
-      console.log(`[DEBUG] Recursive listing (first 50 lines):\n${lsRecursive}`);
-    } catch (e) {
-      console.log(`[DEBUG] ls -laR failed: ${e}`);
-    }
-  } catch (e) {
-    console.log(`[DEBUG] Error inspecting directory: ${e}`);
-  }
-  console.log(`[DEBUG] === END ${label} ===\n`);
-}
-
-/**
- * Debug helper: print current user info.
- */
-function debugPrintUserInfo(): void {
-  console.log(`\n[DEBUG] === User Info ===`);
-
-  const uid = typeof process.getuid === "function" ? process.getuid() : null;
-  const gid = typeof process.getgid === "function" ? process.getgid() : null;
-  console.log(`[DEBUG] process.getuid(): ${uid}`);
-  console.log(`[DEBUG] process.getgid(): ${gid}`);
-
-  try {
-    const whoami = execSync("whoami", { encoding: "utf-8" }).trim();
-    console.log(`[DEBUG] whoami: ${whoami}`);
-  } catch (e) {
-    console.log(`[DEBUG] whoami failed: ${e}`);
-  }
-
-  try {
-    const id = execSync("id", { encoding: "utf-8" }).trim();
-    console.log(`[DEBUG] id: ${id}`);
-  } catch (e) {
-    console.log(`[DEBUG] id failed: ${e}`);
-  }
-
-  try {
-    const sudoCheck = execSync("sudo -n true 2>&1 && echo 'sudo: YES' || echo 'sudo: NO'", { encoding: "utf-8", shell: "/bin/bash" }).trim();
-    console.log(`[DEBUG] ${sudoCheck}`);
-  } catch (e) {
-    console.log(`[DEBUG] sudo check failed: ${e}`);
-  }
-
-  console.log(`[DEBUG] === END User Info ===\n`);
-}
-
-/**
  * Fix ownership of files in a directory after Docker has written to them.
- * Docker runs as root, so files are owned by root. This uses sudo to change
+ * Docker runs as root on Linux, so files are owned by root. This uses sudo to change
  * ownership to the current user so the local Kellnr process can access them.
+ *
+ * On macOS with Docker Desktop, files are typically already owned by the current user,
+ * so no fix is needed.
  *
  * This works on GitHub Actions runners which have passwordless sudo.
  * On systems without sudo or where sudo requires a password, this will fail
  * silently and the test will fail with a more specific error later.
  */
 function fixDataDirOwnership(dirPath: string): void {
-  console.log(`[DEBUG] fixDataDirOwnership called for: ${dirPath}`);
-
   // Get current user's UID:GID
   const uid = typeof process.getuid === "function" ? process.getuid() : null;
   const gid = typeof process.getgid === "function" ? process.getgid() : null;
-
-  console.log(`[DEBUG] Target UID:GID = ${uid}:${gid}`);
 
   if (uid === null || gid === null) {
     console.log("[migration] Cannot determine current user UID/GID, skipping ownership fix");
     return;
   }
 
+  // Check if the directory is already owned by current user
+  try {
+    const stat = fs.statSync(dirPath);
+    if (stat.uid === uid) {
+      console.log("[migration] Data directory already owned by current user, no fix needed");
+      return;
+    }
+    console.log(`[migration] Data directory owned by uid ${stat.uid}, current user is ${uid}`);
+  } catch {
+    console.log("[migration] Could not stat data directory, skipping ownership fix");
+    return;
+  }
+
   try {
     // Use sudo to change ownership recursively
-    const cmd = `sudo chown -R ${uid}:${gid} "${dirPath}"`;
-    console.log(`[DEBUG] Running: ${cmd}`);
-    execSync(cmd, { stdio: "inherit" });
+    execSync(`sudo chown -R ${uid}:${gid} "${dirPath}"`, { stdio: "inherit" });
     console.log(`[migration] Changed ownership to ${uid}:${gid}`);
-  } catch (e) {
+  } catch {
     // sudo might not be available or might require a password
-    console.log(`[DEBUG] sudo chown failed with error: ${e}`);
     console.log("[migration] Warning: Could not fix data directory ownership (sudo may not be available)");
   }
 }
@@ -215,9 +142,6 @@ test.describe("Migration UI Tests", () => {
 
     try {
       await test.step("check prerequisites", async () => {
-        // Debug: Print user info at the start
-        debugPrintUserInfo();
-
         await assertDockerAvailable();
         console.log("[migration] Docker is available (for old version)");
 
@@ -282,38 +206,21 @@ test.describe("Migration UI Tests", () => {
 
       // ---- Fix file ownership after Docker ----
       await test.step("fix data directory ownership", async () => {
-        console.log("[migration] Fixing data directory ownership after Docker");
-
-        // Debug: Show directory contents BEFORE ownership fix
-        debugPrintDirContents(kdataDir, "BEFORE ownership fix");
-
         fixDataDirOwnership(kdataDir);
-
-        // Debug: Show directory contents AFTER ownership fix
-        debugPrintDirContents(kdataDir, "AFTER ownership fix");
       });
 
       // ---- Run new version (local) ----
       await test.step("run new version (local) and verify migration", async () => {
-        console.log("[DEBUG] About to start local Kellnr process...");
-        console.log(`[DEBUG] Using data directory: ${kdataDir}`);
-
         // Start local Kellnr with the same data directory
-        try {
-          localKellnr = await startLocalKellnr({
-            name: `kellnr-migration-new-${suffix}`,
-            env: {
-              // Use the existing kdata directory from the old container
-              KELLNR_REGISTRY__DATA_DIR: kdataDir,
-            },
-          });
-          console.log("[migration] New server (local) ready");
-        } catch (e) {
-          console.log(`[DEBUG] startLocalKellnr FAILED: ${e}`);
-          // Print directory state at failure time
-          debugPrintDirContents(kdataDir, "AT FAILURE TIME");
-          throw e;
-        }
+        localKellnr = await startLocalKellnr({
+          name: `kellnr-migration-new-${suffix}`,
+          env: {
+            // Use the existing kdata directory from the old container
+            KELLNR_REGISTRY__DATA_DIR: kdataDir,
+          },
+        });
+
+        console.log("[migration] New server (local) ready");
 
         console.log("[migration] Publishing crate to new version");
         await publishCrate({
