@@ -1,8 +1,9 @@
+use clap::ValueEnum;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::deserialize_with::DeserializeWith;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
 pub enum Protocol {
     #[default]
     Http,

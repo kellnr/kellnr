@@ -26,7 +26,7 @@ mod routes;
 
 #[tokio::main]
 async fn main() {
-    let settings: Arc<Settings> = kellnr_settings::get_settings()
+    let settings: Arc<Settings> = kellnr_settings::get_settings_with_cli()
         .expect("Cannot read config")
         .into();
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));

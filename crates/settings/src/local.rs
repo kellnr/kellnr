@@ -1,19 +1,22 @@
 use std::net::{IpAddr, Ipv4Addr};
 
+use clap_serde_derive::ClapSerde;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
-#[serde(default)]
-pub struct Local {
-    pub ip: IpAddr,
-    pub port: u16,
+fn default_ip() -> IpAddr {
+    IpAddr::V4(Ipv4Addr::UNSPECIFIED)
 }
 
-impl Default for Local {
-    fn default() -> Self {
-        Self {
-            ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-            port: 8000,
-        }
-    }
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
+#[serde(default)]
+pub struct Local {
+    /// IP address to bind to
+    #[default(default_ip())]
+    #[arg(id = "local-ip", long = "local-ip")]
+    pub ip: IpAddr,
+
+    /// Port to listen on
+    #[default(8000)]
+    #[arg(id = "local-port", long = "local-port", short = 'p')]
+    pub port: u16,
 }

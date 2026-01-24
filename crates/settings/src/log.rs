@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use clap::ValueEnum;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::deserialize_with::DeserializeWith;
@@ -25,7 +26,7 @@ impl Default for Log {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum)]
 pub enum LogFormat {
     Compact,
     Pretty,
@@ -69,7 +70,7 @@ impl Display for LogFormat {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum)]
 pub enum LogLevel {
     Trace,
     Debug,
