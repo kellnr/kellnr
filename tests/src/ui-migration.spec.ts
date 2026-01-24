@@ -29,9 +29,28 @@ import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 import fs from "node:fs";
 import path from "node:path";
+import { execSync } from "node:child_process";
 
 function rimrafSync(p: string) {
   fs.rmSync(p, { recursive: true, force: true });
+}
+
+/**
+ * Fix permissions on a directory after Docker has written to it.
+ * Docker may create files as root, making them inaccessible to the CI runner.
+ * This function makes all files readable and writable by the current user.
+ */
+function fixDataDirPermissions(dirPath: string): void {
+  try {
+    // Use chmod -R to recursively set permissions
+    // 755 for directories, 644 for files would be ideal, but chmod -R 777 is simpler
+    // and safe for test data directories
+    execSync(`chmod -R 777 "${dirPath}"`, { stdio: "inherit" });
+  } catch {
+    // On some systems (Windows, or if running as non-root), this might fail
+    // That's OK - the test will fail with a more specific error if needed
+    console.log("[migration] Warning: Could not fix data directory permissions");
+  }
 }
 
 function fileExists(p: string): boolean {
@@ -155,6 +174,14 @@ test.describe("Migration UI Tests", () => {
           startedOld.stopLogStreaming?.();
           await startedOld.container.stop().catch(() => { });
         }
+      });
+
+      // Fix permissions on the data directory
+      // Docker may have created files as root, which the local process can't access
+      await test.step("fix data directory permissions", async () => {
+        console.log("[migration] Fixing data directory permissions");
+        fixDataDirPermissions(kdataDir);
+        console.log("[migration] Permissions fixed");
       });
 
       // ---- Run new version (local) ----

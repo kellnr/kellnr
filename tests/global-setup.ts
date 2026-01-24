@@ -27,17 +27,12 @@ function repoRootFromTests(): string {
 }
 
 /**
- * Check if the Kellnr binary exists and is recent enough.
- * Returns true if we should skip rebuilding.
+ * Check if the Kellnr binary exists.
  */
-function binaryExistsAndRecent(binaryPath: string, maxAgeMs: number = 0): boolean {
+function binaryExists(binaryPath: string): boolean {
     try {
-        const stats = fs.statSync(binaryPath);
-        if (maxAgeMs === 0) {
-            return true;
-        }
-        const age = Date.now() - stats.mtimeMs;
-        return age < maxAgeMs;
+        fs.statSync(binaryPath);
+        return true;
     } catch {
         return false;
     }
@@ -62,24 +57,12 @@ export default async function globalSetup(_config: FullConfig) {
     if (process.env.KELLNR_SKIP_BUILD === "1") {
         // eslint-disable-next-line no-console
         console.log("[globalSetup] KELLNR_SKIP_BUILD=1, skipping build");
-        if (!binaryExistsAndRecent(binaryPath)) {
+        if (!binaryExists(binaryPath)) {
             throw new Error(
                 `KELLNR_SKIP_BUILD=1 but binary not found at ${binaryPath}. ` +
                     `Run 'just npm-build && just build' first.`,
             );
         }
-        return;
-    }
-
-    // Check if we should force rebuild
-    const forceRebuild = process.env.KELLNR_FORCE_REBUILD === "1";
-
-    // If binary exists and we're not forcing rebuild, skip
-    if (!forceRebuild && binaryExistsAndRecent(binaryPath)) {
-        // eslint-disable-next-line no-console
-        console.log(`[globalSetup] Binary exists at ${binaryPath}`);
-        // eslint-disable-next-line no-console
-        console.log("[globalSetup] Skipping build (set KELLNR_FORCE_REBUILD=1 to force)");
         return;
     }
 
@@ -108,7 +91,7 @@ export default async function globalSetup(_config: FullConfig) {
     console.log("[globalSetup] Backend built successfully");
 
     // Verify binary was created
-    if (!binaryExistsAndRecent(binaryPath)) {
+    if (!binaryExists(binaryPath)) {
         throw new Error(
             `Build completed but binary not found at ${binaryPath}. ` +
                 `Check the build output for errors.`,

@@ -95,7 +95,6 @@ npm test -- --debug
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KELLNR_SKIP_BUILD` | - | Set to `1` to skip building Kellnr (use existing binary) |
-| `KELLNR_FORCE_REBUILD` | - | Set to `1` to force rebuild even if binary exists |
 | `KELLNR_BINARY_PATH` | `target/debug/kellnr` | Path to Kellnr binary |
 | `KELLNR_BASE_URL` | `http://localhost:8000` | Base URL for tests |
 | `PLAYWRIGHT_UI` | - | Set to `1` to enable all browsers (Chromium, Firefox, WebKit) |
