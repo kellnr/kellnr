@@ -2,13 +2,15 @@
  * UI tests for database migration and version upgrades.
  *
  * Tests:
- * - Starts Kellnr with old version and publishes crates
+ * - Starts Kellnr with old version (Docker) and publishes crates
  * - Stops old container
- * - Starts Kellnr with new version (same data directory)
+ * - Starts Kellnr with new version (local) using the same data directory
  * - Verifies database migration succeeded
  * - Verifies UI is accessible and shows migrated data
  *
- * Performance: Sequential test with old → new version upgrade.
+ * Performance: Sequential test with old (Docker) → new (local) version upgrade.
+ * Docker is used for old version because we need released images.
+ * Local process is used for new version to speed up testing.
  */
 
 import { test, expect } from "./lib/ui-fixtures";
@@ -17,12 +19,13 @@ import {
   restrictToSingleWorkerBecauseFixedPorts,
   waitForHttpOk,
   assertDockerAvailable,
+  assertKellnrBinaryExists,
   publishCrate,
   fetchLatestReleasedKellnrImage,
-  ensureLocalKellnrTestImage,
 } from "./testUtils";
-import { startContainer, attachContainerLogs, type Started } from "./lib/docker";
+import { startContainer, attachContainerLogs } from "./lib/docker";
 import { kellnrDefaults } from "./lib/kellnr";
+import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 import fs from "node:fs";
 import path from "node:path";
@@ -49,31 +52,25 @@ test.describe("Migration UI Tests", () => {
   test("migrates from old version to new and UI is accessible", async ({ page }, testInfo) => {
     testInfo.setTimeout(20 * 60 * 1000); // 20 minutes
 
-    // Get old and new images
+    // Get old image (must use Docker for released versions)
     const oldImageFromEnv = process.env.KELLNR_OLD_IMAGE;
-    const newImage = process.env.KELLNR_NEW_IMAGE;
-
-    const resolvedNewImage =
-      newImage ?? process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
-
     const oldImage =
       oldImageFromEnv && oldImageFromEnv.trim() !== ""
         ? oldImageFromEnv
         : await fetchLatestReleasedKellnrImage();
 
-    console.log(`[migration] Old image: ${oldImage}`);
-    console.log(`[migration] New image: ${resolvedNewImage}`);
+    console.log(`[migration] Old image (Docker): ${oldImage}`);
+    console.log("[migration] New version: local binary");
 
     const registry = process.env.KELLNR_MIGRATION_REGISTRY ?? "kellnr-local";
     const suffix = `${Date.now()}`;
     const oldContainer = `kellnr-old-${suffix}`;
-    const newContainer = `kellnr-new-${suffix}`;
 
     // Fixed localhost:8000 setup
     const k = kellnrDefaults();
     baseUrl = k.baseUrl;
 
-    // Persisted data directory
+    // Persisted data directory - used by both Docker and local Kellnr
     kdataDir = path.resolve(
       process.cwd(),
       "tmp",
@@ -94,15 +91,15 @@ test.describe("Migration UI Tests", () => {
       registryName: registry,
     });
 
+    let localKellnr: StartedLocalKellnr | undefined;
+
     try {
       await test.step("check prerequisites", async () => {
         await assertDockerAvailable();
-        console.log("[migration] Docker is available");
-      });
+        console.log("[migration] Docker is available (for old version)");
 
-      await test.step("ensure new image exists", async () => {
-        await ensureLocalKellnrTestImage(resolvedNewImage);
-        console.log("[migration] New image is available");
+        assertKellnrBinaryExists();
+        console.log("[migration] Local Kellnr binary is available (for new version)");
       });
 
       await test.step("prepare kdata dir", async () => {
@@ -112,8 +109,8 @@ test.describe("Migration UI Tests", () => {
         console.log("[migration] kdata dir ready");
       });
 
-      // ---- Run old container ----
-      await test.step("run old version and publish crates", async () => {
+      // ---- Run old container (Docker) ----
+      await test.step("run old version (Docker) and publish crates", async () => {
         const startedOld = await startContainer(
           {
             name: oldContainer,
@@ -160,131 +157,100 @@ test.describe("Migration UI Tests", () => {
         }
       });
 
-      // ---- Run new container ----
-      await test.step("run new version and verify migration", async () => {
-        const startedNew = await startContainer(
-          {
-            name: newContainer,
-            image: resolvedNewImage,
-            ports: k.ports,
-            env: k.env,
-            bindMounts: {
-              [kdataDir]: kdataMount,
-            },
+      // ---- Run new version (local) ----
+      await test.step("run new version (local) and verify migration", async () => {
+        // Start local Kellnr with the same data directory
+        localKellnr = await startLocalKellnr({
+          name: `kellnr-migration-new-${suffix}`,
+          env: {
+            // Use the existing kdata directory from the old container
+            KELLNR_REGISTRY__DATA_DIR: kdataDir,
           },
-          testInfo,
-        );
+        });
 
-        try {
-          console.log(`[migration] Waiting for HTTP 200 on ${baseUrl}`);
-          await waitForHttpOk(baseUrl, { timeoutMs: 60_000, intervalMs: 1_000 });
-          console.log("[migration] New server ready");
+        console.log("[migration] New server (local) ready");
 
-          console.log("[migration] Publishing crate to new version");
-          await publishCrate({
-            cratePath: "tests/crates/test-migration/full-toml",
-            registry,
-            registryToken,
-          });
-          console.log("[migration] Published crate to new version");
-        } finally {
-          // Attach logs and stop container
-          await attachContainerLogs(testInfo, startedNew.container, {
-            name: startedNew.name,
-            filePath: startedNew.logsFilePath,
-          });
-          startedNew.stopLogStreaming?.();
-          await startedNew.container.stop().catch(() => { });
-        }
+        console.log("[migration] Publishing crate to new version");
+        await publishCrate({
+          cratePath: "tests/crates/test-migration/full-toml",
+          registry,
+          registryToken,
+        });
+        console.log("[migration] Published crate to new version");
       });
 
       // ---- Verify UI accessibility after migration ----
+      // Note: localKellnr is still running from the previous step
       await test.step("verify UI is accessible after migration", async () => {
-        // Start the new container again for UI testing
-        const startedNewForUI = await startContainer(
-          {
-            name: `${newContainer}-ui`,
-            image: resolvedNewImage,
-            ports: k.ports,
-            env: k.env,
-            bindMounts: {
-              [kdataDir]: kdataMount,
-            },
-          },
-          testInfo,
-        );
+        console.log("[migration] Starting UI verification tests");
 
-        try {
-          console.log("[migration] Waiting for new server for UI tests");
-          await waitForHttpOk(baseUrl, { timeoutMs: 60_000, intervalMs: 1_000 });
-          console.log("[migration] New server ready for UI tests");
+        // Test 1: Landing page loads
+        const landingPage = new LandingPage(page);
+        await page.goto(baseUrl);
+        await landingPage.waitForPageLoad();
+        console.log("[migration] ✓ Landing page loaded");
 
-          // Test 1: Landing page loads
-          const landingPage = new LandingPage(page);
-          await page.goto(baseUrl);
-          await landingPage.waitForPageLoad();
-          console.log("[migration] ✓ Landing page loaded");
+        // Verify Kellnr branding is visible
+        const hasBranding = await landingPage.hasKellnrBranding();
+        expect(hasBranding).toBe(true);
+        console.log("[migration] ✓ Kellnr branding visible");
 
-          // Verify Kellnr branding is visible
-          const hasBranding = await landingPage.hasKellnrBranding();
-          expect(hasBranding).toBe(true);
-          console.log("[migration] ✓ Kellnr branding visible");
+        // Test 2: Statistics show migrated data
+        await landingPage.waitForStatistics();
+        const crateCount = await landingPage.getTotalCratesCount();
+        expect(crateCount).toBe(3); // test_lib, foo-bar, full-toml
+        console.log(`[migration] ✓ Statistics show ${crateCount} crates`);
 
-          // Test 2: Statistics show migrated data
-          await landingPage.waitForStatistics();
-          const crateCount = await landingPage.getTotalCratesCount();
-          expect(crateCount).toBe(3); // test_lib, foo-bar, full-toml
-          console.log(`[migration] ✓ Statistics show ${crateCount} crates`);
+        // Test 3: Crates page shows all migrated crates
+        const cratesPage = new CratesPage(page);
+        await page.goto(`${baseUrl}/crates`);
+        await cratesPage.waitForSearchResults();
 
-          // Test 3: Crates page shows all migrated crates
-          const cratesPage = new CratesPage(page);
-          await page.goto(`${baseUrl}/crates`);
-          await cratesPage.waitForSearchResults();
+        const hasFooBar = await cratesPage.hasCrate("foo-bar");
+        expect(hasFooBar).toBe(true);
+        console.log("[migration] ✓ foo-bar crate visible");
 
-          const hasFooBar = await cratesPage.hasCrate("foo-bar");
-          expect(hasFooBar).toBe(true);
-          console.log("[migration] ✓ foo-bar crate visible");
+        const hasTestLib = await cratesPage.hasCrate("test_lib");
+        expect(hasTestLib).toBe(true);
+        console.log("[migration] ✓ test_lib crate visible");
 
-          const hasTestLib = await cratesPage.hasCrate("test_lib");
-          expect(hasTestLib).toBe(true);
-          console.log("[migration] ✓ test_lib crate visible");
+        const hasFullToml = await cratesPage.hasCrate("full-toml");
+        expect(hasFullToml).toBe(true);
+        console.log("[migration] ✓ full-toml crate visible");
 
-          const hasFullToml = await cratesPage.hasCrate("full-toml");
-          expect(hasFullToml).toBe(true);
-          console.log("[migration] ✓ full-toml crate visible");
+        // Test 4: Crate details are accessible
+        await page.goto(`${baseUrl}/crate?name=foo-bar`);
+        const cratePage = new CratePage(page);
+        await cratePage.waitForCrateData();
 
-          // Test 4: Crate details are accessible
-          await page.goto(`${baseUrl}/crate?name=foo-bar`);
-          const cratePage = new CratePage(page);
-          await cratePage.waitForCrateData();
+        const crateName = await cratePage.getCrateName();
+        expect(crateName).toBe("foo-bar");
 
-          const crateName = await cratePage.getCrateName();
-          expect(crateName).toBe("foo-bar");
+        const version = await cratePage.getVersion();
+        expect(version).toBe("1.0.0");
+        console.log("[migration] ✓ Crate details accessible");
 
-          const version = await cratePage.getVersion();
-          expect(version).toBe("1.0.0");
-          console.log("[migration] ✓ Crate details accessible");
+        // Test 5: Dependencies are preserved
+        await cratePage.clickTab("dependencies");
+        await page.waitForTimeout(500);
 
-          // Test 5: Dependencies are preserved
-          await cratePage.clickTab("dependencies");
-          await page.waitForTimeout(500);
+        const testLibDep = page.locator(".dep-name").filter({ hasText: "test_lib" });
+        await expect(testLibDep).toBeVisible();
+        console.log("[migration] ✓ Dependencies preserved");
 
-          const testLibDep = page.locator(".dep-name").filter({ hasText: "test_lib" });
-          await expect(testLibDep).toBeVisible();
-          console.log("[migration] ✓ Dependencies preserved");
-
-          console.log("[migration] All UI verification tests passed");
-        } finally {
-          // Attach logs and stop container
-          await attachContainerLogs(testInfo, startedNewForUI.container, {
-            name: startedNewForUI.name,
-            filePath: startedNewForUI.logsFilePath,
-          });
-          startedNewForUI.stopLogStreaming?.();
-          await startedNewForUI.container.stop().catch(() => { });
-        }
+        console.log("[migration] All UI verification tests passed");
       });
     } finally {
+      // Stop local Kellnr
+      if (localKellnr) {
+        try {
+          console.log("[migration] Stopping local Kellnr");
+          await localKellnr.stop();
+        } catch {
+          // best-effort
+        }
+      }
+
       // Cleanup kdata dir
       try {
         if (fileExists(kdataDir)) rimrafSync(kdataDir);

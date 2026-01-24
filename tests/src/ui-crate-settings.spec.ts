@@ -7,7 +7,7 @@
  * - Download restriction settings
  * - Crate deletion (version and full)
  *
- * Performance: All tests share a single Kellnr container instance.
+ * Performance: All tests share a single local Kellnr instance.
  */
 
 import path from "node:path";
@@ -16,10 +16,9 @@ import { CratesPage, CratePage, LoginPage } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
   publishCrate,
-  waitForHttpOk,
-  assertDockerAvailable,
+  assertKellnrBinaryExists,
 } from "./testUtils";
-import { startKellnr, type StartedKellnr } from "./lib/kellnr";
+import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 
 /**
@@ -58,38 +57,27 @@ test.describe("Crate Settings UI Tests", () => {
   // These tests use fixed localhost:8000 port
   restrictToSingleWorkerBecauseFixedPorts();
 
-  let started: StartedKellnr;
+  let started: StartedLocalKellnr;
   let baseUrl: string;
 
   test.beforeAll(async () => {
-    // Container setup needs more time than default 10s timeout
-    test.setTimeout(120_000); // 2 minutes for setup
+    // Setup needs more time for publishing crates
+    test.setTimeout(120_000);
 
-    await assertDockerAvailable();
-    console.log("[setup] Docker is available");
+    assertKellnrBinaryExists();
+    console.log("[setup] Kellnr binary is available");
 
-    const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
     const suffix = `${Date.now()}`;
 
-    started = await startKellnr(
-      {
-        name: `kellnr-settings-${suffix}`,
-        image,
-        env: {
-          KELLNR_REGISTRY__AUTH_REQUIRED: "true",
-        },
+    started = await startLocalKellnr({
+      name: `kellnr-settings-${suffix}`,
+      env: {
+        KELLNR_REGISTRY__AUTH_REQUIRED: "true",
       },
-      { title: "crate-settings" } as any
-    );
+    });
 
     baseUrl = started.baseUrl;
-
-    console.log(`[setup] Waiting for HTTP 200 on ${baseUrl}`);
-    await waitForHttpOk(baseUrl, {
-      timeoutMs: 60_000,
-      intervalMs: 1_000,
-    });
-    console.log("[setup] Server ready");
+    console.log(`[setup] Server ready at ${baseUrl}`);
 
     console.log("[setup] Publishing test crates");
     await publishTestCrates(console.log);
@@ -98,8 +86,8 @@ test.describe("Crate Settings UI Tests", () => {
 
   test.afterAll(async () => {
     if (started) {
-      console.log("[teardown] Stopping container");
-      await started.started.container.stop();
+      console.log("[teardown] Stopping Kellnr process");
+      await started.stop();
     }
   });
 

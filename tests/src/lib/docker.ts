@@ -35,7 +35,7 @@ export type PortBindings = Record<number, number>; // containerPort -> hostPort 
 
 export type StartContainerOptions = {
   /**
-   * Docker image name, e.g. "kellnr-test:local" or "minio/minio:RELEASE..."
+   * Docker image name, e.g. "ghcr.io/kellnr/kellnr:latest" or "minio/minio:RELEASE..."
    */
   image: string;
 
@@ -77,6 +77,15 @@ export type StartContainerOptions = {
    * crate-local `.cargo/config.toml` can remain static.
    */
   ports?: PortBindings;
+
+  /**
+   * Expose container ports to random host ports.
+   *
+   * Use this when you need to access a container port from the host but don't need
+   * a specific host port. Call `container.getMappedPort(containerPort)` to get the
+   * assigned host port.
+   */
+  exposedPorts?: number[];
 
   /**
    * Command override passed to Docker (ENTRYPOINT stays, CMD replaced).
@@ -410,6 +419,12 @@ export async function startContainer(
     }
   }
 
+  if (options.exposedPorts?.length) {
+    // Expose ports to random host ports (testcontainers picks an available port).
+    // Use container.getMappedPort(containerPort) to get the assigned host port.
+    container = container.withExposedPorts(...options.exposedPorts);
+  }
+
   if (options.network) {
     container = container.withNetwork(options.network);
     if (options.networkAliases?.length) {
@@ -490,6 +505,12 @@ export async function startS3MinioContainer(
     network: StartedNetwork;
     rootUser: string;
     rootPassword: string;
+    /**
+     * If true, expose port 9000 to a random host port.
+     * Use container.getMappedPort(9000) to get the assigned port.
+     * Required when Kellnr runs locally (not in Docker) and needs to access MinIO.
+     */
+    exposeToHost?: boolean;
   },
   testInfo?: TestInfo | BeforeAllTestInfo,
 ): Promise<Started> {
@@ -503,6 +524,8 @@ export async function startS3MinioContainer(
         MINIO_ROOT_USER: options.rootUser,
         MINIO_ROOT_PASSWORD: options.rootPassword,
       },
+      // Expose port 9000 to a random host port if requested (for local Kellnr access)
+      ...(options.exposeToHost ? { exposedPorts: [9000] } : {}),
       // MinIO images typically listen quickly; the default listening-ports wait is sufficient.
       // If you want stricter readiness, replace with `waitFor: waitForHttp(9000, "/minio/health/live")`
     },

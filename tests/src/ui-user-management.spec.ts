@@ -8,7 +8,7 @@
  * - Admin can promote and demote a user
  * - Non-admin users cannot access user management
  *
- * Performance: All tests share a single Kellnr container instance.
+ * Performance: All tests share a single local Kellnr instance.
  * Note: Tests run serially and share state, so users created in earlier tests
  * are available in later tests.
  */
@@ -17,54 +17,42 @@ import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/
 import { LoginPage } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
-  waitForHttpOk,
-  assertDockerAvailable,
+  assertKellnrBinaryExists,
 } from "./testUtils";
-import { startKellnr, type StartedKellnr } from "./lib/kellnr";
+import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 
 test.describe("User Management UI Tests", () => {
   // These tests use fixed localhost:8000 port
   restrictToSingleWorkerBecauseFixedPorts();
 
-  let started: StartedKellnr;
+  let started: StartedLocalKellnr;
   let baseUrl: string;
 
   test.beforeAll(async () => {
-    // Container setup needs more time than default timeout
-    test.setTimeout(120_000); // 2 minutes for setup
+    // Local process setup is faster but still allow extra time
+    test.setTimeout(60_000);
 
-    await assertDockerAvailable();
-    console.log("[setup] Docker is available");
+    assertKellnrBinaryExists();
+    console.log("[setup] Kellnr binary is available");
 
-    const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
     const suffix = `${Date.now()}`;
 
-    started = await startKellnr(
-      {
-        name: `kellnr-usermgmt-${suffix}`,
-        image,
-        env: {
-          KELLNR_REGISTRY__AUTH_REQUIRED: "true",
-        },
+    started = await startLocalKellnr({
+      name: `kellnr-usermgmt-${suffix}`,
+      env: {
+        KELLNR_REGISTRY__AUTH_REQUIRED: "true",
       },
-      { title: "user-management" } as any
-    );
+    });
 
     baseUrl = started.baseUrl;
-
-    console.log(`[setup] Waiting for HTTP 200 on ${baseUrl}`);
-    await waitForHttpOk(baseUrl, {
-      timeoutMs: 60_000,
-      intervalMs: 1_000,
-    });
-    console.log("[setup] Server ready");
+    console.log(`[setup] Server ready at ${baseUrl}`);
     console.log("[setup] Done");
   });
 
   test.afterAll(async () => {
     if (started) {
-      console.log("[teardown] Stopping container");
-      await started.started.container.stop();
+      console.log("[teardown] Stopping Kellnr process");
+      await started.stop();
     }
   });
 

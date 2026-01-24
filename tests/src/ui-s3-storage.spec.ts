@@ -2,23 +2,23 @@
  * UI tests for S3 storage backend.
  *
  * Tests:
- * - Starts MinIO (S3-compatible storage)
- * - Starts Kellnr with S3 backend enabled
+ * - Starts MinIO (S3-compatible storage) in Docker
+ * - Starts local Kellnr with S3 backend enabled
  * - Publishes crates to S3 storage
  * - Verifies crates are visible and accessible in the UI
  *
- * Performance: Uses a single Kellnr + MinIO container setup.
+ * Performance: Uses local Kellnr with Docker MinIO for S3 storage.
  */
 
 import { test, expect } from "./lib/ui-fixtures";
 import { CratesPage, CratePage } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
-  waitForHttpOk,
+  assertKellnrBinaryExists,
   assertDockerAvailable,
   publishCrate,
 } from "./testUtils";
-import { startKellnr, type StartedKellnr } from "./lib/kellnr";
+import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 import {
   buildS3MinioImage,
   createNetwork,
@@ -33,14 +33,17 @@ test.describe("S3 Storage UI Tests", () => {
   // These tests use fixed localhost:8000 port
   restrictToSingleWorkerBecauseFixedPorts();
 
-  let started: StartedKellnr;
+  let started: StartedLocalKellnr;
   let baseUrl: string;
   let network: StartedNetwork;
   let minioContainer: Started;
 
   test.beforeAll(async ({}, testInfo) => {
-    // Container setup needs more time than default timeout
+    // Container + local setup needs more time
     test.setTimeout(15 * 60 * 1000); // 15 minutes for setup
+
+    assertKellnrBinaryExists();
+    console.log("[setup] Kellnr binary is available");
 
     await assertDockerAvailable();
     console.log("[setup] Docker is available");
@@ -48,15 +51,12 @@ test.describe("S3 Storage UI Tests", () => {
     const suffix = `${Date.now()}`;
     const networkBaseName = `s3-net-${suffix}`;
     const minioBaseName = `minio-${suffix}`;
-    const kellnrBaseName = `kellnr-s3-${suffix}`;
 
-    const kellnrImage = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
     const registry = "kellnr-test";
 
     // S3 settings
     const s3RootUser = "minioadmin";
     const s3RootPassword = "minioadmin";
-    const s3UrlInDockerNet = "http://minio:9000";
     const s3AllowHttp = "true";
     const s3Image = `custom-minio-${suffix}`;
     const s3CratesBucket = "kellnr-crates";
@@ -91,39 +91,35 @@ test.describe("S3 Storage UI Tests", () => {
         network,
         rootUser: s3RootUser,
         rootPassword: s3RootPassword,
+        exposeToHost: true, // Required for local Kellnr to access MinIO
       },
       testInfo,
     );
 
     console.log("[setup] Minio container started");
 
-    started = await startKellnr(
-      {
-        name: kellnrBaseName,
-        image: kellnrImage,
-        network,
-        env: {
-          KELLNR_PROXY__ENABLED: "true",
-          KELLNR_S3__ENABLED: "true",
-          KELLNR_S3__ACCESS_KEY: s3RootUser,
-          KELLNR_S3__SECRET_KEY: s3RootPassword,
-          KELLNR_S3__ENDPOINT: s3UrlInDockerNet,
-          KELLNR_S3__ALLOW_HTTP: s3AllowHttp,
-          KELLNR_S3__CRATES_BUCKET: s3CratesBucket,
-          KELLNR_S3__CRATESIO_BUCKET: s3CratesioBucket,
-        },
+    // Get MinIO's mapped host port for localhost access
+    const minioHostPort = minioContainer.container.getMappedPort(9000);
+    const s3UrlForLocalKellnr = `http://localhost:${minioHostPort}`;
+
+    console.log(`[setup] MinIO accessible at ${s3UrlForLocalKellnr}`);
+
+    started = await startLocalKellnr({
+      name: `kellnr-s3-${suffix}`,
+      env: {
+        KELLNR_PROXY__ENABLED: "true",
+        KELLNR_S3__ENABLED: "true",
+        KELLNR_S3__ACCESS_KEY: s3RootUser,
+        KELLNR_S3__SECRET_KEY: s3RootPassword,
+        KELLNR_S3__ENDPOINT: s3UrlForLocalKellnr,
+        KELLNR_S3__ALLOW_HTTP: s3AllowHttp,
+        KELLNR_S3__CRATES_BUCKET: s3CratesBucket,
+        KELLNR_S3__CRATESIO_BUCKET: s3CratesioBucket,
       },
-      testInfo,
-    );
+    });
 
     baseUrl = started.baseUrl;
-
-    console.log(`[setup] Waiting for HTTP 200 on ${baseUrl}`);
-    await waitForHttpOk(baseUrl, {
-      timeoutMs: 60_000,
-      intervalMs: 1_000,
-    });
-    console.log("[setup] Server ready");
+    console.log(`[setup] Server ready at ${baseUrl}`);
 
     console.log("[setup] Publishing crates to S3 storage");
 
@@ -155,11 +151,11 @@ test.describe("S3 Storage UI Tests", () => {
   test.afterAll(async () => {
     console.log("[teardown] Starting cleanup");
 
-    // Stop Kellnr container
+    // Stop Kellnr process
     if (started) {
       try {
-        console.log("[teardown] Stopping Kellnr container");
-        await started.started.container.stop();
+        console.log("[teardown] Stopping Kellnr process");
+        await started.stop();
       } catch (e) {
         console.log("[teardown] Error stopping Kellnr:", e);
       }

@@ -7,7 +7,6 @@
 result/
 tests/
 !tests/ca.crt
-!tests/Dockerfile
 *.md
 LICENSE
 flake.*

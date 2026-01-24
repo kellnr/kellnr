@@ -7,61 +7,49 @@
  * - Crates proxy toggle
  * - Empty state when no crates
  *
- * Performance: All tests share a single Kellnr container instance.
+ * Performance: All tests share a single local Kellnr instance.
  */
 
 import { test, expect } from "./lib/ui-fixtures";
 import { CratesPage } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
-  waitForHttpOk,
-  assertDockerAvailable,
+  assertKellnrBinaryExists,
 } from "./testUtils";
-import { startKellnr, type StartedKellnr } from "./lib/kellnr";
+import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 
 test.describe("Crates Page UI Tests", () => {
   // These tests use fixed localhost:8000 port
   restrictToSingleWorkerBecauseFixedPorts();
 
-  let started: StartedKellnr;
+  let started: StartedLocalKellnr;
   let baseUrl: string;
 
   test.beforeAll(async () => {
-    // Container setup needs more time than default timeout
-    test.setTimeout(120_000); // 2 minutes for setup
+    // Local process setup is faster but still allow extra time
+    test.setTimeout(60_000);
 
-    await assertDockerAvailable();
-    console.log("[setup] Docker is available");
+    assertKellnrBinaryExists();
+    console.log("[setup] Kellnr binary is available");
 
-    const image = process.env.KELLNR_TEST_IMAGE ?? "kellnr-test:local";
     const suffix = `${Date.now()}`;
 
-    started = await startKellnr(
-      {
-        name: `kellnr-crates-${suffix}`,
-        image,
-        env: {
-          // No special config needed for crates page tests
-        },
+    started = await startLocalKellnr({
+      name: `kellnr-crates-${suffix}`,
+      env: {
+        // No special config needed for crates page tests
       },
-      { title: "crates" } as any
-    );
+    });
 
     baseUrl = started.baseUrl;
-
-    console.log(`[setup] Waiting for HTTP 200 on ${baseUrl}`);
-    await waitForHttpOk(baseUrl, {
-      timeoutMs: 60_000,
-      intervalMs: 1_000,
-    });
-    console.log("[setup] Server ready");
+    console.log(`[setup] Server ready at ${baseUrl}`);
     console.log("[setup] Done");
   });
 
   test.afterAll(async () => {
     if (started) {
-      console.log("[teardown] Stopping container");
-      await started.started.container.stop();
+      console.log("[teardown] Stopping Kellnr process");
+      await started.stop();
     }
   });
 
