@@ -40,6 +40,17 @@
             </div>
             <div class="user-actions">
               <v-btn
+                :color="user.is_admin ? 'warning' : 'primary'"
+                variant="tonal"
+                size="small"
+                :disabled="user.name === currentUserName"
+                @click="handleToggleAdmin(user)"
+              >
+                <v-icon :icon="user.is_admin ? 'mdi-shield-off-outline' : 'mdi-shield-crown-outline'" size="small" class="me-1"></v-icon>
+                {{ user.is_admin ? 'Demote' : 'Promote' }}
+              </v-btn>
+
+              <v-btn
                 :color="user.is_read_only ? 'info' : 'default'"
                 variant="tonal"
                 size="small"
@@ -192,7 +203,7 @@
     </v-snackbar>
 
     <!-- Confirmation Dialog -->
-    <v-dialog v-model="dialog.isOpen" max-width="450">
+    <v-dialog v-model="dialogIsOpen" max-width="450">
       <v-card class="confirm-dialog">
         <div class="dialog-header">
           <v-icon icon="mdi-alert-circle" color="warning" size="small" class="me-3"></v-icon>
@@ -214,11 +225,12 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, ref } from 'vue'
+import { onBeforeMount, ref, computed } from 'vue'
 import { useStatusMessage, useConfirmCallback, useNotification } from "../composables"
 import { userService } from "../services"
 import { isSuccess } from "../services/api"
 import type { User } from "../types/user"
+import { useStore } from "../store/store"
 
 // State
 const users = ref<User[]>([])
@@ -228,9 +240,14 @@ const newUserPwd2 = ref("")
 const newUserIsAdmin = ref(false)
 const newUserIsReadOnly = ref(false)
 
+// Store
+const store = useStore()
+const currentUserName = computed(() => store.loggedInUser)
+
 // Composables
 const addStatus = useStatusMessage()
 const { dialog, showConfirm } = useConfirmCallback()
+const dialogIsOpen = dialog.isOpen  // Destructure to make it a top-level ref for v-model
 const notification = useNotification()
 
 // Lifecycle
@@ -325,6 +342,30 @@ function handleToggleReadOnly(user: User) {
       if (isSuccess(result)) {
         // Update local state
         user.is_read_only = newState
+        notification.showSuccess(`"${user.name}" is now ${actionText}`)
+      } else {
+        notification.showError(result.error.message)
+      }
+    }
+  })
+}
+
+// Toggle admin status with confirmation
+function handleToggleAdmin(user: User) {
+  const newState = !user.is_admin
+  const actionText = newState ? "an admin" : "a regular user"
+
+  showConfirm({
+    title: "Change Admin Status",
+    message: newState
+      ? `Promote "${user.name}" to admin? They will have full access to all features.`
+      : `Demote "${user.name}" from admin? They will lose administrative privileges.`,
+    confirmColor: newState ? "primary" : "warning",
+    onConfirm: async () => {
+      const result = await userService.setAdmin(user.name, newState)
+      if (isSuccess(result)) {
+        // Update local state
+        user.is_admin = newState
         notification.showSuccess(`"${user.name}" is now ${actionText}`)
       } else {
         notification.showError(result.error.message)

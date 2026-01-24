@@ -19,16 +19,16 @@ ENV KELLNR_VERSION=$KELLNR_VERSION
 
 RUN apt update
 RUN apt install -y -q --no-install-recommends \
-  ca-certificates \
-  git \
-  curl \
-  sed \
-  build-essential \
-  pkg-config \
-  openssl \
-  libssl-dev \
-  gcc \
-  && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    git \
+    curl \
+    sed \
+    build-essential \
+    pkg-config \
+    openssl \
+    libssl-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install just command runner
 RUN cargo install just
@@ -38,10 +38,10 @@ RUN cargo install just
 ENV NVM_DIR="/root/.nvm"
 ENV NODE_VERSION="24.5.0"
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash \
-  && . "$NVM_DIR/nvm.sh" \
-  && nvm install $NODE_VERSION \
-  && nvm alias default $NODE_VERSION \
-  && nvm use $NODE_VERSION
+    && . "$NVM_DIR/nvm.sh" \
+    && nvm install $NODE_VERSION \
+    && nvm alias default $NODE_VERSION \
+    && nvm use $NODE_VERSION
 ENV NODE_PATH="$NVM_DIR/versions/node/$NODE_VERSION/lib/node_modules"
 ENV PATH="$NVM_DIR/versions/node/v$NODE_VERSION/bin:/root/.cargo/bin:$PATH"
 
@@ -52,7 +52,8 @@ COPY . /sources
 
 # Build kellnr
 WORKDIR /sources
-RUN just build-release
+RUN just npm-build
+RUN just build
 
 
 ##################
@@ -64,7 +65,7 @@ FROM rust:slim-trixie
 RUN mkdir -p /opt/kellnr
 RUN rustup component add rust-src
 WORKDIR /opt/kellnr
-COPY --from=builder /sources/target/release/kellnr ./kellnr
+COPY --from=builder /sources/target/debug/kellnr ./kellnr
 
 # Self-contained cert: copy from tests/ (from repo root build context).
 COPY tests/ca.crt /usr/local/share/ca-certificates/ca.crt
@@ -74,4 +75,4 @@ HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/
 
 EXPOSE 8000
 
-ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && ./kellnr"]
+ENTRYPOINT ["/bin/sh", "-c" , "./kellnr"]

@@ -59,6 +59,7 @@ pub trait DbProvider: Send + Sync {
     async fn delete_user(&self, user_name: &str) -> DbResult<()>;
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()>;
     async fn change_read_only_state(&self, user_name: &str, state: bool) -> DbResult<()>;
+    async fn change_admin_state(&self, user_name: &str, state: bool) -> DbResult<()>;
     async fn crate_version_exists(&self, crate_id: i64, version: &str) -> DbResult<bool>;
     async fn get_max_version_from_id(&self, crate_id: i64) -> DbResult<Version>;
     async fn get_max_version_from_name(&self, crate_name: &NormalizedName) -> DbResult<Version>;
@@ -289,6 +290,10 @@ pub mod mock {
             }
 
             async fn change_read_only_state(&self, _user_name: &str, _state: bool) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn change_admin_state(&self, _user_name: &str, _state: bool) -> DbResult<()> {
                 unimplemented!()
             }
 

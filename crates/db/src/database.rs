@@ -627,6 +627,20 @@ impl DbProvider for Database {
         Ok(())
     }
 
+    async fn change_admin_state(&self, user_name: &str, state: bool) -> DbResult<()> {
+        let mut u: user::ActiveModel = user::Entity::find()
+            .filter(user::Column::Name.eq(user_name))
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::UserNotFound(user_name.to_owned()))?
+            .into();
+
+        u.is_admin = Set(state);
+
+        u.update(&self.db_con).await?;
+        Ok(())
+    }
+
     async fn crate_version_exists(&self, crate_id: i64, version: &str) -> DbResult<bool> {
         let cm = crate_meta::Entity::find()
             .filter(

@@ -9,6 +9,7 @@ export const DELETE_USER = (name: string) => `./api/v1/user/delete/${encodeURICo
 export const LIST_USERS = "./api/v1/user/list_users";
 export const RESET_PWD = (name: string) => `./api/v1/user/reset_pwd/${encodeURIComponent(name)}`;
 export const USER_READ_ONLY = (name: string) => `./api/v1/user/read_only/${encodeURIComponent(name)}`;
+export const USER_ADMIN = (name: string) => `./api/v1/user/admin/${encodeURIComponent(name)}`;
 export const LOGIN = "./api/v1/user/login";
 
 export const ADD_GROUP = "./api/v1/group/add";

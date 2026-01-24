@@ -203,7 +203,7 @@
     </v-snackbar>
 
     <!-- Confirmation Dialog -->
-    <v-dialog v-model="dialog.isOpen" max-width="450">
+    <v-dialog v-model="dialogIsOpen" max-width="450">
       <v-card class="confirm-dialog">
         <div class="dialog-header">
           <v-icon icon="mdi-alert-circle" color="warning" size="small" class="me-3"></v-icon>
@@ -244,6 +244,7 @@ const selectedUser = ref("")
 const addGroupStatus = useStatusMessage()
 const memberStatus = useStatusMessage()
 const { dialog, showConfirm } = useConfirmCallback()
+const dialogIsOpen = dialog.isOpen  // Destructure to make it a top-level ref for v-model
 const notification = useNotification()
 
 // Computed

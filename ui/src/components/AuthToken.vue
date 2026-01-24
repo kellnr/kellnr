@@ -120,7 +120,7 @@
     </div>
 
     <!-- Delete Confirmation Dialog -->
-    <v-dialog v-model="dialog.isOpen" max-width="450">
+    <v-dialog v-model="dialogIsOpen" max-width="450">
       <v-card class="delete-dialog">
         <div class="dialog-header">
           <v-icon icon="mdi-alert-circle" color="error" size="small" class="me-3"></v-icon>
@@ -167,6 +167,7 @@ const createLoading = ref(false)
 // Composables
 const createStatus = useStatusMessage()
 const { dialog, showConfirm } = useConfirmCallback()
+const dialogIsOpen = dialog.isOpen  // Destructure to make it a top-level ref for v-model
 
 // Lifecycle
 onBeforeMount(() => {
