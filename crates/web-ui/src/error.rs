@@ -14,6 +14,7 @@ impl From<kellnr_db::error::DbError> for RouteError {
     fn from(err: kellnr_db::error::DbError) -> Self {
         match err {
             kellnr_db::error::DbError::PasswordMismatch => Self::AuthenticationFailure,
+            kellnr_db::error::DbError::UserNotFound(name) => Self::UserNotFound(name),
             _ => Self::DbError(err),
         }
     }

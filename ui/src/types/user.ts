@@ -34,3 +34,7 @@ export interface PasswordResetResponse {
 export interface ReadOnlyRequest {
   state: boolean
 }
+
+export interface AdminRequest {
+  state: boolean
+}

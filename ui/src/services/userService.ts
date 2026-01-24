@@ -10,6 +10,7 @@ import type {
   LoginResponse,
   PasswordResetResponse,
   ReadOnlyRequest,
+  AdminRequest,
 } from '../types/user'
 import {
   ADD_USER,
@@ -17,6 +18,7 @@ import {
   LIST_USERS,
   RESET_PWD,
   USER_READ_ONLY,
+  USER_ADMIN,
   LOGIN,
   LOGOUT,
   LOGIN_STATE,
@@ -69,6 +71,21 @@ export async function setReadOnly(
 ): Promise<ApiResult<void>> {
   const data: ReadOnlyRequest = { state }
   return apiPost<void>(USER_READ_ONLY(name), data)
+}
+
+/**
+ * Set a user's admin status
+ */
+export async function setAdmin(
+  name: string,
+  state: boolean
+): Promise<ApiResult<void>> {
+  const data: AdminRequest = { state }
+  return apiPost<void>(USER_ADMIN(name), data, undefined, {
+    customErrors: {
+      400: 'Cannot remove your own admin rights.',
+    },
+  })
 }
 
 /**

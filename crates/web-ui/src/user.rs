@@ -119,6 +119,32 @@ pub async fn read_only(
     Ok(())
 }
 
+#[derive(Deserialize)]
+pub struct AdminState {
+    pub state: bool,
+}
+
+pub async fn admin(
+    user: MaybeUser,
+    Path(name): Path<String>,
+    State(db): DbState,
+    State(cache): TokenCacheState,
+    Json(admin_state): Json<AdminState>,
+) -> Result<(), RouteError> {
+    user.assert_admin()?;
+
+    // Prevent self-demotion to avoid lockout
+    if user.name() == name && !admin_state.state {
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+    }
+
+    db.change_admin_state(&name, admin_state.state).await?;
+
+    cache.invalidate_all();
+
+    Ok(())
+}
+
 pub async fn delete(
     user: MaybeUser,
     Path(name): Path<String>,
@@ -706,5 +732,265 @@ mod tests {
 
         // Cache should still contain the token since operation failed
         assert!(cache.get("existing_token").await.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_admin_change_invalidates_cache() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        cache
+            .insert(
+                "user_token".to_string(),
+                CachedTokenData {
+                    user: "target_user".to_string(),
+                    is_admin: false, // Currently NOT admin
+                    is_read_only: false,
+                },
+            )
+            .await;
+
+        assert!(cache.get("user_token").await.is_some());
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db
+            .expect_change_admin_state()
+            .times(1)
+            .with(eq("target_user"), eq(true))
+            .returning(|_, _| Ok(()));
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/admin/{name}", post(admin))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/admin/target_user")
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"state":true}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
+
+        // Verify cache was invalidated - important because is_admin permission changed
+        assert!(cache.get("user_token").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_admin_self_demotion_prevented() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        // Note: change_admin_state should NOT be called because self-demotion is blocked
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/admin/{name}", post(admin))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/admin/admin") // Trying to demote self
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"state":false}"#)) // Demoting (state=false)
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Request should fail with Bad Request
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "Expected BAD_REQUEST but got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_non_admin_cannot_change_admin_status() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("regular_user".to_string(), false))); // NOT admin
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/admin/{name}", post(admin))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/admin/target_user")
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"state":true}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Request should fail with Forbidden
+        assert_eq!(
+            response.status(),
+            StatusCode::FORBIDDEN,
+            "Expected FORBIDDEN but got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_admin_demotion_works() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db
+            .expect_change_admin_state()
+            .times(1)
+            .with(eq("other_admin"), eq(false)) // Demoting other_admin
+            .returning(|_, _| Ok(()));
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/admin/{name}", post(admin))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/admin/other_admin")
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"state":false}"#)) // Demoting
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_admin_nonexistent_user_returns_error() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db
+            .expect_change_admin_state()
+            .times(1)
+            .with(eq("nonexistent"), eq(true))
+            .returning(|_, _| Err(DbError::UserNotFound("nonexistent".to_string())));
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/admin/{name}", post(admin))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/admin/nonexistent")
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"state":true}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Request should fail with Not Found
+        assert_eq!(
+            response.status(),
+            StatusCode::NOT_FOUND,
+            "Expected NOT_FOUND but got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_admin_self_promotion_allowed() {
+        // An admin promoting themselves (state=true) should be allowed
+        // Only self-demotion (state=false) is blocked
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db
+            .expect_change_admin_state()
+            .times(1)
+            .with(eq("admin"), eq(true)) // Self-promotion (no-op but allowed)
+            .returning(|_, _| Ok(()));
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/admin/{name}", post(admin))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/admin/admin") // Same user
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"state":true}"#)) // Promoting (state=true)
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
     }
 }

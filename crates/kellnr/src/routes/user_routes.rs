@@ -13,6 +13,7 @@ pub fn create_routes() -> Router<AppStateData> {
         .route("/delete/{name}", delete(user::delete))
         .route("/reset_pwd/{name}", post(user::reset_pwd))
         .route("/read_only/{name}", post(user::read_only))
+        .route("/admin/{name}", post(user::admin))
         .route("/add_token", post(user::add_token))
         .route("/delete_token/{id}", delete(user::delete_token))
         .route("/list_tokens", get(user::list_tokens))
