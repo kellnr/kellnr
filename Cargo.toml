@@ -81,7 +81,7 @@ tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["json", "fmt"] }
 url = { version = "2.5.8", features = ["serde"] }
 uuid = { version = "1.19.0", features = ["v4"] }
-zip = "6.0.0"
+zip = "7.2.0"
 
 [profile.release]
 lto = "thin"
