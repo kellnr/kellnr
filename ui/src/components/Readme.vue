@@ -10,7 +10,7 @@ import { mangle } from 'marked-mangle';
 import { gfmHeadingId } from "marked-gfm-heading-id";
 import { markedHighlight } from "marked-highlight";
 import DOMPurify from 'dompurify';
-import { computed, onMounted, watchEffect } from "vue";
+import { computed, watchEffect } from "vue";
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
 import { useTheme } from 'vuetify';

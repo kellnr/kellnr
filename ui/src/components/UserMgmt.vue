@@ -192,7 +192,7 @@
     </v-snackbar>
 
     <!-- Confirmation Dialog -->
-    <v-dialog v-model="dialog.isOpen" max-width="450">
+    <v-dialog v-model="dialogOpen" max-width="450">
       <v-card class="confirm-dialog">
         <div class="dialog-header">
           <v-icon icon="mdi-alert-circle" color="warning" size="small" class="me-3"></v-icon>
@@ -214,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, ref } from 'vue'
+import { onBeforeMount, ref, computed } from 'vue'
 import { useStatusMessage, useConfirmCallback, useNotification } from "../composables"
 import { userService } from "../services"
 import { isSuccess } from "../services/api"
@@ -232,6 +232,12 @@ const newUserIsReadOnly = ref(false)
 const addStatus = useStatusMessage()
 const { dialog, showConfirm } = useConfirmCallback()
 const notification = useNotification()
+
+// Computed wrapper for dialog.isOpen to properly handle ref unwrapping in v-model
+const dialogOpen = computed({
+  get: () => dialog.isOpen.value,
+  set: (val: boolean) => { dialog.isOpen.value = val }
+})
 
 // Lifecycle
 onBeforeMount(() => {

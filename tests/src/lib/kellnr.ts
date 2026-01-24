@@ -7,6 +7,7 @@
 
 import process from "node:process";
 import type { TestInfo } from "@playwright/test";
+import type { BeforeAllTestInfo } from "../testUtils";
 import type { PortBindings } from "./docker";
 import type { Started, StartedNetwork } from "./docker";
 import { startContainer, withStartedContainer } from "./docker";
@@ -125,7 +126,7 @@ export type StartedKellnr = {
 
 export async function startKellnr(
   options: StartKellnrOptions,
-  testInfo: TestInfo,
+  testInfo: TestInfo | BeforeAllTestInfo,
 ): Promise<StartedKellnr> {
   const k = kellnrDefaults(options.defaults);
 
