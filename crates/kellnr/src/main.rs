@@ -10,7 +10,7 @@ use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
-use kellnr_settings::{LogFormat, Settings};
+use kellnr_settings::{CliResult, LogFormat, Settings, parse_cli};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
@@ -26,9 +26,30 @@ mod routes;
 
 #[tokio::main]
 async fn main() {
-    let settings: Arc<Settings> = kellnr_settings::get_settings_with_cli()
-        .expect("Cannot read config")
-        .into();
+    let cli_result = parse_cli().expect("Cannot read config");
+
+    match cli_result {
+        CliResult::ShowConfig(settings) => {
+            show_config(&settings);
+        }
+        CliResult::RunServer(settings) => {
+            run_server(settings).await;
+        }
+    }
+}
+
+fn show_config(settings: &Settings) {
+    match toml::to_string_pretty(settings) {
+        Ok(toml) => println!("{toml}"),
+        Err(e) => {
+            eprintln!("Error serializing config: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+async fn run_server(settings: Settings) {
+    let settings: Arc<Settings> = settings.into();
 
     // Validate required settings
     if settings.registry.data_dir.is_empty() {

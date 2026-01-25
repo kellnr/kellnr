@@ -14,7 +14,7 @@ pub mod s3;
 pub mod settings;
 pub mod setup;
 
-pub use cli::get_settings_with_cli;
+pub use cli::{CliResult, get_settings_with_cli, parse_cli};
 pub use docs::Docs;
 pub use local::Local;
 pub use log::{LogFormat, LogLevel};
