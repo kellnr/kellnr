@@ -1,14 +1,9 @@
 name: Release
 
-# TEMPORARILY CHANGED FOR DOCKER BUILD TESTING
 on:
-  push:
-    branches:
-      - '**'
-# on:
-#   release:
-#     types:
-#       - published
+  release:
+    types:
+      - published
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,131 +12,128 @@ permissions:
   contents: read
 
 jobs:
-  # TEMPORARILY DISABLED FOR DOCKER BUILD TESTING
-  # test:
-  #   name: Run Tests
-  #   runs-on: ubuntu-24.04
-  #   strategy:
-  #     matrix:
-  #       test-type: [unit, pgdb, ui]
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v6
+  test:
+    name: Run Tests
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        test-type: [unit, pgdb, ui]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-  #     - uses: cachix/install-nix-action@v31
-  #       with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+      - uses: cachix/install-nix-action@v31
+        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
 
-  #     - name: Run ${{ matrix.test-type }} tests
-  #       run: |
-  #         case "${{ matrix.test-type }}" in
-  #           unit) nix develop --command just test ;;
-  #           pgdb) nix develop --command just test-pgdb ;;
-  #           ui) nix develop --command just test-ui ;;
-  #         esac
+      - name: Run ${{ matrix.test-type }} tests
+        run: |
+          case "${{ matrix.test-type }}" in
+            unit) nix develop --command just test ;;
+            pgdb) nix develop --command just test-pgdb ;;
+            ui) nix develop --command just test-ui ;;
+          esac
 
-  # TEMPORARILY DISABLED FOR DOCKER BUILD TESTING
-  # build-kellnr:
-  #   name: Build Binaries
-  #   runs-on: ubuntu-24.04
-  #   needs: [test]
-  #   permissions: { contents: write }
-  #   strategy:
-  #     matrix:
-  #       target:
-  #         [
-  #           "x86_64-unknown-linux-gnu",
-  #           "x86_64-unknown-linux-musl",
-  #           "aarch64-unknown-linux-gnu",
-  #           "aarch64-unknown-linux-musl",
-  #         ]
+  build-kellnr:
+    name: Build Binaries
+    runs-on: ubuntu-24.04
+    needs: [test]
+    permissions: { contents: write }
+    strategy:
+      matrix:
+        target:
+          [
+            "x86_64-unknown-linux-gnu",
+            "x86_64-unknown-linux-musl",
+            "aarch64-unknown-linux-gnu",
+            "aarch64-unknown-linux-musl",
+          ]
 
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-  #     - name: Update APT Repositories
-  #       run: sudo apt update
+      - name: Update APT Repositories
+        run: sudo apt update
 
-  #     - name: Install dependencies
-  #       run: sudo apt install -y sed zip
+      - name: Install dependencies
+        run: sudo apt install -y sed zip
 
-  #     - name: Install Just
-  #       uses: taiki-e/install-action@v2
-  #       with: { tool: just }
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with: { tool: just }
 
-  #     - name: Setup Rust
-  #       uses: hecrj/setup-rust-action@v2
+      - name: Setup Rust
+        uses: hecrj/setup-rust-action@v2
 
-  #     - name: Add Rust Targets
-  #       run: rustup target add ${{ matrix.target }}
+      - name: Add Rust Targets
+        run: rustup target add ${{ matrix.target }}
 
-  #     - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
 
-  #     - name: Install cross-rs
-  #       uses: taiki-e/install-action@v2
-  #       with: { tool: cross }
+      - name: Install cross-rs
+        uses: taiki-e/install-action@v2
+        with: { tool: cross }
 
-  #     - name: Extract Version
-  #       run: |
-  #         echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-  #         echo $KELLNR_COMPTIME__VERSION
+      - name: Extract Version
+        run: |
+          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo $KELLNR_COMPTIME__VERSION
 
-  #     - name: Build Release ${{ matrix.target }}
-  #       run: just target=${{ matrix.target }} ci-release
+      - name: Build Release ${{ matrix.target }}
+        run: just target=${{ matrix.target }} ci-release
 
-  #     - name: Set Package Name
-  #       run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_COMPTIME__VERSION.zip" >> $GITHUB_ENV
+      - name: Set Package Name
+        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_COMPTIME__VERSION.zip" >> $GITHUB_ENV
 
-  #     - name: Print Package Name
-  #       run: echo $KELLNR_PACKAGE
+      - name: Print Package Name
+        run: echo $KELLNR_PACKAGE
 
-  #     - name: Package Kellnr
-  #       uses: montudor/action-zip@v1.0.0
-  #       with:
-  #         args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/release/kellnr
+      - name: Package Kellnr
+        uses: montudor/action-zip@v1.0.0
+        with:
+          args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/release/kellnr
 
-  #     - name: Set Asset Name
-  #       run: echo "KELLNR_ASSET=kellnr-${{ matrix.target }}.zip" >> $GITHUB_ENV
+      - name: Set Asset Name
+        run: echo "KELLNR_ASSET=kellnr-${{ matrix.target }}.zip" >> $GITHUB_ENV
 
-  #     - name: Upload binaries to release
-  #       uses: svenstaro/upload-release-action@v2
-  #       with:
-  #         repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #         file: ${{ env.KELLNR_PACKAGE }}
-  #         asset_name: ${{ env.KELLNR_ASSET }}
-  #         tag: ${{ github.ref }}
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.KELLNR_PACKAGE }}
+          asset_name: ${{ env.KELLNR_ASSET }}
+          tag: ${{ github.ref }}
 
-  # TEMPORARILY DISABLED FOR DOCKER BUILD TESTING
-  # crates-io-release:
-  #   name: Publish to crates.io
-  #   runs-on: ubuntu-24.04
-  #   needs: [test]
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v6
-  #       with: { fetch-depth: 0, persist-credentials: false }
+  crates-io-release:
+    name: Publish to crates.io
+    runs-on: ubuntu-24.04
+    needs: [test]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with: { fetch-depth: 0, persist-credentials: false }
 
-  #     - name: Install Just
-  #       uses: taiki-e/install-action@v2
-  #       with: { tool: just }
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with: { tool: just }
 
-  #     - name: Setup Rust
-  #       uses: hecrj/setup-rust-action@v2
+      - name: Setup Rust
+        uses: hecrj/setup-rust-action@v2
 
-  #     - name: Build static resources
-  #       run: just npm-build
+      - name: Build static resources
+        run: just npm-build
 
-  #     - name: Publish to crates.io
-  #       uses: secana/k-releaser@v1
-  #       with:
-  #         command: publish
-  #       env:
-  #         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish to crates.io
+        uses: secana/k-releaser@v1
+        with:
+          command: publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   build-and-push-image:
     name: Build and Push Docker Image
     runs-on: ubuntu-24.04
-    # needs: [build-kellnr]  # TEMPORARILY DISABLED
+    needs: [build-kellnr]
     permissions:
       packages: write
       contents: read
@@ -154,9 +146,7 @@ jobs:
 
       - name: Extract Version
         run: |
-          # TEMPORARILY HARDCODED FOR TESTING
-          echo "RELEASE_VERSION=6.0.0-rc.1" >> $GITHUB_ENV
-          # echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
           echo $RELEASE_VERSION
 
       - name: Set up QEMU
@@ -173,86 +163,84 @@ jobs:
         run: chmod u+x build_and_push.sh && ./build_and_push.sh $IMAGE $RELEASE_VERSION
         working-directory: docker
 
-  # TEMPORARILY DISABLED FOR DOCKER BUILD TESTING
-  # dispatch-helm:
-  #   name: Update Helm Chart
-  #   runs-on: ubuntu-24.04
-  #   needs: [build-and-push-image]
-  #   steps:
-  #     - name: Extract Version
-  #       run: |
-  #         echo "RELEASE_TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-  #         echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-  #         echo $RELEASE_TAG
-  #         echo $RELEASE_VERSION
+  dispatch-helm:
+    name: Update Helm Chart
+    runs-on: ubuntu-24.04
+    needs: [build-and-push-image]
+    steps:
+      - name: Extract Version
+        run: |
+          echo "RELEASE_TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo $RELEASE_TAG
+          echo $RELEASE_VERSION
 
-  #     - name: Dispatch event to kellnr/helm
-  #       env:
-  #         DISPATCH_TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
-  #         OWNER: kellnr
-  #         REPO: helm
-  #         EVENT_TYPE: kellnr_release
-  #         VERSION: ${{ env.RELEASE_VERSION }}
-  #         TAG: ${{ env.RELEASE_TAG }}
-  #         SOURCE_REPO: ${{ github.repository }}
-  #       run: |
-  #         if [ -z "$DISPATCH_TOKEN" ]; then
-  #           echo "Missing secret REPO_DISPATCH_TOKEN"
-  #           exit 1
-  #         fi
+      - name: Dispatch event to kellnr/helm
+        env:
+          DISPATCH_TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          OWNER: kellnr
+          REPO: helm
+          EVENT_TYPE: kellnr_release
+          VERSION: ${{ env.RELEASE_VERSION }}
+          TAG: ${{ env.RELEASE_TAG }}
+          SOURCE_REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "Missing secret REPO_DISPATCH_TOKEN"
+            exit 1
+          fi
 
-  #         curl -sS -X POST \
-  #           -H "Accept: application/vnd.github+json" \
-  #           -H "Authorization: Bearer $DISPATCH_TOKEN" \
-  #           -H "X-GitHub-Api-Version: 2022-11-28" \
-  #           https://api.github.com/repos/$OWNER/$REPO/dispatches \
-  #           -d "{\"event_type\":\"$EVENT_TYPE\",\"client_payload\":{\"version\":\"$VERSION\",\"tag\":\"$TAG\",\"source_repo\":\"$GITHUB_REPOSITORY\"}}"
+          curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/$OWNER/$REPO/dispatches \
+            -d "{\"event_type\":\"$EVENT_TYPE\",\"client_payload\":{\"version\":\"$VERSION\",\"tag\":\"$TAG\",\"source_repo\":\"$GITHUB_REPOSITORY\"}}"
 
-  # TEMPORARILY DISABLED FOR DOCKER BUILD TESTING
-  # dispatch-website:
-  #   name: Update Website Release Notes
-  #   runs-on: ubuntu-24.04
-  #   needs: [build-and-push-image]
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v6
+  dispatch-website:
+    name: Update Website Release Notes
+    runs-on: ubuntu-24.04
+    needs: [build-and-push-image]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-  #     - name: Generate changelog-style JSON payload
-  #       env:
-  #         RELEASE_TAG: ${{ github.ref_name }}
-  #         RELEASE_PUBLISHED_AT: ${{ github.event.release.published_at }}
-  #         RELEASE_BODY: ${{ github.event.release.body }}
-  #       run: |
-  #         python3 .github/scripts/release_notes_to_kac_json.py > release_payload.json
-  #         cat release_payload.json
+      - name: Generate changelog-style JSON payload
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_PUBLISHED_AT: ${{ github.event.release.published_at }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          python3 .github/scripts/release_notes_to_kac_json.py > release_payload.json
+          cat release_payload.json
 
-  #     - name: Dispatch event to kellnr/website
-  #       env:
-  #         DISPATCH_TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
-  #         OWNER: kellnr
-  #         REPO: website
-  #         EVENT_TYPE: kellnr_release_notes
-  #       run: |
-  #         if [ -z "$DISPATCH_TOKEN" ]; then
-  #           echo "Missing secret REPO_DISPATCH_TOKEN"
-  #           exit 1
-  #         fi
+      - name: Dispatch event to kellnr/website
+        env:
+          DISPATCH_TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          OWNER: kellnr
+          REPO: website
+          EVENT_TYPE: kellnr_release_notes
+        run: |
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "Missing secret REPO_DISPATCH_TOKEN"
+            exit 1
+          fi
 
-  #         curl -sS -X POST \
-  #           -H "Accept: application/vnd.github+json" \
-  #           -H "Authorization: Bearer $DISPATCH_TOKEN" \
-  #           -H "X-GitHub-Api-Version: 2022-11-28" \
-  #           https://api.github.com/repos/$OWNER/$REPO/dispatches \
-  #           -d "$(python3 - <<'PY'
-  #         import json, os
+          curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/$OWNER/$REPO/dispatches \
+            -d "$(python3 - <<'PY'
+          import json, os
 
-  #         payload_path = "release_payload.json"
-  #         with open(payload_path, "r", encoding="utf-8") as f:
-  #           payload = json.load(f)
+          payload_path = "release_payload.json"
+          with open(payload_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
 
-  #         print(json.dumps({
-  #           "event_type": os.environ["EVENT_TYPE"],
-  #           "client_payload": payload
-  #         }, ensure_ascii=False))
-  #         PY
-  #         )"
+          print(json.dumps({
+            "event_type": os.environ["EVENT_TYPE"],
+            "client_payload": payload
+          }, ensure_ascii=False))
+          PY
+          )"
