@@ -7,7 +7,6 @@ FROM rust:slim-trixie
 ARG ADMINPWD=admin
 ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
 ARG VERSION
-ENV KELLNR_CONFIG_FILE=/etc/kellnr/kellnr.toml
 
 RUN apt update
 RUN apt install -y \
@@ -29,6 +28,8 @@ RUN curl -sL https://github.com/kellnr/installer/releases/download/v0.1.1/instal
     bash /tmp/install.sh -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION} && \
     rm /tmp/install.sh
 RUN rustup component add rust-src
+
+ENV KELLNR_CONFIG_FILE=/etc/kellnr/kellnr.toml
 
 HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
