@@ -25,7 +25,9 @@ RUN apt install -y \
     libssl-dev
 
 WORKDIR ${INSTALLDIR}
-RUN curl -s https://github.com/kellnr/installer/releases/download/v0.1.1/install.sh | bash -s -- -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+RUN curl -sL https://github.com/kellnr/installer/releases/download/v0.1.1/install.sh -o /tmp/install.sh && \
+    bash /tmp/install.sh -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION} && \
+    rm /tmp/install.sh
 RUN rustup component add rust-src
 
 HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/health || exit 1
