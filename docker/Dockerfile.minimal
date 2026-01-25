@@ -8,10 +8,10 @@ ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
 ARG VERSION
 
 # Install only what's needed for downloading and extracting
-RUN apk add --no-cache curl zip lscpu sed
+RUN apk add --no-cache curl zip lscpu sed bash
 
 # Download and install kellnr
-RUN curl -s https://github.com/kellnr/installer/releases/download/v0.1.0/install.sh | /bin/sh -s -- -m -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+RUN curl -s https://raw.githubusercontent.com/kellnr/installer/feat/adapt-new-kellnr-cli/install.sh | bash -s -- -m -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
 
 ##################
 # Runtime image  #
