@@ -85,6 +85,12 @@ pub enum Command {
 pub enum ConfigAction {
     /// Show the current configuration
     Show,
+    /// Initialize a new configuration file with default values
+    Init {
+        /// Output file path (default: ./kellnr.toml)
+        #[arg(short = 'o', long = "output")]
+        output: Option<PathBuf>,
+    },
 }
 
 /// Result of parsing the CLI
@@ -93,6 +99,13 @@ pub enum CliResult {
     RunServer(Settings),
     /// Show the current configuration
     ShowConfig(Settings),
+    /// Initialize a new configuration file
+    InitConfig {
+        /// Default settings to write
+        settings: Settings,
+        /// Output file path
+        output: PathBuf,
+    },
 }
 
 pub fn parse_cli() -> Result<CliResult, ConfigError> {
@@ -112,6 +125,13 @@ pub fn parse_cli() -> Result<CliResult, ConfigError> {
     match cli.command {
         Some(Command::Config { action }) => match action {
             ConfigAction::Show => Ok(CliResult::ShowConfig(settings)),
+            ConfigAction::Init { output } => {
+                let output_path = output.unwrap_or_else(|| PathBuf::from("kellnr.toml"));
+                Ok(CliResult::InitConfig {
+                    settings: Settings::default(),
+                    output: output_path,
+                })
+            }
         },
         None => {
             // No subcommand - run server, merge CLI args
@@ -143,6 +163,8 @@ pub fn parse_cli() -> Result<CliResult, ConfigError> {
 /// Legacy function for backward compatibility
 pub fn get_settings_with_cli() -> Result<Settings, ConfigError> {
     match parse_cli()? {
-        CliResult::RunServer(settings) | CliResult::ShowConfig(settings) => Ok(settings),
+        CliResult::RunServer(settings)
+        | CliResult::ShowConfig(settings)
+        | CliResult::InitConfig { settings, .. } => Ok(settings),
     }
 }

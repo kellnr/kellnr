@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,6 +33,9 @@ async fn main() {
         CliResult::ShowConfig(settings) => {
             show_config(&settings);
         }
+        CliResult::InitConfig { settings, output } => {
+            init_config(&settings, &output);
+        }
         CliResult::RunServer(settings) => {
             run_server(settings).await;
         }
@@ -41,6 +45,30 @@ async fn main() {
 fn show_config(settings: &Settings) {
     match toml::to_string_pretty(settings) {
         Ok(toml) => println!("{toml}"),
+        Err(e) => {
+            eprintln!("Error serializing config: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn init_config(settings: &Settings, output: &Path) {
+    if output.exists() {
+        eprintln!("Error: File already exists: {}", output.display());
+        eprintln!("Remove the file or specify a different output path with -o");
+        std::process::exit(1);
+    }
+
+    match toml::to_string_pretty(settings) {
+        Ok(toml) => match std::fs::write(output, toml) {
+            Ok(()) => {
+                println!("Configuration file created: {}", output.display());
+            }
+            Err(e) => {
+                eprintln!("Error writing config file: {e}");
+                std::process::exit(1);
+            }
+        },
         Err(e) => {
             eprintln!("Error serializing config: {e}");
             std::process::exit(1);
