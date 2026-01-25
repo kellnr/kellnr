@@ -111,7 +111,7 @@ async fn run_server(settings: Settings) {
     let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).into();
 
     // Create the database connection. Has to be done after the index and storage
-    // as the needed folders for the sqlite database my not been created before that.
+    // as the needed folders for the sqlite database may not have been created before that.
     let con_string = get_connect_string(&settings);
     let db = Database::new(&con_string, settings.registry.max_db_connections)
         .await
@@ -137,7 +137,7 @@ async fn run_server(settings: Settings) {
 
     init_cratesio_prefetch_thread(
         cratesio_prefetch_sender.clone(),
-        settings.proxy.num_threads as usize,
+        settings.proxy.num_threads,
         prefetch_args,
     );
 

@@ -1,6 +1,6 @@
 ![GitHub](https://img.shields.io/github/license/kellnr/kellnr)
 ![GitHub release (with filter)](https://img.shields.io/github/v/release/kellnr/kellnr)
-![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/kellnr/kellnr/ci.yaml)
+![Tests](https://img.shields.io/github/actions/workflow/status/kellnr/kellnr/test.yaml?label=tests)
 ![GitHub Sponsors](https://img.shields.io/github/sponsors/secana)
 
 

@@ -37,7 +37,10 @@ pub struct Registry {
 
     /// Max database connections (0 = unlimited)
     #[default(0)]
-    #[arg(id = "registry-max-db-connections", long = "registry-max-db-connections")]
+    #[arg(
+        id = "registry-max-db-connections",
+        long = "registry-max-db-connections"
+    )]
     pub max_db_connections: u32,
 
     /// Require authentication for all operations
@@ -47,27 +50,43 @@ pub struct Registry {
 
     /// Required crate fields (comma-separated)
     #[default(Vec::new())]
-    #[arg(id = "registry-required-crate-fields", long = "registry-required-crate-fields", value_delimiter = ',')]
+    #[arg(
+        id = "registry-required-crate-fields",
+        long = "registry-required-crate-fields",
+        value_delimiter = ','
+    )]
     pub required_crate_fields: Vec<String>,
 
     /// Restrict new crate uploads to admins
     #[default(false)]
-    #[arg(id = "registry-new-crates-restricted", long = "registry-new-crates-restricted")]
+    #[arg(
+        id = "registry-new-crates-restricted",
+        long = "registry-new-crates-restricted"
+    )]
     pub new_crates_restricted: bool,
 
     /// Cookie signing key (for multi-instance setups)
     #[default(None)]
-    #[arg(id = "registry-cookie-signing-key", long = "registry-cookie-signing-key")]
+    #[arg(
+        id = "registry-cookie-signing-key",
+        long = "registry-cookie-signing-key"
+    )]
     pub cookie_signing_key: Option<String>,
 
     /// Allow crates without owners
     #[default(false)]
-    #[arg(id = "registry-allow-ownerless-crates", long = "registry-allow-ownerless-crates")]
+    #[arg(
+        id = "registry-allow-ownerless-crates",
+        long = "registry-allow-ownerless-crates"
+    )]
     pub allow_ownerless_crates: bool,
 
     /// Enable token cache
     #[default(true)]
-    #[arg(id = "registry-token-cache-enabled", long = "registry-token-cache-enabled")]
+    #[arg(
+        id = "registry-token-cache-enabled",
+        long = "registry-token-cache-enabled"
+    )]
     pub token_cache_enabled: bool,
 
     /// Token cache TTL in seconds
@@ -77,16 +96,25 @@ pub struct Registry {
 
     /// Token cache max capacity
     #[default(10000)]
-    #[arg(id = "registry-token-cache-max-capacity", long = "registry-token-cache-max-capacity")]
+    #[arg(
+        id = "registry-token-cache-max-capacity",
+        long = "registry-token-cache-max-capacity"
+    )]
     pub token_cache_max_capacity: u64,
 
     /// Token DB retry count
     #[default(3)]
-    #[arg(id = "registry-token-db-retry-count", long = "registry-token-db-retry-count")]
+    #[arg(
+        id = "registry-token-db-retry-count",
+        long = "registry-token-db-retry-count"
+    )]
     pub token_db_retry_count: u32,
 
     /// Token DB retry delay in ms
     #[default(100)]
-    #[arg(id = "registry-token-db-retry-delay", long = "registry-token-db-retry-delay")]
+    #[arg(
+        id = "registry-token-db-retry-delay",
+        long = "registry-token-db-retry-delay"
+    )]
     pub token_db_retry_delay_ms: u64,
 }
