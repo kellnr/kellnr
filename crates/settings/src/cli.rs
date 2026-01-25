@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use clap_serde_derive::ClapSerde;
 use config::ConfigError;
 
@@ -25,10 +25,6 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub command: Option<Command>,
-
-    // Server options (used when no subcommand is provided)
-    #[command(flatten)]
-    pub server: ServerArgs,
 }
 
 /// Server configuration options
@@ -74,6 +70,11 @@ pub struct ServerArgs {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Run the kellnr server
+    Run {
+        #[command(flatten)]
+        server: ServerArgs,
+    },
     /// Configuration management commands
     Config {
         #[command(subcommand)]
@@ -106,6 +107,8 @@ pub enum CliResult {
         /// Output file path
         output: PathBuf,
     },
+    /// Show help/usage information
+    ShowHelp,
 }
 
 pub fn parse_cli() -> Result<CliResult, ConfigError> {
@@ -123,6 +126,30 @@ pub fn parse_cli() -> Result<CliResult, ConfigError> {
 
     // Handle subcommands
     match cli.command {
+        Some(Command::Run { server }) => {
+            // Run server, merge CLI args
+            settings.local = Local::from(settings.local).merge(server.local);
+            settings.origin = Origin::from(settings.origin).merge(server.origin);
+            settings.registry = Registry::from(settings.registry).merge(server.registry);
+            settings.docs = Docs::from(settings.docs).merge(server.docs);
+            settings.proxy = Proxy::from(settings.proxy).merge(server.proxy);
+            settings.postgresql = Postgresql::from(settings.postgresql).merge(server.postgresql);
+            settings.s3 = S3::from(settings.s3).merge(server.s3);
+            settings.setup = Setup::from(settings.setup).merge(server.setup);
+
+            // Log settings (manual merge due to custom serde deserializers)
+            if let Some(format) = server.log_format {
+                settings.log.format = format;
+            }
+            if let Some(level) = server.log_level {
+                settings.log.level = level;
+            }
+            if let Some(level) = server.log_level_web_server {
+                settings.log.level_web_server = level;
+            }
+
+            Ok(CliResult::RunServer(settings))
+        }
         Some(Command::Config { action }) => match action {
             ConfigAction::Show => Ok(CliResult::ShowConfig(settings)),
             ConfigAction::Init { output } => {
@@ -134,28 +161,9 @@ pub fn parse_cli() -> Result<CliResult, ConfigError> {
             }
         },
         None => {
-            // No subcommand - run server, merge CLI args
-            settings.local = Local::from(settings.local).merge(cli.server.local);
-            settings.origin = Origin::from(settings.origin).merge(cli.server.origin);
-            settings.registry = Registry::from(settings.registry).merge(cli.server.registry);
-            settings.docs = Docs::from(settings.docs).merge(cli.server.docs);
-            settings.proxy = Proxy::from(settings.proxy).merge(cli.server.proxy);
-            settings.postgresql = Postgresql::from(settings.postgresql).merge(cli.server.postgresql);
-            settings.s3 = S3::from(settings.s3).merge(cli.server.s3);
-            settings.setup = Setup::from(settings.setup).merge(cli.server.setup);
-
-            // Log settings (manual merge due to custom serde deserializers)
-            if let Some(format) = cli.server.log_format {
-                settings.log.format = format;
-            }
-            if let Some(level) = cli.server.log_level {
-                settings.log.level = level;
-            }
-            if let Some(level) = cli.server.log_level_web_server {
-                settings.log.level_web_server = level;
-            }
-
-            Ok(CliResult::RunServer(settings))
+            // No subcommand - show help
+            Cli::command().print_help().ok();
+            Ok(CliResult::ShowHelp)
         }
     }
 }
@@ -166,5 +174,6 @@ pub fn get_settings_with_cli() -> Result<Settings, ConfigError> {
         CliResult::RunServer(settings)
         | CliResult::ShowConfig(settings)
         | CliResult::InitConfig { settings, .. } => Ok(settings),
+        CliResult::ShowHelp => Ok(Settings::default()),
     }
 }

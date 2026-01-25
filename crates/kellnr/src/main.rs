@@ -39,6 +39,9 @@ async fn main() {
         CliResult::RunServer(settings) => {
             run_server(settings).await;
         }
+        CliResult::ShowHelp => {
+            // Help was already printed by parse_cli()
+        }
     }
 }
 
@@ -84,11 +87,11 @@ async fn run_server(settings: Settings) {
         eprintln!("Error: No data directory configured.");
         eprintln!();
         eprintln!("Please set the data directory using one of the following methods:");
-        eprintln!("  1. CLI argument:    kellnr --registry-data-dir /path/to/data");
+        eprintln!("  1. CLI argument:    kellnr run --registry-data-dir /path/to/data");
         eprintln!("  2. Environment var: KELLNR_REGISTRY__DATA_DIR=/path/to/data");
         eprintln!("  3. Config file:     registry.data_dir = \"/path/to/data\"");
         eprintln!();
-        eprintln!("For more information, run: kellnr --help");
+        eprintln!("For more information, run: kellnr run --help");
         std::process::exit(1);
     }
 
