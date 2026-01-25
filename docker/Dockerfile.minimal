@@ -11,7 +11,7 @@ ARG VERSION
 RUN apk add --no-cache curl zip lscpu sed bash
 
 # Download and install kellnr
-RUN curl -s https://raw.githubusercontent.com/kellnr/installer/feat/adapt-new-kellnr-cli/install.sh | bash -s -- -m -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+RUN curl -s https://github.com/kellnr/installer/releases/download/v0.1.1/install.sh | bash -s -- -m -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
 
 ##################
 # Runtime image  #

@@ -114,6 +114,20 @@ pub enum CliResult {
 pub fn parse_cli() -> Result<CliResult, ConfigError> {
     let cli = Cli::parse();
 
+    // Handle `config init` early - it doesn't need an existing config file
+    if let Some(Command::Config {
+        action: ConfigAction::Init { output },
+    }) = &cli.command
+    {
+        let output_path = output
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("kellnr.toml"));
+        return Ok(CliResult::InitConfig {
+            settings: Settings::default(),
+            output: output_path,
+        });
+    }
+
     // Config file priority: CLI > env var > compile-time > None
     let env_config_file = std::env::var("KELLNR_CONFIG_FILE").ok();
     let config_file: Option<PathBuf> = cli
@@ -152,12 +166,9 @@ pub fn parse_cli() -> Result<CliResult, ConfigError> {
         }
         Some(Command::Config { action }) => match action {
             ConfigAction::Show => Ok(CliResult::ShowConfig(settings)),
-            ConfigAction::Init { output } => {
-                let output_path = output.unwrap_or_else(|| PathBuf::from("kellnr.toml"));
-                Ok(CliResult::InitConfig {
-                    settings: Settings::default(),
-                    output: output_path,
-                })
+            ConfigAction::Init { .. } => {
+                // Already handled above
+                unreachable!()
             }
         },
         None => {
