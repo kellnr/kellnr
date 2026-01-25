@@ -122,7 +122,7 @@ The following environment variables can be set at compile time:
 
 - `KELLNR_COMPTIME__VERSION`: The version of kellnr currently being compiled (default: `0.0.0-unknown`).
 - `KELLNR_COMPTIME__CONFIG_FILE`: Path to the configuration file (default: `None`).
-- `KELLNR_COMPTIME__DATA_DIR`: The directory where kellnr stores its data (default: `/opt/kdata`).
+- `KELLNR_COMPTIME__DATA_DIR`: The directory where kellnr stores its data (default: `None`).
 
 ## Update Documentation
 

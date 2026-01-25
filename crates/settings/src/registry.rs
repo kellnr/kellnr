@@ -4,7 +4,11 @@ use serde::{Deserialize, Serialize};
 use crate::compile_time_config;
 
 fn default_data_dir() -> String {
-    compile_time_config::KELLNR_COMPTIME__DATA_DIR.to_string()
+    // Priority: runtime env var > compile-time > empty (must be set via CLI or config)
+    std::env::var("KELLNR_DATA_DIR")
+        .ok()
+        .or_else(|| compile_time_config::KELLNR_COMPTIME__DATA_DIR.map(String::from))
+        .unwrap_or_default()
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]

@@ -29,6 +29,20 @@ async fn main() {
     let settings: Arc<Settings> = kellnr_settings::get_settings_with_cli()
         .expect("Cannot read config")
         .into();
+
+    // Validate required settings
+    if settings.registry.data_dir.is_empty() {
+        eprintln!("Error: No data directory configured.");
+        eprintln!();
+        eprintln!("Please set the data directory using one of the following methods:");
+        eprintln!("  1. CLI argument:    kellnr --registry-data-dir /path/to/data");
+        eprintln!("  2. Environment var: KELLNR_REGISTRY__DATA_DIR=/path/to/data");
+        eprintln!("  3. Config file:     registry.data_dir = \"/path/to/data\"");
+        eprintln!();
+        eprintln!("For more information, run: kellnr --help");
+        std::process::exit(1);
+    }
+
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber
