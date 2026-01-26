@@ -1,6 +1,6 @@
 ![GitHub](https://img.shields.io/github/license/kellnr/kellnr)
 ![GitHub release (with filter)](https://img.shields.io/github/v/release/kellnr/kellnr)
-![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/kellnr/kellnr/ci.yaml)
+![Tests](https://img.shields.io/github/actions/workflow/status/kellnr/kellnr/test.yaml?label=tests)
 ![GitHub Sponsors](https://img.shields.io/github/sponsors/secana)
 
 
@@ -21,7 +21,43 @@ docker run \
     -e "KELLNR_ORIGIN__HOSTNAME=localhost" ghcr.io/kellnr/kellnr:5
 ```
 
-Fore more information about how to configure and run **kellnr**, check out the [documentation](https://kellnr.io/documentation).
+For more information about how to configure and run **kellnr**, check out the [documentation](https://kellnr.io/documentation).
+
+## CLI Usage
+
+When running kellnr as a standalone binary, use the following commands:
+
+```bash
+# Show help and available commands
+kellnr
+
+# Start the server
+kellnr run
+
+# Start with custom data directory and port
+kellnr run --registry-data-dir /var/lib/kellnr --local-port 8080
+
+# Show all available run options
+kellnr run --help
+
+# Show current configuration as TOML
+kellnr config show
+
+# Create a default configuration file
+kellnr config init
+
+# Create config file at custom path
+kellnr config init -o /etc/kellnr/kellnr.toml
+
+# Use a specific configuration file
+kellnr -c /path/to/kellnr.toml run
+```
+
+Configuration can be provided through (in order of priority):
+1. **CLI arguments** (highest priority)
+2. **Environment variables** (e.g., `KELLNR_REGISTRY__DATA_DIR`)
+3. **Configuration file** (TOML format)
+4. **Default values** (lowest priority)
 
 You can find the latest binary releases here: [Kellnr Binary Releases](https://github.com/kellnr/kellnr/releases). 
 

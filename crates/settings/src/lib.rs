@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod compile_time_config;
 pub mod constants;
 mod deserialize_with;
@@ -13,6 +14,7 @@ pub mod s3;
 pub mod settings;
 pub mod setup;
 
+pub use cli::{CliResult, get_settings_with_cli, parse_cli};
 pub use docs::Docs;
 pub use local::Local;
 pub use log::{LogFormat, LogLevel};

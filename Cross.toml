@@ -1,15 +1,15 @@
 [build.env]
-passthrough = [ 
-    # The version of kellnr need to be passed through 
+passthrough = [
+    # The version of kellnr need to be passed through
     # to cross in the github workflow to set the version
     # correctly in the kellnr web ui.
-    "KELLNR_VERSION",
+    "KELLNR_COMPTIME__VERSION",
 
-    # Sets the config directory for kellnr at 
+    # Sets the config file path for kellnr at
     # compile time.
-    "KELLNR_CONFIG_DIR",
+    "KELLNR_COMPTIME__CONFIG_FILE",
 
     # Sets the data directory for kellnr at
     # compile time.
-    "KELLNR_DATA_DIR",
+    "KELLNR_COMPTIME__DATA_DIR",
 ]

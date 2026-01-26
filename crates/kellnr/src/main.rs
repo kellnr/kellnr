@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,7 +11,7 @@ use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
-use kellnr_settings::{LogFormat, Settings};
+use kellnr_settings::{CliResult, LogFormat, Settings, parse_cli};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
@@ -26,9 +27,74 @@ mod routes;
 
 #[tokio::main]
 async fn main() {
-    let settings: Arc<Settings> = kellnr_settings::get_settings()
-        .expect("Cannot read config")
-        .into();
+    let cli_result = parse_cli().expect("Cannot read config");
+
+    match cli_result {
+        CliResult::ShowConfig(settings) => {
+            show_config(&settings);
+        }
+        CliResult::InitConfig { settings, output } => {
+            init_config(&settings, &output);
+        }
+        CliResult::RunServer(settings) => {
+            run_server(settings).await;
+        }
+        CliResult::ShowHelp => {
+            // Help was already printed by parse_cli()
+        }
+    }
+}
+
+fn show_config(settings: &Settings) {
+    match toml::to_string_pretty(settings) {
+        Ok(toml) => println!("{toml}"),
+        Err(e) => {
+            eprintln!("Error serializing config: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn init_config(settings: &Settings, output: &Path) {
+    if output.exists() {
+        eprintln!("Error: File already exists: {}", output.display());
+        eprintln!("Remove the file or specify a different output path with -o");
+        std::process::exit(1);
+    }
+
+    match toml::to_string_pretty(settings) {
+        Ok(toml) => match std::fs::write(output, toml) {
+            Ok(()) => {
+                println!("Configuration file created: {}", output.display());
+            }
+            Err(e) => {
+                eprintln!("Error writing config file: {e}");
+                std::process::exit(1);
+            }
+        },
+        Err(e) => {
+            eprintln!("Error serializing config: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+async fn run_server(settings: Settings) {
+    let settings: Arc<Settings> = settings.into();
+
+    // Validate required settings
+    if settings.registry.data_dir.is_empty() {
+        eprintln!("Error: No data directory configured.");
+        eprintln!();
+        eprintln!("Please set the data directory using one of the following methods:");
+        eprintln!("  1. CLI argument:    kellnr run --registry-data-dir /path/to/data");
+        eprintln!("  2. Environment var: KELLNR_REGISTRY__DATA_DIR=/path/to/data");
+        eprintln!("  3. Config file:     registry.data_dir = \"/path/to/data\"");
+        eprintln!();
+        eprintln!("For more information, run: kellnr run --help");
+        std::process::exit(1);
+    }
+
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber
@@ -45,7 +111,7 @@ async fn main() {
     let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).into();
 
     // Create the database connection. Has to be done after the index and storage
-    // as the needed folders for the sqlite database my not been created before that.
+    // as the needed folders for the sqlite database may not have been created before that.
     let con_string = get_connect_string(&settings);
     let db = Database::new(&con_string, settings.registry.max_db_connections)
         .await
@@ -71,7 +137,7 @@ async fn main() {
 
     init_cratesio_prefetch_thread(
         cratesio_prefetch_sender.clone(),
-        settings.proxy.num_threads as usize,
+        settings.proxy.num_threads,
         prefetch_args,
     );
 
