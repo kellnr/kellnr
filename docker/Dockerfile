@@ -23,7 +23,6 @@ RUN apt install -y \
     pkg-config \
     libssl-dev
 
-WORKDIR ${INSTALLDIR}
 RUN curl -sL https://github.com/kellnr/installer/releases/download/v0.1.1/install.sh -o /tmp/install.sh && \
     bash /tmp/install.sh -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION} && \
     rm /tmp/install.sh
