@@ -160,7 +160,12 @@ async fn init_docs_hosting(
         .await
         .expect("Failed to create docs directory.");
     if settings.docs.enabled {
-        kellnr_docs::doc_queue::doc_extraction_queue(db, cs, settings.docs_path());
+        kellnr_docs::doc_queue::doc_extraction_queue(
+            db,
+            cs,
+            settings.docs_path(),
+            settings.origin.path.clone(),
+        );
     }
 }
 
