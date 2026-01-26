@@ -83,6 +83,12 @@ export type StartLocalKellnrOptions = {
    * Useful for debugging. Defaults to false.
    */
   logToStdout?: boolean;
+
+  /**
+   * Path to use for the health check. Defaults to "/".
+   * Set this when using KELLNR_ORIGIN__PATH to match the path prefix.
+   */
+  healthCheckPath?: string;
 };
 
 /**
@@ -282,8 +288,11 @@ export async function startLocalKellnr(
   });
 
   // Wait for server to be ready
+  const healthCheckUrl = options.healthCheckPath
+    ? `${baseUrl}${options.healthCheckPath}`
+    : baseUrl;
   try {
-    await waitForHttpOk(baseUrl, { timeoutMs: 60_000, intervalMs: 500 });
+    await waitForHttpOk(healthCheckUrl, { timeoutMs: 60_000, intervalMs: 500 });
   } catch (e) {
     // Server failed to start - clean up and rethrow
     await stop();

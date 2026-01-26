@@ -32,7 +32,7 @@ pub async fn latest_docs(
         && let Ok(db_version) = res_db_version
         && doc_version == db_version
     {
-        return Redirect::temporary(&compute_doc_url(&name, &db_version));
+        return Redirect::temporary(&compute_doc_url(&name, &db_version, &settings.origin.path));
     }
 
     Redirect::temporary("/")
@@ -72,7 +72,7 @@ pub async fn publish_docs(
     db.update_docs_link(
         &normalized_name,
         &version,
-        &compute_doc_url(&package, &version),
+        &compute_doc_url(&package, &version, &settings.origin.path),
     )
     .await?;
 
@@ -80,6 +80,7 @@ pub async fn publish_docs(
         "Successfully published docs.".to_string(),
         &package,
         &version,
+        &settings.origin.path,
     )))
 }
 

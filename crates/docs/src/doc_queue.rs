@@ -23,11 +23,12 @@ pub fn doc_extraction_queue(
     db: Arc<dyn DbProvider>,
     cs: Arc<KellnrCrateStorage>,
     docs_path: PathBuf,
+    path_prefix: String,
 ) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-            if let Err(e) = inner_loop(db.clone(), &cs, &docs_path).await {
+            if let Err(e) = inner_loop(db.clone(), &cs, &docs_path, &path_prefix).await {
                 error!("Rustdoc generation loop failed: {e}");
             }
         }
@@ -38,6 +39,7 @@ async fn inner_loop(
     db: Arc<dyn DbProvider>,
     cs: &KellnrCrateStorage,
     docs_path: &Path,
+    path_prefix: &str,
 ) -> Result<(), DocsError> {
     let entries = db.get_doc_queue().await?;
 
@@ -50,7 +52,7 @@ async fn inner_loop(
             }
 
             let version = Version::from_unchecked_str(&entry.version);
-            let docs_link = compute_doc_url(&entry.normalized_name, &version);
+            let docs_link = compute_doc_url(&entry.normalized_name, &version, path_prefix);
             db.update_docs_link(&entry.normalized_name, &version, &docs_link)
                 .await?;
         }

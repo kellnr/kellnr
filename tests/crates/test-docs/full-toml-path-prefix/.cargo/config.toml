@@ -1,0 +1,5 @@
+[registries]
+kellnr-test-path = {index = "sparse+http://localhost:8000/kellnr/api/v1/crates/", token = "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD"}
+
+[registry]
+global-credential-providers = ["cargo:token"]

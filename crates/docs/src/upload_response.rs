@@ -13,12 +13,17 @@ pub struct DocUploadResponse {
 }
 
 impl DocUploadResponse {
-    pub fn new(message: String, crate_name: &OriginalName, crate_version: &Version) -> Self {
+    pub fn new(
+        message: String,
+        crate_name: &OriginalName,
+        crate_version: &Version,
+        path_prefix: &str,
+    ) -> Self {
         Self {
             message,
             crate_name: crate_name.to_string(),
             crate_version: crate_version.to_string(),
-            url: compute_doc_url(&crate_name.to_string(), crate_version),
+            url: compute_doc_url(&crate_name.to_string(), crate_version, path_prefix),
         }
     }
 }
@@ -35,7 +40,7 @@ mod tests {
         let version = Version::try_from("1.0.0-beta2").unwrap();
         let msg = "Hello, this is the message.".to_string();
 
-        let dur = DocUploadResponse::new(msg, &name, &version);
+        let dur = DocUploadResponse::new(msg, &name, &version, "");
 
         assert_eq!(
             DocUploadResponse {
@@ -54,13 +59,32 @@ mod tests {
         let version = Version::try_from("1.0.0").unwrap();
         let msg = "Hello, this is the message.".to_string();
 
-        let dur = DocUploadResponse::new(msg, &name, &version);
+        let dur = DocUploadResponse::new(msg, &name, &version, "");
 
         assert_eq!(
             DocUploadResponse {
                 message: "Hello, this is the message.".to_string(),
                 url: "/docs/my-crate/1.0.0/doc/my_crate/index.html".to_string(),
                 crate_name: "my-crate".to_string(),
+                crate_version: "1.0.0".to_string()
+            },
+            dur
+        );
+    }
+
+    #[test]
+    fn create_new_doc_upload_with_path_prefix() {
+        let name = OriginalName::try_from("mycrate").unwrap();
+        let version = Version::try_from("1.0.0").unwrap();
+        let msg = "Hello, this is the message.".to_string();
+
+        let dur = DocUploadResponse::new(msg, &name, &version, "/kellnr");
+
+        assert_eq!(
+            DocUploadResponse {
+                message: "Hello, this is the message.".to_string(),
+                url: "/kellnr/docs/mycrate/1.0.0/doc/mycrate/index.html".to_string(),
+                crate_name: "mycrate".to_string(),
                 crate_version: "1.0.0".to_string()
             },
             dur

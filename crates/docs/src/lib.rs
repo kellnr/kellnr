@@ -13,24 +13,31 @@ use kellnr_settings::Settings;
 
 pub fn get_latest_doc_url(crate_name: &str, settings: &Settings) -> Option<String> {
     let version = get_latest_version_with_doc(crate_name, settings);
-    version.map(|v| compute_doc_url(crate_name, &v))
+    version.map(|v| compute_doc_url(crate_name, &v, &settings.origin.path))
 }
 
-pub fn get_doc_url(crate_name: &str, crate_version: &Version, docs_path: &Path) -> Option<String> {
+pub fn get_doc_url(
+    crate_name: &str,
+    crate_version: &Version,
+    docs_path: &Path,
+    path_prefix: &str,
+) -> Option<String> {
     let docs_name = crate_name_to_docs_name(crate_name);
+    let path_prefix = path_prefix.trim();
 
     if doc_exists(crate_name, crate_version, docs_path) {
         Some(format!(
-            "/docs/{crate_name}/{crate_version}/doc/{docs_name}/index.html"
+            "{path_prefix}/docs/{crate_name}/{crate_version}/doc/{docs_name}/index.html"
         ))
     } else {
         None
     }
 }
 
-pub fn compute_doc_url(crate_name: &str, crate_version: &Version) -> String {
+pub fn compute_doc_url(crate_name: &str, crate_version: &Version, path_prefix: &str) -> String {
     let docs_name = crate_name_to_docs_name(crate_name);
-    format!("/docs/{crate_name}/{crate_version}/doc/{docs_name}/index.html")
+    let path_prefix = path_prefix.trim();
+    format!("{path_prefix}/docs/{crate_name}/{crate_version}/doc/{docs_name}/index.html")
 }
 
 fn crate_name_to_docs_name(crate_name: &str) -> String {
@@ -91,4 +98,37 @@ pub async fn delete(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compute_doc_url_without_path_prefix() {
+        let version = Version::try_from("1.0.0").unwrap();
+        let url = compute_doc_url("my-crate", &version, "");
+        assert_eq!(url, "/docs/my-crate/1.0.0/doc/my_crate/index.html");
+    }
+
+    #[test]
+    fn compute_doc_url_with_path_prefix() {
+        let version = Version::try_from("1.0.0").unwrap();
+        let url = compute_doc_url("my-crate", &version, "/kellnr");
+        assert_eq!(url, "/kellnr/docs/my-crate/1.0.0/doc/my_crate/index.html");
+    }
+
+    #[test]
+    fn compute_doc_url_trims_whitespace_from_path_prefix() {
+        let version = Version::try_from("1.0.0").unwrap();
+        let url = compute_doc_url("my-crate", &version, "  /kellnr  ");
+        assert_eq!(url, "/kellnr/docs/my-crate/1.0.0/doc/my_crate/index.html");
+    }
+
+    #[test]
+    fn compute_doc_url_replaces_hyphen_with_underscore_in_docs_name() {
+        let version = Version::try_from("2.0.0-beta1").unwrap();
+        let url = compute_doc_url("foo-bar-baz", &version, "");
+        assert_eq!(url, "/docs/foo-bar-baz/2.0.0-beta1/doc/foo_bar_baz/index.html");
+    }
 }
