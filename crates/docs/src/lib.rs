@@ -129,6 +129,9 @@ mod tests {
     fn compute_doc_url_replaces_hyphen_with_underscore_in_docs_name() {
         let version = Version::try_from("2.0.0-beta1").unwrap();
         let url = compute_doc_url("foo-bar-baz", &version, "");
-        assert_eq!(url, "/docs/foo-bar-baz/2.0.0-beta1/doc/foo_bar_baz/index.html");
+        assert_eq!(
+            url,
+            "/docs/foo-bar-baz/2.0.0-beta1/doc/foo_bar_baz/index.html"
+        );
     }
 }

@@ -172,7 +172,11 @@ test.describe("Migration UI Tests", () => {
             name: oldContainer,
             image: oldImage,
             ports: k.ports,
-            env: k.env,
+            env: {
+              ...k.env,
+              // Explicitly set data directory to ensure it uses the mounted path
+              KELLNR_REGISTRY__DATA_DIR: kdataMount,
+            },
             bindMounts: {
               [kdataDir]: kdataMount,
             },
