@@ -528,12 +528,13 @@ export async function fetchLatestReleasedKellnrImage(): Promise<string> {
     );
   }
 
-  // Filter to semver-like tags, ignore "latest"
+  // Filter to semver-like tags, ignore "latest" and pre-releases
+  // We only want stable releases for migration testing (no -rc, -beta, -alpha suffixes)
   const versionTags = tags
     .filter((t: unknown): t is string => typeof t === "string")
     .filter((t) => t !== "latest")
     .map((t) => ({ tag: t, v: parseVersion(t) }))
-    .filter((x) => x.v !== null) as Array<{ tag: string; v: Version }>;
+    .filter((x) => x.v !== null && !x.v.pre) as Array<{ tag: string; v: Version }>;
 
   if (versionTags.length === 0) {
     throw new Error(
