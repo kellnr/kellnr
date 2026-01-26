@@ -8,20 +8,22 @@ use crate::types::WebhookError;
 
 pub fn run_webhook_service(db: Arc<dyn DbProvider>) {
     tokio::spawn(async move {
+        let http_client = reqwest::Client::new();
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            if let Err(err) = handle_queue(&db).await {
+            if let Err(err) = handle_queue(&db, &http_client).await {
                 tracing::error!("Webhook queue failed. Reason {err}");
             }
         }
     });
 }
 
-async fn handle_queue(db: &Arc<dyn DbProvider>) -> Result<(), WebhookError> {
+async fn handle_queue(
+    db: &Arc<dyn DbProvider>,
+    client: &reqwest::Client,
+) -> Result<(), WebhookError> {
     let now = Utc::now();
     let pending = db.get_pending_webhook_queue_entries(now).await?;
-
-    let client = reqwest::Client::new();
 
     for entry in pending {
         let request = client.post(&entry.callback_url).json(&entry.payload);
@@ -136,7 +138,8 @@ mod service_tests {
         .await;
 
         let mut listener = get_test_listener(9980, 200).await;
-        handle_queue(&db).await.unwrap();
+        let http_client = reqwest::Client::new();
+        handle_queue(&db, &http_client).await.unwrap();
 
         for _ in 0..5 {
             let listener_resp = listener.rx.recv().await.unwrap();
@@ -167,7 +170,8 @@ mod service_tests {
         .await;
 
         let mut listener = get_test_listener(9981, 400).await;
-        handle_queue(&db).await.unwrap();
+        let http_client = reqwest::Client::new();
+        handle_queue(&db, &http_client).await.unwrap();
 
         let listener_resp = listener.rx.recv().await.unwrap();
         assert_eq!(0, listener_resp);
@@ -183,7 +187,7 @@ mod service_tests {
 
         // Try again to check the increasing interval
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        handle_queue(&db).await.unwrap();
+        handle_queue(&db, &http_client).await.unwrap();
 
         let ts = Utc::now() + TimeDelta::minutes(5);
         let pending = db.get_pending_webhook_queue_entries(ts).await.unwrap();
@@ -212,7 +216,8 @@ mod service_tests {
         )
         .await;
 
-        handle_queue(&db).await.unwrap();
+        let http_client = reqwest::Client::new();
+        handle_queue(&db, &http_client).await.unwrap();
 
         let ts = Utc::now() + TimeDelta::minutes(5);
         let pending = db.get_pending_webhook_queue_entries(ts).await.unwrap();
