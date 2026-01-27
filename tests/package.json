@@ -1,29 +1,29 @@
 {
-  "name": "kellnr-smoke-tests",
-  "private": true,
-  "version": "0.1.0",
-  "description": "Playwright Test based smoke/integration tests and UI tests for Kellnr",
-  "type": "module",
-  "scripts": {
-    "test": "playwright test",
-    "test:smoke": "playwright test --project=smoke",
-    "test:ui": "PLAYWRIGHT_UI=1 playwright test",
-    "test:ui:chromium": "PLAYWRIGHT_UI=1 playwright test --project=chromium",
-    "test:ui:firefox": "PLAYWRIGHT_UI=1 playwright test --project=firefox",
-    "test:ui:webkit": "PLAYWRIGHT_UI=1 playwright test --project=webkit",
-    "test:headed": "playwright test --headed",
-    "test:ui:headed": "PLAYWRIGHT_UI=1 playwright test --headed",
-    "test:debug": "playwright test --debug",
-    "test:ui:debug": "PLAYWRIGHT_UI=1 playwright test --debug",
-    "test:report": "playwright show-report",
-    "install:browsers": "playwright install",
-    "install:browsers:with-deps": "playwright install --with-deps"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.49.1",
-    "@types/node": "^22.10.2",
-    "execa": "^9.5.1",
-    "testcontainers": "^11.11.0",
-    "typescript": "^5.7.2"
-  }
+    "name": "kellnr-smoke-tests",
+    "private": true,
+    "version": "0.1.0",
+    "description": "Playwright Test based smoke/integration tests and UI tests for Kellnr",
+    "type": "module",
+    "scripts": {
+        "test": "playwright test",
+        "test:smoke": "playwright test --project=smoke",
+        "test:ui": "PLAYWRIGHT_UI=1 playwright test",
+        "test:ui:chromium": "PLAYWRIGHT_UI=1 playwright test --project=chromium",
+        "test:ui:firefox": "PLAYWRIGHT_UI=1 playwright test --project=firefox",
+        "test:ui:webkit": "PLAYWRIGHT_UI=1 playwright test --project=webkit",
+        "test:headed": "playwright test --headed",
+        "test:ui:headed": "PLAYWRIGHT_UI=1 playwright test --headed",
+        "test:debug": "playwright test --debug",
+        "test:ui:debug": "PLAYWRIGHT_UI=1 playwright test --debug",
+        "test:report": "playwright show-report",
+        "install:browsers": "playwright install",
+        "install:browsers:with-deps": "playwright install --with-deps"
+    },
+    "devDependencies": {
+        "@playwright/test": "1.57.0",
+        "@types/node": "^22.10.2",
+        "execa": "^9.5.1",
+        "testcontainers": "^11.11.0",
+        "typescript": "^5.7.2"
+    }
 }

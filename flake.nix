@@ -142,7 +142,7 @@
             cargo-machete
 
             # Node.js for UI development
-            nodejs_22
+            nodejs_24
 
             # Database tools
             sea-orm-cli
@@ -160,40 +160,8 @@
 
             # Testing
             python3
+            playwright-driver.browsers
           ] ++ lib.optionals stdenv.isLinux [
-            # Playwright browser dependencies for Linux
-            alsa-lib
-            at-spi2-atk
-            atk
-            cairo
-            cups
-            dbus
-            expat
-            fontconfig
-            freetype
-            gdk-pixbuf
-            glib
-            gtk3
-            libdrm
-            libnotify
-            libuuid
-            libxkbcommon
-            mesa
-            nspr
-            nss
-            pango
-            xorg.libX11
-            xorg.libXcomposite
-            xorg.libXcursor
-            xorg.libXdamage
-            xorg.libXext
-            xorg.libXfixes
-            xorg.libXi
-            xorg.libXrandr
-            xorg.libXrender
-            xorg.libXtst
-            xorg.libxcb
-            xorg.libxshmfence
           ];
 
           shellHook = ''
@@ -230,8 +198,14 @@
             export REQUESTS_CA_BUNDLE="$COMBINED_CERT_FILE"
             export NODE_EXTRA_CA_CERTS="$COMBINED_CERT_FILE"
 
-            # Playwright setup
-            export PLAYWRIGHT_BROWSERS_PATH=0
+            # Playwright setup for NixOS
+            # Use pre-patched browsers from nixpkgs instead of downloading
+            export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
+            export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+            export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+            echo "Playwright browsers: $PLAYWRIGHT_BROWSERS_PATH"
+            echo "Nixpkgs playwright version: ${pkgs.playwright-driver.version}"
+            echo "NOTE: Your tests/package.json @playwright/test version must match!"
 
             alias c=cargo
             alias j=just
