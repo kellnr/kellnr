@@ -42,7 +42,6 @@ ui.rs-e
 kellnr-dev.yaml-e
 .DS_Store
 node_modules/
-package-lock.json
 
 # Testing related
 tests/**/logs/
