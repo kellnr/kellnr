@@ -115,3 +115,28 @@ endpoint = "http://localhost:9000"
 allow_http = true
 crates_bucket = "kellnr-crates" # Used for the crates
 cratesio_bucket = "kellnr-cratesio" # Used for the crates.io proxy
+
+# Configure OAuth2/OpenID Connect authentication
+[oauth2]
+# Enable OAuth2/OIDC authentication (disabled by default)
+enabled = false
+# OIDC issuer URL for discovery (e.g., https://authentik.example.com/application/o/kellnr/)
+# issuer_url = ""
+# OAuth2 client ID
+# client_id = ""
+# OAuth2 client secret - prefer setting via KELLNR_OAUTH2__CLIENT_SECRET env var
+# client_secret = ""
+# OAuth2 scopes to request
+scopes = ["openid", "profile", "email"]
+# Automatically create local user accounts for new OAuth2 users
+auto_provision_users = true
+# Claim name to check for admin group membership (e.g., "groups")
+# admin_group_claim = ""
+# Value in the admin group claim that grants admin privileges (e.g., "kellnr-admins")
+# admin_group_value = ""
+# Claim name to check for read-only group membership (e.g., "groups")
+# read_only_group_claim = ""
+# Value in the read-only group claim that grants read-only access (e.g., "kellnr-readonly")
+# read_only_group_value = ""
+# Text displayed on the OAuth2 login button
+button_text = "Login with SSO"

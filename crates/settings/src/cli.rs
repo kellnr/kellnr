@@ -8,6 +8,7 @@ use crate::compile_time_config;
 use crate::docs::Docs;
 use crate::local::Local;
 use crate::log::{LogFormat, LogLevel};
+use crate::oauth2::OAuth2;
 use crate::origin::Origin;
 use crate::postgresql::Postgresql;
 use crate::proxy::Proxy;
@@ -54,6 +55,9 @@ pub struct ServerArgs {
     #[command(flatten)]
     pub setup: <Setup as ClapSerde>::Opt,
 
+    #[command(flatten)]
+    pub oauth2: <OAuth2 as ClapSerde>::Opt,
+
     // Log settings (manual, not using ClapSerde due to custom serde deserializers)
     /// Log output format
     #[arg(id = "log-format", long = "log-format", value_enum)]
@@ -69,6 +73,7 @@ pub struct ServerArgs {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum Command {
     /// Run the kellnr server
     Run {
@@ -142,14 +147,15 @@ pub fn parse_cli() -> Result<CliResult, ConfigError> {
     match cli.command {
         Some(Command::Run { server }) => {
             // Run server, merge CLI args
-            settings.local = Local::from(settings.local).merge(server.local);
-            settings.origin = Origin::from(settings.origin).merge(server.origin);
-            settings.registry = Registry::from(settings.registry).merge(server.registry);
-            settings.docs = Docs::from(settings.docs).merge(server.docs);
-            settings.proxy = Proxy::from(settings.proxy).merge(server.proxy);
-            settings.postgresql = Postgresql::from(settings.postgresql).merge(server.postgresql);
-            settings.s3 = S3::from(settings.s3).merge(server.s3);
-            settings.setup = Setup::from(settings.setup).merge(server.setup);
+            settings.local = settings.local.merge(server.local);
+            settings.origin = settings.origin.merge(server.origin);
+            settings.registry = settings.registry.merge(server.registry);
+            settings.docs = settings.docs.merge(server.docs);
+            settings.proxy = settings.proxy.merge(server.proxy);
+            settings.postgresql = settings.postgresql.merge(server.postgresql);
+            settings.s3 = settings.s3.merge(server.s3);
+            settings.setup = settings.setup.merge(server.setup);
+            settings.oauth2 = settings.oauth2.merge(server.oauth2);
 
             // Log settings (manual merge due to custom serde deserializers)
             if let Some(format) = server.log_format {

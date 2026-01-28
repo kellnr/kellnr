@@ -201,7 +201,11 @@ export async function startLocalKellnr(
     // Logging
     KELLNR_LOG__LEVEL: logLevel,
     KELLNR_LOG__LEVEL_WEB_SERVER: webLogLevel,
-    // Merge user-provided environment
+    // Disable OAuth2 by default to ensure test isolation.
+    // Tests that need OAuth2 should explicitly set KELLNR_OAUTH2__ENABLED=true
+    // along with required config (issuer_url, client_id, client_secret).
+    KELLNR_OAUTH2__ENABLED: "false",
+    // Merge user-provided environment (can override the defaults above)
     ...(options.env ?? {}),
   };
 

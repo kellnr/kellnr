@@ -12,17 +12,17 @@ fn default_pg_db() -> String {
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
 #[serde(default)]
 pub struct Postgresql {
-    /// Use PostgreSQL instead of SQLite
+    /// Use `PostgreSQL` instead of `SQLite`
     #[default(false)]
     #[arg(id = "postgresql-enabled", long = "postgresql-enabled")]
     pub enabled: bool,
 
-    /// PostgreSQL server address
+    /// `PostgreSQL` server address
     #[default(default_pg_address())]
     #[arg(id = "postgresql-address", long = "postgresql-address")]
     pub address: String,
 
-    /// PostgreSQL port
+    /// `PostgreSQL` port
     #[default(5432)]
     #[arg(id = "postgresql-port", long = "postgresql-port")]
     pub port: u16,

@@ -25,6 +25,8 @@ pub enum Relation {
     CrateUser,
     #[sea_orm(has_many = "super::group_user::Entity")]
     GroupUser,
+    #[sea_orm(has_many = "super::oauth2_identity::Entity")]
+    OAuth2Identity,
     #[sea_orm(has_many = "super::owner::Entity")]
     Owner,
     #[sea_orm(has_many = "super::session::Entity")]
@@ -46,6 +48,12 @@ impl Related<super::crate_user::Entity> for Entity {
 impl Related<super::group_user::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::GroupUser.def()
+    }
+}
+
+impl Related<super::oauth2_identity::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OAuth2Identity.def()
     }
 }
 

@@ -45,22 +45,19 @@ pub async fn init_database(
     Ok(db)
 }
 
-/// Delete old migration entries from seaql_migrations table if they exist.
+/// Delete old migration entries from `seaql_migrations` table if they exist.
 /// This allows the v6.0.0 migrations to run even when upgrading from older versions.
 async fn cleanup_old_migrations(db: &DatabaseConnection) -> Result<(), DbErr> {
     // Just try to delete old migrations. If the table doesn't exist (fresh install),
     // the DELETE will fail silently - that's fine.
     let mut cleaned = 0;
     for migration in OLD_MIGRATIONS {
-        let sql = format!(
-            "DELETE FROM seaql_migrations WHERE version = '{}'",
-            migration
-        );
-        if let Ok(result) = db.execute_unprepared(&sql).await {
-            if result.rows_affected() > 0 {
-                debug!("Removed old migration entry: {}", migration);
-                cleaned += 1;
-            }
+        let sql = format!("DELETE FROM seaql_migrations WHERE version = '{migration}'");
+        if let Ok(result) = db.execute_unprepared(&sql).await
+            && result.rows_affected() > 0
+        {
+            debug!("Removed old migration entry: {}", migration);
+            cleaned += 1;
         }
     }
 

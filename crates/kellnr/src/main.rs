@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use axum_extra::extract::cookie::Key;
 use kellnr_appstate::AppStateData;
+use kellnr_auth::oauth2::OAuth2Handler;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
@@ -20,7 +21,7 @@ use kellnr_storage::s3_storage::S3Storage;
 use moka::future::Cache;
 use tokio::fs::create_dir_all;
 use tokio::net::TcpListener;
-use tracing::info;
+use tracing::{error, info, warn};
 use tracing_subscriber::fmt::format;
 
 mod routes;
@@ -157,6 +158,10 @@ async fn run_server(settings: Settings) {
         settings.registry.token_cache_ttl_seconds,
         settings.registry.token_cache_max_capacity,
     ));
+
+    // Initialize OAuth2/OIDC handler if enabled
+    let oauth2_handler = init_oauth2_handler(&settings).await;
+
     let state = AppStateData {
         db,
         signing_key,
@@ -168,7 +173,13 @@ async fn run_server(settings: Settings) {
     };
 
     // Create router using the route module
-    let mut app = routes::create_router(state, &data_dir, max_docs_size, max_crate_size);
+    let mut app = routes::create_router(
+        state,
+        &data_dir,
+        max_docs_size,
+        max_crate_size,
+        oauth2_handler,
+    );
     if !route_path_prefix.is_empty() {
         app = axum::Router::new().nest(&route_path_prefix, app);
     }
@@ -257,4 +268,43 @@ fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
 
 fn init_webhook_service(db: Arc<dyn DbProvider + 'static>) {
     kellnr_webhooks::run_webhook_service(db);
+}
+
+/// Initialize `OAuth2`/OIDC handler if enabled in settings
+///
+/// Returns None if `OAuth2` is disabled or if initialization fails.
+async fn init_oauth2_handler(settings: &Settings) -> Option<Arc<OAuth2Handler>> {
+    if !settings.oauth2.enabled {
+        info!("OAuth2/OIDC authentication is disabled");
+        return None;
+    }
+
+    // Construct the callback URL based on settings
+    let protocol = &settings.origin.protocol; // Protocol enum implements Display
+    let host = &settings.origin.hostname;
+    let port = settings.origin.port;
+    let path_prefix = settings.origin.path.trim();
+
+    let callback_url = if port == 443 || port == 80 {
+        format!("{protocol}://{host}{path_prefix}/api/v1/oauth2/callback")
+    } else {
+        format!("{protocol}://{host}:{port}{path_prefix}/api/v1/oauth2/callback")
+    };
+
+    info!(
+        "Initializing OAuth2/OIDC handler with callback URL: {}",
+        callback_url
+    );
+
+    match OAuth2Handler::from_discovery(&settings.oauth2, &callback_url).await {
+        Ok(handler) => {
+            info!("OAuth2/OIDC handler initialized successfully");
+            Some(Arc::new(handler))
+        }
+        Err(e) => {
+            error!("Failed to initialize OAuth2/OIDC handler: {}", e);
+            warn!("OAuth2/OIDC authentication will be disabled");
+            None
+        }
+    }
 }

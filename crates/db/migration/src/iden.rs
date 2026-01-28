@@ -233,3 +233,27 @@ pub enum CrateGroupIden {
     #[iden = "group_fk"]
     GroupFk,
 }
+
+#[derive(Iden)]
+pub enum OAuth2IdentityIden {
+    #[iden = "oauth2_identity"]
+    Table,
+    Id,
+    #[iden = "user_fk"]
+    UserFk,
+    ProviderIssuer,
+    Subject,
+    Email,
+    Created,
+}
+
+#[derive(Iden)]
+pub enum OAuth2StateIden {
+    #[iden = "oauth2_state"]
+    Table,
+    Id,
+    State,
+    PkceVerifier,
+    Nonce,
+    Created,
+}
