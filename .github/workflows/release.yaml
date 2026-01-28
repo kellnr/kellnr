@@ -105,10 +105,17 @@ jobs:
           tag: ${{ github.ref }}
 
   build-windows:
-    name: Build Windows x64
+    name: Build Windows
     runs-on: windows-latest
     needs: [test]
     permissions: { contents: write }
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            artifact: kellnr-x86_64-windows
+          - target: aarch64-pc-windows-msvc
+            artifact: kellnr-aarch64-windows
 
     steps:
       - name: Checkout
@@ -116,6 +123,9 @@ jobs:
 
       - name: Setup Rust
         uses: hecrj/setup-rust-action@v2
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -131,20 +141,23 @@ jobs:
         run: |
           echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
 
+      - name: Build UI assets
+        run: just npm-build
+
       - name: Build Release
-        run: just build-release
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package Kellnr
         shell: bash
         run: |
-          zip -j kellnr-x86_64-windows-${{ env.KELLNR_COMPTIME__VERSION }}.zip target/release/kellnr.exe
+          zip -j ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip target/${{ matrix.target }}/release/kellnr.exe
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: kellnr-x86_64-windows-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-          asset_name: kellnr-x86_64-windows.zip
+          file: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
+          asset_name: ${{ matrix.artifact }}.zip
           tag: ${{ github.ref }}
 
   crates-io-release:

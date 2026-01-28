@@ -28,8 +28,15 @@ jobs:
         run: nix build
 
   build-windows:
-    name: Build Windows x64
+    name: Build Windows
     runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            artifact: kellnr-x86_64-windows
+          - target: aarch64-pc-windows-msvc
+            artifact: kellnr-aarch64-windows
 
     steps:
       - name: Checkout
@@ -37,6 +44,9 @@ jobs:
 
       - name: Setup Rust
         uses: hecrj/setup-rust-action@v2
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -51,10 +61,10 @@ jobs:
         run: just npm-build
 
       - name: Build Release
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kellnr-x86_64-windows
-          path: target/release/kellnr.exe
+          name: ${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/kellnr.exe
