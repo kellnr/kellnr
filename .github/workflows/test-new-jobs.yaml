@@ -1,6 +1,9 @@
 name: Test New Jobs (temporary)
 
 on:
+  push:
+    branches:
+      - ci/new-build-targets
   workflow_dispatch:
 
 env:
