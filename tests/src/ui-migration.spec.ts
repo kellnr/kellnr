@@ -30,26 +30,20 @@ import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { execSync } from "node:child_process";
+import { execa } from "execa";
 
 function rimrafSync(p: string) {
   fs.rmSync(p, { recursive: true, force: true });
 }
 
 /**
- * Fix ownership of files in a directory after Docker has written to them.
- * Docker runs as root on Linux, so files are owned by root. This uses sudo to change
- * ownership to the current user so the local Kellnr process can access them.
+ * Fix ownership of files in a directory using Docker.
+ * Uses a lightweight container to chown files - no sudo required.
  *
  * On macOS with Docker Desktop, files are typically already owned by the current user,
  * so no fix is needed.
- *
- * This works on GitHub Actions runners which have passwordless sudo.
- * On systems without sudo or where sudo requires a password, this will fail
- * silently and the test will fail with a more specific error later.
  */
-function fixDataDirOwnership(dirPath: string): void {
-  // Get current user's UID:GID
+async function fixDataDirOwnershipWithDocker(dirPath: string): Promise<void> {
   const uid = typeof process.getuid === "function" ? process.getuid() : null;
   const gid = typeof process.getgid === "function" ? process.getgid() : null;
 
@@ -58,8 +52,7 @@ function fixDataDirOwnership(dirPath: string): void {
     return;
   }
 
-  // Check if files inside the directory are owned by current user
-  // The directory itself may be owned by the test, but files inside are created by Docker
+  // Check if files need ownership fix
   try {
     const entries = fs.readdirSync(dirPath);
     if (entries.length === 0) {
@@ -67,7 +60,6 @@ function fixDataDirOwnership(dirPath: string): void {
       return;
     }
 
-    // Check ownership of first file/subdirectory inside
     const firstEntry = path.join(dirPath, entries[0]);
     const stat = fs.statSync(firstEntry);
     if (stat.uid === uid) {
@@ -77,16 +69,20 @@ function fixDataDirOwnership(dirPath: string): void {
     console.log(`[migration] Data directory contents owned by uid ${stat.uid}, current user is ${uid}`);
   } catch (e) {
     console.log(`[migration] Could not check data directory contents: ${e}`);
-    // Continue anyway - try the chown
   }
 
+  // Use Docker to fix ownership - no sudo required
   try {
-    // Use sudo to change ownership recursively
-    execSync(`sudo chown -R ${uid}:${gid} "${dirPath}"`, { stdio: "inherit" });
-    console.log(`[migration] Changed ownership to ${uid}:${gid}`);
-  } catch {
-    // sudo might not be available or might require a password
-    console.log("[migration] Warning: Could not fix data directory ownership (sudo may not be available)");
+    console.log(`[migration] Fixing ownership with Docker to ${uid}:${gid}`);
+    await execa("docker", [
+      "run", "--rm",
+      "-v", `${dirPath}:/data`,
+      "busybox",
+      "chown", "-R", `${uid}:${gid}`, "/data"
+    ], { stdio: "inherit" });
+    console.log("[migration] Ownership fixed via Docker");
+  } catch (e) {
+    console.log(`[migration] Warning: Could not fix ownership with Docker: ${e}`);
   }
 }
 
@@ -217,9 +213,9 @@ test.describe("Migration UI Tests", () => {
         }
       });
 
-      // ---- Fix file ownership after Docker ----
+      // ---- Fix file ownership using Docker (no sudo needed) ----
       await test.step("fix data directory ownership", async () => {
-        fixDataDirOwnership(kdataDir);
+        await fixDataDirOwnershipWithDocker(kdataDir);
       });
 
       // ---- Run new version (local) ----
