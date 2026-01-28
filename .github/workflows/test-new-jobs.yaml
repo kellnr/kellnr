@@ -1,0 +1,57 @@
+name: Test New Jobs (temporary)
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  nix-build:
+    name: Nix Build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+
+      - name: Build with Nix
+        run: nix build
+
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: hecrj/setup-rust-action@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with: { tool: just }
+
+      - name: Build UI assets
+        run: just npm-build
+
+      - name: Build Release
+        run: cargo build --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kellnr-x86_64-windows
+          path: target/release/kellnr.exe

@@ -104,6 +104,49 @@ jobs:
           asset_name: ${{ env.KELLNR_ASSET }}
           tag: ${{ github.ref }}
 
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    needs: [test]
+    permissions: { contents: write }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: hecrj/setup-rust-action@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with: { tool: just }
+
+      - name: Extract Version
+        shell: bash
+        run: |
+          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+
+      - name: Build Release
+        run: just build-release
+
+      - name: Package Kellnr
+        shell: bash
+        run: |
+          zip -j kellnr-x86_64-windows-${{ env.KELLNR_COMPTIME__VERSION }}.zip target/release/kellnr.exe
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: kellnr-x86_64-windows-${{ env.KELLNR_COMPTIME__VERSION }}.zip
+          asset_name: kellnr-x86_64-windows.zip
+          tag: ${{ github.ref }}
+
   crates-io-release:
     name: Publish to crates.io
     runs-on: ubuntu-24.04
