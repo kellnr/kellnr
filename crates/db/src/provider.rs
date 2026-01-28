@@ -18,11 +18,20 @@ use crate::error::DbError;
 use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta};
 
 pub type DbResult<T> = Result<T, DbError>;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum PrefetchState {
     UpToDate,
     NeedsUpdate(Prefetch),
     NotFound,
+}
+
+/// Data stored during `OAuth2` authentication flow for CSRF/PKCE verification
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OAuth2StateData {
+    pub state: String,
+    pub pkce_verifier: String,
+    pub nonce: String,
 }
 
 #[async_trait]
@@ -186,6 +195,52 @@ pub trait DbProvider: Send + Sync {
         next_attempt: DateTime<Utc>,
     ) -> DbResult<()>;
     async fn delete_webhook_queue(&self, id: &str) -> DbResult<()>;
+
+    // `OAuth2` identity methods
+    /// Look up a user by their `OAuth2` identity (issuer + subject)
+    async fn get_user_by_oauth2_identity(
+        &self,
+        issuer: &str,
+        subject: &str,
+    ) -> DbResult<Option<User>>;
+
+    /// Create a new user from `OAuth2` authentication and link their identity
+    async fn create_oauth2_user(
+        &self,
+        username: &str,
+        issuer: &str,
+        subject: &str,
+        email: Option<String>,
+        is_admin: bool,
+        is_read_only: bool,
+    ) -> DbResult<User>;
+
+    /// Link an `OAuth2` identity to an existing user
+    async fn link_oauth2_identity(
+        &self,
+        user_id: i64,
+        issuer: &str,
+        subject: &str,
+        email: Option<String>,
+    ) -> DbResult<()>;
+
+    // `OAuth2` state methods (CSRF/PKCE during auth flow)
+    /// Store `OAuth2` state for CSRF/PKCE verification during auth flow
+    async fn store_oauth2_state(
+        &self,
+        state: &str,
+        pkce_verifier: &str,
+        nonce: &str,
+    ) -> DbResult<()>;
+
+    /// Retrieve and delete `OAuth2` state (single use)
+    async fn get_and_delete_oauth2_state(&self, state: &str) -> DbResult<Option<OAuth2StateData>>;
+
+    /// Clean up expired `OAuth2` states (older than 10 minutes)
+    async fn cleanup_expired_oauth2_states(&self) -> DbResult<u64>;
+
+    /// Check if username is available (for `OAuth2` auto-provisioning)
+    async fn is_username_available(&self, username: &str) -> DbResult<bool>;
 }
 
 pub mod mock {
@@ -531,6 +586,60 @@ pub mod mock {
                 unimplemented!()
             }
             async fn delete_webhook_queue(&self, id: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn get_user_by_oauth2_identity(
+                &self,
+                issuer: &str,
+                subject: &str,
+            ) -> DbResult<Option<User>> {
+                unimplemented!()
+            }
+
+            async fn create_oauth2_user(
+                &self,
+                username: &str,
+                issuer: &str,
+                subject: &str,
+                email: Option<String>,
+                is_admin: bool,
+                is_read_only: bool,
+            ) -> DbResult<User> {
+                unimplemented!()
+            }
+
+            async fn link_oauth2_identity(
+                &self,
+                user_id: i64,
+                issuer: &str,
+                subject: &str,
+                email: Option<String>,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn store_oauth2_state(
+                &self,
+                state: &str,
+                pkce_verifier: &str,
+                nonce: &str,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn get_and_delete_oauth2_state(
+                &self,
+                state: &str,
+            ) -> DbResult<Option<OAuth2StateData>> {
+                unimplemented!()
+            }
+
+            async fn cleanup_expired_oauth2_states(&self) -> DbResult<u64> {
+                unimplemented!()
+            }
+
+            async fn is_username_available(&self, username: &str) -> DbResult<bool> {
                 unimplemented!()
             }
         }

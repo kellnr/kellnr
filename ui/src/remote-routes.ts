@@ -40,5 +40,9 @@ export const SEARCH = "./api/v1/ui/search";
 export const DOCS_BUILD = "./api/v1/docs/build";
 export const DOCS_QUEUE = "./api/v1/docs/queue";
 
+// OAuth2/OIDC
+export const OAUTH2_CONFIG = "./api/v1/oauth2/config";
+export const OAUTH2_LOGIN = "./api/v1/oauth2/login";
+
 // External URL
 export const CRATESIO_LINK = (name: string) => `https://crates.io/crates/${name}`;

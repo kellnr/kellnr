@@ -18,6 +18,8 @@ pub use super::doc_queue::Entity as DocQueue;
 pub use super::group::Entity as Group;
 pub use super::group_user::Entity as GroupUser;
 pub use super::krate::Entity as Krate;
+pub use super::oauth2_identity::Entity as OAuth2Identity;
+pub use super::oauth2_state::Entity as OAuth2State;
 pub use super::owner::Entity as Owner;
 pub use super::session::Entity as Session;
 pub use super::user::Entity as User;

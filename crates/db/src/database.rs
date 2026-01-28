@@ -16,8 +16,8 @@ use kellnr_entity::prelude::*;
 use kellnr_entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
-    cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate, owner,
-    session, user, webhook, webhook_queue,
+    cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate,
+    oauth2_identity, oauth2_state, owner, session, user, webhook, webhook_queue,
 };
 use kellnr_migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
@@ -33,7 +33,7 @@ use sea_orm::{
 
 use crate::error::DbError;
 use crate::password::{generate_salt, hash_pwd, hash_token};
-use crate::provider::{DbResult, PrefetchState};
+use crate::provider::{DbResult, OAuth2StateData, PrefetchState};
 use crate::tables::init_database;
 use crate::{
     AuthToken, ConString, CrateMeta, CrateSummary, DbProvider, DocQueueEntry, Group, User,
@@ -1939,6 +1939,183 @@ impl DbProvider for Database {
 
         w.delete(&self.db_con).await?;
         Ok(())
+    }
+
+    // OAuth2 identity methods
+
+    async fn get_user_by_oauth2_identity(
+        &self,
+        issuer: &str,
+        subject: &str,
+    ) -> DbResult<Option<User>> {
+        let identity = oauth2_identity::Entity::find()
+            .filter(oauth2_identity::Column::ProviderIssuer.eq(issuer))
+            .filter(oauth2_identity::Column::Subject.eq(subject))
+            .one(&self.db_con)
+            .await?;
+
+        if let Some(identity) = identity {
+            let u = user::Entity::find_by_id(identity.user_fk)
+                .one(&self.db_con)
+                .await?
+                .ok_or_else(|| DbError::UserNotFound(format!("user_id={}", identity.user_fk)))?;
+
+            Ok(Some(User {
+                id: u.id as i32,
+                name: u.name,
+                pwd: u.pwd,
+                salt: u.salt,
+                is_admin: u.is_admin,
+                is_read_only: u.is_read_only,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn create_oauth2_user(
+        &self,
+        username: &str,
+        issuer: &str,
+        subject: &str,
+        email: Option<String>,
+        is_admin: bool,
+        is_read_only: bool,
+    ) -> DbResult<User> {
+        // Use a transaction to ensure atomicity
+        let txn = self.db_con.begin().await?;
+
+        // Generate a random password and salt for OAuth2 users
+        // They won't use password auth, but we need valid values
+        let salt = generate_salt();
+        let random_pwd = Uuid::new_v4().to_string();
+        let hashed_pwd = hash_pwd(&random_pwd, &salt);
+
+        // Create the user
+        let new_user = user::ActiveModel {
+            name: Set(username.to_string()),
+            pwd: Set(hashed_pwd),
+            salt: Set(salt),
+            is_admin: Set(is_admin),
+            is_read_only: Set(is_read_only),
+            ..Default::default()
+        };
+
+        let res = user::Entity::insert(new_user).exec(&txn).await?;
+        let user_id = res.last_insert_id;
+
+        // Link the OAuth2 identity
+        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
+        let identity = oauth2_identity::ActiveModel {
+            user_fk: Set(user_id),
+            provider_issuer: Set(issuer.to_string()),
+            subject: Set(subject.to_string()),
+            email: Set(email),
+            created: Set(created),
+            ..Default::default()
+        };
+
+        oauth2_identity::Entity::insert(identity).exec(&txn).await?;
+
+        txn.commit().await?;
+
+        Ok(User {
+            id: user_id as i32,
+            name: username.to_string(),
+            pwd: String::new(),  // Don't expose password hash
+            salt: String::new(), // Don't expose salt
+            is_admin,
+            is_read_only,
+        })
+    }
+
+    async fn link_oauth2_identity(
+        &self,
+        user_id: i64,
+        issuer: &str,
+        subject: &str,
+        email: Option<String>,
+    ) -> DbResult<()> {
+        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
+        let identity = oauth2_identity::ActiveModel {
+            user_fk: Set(user_id),
+            provider_issuer: Set(issuer.to_string()),
+            subject: Set(subject.to_string()),
+            email: Set(email),
+            created: Set(created),
+            ..Default::default()
+        };
+
+        oauth2_identity::Entity::insert(identity)
+            .exec(&self.db_con)
+            .await?;
+
+        Ok(())
+    }
+
+    // OAuth2 state methods (CSRF/PKCE during auth flow)
+
+    async fn store_oauth2_state(
+        &self,
+        state: &str,
+        pkce_verifier: &str,
+        nonce: &str,
+    ) -> DbResult<()> {
+        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
+        let s = oauth2_state::ActiveModel {
+            state: Set(state.to_string()),
+            pkce_verifier: Set(pkce_verifier.to_string()),
+            nonce: Set(nonce.to_string()),
+            created: Set(created),
+            ..Default::default()
+        };
+
+        oauth2_state::Entity::insert(s).exec(&self.db_con).await?;
+        Ok(())
+    }
+
+    async fn get_and_delete_oauth2_state(&self, state: &str) -> DbResult<Option<OAuth2StateData>> {
+        let s = oauth2_state::Entity::find()
+            .filter(oauth2_state::Column::State.eq(state))
+            .one(&self.db_con)
+            .await?;
+
+        if let Some(s) = s {
+            let data = OAuth2StateData {
+                state: s.state.clone(),
+                pkce_verifier: s.pkce_verifier.clone(),
+                nonce: s.nonce.clone(),
+            };
+
+            // Delete after retrieving (single use)
+            s.delete(&self.db_con).await?;
+
+            Ok(Some(data))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn cleanup_expired_oauth2_states(&self) -> DbResult<u64> {
+        // States older than 10 minutes are expired
+        let expiry = Utc::now() - chrono::Duration::minutes(10);
+        let expiry_str = expiry.format(DB_DATE_FORMAT).to_string();
+
+        let result = oauth2_state::Entity::delete_many()
+            .filter(oauth2_state::Column::Created.lt(expiry_str))
+            .exec(&self.db_con)
+            .await?;
+
+        Ok(result.rows_affected)
+    }
+
+    async fn is_username_available(&self, username: &str) -> DbResult<bool> {
+        let existing = user::Entity::find()
+            .filter(user::Column::Name.eq(username))
+            .one(&self.db_con)
+            .await?;
+
+        Ok(existing.is_none())
     }
 }
 

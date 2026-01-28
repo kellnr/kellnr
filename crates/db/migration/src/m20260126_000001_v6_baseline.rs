@@ -114,11 +114,7 @@ impl MigrationTrait for Migration {
                             .unique_key(),
                     )
                     .col(ColumnDef::new(SessionIden::Created).text().not_null())
-                    .col(
-                        ColumnDef::new(SessionIden::UserFk)
-                            .big_integer()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(SessionIden::UserFk).big_integer().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .name("user_fk")
@@ -375,16 +371,8 @@ impl MigrationTrait for Migration {
                             .primary_key()
                             .auto_increment(),
                     )
-                    .col(
-                        ColumnDef::new(OwnerIden::CrateFk)
-                            .big_integer()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(OwnerIden::UserFk)
-                            .big_integer()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(OwnerIden::CrateFk).big_integer().not_null())
+                    .col(ColumnDef::new(OwnerIden::UserFk).big_integer().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .name("crate_fk")
@@ -740,16 +728,8 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .unique_key(),
                     )
-                    .col(
-                        ColumnDef::new(CratesIoIden::ETag)
-                            .string_len(64)
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(CratesIoIden::LastModified)
-                            .text()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(CratesIoIden::ETag).string_len(64).not_null())
+                    .col(ColumnDef::new(CratesIoIden::LastModified).text().not_null())
                     .col(ColumnDef::new(CratesIoIden::Description).text())
                     .col(
                         ColumnDef::new(CratesIoIden::TotalDownloads)

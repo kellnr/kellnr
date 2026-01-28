@@ -164,9 +164,6 @@ async fn cleanup_old_migrations(manager: &SchemaManager<'_>) -> Result<(), DbErr
         db.execute_unprepared(&sql).await?;
     }
 
-    info!(
-        "Cleaned up {} old migration entries",
-        OLD_MIGRATIONS.len()
-    );
+    info!("Cleaned up {} old migration entries", OLD_MIGRATIONS.len());
     Ok(())
 }

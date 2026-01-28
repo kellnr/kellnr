@@ -78,6 +78,26 @@
                 Sign In
               </v-btn>
             </v-form>
+
+            <!-- OAuth2/SSO Login -->
+            <template v-if="oauth2Enabled">
+              <div class="oauth2-divider">
+                <span>or</span>
+              </div>
+
+              <v-btn
+                color="secondary"
+                size="large"
+                variant="outlined"
+                block
+                class="oauth2-button"
+                rounded="lg"
+                @click="handleOAuth2Login"
+              >
+                <v-icon icon="mdi-shield-account" class="mr-2" />
+                {{ oauth2ButtonText }}
+              </v-btn>
+            </template>
           </v-card-text>
         </v-card>
       </v-col>
@@ -89,9 +109,10 @@
 import { onMounted, ref } from "vue"
 import { useStore } from "../store/store"
 import { useStatusMessage } from "../composables"
-import { userService } from "../services"
+import { userService, settingsService } from "../services"
 import { isSuccess } from "../services/api"
 import router from "../router"
+import { OAUTH2_LOGIN } from "../remote-routes"
 
 // State
 const form = ref(null)
@@ -100,6 +121,10 @@ const loading = ref(false)
 const username = ref("")
 const password = ref("")
 const store = useStore()
+
+// OAuth2 state
+const oauth2Enabled = ref(false)
+const oauth2ButtonText = ref("Login with SSO")
 
 // Composables
 const status = useStatusMessage()
@@ -114,11 +139,33 @@ const passwordRules = [
 ]
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   if (store.rememberMe && store.rememberMeUser !== null) {
     username.value = store.rememberMeUser
   }
+
+  // Check for OAuth2 error in query params (from error callback)
+  const errorParam = router.currentRoute.value.query["error"]
+  if (errorParam) {
+    const errorMessage = Array.isArray(errorParam) ? errorParam[0] : errorParam
+    if (errorMessage) {
+      status.setError(errorMessage)
+    }
+  }
+
+  // Fetch OAuth2 configuration
+  const oauth2Result = await settingsService.getOAuth2Config()
+  if (isSuccess(oauth2Result)) {
+    oauth2Enabled.value = oauth2Result.data.enabled
+    oauth2ButtonText.value = oauth2Result.data.button_text
+  }
 })
+
+// Handle OAuth2 login
+function handleOAuth2Login() {
+  // Redirect to OAuth2 login endpoint
+  window.location.href = OAUTH2_LOGIN
+}
 
 // Handle login
 async function handleLogin() {
@@ -234,6 +281,32 @@ async function handleLogin() {
 }
 
 .login-button {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.25px;
+}
+
+.oauth2-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.oauth2-divider::before,
+.oauth2-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid rgb(var(--v-theme-outline));
+}
+
+.oauth2-divider span {
+  padding: 0 16px;
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-size: 0.875rem;
+}
+
+.oauth2-button {
   font-weight: 600;
   text-transform: none;
   letter-spacing: 0.25px;

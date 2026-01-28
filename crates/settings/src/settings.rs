@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::docs::Docs;
 use crate::local::Local;
 use crate::log::Log;
+use crate::oauth2::OAuth2;
 use crate::origin::Origin;
 use crate::postgresql::Postgresql;
 use crate::proxy::Proxy;
@@ -26,6 +27,7 @@ pub struct Settings {
     pub origin: Origin,
     pub postgresql: Postgresql,
     pub s3: S3,
+    pub oauth2: OAuth2,
 }
 
 impl TryFrom<Option<&Path>> for Settings {
