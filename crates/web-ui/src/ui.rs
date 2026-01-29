@@ -532,6 +532,7 @@ mod tests {
                     salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
+                    created: String::new(),
                 })
             });
         let (settings, storage) = test_deps();
@@ -590,6 +591,7 @@ mod tests {
                     salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
+                    created: String::new(),
                 })
             });
         mock_db
@@ -658,6 +660,7 @@ mod tests {
                     salt: String::new(),
                     is_admin: true,
                     is_read_only: false,
+                    created: String::new(),
                 })
             });
         mock_db

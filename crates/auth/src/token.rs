@@ -243,6 +243,7 @@ mod tests {
             salt: String::new(),
             is_admin: false,
             is_read_only: false,
+            created: String::new(),
         }
     }
 
@@ -420,6 +421,7 @@ mod tests {
                     salt: String::new(),
                     is_admin: false,
                     is_read_only: true,
+                    created: String::new(),
                 })
             });
 

@@ -1,3 +1,6 @@
+mod operations;
+pub mod test_utils;
+
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -27,8 +30,8 @@ use sea_orm::prelude::async_trait::async_trait;
 use sea_orm::query::{QueryOrder, QuerySelect, TransactionTrait};
 use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
-    ExprTrait, FromQueryResult, InsertResult, ModelTrait, QueryFilter, RelationTrait, Set,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
+    FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set,
 };
 
 use crate::error::DbError;
@@ -55,8 +58,8 @@ impl Database {
             .await
             .map_err(|e| DbError::InitializationError(e.to_string()))?;
 
-        if no_user_exists(&db_con).await? {
-            insert_admin_credentials(&db_con, con).await?;
+        if operations::no_user_exists(&db_con).await? {
+            operations::insert_admin_credentials(&db_con, con).await?;
         }
 
         Ok(Self { db_con })
@@ -489,6 +492,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             })
             .collect())
     }
@@ -509,6 +513,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             })
             .collect())
     }
@@ -545,6 +550,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             })
             .collect())
     }
@@ -655,7 +661,7 @@ impl DbProvider for Database {
     }
 
     async fn get_max_version_from_id(&self, crate_id: i64) -> DbResult<Version> {
-        get_max_version_from_id(&self.db_con, crate_id).await
+        operations::get_max_version_from_id(&self.db_con, crate_id).await
     }
 
     async fn get_max_version_from_name(&self, crate_name: &NormalizedName) -> DbResult<Version> {
@@ -722,6 +728,7 @@ impl DbProvider for Database {
             salt: u.salt,
             is_admin: u.is_admin,
             is_read_only: u.is_read_only,
+            created: u.created,
         })
     }
 
@@ -739,6 +746,7 @@ impl DbProvider for Database {
             salt: u.salt,
             is_admin: u.is_admin,
             is_read_only: u.is_read_only,
+            created: u.created,
         })
     }
 
@@ -856,6 +864,7 @@ impl DbProvider for Database {
         is_read_only: bool,
     ) -> DbResult<()> {
         let hashed_pwd = hash_pwd(pwd, salt);
+        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         let u = user::ActiveModel {
             name: Set(name.to_owned()),
@@ -863,6 +872,7 @@ impl DbProvider for Database {
             salt: Set(salt.to_owned()),
             is_admin: Set(is_admin),
             is_read_only: Set(is_read_only),
+            created: Set(created),
             ..Default::default()
         };
 
@@ -895,6 +905,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             })
             .collect())
     }
@@ -1067,7 +1078,7 @@ impl DbProvider for Database {
             .await?
             .ok_or_else(|| DbError::CrateMetaNotFound(krate.to_string(), version.to_string()))?;
         let crate_id = crate_meta_version.crate_fk;
-        let current_max_version = get_max_version_from_id(&txn, crate_id).await?;
+        let current_max_version = operations::get_max_version_from_id(&txn, crate_id).await?;
         crate_meta_version.delete(&txn).await?;
 
         // Delete the crate index entry from "crate_index" table
@@ -1110,7 +1121,7 @@ impl DbProvider for Database {
                 c.max_version = Set(new_max_version.to_string());
             }
             // Update the ETag value of the crate index.
-            let etag = compute_etag(&txn, krate, crate_id).await?;
+            let etag = operations::compute_etag(&txn, krate, crate_id).await?;
             c.e_tag = Set(etag);
             c.update(&txn).await?;
         }
@@ -1391,7 +1402,7 @@ impl DbProvider for Database {
                     let mut ft = Vec::new();
                     for dep in ix {
                         ft.push(CrateRegistryDep::from_index(
-                            get_desc_for_crate_dep(
+                            operations::get_desc_for_crate_dep(
                                 &self.db_con,
                                 &dep.name,
                                 dep.registry.as_deref(),
@@ -1527,13 +1538,13 @@ impl DbProvider for Database {
             krate.id
         };
 
-        add_owner_if_not_exists(&txn, owner, crate_id).await?;
-        add_crate_metadata(&txn, pub_metadata, &created, crate_id).await?;
-        add_crate_index(&txn, pub_metadata, cksum, crate_id).await?;
-        update_etag(&txn, &pub_metadata.name, crate_id).await?;
-        update_crate_categories(&txn, pub_metadata, crate_id).await?;
-        update_crate_keywords(&txn, pub_metadata, crate_id).await?;
-        update_crate_authors(&txn, pub_metadata, crate_id).await?;
+        operations::add_owner_if_not_exists(&txn, owner, crate_id).await?;
+        operations::add_crate_metadata(&txn, pub_metadata, &created, crate_id).await?;
+        operations::add_crate_index(&txn, pub_metadata, cksum, crate_id).await?;
+        operations::update_etag(&txn, &pub_metadata.name, crate_id).await?;
+        operations::update_crate_categories(&txn, pub_metadata, crate_id).await?;
+        operations::update_crate_keywords(&txn, pub_metadata, crate_id).await?;
+        operations::update_crate_authors(&txn, pub_metadata, crate_id).await?;
 
         txn.commit().await?;
         Ok(crate_id)
@@ -1568,7 +1579,7 @@ impl DbProvider for Database {
         created: &str,
         crate_id: i64,
     ) -> DbResult<()> {
-        add_crate_metadata(&self.db_con, pub_metadata, created, crate_id).await
+        operations::add_crate_metadata(&self.db_con, pub_metadata, created, crate_id).await
     }
 
     async fn get_prefetch_data(&self, crate_name: &str) -> DbResult<Prefetch> {
@@ -1584,8 +1595,8 @@ impl DbProvider for Database {
         }
 
         let (krate, crate_indices) = krate[0].to_owned();
-        let index_metadata = crate_index_model_to_index_metadata(crate_name, crate_indices)?;
-        let data = index_metadata_to_bytes(&index_metadata)?;
+        let index_metadata = operations::crate_index_model_to_index_metadata(crate_name, crate_indices)?;
+        let data = operations::index_metadata_to_bytes(&index_metadata)?;
 
         Ok(Prefetch {
             data,
@@ -1624,8 +1635,8 @@ impl DbProvider for Database {
                 .find_related(cratesio_index::Entity)
                 .all(&self.db_con)
                 .await?;
-            let index_metadata = cratesio_index_model_to_index_metadata(crate_name, crate_indices)?;
-            let data = index_metadata_to_bytes(&index_metadata)?;
+            let index_metadata = operations::cratesio_index_model_to_index_metadata(crate_name, crate_indices)?;
+            let data = operations::index_metadata_to_bytes(&index_metadata)?;
 
             Ok(PrefetchState::NeedsUpdate(Prefetch {
                 data,
@@ -1738,7 +1749,7 @@ impl DbProvider for Database {
         }
 
         Ok(Prefetch {
-            data: index_metadata_to_bytes(indices)?,
+            data: operations::index_metadata_to_bytes(indices)?,
             etag: etag.to_string(),
             last_modified: last_modified.to_string(),
         })
@@ -1967,6 +1978,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             }))
         } else {
             Ok(None)
@@ -1990,6 +2002,7 @@ impl DbProvider for Database {
         let salt = generate_salt();
         let random_pwd = Uuid::new_v4().to_string();
         let hashed_pwd = hash_pwd(&random_pwd, &salt);
+        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         // Create the user
         let new_user = user::ActiveModel {
@@ -1998,6 +2011,7 @@ impl DbProvider for Database {
             salt: Set(salt),
             is_admin: Set(is_admin),
             is_read_only: Set(is_read_only),
+            created: Set(created.clone()),
             ..Default::default()
         };
 
@@ -2005,13 +2019,12 @@ impl DbProvider for Database {
         let user_id = res.last_insert_id;
 
         // Link the OAuth2 identity
-        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
         let identity = oauth2_identity::ActiveModel {
             user_fk: Set(user_id),
             provider_issuer: Set(issuer.to_string()),
             subject: Set(subject.to_string()),
             email: Set(email),
-            created: Set(created),
+            created: Set(created.clone()),
             ..Default::default()
         };
 
@@ -2026,6 +2039,7 @@ impl DbProvider for Database {
             salt: String::new(), // Don't expose salt
             is_admin,
             is_read_only,
+            created,
         })
     }
 
@@ -2116,619 +2130,5 @@ impl DbProvider for Database {
             .await?;
 
         Ok(existing.is_none())
-    }
-}
-
-// Db methods
-
-async fn get_desc_for_crate_dep<C: ConnectionTrait>(
-    db_con: &C,
-    name: &str,
-    registry: Option<&str>,
-) -> DbResult<Option<String>> {
-    let desc = if registry.unwrap_or_default() == "https://github.com/rust-lang/crates.io-index" {
-        let krate = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(name))
-            .one(db_con)
-            .await?;
-        krate.and_then(|krate| krate.description)
-    } else {
-        // Not a crates.io dependency.
-        // We cannot know that the crate is from this kellnr instance, but we give it a try.
-        let krate = krate::Entity::find()
-            .filter(krate::Column::Name.eq(name))
-            .one(db_con)
-            .await?;
-        krate.and_then(|krate| krate.description)
-    };
-
-    Ok(desc)
-}
-
-async fn insert_admin_credentials<C: ConnectionTrait>(
-    db_con: &C,
-    con_string: &ConString,
-) -> DbResult<()> {
-    let hashed_pwd = hash_pwd(&con_string.admin_pwd(), &con_string.salt());
-
-    let admin = user::ActiveModel {
-        name: Set("admin".to_string()),
-        pwd: Set(hashed_pwd),
-        salt: Set(con_string.salt()),
-        is_admin: Set(true),
-        is_read_only: Set(false),
-        ..Default::default()
-    };
-
-    let res: InsertResult<user::ActiveModel> = user::Entity::insert(admin).exec(db_con).await?;
-    let auth_token = hash_token(&con_string.admin_token());
-
-    let auth_token = auth_token::ActiveModel {
-        name: Set("admin".to_string()),
-        token: Set(auth_token),
-        user_fk: Set(res.last_insert_id),
-        ..Default::default()
-    };
-    auth_token::Entity::insert(auth_token).exec(db_con).await?;
-
-    Ok(())
-}
-
-async fn no_user_exists<C: ConnectionTrait>(db_con: &C) -> DbResult<bool> {
-    let id = user::Entity::find()
-        .one(db_con)
-        .await?
-        .map(|model| model.id);
-
-    Ok(id.is_none())
-}
-
-async fn add_owner_if_not_exists<C: ConnectionTrait>(
-    db_con: &C,
-    owner: &str,
-    crate_id: i64,
-) -> DbResult<()> {
-    let user_fk = user::Entity::find()
-        .filter(user::Column::Name.eq(owner))
-        .one(db_con)
-        .await?
-        .map(|model| model.id)
-        .ok_or_else(|| DbError::UserNotFound(owner.to_string()))?;
-
-    let owner = owner::Entity::find()
-        .filter(owner::Column::CrateFk.eq(crate_id))
-        .filter(owner::Column::UserFk.eq(user_fk))
-        .one(db_con)
-        .await?;
-
-    if owner.is_none() {
-        let o = owner::ActiveModel {
-            user_fk: Set(user_fk),
-            crate_fk: Set(crate_id),
-            ..Default::default()
-        };
-
-        o.insert(db_con).await?;
-    }
-    Ok(())
-}
-
-async fn add_crate_index<C: ConnectionTrait>(
-    db_con: &C,
-    pub_metadata: &PublishMetadata,
-    cksum: &str,
-    crate_id: i64,
-) -> DbResult<()> {
-    let index_data = IndexMetadata::from_reg_meta(pub_metadata, cksum);
-
-    let deps = if index_data.deps.is_empty() {
-        None
-    } else {
-        let deps = serde_json::to_value(&index_data.deps)
-            .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
-        Some(deps)
-    };
-
-    let features = serde_json::to_value(&index_data.features)
-        .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
-
-    let ci = crate_index::ActiveModel {
-        id: ActiveValue::default(),
-        name: Set(index_data.name),
-        vers: Set(index_data.vers),
-        deps: Set(deps),
-        cksum: Set(cksum.to_owned()),
-        features: Set(Some(features)),
-        yanked: ActiveValue::default(),
-        pubtime: Set(index_data.pubtime.map(|dt| dt.naive_utc())),
-        links: Set(index_data.links),
-        v: Set(index_data.v.unwrap_or(1) as i32),
-        crate_fk: Set(crate_id),
-    };
-
-    ci.insert(db_con).await?;
-    Ok(())
-}
-
-async fn add_crate_metadata<C: ConnectionTrait>(
-    db_con: &C,
-    pub_metadata: &PublishMetadata,
-    created: &str,
-    crate_id: i64,
-) -> DbResult<()> {
-    let cm = crate_meta::ActiveModel {
-        id: ActiveValue::default(),
-        version: Set(pub_metadata.vers.clone()),
-        created: Set(created.to_string()),
-        downloads: Set(0),
-        crate_fk: Set(crate_id),
-        readme: Set(pub_metadata.readme.clone()),
-        license: Set(pub_metadata.license.clone()),
-        license_file: Set(pub_metadata.license_file.clone()),
-        documentation: Set(pub_metadata.documentation.clone()),
-    };
-
-    cm.insert(db_con).await?;
-
-    Ok(())
-}
-
-async fn update_crate_categories<C: ConnectionTrait>(
-    db_con: &C,
-    pub_metadata: &PublishMetadata,
-    crate_id: i64,
-) -> DbResult<()> {
-    let categories = pub_metadata.categories.clone();
-
-    // Delete all existing categories relationships as only the latest list of categories is relevant
-    crate_category_to_crate::Entity::delete_many()
-        .filter(crate_category_to_crate::Column::CrateFk.eq(crate_id))
-        .exec(db_con)
-        .await?;
-
-    // Set the latest list of categories for the crate
-    for category in categories {
-        let category_fk = crate_category::Entity::find()
-            .filter(crate_category::Column::Category.eq(category.clone()))
-            .one(db_con)
-            .await?
-            .map(|model| model.id);
-
-        // If the category does not exist, create it
-        let category_fk = if let Some(category_fk) = category_fk {
-            category_fk
-        } else {
-            let cc = crate_category::ActiveModel {
-                id: ActiveValue::default(),
-                category: Set(category.clone()),
-            };
-
-            cc.insert(db_con).await?.id
-        };
-
-        // Add the relationship between the crate and the category
-        let cctc = crate_category_to_crate::ActiveModel {
-            id: ActiveValue::default(),
-            crate_fk: Set(crate_id),
-            category_fk: Set(category_fk),
-        };
-        cctc.insert(db_con).await?;
-    }
-
-    Ok(())
-}
-
-async fn update_crate_keywords<C: ConnectionTrait>(
-    db_con: &C,
-    pub_metadata: &PublishMetadata,
-    crate_id: i64,
-) -> DbResult<()> {
-    let keywords = pub_metadata.keywords.clone();
-
-    // Delete all existing keywords relationships as only the latest list of keywords is relevant
-    crate_keyword_to_crate::Entity::delete_many()
-        .filter(crate_keyword_to_crate::Column::CrateFk.eq(crate_id))
-        .exec(db_con)
-        .await?;
-
-    // Set the latest list of keywords for the crate
-    for keyword in keywords {
-        let keyword_fk = crate_keyword::Entity::find()
-            .filter(crate_keyword::Column::Keyword.eq(keyword.clone()))
-            .one(db_con)
-            .await?
-            .map(|model| model.id);
-
-        // If the keyword does not exist, create it
-        let keyword_fk = if let Some(keyword_fk) = keyword_fk {
-            keyword_fk
-        } else {
-            let ck = crate_keyword::ActiveModel {
-                id: ActiveValue::default(),
-                keyword: Set(keyword.clone()),
-            };
-
-            ck.insert(db_con).await?.id
-        };
-
-        // Add the relationship between the crate and the keyword
-        let cktc = crate_keyword_to_crate::ActiveModel {
-            id: ActiveValue::default(),
-            crate_fk: Set(crate_id),
-            keyword_fk: Set(keyword_fk),
-        };
-        cktc.insert(db_con).await?;
-    }
-
-    Ok(())
-}
-
-async fn update_crate_authors<C: ConnectionTrait>(
-    db_con: &C,
-    pub_metadata: &PublishMetadata,
-    crate_id: i64,
-) -> DbResult<()> {
-    let authors = pub_metadata.authors.clone().unwrap_or_default();
-
-    // Delete all existing authors relationships as only the latest list of authors is relevant
-    crate_author_to_crate::Entity::delete_many()
-        .filter(crate_author_to_crate::Column::CrateFk.eq(crate_id))
-        .exec(db_con)
-        .await?;
-
-    // Set the latest list of authors for the crate
-    for author in authors {
-        let author_fk = crate_author::Entity::find()
-            .filter(crate_author::Column::Author.eq(author.clone()))
-            .one(db_con)
-            .await?
-            .map(|model| model.id);
-
-        // If the author does not exist, create it
-        let author_fk = if let Some(author_fk) = author_fk {
-            author_fk
-        } else {
-            let ca = crate_author::ActiveModel {
-                id: ActiveValue::default(),
-                author: Set(author.clone()),
-            };
-
-            ca.insert(db_con).await?.id
-        };
-
-        // Add the relationship between the crate and the author
-        let catc = crate_author_to_crate::ActiveModel {
-            id: ActiveValue::default(),
-            crate_fk: Set(crate_id),
-            author_fk: Set(author_fk),
-        };
-        catc.insert(db_con).await?;
-    }
-
-    Ok(())
-}
-
-async fn compute_etag<C: ConnectionTrait>(
-    db_con: &C,
-    crate_name: &str,
-    crate_id: i64,
-) -> DbResult<String> {
-    let crate_indices = crate_index::Entity::find()
-        .filter(crate_index::Column::CrateFk.eq(crate_id))
-        .all(db_con)
-        .await?;
-
-    let index_metadata = crate_index_model_to_index_metadata(crate_name, crate_indices)?;
-    let data = index_metadata_to_bytes(&index_metadata)?;
-
-    Ok(sha256::digest(data))
-}
-
-fn index_metadata_to_bytes(index_metadata: &[IndexMetadata]) -> DbResult<Vec<u8>> {
-    IndexMetadata::serialize_indices(index_metadata)
-        .map(String::into_bytes)
-        .map_err(|e| DbError::FailedToConvertToJson(format!("{e}")))
-}
-
-fn crate_index_model_to_index_metadata(
-    crate_name: &str,
-    crate_indices: Vec<crate_index::Model>,
-) -> DbResult<Vec<IndexMetadata>> {
-    let mut index_metadata = vec![];
-    for ci in crate_indices {
-        let deps = match ci.deps {
-            Some(ref deps) => serde_json::value::from_value(deps.to_owned()).map_err(|e| {
-                DbError::FailedToConvertFromJson(format!(
-                    "Failed to deserialize crate dependencies of {crate_name}: {e}"
-                ))
-            })?,
-            None => vec![],
-        };
-        let features = ci.features.clone().unwrap_or_default();
-        let features = serde_json::value::from_value(features).map_err(|e| {
-            DbError::FailedToConvertFromJson(format!(
-                "Failed to deserialize crate features of {crate_name}: {e}"
-            ))
-        })?;
-
-        let cm = IndexMetadata {
-            name: ci.name,
-            vers: ci.vers,
-            deps,
-            cksum: ci.cksum,
-            features,
-            yanked: ci.yanked,
-            pubtime: ci.pubtime.map(|dt| dt.and_utc()),
-            links: ci.links,
-            v: Some(ci.v as u32),
-            features2: None,
-        };
-        index_metadata.push(cm);
-    }
-    Ok(index_metadata)
-}
-
-fn cratesio_index_model_to_index_metadata(
-    crate_name: &NormalizedName,
-    crate_indices: Vec<cratesio_index::Model>,
-) -> DbResult<Vec<IndexMetadata>> {
-    let mut index_metadata = vec![];
-    for ci in crate_indices {
-        let deps = match ci.deps {
-            Some(ref deps) => serde_json::value::from_value(deps.to_owned()).map_err(|e| {
-                DbError::FailedToConvertFromJson(format!(
-                    "Failed to deserialize crate dependencies of {crate_name}: {e}"
-                ))
-            })?,
-            None => vec![],
-        };
-        let features = ci.features.clone().unwrap_or_default();
-        let features = serde_json::value::from_value(features).map_err(|e| {
-            DbError::FailedToConvertFromJson(format!(
-                "Failed to deserialize crate features of {crate_name}: {e}"
-            ))
-        })?;
-
-        let features2 = ci.features2.clone().unwrap_or_default();
-        let features2 = serde_json::value::from_value(features2).map_err(|e| {
-            DbError::FailedToConvertFromJson(format!(
-                "Failed to deserialize crate features of {crate_name}: {e}"
-            ))
-        })?;
-
-        let cm = IndexMetadata {
-            name: ci.name,
-            vers: ci.vers.clone(),
-            deps,
-            cksum: ci.cksum.clone(),
-            pubtime: ci.pubtime.map(|dt| dt.and_utc()),
-            features,
-            features2,
-            yanked: ci.yanked,
-            links: ci.links.clone(),
-            v: Some(ci.v as u32),
-        };
-        index_metadata.push(cm);
-    }
-    Ok(index_metadata)
-}
-
-async fn update_etag<C: ConnectionTrait>(
-    db_con: &C,
-    crate_name: &str,
-    crate_id: i64,
-) -> DbResult<()> {
-    let etag = compute_etag(db_con, crate_name, crate_id).await?;
-    let krate = krate::Entity::find()
-        .filter(krate::Column::Id.eq(crate_id))
-        .one(db_con)
-        .await?
-        .ok_or(DbError::CrateNotFound(crate_name.to_string()))?;
-    let mut krate: krate::ActiveModel = krate.into();
-    krate.e_tag = Set(etag);
-    krate.update(db_con).await?;
-    Ok(())
-}
-
-async fn get_max_version_from_id<C: ConnectionTrait>(
-    db_con: &C,
-    crate_id: i64,
-) -> DbResult<Version> {
-    let krate = krate::Entity::find_by_id(crate_id).one(db_con).await?;
-
-    let k = krate.ok_or(DbError::FailedToGetMaxVersionById(crate_id))?;
-    let v = Version::try_from(&k.max_version)
-        .map_err(|_| DbError::FailedToGetMaxVersionById(crate_id))?;
-    Ok(v)
-}
-
-// Test utils
-
-pub mod test_utils {
-
-    use super::*;
-
-    pub async fn test_add_cached_crate_with_downloads(
-        db: &Database,
-        name: &str,
-        version: &str,
-        downloads: u64,
-    ) -> DbResult<()> {
-        let _ = test_add_cached_crate(db, name, version).await?;
-
-        let krate = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(name))
-            .one(&db.db_con)
-            .await?
-            .ok_or(DbError::CrateNotFound(name.to_string()))?;
-
-        let total_downloads = krate.total_downloads as u64;
-
-        let mut krate: cratesio_crate::ActiveModel = krate.into();
-        krate.total_downloads = Set((total_downloads + downloads) as i64);
-        krate.update(&db.db_con).await?;
-
-        Ok(())
-    }
-
-    pub async fn test_add_cached_crate(
-        db: &Database,
-        name: &str,
-        version: &str,
-    ) -> DbResult<Prefetch> {
-        let etag = "etag";
-        let last_modified = "last_modified";
-        let description = Some(String::from("description"));
-        let indices = vec![IndexMetadata {
-            name: name.to_string(),
-            vers: version.to_string(),
-            deps: vec![],
-            cksum: "cksum".to_string(),
-            features: BTreeMap::new(),
-            features2: None,
-            pubtime: None,
-            yanked: false,
-            links: None,
-            v: Some(1),
-        }];
-
-        db.add_cratesio_prefetch_data(
-            &OriginalName::from_unchecked(name.to_string()),
-            etag,
-            last_modified,
-            description,
-            &indices,
-        )
-        .await
-    }
-
-    pub async fn test_add_crate(
-        db: &Database,
-        name: &str,
-        owner: &str,
-        version: &Version,
-        created: &DateTime<Utc>,
-    ) -> DbResult<i64> {
-        let pm = PublishMetadata {
-            name: name.to_string(),
-            vers: version.to_string(),
-            ..PublishMetadata::default()
-        };
-        let user = user::Entity::find()
-            .filter(user::Column::Name.eq(owner))
-            .one(&db.db_con)
-            .await?;
-        if user.is_none() {
-            db.add_user(name, "pwd", "salt", false, false).await?;
-        }
-
-        db.add_crate(&pm, "cksum", created, owner).await
-    }
-
-    pub async fn test_add_crate_with_downloads(
-        db: &Database,
-        name: &str,
-        owner: &str,
-        version: &Version,
-        created: &DateTime<Utc>,
-        downloads: Option<i64>,
-    ) -> DbResult<i64> {
-        let pm = PublishMetadata {
-            name: name.to_string(),
-            vers: version.to_string(),
-            ..PublishMetadata::default()
-        };
-        let user = user::Entity::find()
-            .filter(user::Column::Name.eq(owner))
-            .one(&db.db_con)
-            .await?;
-        if user.is_none() {
-            db.add_user(name, "pwd", "salt", false, false).await?;
-        }
-
-        db.add_crate(&pm, "cksum", created, owner).await?;
-        let (cm, krate) = crate_meta::Entity::find()
-            .find_also_related(krate::Entity)
-            .filter(krate::Column::Name.eq(name))
-            .filter(crate_meta::Column::Version.eq(version.to_string()))
-            .one(&db.db_con)
-            .await?
-            .ok_or(DbError::CrateNotFound(name.to_string()))?;
-        let mut cm: crate_meta::ActiveModel = cm.into();
-
-        let current_downloads = krate.as_ref().unwrap().total_downloads;
-        let crate_id = krate.as_ref().unwrap().id;
-
-        let mut krate: krate::ActiveModel = krate.unwrap().into();
-        krate.total_downloads = Set(current_downloads + downloads.unwrap_or(0));
-        krate.update(&db.db_con).await?;
-        cm.downloads = Set(downloads.unwrap_or_default());
-        cm.update(&db.db_con).await?;
-        Ok(crate_id)
-    }
-
-    pub async fn test_add_crate_meta(
-        db: &Database,
-        crate_id: i64,
-        version: &str,
-        created: &DateTime<Utc>,
-        downloads: Option<i64>,
-    ) -> DbResult<()> {
-        let cm = crate_meta::ActiveModel {
-            id: ActiveValue::default(),
-            version: Set(version.to_string()),
-            created: Set(created.to_string()),
-            downloads: Set(downloads.unwrap_or_default()),
-            crate_fk: Set(crate_id),
-            ..Default::default()
-        };
-
-        cm.insert(&db.db_con).await?;
-
-        Ok(())
-    }
-
-    pub async fn test_delete_crate_index(db: &Database, crate_id: i64) -> DbResult<()> {
-        crate_index::Entity::delete_many()
-            .filter(crate_index::Column::CrateFk.eq(crate_id))
-            .exec(&db.db_con)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn clean_db(db: &Database, session_age: std::time::Duration) -> DbResult<()> {
-        let session_age = chrono::Duration::from_std(session_age).unwrap();
-        let now = std::ops::Add::add(Utc::now(), session_age)
-            .format(DB_DATE_FORMAT)
-            .to_string();
-
-        session::Entity::delete_many()
-            .filter(Expr::col(session::Column::Created).lt(now))
-            .exec(&db.db_con)
-            .await?;
-
-        Ok(())
-    }
-
-    pub async fn get_crate_meta_list(db: &Database, crate_id: i64) -> DbResult<Vec<CrateMeta>> {
-        let cm: Vec<(crate_meta::Model, Option<krate::Model>)> = crate_meta::Entity::find()
-            .find_also_related(krate::Entity)
-            .filter(crate_meta::Column::CrateFk.eq(crate_id))
-            .all(&db.db_con)
-            .await?;
-
-        let crate_metas: Vec<CrateMeta> = cm
-            .into_iter()
-            .map(|(m, c)| CrateMeta {
-                name: c.unwrap().name, // Unwarp is ok, as a relation always exists
-                id: m.id,
-                version: m.version,
-                created: m.created,
-                downloads: m.downloads,
-                crate_fk: m.crate_fk,
-            })
-            .collect();
-
-        Ok(crate_metas)
     }
 }
