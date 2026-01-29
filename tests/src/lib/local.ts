@@ -213,8 +213,8 @@ export async function startLocalKellnr(
   const logFd = fs.openSync(logFile, "w");
   const logStream = fs.createWriteStream("", { fd: logFd });
 
-  // Spawn the process with "run" subcommand
-  const childProcess = spawn(binaryPath, ["run"], {
+  // Spawn the process with "start" subcommand
+  const childProcess = spawn(binaryPath, ["start"], {
     cwd: dataDir,
     env,
     stdio: ["ignore", "pipe", "pipe"],

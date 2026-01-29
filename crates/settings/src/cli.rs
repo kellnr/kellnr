@@ -75,8 +75,8 @@ pub struct ServerArgs {
 #[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command {
-    /// Run the kellnr server
-    Run {
+    /// Start the kellnr server
+    Start {
         #[command(flatten)]
         server: ServerArgs,
     },
@@ -145,8 +145,8 @@ pub fn parse_cli() -> Result<CliResult, ConfigError> {
 
     // Handle subcommands
     match cli.command {
-        Some(Command::Run { server }) => {
-            // Run server, merge CLI args
+        Some(Command::Start { server }) => {
+            // Start server, merge CLI args
             settings.local = settings.local.merge(server.local);
             settings.origin = settings.origin.merge(server.origin);
             settings.registry = settings.registry.merge(server.registry);

@@ -32,13 +32,13 @@ When running kellnr as a standalone binary, use the following commands:
 kellnr
 
 # Start the server
-kellnr run
+kellnr start
 
 # Start with custom data directory and port
-kellnr run --registry-data-dir /var/lib/kellnr --local-port 8080
+kellnr start --registry-data-dir /var/lib/kellnr --local-port 8080
 
 # Show all available run options
-kellnr run --help
+kellnr start --help
 
 # Show current configuration as TOML
 kellnr config show

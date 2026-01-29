@@ -6,8 +6,8 @@
  * - Version output
  * - Config show command
  * - Config init command
- * - Run command validation (missing data_dir)
- * - Run command with valid config starts server
+ * - Start command validation (missing data_dir)
+ * - Start command with valid config starts server
  *
  * Note: Most tests don't require starting the server, making them fast.
  */
@@ -55,7 +55,7 @@ test.describe("CLI Tests", () => {
       expect(result.stdout).toContain("Usage:");
       expect(result.stdout).toContain("kellnr");
       expect(result.stdout).toContain("Commands:");
-      expect(result.stdout).toContain("run");
+      expect(result.stdout).toContain("start");
       expect(result.stdout).toContain("config");
     });
 
@@ -78,11 +78,11 @@ test.describe("CLI Tests", () => {
       expect(result.stdout).toMatch(/kellnr\s+\d+\.\d+\.\d+/);
     });
 
-    test("kellnr run --help shows run options", async () => {
-      const result = await exec(kellnrBinary, ["run", "--help"]);
+    test("kellnr start --help shows start options", async () => {
+      const result = await exec(kellnrBinary, ["start", "--help"]);
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("Run the kellnr server");
+      expect(result.stdout).toContain("Start the kellnr server");
       expect(result.stdout).toContain("--registry-data-dir");
       expect(result.stdout).toContain("--local-port");
       expect(result.stdout).toContain("--log-level");
@@ -162,9 +162,9 @@ test.describe("CLI Tests", () => {
     });
   });
 
-  test.describe("Run Command Validation", () => {
-    test("kellnr run without data_dir shows helpful error", async () => {
-      const result = await exec(kellnrBinary, ["run"]);
+  test.describe("Start Command Validation", () => {
+    test("kellnr start without data_dir shows helpful error", async () => {
+      const result = await exec(kellnrBinary, ["start"]);
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("No data directory configured");
@@ -172,10 +172,10 @@ test.describe("CLI Tests", () => {
       expect(result.stderr).toContain("KELLNR_REGISTRY__DATA_DIR");
     });
 
-    test("kellnr run with -d short flag is recognized", async () => {
+    test("kellnr start with -d short flag is recognized", async () => {
       // This should fail with a different error (port binding) not "unknown flag"
       // or succeed in starting. We just verify -d is a valid flag.
-      const result = await exec(kellnrBinary, ["run", "-d", tempDir], {
+      const result = await exec(kellnrBinary, ["start", "-d", tempDir], {
         timeout: 5000,
       });
 
@@ -227,7 +227,7 @@ data_dir = "/custom/path"
   });
 
   test.describe("Server Startup", () => {
-    test("kellnr run starts server and responds to HTTP", async () => {
+    test("kellnr start starts server and responds to HTTP", async () => {
       // Use a unique port to avoid conflicts with other tests
       const port = 18080 + Math.floor(Math.random() * 1000);
       const dataDir = path.join(tempDir, "data");
@@ -236,7 +236,7 @@ data_dir = "/custom/path"
       // Start kellnr in background
       const kellnrProcess = spawn(
         kellnrBinary,
-        ["run", "-d", dataDir, "--local-port", String(port)],
+        ["start", "-d", dataDir, "--local-port", String(port)],
         {
           stdio: ["ignore", "pipe", "pipe"],
           detached: true,

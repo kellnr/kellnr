@@ -34,4 +34,4 @@ HEALTHCHECK --interval=5m --timeout=3s CMD curl -f http://localhost:8000/api/v1/
 
 EXPOSE 8000
 
-ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && kellnr run"]
+ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && kellnr start"]
