@@ -140,6 +140,7 @@
             rust-analyzer
             cargo-nextest
             cargo-machete
+            cargo-cyclonedx
 
             # Node.js for UI development
             nodejs_24
@@ -175,6 +176,7 @@
             echo "  just run       - Run kellnr locally"
             echo "  just test      - Run tests"
             echo "  just npm-dev   - Run UI dev server"
+            echo "  just sbom      - Generate SBOM (CycloneDX)"
             echo ""
 
             # Setup custom CA certificate for testing
