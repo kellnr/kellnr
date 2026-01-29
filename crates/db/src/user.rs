@@ -11,4 +11,5 @@ pub struct User {
     pub salt: String,
     pub is_admin: bool,
     pub is_read_only: bool,
+    pub created: String,
 }

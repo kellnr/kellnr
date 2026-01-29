@@ -10,6 +10,7 @@ pub enum UserIden {
     Salt,
     IsAdmin,
     IsReadOnly,
+    Created,
 }
 
 #[derive(Iden)]

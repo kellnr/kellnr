@@ -216,6 +216,7 @@ mod test {
                     salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
+                    created: String::new(),
                 })
             });
         mock_db

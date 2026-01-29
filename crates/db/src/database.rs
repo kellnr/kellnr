@@ -489,6 +489,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             })
             .collect())
     }
@@ -509,6 +510,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             })
             .collect())
     }
@@ -545,6 +547,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             })
             .collect())
     }
@@ -722,6 +725,7 @@ impl DbProvider for Database {
             salt: u.salt,
             is_admin: u.is_admin,
             is_read_only: u.is_read_only,
+            created: u.created,
         })
     }
 
@@ -739,6 +743,7 @@ impl DbProvider for Database {
             salt: u.salt,
             is_admin: u.is_admin,
             is_read_only: u.is_read_only,
+            created: u.created,
         })
     }
 
@@ -856,6 +861,7 @@ impl DbProvider for Database {
         is_read_only: bool,
     ) -> DbResult<()> {
         let hashed_pwd = hash_pwd(pwd, salt);
+        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         let u = user::ActiveModel {
             name: Set(name.to_owned()),
@@ -863,6 +869,7 @@ impl DbProvider for Database {
             salt: Set(salt.to_owned()),
             is_admin: Set(is_admin),
             is_read_only: Set(is_read_only),
+            created: Set(created),
             ..Default::default()
         };
 
@@ -895,6 +902,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             })
             .collect())
     }
@@ -1967,6 +1975,7 @@ impl DbProvider for Database {
                 salt: u.salt,
                 is_admin: u.is_admin,
                 is_read_only: u.is_read_only,
+                created: u.created,
             }))
         } else {
             Ok(None)
@@ -1990,6 +1999,7 @@ impl DbProvider for Database {
         let salt = generate_salt();
         let random_pwd = Uuid::new_v4().to_string();
         let hashed_pwd = hash_pwd(&random_pwd, &salt);
+        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         // Create the user
         let new_user = user::ActiveModel {
@@ -1998,6 +2008,7 @@ impl DbProvider for Database {
             salt: Set(salt),
             is_admin: Set(is_admin),
             is_read_only: Set(is_read_only),
+            created: Set(created.clone()),
             ..Default::default()
         };
 
@@ -2005,13 +2016,12 @@ impl DbProvider for Database {
         let user_id = res.last_insert_id;
 
         // Link the OAuth2 identity
-        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
         let identity = oauth2_identity::ActiveModel {
             user_fk: Set(user_id),
             provider_issuer: Set(issuer.to_string()),
             subject: Set(subject.to_string()),
             email: Set(email),
-            created: Set(created),
+            created: Set(created.clone()),
             ..Default::default()
         };
 
@@ -2026,6 +2036,7 @@ impl DbProvider for Database {
             salt: String::new(), // Don't expose salt
             is_admin,
             is_read_only,
+            created,
         })
     }
 
