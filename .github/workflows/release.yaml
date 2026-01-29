@@ -175,9 +175,9 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package Kellnr
-        shell: bash
-        run: |
-          zip -j ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip target/${{ matrix.target }}/release/kellnr.exe
+        uses: montudor/action-zip@v1.0.0
+        with:
+          args: zip -qq -j ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip target/${{ matrix.target }}/release/kellnr.exe
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
