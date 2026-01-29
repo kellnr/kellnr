@@ -48,3 +48,6 @@ tests/**/logs/
 tests/**/data/
 tests/**/kdata/
 .certs/
+
+# Generated SBOM files
+*.cdx.json
