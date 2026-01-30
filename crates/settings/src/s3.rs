@@ -4,43 +4,39 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
 #[serde(default)]
 pub struct S3 {
-    /// Use S3 storage instead of filesystem
     #[default(false)]
     #[arg(id = "s3-enabled", long = "s3-enabled")]
     pub enabled: bool,
 
-    /// S3 access key
-    #[default(None)]
+    #[default("access-key".to_string())]
     #[arg(id = "s3-access-key", long = "s3-access-key")]
-    pub access_key: Option<String>,
+    pub access_key: String,
 
-    /// S3 secret key
-    #[default(None)]
+    #[default("secret-key".to_string())]
     #[arg(id = "s3-secret-key", long = "s3-secret-key")]
-    pub secret_key: Option<String>,
+    pub secret_key: String,
 
-    /// S3 region
-    #[default(None)]
+    #[default("us-east-1".to_string())]
     #[arg(id = "s3-region", long = "s3-region")]
-    pub region: Option<String>,
+    pub region: String,
 
-    /// S3 endpoint URL
-    #[default(None)]
+    #[default("http://localhost:9000".to_string())]
     #[arg(id = "s3-endpoint", long = "s3-endpoint")]
-    pub endpoint: Option<String>,
+    pub endpoint: String,
 
-    /// Allow HTTP (non-TLS) connections
-    #[default(false)]
+    #[default(true)]
     #[arg(id = "s3-allow-http", long = "s3-allow-http")]
     pub allow_http: bool,
 
-    /// Bucket for kellnr crates
-    #[default(None)]
+    #[default("kellnr-crates".to_string())]
     #[arg(id = "s3-crates-bucket", long = "s3-crates-bucket")]
-    pub crates_bucket: Option<String>,
+    pub crates_bucket: String,
 
-    /// Bucket for cached crates.io crates
-    #[default(None)]
+    #[default("kellnr-cratesio".to_string())]
     #[arg(id = "s3-cratesio-bucket", long = "s3-cratesio-bucket")]
-    pub cratesio_bucket: Option<String>,
+    pub cratesio_bucket: String,
+
+    #[default("kellnr-toolchains".to_string())]
+    #[arg(id = "s3-toolchain-bucket", long = "s3-toolchain-bucket")]
+    pub toolchain_bucket: String,
 }

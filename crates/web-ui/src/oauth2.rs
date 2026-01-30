@@ -19,7 +19,7 @@ use kellnr_auth::oauth2::{OAuth2Handler, generate_unique_username};
 use kellnr_common::util::generate_rand_string;
 use kellnr_settings::constants::COOKIE_SESSION_ID;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::error::RouteError;
 
@@ -66,6 +66,8 @@ pub async fn login(
     State(db): DbState,
     Extension(oauth2_handler): OAuth2Ext,
 ) -> Result<Redirect, RouteError> {
+    trace!("OAuth2 login initiated");
+
     // Check if OAuth2 is enabled
     let handler = oauth2_handler.as_ref().ok_or_else(|| {
         warn!("OAuth2 login attempted but OAuth2 is not enabled");
@@ -74,11 +76,6 @@ pub async fn login(
 
     // Generate authorization URL with PKCE
     let auth_request = handler.generate_auth_url();
-
-    debug!(
-        "Generated OAuth2 auth request, state: {}, redirecting to provider",
-        auth_request.state
-    );
 
     // Store state in database for verification in callback
     db.store_oauth2_state(
@@ -111,7 +108,7 @@ pub async fn callback(
     State(app_state): AppState,
     Extension(oauth2_handler): OAuth2Ext,
 ) -> Result<(PrivateCookieJar, Redirect), RouteError> {
-    debug!("OAuth2 callback received with state: {}", query.state);
+    trace!(state = %query.state, "OAuth2 callback received");
 
     // Check if OAuth2 is enabled
     let handler = oauth2_handler.as_ref().ok_or_else(|| {

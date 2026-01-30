@@ -15,6 +15,7 @@ mod group_routes;
 mod health_routes;
 mod kellnr_api_routes;
 mod oauth2_routes;
+mod toolchain_routes;
 mod ui_routes;
 mod user_routes;
 mod webhook_routes;
@@ -24,6 +25,7 @@ pub fn create_router(
     data_dir: &str,
     max_docs_size: usize,
     max_crate_size: usize,
+    max_toolchain_size: usize,
     oauth2_handler: Option<Arc<OAuth2Handler>>,
 ) -> Router {
     // Docs are served from disk and not from embedded assets
@@ -31,7 +33,7 @@ pub fn create_router(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
 
-    Router::new()
+    let mut router = Router::new()
         .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
         .nest("/api/v1/user", user_routes::create_routes())
         .nest("/api/v1/group", group_routes::create_routes())
@@ -52,7 +54,22 @@ pub fn create_router(
         .nest("/api/v1/webhook", webhook_routes::create_routes())
         .nest("/api/v1/oauth2", oauth2_routes::create_routes())
         .nest("/api/v1", health_routes::create_routes())
-        .nest_service("/docs", docs_service)
+        .nest_service("/docs", docs_service);
+
+    // Conditionally add toolchain routes if enabled
+    if state.settings.toolchain.enabled {
+        router = router
+            .nest(
+                "/api/v1/toolchain",
+                toolchain_routes::create_api_routes(state.clone(), max_toolchain_size),
+            )
+            .nest(
+                "/api/v1/toolchain/dist",
+                toolchain_routes::create_dist_routes(state.clone()),
+            );
+    }
+
+    router
         // Always serve the UI from the embedded directory (single-binary deploy).
         .fallback(get(embedded_static_handler))
         .with_state(state)

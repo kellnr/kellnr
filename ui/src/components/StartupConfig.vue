@@ -4,7 +4,7 @@
     <div class="section-header">
       <v-icon icon="mdi-tune" size="small" color="primary" class="me-3"></v-icon>
       <span class="text-h6 font-weight-bold">Startup Configuration</span>
-      <span class="section-count">8 sections</span>
+      <span class="section-count">9 sections</span>
     </div>
 
     <!-- Content -->
@@ -482,6 +482,65 @@
                 <div class="config-refs">
                   <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.allow_http</code></div>
                   <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__ALLOW_HTTP</code></div>
+                </div>
+              </div>
+              <div class="config-row">
+                <div class="config-label">Crates Bucket</div>
+                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.s3.crates_bucket) }}</span></div>
+                <div class="config-refs">
+                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.crates_bucket</code></div>
+                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__CRATES_BUCKET</code></div>
+                </div>
+              </div>
+              <div class="config-row">
+                <div class="config-label">Crates.io Bucket</div>
+                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.s3.cratesio_bucket) }}</span></div>
+                <div class="config-refs">
+                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.cratesio_bucket</code></div>
+                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__CRATESIO_BUCKET</code></div>
+                </div>
+              </div>
+              <div class="config-row">
+                <div class="config-label">Toolchain Bucket</div>
+                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.s3.toolchain_bucket) }}</span></div>
+                <div class="config-refs">
+                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.toolchain_bucket</code></div>
+                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__TOOLCHAIN_BUCKET</code></div>
+                </div>
+              </div>
+            </div>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+
+        <!-- Toolchain Section -->
+        <v-expansion-panel>
+          <v-expansion-panel-title class="panel-title">
+            <div class="panel-header">
+              <div class="panel-icon-wrapper">
+                <v-icon icon="mdi-wrench" size="small"></v-icon>
+              </div>
+              <span class="text-body-1 font-weight-medium">Toolchain</span>
+              <v-chip size="x-small" class="ms-2" :color="settings.toolchain.enabled ? 'success' : 'default'" variant="tonal">
+                {{ settings.toolchain.enabled ? 'Enabled' : 'Disabled' }}
+              </v-chip>
+            </div>
+          </v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <div class="config-list">
+              <div class="config-row">
+                <div class="config-label">Enabled</div>
+                <div class="config-value-cell"><span :class="['boolean-badge', settings.toolchain.enabled ? 'enabled' : 'disabled']">{{ settings.toolchain.enabled ? 'true' : 'false' }}</span></div>
+                <div class="config-refs">
+                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">toolchain.enabled</code></div>
+                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_TOOLCHAIN__ENABLED</code></div>
+                </div>
+              </div>
+              <div class="config-row">
+                <div class="config-label">Max Size (MB)</div>
+                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.toolchain.max_size) }}</span></div>
+                <div class="config-refs">
+                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">toolchain.max_size</code></div>
+                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_TOOLCHAIN__MAX_SIZE</code></div>
                 </div>
               </div>
             </div>

@@ -14,12 +14,39 @@ pub trait Name {
 }
 
 pub struct AdminUser(pub String);
+
+impl AdminUser {
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+}
+
 impl Name for AdminUser {
     fn name(&self) -> String {
         self.0.clone()
     }
     fn new(name: String) -> Self {
         Self(name)
+    }
+}
+
+impl axum::extract::FromRequestParts<kellnr_appstate::AppStateData> for AdminUser {
+    type Rejection = RouteError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &kellnr_appstate::AppStateData,
+    ) -> Result<Self, Self::Rejection> {
+        let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
+        let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+        match session_cookie {
+            Some(cookie) => match state.db.validate_session(cookie.value()).await {
+                Ok((name, true)) => Ok(Self(name)),
+                Ok((_, false)) => Err(RouteError::InsufficientPrivileges),
+                Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+            },
+            None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+        }
     }
 }
 

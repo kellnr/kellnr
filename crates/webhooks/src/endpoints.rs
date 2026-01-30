@@ -5,6 +5,7 @@ use kellnr_appstate::DbState;
 use kellnr_auth::token;
 use kellnr_common::webhook::Webhook;
 use kellnr_error::api_error::{ApiError, ApiResult};
+use tracing::trace;
 
 use crate::types;
 
@@ -13,6 +14,7 @@ pub async fn register_webhook(
     State(db): DbState,
     Json(input): Json<types::RegisterWebhookRequest>,
 ) -> ApiResult<Json<types::RegisterWebhookResponse>> {
+    trace!(user = %token.user, event = ?input.event, "Registering webhook");
     if !token.is_admin {
         return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }
@@ -34,6 +36,7 @@ pub async fn get_webhook(
     Path(id): Path<String>,
     State(db): DbState,
 ) -> ApiResult<Json<types::GetWebhookResponse>> {
+    trace!(user = %token.user, webhook_id = %id, "Getting webhook");
     if !token.is_admin {
         return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }
@@ -51,6 +54,7 @@ pub async fn get_all_webhooks(
     token: token::Token,
     State(db): DbState,
 ) -> ApiResult<Json<types::GetAllWebhooksResponse>> {
+    trace!(user = %token.user, "Listing all webhooks");
     if !token.is_admin {
         return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }
@@ -64,6 +68,7 @@ pub async fn delete_webhook(
     Path(id): Path<String>,
     State(db): DbState,
 ) -> ApiResult<()> {
+    trace!(user = %token.user, webhook_id = %id, "Deleting webhook");
     if !token.is_admin {
         return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }
@@ -77,6 +82,7 @@ pub async fn test_webhook(
     Path(id): Path<String>,
     State(db): DbState,
 ) -> ApiResult<()> {
+    trace!(user = %token.user, webhook_id = %id, "Testing webhook");
     if !token.is_admin {
         return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }

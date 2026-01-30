@@ -16,6 +16,7 @@ use crate::registry::Registry;
 use crate::s3::S3;
 use crate::settings::Settings;
 use crate::setup::Setup;
+use crate::toolchain::Toolchain;
 
 #[derive(Parser)]
 #[command(name = "kellnr", version, about)]
@@ -57,6 +58,9 @@ pub struct ServerArgs {
 
     #[command(flatten)]
     pub oauth2: <OAuth2 as ClapSerde>::Opt,
+
+    #[command(flatten)]
+    pub toolchain: <Toolchain as ClapSerde>::Opt,
 
     // Log settings (manual, not using ClapSerde due to custom serde deserializers)
     /// Log output format
@@ -156,6 +160,7 @@ pub fn parse_cli() -> Result<CliResult, ConfigError> {
             settings.s3 = settings.s3.merge(server.s3);
             settings.setup = settings.setup.merge(server.setup);
             settings.oauth2 = settings.oauth2.merge(server.oauth2);
+            settings.toolchain = settings.toolchain.merge(server.toolchain);
 
             // Log settings (manual merge due to custom serde deserializers)
             if let Some(format) = server.log_format {

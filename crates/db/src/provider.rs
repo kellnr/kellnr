@@ -13,6 +13,7 @@ use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
 use kellnr_common::webhook::{Webhook, WebhookEvent, WebhookQueue};
 use sea_orm::prelude::async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use crate::error::DbError;
 use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta};
@@ -32,6 +33,36 @@ pub struct OAuth2StateData {
     pub state: String,
     pub pkce_verifier: String,
     pub nonce: String,
+}
+
+/// Toolchain target information (e.g., a specific archive for a target triple)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolchainTargetInfo {
+    pub id: i64,
+    pub target: String,
+    pub storage_path: String,
+    pub hash: String,
+    pub size: i64,
+}
+
+/// Toolchain with all its targets
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolchainWithTargets {
+    pub id: i64,
+    pub name: String,
+    pub version: String,
+    pub date: String,
+    pub channel: Option<String>,
+    pub created: String,
+    pub targets: Vec<ToolchainTargetInfo>,
+}
+
+/// Channel information (e.g., "stable" -> "1.75.0")
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChannelInfo {
+    pub name: String,
+    pub version: String,
+    pub date: String,
 }
 
 #[async_trait]
@@ -241,6 +272,59 @@ pub trait DbProvider: Send + Sync {
 
     /// Check if username is available (for `OAuth2` auto-provisioning)
     async fn is_username_available(&self, username: &str) -> DbResult<bool>;
+
+    // Toolchain distribution methods
+    /// Add a new toolchain release
+    async fn add_toolchain(
+        &self,
+        name: &str,
+        version: &str,
+        date: &str,
+        channel: Option<String>,
+    ) -> DbResult<i64>;
+
+    /// Add a target archive to an existing toolchain
+    async fn add_toolchain_target(
+        &self,
+        toolchain_id: i64,
+        target: &str,
+        storage_path: &str,
+        hash: &str,
+        size: i64,
+    ) -> DbResult<()>;
+
+    /// Get a toolchain by its channel (e.g., "stable", "nightly")
+    async fn get_toolchain_by_channel(
+        &self,
+        channel: &str,
+    ) -> DbResult<Option<ToolchainWithTargets>>;
+
+    /// Get a toolchain by name and version
+    async fn get_toolchain_by_version(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> DbResult<Option<ToolchainWithTargets>>;
+
+    /// List all toolchains
+    async fn list_toolchains(&self) -> DbResult<Vec<ToolchainWithTargets>>;
+
+    /// Delete a toolchain and all its targets
+    async fn delete_toolchain(&self, name: &str, version: &str) -> DbResult<()>;
+
+    /// Delete a specific toolchain target
+    async fn delete_toolchain_target(
+        &self,
+        name: &str,
+        version: &str,
+        target: &str,
+    ) -> DbResult<()>;
+
+    /// Set a channel to point to a specific toolchain version
+    async fn set_channel(&self, channel: &str, name: &str, version: &str) -> DbResult<()>;
+
+    /// Get all channels with their current versions
+    async fn get_channels(&self) -> DbResult<Vec<ChannelInfo>>;
 }
 
 pub mod mock {
@@ -640,6 +724,64 @@ pub mod mock {
             }
 
             async fn is_username_available(&self, username: &str) -> DbResult<bool> {
+                unimplemented!()
+            }
+
+            async fn add_toolchain(
+                &self,
+                name: &str,
+                version: &str,
+                date: &str,
+                channel: Option<String>,
+            ) -> DbResult<i64> {
+                unimplemented!()
+            }
+
+            async fn add_toolchain_target(
+                &self,
+                toolchain_id: i64,
+                target: &str,
+                storage_path: &str,
+                hash: &str,
+                size: i64,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn get_toolchain_by_channel(&self, channel: &str) -> DbResult<Option<ToolchainWithTargets>> {
+                unimplemented!()
+            }
+
+            async fn get_toolchain_by_version(
+                &self,
+                name: &str,
+                version: &str,
+            ) -> DbResult<Option<ToolchainWithTargets>> {
+                unimplemented!()
+            }
+
+            async fn list_toolchains(&self) -> DbResult<Vec<ToolchainWithTargets>> {
+                unimplemented!()
+            }
+
+            async fn delete_toolchain(&self, name: &str, version: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn delete_toolchain_target(
+                &self,
+                name: &str,
+                version: &str,
+                target: &str,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn set_channel(&self, channel: &str, name: &str, version: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn get_channels(&self) -> DbResult<Vec<ChannelInfo>> {
                 unimplemented!()
             }
         }

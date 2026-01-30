@@ -7,7 +7,7 @@ use kellnr_registry::crate_user::{CrateUser, CrateUserList};
 use serde::{Deserialize, Serialize};
 
 use crate::error::RouteError;
-use crate::session::MaybeUser;
+use crate::session::AdminUser;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccessData {
@@ -15,12 +15,10 @@ pub struct AccessData {
 }
 
 pub async fn list_users(
-    user: MaybeUser,
+    _user: AdminUser,
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> Result<Json<CrateUserList>, RouteError> {
-    user.assert_admin()?;
-
     let crate_name = crate_name.to_normalized();
     let users: Vec<CrateUser> = db
         .get_crate_users(&crate_name)
@@ -37,12 +35,10 @@ pub async fn list_users(
 }
 
 pub async fn add_user(
-    user: MaybeUser,
+    _user: AdminUser,
     Path((crate_name, name)): Path<(OriginalName, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     let crate_name = crate_name.to_normalized();
 
     if db.get_user(&name).await.is_err() {
@@ -57,23 +53,19 @@ pub async fn add_user(
 }
 
 pub async fn delete_user(
-    user: MaybeUser,
+    _user: AdminUser,
     Path((crate_name, name)): Path<(OriginalName, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     let crate_name = crate_name.to_normalized();
     Ok(db.delete_crate_user(&crate_name, &name).await?)
 }
 
 pub async fn list_groups(
-    group: MaybeUser,
+    _user: AdminUser,
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> Result<Json<CrateGroupList>, RouteError> {
-    group.assert_admin()?;
-
     let crate_name = crate_name.to_normalized();
     let groups: Vec<CrateGroup> = db
         .get_crate_groups(&crate_name)
@@ -89,12 +81,10 @@ pub async fn list_groups(
 }
 
 pub async fn add_group(
-    group: MaybeUser,
+    _user: AdminUser,
     Path((crate_name, name)): Path<(OriginalName, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    group.assert_admin()?;
-
     let crate_name = crate_name.to_normalized();
     if !db.is_crate_group(&crate_name, &name).await? {
         db.add_crate_group(&crate_name, &name).await?;
@@ -104,23 +94,19 @@ pub async fn add_group(
 }
 
 pub async fn delete_group(
-    group: MaybeUser,
+    _user: AdminUser,
     Path((crate_name, name)): Path<(OriginalName, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    group.assert_admin()?;
-
     let crate_name = crate_name.to_normalized();
     Ok(db.delete_crate_group(&crate_name, &name).await?)
 }
 
 pub async fn get_access_data(
-    user: MaybeUser,
+    _user: AdminUser,
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> Result<Json<AccessData>, RouteError> {
-    user.assert_admin()?;
-
     let crate_name = crate_name.to_normalized();
     Ok(Json(AccessData {
         download_restricted: db.is_download_restricted(&crate_name).await?,
@@ -128,13 +114,11 @@ pub async fn get_access_data(
 }
 
 pub async fn set_access_data(
-    user: MaybeUser,
+    _user: AdminUser,
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<AccessData>,
 ) -> Result<Json<AccessData>, RouteError> {
-    user.assert_admin()?;
-
     let crate_name = crate_name.to_normalized();
     db.change_download_restricted(&crate_name, input.download_restricted)
         .await?;

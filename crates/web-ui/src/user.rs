@@ -13,7 +13,7 @@ use kellnr_settings::constants::{COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 use serde::{Deserialize, Serialize};
 
 use crate::error::RouteError;
-use crate::session::MaybeUser;
+use crate::session::{AdminUser, MaybeUser};
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {
@@ -48,11 +48,9 @@ pub async fn list_tokens(
 }
 
 pub async fn list_users(
-    user: MaybeUser,
+    _user: AdminUser,
     State(db): DbState,
 ) -> Result<Json<Vec<User>>, RouteError> {
-    user.assert_admin()?;
-
     Ok(Json(db.get_users().await?))
 }
 
@@ -82,12 +80,10 @@ pub struct ResetPwd {
 }
 
 pub async fn reset_pwd(
-    user: MaybeUser,
+    user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
 ) -> Result<Json<ResetPwd>, RouteError> {
-    user.assert_admin()?;
-
     let new_pwd = generate_rand_string(12);
     db.change_pwd(&name, &new_pwd).await?;
 
@@ -104,14 +100,12 @@ pub struct ReadOnlyState {
 }
 
 pub async fn read_only(
-    user: MaybeUser,
+    _user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(ro_state): Json<ReadOnlyState>,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     db.change_read_only_state(&name, ro_state.state).await?;
 
     cache.invalidate_all();
@@ -125,14 +119,12 @@ pub struct AdminState {
 }
 
 pub async fn admin(
-    user: MaybeUser,
+    user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(admin_state): Json<AdminState>,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     // Prevent self-demotion to avoid lockout
     if user.name() == name && !admin_state.state {
         return Err(RouteError::Status(StatusCode::BAD_REQUEST));
@@ -146,13 +138,11 @@ pub async fn admin(
 }
 
 pub async fn delete(
-    user: MaybeUser,
+    _user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
     State(cache): TokenCacheState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     db.delete_user(&name).await?;
 
     cache.invalidate_all();
@@ -326,13 +316,11 @@ impl NewUser {
 }
 
 pub async fn add(
-    user: MaybeUser,
+    _user: AdminUser,
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(new_user): Json<NewUser>,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     new_user.validate()?;
 
     let salt = generate_salt();
@@ -394,6 +382,7 @@ mod tests {
             cratesio_storage,
             cratesio_prefetch_sender,
             token_cache: cache,
+            toolchain_storage: None,
         }
     }
 

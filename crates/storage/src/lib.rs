@@ -5,3 +5,4 @@ pub mod kellnr_crate_storage;
 pub mod s3_storage;
 pub mod storage;
 pub mod storage_error;
+pub mod toolchain_storage;

@@ -10,7 +10,7 @@
 //! Users MUST upgrade to v5.14.0 before upgrading to v6.0.0.
 
 use sea_orm_migration::prelude::*;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 /// Old migration names that were used in v5.14.0 and earlier
 const OLD_MIGRATIONS: &[&str] = &[
@@ -147,7 +147,6 @@ async fn validate_schema(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
         }
     }
 
-    debug!("Schema validation passed");
     Ok(())
 }
 
@@ -156,7 +155,6 @@ async fn cleanup_old_migrations(manager: &SchemaManager<'_>) -> Result<(), DbErr
     let db = manager.get_connection();
 
     for migration in OLD_MIGRATIONS {
-        debug!("Removing old migration entry: {}", migration);
         let sql = format!(
             "DELETE FROM seaql_migrations WHERE version = '{}'",
             migration

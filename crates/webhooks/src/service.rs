@@ -30,10 +30,6 @@ async fn handle_queue(
 
         match request.send().await {
             Ok(resp) if resp.status().as_u16() < 300 => {
-                tracing::debug!(
-                    "Webhook callback sent successfully to: {}",
-                    entry.callback_url
-                );
                 if let Err(err) = db.delete_webhook_queue(&entry.id).await {
                     tracing::error!("Cannot delete webhook queue entry. Reason {err}");
                 }
@@ -84,7 +80,6 @@ fn get_next_attempt(
     current_attempt: &DateTime<Utc>,
 ) -> Option<DateTime<Utc>> {
     let delta = last_attempt.map(|a| *current_attempt - a);
-    println!("@@@@@ {delta:?}");
 
     let offset = match delta {
         // First try

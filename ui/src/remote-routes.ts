@@ -44,5 +44,15 @@ export const DOCS_QUEUE = "./api/v1/docs/queue";
 export const OAUTH2_CONFIG = "./api/v1/oauth2/config";
 export const OAUTH2_LOGIN = "./api/v1/oauth2/login";
 
+// Toolchain Distribution Server
+export const TOOLCHAIN_LIST = "./api/v1/toolchain/toolchains";
+export const TOOLCHAIN_DELETE = (name: string, version: string) =>
+  `./api/v1/toolchain/toolchains/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
+export const TOOLCHAIN_DELETE_TARGET = (name: string, version: string, target: string) =>
+  `./api/v1/toolchain/toolchains/${encodeURIComponent(name)}/${encodeURIComponent(version)}/${encodeURIComponent(target)}`;
+export const TOOLCHAIN_CHANNELS = "./api/v1/toolchain/channels";
+export const TOOLCHAIN_SET_CHANNEL = (channel: string) =>
+  `./api/v1/toolchain/channels/${encodeURIComponent(channel)}`;
+
 // External URL
 export const CRATESIO_LINK = (name: string) => `https://crates.io/crates/${name}`;

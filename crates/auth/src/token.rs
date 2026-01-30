@@ -16,7 +16,7 @@ use rand::distr::Alphanumeric;
 use rand::{Rng, rng};
 use serde::Deserialize;
 use tokio::time::sleep;
-use tracing::{debug, warn};
+use tracing::warn;
 
 #[derive(Debug)]
 pub struct Token {
@@ -93,7 +93,6 @@ impl Token {
 
         // Check cache first
         if let Some(cached) = cache.get(token).await {
-            debug!("Token cache hit for user: {}", cached.user);
             return Ok(Token {
                 value: token.to_string(),
                 user: cached.user,
@@ -103,22 +102,16 @@ impl Token {
         }
 
         // Cache miss - query DB with retry logic
-        let user = match get_user_with_retry(
+        let Ok(user) = get_user_with_retry(
             db,
             token,
             settings.registry.token_db_retry_count,
             settings.registry.token_db_retry_delay_ms,
         )
         .await
-        {
-            Ok(user) => user,
-            Err(e) => {
-                debug!("Token cache miss, DB lookup failed: {}", e);
-                return Err(StatusCode::FORBIDDEN);
-            }
+        else {
+            return Err(StatusCode::FORBIDDEN);
         };
-
-        debug!("Token cache miss, queried DB for user: {}", user.name);
 
         // Insert into cache on successful DB lookup
         cache

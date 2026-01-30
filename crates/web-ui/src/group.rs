@@ -6,7 +6,7 @@ use kellnr_db::{self, Group};
 use serde::{Deserialize, Serialize};
 
 use crate::error::RouteError;
-use crate::session::MaybeUser;
+use crate::session::AdminUser;
 
 #[derive(Serialize)]
 pub struct NewTokenResponse {
@@ -15,21 +15,17 @@ pub struct NewTokenResponse {
 }
 
 pub async fn list_groups(
-    user: MaybeUser,
+    _user: AdminUser,
     State(db): DbState,
 ) -> Result<Json<Vec<Group>>, RouteError> {
-    user.assert_admin()?;
-
     Ok(Json(db.get_groups().await?))
 }
 
 pub async fn delete(
-    user: MaybeUser,
+    _user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     Ok(db.delete_group(&name).await?)
 }
 
@@ -48,12 +44,10 @@ impl NewGroup {
 }
 
 pub async fn add(
-    user: MaybeUser,
+    _user: AdminUser,
     State(db): DbState,
     Json(new_group): Json<NewGroup>,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     new_group.validate()?;
 
     Ok(db.add_group(&new_group.name).await?)
@@ -77,12 +71,10 @@ impl From<Vec<GroupUser>> for GroupUserList {
 }
 
 pub async fn list_users(
-    user: MaybeUser,
+    _user: AdminUser,
     Path(group_name): Path<String>,
     State(db): DbState,
 ) -> Result<Json<GroupUserList>, RouteError> {
-    user.assert_admin()?;
-
     let users: Vec<GroupUser> = db
         .get_group_users(&group_name)
         .await?
@@ -97,12 +89,10 @@ pub async fn list_users(
 }
 
 pub async fn add_user(
-    user: MaybeUser,
+    _user: AdminUser,
     Path((group_name, name)): Path<(String, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     if !db.is_group_user(&group_name, &name).await? {
         db.add_group_user(&group_name, &name).await?;
     }
@@ -111,11 +101,9 @@ pub async fn add_user(
 }
 
 pub async fn delete_user(
-    user: MaybeUser,
+    _user: AdminUser,
     Path((group_name, name)): Path<(String, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     Ok(db.delete_group_user(&group_name, &name).await?)
 }

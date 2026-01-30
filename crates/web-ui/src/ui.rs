@@ -12,14 +12,13 @@ use kellnr_settings::{Settings, compile_time_config};
 use tracing::error;
 
 use crate::error::RouteError;
-use crate::session::MaybeUser;
+use crate::session::{AdminUser, MaybeUser};
 
 #[allow(clippy::unused_async)] // part of the router
 pub async fn settings(
-    user: MaybeUser,
+    _user: AdminUser,
     State(settings): SettingsState,
 ) -> Result<Json<Settings>, RouteError> {
-    user.assert_admin()?;
     let s: Settings = (*settings).clone();
     Ok(Json(s))
 }
@@ -151,10 +150,9 @@ pub struct DeleteCrateVersionParams {
 
 pub async fn delete_version(
     Query(params): Query<DeleteCrateVersionParams>,
-    user: MaybeUser,
+    _user: AdminUser,
     State(state): AppState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
     let version = params.version;
     let name = params.name;
 
@@ -183,10 +181,9 @@ pub struct DeleteCrateParams {
 
 pub async fn delete_crate(
     Query(params): Query<DeleteCrateParams>,
-    user: MaybeUser,
+    _user: AdminUser,
     State(state): AppState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
     let name = params.name;
 
     let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;

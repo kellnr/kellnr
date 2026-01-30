@@ -90,6 +90,7 @@
                 :active="activeTab === 'config'"
                 color="primary"
                 rounded="lg"
+                class="mb-1"
               >
                 <template v-slot:prepend>
                   <div class="nav-icon-wrapper" :class="{ active: activeTab === 'config' }">
@@ -97,6 +98,24 @@
                   </div>
                 </template>
                 <v-list-item-title class="text-body-1 font-weight-medium">Startup Config</v-list-item-title>
+                <template v-slot:append>
+                  <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
+                </template>
+              </v-list-item>
+
+              <v-list-item
+                v-if="settings.toolchain.enabled"
+                @click="activeTab = 'toolchains'"
+                :active="activeTab === 'toolchains'"
+                color="primary"
+                rounded="lg"
+              >
+                <template v-slot:prepend>
+                  <div class="nav-icon-wrapper" :class="{ active: activeTab === 'toolchains' }">
+                    <v-icon icon="mdi-hammer-wrench" size="small"></v-icon>
+                  </div>
+                </template>
+                <v-list-item-title class="text-body-1 font-weight-medium">Toolchains</v-list-item-title>
                 <template v-slot:append>
                   <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
                 </template>
@@ -114,6 +133,7 @@
           <user-mgmt v-if="activeTab === 'users'" />
           <group-mgmt v-if="activeTab === 'groups'" />
           <startup-config v-if="activeTab === 'config'" />
+          <toolchain-mgmt v-if="activeTab === 'toolchains'" />
         </v-card>
       </v-col>
     </v-row>
@@ -126,22 +146,36 @@ import AuthToken from "../components/AuthToken.vue";
 import UserMgmt from "../components/UserMgmt.vue";
 import GroupMgmt from "../components/GroupMgmt.vue";
 import StartupConfig from "../components/StartupConfig.vue";
+import ToolchainMgmt from "../components/ToolchainMgmt.vue";
 import { useStore } from "../store/store";
-import { ref } from "vue";
+import { ref, onBeforeMount } from "vue";
 import { useRoute } from "vue-router";
+import { settingsService } from "../services";
+import { isSuccess } from "../services/api";
+import type { Settings } from "../types/settings";
+import { emptySettings } from "../types/settings";
 
-type SettingsTab = 'password' | 'tokens' | 'users' | 'groups' | 'config'
+type SettingsTab = 'password' | 'tokens' | 'users' | 'groups' | 'config' | 'toolchains'
 
 const route = useRoute()
 
+const settings = ref<Settings>(emptySettings)
+
 function getInitialTab(): SettingsTab {
   const tab = route.query.tab as string | undefined
-  const validTabs: SettingsTab[] = ['password', 'tokens', 'users', 'groups', 'config']
+  const validTabs: SettingsTab[] = ['password', 'tokens', 'users', 'groups', 'config', 'toolchains']
   return validTabs.includes(tab as SettingsTab) ? (tab as SettingsTab) : 'password'
 }
 
 const activeTab = ref<SettingsTab>(getInitialTab())
 const store = useStore()
+
+onBeforeMount(async () => {
+  const result = await settingsService.getSettings()
+  if (isSuccess(result)) {
+    settings.value = result.data
+  }
+})
 </script>
 
 <style scoped>

@@ -12,14 +12,15 @@ use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
 use kellnr_entity::{crate_index, crate_meta, cratesio_crate, krate, session, user};
-use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, ExprTrait, QueryFilter, Set};
 use sea_orm::sea_query::Expr;
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, ExprTrait, QueryFilter, Set,
+};
 
-use super::Database;
-use super::DB_DATE_FORMAT;
+use super::{DB_DATE_FORMAT, Database};
+use crate::CrateMeta;
 use crate::error::DbError;
 use crate::provider::{DbProvider, DbResult};
-use crate::CrateMeta;
 
 /// Add a cached crate with a specified download count.
 pub async fn test_add_cached_crate_with_downloads(
@@ -46,11 +47,7 @@ pub async fn test_add_cached_crate_with_downloads(
 }
 
 /// Add a cached crate for testing.
-pub async fn test_add_cached_crate(
-    db: &Database,
-    name: &str,
-    version: &str,
-) -> DbResult<Prefetch> {
+pub async fn test_add_cached_crate(db: &Database, name: &str, version: &str) -> DbResult<Prefetch> {
     let etag = "etag";
     let last_modified = "last_modified";
     let description = Some(String::from("description"));

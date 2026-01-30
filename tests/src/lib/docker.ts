@@ -203,11 +203,32 @@ export async function createNetwork(
  *
  * NOTE: This function assumes it's called from within tests (process.cwd() == tests root).
  */
+/**
+ * Check if a Docker image exists locally.
+ */
+async function dockerImageExists(imageName: string): Promise<boolean> {
+  try {
+    const result = await execa("docker", ["inspect", imageName], {
+      reject: false,
+    });
+    return result.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function buildS3MinioImage(options: {
   imageName: string;
   cratesBucket: string;
   cratesioBucket: string;
+  toolchainBucket?: string;
 }): Promise<void> {
+  // Check if image already exists
+  if (await dockerImageExists(options.imageName)) {
+    console.log(`[docker] Image ${options.imageName} already exists, skipping build`);
+    return;
+  }
+
   const repoRoot = path.resolve(process.cwd(), "..");
 
   // We build the MinIO fixture image from `tests/fixtures/test-s3-storage`.
@@ -229,8 +250,13 @@ export async function buildS3MinioImage(options: {
     `CRATES_BUCKET=${options.cratesBucket}`,
     "--build-arg",
     `CRATESIO_BUCKET=${options.cratesioBucket}`,
-    contextDir,
   ];
+
+  if (options.toolchainBucket) {
+    args.push("--build-arg", `TOOLCHAIN_BUCKET=${options.toolchainBucket}`);
+  }
+
+  args.push(contextDir);
 
   const res = await execa("docker", args, {
     cwd: repoRoot,
