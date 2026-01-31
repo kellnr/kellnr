@@ -73,12 +73,12 @@ fmt-check:
     cargo fmt --all -- --check
 
 [unix]
-run: npm-build build
-    cargo run -- start
+run *ARGS='start': npm-build build
+    cargo run -- {{ARGS}}
 
 [windows]
-run: npm-build build
-    {{ setup-msvc }} cargo run --no-default-features -- start
+run *ARGS='start': npm-build build
+    {{ setup-msvc }} cargo run --no-default-features -- {{ARGS}}
 
 [unix]
 test: npm-build
@@ -209,13 +209,15 @@ npm-build: npm-install
     if (Test-Path crates/embedded-resources/static/*) { Remove-Item -Recurse -Force crates/embedded-resources/static/* }
     Copy-Item -Recurse -Force ui/dist/* crates/embedded-resources/static/
 
+# Install NPM dependencies without updating package-lock.json
 [unix]
 npm-install:
-    cd ui && npm install
+    cd ui && npm ci
 
+# Install NPM dependencies without updating package-lock.json
 [windows]
 npm-install:
-    cd ui; npm install
+    cd ui; npm ci
 
 ##########################################
 # Commands used by the Nix package manager
