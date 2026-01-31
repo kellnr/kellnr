@@ -563,7 +563,7 @@ export async function startS3RustFsContainer(
       // Expose port 9000 to a random host port if requested (for local Kellnr access)
       ...(options.exposeToHost ? { exposedPorts: [9000] } : {}),
       // RustFS images typically listen quickly; the default listening-ports wait is sufficient.
-      // If you want stricter readiness, replace with `waitFor: waitForHttp(9000, "/health/live")`
+      // Note: caller should add a delay if needed for bucket initialization
     },
     testInfo,
   );

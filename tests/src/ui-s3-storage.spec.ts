@@ -58,7 +58,7 @@ test.describe("S3 Storage UI Tests", () => {
     const s3RootUser = "rustfsadmin";
     const s3RootPassword = "rustfsadmin";
     const s3AllowHttp = "true";
-    const s3Image = `custom-rustfs-${suffix}`;
+    const s3Image = "kellnr-rustfs-storage";
     const s3CratesBucket = "kellnr-crates";
     const s3CratesioBucket = "kellnr-cratesio";
 
@@ -103,6 +103,22 @@ test.describe("S3 Storage UI Tests", () => {
     const s3UrlForLocalKellnr = `http://localhost:${rustfsHostPort}`;
 
     console.log(`[setup] RustFS accessible at ${s3UrlForLocalKellnr}`);
+
+    // Wait for RustFS to be fully ready by checking the health endpoint
+    console.log("[setup] Waiting for RustFS health check...");
+    const healthUrl = `${s3UrlForLocalKellnr}/health/live`;
+    for (let i = 0; i < 30; i++) {
+      try {
+        const res = await fetch(healthUrl);
+        if (res.ok) {
+          console.log("[setup] RustFS health check passed");
+          break;
+        }
+      } catch {
+        // Not ready yet
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
 
     started = await startLocalKellnr({
       name: `kellnr-s3-${suffix}`,
