@@ -11,6 +11,12 @@ export type Settings = {
   proxy: Proxy
   registry: Registry
   s3: S3
+  toolchain: Toolchain
+}
+
+export type Toolchain = {
+  enabled: boolean
+  max_size: number
 }
 
 export type Docs = {
@@ -77,6 +83,7 @@ export type S3 = {
   allow_http: boolean
   crates_bucket: string
   cratesio_bucket: string
+  toolchain_bucket: string
 }
 
 export const emptySettings: Settings = {
@@ -136,6 +143,11 @@ export const emptySettings: Settings = {
     endpoint: "",
     allow_http: false,
     crates_bucket: "",
-    cratesio_bucket: ""
+    cratesio_bucket: "",
+    toolchain_bucket: ""
+  },
+  toolchain: {
+    enabled: false,
+    max_size: 500
   }
 }

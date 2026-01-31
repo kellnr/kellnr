@@ -18,6 +18,7 @@ use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::s3_storage::S3Storage;
+use kellnr_storage::toolchain_storage::ToolchainStorage;
 use moka::future::Cache;
 use tokio::fs::create_dir_all;
 use tokio::net::TcpListener;
@@ -152,12 +153,16 @@ async fn run_server(settings: Settings) {
     let signing_key = init_cookie_signing_key(&settings);
     let max_docs_size = settings.docs.max_size;
     let max_crate_size = settings.registry.max_crate_size as usize;
+    let max_toolchain_size = settings.toolchain.max_size;
     let route_path_prefix = settings.origin.path.trim().to_owned();
     let token_cache = Arc::new(TokenCacheManager::new(
         settings.registry.token_cache_enabled,
         settings.registry.token_cache_ttl_seconds,
         settings.registry.token_cache_max_capacity,
     ));
+
+    // Initialize toolchain storage if enabled
+    let toolchain_storage = init_toolchain_storage(&settings);
 
     // Initialize OAuth2/OIDC handler if enabled
     let oauth2_handler = init_oauth2_handler(&settings).await;
@@ -170,6 +175,7 @@ async fn run_server(settings: Settings) {
         cratesio_storage,
         cratesio_prefetch_sender,
         token_cache,
+        toolchain_storage,
     };
 
     // Create router using the route module
@@ -178,6 +184,7 @@ async fn run_server(settings: Settings) {
         &data_dir,
         max_docs_size,
         max_crate_size,
+        max_toolchain_size,
         oauth2_handler,
     );
     if !route_path_prefix.is_empty() {
@@ -270,12 +277,19 @@ fn init_webhook_service(db: Arc<dyn DbProvider + 'static>) {
     kellnr_webhooks::run_webhook_service(db);
 }
 
-/// Initialize `OAuth2`/OIDC handler if enabled in settings
-///
-/// Returns None if `OAuth2` is disabled or if initialization fails.
+fn init_toolchain_storage(settings: &Arc<Settings>) -> Option<Arc<ToolchainStorage>> {
+    if !settings.toolchain.enabled {
+        return None;
+    }
+
+    let storage = init_storage(&settings.toolchain_path_or_bucket(), settings);
+    let toolchain_storage = ToolchainStorage::new(storage);
+
+    Some(Arc::new(toolchain_storage))
+}
+
 async fn init_oauth2_handler(settings: &Settings) -> Option<Arc<OAuth2Handler>> {
     if !settings.oauth2.enabled {
-        info!("OAuth2/OIDC authentication is disabled");
         return None;
     }
 
@@ -291,16 +305,8 @@ async fn init_oauth2_handler(settings: &Settings) -> Option<Arc<OAuth2Handler>> 
         format!("{protocol}://{host}:{port}{path_prefix}/api/v1/oauth2/callback")
     };
 
-    info!(
-        "Initializing OAuth2/OIDC handler with callback URL: {}",
-        callback_url
-    );
-
     match OAuth2Handler::from_discovery(&settings.oauth2, &callback_url).await {
-        Ok(handler) => {
-            info!("OAuth2/OIDC handler initialized successfully");
-            Some(Arc::new(handler))
-        }
+        Ok(handler) => Some(Arc::new(handler)),
         Err(e) => {
             error!("Failed to initialize OAuth2/OIDC handler: {}", e);
             warn!("OAuth2/OIDC authentication will be disabled");

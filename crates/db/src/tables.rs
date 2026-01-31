@@ -1,6 +1,6 @@
 use kellnr_migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbErr};
-use tracing::{debug, info};
+use tracing::info;
 
 /// Old migration names from v5.14.0 and earlier that need to be cleaned up
 /// before running the v6.0.0 migrations.
@@ -56,7 +56,6 @@ async fn cleanup_old_migrations(db: &DatabaseConnection) -> Result<(), DbErr> {
         if let Ok(result) = db.execute_unprepared(&sql).await
             && result.rows_affected() > 0
         {
-            debug!("Removed old migration entry: {}", migration);
             cleaned += 1;
         }
     }

@@ -258,3 +258,28 @@ pub enum OAuth2StateIden {
     Nonce,
     Created,
 }
+
+#[derive(Iden)]
+pub enum ToolchainIden {
+    #[iden = "toolchain"]
+    Table,
+    Id,
+    Name,
+    Version,
+    Date,
+    Channel,
+    Created,
+}
+
+#[derive(Iden)]
+pub enum ToolchainTargetIden {
+    #[iden = "toolchain_target"]
+    Table,
+    Id,
+    #[iden = "toolchain_fk"]
+    ToolchainFk,
+    Target,
+    StoragePath,
+    Hash,
+    Size,
+}

@@ -20,7 +20,8 @@ use kellnr_entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
     cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate,
-    oauth2_identity, oauth2_state, owner, session, user, webhook, webhook_queue,
+    oauth2_identity, oauth2_state, owner, session, toolchain, toolchain_target, user, webhook,
+    webhook_queue,
 };
 use kellnr_migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
@@ -36,7 +37,10 @@ use sea_orm::{
 
 use crate::error::DbError;
 use crate::password::{generate_salt, hash_pwd, hash_token};
-use crate::provider::{DbResult, OAuth2StateData, PrefetchState};
+use crate::provider::{
+    ChannelInfo, DbResult, OAuth2StateData, PrefetchState, ToolchainTargetInfo,
+    ToolchainWithTargets,
+};
 use crate::tables::init_database;
 use crate::{
     AuthToken, ConString, CrateMeta, CrateSummary, DbProvider, DocQueueEntry, Group, User,
@@ -1595,7 +1599,8 @@ impl DbProvider for Database {
         }
 
         let (krate, crate_indices) = krate[0].to_owned();
-        let index_metadata = operations::crate_index_model_to_index_metadata(crate_name, crate_indices)?;
+        let index_metadata =
+            operations::crate_index_model_to_index_metadata(crate_name, crate_indices)?;
         let data = operations::index_metadata_to_bytes(&index_metadata)?;
 
         Ok(Prefetch {
@@ -1635,7 +1640,8 @@ impl DbProvider for Database {
                 .find_related(cratesio_index::Entity)
                 .all(&self.db_con)
                 .await?;
-            let index_metadata = operations::cratesio_index_model_to_index_metadata(crate_name, crate_indices)?;
+            let index_metadata =
+                operations::cratesio_index_model_to_index_metadata(crate_name, crate_indices)?;
             let data = operations::index_metadata_to_bytes(&index_metadata)?;
 
             Ok(PrefetchState::NeedsUpdate(Prefetch {
@@ -2130,5 +2136,248 @@ impl DbProvider for Database {
             .await?;
 
         Ok(existing.is_none())
+    }
+
+    // Toolchain distribution methods
+
+    async fn add_toolchain(
+        &self,
+        name: &str,
+        version: &str,
+        date: &str,
+        channel: Option<String>,
+    ) -> DbResult<i64> {
+        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
+
+        let model = toolchain::ActiveModel {
+            id: ActiveValue::NotSet,
+            name: Set(name.to_string()),
+            version: Set(version.to_string()),
+            date: Set(date.to_string()),
+            channel: Set(channel),
+            created: Set(created),
+        };
+
+        let result = model.insert(&self.db_con).await?;
+        Ok(result.id)
+    }
+
+    async fn add_toolchain_target(
+        &self,
+        toolchain_id: i64,
+        target: &str,
+        storage_path: &str,
+        hash: &str,
+        size: i64,
+    ) -> DbResult<()> {
+        let model = toolchain_target::ActiveModel {
+            id: ActiveValue::NotSet,
+            toolchain_fk: Set(toolchain_id),
+            target: Set(target.to_string()),
+            storage_path: Set(storage_path.to_string()),
+            hash: Set(hash.to_string()),
+            size: Set(size),
+        };
+
+        model.insert(&self.db_con).await?;
+        Ok(())
+    }
+
+    async fn get_toolchain_by_channel(
+        &self,
+        channel: &str,
+    ) -> DbResult<Option<ToolchainWithTargets>> {
+        let tc = toolchain::Entity::find()
+            .filter(toolchain::Column::Channel.eq(channel))
+            .one(&self.db_con)
+            .await?;
+
+        match tc {
+            Some(tc) => {
+                let targets = toolchain_target::Entity::find()
+                    .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
+                    .all(&self.db_con)
+                    .await?;
+
+                Ok(Some(ToolchainWithTargets {
+                    id: tc.id,
+                    name: tc.name,
+                    version: tc.version,
+                    date: tc.date,
+                    channel: tc.channel,
+                    created: tc.created,
+                    targets: targets
+                        .into_iter()
+                        .map(|t| ToolchainTargetInfo {
+                            id: t.id,
+                            target: t.target,
+                            storage_path: t.storage_path,
+                            hash: t.hash,
+                            size: t.size,
+                        })
+                        .collect(),
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn get_toolchain_by_version(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> DbResult<Option<ToolchainWithTargets>> {
+        let tc = toolchain::Entity::find()
+            .filter(toolchain::Column::Name.eq(name))
+            .filter(toolchain::Column::Version.eq(version))
+            .one(&self.db_con)
+            .await?;
+
+        match tc {
+            Some(tc) => {
+                let targets = toolchain_target::Entity::find()
+                    .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
+                    .all(&self.db_con)
+                    .await?;
+
+                Ok(Some(ToolchainWithTargets {
+                    id: tc.id,
+                    name: tc.name,
+                    version: tc.version,
+                    date: tc.date,
+                    channel: tc.channel,
+                    created: tc.created,
+                    targets: targets
+                        .into_iter()
+                        .map(|t| ToolchainTargetInfo {
+                            id: t.id,
+                            target: t.target,
+                            storage_path: t.storage_path,
+                            hash: t.hash,
+                            size: t.size,
+                        })
+                        .collect(),
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn list_toolchains(&self) -> DbResult<Vec<ToolchainWithTargets>> {
+        let toolchains = toolchain::Entity::find()
+            .order_by_desc(toolchain::Column::Created)
+            .all(&self.db_con)
+            .await?;
+
+        let mut result = Vec::with_capacity(toolchains.len());
+
+        for tc in toolchains {
+            let targets = toolchain_target::Entity::find()
+                .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
+                .all(&self.db_con)
+                .await?;
+
+            result.push(ToolchainWithTargets {
+                id: tc.id,
+                name: tc.name,
+                version: tc.version,
+                date: tc.date,
+                channel: tc.channel,
+                created: tc.created,
+                targets: targets
+                    .into_iter()
+                    .map(|t| ToolchainTargetInfo {
+                        id: t.id,
+                        target: t.target,
+                        storage_path: t.storage_path,
+                        hash: t.hash,
+                        size: t.size,
+                    })
+                    .collect(),
+            });
+        }
+
+        Ok(result)
+    }
+
+    async fn delete_toolchain(&self, name: &str, version: &str) -> DbResult<()> {
+        toolchain::Entity::delete_many()
+            .filter(toolchain::Column::Name.eq(name))
+            .filter(toolchain::Column::Version.eq(version))
+            .exec(&self.db_con)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn delete_toolchain_target(
+        &self,
+        name: &str,
+        version: &str,
+        target: &str,
+    ) -> DbResult<()> {
+        // First get the toolchain ID
+        let tc = toolchain::Entity::find()
+            .filter(toolchain::Column::Name.eq(name))
+            .filter(toolchain::Column::Version.eq(version))
+            .one(&self.db_con)
+            .await?;
+
+        if let Some(tc) = tc {
+            toolchain_target::Entity::delete_many()
+                .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
+                .filter(toolchain_target::Column::Target.eq(target))
+                .exec(&self.db_con)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn set_channel(&self, channel: &str, name: &str, version: &str) -> DbResult<()> {
+        // First, clear the channel from any other toolchain that has it
+        let toolchains_with_channel = toolchain::Entity::find()
+            .filter(toolchain::Column::Channel.eq(channel))
+            .all(&self.db_con)
+            .await?;
+
+        for tc in toolchains_with_channel {
+            let mut model: toolchain::ActiveModel = tc.into();
+            model.channel = Set(None);
+            model.update(&self.db_con).await?;
+        }
+
+        // Then set the channel on the target toolchain
+        let tc = toolchain::Entity::find()
+            .filter(toolchain::Column::Name.eq(name))
+            .filter(toolchain::Column::Version.eq(version))
+            .one(&self.db_con)
+            .await?;
+
+        if let Some(tc) = tc {
+            let mut model: toolchain::ActiveModel = tc.into();
+            model.channel = Set(Some(channel.to_string()));
+            model.update(&self.db_con).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn get_channels(&self) -> DbResult<Vec<ChannelInfo>> {
+        let toolchains = toolchain::Entity::find()
+            .filter(toolchain::Column::Channel.is_not_null())
+            .all(&self.db_con)
+            .await?;
+
+        Ok(toolchains
+            .into_iter()
+            .filter_map(|tc| {
+                tc.channel.map(|channel| ChannelInfo {
+                    name: channel,
+                    version: tc.version,
+                    date: tc.date,
+                })
+            })
+            .collect())
     }
 }

@@ -20,7 +20,9 @@ pub use crate_summary::CrateSummary;
 pub use doc_queue_entry::DocQueueEntry;
 pub use group::Group;
 pub use krate::Crate;
-pub use provider::{DbProvider, OAuth2StateData, mock};
+pub use provider::{
+    ChannelInfo, DbProvider, OAuth2StateData, ToolchainTargetInfo, ToolchainWithTargets, mock,
+};
 pub use user::User;
 
 pub use crate::database::{Database, test_utils};

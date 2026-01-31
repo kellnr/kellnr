@@ -55,3 +55,13 @@ export type { DocQueueItem } from './doc_queue_item'
 export type { VersionInfo } from './version_info'
 export type { Owner } from './owner'
 export type { OAuth2Config } from './oauth2'
+
+// Toolchain types
+export type {
+  Toolchain,
+  ToolchainTarget,
+  ChannelInfo,
+  SetChannelRequest,
+  ToolchainResponse,
+  ToolchainUploadParams,
+} from './toolchain'

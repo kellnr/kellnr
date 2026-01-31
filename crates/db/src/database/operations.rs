@@ -2,7 +2,7 @@
 //!
 //! Standalone async functions that take a database connection and perform
 //! specific operations. Used by the Database impl to keep the main module
-//! focused on the DbProvider trait implementation.
+//! focused on the `DbProvider` trait implementation.
 
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::normalized_name::NormalizedName;
@@ -21,7 +21,6 @@ use crate::error::DbError;
 use crate::password::{hash_pwd, hash_token};
 use crate::provider::DbResult;
 
-/// Get the description for a crate dependency, checking crates.io cache first.
 pub async fn get_desc_for_crate_dep<C: ConnectionTrait>(
     db_con: &C,
     name: &str,
@@ -46,7 +45,6 @@ pub async fn get_desc_for_crate_dep<C: ConnectionTrait>(
     Ok(desc)
 }
 
-/// Insert admin credentials during initial database setup.
 pub async fn insert_admin_credentials<C: ConnectionTrait>(
     db_con: &C,
     con_string: &ConString,
@@ -77,7 +75,6 @@ pub async fn insert_admin_credentials<C: ConnectionTrait>(
     Ok(())
 }
 
-/// Check if no users exist in the database (for initial setup).
 pub async fn no_user_exists<C: ConnectionTrait>(db_con: &C) -> DbResult<bool> {
     let id = user::Entity::find()
         .one(db_con)
@@ -87,7 +84,6 @@ pub async fn no_user_exists<C: ConnectionTrait>(db_con: &C) -> DbResult<bool> {
     Ok(id.is_none())
 }
 
-/// Add an owner to a crate if the relationship doesn't already exist.
 pub async fn add_owner_if_not_exists<C: ConnectionTrait>(
     db_con: &C,
     owner_name: &str,
@@ -118,7 +114,6 @@ pub async fn add_owner_if_not_exists<C: ConnectionTrait>(
     Ok(())
 }
 
-/// Add crate index entry for a published crate.
 pub async fn add_crate_index<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
@@ -156,7 +151,6 @@ pub async fn add_crate_index<C: ConnectionTrait>(
     Ok(())
 }
 
-/// Add crate metadata entry for a published crate version.
 pub async fn add_crate_metadata<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
@@ -180,7 +174,6 @@ pub async fn add_crate_metadata<C: ConnectionTrait>(
     Ok(())
 }
 
-/// Update the categories for a crate, replacing any existing categories.
 pub async fn update_crate_categories<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
@@ -226,7 +219,6 @@ pub async fn update_crate_categories<C: ConnectionTrait>(
     Ok(())
 }
 
-/// Update the keywords for a crate, replacing any existing keywords.
 pub async fn update_crate_keywords<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
@@ -272,7 +264,6 @@ pub async fn update_crate_keywords<C: ConnectionTrait>(
     Ok(())
 }
 
-/// Update the authors for a crate, replacing any existing authors.
 pub async fn update_crate_authors<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
@@ -318,7 +309,6 @@ pub async fn update_crate_authors<C: ConnectionTrait>(
     Ok(())
 }
 
-/// Compute the ETag for a crate based on its index data.
 pub async fn compute_etag<C: ConnectionTrait>(
     db_con: &C,
     crate_name: &str,
@@ -335,14 +325,12 @@ pub async fn compute_etag<C: ConnectionTrait>(
     Ok(sha256::digest(data))
 }
 
-/// Serialize index metadata to bytes.
 pub fn index_metadata_to_bytes(index_metadata: &[IndexMetadata]) -> DbResult<Vec<u8>> {
     IndexMetadata::serialize_indices(index_metadata)
         .map(String::into_bytes)
         .map_err(|e| DbError::FailedToConvertToJson(format!("{e}")))
 }
 
-/// Convert crate index entity models to IndexMetadata.
 pub fn crate_index_model_to_index_metadata(
     crate_name: &str,
     crate_indices: Vec<crate_index::Model>,
@@ -381,7 +369,6 @@ pub fn crate_index_model_to_index_metadata(
     Ok(index_metadata)
 }
 
-/// Convert crates.io index entity models to IndexMetadata.
 pub fn cratesio_index_model_to_index_metadata(
     crate_name: &NormalizedName,
     crate_indices: Vec<cratesio_index::Model>,
@@ -427,7 +414,6 @@ pub fn cratesio_index_model_to_index_metadata(
     Ok(index_metadata)
 }
 
-/// Update the ETag for a crate after changes to its index.
 pub async fn update_etag<C: ConnectionTrait>(
     db_con: &C,
     crate_name: &str,
@@ -445,7 +431,6 @@ pub async fn update_etag<C: ConnectionTrait>(
     Ok(())
 }
 
-/// Get the maximum version for a crate by its ID.
 pub async fn get_max_version_from_id<C: ConnectionTrait>(
     db_con: &C,
     crate_id: i64,

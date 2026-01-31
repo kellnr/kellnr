@@ -20,7 +20,7 @@ use openidconnect::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use url::Url;
 
 /// Type alias for the configured OIDC client after provider discovery
@@ -159,11 +159,6 @@ impl OAuth2Handler {
                 .await
                 .map_err(|e| OAuth2Error::DiscoveryError(e.to_string()))?;
 
-        debug!(
-            "OIDC discovery successful, authorization endpoint: {:?}",
-            provider_metadata.authorization_endpoint()
-        );
-
         let client_id = ClientId::new(
             settings
                 .client_id
@@ -213,11 +208,6 @@ impl OAuth2Handler {
 
         let (auth_url, csrf_state, nonce) = auth_request.url();
 
-        debug!(
-            "Generated authorization URL for state: {}",
-            csrf_state.secret()
-        );
-
         AuthRequest {
             auth_url,
             state: csrf_state.secret().clone(),
@@ -244,8 +234,6 @@ impl OAuth2Handler {
         let code = AuthorizationCode::new(code.to_string());
         let verifier = PkceCodeVerifier::new(pkce_verifier.to_string());
 
-        debug!("Exchanging authorization code for tokens");
-
         let token_request = self
             .client
             .exchange_code(code)
@@ -256,8 +244,6 @@ impl OAuth2Handler {
             .request_async(&self.http_client)
             .await
             .map_err(|e| OAuth2Error::TokenExchangeError(e.to_string()))?;
-
-        debug!("Successfully exchanged code for tokens");
 
         // Get and validate the ID token
         let id_token = token_response
@@ -271,8 +257,6 @@ impl OAuth2Handler {
             .claims(&verifier, &nonce)
             .map_err(|e| OAuth2Error::TokenVerificationError(e.to_string()))?
             .clone();
-
-        debug!("ID token validated, subject: {}", claims.subject().as_str());
 
         // Also extract raw payload for additional claims
         let raw_payload = extract_jwt_payload(id_token.to_string().as_str())
@@ -315,11 +299,6 @@ impl OAuth2Handler {
             &result.raw_payload,
             self.settings.read_only_group_claim.as_deref(),
             self.settings.read_only_group_value.as_deref(),
-        );
-
-        debug!(
-            "Extracted user info - subject: {}, email: {:?}, username: {:?}, groups: {:?}, admin: {}, read_only: {}",
-            subject, email, preferred_username, groups, is_admin, is_read_only
         );
 
         UserInfo {

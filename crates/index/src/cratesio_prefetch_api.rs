@@ -19,7 +19,7 @@ use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use moka::future::Cache;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::Deserialize;
-use tracing::{debug, error, trace, warn};
+use tracing::{error, trace, warn};
 
 use super::config_json::ConfigJson;
 
@@ -505,10 +505,7 @@ async fn fetch_cratesio_prefetch(
             match r.status() {
                 status @ (StatusCode::NOT_FOUND
                 | StatusCode::GONE
-                | StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS) => {
-                    debug!("Crate: '{name}' not available on crates.io ({status})");
-                    Err(status)
-                }
+                | StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS) => Err(status),
 
                 StatusCode::OK => {
                     let headers = r.headers();
