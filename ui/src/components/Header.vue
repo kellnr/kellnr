@@ -7,7 +7,9 @@
 
       <!-- Logo -->
       <v-app-bar-title class="logo-title">
-        <span class="logo-text">&lt;'kellnr&gt;</span>
+        <span class="logo-text">
+          <span class="logo-bracket">&lt;</span><span class="logo-lifetime">'</span><span class="logo-name">kellnr</span><span class="logo-bracket">&gt;</span>
+        </span>
       </v-app-bar-title>
 
       <!-- Desktop Navigation Links -->
@@ -51,7 +53,9 @@
     <!-- Mobile Navigation Drawer -->
     <v-navigation-drawer v-model="drawer" temporary location="left" class="mobile-drawer">
       <div class="drawer-header">
-        <span class="drawer-logo">&lt;'kellnr&gt;</span>
+        <span class="drawer-logo">
+          <span class="logo-bracket">&lt;</span><span class="logo-lifetime">'</span><span class="logo-name">kellnr</span><span class="logo-bracket">&gt;</span>
+        </span>
       </div>
       <v-divider />
       <v-list nav class="drawer-list">
@@ -162,8 +166,10 @@ function showNotification(message: string, isError: boolean = false) {
 
 <style scoped>
 .app-header {
-  background: rgb(var(--v-theme-surface)) !important;
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
+  background: rgba(var(--v-theme-surface), 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.5);
 }
 
 .nav-toggle {
@@ -179,8 +185,27 @@ function showNotification(message: string, isError: boolean = false) {
 .logo-text {
   font-size: 1.5rem;
   font-weight: 700;
-  color: rgb(var(--v-theme-primary));
   letter-spacing: -0.5px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  display: inline-flex;
+  align-items: center;
+}
+
+.logo-bracket {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.logo-lifetime {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.logo-name {
+  color: rgb(var(--v-theme-primary));
+  font-weight: 700;
 }
 
 .nav-links {
@@ -231,7 +256,26 @@ function showNotification(message: string, isError: boolean = false) {
 .drawer-logo {
   font-size: 1.25rem;
   font-weight: 700;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  display: inline-flex;
+  align-items: center;
+}
+
+.drawer-logo .logo-bracket {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.drawer-logo .logo-lifetime {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.drawer-logo .logo-name {
   color: rgb(var(--v-theme-primary));
+  font-weight: 700;
 }
 
 .drawer-list {

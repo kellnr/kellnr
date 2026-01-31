@@ -217,7 +217,7 @@ fn init_tracing(settings: &Settings) {
             "{},mio::poll=error,want=error,sqlx::query=error,sqlx::postgres=warn,\
                 sea_orm_migration=warn,cargo=error,globset=warn,\
                 hyper=warn,_=warn,reqwest=warn,tower_http={},\
-                object_store::aws::builder=error",
+                object_store::aws::builder=error,h2=error",
             settings.log.level, settings.log.level_web_server
         ));
 

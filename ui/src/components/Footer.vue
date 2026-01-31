@@ -4,7 +4,9 @@
       <!-- Brand and Version -->
       <div class="brand-section">
         <v-icon icon="mdi-package-variant-closed" class="brand-icon" size="small" />
-        <span class="brand-name">kellnr</span>
+        <span class="brand-name">
+          <span class="brand-bracket">&lt;</span><span class="brand-lifetime">'</span><span class="brand-kellnr">k</span><span class="brand-bracket">&gt;</span>
+        </span>
         <span class="version-text">v{{ version }}</span>
       </div>
 
@@ -63,8 +65,10 @@ onMounted(async () => {
 
 <style scoped>
 .footer-container {
-  background: rgb(var(--v-theme-surface)) !important;
-  border-top: 1px solid rgb(var(--v-theme-outline));
+  background: rgba(var(--v-theme-surface), 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(var(--v-theme-outline), 0.5);
   z-index: 5;
   min-height: 48px !important;
   max-height: 48px;
@@ -92,7 +96,26 @@ onMounted(async () => {
 .brand-name {
   font-size: 0.875rem;
   font-weight: 600;
-  color: rgb(var(--v-theme-on-surface));
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-bracket {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.brand-lifetime {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.brand-kellnr {
+  color: rgb(var(--v-theme-primary));
+  font-weight: 700;
 }
 
 .version-text {
