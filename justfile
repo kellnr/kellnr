@@ -73,12 +73,12 @@ fmt-check:
     cargo fmt --all -- --check
 
 [unix]
-run: npm-build build
-    cargo run -- start
+run *ARGS='start': npm-build build
+    cargo run -- {{ARGS}}
 
 [windows]
-run: npm-build build
-    {{ setup-msvc }} cargo run --no-default-features -- start
+run *ARGS='start': npm-build build
+    {{ setup-msvc }} cargo run --no-default-features -- {{ARGS}}
 
 [unix]
 test: npm-build
