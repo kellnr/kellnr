@@ -10,10 +10,22 @@ use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
 use kellnr_settings::{Settings, compile_time_config};
 use tracing::error;
+use utoipa::ToSchema;
 
 use crate::error::RouteError;
 use crate::session::{AdminUser, MaybeUser};
 
+/// Get Kellnr settings (admin only)
+#[utoipa::path(
+    get,
+    path = "/settings",
+    tag = "ui",
+    responses(
+        (status = 200, description = "Kellnr settings"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 #[allow(clippy::unused_async)] // part of the router
 pub async fn settings(
     _user: AdminUser,
@@ -23,11 +35,20 @@ pub async fn settings(
     Ok(Json(s))
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct KellnrVersion {
     pub version: String,
 }
 
+/// Get Kellnr version
+#[utoipa::path(
+    get,
+    path = "/version",
+    tag = "ui",
+    responses(
+        (status = 200, description = "Kellnr version", body = KellnrVersion)
+    )
+)]
 #[allow(clippy::unused_async)] // part of the router
 pub async fn kellnr_version() -> Json<KellnrVersion> {
     Json(KellnrVersion {
@@ -35,20 +56,30 @@ pub async fn kellnr_version() -> Json<KellnrVersion> {
     })
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct CratesParams {
     page: Option<u64>,
     page_size: Option<u64>,
     cache: Option<bool>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct Pagination {
     crates: Vec<CrateOverview>,
     page_size: u64,
     page: u64,
 }
 
+/// Get paginated list of crates
+#[utoipa::path(
+    get,
+    path = "/crates",
+    tag = "ui",
+    params(CratesParams),
+    responses(
+        (status = 200, description = "Paginated crate list", body = Pagination)
+    )
+)]
 pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
     let page = params.page.unwrap_or(0);
@@ -65,12 +96,22 @@ pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> J
     })
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct SearchParams {
     name: OriginalName,
     cache: Option<bool>,
 }
 
+/// Search for crates by name
+#[utoipa::path(
+    get,
+    path = "/search",
+    tag = "ui",
+    params(SearchParams),
+    responses(
+        (status = 200, description = "Search results", body = Pagination)
+    )
+)]
 pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
     let crates = db
         .search_in_crate_name(&params.name, params.cache.unwrap_or(false))
@@ -83,11 +124,22 @@ pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> J
     })
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct CrateDataParams {
     name: OriginalName,
 }
 
+/// Get detailed crate data
+#[utoipa::path(
+    get,
+    path = "/crate_data",
+    tag = "ui",
+    params(CrateDataParams),
+    responses(
+        (status = 200, description = "Crate details", body = CrateData),
+        (status = 404, description = "Crate not found")
+    )
+)]
 pub async fn crate_data(
     Query(params): Query<CrateDataParams>,
     State(db): DbState,
@@ -102,11 +154,22 @@ pub async fn crate_data(
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct CratesIoDataParams {
     name: OriginalName,
 }
 
+/// Get crate data from crates.io
+#[utoipa::path(
+    get,
+    path = "/cratesio_data",
+    tag = "ui",
+    params(CratesIoDataParams),
+    responses(
+        (status = 200, description = "Crates.io crate data", body = String),
+        (status = 404, description = "Crate not found")
+    )
+)]
 pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<String, StatusCode> {
     let url = format!("https://crates.io/api/v1/crates/{}", params.name);
 
@@ -142,7 +205,7 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct DeleteCrateVersionParams {
     name: OriginalName,
     version: Version,
@@ -174,7 +237,7 @@ pub async fn delete_version(
     Ok(())
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct DeleteCrateParams {
     name: OriginalName,
 }
@@ -210,6 +273,21 @@ pub async fn delete_crate(
 }
 
 /// Delete a specific version of a crate (path parameter version)
+#[utoipa::path(
+    delete,
+    path = "/crates/{name}/{version}",
+    tag = "ui",
+    params(
+        ("name" = String, Path, description = "Crate name"),
+        ("version" = String, Path, description = "Version to delete")
+    ),
+    responses(
+        (status = 200, description = "Crate version deleted"),
+        (status = 400, description = "Invalid parameters"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete_crate_version(
     Path((name, version)): Path<(String, String)>,
     _user: AdminUser,
@@ -239,6 +317,20 @@ pub async fn delete_crate_version(
 }
 
 /// Delete all versions of a crate (path parameter version)
+#[utoipa::path(
+    delete,
+    path = "/crates/{name}",
+    tag = "ui",
+    params(
+        ("name" = String, Path, description = "Crate name")
+    ),
+    responses(
+        (status = 200, description = "All crate versions deleted"),
+        (status = 400, description = "Invalid parameters"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete_crate_all(
     Path(name): Path<String>,
     _user: AdminUser,
@@ -270,7 +362,7 @@ pub async fn delete_crate_all(
     Ok(())
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
 pub struct Statistic {
     pub num_crates: u32,
     pub num_crate_versions: u32,
@@ -283,13 +375,22 @@ pub struct Statistic {
     pub proxy_enabled: bool,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
 pub struct TopCrates {
     pub first: (String, u64),
     pub second: (String, u64),
     pub third: (String, u64),
 }
 
+/// Get registry statistics
+#[utoipa::path(
+    get,
+    path = "/statistics",
+    tag = "ui",
+    responses(
+        (status = 200, description = "Registry statistics", body = Statistic)
+    )
+)]
 pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Json<Statistic> {
     fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
         if tops.len() > i {
@@ -331,12 +432,31 @@ pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Js
     })
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+/// Parameters for triggering a documentation build
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct BuildParams {
+    /// Package name
     package: OriginalName,
+    /// Package version
     version: Version,
 }
 
+/// Trigger documentation build for a crate
+///
+/// Add a crate version to the documentation build queue.
+/// Requires ownership of the crate or admin access.
+#[utoipa::path(
+    post,
+    path = "/builds",
+    tag = "docs",
+    params(BuildParams),
+    responses(
+        (status = 200, description = "Build queued successfully"),
+        (status = 400, description = "Crate or version does not exist"),
+        (status = 401, description = "Not authorized or not an owner")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn build_rustdoc(
     Query(params): Query<BuildParams>,
     State(state): AppState,

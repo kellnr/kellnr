@@ -1,14 +1,20 @@
 use kellnr_db::DocQueueEntry;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+/// Response containing documentation build queue
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, ToSchema)]
 pub struct DocQueueResponse {
+    /// List of crates in the documentation build queue
     pub(crate) queue: Vec<DocQueueEntryResponse>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+/// Entry in the documentation build queue
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, ToSchema)]
 pub struct DocQueueEntryResponse {
+    /// Crate name
     pub(crate) name: String,
+    /// Crate version
     pub(crate) version: String,
 }
 

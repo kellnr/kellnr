@@ -74,6 +74,25 @@ pub async fn check_download_auth(
     }
 }
 
+/// Remove owners from a crate
+///
+/// Removes one or more owners from a crate. Cannot remove the last owner
+/// unless `allow_ownerless_crates` is enabled.
+#[utoipa::path(
+    delete,
+    path = "/{crate_name}/owners",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name")
+    ),
+    request_body = crate_user::CrateUserRequest,
+    responses(
+        (status = 200, description = "Owners removed", body = crate_user::CrateUserResponse),
+        (status = 403, description = "Not an owner"),
+        (status = 409, description = "Cannot remove last owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn remove_owner(
     user: maybe_user::MaybeUser,
     state: AppState,
@@ -109,6 +128,24 @@ pub async fn remove_owner(
     )))
 }
 
+/// Remove a single owner from a crate
+///
+/// Removes a single owner from a crate by username.
+#[utoipa::path(
+    delete,
+    path = "/{crate_name}/owners/{user}",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name"),
+        ("user" = String, Path, description = "Username to remove")
+    ),
+    responses(
+        (status = 200, description = "Owner removed", body = crate_user::CrateUserResponse),
+        (status = 403, description = "Not an owner"),
+        (status = 409, description = "Cannot remove last owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn remove_owner_single(
     user: maybe_user::MaybeUser,
     state: AppState,
@@ -137,6 +174,23 @@ pub async fn remove_owner_single(
     )))
 }
 
+/// Remove a user from crate access list
+///
+/// Removes a user's access to a restricted crate.
+#[utoipa::path(
+    delete,
+    path = "/{crate_name}/crate_users/{user}",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name"),
+        ("user" = String, Path, description = "Username to remove")
+    ),
+    responses(
+        (status = 200, description = "User removed", body = crate_user::CrateUserResponse),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn remove_crate_user(
     user: maybe_user::MaybeUser,
     State(db): DbState,
@@ -156,6 +210,23 @@ pub async fn remove_crate_user(
     )))
 }
 
+/// Remove a group from crate access list
+///
+/// Removes a group's access to a restricted crate.
+#[utoipa::path(
+    delete,
+    path = "/{crate_name}/crate_groups/{group}",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name"),
+        ("group" = String, Path, description = "Group name to remove")
+    ),
+    responses(
+        (status = 200, description = "Group removed", body = crate_group::CrateGroupResponse),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn remove_crate_group(
     user: maybe_user::MaybeUser,
     State(db): DbState,
@@ -170,6 +241,23 @@ pub async fn remove_crate_group(
     )))
 }
 
+/// Add owners to a crate
+///
+/// Adds one or more owners to a crate.
+#[utoipa::path(
+    put,
+    path = "/{crate_name}/owners",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name")
+    ),
+    request_body = crate_user::CrateUserRequest,
+    responses(
+        (status = 200, description = "Owners added", body = crate_user::CrateUserResponse),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn add_owner(
     user: maybe_user::MaybeUser,
     State(db): DbState,
@@ -193,6 +281,23 @@ pub async fn add_owner(
     )))
 }
 
+/// Add a single owner to a crate
+///
+/// Adds a single owner to a crate by username.
+#[utoipa::path(
+    put,
+    path = "/{crate_name}/owners/{user}",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name"),
+        ("user" = String, Path, description = "Username to add")
+    ),
+    responses(
+        (status = 200, description = "Owner added", body = crate_user::CrateUserResponse),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn add_owner_single(
     user: maybe_user::MaybeUser,
     State(db): DbState,
@@ -210,6 +315,21 @@ pub async fn add_owner_single(
     )))
 }
 
+/// List crate owners
+///
+/// Returns the list of owners for a crate.
+#[utoipa::path(
+    get,
+    path = "/{crate_name}/owners",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name")
+    ),
+    responses(
+        (status = 200, description = "List of owners", body = crate_user::CrateUserList)
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn list_owners(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
@@ -230,6 +350,23 @@ pub async fn list_owners(
     Ok(Json(crate_user::CrateUserList::from(owners)))
 }
 
+/// Add a user to crate access list
+///
+/// Adds a user to the access list of a restricted crate.
+#[utoipa::path(
+    put,
+    path = "/{crate_name}/crate_users/{user}",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name"),
+        ("user" = String, Path, description = "Username to add")
+    ),
+    responses(
+        (status = 200, description = "User added", body = crate_user::CrateUserResponse),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn add_crate_user(
     user: maybe_user::MaybeUser,
     State(db): DbState,
@@ -252,6 +389,22 @@ pub async fn add_crate_user(
     )))
 }
 
+/// List crate users
+///
+/// Returns the list of users with access to a restricted crate.
+#[utoipa::path(
+    get,
+    path = "/{crate_name}/crate_users",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name")
+    ),
+    responses(
+        (status = 200, description = "List of users", body = crate_user::CrateUserList),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn list_crate_users(
     user: maybe_user::MaybeUser,
     Path(crate_name): Path<OriginalName>,
@@ -274,6 +427,23 @@ pub async fn list_crate_users(
     Ok(Json(crate_user::CrateUserList::from(users)))
 }
 
+/// Add a group to crate access list
+///
+/// Adds a group to the access list of a restricted crate.
+#[utoipa::path(
+    put,
+    path = "/{crate_name}/crate_groups/{group}",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name"),
+        ("group" = String, Path, description = "Group name to add")
+    ),
+    responses(
+        (status = 200, description = "Group added", body = crate_group::CrateGroupResponse),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn add_crate_group(
     user: maybe_user::MaybeUser,
     State(db): DbState,
@@ -291,6 +461,22 @@ pub async fn add_crate_group(
     )))
 }
 
+/// List crate groups
+///
+/// Returns the list of groups with access to a restricted crate.
+#[utoipa::path(
+    get,
+    path = "/{crate_name}/crate_groups",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name")
+    ),
+    responses(
+        (status = 200, description = "List of groups", body = crate_group::CrateGroupList),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn list_crate_groups(
     user: maybe_user::MaybeUser,
     Path(crate_name): Path<OriginalName>,
@@ -312,6 +498,21 @@ pub async fn list_crate_groups(
     Ok(Json(crate_group::CrateGroupList::from(groups)))
 }
 
+/// List crate versions
+///
+/// Returns all available versions of a crate.
+#[utoipa::path(
+    get,
+    path = "/{crate_name}/crate_versions",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name")
+    ),
+    responses(
+        (status = 200, description = "List of versions", body = crate_version::CrateVersionList)
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn list_crate_versions(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
@@ -330,6 +531,22 @@ pub async fn list_crate_versions(
     Ok(Json(crate_version::CrateVersionList::from(versions)))
 }
 
+/// Search crates in Kellnr registry
+///
+/// Searches for crates by name in the Kellnr registry.
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "crates",
+    params(
+        ("q" = String, Query, description = "Search query"),
+        ("per_page" = Option<u32>, Query, description = "Results per page")
+    ),
+    responses(
+        (status = 200, description = "Search results", body = SearchResult)
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<SearchResult>> {
     let crates = db
         .search_in_crate_name(&params.q, false)
@@ -353,6 +570,24 @@ pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<
     }))
 }
 
+/// Download a crate from Kellnr registry
+///
+/// Downloads a specific version of a crate from the Kellnr registry.
+#[utoipa::path(
+    get,
+    path = "/dl/{package}/{version}/download",
+    tag = "crates",
+    params(
+        ("package" = String, Path, description = "Package name"),
+        ("version" = String, Path, description = "Package version")
+    ),
+    responses(
+        (status = 200, description = "Crate archive", content_type = "application/octet-stream"),
+        (status = 404, description = "Crate not found"),
+        (status = 401, description = "Unauthorized for restricted crate")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn download(
     State(state): AppState,
     token: token::OptionToken,
@@ -375,6 +610,21 @@ pub async fn download(
     }
 }
 
+/// Create an empty crate placeholder
+///
+/// Creates an empty crate placeholder for later publishing. Admin only.
+#[utoipa::path(
+    put,
+    path = "/new_empty",
+    tag = "crates",
+    request_body = EmptyCrateData,
+    responses(
+        (status = 200, description = "Empty crate created", body = EmptyCrateSuccess),
+        (status = 400, description = "Crate already exists"),
+        (status = 401, description = "Unauthorized - admin only")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn add_empty_crate(
     State(state): AppState,
     token: token::Token,
@@ -403,6 +653,20 @@ pub async fn add_empty_crate(
     Ok(Json(EmptyCrateSuccess::new()))
 }
 
+/// Publish a new crate version
+///
+/// Publishes a new version of a crate to the Kellnr registry.
+#[utoipa::path(
+    put,
+    path = "/new",
+    tag = "crates",
+    responses(
+        (status = 200, description = "Crate published", body = PubDataSuccess),
+        (status = 400, description = "Invalid crate data or version exists"),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn publish(
     State(state): AppState,
     token: token::Token,
@@ -519,6 +783,23 @@ pub async fn publish(
     Ok(Json(PubDataSuccess::new()))
 }
 
+/// Yank a crate version
+///
+/// Marks a crate version as yanked, preventing new downloads.
+#[utoipa::path(
+    delete,
+    path = "/{crate_name}/{version}/yank",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name"),
+        ("version" = String, Path, description = "Version to yank")
+    ),
+    responses(
+        (status = 200, description = "Version yanked", body = YankSuccess),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn yank(
     Path((crate_name, version)): Path<(OriginalName, Version)>,
     token: token::Token,
@@ -547,6 +828,23 @@ pub async fn yank(
     Ok(Json(YankSuccess::new()))
 }
 
+/// Unyank a crate version
+///
+/// Removes the yanked status from a crate version, allowing downloads again.
+#[utoipa::path(
+    put,
+    path = "/{crate_name}/{version}/unyank",
+    tag = "crates",
+    params(
+        ("crate_name" = String, Path, description = "Crate name"),
+        ("version" = String, Path, description = "Version to unyank")
+    ),
+    responses(
+        (status = 200, description = "Version unyanked", body = YankSuccess),
+        (status = 403, description = "Not an owner")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn unyank(
     Path((crate_name, version)): Path<(OriginalName, Version)>,
     token: token::Token,

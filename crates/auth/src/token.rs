@@ -17,6 +17,7 @@ use rand::{Rng, rng};
 use serde::Deserialize;
 use tokio::time::sleep;
 use tracing::warn;
+use utoipa::ToSchema;
 
 #[derive(Debug)]
 pub struct Token {
@@ -212,7 +213,7 @@ impl FromRequestParts<AppStateData> for OptionToken {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct NewTokenReqData {
     pub name: String,
 }

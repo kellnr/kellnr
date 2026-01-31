@@ -7,6 +7,11 @@ use kellnr_auth::oauth2::OAuth2Handler;
 use kellnr_embedded_resources::embedded_static_handler;
 use kellnr_web_ui::session;
 use tower_http::services::ServeDir;
+use utoipa::OpenApi;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_swagger_ui::SwaggerUi;
+
+use crate::openapi::ApiDoc;
 
 mod auth_routes;
 mod crate_access_routes;
@@ -34,33 +39,30 @@ pub fn create_router(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
 
-    let mut router = Router::new()
-        .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
-        .nest("/api/v1/auth", auth_routes::create_routes())
-        .nest("/api/v1/users", user_routes::create_routes())
-        .nest("/api/v1/groups", group_routes::create_routes())
-        .nest("/api/v1/acl", crate_access_routes::create_routes())
-        .nest("/api/v1/docs", docs_routes::create_ui_routes(state.clone()))
-        .nest(
-            "/api/v1/docs",
-            docs_routes::create_manual_routes(max_docs_size),
-        )
-        .nest(
-            "/api/v1/crates",
-            kellnr_api_routes::create_routes(state.clone(), max_crate_size),
-        )
-        .nest(
-            "/api/v1/cratesio",
-            cratesio_api_routes::create_routes(state.clone()),
-        )
-        .nest("/api/v1/webhooks", webhook_routes::create_routes())
-        .nest("/api/v1/oauth2", oauth2_routes::create_routes())
-        .nest("/api/v1", health_routes::create_routes())
-        .nest_service("/docs", docs_service);
+    // Build API routes using OpenApiRouter with the base OpenAPI document
+    let mut api_router: OpenApiRouter<AppStateData> =
+        OpenApiRouter::with_openapi(ApiDoc::openapi())
+            .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
+            .nest("/api/v1/auth", auth_routes::create_routes())
+            .nest("/api/v1/users", user_routes::create_routes())
+            .nest("/api/v1/groups", group_routes::create_routes())
+            .nest("/api/v1/acl", crate_access_routes::create_routes())
+            .nest("/api/v1/docs", docs_routes::create_ui_routes(state.clone()))
+            .nest("/api/v1/webhooks", webhook_routes::create_routes())
+            .nest("/api/v1/oauth2", oauth2_routes::create_routes())
+            .nest(
+                "/api/v1/cratesio",
+                cratesio_api_routes::create_routes(state.clone()),
+            )
+            .nest(
+                "/api/v1/crates",
+                kellnr_api_routes::create_routes(state.clone(), max_crate_size),
+            )
+            .nest("/api/v1", health_routes::create_routes());
 
     // Conditionally add toolchain routes if enabled
     if state.settings.toolchain.enabled {
-        router = router
+        api_router = api_router
             .nest(
                 "/api/v1/toolchains",
                 toolchain_routes::create_api_routes(state.clone(), max_toolchain_size),
@@ -70,6 +72,19 @@ pub fn create_router(
                 toolchain_routes::create_dist_routes(state.clone()),
             );
     }
+
+    // Split into router and OpenAPI spec
+    let (router, api): (Router<AppStateData>, _) = api_router.split_for_parts();
+
+    // Add routes that don't have OpenAPI annotations and static services
+    let router = router
+        .nest(
+            "/api/v1/docs",
+            docs_routes::create_manual_routes(max_docs_size),
+        )
+        .nest_service("/docs", docs_service)
+        // Serve Swagger UI at /api/docs with OpenAPI spec at /api/openapi.json
+        .merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", api));
 
     router
         // Always serve the UI from the embedded directory (single-binary deploy).

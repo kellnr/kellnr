@@ -4,8 +4,10 @@ use std::fmt;
 use std::ops::Deref;
 
 use thiserror::Error;
+use utoipa::ToSchema;
 
-#[derive(Debug, Eq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
+#[schema(value_type = String)]
 pub struct Version(String);
 
 #[derive(Debug, Eq, PartialEq, Error)]

@@ -2,10 +2,10 @@
 //!
 //! These routes handle OAuth2/OpenID Connect authentication flow.
 
-use axum::Router;
-use axum::routing::get;
 use kellnr_appstate::AppStateData;
 use kellnr_web_ui::oauth2;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
 /// Create `OAuth2` routes
 ///
@@ -14,10 +14,10 @@ use kellnr_web_ui::oauth2;
 /// - GET /login - Initiates `OAuth2` flow, redirects to provider
 /// - GET /callback - Handles callback from provider
 /// - GET /error - Handles error responses from provider
-pub fn create_routes() -> Router<AppStateData> {
-    Router::new()
-        .route("/config", get(oauth2::get_config))
-        .route("/login", get(oauth2::login))
-        .route("/callback", get(oauth2::callback))
-        .route("/error", get(oauth2::error_callback))
+pub fn create_routes() -> OpenApiRouter<AppStateData> {
+    OpenApiRouter::new()
+        .routes(routes!(oauth2::get_config))
+        .routes(routes!(oauth2::login))
+        .routes(routes!(oauth2::callback))
+        .routes(routes!(oauth2::error_callback))
 }

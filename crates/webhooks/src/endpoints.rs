@@ -9,6 +9,20 @@ use tracing::trace;
 
 use crate::types;
 
+// Re-export types for utoipa
+
+/// Register a new webhook (admin only)
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "webhooks",
+    request_body = types::RegisterWebhookRequest,
+    responses(
+        (status = 200, description = "Webhook registered successfully", body = types::RegisterWebhookResponse),
+        (status = 401, description = "Admin access required")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn register_webhook(
     token: token::Token,
     State(db): DbState,
@@ -31,6 +45,20 @@ pub async fn register_webhook(
     Ok(Json(types::RegisterWebhookResponse { id }))
 }
 
+/// Get a webhook by ID (admin only)
+#[utoipa::path(
+    get,
+    path = "/{id}",
+    tag = "webhooks",
+    params(
+        ("id" = String, Path, description = "Webhook ID")
+    ),
+    responses(
+        (status = 200, description = "Webhook details", body = types::GetWebhookResponse),
+        (status = 401, description = "Admin access required")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn get_webhook(
     token: token::Token,
     Path(id): Path<String>,
@@ -50,6 +78,17 @@ pub async fn get_webhook(
     }))
 }
 
+/// List all webhooks (admin only)
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "webhooks",
+    responses(
+        (status = 200, description = "List of all webhooks", body = types::GetAllWebhooksResponse),
+        (status = 401, description = "Admin access required")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn get_all_webhooks(
     token: token::Token,
     State(db): DbState,
@@ -63,6 +102,20 @@ pub async fn get_all_webhooks(
     Ok(Json(types::GetAllWebhooksResponse(w)))
 }
 
+/// Delete a webhook (admin only)
+#[utoipa::path(
+    delete,
+    path = "/{id}",
+    tag = "webhooks",
+    params(
+        ("id" = String, Path, description = "Webhook ID")
+    ),
+    responses(
+        (status = 200, description = "Webhook deleted successfully"),
+        (status = 401, description = "Admin access required")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn delete_webhook(
     token: token::Token,
     Path(id): Path<String>,
@@ -77,6 +130,21 @@ pub async fn delete_webhook(
     Ok(())
 }
 
+/// Test a webhook by sending a test payload (admin only)
+#[utoipa::path(
+    post,
+    path = "/{id}/test",
+    tag = "webhooks",
+    params(
+        ("id" = String, Path, description = "Webhook ID")
+    ),
+    responses(
+        (status = 200, description = "Test payload sent successfully"),
+        (status = 401, description = "Admin access required"),
+        (status = 500, description = "Webhook callback failed")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn test_webhook(
     token: token::Token,
     Path(id): Path<String>,

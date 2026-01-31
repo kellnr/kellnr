@@ -25,6 +25,7 @@ use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 use tracing_subscriber::fmt::format;
 
+mod openapi;
 mod routes;
 
 #[tokio::main]

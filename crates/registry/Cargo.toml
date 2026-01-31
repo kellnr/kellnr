@@ -23,6 +23,7 @@ kellnr-webhooks.workspace = true
 # External dependencies from crates.io
 axum.workspace = true
 chrono.workspace = true
+utoipa.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 reqwest.workspace = true

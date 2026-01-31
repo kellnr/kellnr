@@ -11,16 +11,29 @@ use kellnr_db::password::generate_salt;
 use kellnr_db::{self, AuthToken, User};
 use kellnr_settings::constants::{COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::error::RouteError;
 use crate::session::{AdminUser, MaybeUser};
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct NewTokenResponse {
     name: String,
     token: String,
 }
 
+/// Add a new auth token for the current user
+#[utoipa::path(
+    post,
+    path = "/me/tokens",
+    tag = "users",
+    request_body = token::NewTokenReqData,
+    responses(
+        (status = 200, description = "Token created successfully", body = NewTokenResponse),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn add_token(
     user: MaybeUser,
     State(db): DbState,
@@ -40,6 +53,17 @@ pub async fn add_token(
     .into())
 }
 
+/// List auth tokens for the current user
+#[utoipa::path(
+    get,
+    path = "/me/tokens",
+    tag = "users",
+    responses(
+        (status = 200, description = "List of auth tokens", body = Vec<AuthToken>),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_tokens(
     user: MaybeUser,
     State(db): DbState,
@@ -47,6 +71,17 @@ pub async fn list_tokens(
     Ok(Json(db.get_auth_tokens(user.name()).await?))
 }
 
+/// List all users (admin only)
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "users",
+    responses(
+        (status = 200, description = "List of all users", body = Vec<User>),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_users(
     _user: AdminUser,
     State(db): DbState,
@@ -54,6 +89,21 @@ pub async fn list_users(
     Ok(Json(db.get_users().await?))
 }
 
+/// Delete an auth token
+#[utoipa::path(
+    delete,
+    path = "/me/tokens/{id}",
+    tag = "users",
+    params(
+        ("id" = i32, Path, description = "Token ID to delete")
+    ),
+    responses(
+        (status = 200, description = "Token deleted successfully"),
+        (status = 400, description = "Token not found"),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete_token(
     user: MaybeUser,
     Path(id): Path<i32>,
@@ -73,12 +123,26 @@ pub async fn delete_token(
     Ok(())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ResetPwd {
     new_pwd: String,
     user: String,
 }
 
+/// Reset a user's password (admin only)
+#[utoipa::path(
+    put,
+    path = "/{name}/password",
+    tag = "users",
+    params(
+        ("name" = String, Path, description = "Username")
+    ),
+    responses(
+        (status = 200, description = "Password reset successfully", body = ResetPwd),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn reset_pwd(
     user: AdminUser,
     Path(name): Path<String>,
@@ -94,11 +158,26 @@ pub async fn reset_pwd(
     .into())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ReadOnlyState {
     pub state: bool,
 }
 
+/// Change a user's read-only state (admin only)
+#[utoipa::path(
+    post,
+    path = "/{name}/read-only",
+    tag = "users",
+    params(
+        ("name" = String, Path, description = "Username")
+    ),
+    request_body = ReadOnlyState,
+    responses(
+        (status = 200, description = "Read-only state changed successfully"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn read_only(
     _user: AdminUser,
     Path(name): Path<String>,
@@ -113,11 +192,27 @@ pub async fn read_only(
     Ok(())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct AdminState {
     pub state: bool,
 }
 
+/// Change a user's admin state (admin only)
+#[utoipa::path(
+    post,
+    path = "/{name}/admin",
+    tag = "users",
+    params(
+        ("name" = String, Path, description = "Username")
+    ),
+    request_body = AdminState,
+    responses(
+        (status = 200, description = "Admin state changed successfully"),
+        (status = 400, description = "Cannot demote yourself"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn admin(
     user: AdminUser,
     Path(name): Path<String>,
@@ -137,6 +232,20 @@ pub async fn admin(
     Ok(())
 }
 
+/// Delete a user (admin only)
+#[utoipa::path(
+    delete,
+    path = "/{name}",
+    tag = "users",
+    params(
+        ("name" = String, Path, description = "Username to delete")
+    ),
+    responses(
+        (status = 200, description = "User deleted successfully"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete(
     _user: AdminUser,
     Path(name): Path<String>,
@@ -150,14 +259,14 @@ pub async fn delete(
     Ok(())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct LoggedInUser {
     user: String,
     is_admin: bool,
     is_logged_in: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct Credentials {
     pub user: String,
     pub pwd: String,
@@ -175,6 +284,18 @@ impl Credentials {
     }
 }
 
+/// Login with username and password
+#[utoipa::path(
+    post,
+    path = "/login",
+    tag = "auth",
+    request_body = Credentials,
+    responses(
+        (status = 200, description = "Successfully logged in", body = LoggedInUser),
+        (status = 400, description = "Invalid credentials"),
+        (status = 401, description = "Authentication failed")
+    )
+)]
 pub async fn login(
     cookies: PrivateCookieJar,
     State(state): AppState,
@@ -214,6 +335,15 @@ pub async fn login(
     ))
 }
 
+/// Get current login state
+#[utoipa::path(
+    get,
+    path = "/state",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Current login state", body = LoggedInUser)
+    )
+)]
 #[expect(clippy::unused_async)] // part of the router
 pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
     match user {
@@ -236,6 +366,15 @@ pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
     .into()
 }
 
+/// Logout and clear session
+#[utoipa::path(
+    post,
+    path = "/logout",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Successfully logged out")
+    )
+)]
 pub async fn logout(
     mut jar: PrivateCookieJar,
     State(state): AppState,
@@ -252,7 +391,7 @@ pub async fn logout(
     Ok(jar)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct PwdChange {
     pub old_pwd: String,
     pub new_pwd1: String,
@@ -274,6 +413,19 @@ impl PwdChange {
     }
 }
 
+/// Change the current user's password
+#[utoipa::path(
+    put,
+    path = "/me/password",
+    tag = "users",
+    request_body = PwdChange,
+    responses(
+        (status = 200, description = "Password changed successfully"),
+        (status = 400, description = "Invalid password or validation failed"),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn change_pwd(
     user: MaybeUser,
     State(db): DbState,
@@ -289,7 +441,7 @@ pub async fn change_pwd(
     Ok(())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct NewUser {
     pub pwd1: String,
     pub pwd2: String,
@@ -315,6 +467,19 @@ impl NewUser {
     }
 }
 
+/// Create a new user (admin only)
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "users",
+    request_body = NewUser,
+    responses(
+        (status = 200, description = "User created successfully"),
+        (status = 400, description = "Validation failed"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn add(
     _user: AdminUser,
     State(db): DbState,

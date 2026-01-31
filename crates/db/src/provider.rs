@@ -36,32 +36,47 @@ pub struct OAuth2StateData {
 }
 
 /// Toolchain target information (e.g., a specific archive for a target triple)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ToolchainTargetInfo {
+    /// Target ID
     pub id: i64,
+    /// Target triple (e.g., "x86_64-unknown-linux-gnu")
     pub target: String,
+    /// Path to the stored archive
     pub storage_path: String,
+    /// SHA256 hash of the archive
     pub hash: String,
+    /// Archive size in bytes
     pub size: i64,
 }
 
 /// Toolchain with all its targets
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ToolchainWithTargets {
+    /// Toolchain ID
     pub id: i64,
+    /// Toolchain name (e.g., "rust")
     pub name: String,
+    /// Toolchain version (e.g., "1.75.0")
     pub version: String,
+    /// Release date
     pub date: String,
+    /// Channel (e.g., "stable", "beta", "nightly")
     pub channel: Option<String>,
+    /// Creation timestamp
     pub created: String,
+    /// Available targets for this toolchain
     pub targets: Vec<ToolchainTargetInfo>,
 }
 
 /// Channel information (e.g., "stable" -> "1.75.0")
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ChannelInfo {
+    /// Channel name (e.g., "stable", "beta", "nightly")
     pub name: String,
+    /// Toolchain version pointed to by this channel
     pub version: String,
+    /// Release date
     pub date: String,
 }
 

@@ -20,6 +20,7 @@ use kellnr_common::util::generate_rand_string;
 use kellnr_settings::constants::COOKIE_SESSION_ID;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, trace, warn};
+use utoipa::ToSchema;
 
 use crate::error::RouteError;
 
@@ -27,7 +28,7 @@ use crate::error::RouteError;
 pub type OAuth2Ext = Extension<Option<Arc<OAuth2Handler>>>;
 
 /// `OAuth2` configuration response for the UI
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct OAuth2Config {
     /// Whether `OAuth2` authentication is enabled
     pub enabled: bool,
@@ -36,7 +37,7 @@ pub struct OAuth2Config {
 }
 
 /// Query parameters received in the `OAuth2` callback
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct CallbackQuery {
     /// Authorization code from the provider
     pub code: String,
@@ -48,6 +49,14 @@ pub struct CallbackQuery {
 ///
 /// Returns whether `OAuth2` is enabled and the button text to display.
 /// This endpoint is always accessible (no auth required).
+#[utoipa::path(
+    get,
+    path = "/config",
+    tag = "oauth2",
+    responses(
+        (status = 200, description = "OAuth2 configuration", body = OAuth2Config)
+    )
+)]
 #[allow(clippy::unused_async)]
 pub async fn get_config(State(settings): SettingsState) -> Json<OAuth2Config> {
     Json(OAuth2Config {
@@ -62,6 +71,15 @@ pub async fn get_config(State(settings): SettingsState) -> Json<OAuth2Config> {
 /// 1. Generates PKCE challenge and state for CSRF protection
 /// 2. Stores state/PKCE/nonce in the database
 /// 3. Redirects the user to the `OAuth2` provider's authorization endpoint
+#[utoipa::path(
+    get,
+    path = "/login",
+    tag = "oauth2",
+    responses(
+        (status = 302, description = "Redirect to OAuth2 provider"),
+        (status = 404, description = "OAuth2 not enabled")
+    )
+)]
 pub async fn login(
     State(db): DbState,
     Extension(oauth2_handler): OAuth2Ext,
@@ -102,6 +120,19 @@ pub async fn login(
 /// 4. Creates or links the user account
 /// 5. Creates a session and sets the session cookie
 /// 6. Redirects to the UI
+#[utoipa::path(
+    get,
+    path = "/callback",
+    tag = "oauth2",
+    params(CallbackQuery),
+    responses(
+        (status = 302, description = "Redirect to UI after successful login"),
+        (status = 400, description = "Invalid state"),
+        (status = 401, description = "Token exchange failed"),
+        (status = 403, description = "User not found and auto-provisioning disabled"),
+        (status = 404, description = "OAuth2 not enabled")
+    )
+)]
 pub async fn callback(
     cookies: PrivateCookieJar,
     Query(query): Query<CallbackQuery>,
@@ -236,13 +267,23 @@ pub async fn callback(
 /// Error callback for `OAuth2` flow
 ///
 /// Handles errors from the `OAuth2` provider (e.g., user cancelled, access denied)
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct ErrorQuery {
     pub error: String,
     #[serde(default)]
     pub error_description: Option<String>,
 }
 
+/// Handle `OAuth2` error callback
+#[utoipa::path(
+    get,
+    path = "/error",
+    tag = "oauth2",
+    params(ErrorQuery),
+    responses(
+        (status = 302, description = "Redirect to login page with error")
+    )
+)]
 #[allow(clippy::unused_async)]
 pub async fn error_callback(Query(query): Query<ErrorQuery>) -> Redirect {
     warn!(

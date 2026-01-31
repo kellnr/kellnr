@@ -5,65 +5,99 @@ use axum::body::Body;
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, put};
+use axum::routing::put;
 use axum::{Json, Router, middleware};
 use kellnr_appstate::{AppStateData, DbState, SettingsState, ToolchainStorageState};
 use kellnr_db::{ChannelInfo, ToolchainWithTargets};
 use kellnr_web_ui::session::{self, AdminUser};
 use serde::{Deserialize, Serialize};
 use tracing::trace;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-#[derive(Debug, Serialize, Deserialize)]
+/// Response for toolchain operations
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ToolchainResponse {
+    /// Whether the operation succeeded
     pub success: bool,
+    /// Optional message with details
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+/// Request to set a channel's toolchain
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SetChannelRequest {
+    /// Toolchain name (e.g., "rust")
     pub name: String,
+    /// Toolchain version (e.g., "1.75.0")
     pub version: String,
 }
 
-#[derive(Debug, Deserialize)]
+/// Query parameters for uploading a toolchain
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct UploadQuery {
+    /// Toolchain name (e.g., "rust")
     pub name: String,
+    /// Toolchain version (e.g., "1.75.0")
     pub version: String,
+    /// Target triple (e.g., "x86_64-unknown-linux-gnu")
     pub target: String,
+    /// Release date (e.g., "2024-01-15")
     pub date: String,
+    /// Optional channel to associate (e.g., "stable")
     #[serde(default)]
     pub channel: Option<String>,
 }
 
-pub fn create_api_routes(_state: AppStateData, max_size: usize) -> Router<AppStateData> {
-    Router::new()
-        .route("/", get(list_toolchains))
+/// Creates the toolchain API routes (management endpoints)
+pub fn create_api_routes(_state: AppStateData, max_size: usize) -> OpenApiRouter<AppStateData> {
+    // Upload route needs custom body limit, so we merge it as a regular Router
+    let upload_router: OpenApiRouter<AppStateData> = Router::new()
         .route(
             "/",
             put(upload_toolchain).layer(DefaultBodyLimit::max(max_size * 1_000_000)),
         )
-        .route("/{name}/{version}", delete(delete_toolchain))
-        .route(
-            "/{name}/{version}/targets/{target}",
-            delete(delete_toolchain_target),
-        )
-        .route("/channels", get(list_channels))
-        .route("/channels/{channel}", put(set_channel))
+        .into();
+
+    OpenApiRouter::new()
+        .routes(routes!(list_toolchains))
+        .merge(upload_router)
+        .routes(routes!(delete_toolchain))
+        .routes(routes!(delete_toolchain_target))
+        .routes(routes!(list_channels))
+        .routes(routes!(set_channel))
 }
 
-pub fn create_dist_routes(state: AppStateData) -> Router<AppStateData> {
-    Router::new()
+/// Creates the toolchain distribution routes (download endpoints)
+pub fn create_dist_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
+    OpenApiRouter::new()
         // Use a full segment parameter and parse the manifest filename in the handler
         // because Axum doesn't allow parameters in the middle of a path segment
-        .route("/{manifest_file}", get(get_channel_manifest))
-        .route("/{date}/{filename}", get(download_archive))
-        .route_layer(middleware::from_fn_with_state(
+        .routes(routes!(get_channel_manifest))
+        .routes(routes!(download_archive))
+        .layer(middleware::from_fn_with_state(
             state,
             session::session_auth_when_required,
         ))
 }
 
+/// List all toolchains
+///
+/// Returns all toolchains with their available targets.
+/// Requires admin access.
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "toolchains",
+    responses(
+        (status = 200, description = "List of toolchains", body = Vec<ToolchainWithTargets>),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 async fn list_toolchains(
     _user: AdminUser,
     State(db): DbState,
@@ -193,6 +227,27 @@ async fn upload_toolchain(
     }))
 }
 
+/// Delete a toolchain and all its targets
+///
+/// Removes a toolchain version and all associated target archives.
+/// Requires admin access.
+#[utoipa::path(
+    delete,
+    path = "/{name}/{version}",
+    tag = "toolchains",
+    params(
+        ("name" = String, Path, description = "Toolchain name"),
+        ("version" = String, Path, description = "Toolchain version")
+    ),
+    responses(
+        (status = 200, description = "Toolchain deleted", body = ToolchainResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin access required"),
+        (status = 404, description = "Toolchain not found"),
+        (status = 503, description = "Storage not configured")
+    ),
+    security(("session_cookie" = []))
+)]
 async fn delete_toolchain(
     _user: AdminUser,
     State(db): DbState,
@@ -255,10 +310,36 @@ async fn delete_toolchain(
 
     Ok(Json(ToolchainResponse {
         success: true,
-        message: Some(format!("Deleted {name}-{version} with {} target(s)", tc.targets.len())),
+        message: Some(format!(
+            "Deleted {name}-{version} with {} target(s)",
+            tc.targets.len()
+        )),
     }))
 }
 
+/// Delete a specific toolchain target
+///
+/// Removes a specific target from a toolchain. If this is the last target,
+/// the entire toolchain is deleted.
+/// Requires admin access.
+#[utoipa::path(
+    delete,
+    path = "/{name}/{version}/targets/{target}",
+    tag = "toolchains",
+    params(
+        ("name" = String, Path, description = "Toolchain name"),
+        ("version" = String, Path, description = "Toolchain version"),
+        ("target" = String, Path, description = "Target triple")
+    ),
+    responses(
+        (status = 200, description = "Target deleted", body = ToolchainResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin access required"),
+        (status = 404, description = "Toolchain not found"),
+        (status = 503, description = "Storage not configured")
+    ),
+    security(("session_cookie" = []))
+)]
 async fn delete_toolchain_target(
     _user: AdminUser,
     State(db): DbState,
@@ -307,10 +388,10 @@ async fn delete_toolchain_target(
     };
 
     // Delete the archive from storage
-    if let Some(t) = tc.targets.iter().find(|t| t.target == target) {
-        if let Err(e) = storage.delete(&t.storage_path).await {
-            tracing::warn!("Failed to delete archive from storage: {e}");
-        }
+    if let Some(t) = tc.targets.iter().find(|t| t.target == target)
+        && let Err(e) = storage.delete(&t.storage_path).await
+    {
+        tracing::warn!("Failed to delete archive from storage: {e}");
     }
 
     // If this is the last target, delete the entire toolchain
@@ -350,6 +431,22 @@ async fn delete_toolchain_target(
     }))
 }
 
+/// List all channels
+///
+/// Returns all configured channels (e.g., stable, beta, nightly) and
+/// the toolchain versions they point to.
+/// Requires admin access.
+#[utoipa::path(
+    get,
+    path = "/channels",
+    tag = "toolchains",
+    responses(
+        (status = 200, description = "List of channels", body = Vec<ChannelInfo>),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 async fn list_channels(
     _user: AdminUser,
     State(db): DbState,
@@ -361,6 +458,26 @@ async fn list_channels(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+/// Set a channel to point to a specific toolchain version
+///
+/// Updates a channel (e.g., "stable") to point to a specific toolchain version.
+/// Requires admin access.
+#[utoipa::path(
+    put,
+    path = "/channels/{channel}",
+    tag = "toolchains",
+    params(
+        ("channel" = String, Path, description = "Channel name (e.g., stable, beta, nightly)")
+    ),
+    request_body = SetChannelRequest,
+    responses(
+        (status = 200, description = "Channel updated", body = ToolchainResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin access required"),
+        (status = 404, description = "Toolchain not found")
+    ),
+    security(("session_cookie" = []))
+)]
 async fn set_channel(
     _user: AdminUser,
     State(db): DbState,
@@ -421,8 +538,22 @@ async fn set_channel(
 
 /// Get the channel manifest (rustup-compatible TOML)
 ///
+/// Returns a rustup-compatible manifest for a channel.
 /// Expects a filename in the format `channel-rust-{channel}.toml`
 /// e.g., `channel-rust-stable.toml` or `channel-rust-nightly.toml`
+#[utoipa::path(
+    get,
+    path = "/{manifest_file}",
+    tag = "toolchains",
+    params(
+        ("manifest_file" = String, Path, description = "Manifest filename (e.g., channel-rust-stable.toml)")
+    ),
+    responses(
+        (status = 200, description = "Channel manifest (TOML)", content_type = "text/toml"),
+        (status = 404, description = "Channel not found")
+    ),
+    security(("session_cookie" = []))
+)]
 async fn get_channel_manifest(
     State(db): DbState,
     State(settings): SettingsState,
@@ -453,6 +584,24 @@ async fn get_channel_manifest(
     Ok((headers, manifest).into_response())
 }
 
+/// Download a toolchain archive
+///
+/// Downloads a specific toolchain archive file.
+#[utoipa::path(
+    get,
+    path = "/{date}/{filename}",
+    tag = "toolchains",
+    params(
+        ("date" = String, Path, description = "Release date (e.g., 2024-01-15)"),
+        ("filename" = String, Path, description = "Archive filename")
+    ),
+    responses(
+        (status = 200, description = "Toolchain archive", content_type = "application/x-xz"),
+        (status = 404, description = "Archive not found"),
+        (status = 503, description = "Storage not configured")
+    ),
+    security(("session_cookie" = []))
+)]
 async fn download_archive(
     State(storage): ToolchainStorageState,
     Path((date, filename)): Path<(String, String)>,
@@ -580,9 +729,13 @@ mod tests {
     }
 
     /// Create app state with the given database and toolchain storage
-    fn create_app_state(db: Arc<dyn DbProvider>, toolchain_storage: Option<Arc<ToolchainStorage>>) -> AppStateData {
+    fn create_app_state(
+        db: Arc<dyn DbProvider>,
+        toolchain_storage: Option<Arc<ToolchainStorage>>,
+    ) -> AppStateData {
         let settings = kellnr_settings::test_settings();
-        let kellnr_storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+        let kellnr_storage =
+            Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         AppStateData {
             db,
             signing_key: Key::from(TEST_KEY),
@@ -598,10 +751,7 @@ mod tests {
         let api_routes = Router::new()
             .route("/", get(list_toolchains))
             .route("/", put(upload_toolchain))
-            .route(
-                "/{name}/{version}",
-                delete(delete_toolchain),
-            )
+            .route("/{name}/{version}", delete(delete_toolchain))
             .route(
                 "/{name}/{version}/targets/{target}",
                 delete(delete_toolchain_target),
@@ -638,9 +788,7 @@ mod tests {
             .expect_validate_session()
             .with(eq("admin_session"))
             .returning(|_| Ok(("admin".to_string(), true)));
-        mock_db
-            .expect_list_toolchains()
-            .returning(|| Ok(vec![]));
+        mock_db.expect_list_toolchains().returning(|| Ok(vec![]));
 
         let state = create_app_state(Arc::new(mock_db), None);
         let router = create_test_router(state);
@@ -823,7 +971,8 @@ mod tests {
                 targets: vec![ToolchainTargetInfo {
                     id: 1,
                     target: "x86_64-unknown-linux-gnu".to_string(),
-                    storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz".to_string(),
+                    storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
+                        .to_string(),
                     hash: "abc123".to_string(),
                     size: 1024,
                 }],
@@ -891,7 +1040,8 @@ mod tests {
     #[tokio::test]
     async fn test_upload_toolchain_success() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage = Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
+        let storage: DynStorage =
+            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
         let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
 
         let mut mock_db = MockDb::new();
@@ -905,7 +1055,12 @@ mod tests {
             .returning(|_, _| Ok(None));
         mock_db
             .expect_add_toolchain()
-            .with(eq("rust"), eq("1.0.0"), eq("2024-01-15"), eq(Some("stable".to_string())))
+            .with(
+                eq("rust"),
+                eq("1.0.0"),
+                eq("2024-01-15"),
+                eq(Some("stable".to_string())),
+            )
             .returning(|_, _, _, _| Ok(1));
         mock_db
             .expect_add_toolchain_target()
@@ -985,7 +1140,8 @@ mod tests {
     #[tokio::test]
     async fn test_delete_toolchain_target_success() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage = Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
+        let storage: DynStorage =
+            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
         let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
 
         let mut mock_db = MockDb::new();
@@ -1009,14 +1165,16 @@ mod tests {
                         ToolchainTargetInfo {
                             id: 1,
                             target: "x86_64-unknown-linux-gnu".to_string(),
-                            storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz".to_string(),
+                            storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
+                                .to_string(),
                             hash: "abc123".to_string(),
                             size: 1024,
                         },
                         ToolchainTargetInfo {
                             id: 2,
                             target: "aarch64-unknown-linux-gnu".to_string(),
-                            storage_path: "2024-01-15/rust-1.0.0-aarch64-unknown-linux-gnu.tar.xz".to_string(),
+                            storage_path: "2024-01-15/rust-1.0.0-aarch64-unknown-linux-gnu.tar.xz"
+                                .to_string(),
                             hash: "def456".to_string(),
                             size: 2048,
                         },
@@ -1050,7 +1208,8 @@ mod tests {
     #[tokio::test]
     async fn test_delete_last_target_auto_deletes_toolchain() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage = Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
+        let storage: DynStorage =
+            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
         let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
 
         let mut mock_db = MockDb::new();
@@ -1073,7 +1232,8 @@ mod tests {
                     targets: vec![ToolchainTargetInfo {
                         id: 1,
                         target: "x86_64-unknown-linux-gnu".to_string(),
-                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz".to_string(),
+                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
+                            .to_string(),
                         hash: "abc123".to_string(),
                         size: 1024,
                     }],
@@ -1105,13 +1265,17 @@ mod tests {
         assert!(result.success);
         // Message should indicate the whole toolchain was deleted (last target removed)
         let msg = result.message.unwrap();
-        assert!(msg.contains("last target removed"), "Expected 'last target removed' in message: {}", msg);
+        assert!(
+            msg.contains("last target removed"),
+            "Expected 'last target removed' in message: {msg}"
+        );
     }
 
     #[tokio::test]
     async fn test_delete_toolchain_success() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage = Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
+        let storage: DynStorage =
+            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
         let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
 
         let mut mock_db = MockDb::new();
@@ -1134,14 +1298,16 @@ mod tests {
                         ToolchainTargetInfo {
                             id: 1,
                             target: "x86_64-unknown-linux-gnu".to_string(),
-                            storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz".to_string(),
+                            storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
+                                .to_string(),
                             hash: "abc123".to_string(),
                             size: 1024,
                         },
                         ToolchainTargetInfo {
                             id: 2,
                             target: "aarch64-unknown-linux-gnu".to_string(),
-                            storage_path: "2024-01-15/rust-1.0.0-aarch64-unknown-linux-gnu.tar.xz".to_string(),
+                            storage_path: "2024-01-15/rust-1.0.0-aarch64-unknown-linux-gnu.tar.xz"
+                                .to_string(),
                             hash: "def456".to_string(),
                             size: 2048,
                         },
@@ -1176,7 +1342,8 @@ mod tests {
     #[tokio::test]
     async fn test_delete_toolchain_not_found() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage = Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
+        let storage: DynStorage =
+            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
         let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
 
         let mut mock_db = MockDb::new();
@@ -1270,7 +1437,8 @@ mod tests {
     #[tokio::test]
     async fn test_upload_duplicate_target_conflict() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage = Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
+        let storage: DynStorage =
+            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
         let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
 
         let mut mock_db = MockDb::new();
@@ -1292,7 +1460,8 @@ mod tests {
                     targets: vec![ToolchainTargetInfo {
                         id: 1,
                         target: "x86_64-unknown-linux-gnu".to_string(),
-                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz".to_string(),
+                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
+                            .to_string(),
                         hash: "abc123".to_string(),
                         size: 1024,
                     }],
@@ -1404,7 +1573,8 @@ mod tests {
     #[tokio::test]
     async fn test_download_archive_not_found() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage = Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
+        let storage: DynStorage =
+            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
         let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
 
         let mock_db = MockDb::new();
@@ -1434,9 +1604,11 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchains/dist/2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz")
-                    .body(Body::empty())
-                    .unwrap(),
+                Request::get(
+                    "/api/v1/toolchains/dist/2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz",
+                )
+                .body(Body::empty())
+                .unwrap(),
             )
             .await
             .unwrap();
@@ -1463,7 +1635,8 @@ mod tests {
                     targets: vec![ToolchainTargetInfo {
                         id: 1,
                         target: "x86_64-unknown-linux-gnu".to_string(),
-                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz".to_string(),
+                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
+                            .to_string(),
                         hash: "abc123def456".to_string(),
                         size: 1024,
                     }],

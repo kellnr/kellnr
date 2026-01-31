@@ -28,6 +28,9 @@ kellnr-webhooks.workspace = true
 # External dependencies from crates.io
 axum-extra.workspace = true
 axum.workspace = true
+utoipa.workspace = true
+utoipa-axum.workspace = true
+utoipa-swagger-ui.workspace = true
 flume.workspace = true
 serde.workspace = true
 moka.workspace = true

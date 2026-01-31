@@ -120,6 +120,11 @@ const navItems = computed(() => [
     title: "Doc Queue",
     icon: "mdi-layers",
     route: "/docqueue"
+  },
+  {
+    title: "API Docs",
+    icon: "mdi-api",
+    href: "/api/docs"
   }
 ]);
 

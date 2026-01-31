@@ -38,11 +38,43 @@ static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
         .unwrap()
 });
 
+/// Get crates.io proxy configuration
+///
+/// Returns the sparse registry configuration for the crates.io proxy.
+#[utoipa::path(
+    get,
+    path = "/config.json",
+    tag = "cratesio",
+    responses(
+        (status = 200, description = "Crates.io proxy configuration")
+    ),
+    security(("cargo_token" = []))
+)]
 #[allow(clippy::unused_async)] // part of the router
 pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson> {
     Json(ConfigJson::from((&(*settings), "cratesio", false)))
 }
 
+/// Prefetch crate metadata from crates.io (3+ char names)
+///
+/// Fetches and caches crate index metadata from crates.io for crates with
+/// names of 3 or more characters.
+#[utoipa::path(
+    get,
+    path = "/{a}/{b}/{name}",
+    tag = "cratesio",
+    params(
+        ("a" = String, Path, description = "First two characters of crate name"),
+        ("b" = String, Path, description = "Next two characters of crate name"),
+        ("name" = String, Path, description = "Full crate name")
+    ),
+    responses(
+        (status = 200, description = "Crate index metadata"),
+        (status = 304, description = "Not modified"),
+        (status = 404, description = "Crate not found")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn prefetch_cratesio(
     Path((_a, _b, name)): Path<(String, String, OriginalName)>,
     headers: HeaderMap,
@@ -53,6 +85,25 @@ pub async fn prefetch_cratesio(
     internal_prefetch_cratesio(name, headers, &db, &settings.proxy.index, &sender).await
 }
 
+/// Prefetch crate metadata from crates.io (1-2 char names)
+///
+/// Fetches and caches crate index metadata from crates.io for crates with
+/// names of 1-2 characters.
+#[utoipa::path(
+    get,
+    path = "/{a}/{name}",
+    tag = "cratesio",
+    params(
+        ("a" = String, Path, description = "Length prefix (1 or 2)"),
+        ("name" = String, Path, description = "Full crate name")
+    ),
+    responses(
+        (status = 200, description = "Crate index metadata"),
+        (status = 304, description = "Not modified"),
+        (status = 404, description = "Crate not found")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn prefetch_len2_cratesio(
     Path((_a, name)): Path<(String, OriginalName)>,
     headers: HeaderMap,
