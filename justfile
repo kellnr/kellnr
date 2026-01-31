@@ -209,13 +209,15 @@ npm-build: npm-install
     if (Test-Path crates/embedded-resources/static/*) { Remove-Item -Recurse -Force crates/embedded-resources/static/* }
     Copy-Item -Recurse -Force ui/dist/* crates/embedded-resources/static/
 
+# Install NPM dependencies without updating package-lock.json
 [unix]
 npm-install:
-    cd ui && npm install
+    cd ui && npm ci
 
+# Install NPM dependencies without updating package-lock.json
 [windows]
 npm-install:
-    cd ui; npm install
+    cd ui; npm ci
 
 ##########################################
 # Commands used by the Nix package manager
