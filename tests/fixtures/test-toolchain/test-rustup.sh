@@ -2,7 +2,7 @@
 # Test script for verifying Kellnr toolchain distribution with rustup
 #
 # Environment variables:
-#   KELLNR_DIST_URL - The Kellnr toolchain distribution URL (e.g., http://host.docker.internal:8000/api/v1/toolchain)
+#   KELLNR_DIST_URL - The Kellnr toolchain distribution URL (e.g., http://host.docker.internal:8000/api/v1/toolchains)
 #   CHANNEL - The channel to test (default: stable)
 #   VERBOSE - Set to 1 for verbose output
 

@@ -383,7 +383,7 @@ test.describe("Toolchain API and Distribution Tests", () => {
     const archiveData = fs.readFileSync(testArchivePath);
 
     // Upload via API
-    const uploadUrl = `${baseUrl}/api/v1/toolchain/toolchains?name=rust&version=1.0.0-test&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable`;
+    const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-test&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable`;
 
     const response = await fetch(uploadUrl, {
       method: "PUT",
@@ -402,7 +402,7 @@ test.describe("Toolchain API and Distribution Tests", () => {
 
   test("can fetch channel manifest", async () => {
     // The manifest should be available after upload (requires auth when auth_required is true)
-    const manifestUrl = `${baseUrl}/api/v1/toolchain/dist/channel-rust-stable.toml`;
+    const manifestUrl = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml`;
 
     const response = await fetch(manifestUrl, {
       headers: { "Cookie": sessionCookie },
@@ -424,7 +424,7 @@ test.describe("Toolchain API and Distribution Tests", () => {
 
   test("can download toolchain archive", async () => {
     // First get the manifest to find the archive URL
-    const manifestUrl = `${baseUrl}/api/v1/toolchain/dist/channel-rust-stable.toml`;
+    const manifestUrl = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml`;
     const manifestResponse = await fetch(manifestUrl, {
       headers: { "Cookie": sessionCookie },
     });
@@ -465,7 +465,7 @@ test.describe("Toolchain API and Distribution Tests", () => {
     const cookie = `kellnr_session_id=${session!.value}`;
 
     // List toolchains via API
-    const listUrl = `${baseUrl}/api/v1/toolchain/toolchains`;
+    const listUrl = `${baseUrl}/api/v1/toolchains`;
     const response = await fetch(listUrl, {
       headers: { "Cookie": cookie },
     });
@@ -498,7 +498,7 @@ test.describe("Toolchain API and Distribution Tests", () => {
     const cookie = `kellnr_session_id=${session!.value}`;
 
     // List channels via API
-    const channelsUrl = `${baseUrl}/api/v1/toolchain/channels`;
+    const channelsUrl = `${baseUrl}/api/v1/toolchains/channels`;
     const response = await fetch(channelsUrl, {
       headers: { "Cookie": cookie },
     });
@@ -615,7 +615,7 @@ test.describe("Toolchain UI Channel and Delete Tests", () => {
     channel?: string
   ): Promise<void> {
     const archiveData = fs.readFileSync(testArchivePath);
-    let uploadUrl = `${baseUrl}/api/v1/toolchain/toolchains?name=${name}&version=${version}&target=${target}&date=${date}`;
+    let uploadUrl = `${baseUrl}/api/v1/toolchains?name=${name}&version=${version}&target=${target}&date=${date}`;
     if (channel) {
       uploadUrl += `&channel=${channel}`;
     }
@@ -762,7 +762,7 @@ test.describe("Toolchain UI Channel and Delete Tests", () => {
     expect(newCount).toBe(initialCount - 1);
 
     // Verify via API that toolchain is gone
-    const listUrl = `${baseUrl}/api/v1/toolchain/toolchains`;
+    const listUrl = `${baseUrl}/api/v1/toolchains`;
     const response = await fetch(listUrl, {
       headers: { "Cookie": sessionCookie },
     });
@@ -832,7 +832,7 @@ test.describe("Toolchain Docker Integration Test", () => {
 
     // Login to get session cookie
     console.log("[setup] Logging in...");
-    const loginResponse = await fetch(`${baseUrl}/api/v1/user/login`, {
+    const loginResponse = await fetch(`${baseUrl}/api/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -860,7 +860,7 @@ test.describe("Toolchain Docker Integration Test", () => {
     // Upload the test toolchain
     console.log("[setup] Uploading test toolchain...");
     const archiveData = fs.readFileSync(testArchivePath);
-    const uploadUrl = `${baseUrl}/api/v1/toolchain/toolchains?name=rust&version=1.0.0-test&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable`;
+    const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-test&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable`;
 
     const uploadResponse = await fetch(uploadUrl, {
       method: "PUT",
@@ -910,8 +910,8 @@ test.describe("Toolchain Docker Integration Test", () => {
 
     // Use host.docker.internal on macOS/Windows, or the host IP on Linux
     const kellnrUrl = process.platform === "linux"
-      ? `http://172.17.0.1:8000/api/v1/toolchain` // Docker bridge IP on Linux
-      : `http://host.docker.internal:8000/api/v1/toolchain`; // macOS/Windows
+      ? `http://172.17.0.1:8000/api/v1/toolchains` // Docker bridge IP on Linux
+      : `http://host.docker.internal:8000/api/v1/toolchains`; // macOS/Windows
 
     // Use the official rust:slim-trixie image which has rustup pre-installed
     // Install curl first (not in slim image), then run the test script

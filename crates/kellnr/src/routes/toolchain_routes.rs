@@ -38,14 +38,14 @@ pub struct UploadQuery {
 
 pub fn create_api_routes(_state: AppStateData, max_size: usize) -> Router<AppStateData> {
     Router::new()
-        .route("/toolchains", get(list_toolchains))
+        .route("/", get(list_toolchains))
         .route(
-            "/toolchains",
+            "/",
             put(upload_toolchain).layer(DefaultBodyLimit::max(max_size * 1_000_000)),
         )
-        .route("/toolchains/{name}/{version}", delete(delete_toolchain))
+        .route("/{name}/{version}", delete(delete_toolchain))
         .route(
-            "/toolchains/{name}/{version}/{target}",
+            "/{name}/{version}/targets/{target}",
             delete(delete_toolchain_target),
         )
         .route("/channels", get(list_channels))
@@ -484,7 +484,7 @@ fn generate_manifest(
     settings: &Arc<kellnr_settings::Settings>,
 ) -> String {
     let base_url = format!(
-        "{}://{}:{}/api/v1/toolchain/dist",
+        "{}://{}:{}/api/v1/toolchains/dist",
         settings.origin.protocol, settings.origin.hostname, settings.origin.port
     );
 
@@ -596,14 +596,14 @@ mod tests {
     /// Create a router with API routes for testing
     fn create_test_router(state: AppStateData) -> Router {
         let api_routes = Router::new()
-            .route("/toolchains", get(list_toolchains))
-            .route("/toolchains", put(upload_toolchain))
+            .route("/", get(list_toolchains))
+            .route("/", put(upload_toolchain))
             .route(
-                "/toolchains/{name}/{version}",
+                "/{name}/{version}",
                 delete(delete_toolchain),
             )
             .route(
-                "/toolchains/{name}/{version}/{target}",
+                "/{name}/{version}/targets/{target}",
                 delete(delete_toolchain_target),
             )
             .route("/channels", get(list_channels))
@@ -614,8 +614,8 @@ mod tests {
             .route("/{date}/{filename}", get(download_archive));
 
         Router::new()
-            .nest("/api/v1/toolchain", api_routes)
-            .nest("/api/v1/toolchain/dist", dist_routes)
+            .nest("/api/v1/toolchains", api_routes)
+            .nest("/api/v1/toolchains/dist", dist_routes)
             .with_state(state)
     }
 
@@ -647,7 +647,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/toolchains")
+                Request::get("/api/v1/toolchains")
                     .header(header::COOKIE, admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -671,7 +671,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/toolchains")
+                Request::get("/api/v1/toolchains")
                     .header(header::COOKIE, non_admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -691,7 +691,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/toolchains")
+                Request::get("/api/v1/toolchains")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -715,7 +715,7 @@ mod tests {
         let response = router
             .oneshot(
                 Request::put(
-                    "/api/v1/toolchain/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15",
+                    "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15",
                 )
                 .header(header::COOKIE, non_admin_cookie())
                 .header(header::CONTENT_TYPE, "application/octet-stream")
@@ -741,7 +741,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::delete("/api/v1/toolchain/toolchains/rust/1.0.0/x86_64-unknown-linux-gnu")
+                Request::delete("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu")
                     .header(header::COOKIE, non_admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -765,7 +765,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/channels")
+                Request::get("/api/v1/toolchains/channels")
                     .header(header::COOKIE, non_admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -791,7 +791,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::put("/api/v1/toolchain/channels/stable")
+                Request::put("/api/v1/toolchains/channels/stable")
                     .header(header::COOKIE, non_admin_cookie())
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(payload))
@@ -835,7 +835,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/toolchains")
+                Request::get("/api/v1/toolchains")
                     .header(header::COOKIE, admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -872,7 +872,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/channels")
+                Request::get("/api/v1/toolchains/channels")
                     .header(header::COOKIE, admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -917,7 +917,7 @@ mod tests {
         let response = router
             .oneshot(
                 Request::put(
-                    "/api/v1/toolchain/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable",
+                    "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable",
                 )
                 .header(header::COOKIE, admin_cookie())
                 .header(header::CONTENT_TYPE, "application/octet-stream")
@@ -967,7 +967,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::put("/api/v1/toolchain/channels/stable")
+                Request::put("/api/v1/toolchains/channels/stable")
                     .header(header::COOKIE, admin_cookie())
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(payload))
@@ -1033,7 +1033,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::delete("/api/v1/toolchain/toolchains/rust/1.0.0/x86_64-unknown-linux-gnu")
+                Request::delete("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu")
                     .header(header::COOKIE, admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -1091,7 +1091,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::delete("/api/v1/toolchain/toolchains/rust/1.0.0/x86_64-unknown-linux-gnu")
+                Request::delete("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu")
                     .header(header::COOKIE, admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -1158,7 +1158,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::delete("/api/v1/toolchain/toolchains/rust/1.0.0")
+                Request::delete("/api/v1/toolchains/rust/1.0.0")
                     .header(header::COOKIE, admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -1194,7 +1194,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::delete("/api/v1/toolchain/toolchains/rust/99.99.99")
+                Request::delete("/api/v1/toolchains/rust/99.99.99")
                     .header(header::COOKIE, admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -1222,7 +1222,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::delete("/api/v1/toolchain/toolchains/rust/1.0.0")
+                Request::delete("/api/v1/toolchains/rust/1.0.0")
                     .header(header::COOKIE, non_admin_cookie())
                     .body(Body::empty())
                     .unwrap(),
@@ -1250,7 +1250,7 @@ mod tests {
         let response = router
             .oneshot(
                 Request::put(
-                    "/api/v1/toolchain/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15",
+                    "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15",
                 )
                 .header(header::COOKIE, admin_cookie())
                 .header(header::CONTENT_TYPE, "application/octet-stream")
@@ -1305,7 +1305,7 @@ mod tests {
         let response = router
             .oneshot(
                 Request::put(
-                    "/api/v1/toolchain/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15",
+                    "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15",
                 )
                 .header(header::COOKIE, admin_cookie())
                 .header(header::CONTENT_TYPE, "application/octet-stream")
@@ -1341,7 +1341,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::put("/api/v1/toolchain/channels/stable")
+                Request::put("/api/v1/toolchains/channels/stable")
                     .header(header::COOKIE, admin_cookie())
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(payload))
@@ -1368,7 +1368,7 @@ mod tests {
         let response = router
             .clone()
             .oneshot(
-                Request::get("/api/v1/toolchain/dist/stable.toml")
+                Request::get("/api/v1/toolchains/dist/stable.toml")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1391,7 +1391,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/dist/channel-rust-nonexistent.toml")
+                Request::get("/api/v1/toolchains/dist/channel-rust-nonexistent.toml")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1414,7 +1414,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/dist/2024-01-15/nonexistent.tar.xz")
+                Request::get("/api/v1/toolchains/dist/2024-01-15/nonexistent.tar.xz")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1434,7 +1434,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/dist/2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz")
+                Request::get("/api/v1/toolchains/dist/2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1475,7 +1475,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::get("/api/v1/toolchain/dist/channel-rust-stable.toml")
+                Request::get("/api/v1/toolchains/dist/channel-rust-stable.toml")
                     .body(Body::empty())
                     .unwrap(),
             )

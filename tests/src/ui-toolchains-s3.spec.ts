@@ -185,7 +185,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const archiveData = fs.readFileSync(testArchivePath);
 
     // Upload via API
-    const uploadUrl = `${baseUrl}/api/v1/toolchain/toolchains?name=rust&version=1.0.0-s3-test&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable`;
+    const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-s3-test&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable`;
 
     const response = await fetch(uploadUrl, {
       method: "PUT",
@@ -208,7 +208,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
 
   test("can fetch channel manifest from S3-backed toolchain", async () => {
     // The manifest should be available after upload
-    const manifestUrl = `${baseUrl}/api/v1/toolchain/dist/channel-rust-stable.toml`;
+    const manifestUrl = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml`;
 
     const response = await fetch(manifestUrl, {
       headers: { "Cookie": sessionCookie },
@@ -230,7 +230,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
 
   test("can download toolchain archive from S3 storage", async () => {
     // First get the manifest to find the archive URL
-    const manifestUrl = `${baseUrl}/api/v1/toolchain/dist/channel-rust-stable.toml`;
+    const manifestUrl = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml`;
     const manifestResponse = await fetch(manifestUrl, {
       headers: { "Cookie": sessionCookie },
     });
@@ -271,7 +271,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const cookie = `kellnr_session_id=${session!.value}`;
 
     // List toolchains via API
-    const listUrl = `${baseUrl}/api/v1/toolchain/toolchains`;
+    const listUrl = `${baseUrl}/api/v1/toolchains`;
     const response = await fetch(listUrl, {
       headers: { "Cookie": cookie },
     });
@@ -304,7 +304,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const cookie = `kellnr_session_id=${session!.value}`;
 
     // List channels via API
-    const channelsUrl = `${baseUrl}/api/v1/toolchain/channels`;
+    const channelsUrl = `${baseUrl}/api/v1/toolchains/channels`;
     const response = await fetch(channelsUrl, {
       headers: { "Cookie": cookie },
     });
@@ -363,7 +363,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const archiveData = fs.readFileSync(testArchivePath);
 
     // Upload same version but different target
-    const uploadUrl = `${baseUrl}/api/v1/toolchain/toolchains?name=rust&version=1.0.0-s3-test&target=aarch64-unknown-linux-gnu&date=2024-01-15`;
+    const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-s3-test&target=aarch64-unknown-linux-gnu&date=2024-01-15`;
 
     const response = await fetch(uploadUrl, {
       method: "PUT",
@@ -379,7 +379,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     expect(result.success).toBe(true);
 
     // Verify both targets are now in the manifest
-    const manifestUrl = `${baseUrl}/api/v1/toolchain/dist/channel-rust-stable.toml`;
+    const manifestUrl = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml`;
     const manifestResponse = await fetch(manifestUrl, {
       headers: { "Cookie": cookie },
     });
@@ -403,7 +403,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const cookie = `kellnr_session_id=${session!.value}`;
 
     // Delete the aarch64 target
-    const deleteUrl = `${baseUrl}/api/v1/toolchain/toolchains/rust/1.0.0-s3-test/aarch64-unknown-linux-gnu`;
+    const deleteUrl = `${baseUrl}/api/v1/toolchains/rust/1.0.0-s3-test/targets/aarch64-unknown-linux-gnu`;
     const response = await fetch(deleteUrl, {
       method: "DELETE",
       headers: { "Cookie": cookie },
@@ -414,7 +414,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     expect(result.success).toBe(true);
 
     // Verify the target is no longer in the list
-    const listUrl = `${baseUrl}/api/v1/toolchain/toolchains`;
+    const listUrl = `${baseUrl}/api/v1/toolchains`;
     const listResponse = await fetch(listUrl, {
       headers: { "Cookie": cookie },
     });

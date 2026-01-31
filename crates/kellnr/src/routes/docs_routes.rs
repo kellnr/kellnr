@@ -8,8 +8,8 @@ use kellnr_web_ui::{session, ui};
 /// Creates the docs UI routes
 pub fn create_ui_routes(state: AppStateData) -> Router<AppStateData> {
     Router::new()
-        .route("/build", post(ui::build_rustdoc))
-        .route("/queue", get(api::docs_in_queue))
+        .route("/builds", get(api::docs_in_queue))
+        .route("/builds", post(ui::build_rustdoc))
         .route("/{package}/latest", get(api::latest_docs))
         .route_layer(middleware::from_fn_with_state(
             state,

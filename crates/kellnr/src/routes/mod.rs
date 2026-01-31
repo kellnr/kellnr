@@ -8,6 +8,7 @@ use kellnr_embedded_resources::embedded_static_handler;
 use kellnr_web_ui::session;
 use tower_http::services::ServeDir;
 
+mod auth_routes;
 mod crate_access_routes;
 mod cratesio_api_routes;
 mod docs_routes;
@@ -35,9 +36,10 @@ pub fn create_router(
 
     let mut router = Router::new()
         .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
-        .nest("/api/v1/user", user_routes::create_routes())
-        .nest("/api/v1/group", group_routes::create_routes())
-        .nest("/api/v1/crate_access", crate_access_routes::create_routes())
+        .nest("/api/v1/auth", auth_routes::create_routes())
+        .nest("/api/v1/users", user_routes::create_routes())
+        .nest("/api/v1/groups", group_routes::create_routes())
+        .nest("/api/v1/acl", crate_access_routes::create_routes())
         .nest("/api/v1/docs", docs_routes::create_ui_routes(state.clone()))
         .nest(
             "/api/v1/docs",
@@ -51,7 +53,7 @@ pub fn create_router(
             "/api/v1/cratesio",
             cratesio_api_routes::create_routes(state.clone()),
         )
-        .nest("/api/v1/webhook", webhook_routes::create_routes())
+        .nest("/api/v1/webhooks", webhook_routes::create_routes())
         .nest("/api/v1/oauth2", oauth2_routes::create_routes())
         .nest("/api/v1", health_routes::create_routes())
         .nest_service("/docs", docs_service);
@@ -60,11 +62,11 @@ pub fn create_router(
     if state.settings.toolchain.enabled {
         router = router
             .nest(
-                "/api/v1/toolchain",
+                "/api/v1/toolchains",
                 toolchain_routes::create_api_routes(state.clone(), max_toolchain_size),
             )
             .nest(
-                "/api/v1/toolchain/dist",
+                "/api/v1/toolchains/dist",
                 toolchain_routes::create_dist_routes(state.clone()),
             );
     }

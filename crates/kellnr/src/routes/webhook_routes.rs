@@ -9,5 +9,5 @@ pub fn create_routes() -> Router<AppStateData> {
         .route("/", post(kellnr_webhooks::register_webhook))
         .route("/{id}", get(kellnr_webhooks::get_webhook))
         .route("/{id}", delete(kellnr_webhooks::delete_webhook))
-        .route("/{id}/test", get(kellnr_webhooks::test_webhook))
+        .route("/{id}/test", post(kellnr_webhooks::test_webhook))
 }

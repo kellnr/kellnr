@@ -1,22 +1,22 @@
 use axum::Router;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use kellnr_appstate::AppStateData;
 use kellnr_web_ui::user;
 
-/// Creates the user routes
+/// Creates the user management routes
 pub fn create_routes() -> Router<AppStateData> {
     Router::new()
-        .route("/login", post(user::login))
-        .route("/logout", get(user::logout))
-        .route("/change_pwd", post(user::change_pwd))
-        .route("/add", post(user::add))
-        .route("/delete/{name}", delete(user::delete))
-        .route("/reset_pwd/{name}", post(user::reset_pwd))
-        .route("/read_only/{name}", post(user::read_only))
-        .route("/admin/{name}", post(user::admin))
-        .route("/add_token", post(user::add_token))
-        .route("/delete_token/{id}", delete(user::delete_token))
-        .route("/list_tokens", get(user::list_tokens))
-        .route("/list_users", get(user::list_users))
-        .route("/login_state", get(user::login_state))
+        // User CRUD
+        .route("/", get(user::list_users))
+        .route("/", post(user::add))
+        .route("/{name}", delete(user::delete))
+        // User attributes
+        .route("/{name}/password", put(user::reset_pwd))
+        .route("/{name}/admin", post(user::admin))
+        .route("/{name}/read-only", post(user::read_only))
+        // Current user (self-service)
+        .route("/me/password", put(user::change_pwd))
+        .route("/me/tokens", get(user::list_tokens))
+        .route("/me/tokens", post(user::add_token))
+        .route("/me/tokens/{id}", delete(user::delete_token))
 }

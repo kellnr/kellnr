@@ -6,7 +6,7 @@
 #
 # Usage (manual testing):
 #   docker build -t kellnr-rustup-test .
-#   docker run -e KELLNR_DIST_URL=http://host.docker.internal:8000/api/v1/toolchain \
+#   docker run -e KELLNR_DIST_URL=http://host.docker.internal:8000/api/v1/toolchains \
 #              -e CHANNEL=stable \
 #              kellnr-rustup-test
 
