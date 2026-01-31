@@ -40,8 +40,8 @@ export class ToolchainsPage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    // Navigation
-    this.toolchainsNavItem = page.locator(".v-list-item-title").filter({ hasText: "Toolchains" });
+    // Navigation - use data-testid for stability
+    this.toolchainsNavItem = page.getByTestId("nav-toolchains");
     this.sectionHeader = page.locator(".section-header").filter({ hasText: "Toolchain Management" });
     this.toolchainCount = page.locator(".toolchain-count");
 

@@ -192,8 +192,13 @@ export async function startLocalKellnr(
   const logFile = path.resolve(dataDir, "kellnr.log");
 
   // Build environment
+  // Start with process.env but filter out KELLNR_CONFIG_FILE to ensure test isolation
+  const baseEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key !== "KELLNR_CONFIG_FILE"),
+  ) as Record<string, string>;
+
   const env: Record<string, string> = {
-    ...process.env,
+    ...baseEnv,
     // Core settings
     KELLNR_REGISTRY__DATA_DIR: dataDir,
     KELLNR_ORIGIN__PORT: String(port),

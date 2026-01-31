@@ -31,8 +31,10 @@
 
         inherit (pkgs) lib;
 
-        # Rust toolchain
-        rustToolchain = pkgs.rust-bin.stable.latest.default;
+        # Rust toolchain with llvm-tools for coverage
+        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+          extensions = [ "llvm-tools-preview" ];
+        };
 
         # Crane library for Rust builds
         craneLib = (crane.mkLib pkgs).overrideToolchain (_: rustToolchain);
@@ -141,6 +143,7 @@
             cargo-nextest
             cargo-machete
             cargo-cyclonedx
+            cargo-llvm-cov
 
             # Node.js for UI development
             nodejs_24
@@ -178,6 +181,10 @@
             echo "  just npm-dev   - Run UI dev server"
             echo "  just sbom      - Generate SBOM (CycloneDX)"
             echo ""
+
+            # LLVM tools for cargo-llvm-cov
+            export LLVM_COV="${pkgs.llvmPackages.bintools-unwrapped}/bin/llvm-cov"
+            export LLVM_PROFDATA="${pkgs.llvmPackages.bintools-unwrapped}/bin/llvm-profdata"
 
             # Setup custom CA certificate for testing
             export CUSTOM_CERT_DIR="$PWD/.certs"

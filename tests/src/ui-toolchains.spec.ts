@@ -209,7 +209,7 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    const userMgmtNavItem = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    const userMgmtNavItem = page.getByTestId("nav-user-management");
     await userMgmtNavItem.click();
     await page.waitForTimeout(500);
 

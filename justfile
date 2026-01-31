@@ -332,6 +332,41 @@ test_ui_chromium := if has_docker == "true" { "cd tests && npm install && PLAYWR
 test_ui_firefox := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=firefox" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 test_ui_webkit := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=webkit" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 test_ui_headed := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --headed" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_cov := if has_docker == "true" { "cd tests && npm install && COVERAGE=1 npx playwright test --project=chromium && echo '' && echo 'Coverage data saved to tests/coverage/*.json'" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+
+##########################################
+# Coverage commands
+##########################################
+
+# Run unit tests with coverage, generate HTML report
+[unix]
+test-cov: npm-build
+    cargo llvm-cov nextest --workspace -E 'not test(~postgres_)' --html --open
+
+# Run PostgreSQL tests with coverage, generate HTML report
+[unix]
+test-pgdb-cov: npm-build
+    cargo llvm-cov nextest --workspace -E 'test(~postgres_)' --html --open
+
+# Run all Rust tests with combined coverage
+[unix]
+test-all-cov: npm-build
+    cargo llvm-cov nextest --workspace --html --open
+
+# Generate coverage summary to terminal
+[unix]
+test-cov-summary: npm-build
+    cargo llvm-cov nextest --workspace
+
+# Clean coverage artifacts
+[unix]
+clean-cov:
+    cargo llvm-cov clean --workspace
+
+# Run UI tests with frontend coverage
+[unix]
+test-ui-cov:
+    {{ test_ui_cov }}
 
 [unix]
 docker:

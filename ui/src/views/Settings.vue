@@ -99,6 +99,7 @@
                 :active="activeTab === 'toolchains'"
                 color="primary"
                 rounded="lg"
+                data-testid="nav-toolchains-mobile"
               >
                 <template v-slot:prepend>
                   <div class="nav-icon-wrapper" :class="{ active: activeTab === 'toolchains' }">
@@ -168,6 +169,7 @@
                 color="primary"
                 rounded="lg"
                 class="mb-1"
+                data-testid="nav-user-management"
               >
                 <template v-slot:prepend>
                   <div class="nav-icon-wrapper" :class="{ active: activeTab === 'users' }">
@@ -222,6 +224,7 @@
                 :active="activeTab === 'toolchains'"
                 color="primary"
                 rounded="lg"
+                data-testid="nav-toolchains"
               >
                 <template v-slot:prepend>
                   <div class="nav-icon-wrapper" :class="{ active: activeTab === 'toolchains' }">
