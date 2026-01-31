@@ -4,39 +4,36 @@ use std::collections::HashMap;
 use testcontainers::Image;
 use testcontainers::core::{ContainerPort, WaitFor};
 
-const NAME: &str = "minio/minio";
+const NAME: &str = "rustfs/rustfs";
 const TAG: &str = "latest";
-const MINIO_ROOT_USER: &str = "minioadmin";
-const MINIO_ROOT_PASSWORD: &str = "minioadmin";
-const MINIO_CONSOLE_ADDRESS: &str = ":9001";
+const RUSTFS_ACCESS_KEY: &str = "rustfsadmin";
+const RUSTFS_SECRET_KEY: &str = "rustfsadmin";
 
 #[derive(Debug, Clone)]
-pub struct Minio {
+pub struct RustFs {
     env_vars: HashMap<String, String>,
 }
 
-impl Minio {
+impl RustFs {
     pub const PORT: u16 = 9000;
     pub const CONTAINER_PORT: ContainerPort = ContainerPort::Tcp(Self::PORT);
 }
 
-impl Default for Minio {
+impl Default for RustFs {
     fn default() -> Self {
         let mut env_vars = HashMap::new();
-        env_vars.insert("MINIO_ROOT_USER".to_owned(), MINIO_ROOT_USER.to_owned());
+        env_vars.insert("RUSTFS_ACCESS_KEY".to_owned(), RUSTFS_ACCESS_KEY.to_owned());
         env_vars.insert(
-            "MINIO_ROOT_PASSWORD".to_owned(),
-            MINIO_ROOT_PASSWORD.to_owned(),
+            "RUSTFS_SECRET_KEY".to_owned(),
+            RUSTFS_SECRET_KEY.to_owned(),
         );
-        env_vars.insert(
-            "MINIO_CONSOLE_ADDRESS".to_owned(),
-            MINIO_CONSOLE_ADDRESS.to_owned(),
-        );
+        // Set the data volume for RustFS - the bucket name will be the directory name
+        env_vars.insert("RUSTFS_VOLUMES".to_owned(), "/data".to_owned());
         Self { env_vars }
     }
 }
 
-impl Image for Minio {
+impl Image for RustFs {
     fn name(&self) -> &str {
         NAME
     }
@@ -46,17 +43,27 @@ impl Image for Minio {
     }
 
     fn ready_conditions(&self) -> Vec<WaitFor> {
-        vec![WaitFor::message_on_stderr("API:")]
+        // RustFS logs "started successfully" when ready
+        vec![WaitFor::message_on_stdout("started successfully")]
     }
 
     fn entrypoint(&self) -> Option<&str> {
+        // Override entrypoint to create bucket directory before starting
         Some("sh")
     }
 
     fn cmd(&self) -> impl IntoIterator<Item = impl Into<Cow<'_, str>>> {
+        // Create bucket directory and start RustFS with command line credentials
+        // (env vars may be ignored in some Docker deployments per rustfs/rustfs#1058)
         vec![
             "-c",
-            "mkdir -p /data/kellnr-crates && /usr/bin/minio server /data",
+            concat!(
+                "mkdir -p /data/kellnr-crates && ",
+                "/usr/bin/rustfs ",
+                "--access-key rustfsadmin ",
+                "--secret-key rustfsadmin ",
+                "/data"
+            ),
         ]
     }
 

@@ -2,12 +2,12 @@
  * UI tests for toolchain management with S3 storage backend.
  *
  * Tests:
- * - Starts MinIO (S3-compatible storage) in Docker
+ * - Starts RustFS (S3-compatible storage) in Docker
  * - Starts local Kellnr with S3 backend and toolchain feature enabled
  * - Uploads toolchains to S3 storage via API
  * - Verifies toolchains are accessible and manifests are generated correctly
  *
- * Performance: Uses local Kellnr with Docker MinIO for S3 storage.
+ * Performance: Uses local Kellnr with Docker RustFS for S3 storage.
  */
 
 import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
@@ -19,9 +19,9 @@ import {
 } from "./testUtils";
 import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 import {
-  buildS3MinioImage,
+  buildS3RustFsImage,
   createNetwork,
-  startS3MinioContainer,
+  startS3RustFsContainer,
   type Started,
 } from "./lib/docker";
 import type { StartedNetwork } from "testcontainers";
@@ -35,7 +35,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
   let started: StartedLocalKellnr;
   let baseUrl: string;
   let network: StartedNetwork;
-  let minioContainer: Started;
+  let rustfsContainer: Started;
   let sessionCookie: string;
 
   // Path to test archive
@@ -47,8 +47,8 @@ test.describe("Toolchain S3 Storage Tests", () => {
   );
 
   // S3 settings
-  const s3RootUser = "minioadmin";
-  const s3RootPassword = "minioadmin";
+  const s3RootUser = "rustfsadmin";
+  const s3RootPassword = "rustfsadmin";
   const s3CratesBucket = "kellnr-crates";
   const s3CratesioBucket = "kellnr-cratesio";
   const s3ToolchainBucket = "kellnr-toolchains";
@@ -71,40 +71,40 @@ test.describe("Toolchain S3 Storage Tests", () => {
 
     const suffix = `${Date.now()}`;
     const networkBaseName = `s3-toolchain-net-${suffix}`;
-    const minioBaseName = `minio-toolchain-${suffix}`;
+    const rustfsBaseName = `rustfs-toolchain-${suffix}`;
     // Use a consistent image name to avoid rebuilding on every test run
-    const s3Image = "kellnr-minio-toolchains";
+    const s3Image = "kellnr-rustfs-toolchains";
 
     network = await createNetwork(networkBaseName, testInfo);
 
-    console.log("[setup] Building minio image with toolchain bucket");
-    await buildS3MinioImage({
+    console.log("[setup] Building RustFS image with toolchain bucket");
+    await buildS3RustFsImage({
       imageName: s3Image,
       cratesBucket: s3CratesBucket,
       cratesioBucket: s3CratesioBucket,
       toolchainBucket: s3ToolchainBucket,
     });
-    console.log("[setup] Minio image built");
+    console.log("[setup] RustFS image built");
 
-    minioContainer = await startS3MinioContainer(
+    rustfsContainer = await startS3RustFsContainer(
       {
-        name: minioBaseName,
+        name: rustfsBaseName,
         image: s3Image,
         network,
         rootUser: s3RootUser,
         rootPassword: s3RootPassword,
-        exposeToHost: true, // Required for local Kellnr to access MinIO
+        exposeToHost: true, // Required for local Kellnr to access RustFS
       },
       testInfo,
     );
 
-    console.log("[setup] Minio container started");
+    console.log("[setup] RustFS container started");
 
-    // Get MinIO's mapped host port for localhost access
-    const minioHostPort = minioContainer.container.getMappedPort(9000);
-    const s3UrlForLocalKellnr = `http://localhost:${minioHostPort}`;
+    // Get RustFS's mapped host port for localhost access
+    const rustfsHostPort = rustfsContainer.container.getMappedPort(9000);
+    const s3UrlForLocalKellnr = `http://localhost:${rustfsHostPort}`;
 
-    console.log(`[setup] MinIO accessible at ${s3UrlForLocalKellnr}`);
+    console.log(`[setup] RustFS accessible at ${s3UrlForLocalKellnr}`);
 
     started = await startLocalKellnr({
       name: `kellnr-toolchain-s3-${suffix}`,
@@ -143,14 +143,14 @@ test.describe("Toolchain S3 Storage Tests", () => {
       }
     }
 
-    // Stop MinIO container
-    if (minioContainer) {
+    // Stop RustFS container
+    if (rustfsContainer) {
       try {
-        console.log("[teardown] Stopping MinIO container");
-        minioContainer.stopLogStreaming?.();
-        await minioContainer.container.stop();
+        console.log("[teardown] Stopping RustFS container");
+        rustfsContainer.stopLogStreaming?.();
+        await rustfsContainer.container.stop();
       } catch (e) {
-        console.log("[teardown] Error stopping MinIO:", e);
+        console.log("[teardown] Error stopping RustFS:", e);
       }
     }
 

@@ -81,7 +81,7 @@ impl TryFrom<(&str, &Settings)> for S3Storage {
         if !settings.s3.secret_key.is_empty() {
             s3 = s3.with_secret_access_key(&settings.s3.secret_key);
         }
-        // MinIO suitable
+        // S3-compatible (RustFS, MinIO, etc.)
         Ok(Self(s3.build()?))
     }
 }

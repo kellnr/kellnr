@@ -4,7 +4,7 @@ use std::sync::Arc;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
-use kellnr_minio_testcontainer::*;
+use kellnr_rustfs_testcontainer::*;
 use kellnr_settings::Settings;
 use kellnr_settings::s3::S3;
 use kellnr_storage::cached_crate_storage::DynStorage;
@@ -30,8 +30,8 @@ impl TestS3Storage {
             },
             s3: S3 {
                 enabled: true,
-                access_key: "minioadmin".into(),
-                secret_key: "minioadmin".into(),
+                access_key: "rustfsadmin".into(),
+                secret_key: "rustfsadmin".into(),
                 endpoint: url.to_string(),
                 allow_http: true,
                 ..S3::default()
@@ -45,7 +45,7 @@ impl TestS3Storage {
     }
 }
 
-#[minio_testcontainer]
+#[rustfs_testcontainer]
 #[tokio::test]
 async fn add_and_get_crate() {
     let host = container.get_host().await.unwrap().to_string();
@@ -70,7 +70,7 @@ async fn add_and_get_crate() {
     assert_eq!(Some(vec![0x00, 0x11, 0x22, 0x33, 0x44]), result_crate);
 }
 
-#[minio_testcontainer]
+#[rustfs_testcontainer]
 #[tokio::test]
 async fn remove_crate() {
     let host = container.get_host().await.unwrap().to_string();

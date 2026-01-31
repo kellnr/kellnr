@@ -1,5 +1,5 @@
 <template>
-  <v-footer fixed class="footer-container">
+  <v-footer app class="footer-container">
     <div class="footer-content">
       <!-- Brand and Version -->
       <div class="brand-section">
@@ -65,8 +65,6 @@ onMounted(async () => {
 .footer-container {
   background: rgb(var(--v-theme-surface)) !important;
   border-top: 1px solid rgb(var(--v-theme-outline));
-  position: sticky;
-  bottom: 0;
   z-index: 5;
   min-height: 48px !important;
   max-height: 48px;

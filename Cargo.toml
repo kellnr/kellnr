@@ -28,7 +28,7 @@ kellnr-entity = { version = "5.14.1", path = "./crates/db/entity" }
 kellnr-error = { version = "5.14.1", path = "./crates/error" }
 kellnr-index = { version = "5.14.1", path = "./crates/index" }
 kellnr-migration = { version = "5.14.1", path = "./crates/db/migration" }
-kellnr-minio-testcontainer = { version = "5.14.1", path = "./crates/storage/minio-testcontainer" }
+kellnr-rustfs-testcontainer = { version = "5.14.1", path = "./crates/storage/rustfs-testcontainer" }
 kellnr-registry = { version = "5.14.1", path = "./crates/registry" }
 kellnr-settings = { version = "5.14.1", path = "./crates/settings" }
 kellnr-storage = { version = "5.14.1", path = "./crates/storage" }

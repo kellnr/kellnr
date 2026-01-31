@@ -1,5 +1,5 @@
 [package]
-name = "kellnr-minio-testcontainer"
+name = "kellnr-rustfs-testcontainer"
 autotests = false
 authors.workspace = true
 edition.workspace = true

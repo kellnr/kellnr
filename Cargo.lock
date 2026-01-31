@@ -3993,14 +3993,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kellnr-minio-testcontainer"
-version = "5.14.1"
-dependencies = [
- "quote",
- "syn 2.0.114",
-]
-
-[[package]]
 name = "kellnr-registry"
 version = "5.14.1"
 dependencies = [
@@ -4032,6 +4024,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kellnr-rustfs-testcontainer"
+version = "5.14.1"
+dependencies = [
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "kellnr-settings"
 version = "5.14.1"
 dependencies = [
@@ -4053,7 +4053,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "kellnr-common",
- "kellnr-minio-testcontainer",
+ "kellnr-rustfs-testcontainer",
  "kellnr-settings",
  "moka",
  "object_store",
