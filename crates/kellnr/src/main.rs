@@ -196,6 +196,7 @@ async fn run_server(settings: Settings) {
     let listener = TcpListener::bind(addr)
         .await
         .unwrap_or_else(|_| panic!("Failed to bind to {addr}"));
+    info!("Kellnr has been started on http://{addr}/.");
     axum::serve(listener, app).await.unwrap();
 }
 
