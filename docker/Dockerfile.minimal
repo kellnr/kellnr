@@ -3,16 +3,14 @@
 ##################
 FROM alpine:3.23 AS builder
 
-ARG ADMINPWD=admin
-ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
 ARG VERSION
 
 # Install only what's needed for downloading and extracting
 RUN apk add --no-cache curl zip lscpu sed bash
 
 # Download and install kellnr
-RUN curl -sL https://github.com/kellnr/installer/releases/download/v0.1.1/install.sh -o /tmp/install.sh && \
-    bash /tmp/install.sh -m -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION} && \
+RUN curl -sL https://github.com/kellnr/installer/releases/download/v0.1.2/install.sh -o /tmp/install.sh && \
+    bash /tmp/install.sh -m -v ${VERSION} && \
     rm /tmp/install.sh
 
 ##################
@@ -22,6 +20,7 @@ FROM alpine:3.23
 
 ARG DATADIR=/var/lib/kellnr
 ENV KELLNR_CONFIG_FILE=/etc/kellnr/kellnr.toml
+ENV KELLNR_SETUP__ADMIN_PWD=admin
 
 # Install only runtime dependencies
 RUN apk add --no-cache ca-certificates curl

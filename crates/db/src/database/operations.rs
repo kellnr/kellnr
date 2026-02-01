@@ -62,15 +62,18 @@ pub async fn insert_admin_credentials<C: ConnectionTrait>(
 
     let res: sea_orm::InsertResult<user::ActiveModel> =
         user::Entity::insert(admin).exec(db_con).await?;
-    let auth_token_hash = hash_token(&con_string.admin_token());
 
-    let auth_token = auth_token::ActiveModel {
-        name: Set("admin".to_string()),
-        token: Set(auth_token_hash),
-        user_fk: Set(res.last_insert_id),
-        ..Default::default()
-    };
-    auth_token::Entity::insert(auth_token).exec(db_con).await?;
+    if let Some(token) = &con_string.admin_token() {
+        let auth_token_hash = hash_token(token);
+
+        let auth_token = auth_token::ActiveModel {
+            name: Set("admin".to_string()),
+            token: Set(auth_token_hash),
+            user_fk: Set(res.last_insert_id),
+            ..Default::default()
+        };
+        auth_token::Entity::insert(auth_token).exec(db_con).await?;
+    }
 
     Ok(())
 }

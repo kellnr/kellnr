@@ -5,10 +5,6 @@ fn default_admin_pwd() -> String {
     "admin".to_string()
 }
 
-fn default_admin_token() -> String {
-    "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD".to_string()
-}
-
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
 #[serde(default)]
 pub struct Setup {
@@ -18,7 +14,7 @@ pub struct Setup {
     pub admin_pwd: String,
 
     /// Initial admin API token
-    #[default(default_admin_token())]
+    #[default(None)]
     #[arg(id = "setup-admin-token", long = "setup-admin-token")]
-    pub admin_token: String,
+    pub admin_token: Option<String>,
 }
