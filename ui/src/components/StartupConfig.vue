@@ -15,8 +15,8 @@
         See the <a href="https://kellnr.io/documentation" class="text-primary font-weight-medium">Kellnr Documentation</a> for details.
       </p>
 
-      <!-- Filter toggle -->
-      <div class="filter-toggle mb-4">
+      <!-- Filter toggle and expand/collapse -->
+      <div class="filter-toggle mb-4 d-flex flex-wrap align-center gap-3">
         <v-switch
           v-model="showOnlyConfigured"
           label="Show only configured values"
@@ -24,10 +24,32 @@
           hide-details
           color="primary"
         ></v-switch>
+        <div class="expand-collapse-buttons d-flex gap-2 ms-auto">
+          <v-btn
+            size="small"
+            variant="tonal"
+            color="primary"
+            @click="expandAll"
+          >
+            Expand all
+          </v-btn>
+          <v-btn
+            size="small"
+            variant="tonal"
+            color="primary"
+            @click="collapseAll"
+          >
+            Collapse all
+          </v-btn>
+        </div>
       </div>
 
       <!-- Config Sections -->
-      <v-expansion-panels variant="accordion" class="config-panels">
+      <v-expansion-panels
+        v-model="expandedPanels"
+        multiple
+        class="config-panels"
+      >
         <!-- Registry Section -->
         <v-expansion-panel v-show="isSectionVisible('registry')">
           <v-expansion-panel-title class="panel-title">
@@ -631,6 +653,12 @@ import { isSuccess } from "../services/api";
 
 const settings = ref<Settings>(emptySettings);
 const showOnlyConfigured = ref(false);
+const expandedPanels = ref<number[]>([]);
+
+// Section order matches the order of v-expansion-panel in the template
+const sectionOrder = [
+  'registry', 'local', 'origin', 'log', 'proxy', 'docs', 'postgresql', 's3', 'toolchain'
+] as const;
 
 // Define setting keys for each section
 const sectionKeys = {
@@ -700,6 +728,22 @@ const visibleSectionsCount = computed(() => {
     configuredCounts.value[section as keyof typeof sectionKeys] > 0
   ).length;
 });
+
+// Indices of sections that are currently visible (for expand all)
+const visibleSectionIndices = computed(() =>
+  sectionOrder
+    .map((section, index) => ({ section, index }))
+    .filter(({ section }) => isSectionVisible(section))
+    .map(({ index }) => index)
+);
+
+function expandAll() {
+  expandedPanels.value = [...visibleSectionIndices.value];
+}
+
+function collapseAll() {
+  expandedPanels.value = [];
+}
 
 onBeforeMount(() => {
   getStartupConfig();
@@ -942,6 +986,10 @@ function isSourceActive(key: string, source: ConfigSource): boolean {
 .filter-toggle {
   display: flex;
   align-items: center;
+}
+
+.expand-collapse-buttons {
+  margin-left: auto;
 }
 
 /* Responsive */
