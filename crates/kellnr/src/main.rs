@@ -12,7 +12,7 @@ use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
-use kellnr_settings::{CliResult, LogFormat, Settings, parse_cli};
+use kellnr_settings::{CliResult, LogFormat, Settings, ShowConfigOptions, parse_cli};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
@@ -25,6 +25,7 @@ use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 use tracing_subscriber::fmt::format;
 
+mod config_printer;
 mod openapi;
 mod routes;
 
@@ -33,8 +34,8 @@ async fn main() {
     let cli_result = parse_cli().expect("Cannot read config");
 
     match cli_result {
-        CliResult::ShowConfig(settings) => {
-            show_config(&settings);
+        CliResult::ShowConfig { settings, options } => {
+            show_config(&settings, &options);
         }
         CliResult::InitConfig { settings, output } => {
             init_config(&settings, &output);
@@ -48,12 +49,18 @@ async fn main() {
     }
 }
 
-fn show_config(settings: &Settings) {
-    match toml::to_string_pretty(settings) {
-        Ok(toml) => println!("{toml}"),
-        Err(e) => {
-            eprintln!("Error serializing config: {e}");
-            std::process::exit(1);
+fn show_config(settings: &Settings, options: &ShowConfigOptions) {
+    if options.no_defaults || options.show_sources {
+        // Use custom formatting with source annotations and/or filtered output
+        config_printer::print_config_with_options(settings, options);
+    } else {
+        // Default: simple TOML output
+        match toml::to_string_pretty(settings) {
+            Ok(toml) => println!("{toml}"),
+            Err(e) => {
+                eprintln!("Error serializing config: {e}");
+                std::process::exit(1);
+            }
         }
     }
 }

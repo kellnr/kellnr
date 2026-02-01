@@ -18,12 +18,34 @@ import os from "os";
 import { spawn } from "child_process";
 
 import { test, expect } from "@playwright/test";
+import { type Options as ExecaOptions } from "execa";
 import {
-  exec,
+  exec as rawExec,
   getKellnrBinaryPath,
   assertKellnrBinaryExists,
   waitForHttpOk,
 } from "./testUtils";
+
+/**
+ * Returns process.env with all KELLNR_* variables removed.
+ * Ensures tests are reproducible and don't pick up user's shell config.
+ */
+function cleanEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("KELLNR_")) {
+      delete env[key];
+    }
+  }
+  return env;
+}
+
+/**
+ * Wrapper around exec that uses cleanEnv by default.
+ */
+async function exec(cmd: string, args: string[] = [], options: ExecaOptions = {}) {
+  return rawExec(cmd, args, { env: cleanEnv(), ...options });
+}
 
 test.describe("CLI Tests", () => {
   let kellnrBinary: string;
@@ -164,7 +186,11 @@ test.describe("CLI Tests", () => {
 
   test.describe("Start Command Validation", () => {
     test("kellnr start without data_dir shows helpful error", async () => {
-      const result = await exec(kellnrBinary, ["start"]);
+      // Create an empty config file to override any compile-time or default configs
+      const emptyConfig = path.join(tempDir, "empty.toml");
+      fs.writeFileSync(emptyConfig, "# Empty config - no data_dir\n");
+
+      const result = await exec(kellnrBinary, ["-c", emptyConfig, "start"]);
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("No data directory configured");
@@ -233,13 +259,14 @@ data_dir = "/custom/path"
       const dataDir = path.join(tempDir, "data");
       fs.mkdirSync(dataDir, { recursive: true });
 
-      // Start kellnr in background
+      // Start kellnr in background (use cleanEnv() directly for spawn)
       const kellnrProcess = spawn(
         kellnrBinary,
         ["start", "-d", dataDir, "--local-port", String(port)],
         {
           stdio: ["ignore", "pipe", "pipe"],
           detached: true,
+          env: cleanEnv() as NodeJS.ProcessEnv,
         }
       );
 

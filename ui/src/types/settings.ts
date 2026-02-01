@@ -2,6 +2,10 @@ export type Version = {
   version: string
 }
 
+export type ConfigSource = 'default' | 'toml' | 'env' | 'cli';
+
+export type SourceMap = Record<string, ConfigSource>;
+
 export type Settings = {
   docs: Docs
   local: Local
@@ -12,6 +16,7 @@ export type Settings = {
   registry: Registry
   s3: S3
   toolchain: Toolchain
+  sources: SourceMap
 }
 
 export type Toolchain = {
@@ -66,6 +71,7 @@ export type Registry = {
   auth_required: boolean
   required_crate_fields: string[]
   new_crates_restricted: boolean
+  cookie_signing_key: string | null
   allow_ownerless_crates: boolean
   token_cache_enabled: boolean
   token_cache_ttl_seconds: number
@@ -128,6 +134,7 @@ export const emptySettings: Settings = {
     auth_required: false,
     required_crate_fields: [],
     new_crates_restricted: false,
+    cookie_signing_key: null,
     allow_ownerless_crates: false,
     token_cache_enabled: true,
     token_cache_ttl_seconds: 1800,
@@ -149,5 +156,6 @@ export const emptySettings: Settings = {
   toolchain: {
     enabled: false,
     max_size: 500
-  }
+  },
+  sources: {}
 }

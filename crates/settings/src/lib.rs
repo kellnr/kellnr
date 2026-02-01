@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod compile_time_config;
+pub mod config_source;
 pub mod constants;
 mod deserialize_with;
 pub mod docs;
@@ -16,7 +17,8 @@ pub mod settings;
 pub mod setup;
 pub mod toolchain;
 
-pub use cli::{CliResult, get_settings_with_cli, parse_cli};
+pub use cli::{CliResult, ShowConfigOptions, get_settings_with_cli, parse_cli};
+pub use config_source::{ConfigSource, SourceMap};
 pub use docs::Docs;
 pub use local::Local;
 pub use log::{LogFormat, LogLevel};

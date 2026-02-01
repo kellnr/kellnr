@@ -8,7 +8,7 @@ import type { OAuth2Config } from '../types/oauth2'
 import { SETTINGS, VERSION, OAUTH2_CONFIG } from '../remote-routes'
 
 /**
- * Get startup configuration settings
+ * Get startup configuration settings with source tracking
  */
 export async function getSettings(): Promise<ApiResult<Settings>> {
   return apiGet<Settings>(SETTINGS)

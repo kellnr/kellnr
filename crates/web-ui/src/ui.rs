@@ -8,12 +8,23 @@ use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
-use kellnr_settings::{Settings, compile_time_config};
+use kellnr_settings::{Settings, SourceMap, compile_time_config};
+use serde::{Deserialize, Serialize};
 use tracing::error;
 use utoipa::ToSchema;
 
 use crate::error::RouteError;
 use crate::session::{AdminUser, MaybeUser};
+
+/// Settings response that includes source tracking.
+/// This wrapper is needed because Settings uses `#[serde(skip)]` on sources
+/// to prevent it from being serialized to TOML config files.
+#[derive(Serialize, Deserialize)]
+pub struct SettingsResponse {
+    #[serde(flatten)]
+    pub settings: Settings,
+    pub sources: SourceMap,
+}
 
 /// Get Kellnr settings (admin only)
 #[utoipa::path(
@@ -21,7 +32,7 @@ use crate::session::{AdminUser, MaybeUser};
     path = "/settings",
     tag = "ui",
     responses(
-        (status = 200, description = "Kellnr settings"),
+        (status = 200, description = "Kellnr settings with source tracking"),
         (status = 403, description = "Admin access required")
     ),
     security(("session_cookie" = []))
@@ -30,9 +41,11 @@ use crate::session::{AdminUser, MaybeUser};
 pub async fn settings(
     _user: AdminUser,
     State(settings): SettingsState,
-) -> Result<Json<Settings>, RouteError> {
-    let s: Settings = (*settings).clone();
-    Ok(Json(s))
+) -> Result<Json<SettingsResponse>, RouteError> {
+    Ok(Json(SettingsResponse {
+        sources: settings.sources.clone(),
+        settings: (*settings).clone(),
+    }))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
@@ -588,7 +601,7 @@ mod tests {
 
         let result_status = r.status();
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_state = serde_json::from_slice::<Settings>(&result_msg).unwrap();
+        let result_response = serde_json::from_slice::<SettingsResponse>(&result_msg).unwrap();
 
         // Set the password to empty string because it is not serialized
         let tmp = kellnr_settings::test_settings();
@@ -602,7 +615,9 @@ mod tests {
         };
 
         assert_eq!(result_status, StatusCode::OK);
-        assert_eq!(result_state, expected_state);
+        assert_eq!(result_response.settings, expected_state);
+        // Verify that sources are present in the response
+        assert!(result_response.sources.contains_key("registry.data_dir"));
     }
 
     #[tokio::test]

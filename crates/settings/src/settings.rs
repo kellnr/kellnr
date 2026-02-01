@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use config::{Config, ConfigError, Environment, File};
 use serde::{Deserialize, Serialize};
 
+use crate::config_source::{SourceMap, init_default_sources};
 use crate::docs::Docs;
 use crate::local::Local;
 use crate::log::Log;
@@ -16,7 +17,7 @@ use crate::s3::S3;
 use crate::setup::Setup;
 use crate::toolchain::Toolchain;
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Default, Clone)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(default)]
 pub struct Settings {
     pub setup: Setup,
@@ -30,6 +31,29 @@ pub struct Settings {
     pub s3: S3,
     pub oauth2: OAuth2,
     pub toolchain: Toolchain,
+    /// Tracks the source (default, toml, env, cli) for each setting.
+    /// Skipped in serde serialization - use `SettingsResponse` for API responses.
+    #[serde(skip)]
+    pub sources: SourceMap,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            setup: Setup::default(),
+            registry: Registry::default(),
+            docs: Docs::default(),
+            proxy: Proxy::default(),
+            log: Log::default(),
+            local: Local::default(),
+            origin: Origin::default(),
+            postgresql: Postgresql::default(),
+            s3: S3::default(),
+            oauth2: OAuth2::default(),
+            toolchain: Toolchain::default(),
+            sources: init_default_sources(),
+        }
+    }
 }
 
 impl TryFrom<Option<&Path>> for Settings {
@@ -132,6 +156,7 @@ pub fn test_settings() -> Settings {
             data_dir: "/tmp/kdata_test".to_string(),
             ..Registry::default()
         },
+        sources: init_default_sources(),
         ..Settings::default()
     }
 }

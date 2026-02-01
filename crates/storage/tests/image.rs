@@ -23,10 +23,7 @@ impl Default for RustFs {
     fn default() -> Self {
         let mut env_vars = HashMap::new();
         env_vars.insert("RUSTFS_ACCESS_KEY".to_owned(), RUSTFS_ACCESS_KEY.to_owned());
-        env_vars.insert(
-            "RUSTFS_SECRET_KEY".to_owned(),
-            RUSTFS_SECRET_KEY.to_owned(),
-        );
+        env_vars.insert("RUSTFS_SECRET_KEY".to_owned(), RUSTFS_SECRET_KEY.to_owned());
         // Set the data volume for RustFS - the bucket name will be the directory name
         env_vars.insert("RUSTFS_VOLUMES".to_owned(), "/data".to_owned());
         Self { env_vars }
