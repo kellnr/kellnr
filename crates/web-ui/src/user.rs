@@ -174,17 +174,23 @@ pub struct ReadOnlyState {
     request_body = ReadOnlyState,
     responses(
         (status = 200, description = "Read-only state changed successfully"),
+        (status = 400, description = "Cannot lock yourself"),
         (status = 403, description = "Admin access required")
     ),
     security(("session_cookie" = []))
 )]
 pub async fn read_only(
-    _user: AdminUser,
+    user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(ro_state): Json<ReadOnlyState>,
 ) -> Result<(), RouteError> {
+    // Prevent self-locking to avoid lockout
+    if user.name() == name && ro_state.state {
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+    }
+
     db.change_read_only_state(&name, ro_state.state).await?;
 
     cache.invalidate_all();
@@ -242,16 +248,22 @@ pub async fn admin(
     ),
     responses(
         (status = 200, description = "User deleted successfully"),
+        (status = 400, description = "Cannot delete yourself"),
         (status = 403, description = "Admin access required")
     ),
     security(("session_cookie" = []))
 )]
 pub async fn delete(
-    _user: AdminUser,
+    user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
     State(cache): TokenCacheState,
 ) -> Result<(), RouteError> {
+    // Prevent self-deletion to avoid lockout
+    if user.name() == name {
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+    }
+
     db.delete_user(&name).await?;
 
     cache.invalidate_all();
@@ -782,6 +794,129 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_admin_self_locking_prevented() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        // Note: change_read_only_state should NOT be called because self-locking is blocked
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/read_only/{name}", post(read_only))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/read_only/admin") // Trying to lock self
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"state":true}"#)) // Locking (state=true)
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Request should fail with Bad Request
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "Expected BAD_REQUEST but got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_admin_self_unlocking_allowed() {
+        // An admin unlocking themselves (state=false) should be allowed
+        // Only self-locking (state=true) is blocked
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db
+            .expect_change_read_only_state()
+            .times(1)
+            .with(eq("admin"), eq(false)) // Self-unlocking
+            .returning(|_, _| Ok(()));
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/read_only/{name}", post(read_only))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/read_only/admin") // Same user
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"state":false}"#)) // Unlocking (state=false)
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_admin_locking_other_user_works() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db
+            .expect_change_read_only_state()
+            .times(1)
+            .with(eq("other_user"), eq(true))
+            .returning(|_, _| Ok(()));
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/read_only/{name}", post(read_only))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/read_only/other_user") // Locking another user
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"state":true}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
     async fn test_add_user_invalidates_cache() {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
         cache
@@ -1136,6 +1271,84 @@ mod tests {
                     )
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(r#"{"state":true}"#)) // Promoting (state=true)
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            response.status().is_success(),
+            "Expected success but got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_admin_self_deletion_prevented() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        // Note: delete_user should NOT be called because self-deletion is blocked
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/delete/{name}", axum::routing::delete(delete))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::delete("/delete/admin") // Trying to delete self
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Request should fail with Bad Request
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "Expected BAD_REQUEST but got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_admin_deletion_of_other_user_works() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .times(1)
+            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db
+            .expect_delete_user()
+            .times(1)
+            .with(eq("other_user"))
+            .returning(|_| Ok(()));
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/delete/{name}", axum::routing::delete(delete))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::delete("/delete/other_user") // Deleting another user
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .body(Body::empty())
                     .unwrap(),
             )
             .await

@@ -54,6 +54,7 @@
                 :color="user.is_read_only ? 'info' : 'default'"
                 variant="tonal"
                 size="small"
+                :disabled="user.name === currentUserName && !user.is_read_only"
                 @click="handleToggleReadOnly(user)"
               >
                 <v-icon :icon="user.is_read_only ? 'mdi-lock-open-outline' : 'mdi-lock-outline'" size="small" class="me-1"></v-icon>
@@ -74,6 +75,7 @@
                 color="error"
                 variant="tonal"
                 size="small"
+                :disabled="user.name === currentUserName"
                 @click="handleDeleteUser(user.name)"
               >
                 <v-icon icon="mdi-delete-outline" size="small"></v-icon>
