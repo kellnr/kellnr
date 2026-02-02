@@ -178,8 +178,8 @@ pub trait DbProvider: Send + Sync {
     async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>>;
     async fn is_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<bool>;
     async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>;
-    async fn get_total_unique_crates(&self) -> DbResult<u32>;
-    async fn get_total_crate_versions(&self) -> DbResult<u32>;
+    async fn get_total_unique_crates(&self) -> DbResult<u64>;
+    async fn get_total_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_downloads(&self) -> DbResult<u64>;
     async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>>;
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64>;
@@ -533,11 +533,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_total_unique_crates(&self) -> DbResult<u32> {
+            async fn get_total_unique_crates(&self) -> DbResult<u64> {
                 unimplemented!()
             }
 
-            async fn get_total_crate_versions(&self) -> DbResult<u32> {
+            async fn get_total_crate_versions(&self) -> DbResult<u64> {
                 unimplemented!()
             }
 

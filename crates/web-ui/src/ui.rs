@@ -377,8 +377,8 @@ pub async fn delete_crate_all(
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
 pub struct Statistic {
-    pub num_crates: u32,
-    pub num_crate_versions: u32,
+    pub num_crates: u64,
+    pub num_crate_versions: u64,
     pub num_crate_downloads: u64,
     pub num_proxy_crates: u64,
     pub num_proxy_crate_versions: u64,

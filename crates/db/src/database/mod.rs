@@ -29,7 +29,7 @@ use kellnr_migration::iden::{
 use sea_orm::entity::prelude::Uuid;
 use sea_orm::prelude::async_trait::async_trait;
 use sea_orm::query::{QueryOrder, QuerySelect, TransactionTrait};
-use sea_orm::sea_query::{Alias, Cond, Expr, JoinType, Order, Query, UnionType};
+use sea_orm::sea_query::{Alias, Cond, Expr, Iden, JoinType, Order, Query, UnionType};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
     FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set,
@@ -117,58 +117,53 @@ impl Database {
             .await
             .map_err(Into::into)
     }
+
+    /// Executes a count query (SELECT COUNT(id_column) FROM table) and returns the count as u64.
+    async fn count<T>(&self, table: T, id_column: T, error: DbError) -> DbResult<u64>
+    where
+        T: Iden + Copy,
+    {
+        #[derive(Debug, PartialEq, FromQueryResult)]
+        struct CountResult {
+            count: Option<i64>,
+        }
+
+        let stmt = Query::select()
+            .expr_as(Expr::col((table, id_column)).count(), Alias::new("count"))
+            .from(table)
+            .to_owned();
+        let statement = self.db_con.get_database_backend().build(&stmt);
+        let Some(result) = CountResult::find_by_statement(statement)
+            .one(&self.db_con)
+            .await?
+        else {
+            return Err(error);
+        };
+        match result.count {
+            Some(count) => Ok(count as u64),
+            None => Err(error),
+        }
+    }
 }
 
 #[async_trait]
 impl DbProvider for Database {
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64> {
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
-
-        let stmt = Query::select()
-            .expr_as(
-                Expr::col((CratesIoIden::Table, CratesIoIden::Id)).count(),
-                Alias::new("count"),
-            )
-            .from(CratesIoIden::Table)
-            .to_owned();
-
-        let builder = self.db_con.get_database_backend();
-        let result = SelectResult::find_by_statement(builder.build(&stmt))
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::FailedToCountCrates)?
-            .count
-            .ok_or(DbError::FailedToCountCrates)?;
-
-        Ok(result as u64)
+        self.count(
+            CratesIoIden::Table,
+            CratesIoIden::Id,
+            DbError::FailedToCountCrates,
+        )
+        .await
     }
 
     async fn get_total_cached_crate_versions(&self) -> DbResult<u64> {
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
-
-        let stmt = Query::select()
-            .expr_as(
-                Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Id)).count(),
-                Alias::new("count"),
-            )
-            .from(CratesIoMetaIden::Table)
-            .to_owned();
-
-        let builder = self.db_con.get_database_backend();
-        let result = SelectResult::find_by_statement(builder.build(&stmt))
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::FailedToCountCrateVersions)?
-            .count
-            .ok_or(DbError::FailedToCountCrateVersions)?;
-
-        Ok(result as u64)
+        self.count(
+            CratesIoMetaIden::Table,
+            CratesIoMetaIden::Id,
+            DbError::FailedToCountCrateVersions,
+        )
+        .await
     }
 
     async fn get_total_cached_downloads(&self) -> DbResult<u64> {
@@ -798,54 +793,22 @@ impl DbProvider for Database {
         Ok(groups.into_iter().map(Group::from).collect())
     }
 
-    async fn get_total_unique_crates(&self) -> DbResult<u32> {
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
-
-        let stmt = Query::select()
-            .expr_as(
-                Expr::col((CrateIden::Table, CrateIden::Id)).count(),
-                Alias::new("count"),
-            )
-            .from(CrateIden::Table)
-            .to_owned();
-
-        let builder = self.db_con.get_database_backend();
-        let result = SelectResult::find_by_statement(builder.build(&stmt))
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::FailedToCountCrates)?
-            .count
-            .ok_or(DbError::FailedToCountCrates)?;
-
-        Ok(result as u32)
+    async fn get_total_unique_crates(&self) -> DbResult<u64> {
+        self.count(
+            CrateIden::Table,
+            CrateIden::Id,
+            DbError::FailedToCountCrates,
+        )
+        .await
     }
 
-    async fn get_total_crate_versions(&self) -> DbResult<u32> {
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct SelectResult {
-            count: Option<i64>,
-        }
-
-        let stmt = Query::select()
-            .expr_as(
-                Expr::col((CrateMetaIden::Table, CrateMetaIden::Id)).count(),
-                Alias::new("count"),
-            )
-            .from(CrateMetaIden::Table)
-            .to_owned();
-
-        let builder = self.db_con.get_database_backend();
-        let result = SelectResult::find_by_statement(builder.build(&stmt))
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::FailedToCountCrateVersions)?
-            .count
-            .ok_or(DbError::FailedToCountCrateVersions)?;
-
-        Ok(result as u32)
+    async fn get_total_crate_versions(&self) -> DbResult<u64> {
+        self.count(
+            CrateMetaIden::Table,
+            CrateMetaIden::Id,
+            DbError::FailedToCountCrateVersions,
+        )
+        .await
     }
 
     async fn get_total_downloads(&self) -> DbResult<u64> {
