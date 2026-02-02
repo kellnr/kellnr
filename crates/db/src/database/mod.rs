@@ -488,17 +488,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(u.into_iter()
-            .map(|u| User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            })
-            .collect())
+        Ok(u.into_iter().map(User::from).collect())
     }
 
     async fn get_crate_users(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>> {
@@ -509,17 +499,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(u.into_iter()
-            .map(|u| User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            })
-            .collect())
+        Ok(u.into_iter().map(User::from).collect())
     }
 
     async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>> {
@@ -530,12 +510,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(u.into_iter()
-            .map(|u| Group {
-                id: u.id as i32,
-                name: u.name,
-            })
-            .collect())
+        Ok(u.into_iter().map(Group::from).collect())
     }
 
     async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>> {
@@ -546,17 +521,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(u.into_iter()
-            .map(|u| User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            })
-            .collect())
+        Ok(u.into_iter().map(User::from).collect())
     }
 
     async fn get_crate_versions(&self, crate_name: &NormalizedName) -> DbResult<Vec<Version>> {
@@ -725,15 +690,7 @@ impl DbProvider for Database {
             .await?
             .ok_or(DbError::TokenNotFound)?;
 
-        Ok(User {
-            id: u.id as i32,
-            name: u.name,
-            pwd: u.pwd,
-            salt: u.salt,
-            is_admin: u.is_admin,
-            is_read_only: u.is_read_only,
-            created: u.created,
-        })
+        Ok(User::from(u))
     }
 
     async fn get_user(&self, name: &str) -> DbResult<User> {
@@ -774,10 +731,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(at
-            .into_iter()
-            .map(|x| AuthToken::new(x.id as i32, x.name, x.token))
-            .collect())
+        Ok(at.into_iter().map(AuthToken::from).collect())
     }
 
     async fn delete_auth_token(&self, id: i32) -> DbResult<()> {
@@ -900,18 +854,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(users
-            .into_iter()
-            .map(|u| User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            })
-            .collect())
+        Ok(users.into_iter().map(User::from).collect())
     }
 
     async fn get_groups(&self) -> DbResult<Vec<Group>> {
@@ -920,13 +863,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(groups
-            .into_iter()
-            .map(|g| Group {
-                id: g.id as i32,
-                name: g.name,
-            })
-            .collect())
+        Ok(groups.into_iter().map(Group::from).collect())
     }
 
     async fn get_total_unique_crates(&self) -> DbResult<u32> {
@@ -1029,17 +966,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        let krates = krates
-            .iter()
-            .map(|c| CrateSummary {
-                name: c.name.clone(),
-                max_version: c.max_version.clone(),
-                last_updated: c.last_updated.clone(),
-                total_downloads: c.total_downloads,
-            })
-            .collect();
-
-        Ok(krates)
+        Ok(krates.into_iter().map(CrateSummary::from).collect())
     }
 
     async fn add_doc_queue(
@@ -1977,15 +1904,7 @@ impl DbProvider for Database {
                 .await?
                 .ok_or_else(|| DbError::UserNotFound(format!("user_id={}", identity.user_fk)))?;
 
-            Ok(Some(User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            }))
+            Ok(Some(User::from(u)))
         } else {
             Ok(None)
         }
