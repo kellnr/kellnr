@@ -1,6 +1,5 @@
 [workspace]
 default-members = ["crates/kellnr"]
-exclude = ["crates/test_data"]
 members = ["crates/*", "crates/db/entity", "crates/db/migration"]
 resolver = "3"
 
