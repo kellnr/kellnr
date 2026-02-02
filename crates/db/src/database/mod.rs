@@ -159,7 +159,7 @@ impl Database {
     /// Looks up a `crate_user` by crate name and user name; returns `None` if not found.
     async fn get_crate_user_by_crate_and_user(
         &self,
-        crate_name: &str,
+        crate_name: &NormalizedName,
         user: &str,
     ) -> DbResult<Option<crate_user::Model>> {
         crate_user::Entity::find()
@@ -167,7 +167,7 @@ impl Database {
             .join(JoinType::InnerJoin, crate_user::Relation::User.def())
             .filter(
                 Cond::all()
-                    .add(krate::Column::Name.eq(crate_name))
+                    .add(krate::Column::Name.eq(&**crate_name))
                     .add(user::Column::Name.eq(user)),
             )
             .one(&self.db_con)
@@ -719,7 +719,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()> {
+    async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
         self.get_crate_user_by_crate_and_user(crate_name, user)
             .await?
             .ok_or_else(|| DbError::UserNotFound(user.to_string()))?
