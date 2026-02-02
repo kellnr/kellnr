@@ -24,6 +24,7 @@ pub struct SettingsResponse {
     #[serde(flatten)]
     pub settings: Settings,
     pub sources: SourceMap,
+    pub defaults: Settings,
 }
 
 /// Get Kellnr settings (admin only)
@@ -45,6 +46,7 @@ pub async fn settings(
     Ok(Json(SettingsResponse {
         sources: settings.sources.clone(),
         settings: (*settings).clone(),
+        defaults: Settings::default(),
     }))
 }
 

@@ -6,6 +6,19 @@ export type ConfigSource = 'default' | 'toml' | 'env' | 'cli';
 
 export type SourceMap = Record<string, ConfigSource>;
 
+// Type for default values (same structure as settings sections, no sources)
+export type SettingsDefaults = {
+  docs: Docs
+  local: Local
+  log: Log
+  origin: Origin
+  postgresql: Postgresql
+  proxy: Proxy
+  registry: Registry
+  s3: S3
+  toolchain: Toolchain
+}
+
 export type Settings = {
   docs: Docs
   local: Local
@@ -17,6 +30,7 @@ export type Settings = {
   s3: S3
   toolchain: Toolchain
   sources: SourceMap
+  defaults?: SettingsDefaults
 }
 
 export type Toolchain = {
@@ -44,6 +58,7 @@ export type Origin = {
   hostname: string
   port: number
   protocol: string
+  path: string
 }
 
 export type Postgresql = {
@@ -109,7 +124,8 @@ export const emptySettings: Settings = {
   origin: {
     hostname: "",
     port: 0,
-    protocol: "0"
+    protocol: "0",
+    path: ""
   },
   postgresql: {
     enabled: false,
@@ -157,5 +173,6 @@ export const emptySettings: Settings = {
     enabled: false,
     max_size: 500
   },
-  sources: {}
+  sources: {},
+  defaults: undefined
 }
