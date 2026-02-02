@@ -228,7 +228,7 @@ export class ToolchainsPage extends BasePage {
     await this.expandToolchain(name, version);
 
     // Find the target item and click delete
-    const targetItem = this.page.locator(".target-item").filter({ hasText: target });
+    const targetItem = this.page.locator('[data-testid="target-item"]').filter({ hasText: target });
     const deleteButton = targetItem.getByRole("button");
     await deleteButton.click();
 

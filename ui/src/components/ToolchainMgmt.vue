@@ -1,13 +1,7 @@
 <template>
   <div>
-    <!-- Header -->
-    <div class="section-header">
-      <v-icon icon="mdi-hammer-wrench" size="small" color="primary" class="me-3"></v-icon>
-      <span class="text-h6 font-weight-bold">Toolchain Management</span>
-      <span v-if="toolchains.length > 0" class="toolchain-count">{{ toolchains.length }}</span>
-    </div>
+    <SectionHeader icon="mdi-hammer-wrench" title="Toolchain Management" :count="toolchains.length" />
 
-    <!-- Content -->
     <div class="section-content">
       <p class="text-body-2 text-medium-emphasis mb-5">
         Manage Rust toolchains for distribution via rustup. Upload toolchain archives (.tar.xz) and assign them to release channels.
@@ -15,10 +9,7 @@
 
       <!-- Toolchains List -->
       <div v-if="toolchains.length > 0" class="toolchains-section mb-6">
-        <div class="subsection-header">
-          <v-icon icon="mdi-package-variant" size="x-small" class="me-2" color="primary"></v-icon>
-          <span class="text-body-2 font-weight-medium">Available Toolchains</span>
-        </div>
+        <SubsectionHeader icon="mdi-package-variant" title="Available Toolchains" />
 
         <div class="toolchain-list">
           <v-expansion-panels variant="accordion" class="toolchain-panels">
@@ -85,21 +76,28 @@
                     </v-btn>
                   </div>
                   <div class="targets-list">
-                    <div v-for="target in toolchain.targets" :key="target.target" class="target-item">
-                      <div class="target-info">
-                        <v-icon icon="mdi-chip" size="x-small" class="me-2 text-medium-emphasis"></v-icon>
+                    <ListItem
+                      v-for="target in toolchain.targets"
+                      :key="target.target"
+                      icon="mdi-chip"
+                      compact
+                      test-id="target-item"
+                    >
+                      <template #title>
                         <span class="target-name">{{ target.target }}</span>
                         <span class="target-size">{{ formatSize(target.size) }}</span>
-                      </div>
-                      <v-btn
-                        color="error"
-                        variant="text"
-                        size="small"
-                        @click.stop="handleDeleteTarget(toolchain.name, toolchain.version, target.target)"
-                      >
-                        <v-icon icon="mdi-delete-outline" size="small"></v-icon>
-                      </v-btn>
-                    </div>
+                      </template>
+                      <template #actions>
+                        <v-btn
+                          color="error"
+                          variant="text"
+                          size="small"
+                          @click.stop="handleDeleteTarget(toolchain.name, toolchain.version, target.target)"
+                        >
+                          <v-icon icon="mdi-delete-outline" size="small"></v-icon>
+                        </v-btn>
+                      </template>
+                    </ListItem>
                   </div>
                 </div>
               </v-expansion-panel-text>
@@ -108,18 +106,15 @@
         </div>
       </div>
 
-      <div v-else class="empty-state mb-6">
-        <v-icon icon="mdi-hammer-wrench" size="large" class="mb-3 text-medium-emphasis"></v-icon>
-        <p class="text-body-2 text-medium-emphasis mb-0">No toolchains uploaded yet.</p>
-      </div>
+      <EmptyState
+        v-else
+        icon="mdi-hammer-wrench"
+        message="No toolchains uploaded yet."
+        class="mb-6"
+      />
 
       <!-- Upload Section -->
-      <div class="upload-section">
-        <div class="subsection-header">
-          <v-icon icon="mdi-upload" size="x-small" class="me-2" color="primary"></v-icon>
-          <span class="text-body-2 font-weight-medium">Upload Toolchain</span>
-        </div>
-
+      <FormSection icon="mdi-upload" title="Upload Toolchain">
         <v-form @submit.prevent="handleUpload" class="upload-form">
           <div class="form-grid">
             <v-text-field
@@ -229,41 +224,24 @@
         >
           {{ uploadStatus.message }}
         </v-alert>
-      </div>
+      </FormSection>
     </div>
 
     <!-- Snackbar for notifications -->
-    <v-snackbar
-      v-model="notification.snackbar.show"
-      :color="notification.snackbar.color"
-      :timeout="notification.snackbar.timeout"
-      location="bottom"
-    >
-      {{ notification.snackbar.message }}
-      <template v-slot:actions>
-        <v-btn variant="text" @click="notification.close()">Close</v-btn>
-      </template>
-    </v-snackbar>
+    <NotificationSnackbar
+      :snackbar="notification.snackbar"
+      @close="notification.close()"
+    />
 
     <!-- Delete Confirmation Dialog -->
-    <v-dialog v-model="dialogOpen" max-width="450">
-      <v-card class="confirm-dialog">
-        <div class="dialog-header">
-          <v-icon icon="mdi-alert-circle" color="warning" size="small" class="me-3"></v-icon>
-          <span class="text-h6 font-weight-bold">{{ dialog.title }}</span>
-        </div>
-
-        <v-card-text class="pa-5">
-          <p class="text-body-1 mb-0">{{ dialog.message }}</p>
-        </v-card-text>
-
-        <v-card-actions class="pa-4 pt-0">
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="dialog.cancel()">Cancel</v-btn>
-          <v-btn :color="dialog.confirmColor" variant="flat" @click="dialog.confirm()">Confirm</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <ConfirmDialog
+      v-model="dialogOpen"
+      :title="dialog.title"
+      :message="dialog.message"
+      :confirm-color="dialog.confirmColor"
+      @confirm="dialog.confirm()"
+      @cancel="dialog.cancel()"
+    />
   </div>
 </template>
 
@@ -273,6 +251,15 @@ import { useStatusMessage, useConfirmCallback, useNotification } from "../compos
 import { toolchainService } from "../services"
 import { isSuccess } from "../services/api"
 import type { Toolchain } from "../types/toolchain"
+import {
+  SectionHeader,
+  SubsectionHeader,
+  ListItem,
+  EmptyState,
+  FormSection,
+  ConfirmDialog,
+  NotificationSnackbar,
+} from "./common"
 
 // State
 const toolchains = ref<Toolchain[]>([])
@@ -384,7 +371,6 @@ async function handleUpload() {
 // Channel change handler
 async function handleChannelChange(toolchain: Toolchain) {
   if (toolchain.channel) {
-    // Assign channel
     const result = await toolchainService.setChannel(
       toolchain.channel,
       toolchain.name,
@@ -395,11 +381,9 @@ async function handleChannelChange(toolchain: Toolchain) {
       await loadToolchains()
     } else {
       notification.showError(result.error.message)
-      await loadToolchains() // Reload to reset the dropdown
+      await loadToolchains()
     }
   }
-  // If cleared (null), we don't need to do anything special
-  // The backend doesn't have a "remove channel" endpoint, but clearing just removes the UI association
 }
 
 // Delete entire toolchain
@@ -458,35 +442,8 @@ function getChannelColor(channel: string): string {
 </script>
 
 <style scoped>
-.section-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 24px;
-  background: rgba(var(--v-theme-primary), 0.05);
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
-}
-
-.toolchain-count {
-  margin-left: auto;
-  background: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 12px;
-}
-
 .section-content {
   padding: 24px;
-}
-
-/* Subsection Header */
-.subsection-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
 }
 
 /* Toolchain Panels */
@@ -599,28 +556,6 @@ function getChannelColor(channel: string): string {
   gap: 6px;
 }
 
-.target-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.target-item:hover {
-  border-color: rgb(var(--v-theme-primary));
-  background: rgba(var(--v-theme-primary), 0.03);
-}
-
-.target-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .target-name {
   font-family: 'Roboto Mono', monospace;
   font-size: 13px;
@@ -633,27 +568,10 @@ function getChannelColor(channel: string): string {
   background: rgba(var(--v-theme-primary), 0.08);
   padding: 2px 8px;
   border-radius: 4px;
+  margin-left: 8px;
 }
 
-/* Empty State */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 32px;
-  background: rgba(var(--v-theme-primary), 0.03);
-  border: 1px dashed rgb(var(--v-theme-outline));
-  border-radius: 8px;
-}
-
-/* Upload Section */
-.upload-section {
-  padding: 20px;
-  background: rgba(var(--v-theme-primary), 0.03);
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
-}
-
+/* Upload Form */
 .upload-form {
   margin-top: 4px;
 }
@@ -702,26 +620,8 @@ function getChannelColor(channel: string): string {
   justify-content: flex-end;
 }
 
-/* Confirm Dialog */
-.confirm-dialog {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.dialog-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 20px;
-  background: rgba(var(--v-theme-warning), 0.08);
-  border-bottom: 1px solid rgba(var(--v-theme-warning), 0.2);
-}
-
 /* Responsive */
 @media (max-width: 600px) {
-  .section-header {
-    padding: 16px 20px;
-  }
-
   .section-content {
     padding: 20px;
   }
@@ -737,12 +637,6 @@ function getChannelColor(channel: string): string {
 
   .channel-controls {
     flex: 1;
-  }
-
-  .target-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
   }
 }
 </style>
