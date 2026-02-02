@@ -38,8 +38,7 @@ use sea_orm::{
 use crate::error::DbError;
 use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{
-    ChannelInfo, DbResult, OAuth2StateData, PrefetchState, ToolchainTargetInfo,
-    ToolchainWithTargets,
+    ChannelInfo, DbResult, OAuth2StateData, PrefetchState, ToolchainWithTargets,
 };
 use crate::tables::init_database;
 use crate::{
@@ -67,6 +66,56 @@ impl Database {
         }
 
         Ok(Self { db_con })
+    }
+
+    /// Looks up a user by name; returns the entity model or [`DbError::UserNotFound`].
+    async fn get_user_model(&self, name: &str) -> DbResult<user::Model> {
+        user::Entity::find()
+            .filter(user::Column::Name.eq(name))
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::UserNotFound(name.to_owned()))
+    }
+
+    /// Looks up a krate by normalized name; returns the entity model or [`DbError::CrateNotFound`].
+    async fn get_krate_model(&self, crate_name: &NormalizedName) -> DbResult<krate::Model> {
+        krate::Entity::find()
+            .filter(krate::Column::Name.eq(&**crate_name))
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))
+    }
+
+    /// Looks up a group by name; returns the entity model or [`DbError::GroupNotFound`].
+    async fn get_group_model(&self, name: &str) -> DbResult<group::Model> {
+        group::Entity::find()
+            .filter(group::Column::Name.eq(name))
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::GroupNotFound(name.to_owned()))
+    }
+
+    /// Loads targets for a toolchain and returns a `ToolchainWithTargets`.
+    async fn toolchain_with_targets(&self, tc: toolchain::Model) -> DbResult<ToolchainWithTargets> {
+        let targets = toolchain_target::Entity::find()
+            .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
+            .all(&self.db_con)
+            .await?;
+        Ok(ToolchainWithTargets::from_model(tc, targets))
+    }
+
+    /// Looks up a toolchain by name and version; returns `None` if not found.
+    async fn get_toolchain_by_name_version(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> DbResult<Option<toolchain::Model>> {
+        toolchain::Entity::find()
+            .filter(toolchain::Column::Name.eq(name))
+            .filter(toolchain::Column::Version.eq(version))
+            .one(&self.db_con)
+            .await
+            .map_err(Into::into)
     }
 }
 
@@ -156,11 +205,7 @@ impl DbProvider for Database {
         crate_name: &NormalizedName,
         crate_version: &Version,
     ) -> DbResult<()> {
-        let krate: krate::Model = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+        let krate = self.get_krate_model(crate_name).await?;
         let crate_id = krate.id;
         let crate_total_downloads = krate.total_downloads;
 
@@ -265,19 +310,8 @@ impl DbProvider for Database {
     }
 
     async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
-        let user_fk = user::Entity::find()
-            .filter(user::Column::Name.eq(user))
-            .one(&self.db_con)
-            .await?
-            .map(|model| model.id)
-            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?;
-
-        let crate_fk: i64 = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
-            .one(&self.db_con)
-            .await?
-            .map(|model| model.id)
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+        let user_fk = self.get_user_model(user).await?.id;
+        let crate_fk = self.get_krate_model(crate_name).await?.id;
 
         let u = crate_user::ActiveModel {
             user_fk: Set(user_fk),
@@ -290,19 +324,8 @@ impl DbProvider for Database {
     }
 
     async fn add_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()> {
-        let group_fk = group::Entity::find()
-            .filter(group::Column::Name.eq(group))
-            .one(&self.db_con)
-            .await?
-            .map(|model| model.id)
-            .ok_or_else(|| DbError::GroupNotFound(group.to_string()))?;
-
-        let crate_fk: i64 = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
-            .one(&self.db_con)
-            .await?
-            .map(|model| model.id)
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+        let group_fk = self.get_group_model(group).await?.id;
+        let crate_fk = self.get_krate_model(crate_name).await?.id;
 
         let u = crate_group::ActiveModel {
             group_fk: Set(group_fk),
@@ -315,19 +338,8 @@ impl DbProvider for Database {
     }
 
     async fn add_group_user(&self, group_name: &str, user: &str) -> DbResult<()> {
-        let user_fk = user::Entity::find()
-            .filter(user::Column::Name.eq(user))
-            .one(&self.db_con)
-            .await?
-            .map(|model| model.id)
-            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?;
-
-        let group_fk: i64 = group::Entity::find()
-            .filter(group::Column::Name.eq(group_name.to_string()))
-            .one(&self.db_con)
-            .await?
-            .map(|model| model.id)
-            .ok_or_else(|| DbError::GroupNotFound(group_name.to_string()))?;
+        let user_fk = self.get_user_model(user).await?.id;
+        let group_fk = self.get_group_model(group_name).await?.id;
 
         let u = group_user::ActiveModel {
             user_fk: Set(user_fk),
@@ -340,19 +352,8 @@ impl DbProvider for Database {
     }
 
     async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()> {
-        let user_fk = user::Entity::find()
-            .filter(user::Column::Name.eq(owner))
-            .one(&self.db_con)
-            .await?
-            .map(|model| model.id)
-            .ok_or_else(|| DbError::UserNotFound(owner.to_string()))?;
-
-        let crate_fk: i64 = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
-            .one(&self.db_con)
-            .await?
-            .map(|model| model.id)
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+        let user_fk = self.get_user_model(owner).await?.id;
+        let crate_fk = self.get_krate_model(crate_name).await?.id;
 
         let o = owner::ActiveModel {
             user_fk: Set(user_fk),
@@ -365,16 +366,11 @@ impl DbProvider for Database {
     }
 
     async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool> {
-        let restricted_download = krate::Entity::find()
+        Ok(krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name.to_string()))
             .one(&self.db_con)
             .await?
-            .map(|model| model.restricted_download);
-
-        match restricted_download {
-            Some(restricted) => Ok(restricted),
-            None => Ok(false),
-        }
+            .is_some_and(|model| model.restricted_download))
     }
 
     async fn change_download_restricted(
@@ -382,13 +378,7 @@ impl DbProvider for Database {
         crate_name: &NormalizedName,
         restricted: bool,
     ) -> DbResult<()> {
-        let mut krate: krate::ActiveModel = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
-            .into();
-
+        let mut krate: krate::ActiveModel = self.get_krate_model(crate_name).await?.into();
         krate.restricted_download = Set(restricted);
         krate.update(&self.db_con).await?;
         Ok(())
@@ -488,17 +478,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(u.into_iter()
-            .map(|u| User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            })
-            .collect())
+        Ok(u.into_iter().map(User::from).collect())
     }
 
     async fn get_crate_users(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>> {
@@ -509,17 +489,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(u.into_iter()
-            .map(|u| User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            })
-            .collect())
+        Ok(u.into_iter().map(User::from).collect())
     }
 
     async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>> {
@@ -530,12 +500,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(u.into_iter()
-            .map(|u| Group {
-                id: u.id as i32,
-                name: u.name,
-            })
-            .collect())
+        Ok(u.into_iter().map(Group::from).collect())
     }
 
     async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>> {
@@ -546,17 +511,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(u.into_iter()
-            .map(|u| User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            })
-            .collect())
+        Ok(u.into_iter().map(User::from).collect())
     }
 
     async fn get_crate_versions(&self, crate_name: &NormalizedName) -> DbResult<Vec<Version>> {
@@ -584,24 +539,18 @@ impl DbProvider for Database {
     }
 
     async fn delete_user(&self, user_name: &str) -> DbResult<()> {
-        let u = user::Entity::find()
-            .filter(user::Column::Name.eq(user_name))
-            .one(&self.db_con)
+        self.get_user_model(user_name)
             .await?
-            .ok_or_else(|| DbError::UserNotFound(user_name.to_owned()))?;
-
-        u.delete(&self.db_con).await?;
+            .delete(&self.db_con)
+            .await?;
         Ok(())
     }
 
     async fn delete_group(&self, group_name: &str) -> DbResult<()> {
-        let g = group::Entity::find()
-            .filter(group::Column::Name.eq(group_name))
-            .one(&self.db_con)
+        self.get_group_model(group_name)
             .await?
-            .ok_or_else(|| DbError::GroupNotFound(group_name.to_owned()))?;
-
-        g.delete(&self.db_con).await?;
+            .delete(&self.db_con)
+            .await?;
         Ok(())
     }
 
@@ -609,13 +558,7 @@ impl DbProvider for Database {
         let salt = generate_salt();
         let hashed = hash_pwd(new_pwd, &salt);
 
-        let mut u: user::ActiveModel = user::Entity::find()
-            .filter(user::Column::Name.eq(user_name))
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::UserNotFound(user_name.to_owned()))?
-            .into();
-
+        let mut u: user::ActiveModel = self.get_user_model(user_name).await?.into();
         u.pwd = Set(hashed.clone());
         u.salt = Set(salt);
 
@@ -624,13 +567,7 @@ impl DbProvider for Database {
     }
 
     async fn change_read_only_state(&self, user_name: &str, state: bool) -> DbResult<()> {
-        let mut u: user::ActiveModel = user::Entity::find()
-            .filter(user::Column::Name.eq(user_name))
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::UserNotFound(user_name.to_owned()))?
-            .into();
-
+        let mut u: user::ActiveModel = self.get_user_model(user_name).await?.into();
         u.is_read_only = Set(state);
 
         u.update(&self.db_con).await?;
@@ -638,13 +575,7 @@ impl DbProvider for Database {
     }
 
     async fn change_admin_state(&self, user_name: &str, state: bool) -> DbResult<()> {
-        let mut u: user::ActiveModel = user::Entity::find()
-            .filter(user::Column::Name.eq(user_name))
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::UserNotFound(user_name.to_owned()))?
-            .into();
-
+        let mut u: user::ActiveModel = self.get_user_model(user_name).await?.into();
         u.is_admin = Set(state);
 
         u.update(&self.db_con).await?;
@@ -669,13 +600,7 @@ impl DbProvider for Database {
     }
 
     async fn get_max_version_from_name(&self, crate_name: &NormalizedName) -> DbResult<Version> {
-        let krate = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
-            .one(&self.db_con)
-            .await?;
-
-        let k =
-            krate.ok_or_else(|| DbError::FailedToGetMaxVersionByName(crate_name.to_string()))?;
+        let k = self.get_krate_model(crate_name).await?;
         let v = Version::try_from(&k.max_version)
             .map_err(|_| DbError::FailedToGetMaxVersionByName(crate_name.to_string()))?;
         Ok(v)
@@ -696,12 +621,7 @@ impl DbProvider for Database {
 
     async fn add_auth_token(&self, name: &str, token: &str, user: &str) -> DbResult<()> {
         let hashed_token = hash_token(token);
-
-        let user = user::Entity::find()
-            .filter(user::Column::Name.eq(user))
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?;
+        let user = self.get_user_model(user).await?;
 
         let at = auth_token::ActiveModel {
             name: Set(name.to_owned()),
@@ -725,46 +645,15 @@ impl DbProvider for Database {
             .await?
             .ok_or(DbError::TokenNotFound)?;
 
-        Ok(User {
-            id: u.id as i32,
-            name: u.name,
-            pwd: u.pwd,
-            salt: u.salt,
-            is_admin: u.is_admin,
-            is_read_only: u.is_read_only,
-            created: u.created,
-        })
+        Ok(User::from(u))
     }
 
     async fn get_user(&self, name: &str) -> DbResult<User> {
-        let u = user::Entity::find()
-            .filter(user::Column::Name.eq(name))
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::UserNotFound(name.to_owned()))?;
-
-        Ok(User {
-            id: u.id as i32,
-            name: u.name,
-            pwd: u.pwd,
-            salt: u.salt,
-            is_admin: u.is_admin,
-            is_read_only: u.is_read_only,
-            created: u.created,
-        })
+        Ok(User::from(self.get_user_model(name).await?))
     }
 
     async fn get_group(&self, name: &str) -> DbResult<Group> {
-        let g = group::Entity::find()
-            .filter(group::Column::Name.eq(name))
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::GroupNotFound(name.to_owned()))?;
-
-        Ok(Group {
-            id: g.id as i32,
-            name: g.name,
-        })
+        Ok(Group::from(self.get_group_model(name).await?))
     }
 
     async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>> {
@@ -774,10 +663,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(at
-            .into_iter()
-            .map(|x| AuthToken::new(x.id as i32, x.name, x.token))
-            .collect())
+        Ok(at.into_iter().map(AuthToken::from).collect())
     }
 
     async fn delete_auth_token(&self, id: i32) -> DbResult<()> {
@@ -900,18 +786,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(users
-            .into_iter()
-            .map(|u| User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            })
-            .collect())
+        Ok(users.into_iter().map(User::from).collect())
     }
 
     async fn get_groups(&self) -> DbResult<Vec<Group>> {
@@ -920,13 +795,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(groups
-            .into_iter()
-            .map(|g| Group {
-                id: g.id as i32,
-                name: g.name,
-            })
-            .collect())
+        Ok(groups.into_iter().map(Group::from).collect())
     }
 
     async fn get_total_unique_crates(&self) -> DbResult<u32> {
@@ -1029,17 +898,7 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        let krates = krates
-            .iter()
-            .map(|c| CrateSummary {
-                name: c.name.clone(),
-                max_version: c.max_version.clone(),
-                last_updated: c.last_updated.clone(),
-                total_downloads: c.total_downloads,
-            })
-            .collect();
-
-        Ok(krates)
+        Ok(krates.into_iter().map(CrateSummary::from).collect())
     }
 
     async fn add_doc_queue(
@@ -1342,11 +1201,7 @@ impl DbProvider for Database {
     }
 
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {
-        let krate = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+        let krate = self.get_krate_model(crate_name).await?;
 
         let owners: Vec<String> = krate
             .find_related(owner::Entity)
@@ -1977,15 +1832,7 @@ impl DbProvider for Database {
                 .await?
                 .ok_or_else(|| DbError::UserNotFound(format!("user_id={}", identity.user_fk)))?;
 
-            Ok(Some(User {
-                id: u.id as i32,
-                name: u.name,
-                pwd: u.pwd,
-                salt: u.salt,
-                is_admin: u.is_admin,
-                is_read_only: u.is_read_only,
-                created: u.created,
-            }))
+            Ok(Some(User::from(u)))
         } else {
             Ok(None)
         }
@@ -2192,34 +2039,10 @@ impl DbProvider for Database {
             .one(&self.db_con)
             .await?;
 
-        match tc {
-            Some(tc) => {
-                let targets = toolchain_target::Entity::find()
-                    .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
-                    .all(&self.db_con)
-                    .await?;
-
-                Ok(Some(ToolchainWithTargets {
-                    id: tc.id,
-                    name: tc.name,
-                    version: tc.version,
-                    date: tc.date,
-                    channel: tc.channel,
-                    created: tc.created,
-                    targets: targets
-                        .into_iter()
-                        .map(|t| ToolchainTargetInfo {
-                            id: t.id,
-                            target: t.target,
-                            storage_path: t.storage_path,
-                            hash: t.hash,
-                            size: t.size,
-                        })
-                        .collect(),
-                }))
-            }
-            None => Ok(None),
-        }
+        Ok(match tc {
+            Some(tc) => Some(self.toolchain_with_targets(tc).await?),
+            None => None,
+        })
     }
 
     async fn get_toolchain_by_version(
@@ -2227,40 +2050,12 @@ impl DbProvider for Database {
         name: &str,
         version: &str,
     ) -> DbResult<Option<ToolchainWithTargets>> {
-        let tc = toolchain::Entity::find()
-            .filter(toolchain::Column::Name.eq(name))
-            .filter(toolchain::Column::Version.eq(version))
-            .one(&self.db_con)
-            .await?;
-
-        match tc {
-            Some(tc) => {
-                let targets = toolchain_target::Entity::find()
-                    .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
-                    .all(&self.db_con)
-                    .await?;
-
-                Ok(Some(ToolchainWithTargets {
-                    id: tc.id,
-                    name: tc.name,
-                    version: tc.version,
-                    date: tc.date,
-                    channel: tc.channel,
-                    created: tc.created,
-                    targets: targets
-                        .into_iter()
-                        .map(|t| ToolchainTargetInfo {
-                            id: t.id,
-                            target: t.target,
-                            storage_path: t.storage_path,
-                            hash: t.hash,
-                            size: t.size,
-                        })
-                        .collect(),
-                }))
-            }
-            None => Ok(None),
-        }
+        Ok(
+            match self.get_toolchain_by_name_version(name, version).await? {
+                Some(tc) => Some(self.toolchain_with_targets(tc).await?),
+                None => None,
+            },
+        )
     }
 
     async fn list_toolchains(&self) -> DbResult<Vec<ToolchainWithTargets>> {
@@ -2272,29 +2067,7 @@ impl DbProvider for Database {
         let mut result = Vec::with_capacity(toolchains.len());
 
         for tc in toolchains {
-            let targets = toolchain_target::Entity::find()
-                .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
-                .all(&self.db_con)
-                .await?;
-
-            result.push(ToolchainWithTargets {
-                id: tc.id,
-                name: tc.name,
-                version: tc.version,
-                date: tc.date,
-                channel: tc.channel,
-                created: tc.created,
-                targets: targets
-                    .into_iter()
-                    .map(|t| ToolchainTargetInfo {
-                        id: t.id,
-                        target: t.target,
-                        storage_path: t.storage_path,
-                        hash: t.hash,
-                        size: t.size,
-                    })
-                    .collect(),
-            });
+            result.push(self.toolchain_with_targets(tc).await?);
         }
 
         Ok(result)
@@ -2316,14 +2089,7 @@ impl DbProvider for Database {
         version: &str,
         target: &str,
     ) -> DbResult<()> {
-        // First get the toolchain ID
-        let tc = toolchain::Entity::find()
-            .filter(toolchain::Column::Name.eq(name))
-            .filter(toolchain::Column::Version.eq(version))
-            .one(&self.db_con)
-            .await?;
-
-        if let Some(tc) = tc {
+        if let Some(tc) = self.get_toolchain_by_name_version(name, version).await? {
             toolchain_target::Entity::delete_many()
                 .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
                 .filter(toolchain_target::Column::Target.eq(target))
@@ -2348,13 +2114,7 @@ impl DbProvider for Database {
         }
 
         // Then set the channel on the target toolchain
-        let tc = toolchain::Entity::find()
-            .filter(toolchain::Column::Name.eq(name))
-            .filter(toolchain::Column::Version.eq(version))
-            .one(&self.db_con)
-            .await?;
-
-        if let Some(tc) = tc {
+        if let Some(tc) = self.get_toolchain_by_name_version(name, version).await? {
             let mut model: toolchain::ActiveModel = tc.into();
             model.channel = Set(Some(channel.to_string()));
             model.update(&self.db_con).await?;

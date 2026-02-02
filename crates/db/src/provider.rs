@@ -50,6 +50,18 @@ pub struct ToolchainTargetInfo {
     pub size: i64,
 }
 
+impl From<kellnr_entity::toolchain_target::Model> for ToolchainTargetInfo {
+    fn from(t: kellnr_entity::toolchain_target::Model) -> Self {
+        Self {
+            id: t.id,
+            target: t.target,
+            storage_path: t.storage_path,
+            hash: t.hash,
+            size: t.size,
+        }
+    }
+}
+
 /// Toolchain with all its targets
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ToolchainWithTargets {
@@ -67,6 +79,24 @@ pub struct ToolchainWithTargets {
     pub created: String,
     /// Available targets for this toolchain
     pub targets: Vec<ToolchainTargetInfo>,
+}
+
+impl ToolchainWithTargets {
+    /// Build from toolchain entity model and its target models.
+    pub fn from_model(
+        tc: kellnr_entity::toolchain::Model,
+        targets: Vec<kellnr_entity::toolchain_target::Model>,
+    ) -> Self {
+        Self {
+            id: tc.id,
+            name: tc.name,
+            version: tc.version,
+            date: tc.date,
+            channel: tc.channel,
+            created: tc.created,
+            targets: targets.into_iter().map(ToolchainTargetInfo::from).collect(),
+        }
+    }
 }
 
 /// Channel information (e.g., "stable" -> "1.75.0")
