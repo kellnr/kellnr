@@ -181,7 +181,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_total_unique_crates(&self) -> DbResult<u64>;
     async fn get_total_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_downloads(&self) -> DbResult<u64>;
-    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>>;
+    async fn get_top_crates_downloads(&self, top: u64) -> DbResult<Vec<(String, u64)>>;
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64>;
     async fn get_total_cached_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_cached_downloads(&self) -> DbResult<u64>;
@@ -541,7 +541,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_top_crates_downloads(&self, _top: u32) -> DbResult<Vec<(String, u64)>> {
+            async fn get_top_crates_downloads(&self, _top: u64) -> DbResult<Vec<(String, u64)>> {
                 unimplemented!()
             }
 

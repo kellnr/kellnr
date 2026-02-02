@@ -199,11 +199,11 @@ impl Database {
             count: Option<i64>,
         }
 
-        let stmt = Query::select()
-            .expr_as(Expr::col((table, id_column)).count(), Alias::new("count"))
-            .from(table)
-            .to_owned();
-        let statement = self.db_con.get_database_backend().build(&stmt);
+        let statement = self.db_con.get_database_backend().build(
+            Query::select()
+                .expr_as(Expr::col((table, id_column)).count(), Alias::new("count"))
+                .from(table),
+        );
         let Some(result) = CountResult::find_by_statement(statement)
             .one(&self.db_con)
             .await?
@@ -871,41 +871,37 @@ impl DbProvider for Database {
             total_downloads: i64,
         }
 
-        let total_downloads = krate::Entity::find()
+        Ok(krate::Entity::find()
             .select_only()
             .column(krate::Column::TotalDownloads)
             .into_model::<Model>()
             .all(&self.db_con)
-            .await?;
-
-        Ok(total_downloads
-            .iter()
+            .await?
+            .into_iter()
             .map(|m| m.total_downloads as u64)
             .sum())
     }
 
-    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>> {
+    async fn get_top_crates_downloads(&self, top: u64) -> DbResult<Vec<(String, u64)>> {
         #[derive(Debug, PartialEq, FromQueryResult)]
         struct SelectResult {
             original_name: String,
             total_downloads: i64,
         }
 
-        let stmt = Query::select()
-            .columns(vec![CrateIden::OriginalName, CrateIden::TotalDownloads])
-            .from(CrateIden::Table)
-            .order_by(CrateIden::TotalDownloads, Order::Desc)
-            .limit(top as u64)
-            .to_owned();
+        let stmt = self.db_con.get_database_backend().build(
+            Query::select()
+                .columns(vec![CrateIden::OriginalName, CrateIden::TotalDownloads])
+                .from(CrateIden::Table)
+                .order_by(CrateIden::TotalDownloads, Order::Desc)
+                .limit(top),
+        );
 
-        let builder = self.db_con.get_database_backend();
-        let result = SelectResult::find_by_statement(builder.build(&stmt))
+        Ok(SelectResult::find_by_statement(stmt)
             .all(&self.db_con)
-            .await?;
-
-        Ok(result
-            .iter()
-            .map(|x| (x.original_name.clone(), x.total_downloads as u64))
+            .await?
+            .into_iter()
+            .map(|x| (x.original_name, x.total_downloads as u64))
             .collect())
     }
 
@@ -994,7 +990,7 @@ impl DbProvider for Database {
             // Update the max. version if the deleted version was the max. version.
             if version == &current_max_version {
                 let new_max_version = crate_meta_rows
-                    .iter()
+                    .into_iter()
                     .map(|cm| Version::from_unchecked_str(&cm.version))
                     .max()
                     .unwrap(); // Safe to unwrap, as crate_meta_rows is not empty
