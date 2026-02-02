@@ -94,4 +94,3 @@ jobs:
 
       - name: Build with Nix
         run: nix build
-
