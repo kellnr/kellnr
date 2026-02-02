@@ -988,10 +988,6 @@ function isSourceActive(key: string, source: ConfigSource): boolean {
   align-items: center;
 }
 
-.expand-collapse-buttons {
-  margin-left: auto;
-}
-
 /* Responsive */
 @media (max-width: 960px) {
   .config-row {
