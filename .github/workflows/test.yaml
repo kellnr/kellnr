@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - v6.0.0
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -94,4 +95,3 @@ jobs:
 
       - name: Build with Nix
         run: nix build
-
