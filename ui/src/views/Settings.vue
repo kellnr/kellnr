@@ -84,6 +84,7 @@
                 color="primary"
                 rounded="lg"
                 class="mb-1"
+                data-testid="nav-startup-config-mobile"
               >
                 <template v-slot:prepend>
                   <div class="nav-icon-wrapper" :class="{ active: activeTab === 'config' }">
@@ -206,6 +207,7 @@
                 color="primary"
                 rounded="lg"
                 class="mb-1"
+                data-testid="nav-startup-config"
               >
                 <template v-slot:prepend>
                   <div class="nav-icon-wrapper" :class="{ active: activeTab === 'config' }">

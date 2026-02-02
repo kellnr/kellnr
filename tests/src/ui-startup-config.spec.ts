@@ -60,10 +60,7 @@ test.describe("Startup Config UI Tests", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    // Open Startup Config tab (sidebar item with "Startup Config" or "Config")
-    const configNavItem = page
-      .locator(".v-list-item-title")
-      .filter({ hasText: /Startup Config|^Config$/ });
+    const configNavItem = page.getByTestId("nav-startup-config");
     await expect(configNavItem).toBeVisible();
     await configNavItem.click();
     await page.waitForTimeout(500);
@@ -98,9 +95,7 @@ test.describe("Startup Config UI Tests", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    const configNavItem = page
-      .locator(".v-list-item-title")
-      .filter({ hasText: /Startup Config|^Config$/ });
+    const configNavItem = page.getByTestId("nav-startup-config");
     await expect(configNavItem).toBeVisible();
     await configNavItem.click();
     await page.waitForTimeout(500);
