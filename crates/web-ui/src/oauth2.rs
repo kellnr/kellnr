@@ -261,14 +261,14 @@ pub async fn callback(
     );
 
     // Redirect to UI root
-    let mut base_path = app_state.settings.origin.path.to_owned();
+    let mut base_path = app_state.settings.origin.path.clone();
     if !base_path.ends_with('/') {
-        base_path += "/";
+        base_path.push('/');
     }
     if !base_path.starts_with('/') {
-        base_path = format!("/{}", base_path);
+        base_path.insert(0, '/');
     }
-    Ok((jar, Redirect::to(base_path.as_str())))
+    Ok((jar, Redirect::to(&base_path)))
 }
 
 /// Error callback for `OAuth2` flow

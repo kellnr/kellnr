@@ -118,6 +118,63 @@ impl Database {
             .map_err(Into::into)
     }
 
+    /// Looks up a `crate_group` by crate name and group name; returns `None` if not found.
+    async fn get_crate_group_by_name_and_group(
+        &self,
+        crate_name: &NormalizedName,
+        group: &str,
+    ) -> DbResult<Option<crate_group::Model>> {
+        crate_group::Entity::find()
+            .join(JoinType::InnerJoin, crate_group::Relation::Krate.def())
+            .join(JoinType::InnerJoin, crate_group::Relation::Group.def())
+            .filter(
+                Cond::all()
+                    .add(krate::Column::Name.eq(&**crate_name))
+                    .add(group::Column::Name.eq(group)),
+            )
+            .one(&self.db_con)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Looks up a `group_user` by group name and user name; returns `None` if not found.
+    async fn get_group_user_by_group_and_user(
+        &self,
+        group_name: &str,
+        user: &str,
+    ) -> DbResult<Option<group_user::Model>> {
+        group_user::Entity::find()
+            .join(JoinType::InnerJoin, group_user::Relation::Group.def())
+            .join(JoinType::InnerJoin, group_user::Relation::User.def())
+            .filter(
+                Cond::all()
+                    .add(group::Column::Name.eq(group_name))
+                    .add(user::Column::Name.eq(user)),
+            )
+            .one(&self.db_con)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Looks up a `crate_user` by crate name and user name; returns `None` if not found.
+    async fn get_crate_user_by_crate_and_user(
+        &self,
+        crate_name: &NormalizedName,
+        user: &str,
+    ) -> DbResult<Option<crate_user::Model>> {
+        crate_user::Entity::find()
+            .join(JoinType::InnerJoin, crate_user::Relation::Krate.def())
+            .join(JoinType::InnerJoin, crate_user::Relation::User.def())
+            .filter(
+                Cond::all()
+                    .add(krate::Column::Name.eq(&**crate_name))
+                    .add(user::Column::Name.eq(user)),
+            )
+            .one(&self.db_con)
+            .await
+            .map_err(Into::into)
+    }
+
     /// Executes a count query `SELECT COUNT(id_column) FROM table` and returns the count as u64.
     async fn count<T>(&self, table: T, id_column: T, error: DbError) -> DbResult<u64>
     where
@@ -380,33 +437,17 @@ impl DbProvider for Database {
     }
 
     async fn is_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool> {
-        let user = crate_user::Entity::find()
-            .join(JoinType::InnerJoin, crate_user::Relation::Krate.def())
-            .join(JoinType::InnerJoin, crate_user::Relation::User.def())
-            .filter(
-                Cond::all()
-                    .add(krate::Column::Name.eq(crate_name.to_string()))
-                    .add(user::Column::Name.eq(user)),
-            )
-            .one(&self.db_con)
-            .await?;
-
-        Ok(user.is_some())
+        Ok(self
+            .get_crate_user_by_crate_and_user(crate_name, user)
+            .await?
+            .is_some())
     }
 
     async fn is_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<bool> {
-        let group = crate_group::Entity::find()
-            .join(JoinType::InnerJoin, crate_group::Relation::Krate.def())
-            .join(JoinType::InnerJoin, crate_group::Relation::Group.def())
-            .filter(
-                Cond::all()
-                    .add(krate::Column::Name.eq(crate_name.to_string()))
-                    .add(group::Column::Name.eq(group)),
-            )
-            .one(&self.db_con)
-            .await?;
-
-        Ok(group.is_some())
+        Ok(self
+            .get_crate_group_by_name_and_group(crate_name, group)
+            .await?
+            .is_some())
     }
 
     async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool> {
@@ -426,18 +467,10 @@ impl DbProvider for Database {
     }
 
     async fn is_group_user(&self, group_name: &str, user: &str) -> DbResult<bool> {
-        let user = group_user::Entity::find()
-            .join(JoinType::InnerJoin, group_user::Relation::Group.def())
-            .join(JoinType::InnerJoin, group_user::Relation::User.def())
-            .filter(
-                Cond::all()
-                    .add(group::Column::Name.eq(group_name.to_string()))
-                    .add(user::Column::Name.eq(user)),
-            )
-            .one(&self.db_con)
-            .await?;
-
-        Ok(user.is_some())
+        Ok(self
+            .get_group_user_by_group_and_user(group_name, user)
+            .await?
+            .is_some())
     }
 
     async fn is_owner(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool> {
@@ -686,57 +719,30 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()> {
-        let user = crate_user::Entity::find()
-            .join(JoinType::InnerJoin, crate_user::Relation::Krate.def())
-            .join(JoinType::InnerJoin, crate_user::Relation::User.def())
-            .filter(
-                Cond::all()
-                    .add(krate::Column::Name.eq(crate_name))
-                    .add(user::Column::Name.eq(user)),
-            )
-            .one(&self.db_con)
+    async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
+        self.get_crate_user_by_crate_and_user(crate_name, user)
             .await?
-            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?;
-
-        user.delete(&self.db_con).await?;
-
+            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?
+            .delete(&self.db_con)
+            .await?;
         Ok(())
     }
 
     async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()> {
-        let group = crate_group::Entity::find()
-            .join(JoinType::InnerJoin, crate_group::Relation::Krate.def())
-            .join(JoinType::InnerJoin, crate_group::Relation::Group.def())
-            .filter(
-                Cond::all()
-                    .add(krate::Column::Name.eq(crate_name.to_string()))
-                    .add(group::Column::Name.eq(group)),
-            )
-            .one(&self.db_con)
+        self.get_crate_group_by_name_and_group(crate_name, group)
             .await?
-            .ok_or_else(|| DbError::GroupNotFound(group.to_string()))?;
-
-        group.delete(&self.db_con).await?;
-
+            .ok_or_else(|| DbError::GroupNotFound(group.to_string()))?
+            .delete(&self.db_con)
+            .await?;
         Ok(())
     }
 
     async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()> {
-        let user = group_user::Entity::find()
-            .join(JoinType::InnerJoin, group_user::Relation::Group.def())
-            .join(JoinType::InnerJoin, group_user::Relation::User.def())
-            .filter(
-                Cond::all()
-                    .add(group::Column::Name.eq(group_name))
-                    .add(user::Column::Name.eq(user)),
-            )
-            .one(&self.db_con)
+        self.get_group_user_by_group_and_user(group_name, user)
             .await?
-            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?;
-
-        user.delete(&self.db_con).await?;
-
+            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?
+            .delete(&self.db_con)
+            .await?;
         Ok(())
     }
 
