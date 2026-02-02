@@ -12,17 +12,14 @@ use axum::http::StatusCode;
 use axum::response::Redirect;
 use axum::{Extension, Json};
 use axum_extra::extract::PrivateCookieJar;
-use axum_extra::extract::cookie::Cookie;
-use cookie::time;
 use kellnr_appstate::{AppState, DbState, SettingsState};
 use kellnr_auth::oauth2::{OAuth2Handler, generate_unique_username};
-use kellnr_common::util::generate_rand_string;
-use kellnr_settings::constants::COOKIE_SESSION_ID;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, trace, warn};
 use utoipa::ToSchema;
 
 use crate::error::RouteError;
+use crate::session::create_session_jar;
 
 /// Type alias for the `OAuth2` handler extension
 pub type OAuth2Ext = Extension<Option<Arc<OAuth2Handler>>>;
@@ -237,28 +234,8 @@ pub async fn callback(
         }
     };
 
-    // Create session
-    let session_token = generate_rand_string(12);
-    app_state
-        .db
-        .add_session_token(&user.name, &session_token)
-        .await
-        .map_err(|e| {
-            error!("Failed to create session: {}", e);
-            RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
-        })?;
-
+    let jar = create_session_jar(cookies, &app_state, &user.name).await?;
     info!("Created session for OAuth2 user: {}", user.name);
-
-    // Set session cookie
-    let jar = cookies.add(
-        Cookie::build((COOKIE_SESSION_ID, session_token))
-            .max_age(time::Duration::seconds(
-                app_state.settings.registry.session_age_seconds as i64,
-            ))
-            .same_site(axum_extra::extract::cookie::SameSite::Strict)
-            .path("/"),
-    );
 
     // Redirect to UI root
     let mut base_path = app_state.settings.origin.path.clone();

@@ -3,7 +3,6 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
-use cookie::time;
 use kellnr_appstate::{AppState, DbState, TokenCacheState};
 use kellnr_auth::token;
 use kellnr_common::util::generate_rand_string;
@@ -14,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::error::RouteError;
-use crate::session::{AdminUser, MaybeUser};
+use crate::session::{AdminUser, MaybeUser, create_session_jar};
 
 #[derive(Serialize, ToSchema)]
 pub struct NewTokenResponse {
@@ -321,20 +320,7 @@ pub async fn login(
         .await
         .map_err(|_| RouteError::AuthenticationFailure)?;
 
-    let session_token = generate_rand_string(12);
-    state
-        .db
-        .add_session_token(&credentials.user, &session_token)
-        .await?;
-
-    let jar = cookies.add(
-        Cookie::build((COOKIE_SESSION_ID, session_token))
-            .max_age(time::Duration::seconds(
-                state.settings.registry.session_age_seconds as i64,
-            ))
-            .same_site(axum_extra::extract::cookie::SameSite::Strict)
-            .path("/"),
-    );
+    let jar = create_session_jar(cookies, &state, &credentials.user).await?;
 
     Ok((
         jar,
