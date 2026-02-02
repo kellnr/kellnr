@@ -155,7 +155,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>>;
     async fn delete_auth_token(&self, id: i32) -> DbResult<()>;
     async fn delete_owner(&self, crate_name: &str, owner: &str) -> DbResult<()>;
-    async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()>;
+    async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
     async fn add_user(
         &self,
         name: &str,
@@ -521,7 +521,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()>{
+            async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>{
                 unimplemented!()
             }
 
