@@ -40,14 +40,16 @@
         craneLib = (crane.mkLib pkgs).overrideToolchain (_: rustToolchain);
 
         # Build the UI with buildNpmPackage
+        # NOTE: When package-lock.json changes, the npmDepsHash must be updated.
+        # For Dependabot PRs, the hash is auto-updated by the dependabot-nix-hash workflow.
+        # For manual updates, run: nix run nixpkgs#prefetch-npm-deps -- ui/package-lock.json
         uiAssets = pkgs.buildNpmPackage {
           pname = "kellnr-ui";
           version = "0.1.0";
           src = ./ui;
 
-          npmDepsHash = "sha256-d58iw7aMQddUGT0EQYq150rlOnVmMOKYFqdpJXgVRmo=";
+          npmDepsHash = "sha256-JYhMoTkzLJ4Q/Gh9J37TvdXVlHEI636MMYufKfEUNsQ=";
 
-          # Don't run the default build, we need vite build
           buildPhase = ''
             npm run build
           '';
@@ -56,14 +58,12 @@
             cp -r dist $out
           '';
 
-          # Node.js version
           nodejs = pkgs.nodejs_22;
         };
 
         # Source filtering for Rust
         rustFilter = path: type:
           (craneLib.filterCargoSources path type) ||
-          # Include the pre-built UI assets location
           (lib.hasInfix "crates/embedded-resources/static" path);
 
         src = lib.cleanSourceWith {
