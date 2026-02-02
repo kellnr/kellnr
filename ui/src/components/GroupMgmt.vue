@@ -180,8 +180,10 @@
 
     <!-- Snackbar for notifications -->
     <NotificationSnackbar
-      :snackbar="notification.snackbar"
-      @close="notification.close()"
+      v-model="notification.snackbar.show"
+      :message="notification.snackbar.message"
+      :color="notification.snackbar.color"
+      :timeout="notification.snackbar.timeout"
     />
 
     <!-- Confirmation Dialog -->

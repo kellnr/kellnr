@@ -1,32 +1,27 @@
 <template>
   <v-snackbar
-    v-model="snackbar.show"
-    :color="snackbar.color"
-    :timeout="snackbar.timeout"
+    :model-value="modelValue"
+    :color="color"
+    :timeout="timeout"
     location="bottom"
+    @update:model-value="$emit('update:modelValue', $event)"
   >
-    {{ snackbar.message }}
+    {{ message }}
     <template v-slot:actions>
-      <v-btn variant="text" @click="close">Close</v-btn>
+      <v-btn variant="text" @click="$emit('update:modelValue', false)">Close</v-btn>
     </template>
   </v-snackbar>
 </template>
 
 <script setup lang="ts">
 defineProps<{
-  snackbar: {
-    show: boolean;
-    message: string;
-    color: string;
-    timeout: number;
-  };
+  modelValue: boolean;
+  message: string;
+  color: string;
+  timeout: number;
 }>();
 
-const emit = defineEmits<{
-  'close': [];
+defineEmits<{
+  'update:modelValue': [value: boolean];
 }>();
-
-function close() {
-  emit('close');
-}
 </script>

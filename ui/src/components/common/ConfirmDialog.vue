@@ -58,11 +58,7 @@ const modelValue = computed({
   set: (val: boolean) => emit('update:modelValue', val)
 });
 
-const iconColor = computed(() => {
-  if (props.confirmColor === 'error') return 'error';
-  if (props.confirmColor === 'warning') return 'warning';
-  return 'warning';
-});
+const iconColor = computed(() => props.confirmColor === 'error' ? 'error' : 'warning');
 
 const headerColorClass = computed(() => {
   if (props.confirmColor === 'error') return 'header-error';
