@@ -1,7 +1,7 @@
 use axum::routing::{get, get_service};
 use axum::{Router, middleware};
 use kellnr_appstate::AppStateData;
-use kellnr_embedded_resources::embedded_static_handler;
+use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};
 use kellnr_web_ui::session;
 use tower_http::services::ServeDir;
 
@@ -27,6 +27,7 @@ pub fn create_router(
     );
 
     Router::new()
+        .route("/", get(embedded_static_root_handler))
         .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
         .nest("/api/v1/user", user_routes::create_routes())
         .nest("/api/v1/group", group_routes::create_routes())

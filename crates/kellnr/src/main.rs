@@ -2,6 +2,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::response::Redirect;
+use axum::routing::get;
 use axum_extra::extract::cookie::Key;
 use kellnr_appstate::AppStateData;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
@@ -85,7 +87,7 @@ async fn main() {
     let signing_key = init_cookie_signing_key(&settings);
     let max_docs_size = settings.docs.max_size;
     let max_crate_size = settings.registry.max_crate_size as usize;
-    let route_path_prefix = settings.origin.path.trim().to_owned();
+    let route_path_prefix = settings.origin.path.trim().trim_end_matches('/').to_owned();
     let token_cache = Arc::new(TokenCacheManager::new(
         settings.registry.token_cache_enabled,
         settings.registry.token_cache_ttl_seconds,
@@ -104,7 +106,15 @@ async fn main() {
     // Create router using the route module
     let mut app = routes::create_router(state, &data_dir, max_docs_size, max_crate_size);
     if !route_path_prefix.is_empty() {
-        app = axum::Router::new().nest(&route_path_prefix, app);
+        let route_path_prefix_with_trailing = format!("{route_path_prefix}/");
+        app = axum::Router::new()
+            .nest(&route_path_prefix_with_trailing, app)
+            .route(
+                &route_path_prefix,
+                get(move || async move {
+                    Redirect::permanent(route_path_prefix_with_trailing.as_str())
+                }),
+            );
     }
 
     // Start the server

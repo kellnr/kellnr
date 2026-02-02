@@ -290,7 +290,7 @@ export async function startLocalKellnr(
   // Wait for server to be ready
   const healthCheckUrl = options.healthCheckPath
     ? `${baseUrl}${options.healthCheckPath}`
-    : baseUrl;
+    : `${baseUrl}/api/v1/health`;
   try {
     await waitForHttpOk(healthCheckUrl, { timeoutMs: 60_000, intervalMs: 500 });
   } catch (e) {
