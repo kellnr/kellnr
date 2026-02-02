@@ -118,7 +118,7 @@ impl Database {
             .map_err(Into::into)
     }
 
-    /// Executes a count query (SELECT COUNT(id_column) FROM table) and returns the count as u64.
+    /// Executes a count query `SELECT COUNT(id_column) FROM table` and returns the count as u64.
     async fn count<T>(&self, table: T, id_column: T, error: DbError) -> DbResult<u64>
     where
         T: Iden + Copy,
@@ -139,10 +139,10 @@ impl Database {
         else {
             return Err(error);
         };
-        match result.count {
-            Some(count) => Ok(count as u64),
-            None => Err(error),
-        }
+        result
+            .count
+            .and_then(|v| u64::try_from(v).ok())
+            .ok_or(error)
     }
 }
 
