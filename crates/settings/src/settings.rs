@@ -46,6 +46,7 @@ impl TryFrom<Option<&Path>> for Settings {
             Environment::with_prefix("KELLNR")
                 .list_separator(",")
                 .with_list_parse_key("registry.required_crate_fields")
+                .with_list_parse_key("oauth2.scopes")
                 .try_parsing(true)
                 .prefix_separator("_")
                 .separator("__"),
