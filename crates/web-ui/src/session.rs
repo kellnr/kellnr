@@ -1,5 +1,5 @@
 use axum::RequestPartsExt;
-use axum::extract::{Request, State};
+use axum::extract::{FromRequestParts, OptionalFromRequestParts, Request, State};
 use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum::middleware::Next;
@@ -62,7 +62,7 @@ impl Name for AdminUser {
     }
 }
 
-impl axum::extract::FromRequestParts<AppStateData> for AdminUser {
+impl FromRequestParts<AppStateData> for AdminUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
@@ -131,7 +131,7 @@ impl MaybeUser {
     }
 }
 
-impl axum::extract::FromRequestParts<AppStateData> for MaybeUser {
+impl FromRequestParts<AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
@@ -153,7 +153,7 @@ impl axum::extract::FromRequestParts<AppStateData> for MaybeUser {
     }
 }
 
-impl axum::extract::OptionalFromRequestParts<AppStateData> for MaybeUser {
+impl OptionalFromRequestParts<AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
@@ -202,33 +202,33 @@ pub async fn session_auth_when_required(
 
 #[cfg(test)]
 mod session_tests {
-    use std::result;
     use std::sync::Arc;
 
     use axum::Router;
     use axum::body::Body;
+    use axum::http::header;
     use axum::routing::get;
-    use axum_extra::extract::cookie::Key;
-    use hyper::{Request, StatusCode, header};
-    use kellnr_appstate::AppStateData;
+    use cookie::Key;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
-    use mockall::predicate::*;
+    use mockall::predicate::eq;
     use tower::ServiceExt;
 
     use super::*;
     use crate::test_helper::encode_cookies;
 
-    async fn admin_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
+    type Result<T = (), E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
+
+    async fn admin_endpoint(user: MaybeUser) -> Result<(), RouteError> {
         user.assert_admin()?;
         Ok(())
     }
 
-    async fn normal_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
+    async fn normal_endpoint(user: MaybeUser) -> Result<(), RouteError> {
         user.assert_normal()?;
         Ok(())
     }
@@ -252,8 +252,6 @@ mod session_tests {
     }
 
     // AdminUser tests
-
-    type Result<T = ()> = result::Result<T, Box<dyn std::error::Error>>;
 
     fn c1234() -> String {
         encode_cookies([(COOKIE_SESSION_ID, "1234")])
@@ -488,16 +486,15 @@ mod auth_middleware_tests {
 
     use axum::Router;
     use axum::body::Body;
+    use axum::http::header;
     use axum::middleware::from_fn_with_state;
     use axum::routing::get;
-    use axum_extra::extract::cookie::Key;
-    use hyper::{Request, StatusCode, header};
-    use kellnr_appstate::AppStateData;
+    use cookie::Key;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::Settings;
-    use mockall::predicate::*;
+    use mockall::predicate::eq;
     use tower::ServiceExt;
 
     use super::*;
