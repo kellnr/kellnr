@@ -104,6 +104,20 @@ impl Database {
         Ok(ToolchainWithTargets::from_model(tc, targets))
     }
 
+    /// Looks up a crate index by name and version; returns the entity model or [`DbError::CrateIndexNotFound`].
+    async fn get_crate_index_model(
+        &self,
+        crate_name: &NormalizedName,
+        version: &Version,
+    ) -> DbResult<crate_index::Model> {
+        crate_index::Entity::find()
+            .filter(crate_index::Column::Name.eq(&**crate_name))
+            .filter(crate_index::Column::Vers.eq(&**version))
+            .one(&self.db_con)
+            .await?
+            .ok_or_else(|| DbError::CrateIndexNotFound(crate_name.to_string(), version.to_string()))
+    }
+
     /// Looks up a toolchain by name and version; returns `None` if not found.
     async fn get_toolchain_by_name_version(
         &self,
@@ -1601,42 +1615,22 @@ impl DbProvider for Database {
     }
 
     async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
-        let ci = crate_index::Entity::find()
-            .filter(crate_index::Column::Name.eq(crate_name.to_string()))
-            .filter(crate_index::Column::Vers.eq(version.to_string()))
-            .one(&self.db_con)
-            .await?;
-
-        let mut ci: crate_index::ActiveModel = ci
-            .ok_or(DbError::CrateIndexNotFound(
-                crate_name.to_string(),
-                version.to_string(),
-            ))?
+        let mut ci: crate_index::ActiveModel = self
+            .get_crate_index_model(crate_name, version)
+            .await?
             .into();
-
         ci.yanked = Set(false);
         ci.save(&self.db_con).await?;
-
         Ok(())
     }
 
     async fn yank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
-        let ci = crate_index::Entity::find()
-            .filter(crate_index::Column::Name.eq(crate_name.to_string()))
-            .filter(crate_index::Column::Vers.eq(version.to_string()))
-            .one(&self.db_con)
-            .await?;
-
-        let mut ci: crate_index::ActiveModel = ci
-            .ok_or(DbError::CrateIndexNotFound(
-                crate_name.to_string(),
-                version.to_string(),
-            ))?
+        let mut ci: crate_index::ActiveModel = self
+            .get_crate_index_model(crate_name, version)
+            .await?
             .into();
-
         ci.yanked = Set(true);
         ci.save(&self.db_con).await?;
-
         Ok(())
     }
 
