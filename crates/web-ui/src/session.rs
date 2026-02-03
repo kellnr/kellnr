@@ -9,7 +9,6 @@ use axum_extra::extract::cookie::Cookie;
 use cookie::{SameSite, time};
 use kellnr_appstate::AppStateData;
 use kellnr_common::util::generate_rand_string;
-use kellnr_settings::constants;
 use kellnr_settings::constants::COOKIE_SESSION_ID;
 use time::Duration;
 use tracing::error;
@@ -63,22 +62,22 @@ impl Name for AdminUser {
     }
 }
 
-impl axum::extract::FromRequestParts<kellnr_appstate::AppStateData> for AdminUser {
+impl axum::extract::FromRequestParts<AppStateData> for AdminUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &kellnr_appstate::AppStateData,
+        state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
-        let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+        let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
             Some(cookie) => match state.db.validate_session(cookie.value()).await {
                 Ok((name, true)) => Ok(Self(name)),
                 Ok((_, false)) => Err(RouteError::InsufficientPrivileges),
-                Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
             },
-            None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+            None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
         }
     }
 }
@@ -132,44 +131,44 @@ impl MaybeUser {
     }
 }
 
-impl axum::extract::FromRequestParts<kellnr_appstate::AppStateData> for MaybeUser {
+impl axum::extract::FromRequestParts<AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &kellnr_appstate::AppStateData,
+        state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
-        let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+        let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
             Some(cookie) => match state.db.validate_session(cookie.value()).await {
                 // admin
                 Ok((name, true)) => Ok(Self::Admin(name)),
                 // not admin
                 Ok((name, false)) => Ok(Self::Normal(name)),
-                Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
             },
-            None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+            None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
         }
     }
 }
 
-impl axum::extract::OptionalFromRequestParts<kellnr_appstate::AppStateData> for MaybeUser {
+impl axum::extract::OptionalFromRequestParts<AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &kellnr_appstate::AppStateData,
+        state: &AppStateData,
     ) -> Result<Option<Self>, Self::Rejection> {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
-        let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+        let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
             Some(cookie) => match state.db.validate_session(cookie.value()).await {
                 // admin
                 Ok((name, true)) => Ok(Some(Self::Admin(name))),
                 // not admin
                 Ok((name, false)) => Ok(Some(Self::Normal(name))),
-                Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
             },
             None => Ok(None),
         }
@@ -179,7 +178,7 @@ impl axum::extract::OptionalFromRequestParts<kellnr_appstate::AppStateData> for 
 /// Middleware that checks if a user is logged in when `settings.registry.auth_required` is `true`
 /// If the user is not logged in, a 401 is returned.
 pub async fn session_auth_when_required(
-    State(state): State<kellnr_appstate::AppStateData>,
+    State(state): State<AppStateData>,
     jar: PrivateCookieJar,
     request: Request,
     next: Next,
@@ -188,16 +187,16 @@ pub async fn session_auth_when_required(
         // If "auth_required" is "false", pass through.
         return Ok(next.run(request).await);
     }
-    let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+    let session_cookie = jar.get(COOKIE_SESSION_ID);
     match session_cookie {
         Some(cookie) => match state.db.validate_session(cookie.value()).await {
             // user is logged in
             Ok(_) => Ok(next.run(request).await),
             // user is not logged in
-            Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+            Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
         },
         // user is not logged in
-        None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+        None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
     }
 }
 
@@ -257,7 +256,7 @@ mod session_tests {
     type Result<T = ()> = result::Result<T, Box<dyn std::error::Error>>;
 
     fn c1234() -> String {
-        encode_cookies([(constants::COOKIE_SESSION_ID, "1234")])
+        encode_cookies([(COOKIE_SESSION_ID, "1234")])
     }
 
     #[tokio::test]
@@ -273,7 +272,7 @@ mod session_tests {
                 Request::get("/admin")
                     .header(
                         header::COOKIE,
-                        encode_cookies([(constants::COOKIE_SESSION_ID, "1234")]),
+                        encode_cookies([(COOKIE_SESSION_ID, "1234")]),
                     )
                     .body(Body::empty())?,
             )
@@ -548,7 +547,7 @@ mod auth_middleware_tests {
     type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
     fn c1234() -> String {
-        encode_cookies([(constants::COOKIE_SESSION_ID, "1234")])
+        encode_cookies([(COOKIE_SESSION_ID, "1234")])
     }
 
     #[tokio::test]
