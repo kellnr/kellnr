@@ -46,10 +46,6 @@ fn serve_embedded_asset(path: &str) -> Response<Body> {
 pub async fn embedded_static_handler(uri: Uri) -> Response<Body> {
     let path = uri.path();
 
-    if path == "/" {
-        return serve_embedded_asset("index.html");
-    }
-
     // Try serving embedded file if it exists
     let candidate = path.trim_start_matches('/');
     if STATIC_DIR.get_file(candidate).is_some() {
@@ -68,5 +64,10 @@ pub async fn embedded_static_handler(uri: Uri) -> Response<Body> {
             .unwrap();
     }
 
+    serve_embedded_asset("index.html")
+}
+
+#[allow(clippy::unused_async)]
+pub async fn embedded_static_root_handler() -> Response<Body> {
     serve_embedded_asset("index.html")
 }
