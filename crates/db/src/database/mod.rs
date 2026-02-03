@@ -1,6 +1,7 @@
 mod operations;
 pub mod test_utils;
 
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -80,7 +81,7 @@ impl Database {
     /// Looks up a krate by normalized name; returns the entity model or [`DbError::CrateNotFound`].
     async fn get_krate_model(&self, crate_name: &NormalizedName) -> DbResult<krate::Model> {
         krate::Entity::find()
-            .filter(krate::Column::Name.eq(&**crate_name))
+            .filter(krate::Column::Name.eq(crate_name))
             .one(&self.db_con)
             .await?
             .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))
@@ -111,8 +112,8 @@ impl Database {
         version: &Version,
     ) -> DbResult<crate_index::Model> {
         crate_index::Entity::find()
-            .filter(crate_index::Column::Name.eq(&**crate_name))
-            .filter(crate_index::Column::Vers.eq(&**version))
+            .filter(crate_index::Column::Name.eq(crate_name))
+            .filter(crate_index::Column::Vers.eq(version))
             .one(&self.db_con)
             .await?
             .ok_or_else(|| DbError::CrateIndexNotFound(crate_name.to_string(), version.to_string()))
@@ -143,7 +144,7 @@ impl Database {
             .join(JoinType::InnerJoin, crate_group::Relation::Group.def())
             .filter(
                 Cond::all()
-                    .add(krate::Column::Name.eq(&**crate_name))
+                    .add(krate::Column::Name.eq(crate_name))
                     .add(group::Column::Name.eq(group)),
             )
             .one(&self.db_con)
@@ -181,7 +182,7 @@ impl Database {
             .join(JoinType::InnerJoin, crate_user::Relation::User.def())
             .filter(
                 Cond::all()
-                    .add(krate::Column::Name.eq(&**crate_name))
+                    .add(krate::Column::Name.eq(crate_name))
                     .add(user::Column::Name.eq(user)),
             )
             .one(&self.db_con)
@@ -488,7 +489,7 @@ impl DbProvider for Database {
             )
             .filter(
                 Cond::all()
-                    .add(crate_meta::Column::Version.eq(crate_version.to_string()))
+                    .add(crate_meta::Column::Version.eq(crate_version))
                     .add(crate_meta::Column::CrateFk.eq(crate_id)),
             )
             .exec(&self.db_con)
@@ -503,7 +504,7 @@ impl DbProvider for Database {
         crate_version: &Version,
     ) -> DbResult<()> {
         let krate: cratesio_crate::Model = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(crate_name.to_string()))
+            .filter(cratesio_crate::Column::Name.eq(crate_name))
             .one(&self.db_con)
             .await?
             .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
@@ -523,7 +524,7 @@ impl DbProvider for Database {
             )
             .filter(
                 Cond::all()
-                    .add(cratesio_meta::Column::Version.eq(crate_version.to_string()))
+                    .add(cratesio_meta::Column::Version.eq(crate_version))
                     .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
             )
             .exec(&self.db_con)
@@ -601,7 +602,7 @@ impl DbProvider for Database {
 
     async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool> {
         Ok(krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
+            .filter(krate::Column::Name.eq(crate_name))
             .one(&self.db_con)
             .await?
             .is_some_and(|model| model.restricted_download))
@@ -640,7 +641,7 @@ impl DbProvider for Database {
             .join(JoinType::InnerJoin, crate_group::Relation::Krate.def())
             .filter(
                 Cond::all()
-                    .add(krate::Column::Name.eq(crate_name.to_string()))
+                    .add(krate::Column::Name.eq(crate_name))
                     .add(user::Column::Name.eq(user)),
             )
             .one(&self.db_con)
@@ -661,7 +662,7 @@ impl DbProvider for Database {
             .join(JoinType::InnerJoin, owner::Relation::User.def())
             .filter(
                 Cond::all()
-                    .add(krate::Column::Name.eq(crate_name.to_string()))
+                    .add(krate::Column::Name.eq(crate_name))
                     .add(user::Column::Name.eq(user)),
             )
             .one(&self.db_con)
@@ -672,7 +673,7 @@ impl DbProvider for Database {
 
     async fn get_crate_id(&self, crate_name: &NormalizedName) -> DbResult<Option<i64>> {
         let id = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
+            .filter(krate::Column::Name.eq(crate_name))
             .one(&self.db_con)
             .await?
             .map(|model| model.id);
@@ -684,7 +685,7 @@ impl DbProvider for Database {
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::Owner.def())
             .join(JoinType::InnerJoin, owner::Relation::Krate.def())
-            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name.to_string()))
+            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name))
             .all(&self.db_con)
             .await?;
 
@@ -695,7 +696,7 @@ impl DbProvider for Database {
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::CrateUser.def())
             .join(JoinType::InnerJoin, crate_user::Relation::Krate.def())
-            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name.to_string()))
+            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name))
             .all(&self.db_con)
             .await?;
 
@@ -706,7 +707,7 @@ impl DbProvider for Database {
         let u = group::Entity::find()
             .join(JoinType::InnerJoin, group::Relation::CrateGroup.def())
             .join(JoinType::InnerJoin, crate_group::Relation::Krate.def())
-            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name.to_string()))
+            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name))
             .all(&self.db_con)
             .await?;
 
@@ -717,7 +718,7 @@ impl DbProvider for Database {
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::GroupUser.def())
             .join(JoinType::InnerJoin, group_user::Relation::Group.def())
-            .filter(Expr::col((GroupIden::Table, group::Column::Name)).eq(group_name.to_string()))
+            .filter(Expr::col((GroupIden::Table, group::Column::Name)).eq(group_name))
             .all(&self.db_con)
             .await?;
 
@@ -727,7 +728,7 @@ impl DbProvider for Database {
     async fn get_crate_versions(&self, crate_name: &NormalizedName) -> DbResult<Vec<Version>> {
         let u = crate_meta::Entity::find()
             .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
-            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name.to_string()))
+            .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name))
             .all(&self.db_con)
             .await?;
 
@@ -769,7 +770,7 @@ impl DbProvider for Database {
         let hashed = hash_pwd(new_pwd, &salt);
 
         let mut u: user::ActiveModel = self.get_user_model(user_name).await?.into();
-        u.pwd = Set(hashed.clone());
+        u.pwd = Set(hashed);
         u.salt = Set(salt);
 
         u.update(&self.db_con).await?;
@@ -835,7 +836,7 @@ impl DbProvider for Database {
 
         let at = auth_token::ActiveModel {
             name: Set(name.to_owned()),
-            token: Set(hashed_token.clone()),
+            token: Set(hashed_token),
             user_fk: Set(user.id),
             ..Default::default()
         };
@@ -1042,6 +1043,7 @@ impl DbProvider for Database {
         let s = doc_queue::ActiveModel {
             krate: Set(krate.to_string()),
             version: Set(version.to_string()),
+            // FIXME: Convert Path to String properly, handle errors
             path: Set(path.to_string_lossy().to_string()),
             ..Default::default()
         };
@@ -1067,8 +1069,8 @@ impl DbProvider for Database {
         // Delete the entry from the "crate_meta" table
         let crate_meta_version = crate_meta::Entity::find()
             .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
-            .filter(krate::Column::Name.eq(krate.to_string()))
-            .filter(crate_meta::Column::Version.eq(version.to_string()))
+            .filter(krate::Column::Name.eq(krate))
+            .filter(crate_meta::Column::Version.eq(version))
             .one(&txn)
             .await?
             .ok_or_else(|| DbError::CrateMetaNotFound(krate.to_string(), version.to_string()))?;
@@ -1079,8 +1081,8 @@ impl DbProvider for Database {
         // Delete the crate index entry from "crate_index" table
         let crate_index_version = crate_index::Entity::find()
             .join(JoinType::InnerJoin, crate_index::Relation::Krate.def())
-            .filter(krate::Column::Name.eq(krate.to_string()))
-            .filter(crate_index::Column::Vers.eq(version.to_string()))
+            .filter(krate::Column::Name.eq(krate))
+            .filter(crate_index::Column::Vers.eq(version))
             .one(&txn)
             .await?
             .ok_or_else(|| DbError::CrateIndexNotFound(krate.to_string(), version.to_string()))?;
@@ -1090,13 +1092,13 @@ impl DbProvider for Database {
         // in the "crate" table as well
         let crate_meta_rows = crate_meta::Entity::find()
             .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
-            .filter(krate::Column::Name.eq(krate.to_string()))
+            .filter(krate::Column::Name.eq(krate))
             .all(&txn)
             .await?;
 
         if crate_meta_rows.is_empty() {
             krate::Entity::delete_many()
-                .filter(krate::Column::Name.eq(krate.to_string()))
+                .filter(krate::Column::Name.eq(krate))
                 .exec(&txn)
                 .await?;
         } else {
@@ -1113,7 +1115,7 @@ impl DbProvider for Database {
                     .map(|cm| Version::from_unchecked_str(&cm.version))
                     .max()
                     .unwrap(); // Safe to unwrap, as crate_meta_rows is not empty
-                c.max_version = Set(new_max_version.to_string());
+                c.max_version = Set(new_max_version.into_inner());
             }
             // Update the ETag value of the crate index.
             let etag = operations::compute_etag(&txn, krate, crate_id).await?;
@@ -1129,7 +1131,7 @@ impl DbProvider for Database {
     async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>> {
         let crate_meta = crate_meta::Entity::find()
             .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
-            .filter(krate::Column::Name.eq(crate_name.to_string()))
+            .filter(krate::Column::Name.eq(crate_name))
             .all(&self.db_con)
             .await?;
 
@@ -1229,10 +1231,9 @@ impl DbProvider for Database {
             let ci = crate_indices
                 .iter()
                 .find(|ci| ci.vers == cm.version)
-                .ok_or(DbError::CrateIndexNotFound(
-                    krate.name.clone(),
-                    cm.version.clone(),
-                ))?;
+                .ok_or_else(|| {
+                    DbError::CrateIndexNotFound(krate.name.clone(), cm.version.clone())
+                })?;
             let dependencies: Vec<CrateRegistryDep> = match ci.deps.clone() {
                 Some(deps) => {
                     let ix = serde_json::from_value::<Vec<IndexDep>>(deps)
@@ -1310,7 +1311,7 @@ impl DbProvider for Database {
             name: Set(normalized_name.to_string()),
             original_name: Set(name.to_string()),
             max_version: Set("0.0.0".to_string()),
-            last_updated: Set(created.clone()),
+            last_updated: Set(created),
             total_downloads: Set(0),
             homepage: Set(None),
             description: Set(None),
@@ -1335,7 +1336,7 @@ impl DbProvider for Database {
         );
 
         let existing = krate::Entity::find()
-            .filter(krate::Column::Name.eq(pub_metadata.name.clone()))
+            .filter(krate::Column::Name.eq(&pub_metadata.name))
             .one(&self.db_con)
             .await?;
 
@@ -1343,16 +1344,14 @@ impl DbProvider for Database {
 
         let crate_id = if let Some(krate) = existing {
             let krate_id = krate.id;
-            let current_max_version = Version::try_from(&krate.max_version)
-                .map_err(|_| DbError::InvalidVersion(krate.max_version.clone()))?;
-            let max_version = current_max_version.max(
-                Version::try_from(&pub_metadata.vers)
-                    .map_err(|_| DbError::InvalidVersion(pub_metadata.vers.clone()))?,
+            let max_version = max(
+                parse_db_version(&krate.max_version)?,
+                parse_db_version(&pub_metadata.vers)?,
             );
 
             let mut krate: krate::ActiveModel = krate.into();
             krate.last_updated = Set(created.clone());
-            krate.max_version = Set(max_version.to_string());
+            krate.max_version = Set(max_version.into_inner());
             krate.homepage = Set(pub_metadata.homepage.clone());
             krate.description = Set(pub_metadata.description.clone());
             krate.repository = Set(pub_metadata.repository.clone());
@@ -1399,12 +1398,12 @@ impl DbProvider for Database {
             .find_also_related(krate::Entity)
             .filter(
                 Cond::all()
-                    .add(krate::Column::Name.eq(crate_name.to_string()))
-                    .add(crate_meta::Column::Version.eq(version.to_string())),
+                    .add(krate::Column::Name.eq(crate_name))
+                    .add(crate_meta::Column::Version.eq(version)),
             )
             .one(&self.db_con)
             .await?
-            .ok_or(DbError::CrateNotFound(crate_name.to_string()))?;
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
 
         let mut cm: crate_meta::ActiveModel = cm.into();
         cm.documentation = Set(Some(docs_link.to_string()));
@@ -1422,25 +1421,25 @@ impl DbProvider for Database {
     }
 
     async fn get_prefetch_data(&self, crate_name: &str) -> DbResult<Prefetch> {
-        let krate = krate::Entity::find()
+        let mut krate = krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
             .find_with_related(crate_index::Entity)
             .all(&self.db_con)
-            .await?;
+            .await?
+            .into_iter();
 
-        // Exactly one crate must be returned.
-        if krate.len() != 1 {
+        // Expecting only one crate with its related indices
+        let (Some((krate, crate_indices)), None) = (krate.next(), krate.next()) else {
             return Err(DbError::CrateNotFound(crate_name.to_string()));
-        }
+        };
 
-        let (krate, crate_indices) = krate[0].to_owned();
         let index_metadata =
             operations::crate_index_model_to_index_metadata(crate_name, crate_indices)?;
         let data = operations::index_metadata_to_bytes(&index_metadata)?;
 
         Ok(Prefetch {
             data,
-            etag: krate.e_tag.clone(),
+            etag: krate.e_tag,
             last_modified: krate.last_updated,
         })
     }
@@ -1452,7 +1451,7 @@ impl DbProvider for Database {
         last_modified: Option<String>,
     ) -> DbResult<PrefetchState> {
         let Some(krate) = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(crate_name.to_string()))
+            .filter(cratesio_crate::Column::Name.eq(crate_name))
             .one(&self.db_con)
             .await?
         else {
@@ -1501,10 +1500,10 @@ impl DbProvider for Database {
             .iter()
             .map(|i| Version::from_unchecked_str(&i.vers))
             .max()
-            .ok_or(DbError::FailedToGetMaxVersionByName(crate_name.to_string()))?;
+            .ok_or_else(|| DbError::FailedToGetMaxVersionByName(crate_name.to_string()))?;
 
         let krate = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(normalized_name.to_string()))
+            .filter(cratesio_crate::Column::Name.eq(&normalized_name))
             .one(&self.db_con)
             .await?;
 
@@ -1512,7 +1511,7 @@ impl DbProvider for Database {
             let mut krate: cratesio_crate::ActiveModel = krate.into();
             krate.e_tag = Set(etag.to_string());
             krate.last_modified = Set(last_modified.to_string());
-            krate.max_version = Set(max_version.to_string());
+            krate.max_version = Set(max_version.into_inner());
             krate.update(&self.db_con).await?
         } else {
             let krate = cratesio_crate::ActiveModel {
@@ -1680,7 +1679,7 @@ impl DbProvider for Database {
 
         let now = Utc::now();
 
-        let entries = w.iter().map(|w| webhook_queue::ActiveModel {
+        let entries = w.into_iter().map(|w| webhook_queue::ActiveModel {
             webhook_fk: Set(w.id),
             payload: Set(payload.clone()),
             next_attempt: Set(now.into()),
@@ -1703,12 +1702,12 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
-        Ok(w.iter()
+        Ok(w.into_iter()
             .filter_map(|w| {
                 Some(WebhookQueue {
-                    id: Into::<String>::into(w.0.id),
+                    id: w.0.id.to_string(),
                     callback_url: w.1.first()?.callback_url.clone(),
-                    payload: w.0.payload.clone(),
+                    payload: w.0.payload,
                     last_attempt: w.0.last_attempt.map(Into::into),
                     next_attempt: w.0.next_attempt.into(),
                 })
@@ -2064,4 +2063,8 @@ impl DbProvider for Database {
             })
             .collect())
     }
+}
+
+fn parse_db_version(value: &str) -> DbResult<Version> {
+    Version::try_from(value).map_err(|_| DbError::InvalidVersion(value.to_owned()))
 }

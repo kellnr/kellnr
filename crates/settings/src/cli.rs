@@ -5,8 +5,6 @@ use clap_serde_derive::ClapSerde;
 use config::ConfigError;
 use toml::Value;
 
-use crate::SourceMap;
-use crate::compile_time_config;
 use crate::config_source::{ConfigSource, track_env_sources};
 use crate::docs::Docs;
 use crate::local::Local;
@@ -20,6 +18,7 @@ use crate::s3::S3;
 use crate::settings::Settings;
 use crate::setup::Setup;
 use crate::toolchain::Toolchain;
+use crate::{SourceMap, compile_time_config};
 
 /// Compare two Settings structs and mark all differences with the given source.
 ///

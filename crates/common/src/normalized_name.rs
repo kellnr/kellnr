@@ -1,5 +1,7 @@
 use std::fmt;
 
+use sea_orm::Value;
+
 use crate::original_name::OriginalName;
 
 /// Index name is a lowercase version of the crate name
@@ -30,6 +32,18 @@ impl From<OriginalName> for NormalizedName {
 impl From<&OriginalName> for NormalizedName {
     fn from(name: &OriginalName) -> Self {
         NormalizedName(name.to_lowercase())
+    }
+}
+
+impl From<NormalizedName> for Value {
+    fn from(value: NormalizedName) -> Self {
+        Value::String(Some(value.0))
+    }
+}
+
+impl From<&NormalizedName> for Value {
+    fn from(value: &NormalizedName) -> Self {
+        Value::String(Some(value.0.clone()))
     }
 }
 

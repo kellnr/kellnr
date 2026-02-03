@@ -3,6 +3,7 @@ use std::fmt;
 use std::ops::Deref;
 
 use regex::Regex;
+use sea_orm::Value;
 use thiserror::Error;
 use utoipa::ToSchema;
 
@@ -57,6 +58,18 @@ impl From<&OriginalName> for String {
 impl From<OriginalName> for String {
     fn from(name: OriginalName) -> Self {
         name.to_string()
+    }
+}
+
+impl From<OriginalName> for Value {
+    fn from(value: OriginalName) -> Self {
+        Value::String(Some(value.0))
+    }
+}
+
+impl From<&OriginalName> for Value {
+    fn from(value: &OriginalName) -> Self {
+        Value::String(Some(value.0.clone()))
     }
 }
 

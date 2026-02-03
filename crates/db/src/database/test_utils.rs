@@ -31,7 +31,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, ExprTrait, QueryFilter, Set,
 };
 
-use super::{DB_DATE_FORMAT, Database};
+use super::{DB_DATE_FORMAT, Database, parse_db_version};
 use crate::CrateMeta;
 use crate::error::DbError;
 use crate::provider::{DbProvider, DbResult};
@@ -77,15 +77,7 @@ pub async fn add_multiple_versions(
     let created = default_created();
     let mut ids = Vec::with_capacity(versions.len());
     for version in versions {
-        let id = test_add_crate(
-            db,
-            name,
-            owner,
-            &Version::try_from(*version)
-                .map_err(|_| DbError::InvalidVersion((*version).to_string()))?,
-            &created,
-        )
-        .await?;
+        let id = test_add_crate(db, name, owner, &parse_db_version(version)?, &created).await?;
         ids.push(id);
     }
     Ok(ids)
@@ -227,7 +219,7 @@ pub async fn test_add_cached_crate_with_downloads(
         .filter(cratesio_crate::Column::Name.eq(name))
         .one(&db.db_con)
         .await?
-        .ok_or(DbError::CrateNotFound(name.to_string()))?;
+        .ok_or_else(|| DbError::CrateNotFound(name.to_string()))?;
 
     let total_downloads = krate.total_downloads as u64;
 
@@ -316,10 +308,10 @@ pub async fn test_add_crate_with_downloads(
     let (cm, krate) = crate_meta::Entity::find()
         .find_also_related(krate::Entity)
         .filter(krate::Column::Name.eq(name))
-        .filter(crate_meta::Column::Version.eq(version.to_string()))
+        .filter(crate_meta::Column::Version.eq(version))
         .one(&db.db_con)
         .await?
-        .ok_or(DbError::CrateNotFound(name.to_string()))?;
+        .ok_or_else(|| DbError::CrateNotFound(name.to_string()))?;
     let mut cm: crate_meta::ActiveModel = cm.into();
 
     let current_downloads = krate.as_ref().unwrap().total_downloads;
