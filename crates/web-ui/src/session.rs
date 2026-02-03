@@ -1,12 +1,45 @@
 use axum::RequestPartsExt;
 use axum::extract::{Request, State};
+use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum::middleware::Next;
 use axum::response::Response;
 use axum_extra::extract::PrivateCookieJar;
+use axum_extra::extract::cookie::Cookie;
+use cookie::{SameSite, time};
+use kellnr_appstate::AppStateData;
+use kellnr_common::util::generate_rand_string;
 use kellnr_settings::constants;
+use kellnr_settings::constants::COOKIE_SESSION_ID;
+use time::Duration;
+use tracing::error;
 
 use crate::error::RouteError;
+
+/// Creates a new session for the user and returns a cookie jar with the session cookie set.
+/// Generates a token, persists it via db, and adds the cookie using app_state settings.
+pub(crate) async fn create_session_jar(
+    cookies: PrivateCookieJar,
+    app_state: &AppStateData,
+    username: &str,
+) -> Result<PrivateCookieJar, RouteError> {
+    let session_token = generate_rand_string(12);
+    app_state
+        .db
+        .add_session_token(username, &session_token)
+        .await
+        .map_err(|e| {
+            error!("Failed to create session: {e}");
+            RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+    let session_age_seconds = app_state.settings.registry.session_age_seconds as i64;
+    Ok(cookies.add(
+        Cookie::build((COOKIE_SESSION_ID, session_token))
+            .max_age(Duration::seconds(session_age_seconds))
+            .same_site(SameSite::Strict)
+            .path("/"),
+    ))
+}
 
 pub trait Name {
     fn name(&self) -> String;
