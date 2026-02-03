@@ -370,6 +370,53 @@ fn webhook_model_to_obj(w: webhook::Model) -> DbResult<Webhook> {
     })
 }
 
+/// Generates an `add_*` method that links two entities via a join table.
+///
+/// # Parameters
+/// - `$method`: The method name to generate (e.g., `add_crate_user_impl`)
+/// - `$relation_entity`: The join table entity module (e.g., `crate_user`)
+/// - `$insert_entity`: The Sea ORM Entity type for insertion (e.g., `CrateUser`)
+/// - `$fk1`: The foreign key field for the first entity
+/// - `$fk2`: The foreign key field for the second entity
+macro_rules! impl_add_relation {
+    ($method:ident, $relation_entity:ident, $insert_entity:ident, $fk1:ident, $fk2:ident) => {
+        async fn $method(&self, fk1: i64, fk2: i64) -> DbResult<()> {
+            let model = $relation_entity::ActiveModel {
+                $fk1: Set(fk1),
+                $fk2: Set(fk2),
+                ..Default::default()
+            };
+            $insert_entity::insert(model).exec(&self.db_con).await?;
+            Ok(())
+        }
+    };
+}
+
+impl Database {
+    impl_add_relation!(
+        add_crate_user_impl,
+        crate_user,
+        CrateUser,
+        crate_fk,
+        user_fk
+    );
+    impl_add_relation!(
+        add_crate_group_impl,
+        crate_group,
+        CrateGroup,
+        crate_fk,
+        group_fk
+    );
+    impl_add_relation!(
+        add_group_user_impl,
+        group_user,
+        GroupUser,
+        group_fk,
+        user_fk
+    );
+    impl_add_relation!(add_owner_impl, owner, Owner, crate_fk, user_fk);
+}
+
 #[async_trait]
 impl DbProvider for Database {
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64> {
@@ -529,59 +576,27 @@ impl DbProvider for Database {
     }
 
     async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
-        let user_fk = self.get_user_model(user).await?.id;
         let crate_fk = self.get_krate_model(crate_name).await?.id;
-
-        let u = crate_user::ActiveModel {
-            user_fk: Set(user_fk),
-            crate_fk: Set(crate_fk),
-            ..Default::default()
-        };
-
-        CrateUser::insert(u).exec(&self.db_con).await?;
-        Ok(())
+        let user_fk = self.get_user_model(user).await?.id;
+        self.add_crate_user_impl(crate_fk, user_fk).await
     }
 
     async fn add_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()> {
-        let group_fk = self.get_group_model(group).await?.id;
         let crate_fk = self.get_krate_model(crate_name).await?.id;
-
-        let u = crate_group::ActiveModel {
-            group_fk: Set(group_fk),
-            crate_fk: Set(crate_fk),
-            ..Default::default()
-        };
-
-        CrateGroup::insert(u).exec(&self.db_con).await?;
-        Ok(())
+        let group_fk = self.get_group_model(group).await?.id;
+        self.add_crate_group_impl(crate_fk, group_fk).await
     }
 
     async fn add_group_user(&self, group_name: &str, user: &str) -> DbResult<()> {
-        let user_fk = self.get_user_model(user).await?.id;
         let group_fk = self.get_group_model(group_name).await?.id;
-
-        let u = group_user::ActiveModel {
-            user_fk: Set(user_fk),
-            group_fk: Set(group_fk),
-            ..Default::default()
-        };
-
-        GroupUser::insert(u).exec(&self.db_con).await?;
-        Ok(())
+        let user_fk = self.get_user_model(user).await?.id;
+        self.add_group_user_impl(group_fk, user_fk).await
     }
 
     async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()> {
-        let user_fk = self.get_user_model(owner).await?.id;
         let crate_fk = self.get_krate_model(crate_name).await?.id;
-
-        let o = owner::ActiveModel {
-            user_fk: Set(user_fk),
-            crate_fk: Set(crate_fk),
-            ..Default::default()
-        };
-
-        Owner::insert(o).exec(&self.db_con).await?;
-        Ok(())
+        let user_fk = self.get_user_model(owner).await?.id;
+        self.add_owner_impl(crate_fk, user_fk).await
     }
 
     async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool> {
@@ -875,19 +890,25 @@ impl DbProvider for Database {
     }
 
     async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
-        let model = self.get_crate_user_by_crate_and_user(crate_name, user).await?;
+        let model = self
+            .get_crate_user_by_crate_and_user(crate_name, user)
+            .await?;
         self.delete_or_not_found(model, DbError::UserNotFound(user.to_string()))
             .await
     }
 
     async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()> {
-        let model = self.get_crate_group_by_name_and_group(crate_name, group).await?;
+        let model = self
+            .get_crate_group_by_name_and_group(crate_name, group)
+            .await?;
         self.delete_or_not_found(model, DbError::GroupNotFound(group.to_string()))
             .await
     }
 
     async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()> {
-        let model = self.get_group_user_by_group_and_user(group_name, user).await?;
+        let model = self
+            .get_group_user_by_group_and_user(group_name, user)
+            .await?;
         self.delete_or_not_found(model, DbError::UserNotFound(user.to_string()))
             .await
     }

@@ -2,10 +2,24 @@
 //!
 //! These functions provide convenient ways to set up test data
 //! in the database for integration and unit tests.
+//!
+//! # Builder Pattern
+//!
+//! For ergonomic test setup, use [`TestCrateBuilder`]:
+//!
+//! ```ignore
+//! TestCrateBuilder::new(test_db)
+//!     .name("mycrate")
+//!     .owner("admin")
+//!     .version("1.0.0")
+//!     .build()
+//!     .await
+//!     .unwrap();
+//! ```
 
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
@@ -21,6 +35,184 @@ use super::{DB_DATE_FORMAT, Database};
 use crate::CrateMeta;
 use crate::error::DbError;
 use crate::provider::{DbProvider, DbResult};
+
+/// Returns a standard test date for consistent test data.
+///
+/// The returned date is `2020-10-07 13:18:00 UTC`, which is commonly
+/// used across the test suite.
+#[must_use]
+pub fn default_created() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 0).unwrap()
+}
+
+/// Add multiple versions of a crate at once.
+///
+/// This is a convenience function for tests that need to set up a crate
+/// with multiple versions quickly.
+///
+/// # Arguments
+///
+/// * `db` - The database connection
+/// * `name` - The crate name
+/// * `owner` - The owner username
+/// * `versions` - Slice of version strings to add (e.g., `["1.0.0", "2.0.0"]`)
+///
+/// # Returns
+///
+/// A vector of crate IDs for each version added.
+///
+/// # Example
+///
+/// ```ignore
+/// let ids = add_multiple_versions(test_db, "mycrate", "admin", &["1.0.0", "2.0.0", "3.0.0"])
+///     .await
+///     .unwrap();
+/// ```
+pub async fn add_multiple_versions(
+    db: &Database,
+    name: &str,
+    owner: &str,
+    versions: &[&str],
+) -> DbResult<Vec<i64>> {
+    let created = default_created();
+    let mut ids = Vec::with_capacity(versions.len());
+    for version in versions {
+        let id = test_add_crate(
+            db,
+            name,
+            owner,
+            &Version::try_from(*version)
+                .map_err(|_| DbError::InvalidVersion((*version).to_string()))?,
+            &created,
+        )
+        .await?;
+        ids.push(id);
+    }
+    Ok(ids)
+}
+
+/// A builder for creating test crates with a fluent API.
+///
+/// # Example
+///
+/// ```ignore
+/// // Minimal usage with defaults
+/// TestCrateBuilder::new(test_db)
+///     .name("mycrate")
+///     .build()
+///     .await
+///     .unwrap();
+///
+/// // Full customization
+/// let crate_id = TestCrateBuilder::new(test_db)
+///     .name("mycrate")
+///     .owner("testuser")
+///     .version("2.0.0")
+///     .created(Utc::now())
+///     .downloads(100)
+///     .build()
+///     .await
+///     .unwrap();
+/// ```
+pub struct TestCrateBuilder<'a> {
+    db: &'a Database,
+    name: Option<&'a str>,
+    owner: &'a str,
+    version: &'a str,
+    created: Option<DateTime<Utc>>,
+    downloads: Option<i64>,
+}
+
+impl<'a> TestCrateBuilder<'a> {
+    /// Create a new builder with default values.
+    ///
+    /// Defaults:
+    /// - `owner`: "admin"
+    /// - `version`: "1.0.0"
+    /// - `created`: [`default_created()`]
+    /// - `downloads`: None (0)
+    #[must_use]
+    pub fn new(db: &'a Database) -> Self {
+        Self {
+            db,
+            name: None,
+            owner: "admin",
+            version: "1.0.0",
+            created: None,
+            downloads: None,
+        }
+    }
+
+    /// Set the crate name (required).
+    #[must_use]
+    pub fn name(mut self, name: &'a str) -> Self {
+        self.name = Some(name);
+        self
+    }
+
+    /// Set the owner username. Defaults to "admin".
+    #[must_use]
+    pub fn owner(mut self, owner: &'a str) -> Self {
+        self.owner = owner;
+        self
+    }
+
+    /// Set the version string. Defaults to "1.0.0".
+    #[must_use]
+    pub fn version(mut self, version: &'a str) -> Self {
+        self.version = version;
+        self
+    }
+
+    /// Set the creation date. Defaults to [`default_created()`].
+    #[must_use]
+    pub fn created(mut self, created: DateTime<Utc>) -> Self {
+        self.created = Some(created);
+        self
+    }
+
+    /// Set the download count. If not set, downloads will be 0.
+    #[must_use]
+    pub fn downloads(mut self, downloads: i64) -> Self {
+        self.downloads = Some(downloads);
+        self
+    }
+
+    /// Build and insert the crate into the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The crate name was not set
+    /// - The version string is invalid
+    /// - Database insertion fails
+    ///
+    /// # Returns
+    ///
+    /// The crate ID on success.
+    pub async fn build(self) -> DbResult<i64> {
+        let name = self.name.ok_or_else(|| {
+            DbError::InvalidCrateName("TestCrateBuilder: name is required".to_string())
+        })?;
+        let created = self.created.unwrap_or_else(default_created);
+        let version = Version::try_from(self.version)
+            .map_err(|_| DbError::InvalidVersion(self.version.to_string()))?;
+
+        if let Some(downloads) = self.downloads {
+            test_add_crate_with_downloads(
+                self.db,
+                name,
+                self.owner,
+                &version,
+                &created,
+                Some(downloads),
+            )
+            .await
+        } else {
+            test_add_crate(self.db, name, self.owner, &version, &created).await
+        }
+    }
+}
 
 /// Add a cached crate with a specified download count.
 pub async fn test_add_cached_crate_with_downloads(

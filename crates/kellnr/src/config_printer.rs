@@ -6,7 +6,6 @@
 use std::fmt::Write;
 
 use kellnr_settings::{ConfigSource, Settings, ShowConfigOptions};
-use serde::Serialize;
 use toml::Value;
 
 fn format_value(value: &Value) -> String {
@@ -62,31 +61,25 @@ impl<'a> ConfigPrinter<'a> {
         )
     }
 
-    fn write_section<T: Serialize>(
+    fn write_section(
         &self,
         output: &mut String,
         section_name: &str,
-        section_data: &T,
-        defaults: &T,
+        section_table: &toml::map::Map<String, Value>,
+        default_table: &toml::map::Map<String, Value>,
     ) {
-        let value = Value::try_from(section_data).expect("Settings should serialize to TOML");
-        let default_value =
-            Value::try_from(defaults).expect("Default settings should serialize to TOML");
-
-        let Value::Table(table) = value else { return };
-        let Value::Table(default_table) = default_value else { return };
-
         let mut section_output = String::new();
 
-        for (field_name, field_value) in &table {
+        for (field_name, field_value) in section_table {
             let key = format!("{section_name}.{field_name}");
 
             // For setup section, skip fields that match defaults (sensitive data)
             if section_name == "setup"
                 && let Some(default_field) = default_table.get(field_name)
-                    && field_value == default_field {
-                        continue;
-                    }
+                && field_value == default_field
+            {
+                continue;
+            }
 
             if !self.should_show(&key) {
                 continue;
@@ -104,46 +97,39 @@ impl<'a> ConfigPrinter<'a> {
         }
     }
 
+    /// Print all settings sections by iterating over the serialized Settings struct.
+    ///
+    /// New sections added to Settings are automatically included without manual updates.
     fn print(&self) {
         let mut output = String::new();
         let defaults = Settings::default();
 
-        self.write_section(&mut output, "setup", &self.settings.setup, &defaults.setup);
-        self.write_section(
-            &mut output,
-            "registry",
-            &self.settings.registry,
-            &defaults.registry,
-        );
-        self.write_section(&mut output, "docs", &self.settings.docs, &defaults.docs);
-        self.write_section(&mut output, "proxy", &self.settings.proxy, &defaults.proxy);
-        self.write_section(&mut output, "log", &self.settings.log, &defaults.log);
-        self.write_section(&mut output, "local", &self.settings.local, &defaults.local);
-        self.write_section(
-            &mut output,
-            "origin",
-            &self.settings.origin,
-            &defaults.origin,
-        );
-        self.write_section(
-            &mut output,
-            "postgresql",
-            &self.settings.postgresql,
-            &defaults.postgresql,
-        );
-        self.write_section(&mut output, "s3", &self.settings.s3, &defaults.s3);
-        self.write_section(
-            &mut output,
-            "oauth2",
-            &self.settings.oauth2,
-            &defaults.oauth2,
-        );
-        self.write_section(
-            &mut output,
-            "toolchain",
-            &self.settings.toolchain,
-            &defaults.toolchain,
-        );
+        // Serialize both to TOML tables for automatic iteration
+        let Value::Table(settings_table) =
+            Value::try_from(self.settings).expect("Settings should serialize to TOML")
+        else {
+            return;
+        };
+        let Value::Table(defaults_table) =
+            Value::try_from(&defaults).expect("Default settings should serialize to TOML")
+        else {
+            return;
+        };
+
+        // Iterate over all sections automatically
+        for (section_name, section_value) in &settings_table {
+            let Value::Table(section_table) = section_value else {
+                continue;
+            };
+
+            let default_section = defaults_table
+                .get(section_name)
+                .and_then(|v| v.as_table())
+                .cloned()
+                .unwrap_or_default();
+
+            self.write_section(&mut output, section_name, section_table, &default_section);
+        }
 
         if output.is_empty() && self.options.no_defaults {
             println!("# No non-default configuration values found.");
@@ -164,10 +150,7 @@ mod tests {
 
     #[test]
     fn format_value_string() {
-        assert_eq!(
-            format_value(&Value::String("hello".into())),
-            "\"hello\""
-        );
+        assert_eq!(format_value(&Value::String("hello".into())), "\"hello\"");
     }
 
     #[test]

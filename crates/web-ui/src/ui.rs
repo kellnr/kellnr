@@ -226,35 +226,55 @@ pub struct DeleteCrateVersionParams {
     version: Version,
 }
 
-pub async fn delete_version(
-    Query(params): Query<DeleteCrateVersionParams>,
-    _user: AdminUser,
-    State(state): AppState,
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
+pub struct DeleteCrateParams {
+    name: OriginalName,
+}
+
+/// Helper function to delete crate versions from db, storage, and docs.
+/// If `versions` is `None`, all versions of the crate are deleted.
+async fn delete_crate_versions_impl(
+    state: &kellnr_appstate::AppStateData,
+    name: &OriginalName,
+    versions: Option<Vec<Version>>,
 ) -> Result<(), RouteError> {
-    let version = params.version;
-    let name = params.name;
+    let versions_to_delete = match versions {
+        Some(v) => v,
+        None => {
+            let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
+            crate_meta
+                .iter()
+                .map(|cm| Version::from_unchecked_str(&cm.version))
+                .collect()
+        }
+    };
 
-    if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
-        error!("Failed to delete crate from database: {e:?}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-    }
+    for version in &versions_to_delete {
+        if let Err(e) = state.db.delete_crate(&name.to_normalized(), version).await {
+            error!("Failed to delete crate from database: {e:?}");
+            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        }
 
-    if let Err(e) = state.crate_storage.delete(&name, &version).await {
-        error!("Failed to delete crate from storage: {e}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-    }
+        if let Err(e) = state.crate_storage.delete(name, version).await {
+            error!("Failed to delete crate from storage: {e}");
+            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        }
 
-    if let Err(e) = kellnr_docs::delete(&name, &version, &state.settings).await {
-        error!("Failed to delete crate from docs: {e}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        if let Err(e) = kellnr_docs::delete(name, version, &state.settings).await {
+            error!("Failed to delete crate from docs: {e}");
+            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        }
     }
 
     Ok(())
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
-pub struct DeleteCrateParams {
-    name: OriginalName,
+pub async fn delete_version(
+    Query(params): Query<DeleteCrateVersionParams>,
+    _user: AdminUser,
+    State(state): AppState,
+) -> Result<(), RouteError> {
+    delete_crate_versions_impl(&state, &params.name, Some(vec![params.version])).await
 }
 
 pub async fn delete_crate(
@@ -262,29 +282,7 @@ pub async fn delete_crate(
     _user: AdminUser,
     State(state): AppState,
 ) -> Result<(), RouteError> {
-    let name = params.name;
-
-    let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
-
-    for cm in &crate_meta {
-        let version = Version::from_unchecked_str(&cm.version);
-        if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
-            error!("Failed to delete crate from database: {e:?}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-        }
-
-        if let Err(e) = state.crate_storage.delete(&name, &version).await {
-            error!("Failed to delete crate from storage: {e}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-        }
-
-        if let Err(e) = kellnr_docs::delete(&name, &cm.version, &state.settings).await {
-            error!("Failed to delete crate from docs: {e}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-        }
-    }
-
-    Ok(())
+    delete_crate_versions_impl(&state, &params.name, None).await
 }
 
 /// Delete a specific version of a crate (path parameter version)
@@ -313,22 +311,7 @@ pub async fn delete_crate_version(
     let version = Version::try_from(version.as_str())
         .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
 
-    if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
-        error!("Failed to delete crate from database: {e:?}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-    }
-
-    if let Err(e) = state.crate_storage.delete(&name, &version).await {
-        error!("Failed to delete crate from storage: {e}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-    }
-
-    if let Err(e) = kellnr_docs::delete(&name, &version, &state.settings).await {
-        error!("Failed to delete crate from docs: {e}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-    }
-
-    Ok(())
+    delete_crate_versions_impl(&state, &name, Some(vec![version])).await
 }
 
 /// Delete all versions of a crate (path parameter version)
@@ -354,27 +337,7 @@ pub async fn delete_crate_all(
     let name = OriginalName::try_from(name.as_str())
         .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
 
-    let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
-
-    for cm in &crate_meta {
-        let version = Version::from_unchecked_str(&cm.version);
-        if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
-            error!("Failed to delete crate from database: {e:?}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-        }
-
-        if let Err(e) = state.crate_storage.delete(&name, &version).await {
-            error!("Failed to delete crate from storage: {e}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-        }
-
-        if let Err(e) = kellnr_docs::delete(&name, &cm.version, &state.settings).await {
-            error!("Failed to delete crate from docs: {e}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-        }
-    }
-
-    Ok(())
+    delete_crate_versions_impl(&state, &name, None).await
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
