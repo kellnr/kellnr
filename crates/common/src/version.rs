@@ -20,6 +20,9 @@ impl Version {
     pub fn from_unchecked_str(version: &str) -> Self {
         Self(version.to_string())
     }
+    pub fn into_inner(self) -> String {
+        self.0
+    }
 }
 
 impl TryFrom<&str> for Version {

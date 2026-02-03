@@ -27,6 +27,9 @@ impl OriginalName {
     pub fn from_unchecked(name: String) -> Self {
         Self(name)
     }
+    pub fn into_inner(self) -> String {
+        self.0
+    }
 }
 
 impl TryFrom<String> for OriginalName {

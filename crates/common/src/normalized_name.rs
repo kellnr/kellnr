@@ -15,6 +15,10 @@ impl NormalizedName {
     pub fn from_unchecked_str(name: &str) -> Self {
         NormalizedName(name.to_owned())
     }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
 }
 
 impl From<OriginalName> for NormalizedName {
