@@ -215,6 +215,40 @@ impl Database {
             .and_then(|v| u64::try_from(v).ok())
             .ok_or(error)
     }
+
+    async fn get_webhook_model(&self, id: &str) -> DbResult<webhook::Model> {
+        webhook::Entity::find()
+            .filter(webhook::Column::Id.eq(
+                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
+            ))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::WebhookNotFound)
+    }
+
+    async fn get_webhook_queue_model(&self, id: &str) -> DbResult<webhook_queue::Model> {
+        webhook_queue::Entity::find()
+            .filter(webhook_queue::Column::Id.eq(
+                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
+            ))
+            .one(&self.db_con)
+            .await?
+            .ok_or(DbError::WebhookNotFound)
+    }
+}
+
+fn webhook_model_to_obj(w: webhook::Model) -> DbResult<Webhook> {
+    let event = w
+        .event
+        .as_str()
+        .try_into()
+        .map_err(|_| DbError::InvalidWebhookEvent(w.event))?;
+    Ok(Webhook {
+        id: Some(w.id.into()),
+        name: w.name,
+        event,
+        callback_url: w.callback_url,
+    })
 }
 
 #[async_trait]
@@ -1645,53 +1679,28 @@ impl DbProvider for Database {
         let w: webhook::Model = w.insert(&self.db_con).await?;
         Ok(w.id.to_string())
     }
-    async fn delete_webhook(&self, id: &str) -> DbResult<()> {
-        let w = webhook::Entity::find()
-            .filter(webhook::Column::Id.eq(
-                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
-            ))
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::WebhookNotFound)?;
 
-        w.delete(&self.db_con).await?;
+    async fn delete_webhook(&self, id: &str) -> DbResult<()> {
+        self.get_webhook_model(id)
+            .await?
+            .delete(&self.db_con)
+            .await?;
         Ok(())
     }
+
     async fn get_webhook(&self, id: &str) -> DbResult<Webhook> {
-        let w = webhook::Entity::find()
-            .filter(webhook::Column::Id.eq(
-                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
-            ))
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::WebhookNotFound)?;
-
-        Ok(Webhook {
-            id: Some(w.id.into()),
-            name: w.name,
-            event: w
-                .event
-                .as_str()
-                .try_into()
-                .map_err(|_| DbError::InvalidWebhookEvent(w.event))?,
-            callback_url: w.callback_url,
-        })
+        webhook_model_to_obj(self.get_webhook_model(id).await?)
     }
-    async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>> {
-        let w = webhook::Entity::find().all(&self.db_con).await?;
 
-        Ok(w.into_iter()
-            .filter_map(|w| {
-                Some(Webhook {
-                    id: Some(w.id.into()),
-                    name: w.name,
-                    // Entries with invalid events would get skipped
-                    event: w.event.as_str().try_into().ok()?,
-                    callback_url: w.callback_url,
-                })
-            })
+    async fn get_all_webhooks(&self) -> DbResult<Vec<Webhook>> {
+        Ok(webhook::Entity::find()
+            .all(&self.db_con)
+            .await?
+            .into_iter()
+            .filter_map(|w| webhook_model_to_obj(w).ok())
             .collect())
     }
+
     async fn add_webhook_queue(
         &self,
         event: WebhookEvent,
@@ -1743,36 +1752,25 @@ impl DbProvider for Database {
             })
             .collect())
     }
+
     async fn update_webhook_queue(
         &self,
         id: &str,
         last_attempt: DateTime<Utc>,
         next_attempt: DateTime<Utc>,
     ) -> DbResult<()> {
-        let w = webhook_queue::Entity::find()
-            .filter(webhook_queue::Column::Id.eq(
-                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
-            ))
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::WebhookNotFound)?;
-
-        let mut w: webhook_queue::ActiveModel = w.into();
+        let mut w: webhook_queue::ActiveModel = self.get_webhook_queue_model(id).await?.into();
         w.last_attempt = Set(Some(last_attempt.into()));
         w.next_attempt = Set(next_attempt.into());
         w.update(&self.db_con).await?;
         Ok(())
     }
-    async fn delete_webhook_queue(&self, id: &str) -> DbResult<()> {
-        let w = webhook_queue::Entity::find()
-            .filter(webhook_queue::Column::Id.eq(
-                TryInto::<Uuid>::try_into(id).map_err(|_| DbError::InvalidId(id.to_string()))?,
-            ))
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::WebhookNotFound)?;
 
-        w.delete(&self.db_con).await?;
+    async fn delete_webhook_queue(&self, id: &str) -> DbResult<()> {
+        self.get_webhook_queue_model(id)
+            .await?
+            .delete(&self.db_con)
+            .await?;
         Ok(())
     }
 
