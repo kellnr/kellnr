@@ -193,7 +193,7 @@ pub async fn update_crate_categories<C: ConnectionTrait>(
     // Set the latest list of categories for the crate
     for category in categories {
         let category_fk = crate_category::Entity::find()
-            .filter(crate_category::Column::Category.eq(category.clone()))
+            .filter(crate_category::Column::Category.eq(&category))
             .one(db_con)
             .await?
             .map(|model| model.id);
@@ -204,7 +204,7 @@ pub async fn update_crate_categories<C: ConnectionTrait>(
         } else {
             let cc = crate_category::ActiveModel {
                 id: ActiveValue::default(),
-                category: Set(category.clone()),
+                category: Set(category),
             };
 
             cc.insert(db_con).await?.id
@@ -238,7 +238,7 @@ pub async fn update_crate_keywords<C: ConnectionTrait>(
     // Set the latest list of keywords for the crate
     for keyword in keywords {
         let keyword_fk = crate_keyword::Entity::find()
-            .filter(crate_keyword::Column::Keyword.eq(keyword.clone()))
+            .filter(crate_keyword::Column::Keyword.eq(&keyword))
             .one(db_con)
             .await?
             .map(|model| model.id);
@@ -249,7 +249,7 @@ pub async fn update_crate_keywords<C: ConnectionTrait>(
         } else {
             let ck = crate_keyword::ActiveModel {
                 id: ActiveValue::default(),
-                keyword: Set(keyword.clone()),
+                keyword: Set(keyword),
             };
 
             ck.insert(db_con).await?.id
@@ -283,7 +283,7 @@ pub async fn update_crate_authors<C: ConnectionTrait>(
     // Set the latest list of authors for the crate
     for author in authors {
         let author_fk = crate_author::Entity::find()
-            .filter(crate_author::Column::Author.eq(author.clone()))
+            .filter(crate_author::Column::Author.eq(&author))
             .one(db_con)
             .await?
             .map(|model| model.id);
@@ -294,7 +294,7 @@ pub async fn update_crate_authors<C: ConnectionTrait>(
         } else {
             let ca = crate_author::ActiveModel {
                 id: ActiveValue::default(),
-                author: Set(author.clone()),
+                author: Set(author),
             };
 
             ca.insert(db_con).await?.id
@@ -341,7 +341,7 @@ pub fn crate_index_model_to_index_metadata(
     let mut index_metadata = vec![];
     for ci in crate_indices {
         let deps = match ci.deps {
-            Some(ref deps) => serde_json::value::from_value(deps.to_owned()).map_err(|e| {
+            Some(deps) => serde_json::value::from_value(deps).map_err(|e| {
                 DbError::FailedToConvertFromJson(format!(
                     "Failed to deserialize crate dependencies of {crate_name}: {e}"
                 ))
@@ -379,7 +379,7 @@ pub fn cratesio_index_model_to_index_metadata(
     let mut index_metadata = vec![];
     for ci in crate_indices {
         let deps = match ci.deps {
-            Some(ref deps) => serde_json::value::from_value(deps.to_owned()).map_err(|e| {
+            Some(deps) => serde_json::value::from_value(deps).map_err(|e| {
                 DbError::FailedToConvertFromJson(format!(
                     "Failed to deserialize crate dependencies of {crate_name}: {e}"
                 ))
@@ -423,12 +423,12 @@ pub async fn update_etag<C: ConnectionTrait>(
     crate_id: i64,
 ) -> DbResult<()> {
     let etag = compute_etag(db_con, crate_name, crate_id).await?;
-    let krate = krate::Entity::find()
+    let mut krate: krate::ActiveModel = krate::Entity::find()
         .filter(krate::Column::Id.eq(crate_id))
         .one(db_con)
         .await?
-        .ok_or(DbError::CrateNotFound(crate_name.to_string()))?;
-    let mut krate: krate::ActiveModel = krate.into();
+        .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+        .into();
     krate.e_tag = Set(etag);
     krate.update(db_con).await?;
     Ok(())
