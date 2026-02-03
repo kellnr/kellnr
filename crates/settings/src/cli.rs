@@ -5,6 +5,7 @@ use clap_serde_derive::ClapSerde;
 use config::ConfigError;
 use toml::Value;
 
+use crate::SourceMap;
 use crate::compile_time_config;
 use crate::config_source::{ConfigSource, track_env_sources};
 use crate::docs::Docs;
@@ -19,7 +20,6 @@ use crate::s3::S3;
 use crate::settings::Settings;
 use crate::setup::Setup;
 use crate::toolchain::Toolchain;
-use crate::SourceMap;
 
 /// Compare two Settings structs and mark all differences with the given source.
 ///
@@ -60,10 +60,10 @@ fn track_settings_differences(
 
         // Compare each field in the section
         for (field_name, field_value) in current_fields {
-            if let Some(previous_field) = previous_fields.get(field_name) {
-                if field_value != previous_field {
-                    sources.insert(format!("{section_name}.{field_name}"), source.clone());
-                }
+            if let Some(previous_field) = previous_fields.get(field_name)
+                && field_value != previous_field
+            {
+                sources.insert(format!("{section_name}.{field_name}"), source);
             }
         }
     }
@@ -269,7 +269,12 @@ pub fn get_settings_with_cli() -> Result<Settings, ConfigError> {
 fn track_toml_sources(settings: &mut Settings) {
     let current = settings.clone();
     let defaults = Settings::default();
-    track_settings_differences(&mut settings.sources, &current, &defaults, ConfigSource::Toml);
+    track_settings_differences(
+        &mut settings.sources,
+        &current,
+        &defaults,
+        ConfigSource::Toml,
+    );
 }
 
 /// Track CLI arguments and merge them into settings.

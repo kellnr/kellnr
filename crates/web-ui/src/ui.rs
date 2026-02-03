@@ -238,15 +238,14 @@ async fn delete_crate_versions_impl(
     name: &OriginalName,
     versions: Option<Vec<Version>>,
 ) -> Result<(), RouteError> {
-    let versions_to_delete = match versions {
-        Some(v) => v,
-        None => {
-            let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
-            crate_meta
-                .iter()
-                .map(|cm| Version::from_unchecked_str(&cm.version))
-                .collect()
-        }
+    let versions_to_delete = if let Some(v) = versions {
+        v
+    } else {
+        let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
+        crate_meta
+            .iter()
+            .map(|cm| Version::from_unchecked_str(&cm.version))
+            .collect()
     };
 
     for version in &versions_to_delete {
