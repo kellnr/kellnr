@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Deref;
 
+use sea_orm::Value;
 use thiserror::Error;
 use utoipa::ToSchema;
 
@@ -22,6 +23,18 @@ impl Version {
     }
     pub fn into_inner(self) -> String {
         self.0
+    }
+}
+
+impl From<Version> for Value {
+    fn from(value: Version) -> Self {
+        Value::String(Some(value.0))
+    }
+}
+
+impl From<&Version> for Value {
+    fn from(value: &Version) -> Self {
+        Value::String(Some(value.0.clone()))
     }
 }
 
