@@ -16,7 +16,7 @@ use tracing::error;
 use crate::error::RouteError;
 
 /// Creates a new session for the user and returns a cookie jar with the session cookie set.
-/// Generates a token, persists it via db, and adds the cookie using app_state settings.
+/// Generates a token, persists it via db, and adds the cookie using `app_state` settings.
 pub(crate) async fn create_session_jar(
     cookies: PrivateCookieJar,
     app_state: &AppStateData,
