@@ -912,7 +912,7 @@ mod reg_api_tests {
         let kellnr = TestKellnr::new(settings).await;
 
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let del_owner = crate_user::CrateUserRequest {
@@ -974,7 +974,7 @@ mod reg_api_tests {
         let kellnr = TestKellnr::new(settings).await;
 
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let del_owner = crate_user::CrateUserRequest {
@@ -1025,7 +1025,7 @@ mod reg_api_tests {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1072,7 +1072,7 @@ mod reg_api_tests {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
 
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1122,7 +1122,7 @@ mod reg_api_tests {
         let settings = get_settings();
         let kellnr = TestKellnr::new(settings).await;
 
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1161,7 +1161,7 @@ mod reg_api_tests {
         settings.registry.allow_ownerless_crates = true;
         let kellnr = TestKellnr::new(settings).await;
 
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1205,7 +1205,7 @@ mod reg_api_tests {
         let kellnr = TestKellnr::new(settings).await;
 
         // publish crate as admin
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1255,7 +1255,7 @@ mod reg_api_tests {
         let kellnr = TestKellnr::new(settings).await;
 
         // publish crate as admin
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1305,7 +1305,7 @@ mod reg_api_tests {
         let kellnr = TestKellnr::new(settings).await;
 
         // publish crate as admin
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1359,7 +1359,7 @@ mod reg_api_tests {
         let kellnr = TestKellnr::new(settings).await;
 
         // publish crate as admin
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1413,7 +1413,7 @@ mod reg_api_tests {
         let kellnr = TestKellnr::new(settings).await;
 
         // publish crate as admin
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1467,7 +1467,7 @@ mod reg_api_tests {
         let kellnr = TestKellnr::new(settings).await;
 
         // publish crate as admin
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1520,7 +1520,7 @@ mod reg_api_tests {
         let kellnr = TestKellnr::new(settings).await;
 
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1726,7 +1726,7 @@ mod reg_api_tests {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1784,7 +1784,7 @@ mod reg_api_tests {
         let settings = get_settings();
         let kellnr = TestKellnr::fake(settings).await;
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let _ = kellnr
@@ -1909,7 +1909,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn add_empty_existing() {
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let settings = get_settings();
@@ -1956,7 +1956,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn publish_package() {
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let settings = get_settings();
@@ -2007,7 +2007,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn try_publish_as_read_only_non_admin() {
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let settings = get_settings();
@@ -2041,7 +2041,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn try_publish_as_read_only_admin() {
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let settings = get_settings();
@@ -2092,7 +2092,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn try_publish_with_restricted() {
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let mut settings = get_settings();
@@ -2146,7 +2146,7 @@ mod reg_api_tests {
             .unwrap();
 
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let r = kellnr
@@ -2210,7 +2210,7 @@ mod reg_api_tests {
             .unwrap();
 
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let r = kellnr
@@ -2238,7 +2238,7 @@ mod reg_api_tests {
 
     #[tokio::test]
     async fn publish_crate_with_missing_one_required_field() {
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let mut settings = get_settings();
@@ -2274,7 +2274,7 @@ mod reg_api_tests {
 
     #[tokio::test]
     async fn publish_crate_with_missing_multiple_required_fields() {
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let mut settings = get_settings();
@@ -2312,7 +2312,7 @@ mod reg_api_tests {
     // Missing some but not all required fields
     #[tokio::test]
     async fn publish_crate_with_some_required_fields() {
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let mut settings = get_settings();
@@ -2350,7 +2350,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn publish_existing_package() {
         // Use valid crate publish data to test.
-        let valid_pub_package = read("../test_data/pub_data.bin")
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
             .expect("Cannot open valid package file.");
         let settings = get_settings();
