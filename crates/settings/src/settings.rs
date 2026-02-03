@@ -1,22 +1,23 @@
 use std::convert::TryFrom;
-use std::env;
 use std::path::{Path, PathBuf};
 
 use config::{Config, ConfigError, Environment, File};
 use serde::{Deserialize, Serialize};
 
-use crate::compile_time_config;
+use crate::config_source::{SourceMap, init_default_sources};
 use crate::docs::Docs;
 use crate::local::Local;
 use crate::log::Log;
+use crate::oauth2::OAuth2;
 use crate::origin::Origin;
 use crate::postgresql::Postgresql;
 use crate::proxy::Proxy;
 use crate::registry::Registry;
 use crate::s3::S3;
 use crate::setup::Setup;
+use crate::toolchain::Toolchain;
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Default, Clone)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(default)]
 pub struct Settings {
     pub setup: Setup,
@@ -28,62 +29,60 @@ pub struct Settings {
     pub origin: Origin,
     pub postgresql: Postgresql,
     pub s3: S3,
+    pub oauth2: OAuth2,
+    pub toolchain: Toolchain,
+    /// Tracks the source (default, toml, env, cli) for each setting.
+    /// Skipped in serde serialization - use `SettingsResponse` for API responses.
+    #[serde(skip)]
+    pub sources: SourceMap,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            setup: Setup::default(),
+            registry: Registry::default(),
+            docs: Docs::default(),
+            proxy: Proxy::default(),
+            log: Log::default(),
+            local: Local::default(),
+            origin: Origin::default(),
+            postgresql: Postgresql::default(),
+            s3: S3::default(),
+            oauth2: OAuth2::default(),
+            toolchain: Toolchain::default(),
+            sources: init_default_sources(),
+        }
+    }
 }
 
 impl TryFrom<Option<&Path>> for Settings {
     type Error = ConfigError;
 
-    fn try_from(config_path: Option<&Path>) -> Result<Self, Self::Error> {
-        let env = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
-        let builder = Config::builder();
+    fn try_from(config_file: Option<&Path>) -> Result<Self, Self::Error> {
+        let mut builder = Config::builder();
 
-        // Add configuration values from a config file if a config path is provided
-        let builder = match config_path {
-            Some(config_path) => {
-                let default_file = Settings::join_path(config_path, "default")?;
-                let env_file = Settings::join_path(config_path, &env)?;
-                let local_file = Settings::join_path(config_path, "local")?;
+        // Add configuration from file if provided
+        if let Some(path) = config_file {
+            builder = builder.add_source(File::from(path).required(true));
+        }
 
-                builder
-                    // Start off by merging in the "default" configuration file
-                    .add_source(File::with_name(&default_file).required(false))
-                    // Add in the current environment file
-                    // Default to 'development' env
-                    // Note that this file is _optional_
-                    .add_source(File::with_name(&env_file).required(false))
-                    // Add in a local configuration file
-                    // This file shouldn't be checked in to git
-                    .add_source(File::with_name(&local_file).required(false))
-            }
-            None => builder,
-        };
+        // Add settings from environment variables (with prefix KELLNR)
+        builder = builder.add_source(
+            Environment::with_prefix("KELLNR")
+                .list_separator(",")
+                .with_list_parse_key("registry.required_crate_fields")
+                .with_list_parse_key("oauth2.scopes")
+                .try_parsing(true)
+                .prefix_separator("_")
+                .separator("__"),
+        );
 
-        let s = builder
-            // Add in settings from the environment (with a prefix of KELLNR)
-            .add_source(
-                Environment::with_prefix("KELLNR")
-                    .list_separator(",")
-                    .with_list_parse_key("registry.required_crate_fields")
-                    .try_parsing(true)
-                    .prefix_separator("_")
-                    .separator("__"),
-            )
-            .build()?;
-
-        // You can deserialize (and thus freeze) the entire configuration as
-        s.try_deserialize()
+        builder.build()?.try_deserialize()
     }
 }
 
 impl Settings {
-    fn join_path(config_path: &Path, file: &str) -> Result<String, ConfigError> {
-        config_path
-            .join(file)
-            .to_str()
-            .map(ToString::to_string)
-            .ok_or_else(|| ConfigError::Message("Invalid UTF-8 string".to_string()))
-    }
-
     pub fn bin_path(&self) -> PathBuf {
         PathBuf::from(&self.registry.data_dir).join("crates")
     }
@@ -117,39 +116,36 @@ impl Settings {
     }
 
     pub fn crates_path_or_bucket(&self) -> String {
-        if self.s3.enabled
-            && let Some(bucket) = &self.s3.crates_bucket
-        {
-            bucket.clone()
+        if self.s3.enabled {
+            self.s3.crates_bucket.clone()
         } else {
             self.crates_path()
         }
     }
 
     pub fn crates_io_path_or_bucket(&self) -> String {
-        if self.s3.enabled
-            && let Some(bucket) = &self.s3.cratesio_bucket
-        {
-            bucket.clone()
+        if self.s3.enabled {
+            self.s3.cratesio_bucket.clone()
         } else {
             self.crates_io_path()
+        }
+    }
+
+    pub fn toolchain_path(&self) -> String {
+        format!("{}/toolchains", self.registry.data_dir)
+    }
+
+    pub fn toolchain_path_or_bucket(&self) -> String {
+        if self.s3.enabled {
+            self.s3.toolchain_bucket.clone()
+        } else {
+            self.toolchain_path()
         }
     }
 }
 
 pub fn get_settings() -> Result<Settings, ConfigError> {
-    let path = if Path::new(compile_time_config::KELLNR_CONFIG_DIR).exists() {
-        Some(Path::new(compile_time_config::KELLNR_CONFIG_DIR))
-    } else if Path::new("./config").exists() {
-        Some(Path::new("./config"))
-    } else if Path::new("../config").exists() {
-        Some(Path::new("../config"))
-    } else if Path::new("../../config").exists() {
-        Some(Path::new("../../config"))
-    } else {
-        None
-    };
-
+    let path = crate::compile_time_config::KELLNR_COMPTIME__CONFIG_FILE.map(Path::new);
     Settings::try_from(path)
 }
 
@@ -160,6 +156,7 @@ pub fn test_settings() -> Settings {
             data_dir: "/tmp/kdata_test".to_string(),
             ..Registry::default()
         },
+        sources: init_default_sources(),
         ..Settings::default()
     }
 }

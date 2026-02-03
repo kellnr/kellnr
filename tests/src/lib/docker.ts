@@ -21,7 +21,7 @@ import {
  *
  * Notes:
  * - globalSetup is responsible for building the shared Kellnr integration image.
- * - This module *can* build test-specific helper images (e.g. MinIO for S3 test) via
+ * - This module *can* build test-specific helper images (e.g. RustFS for S3 test) via
  *   `ImageFromDockerfile`, so individual specs don't shell out to the Docker CLI.
  *
  * Logging:
@@ -35,7 +35,7 @@ export type PortBindings = Record<number, number>; // containerPort -> hostPort 
 
 export type StartContainerOptions = {
   /**
-   * Docker image name, e.g. "ghcr.io/kellnr/kellnr:latest" or "minio/minio:RELEASE..."
+   * Docker image name, e.g. "ghcr.io/kellnr/kellnr:latest" or "rustfs/rustfs:latest"
    */
   image: string;
 
@@ -63,7 +63,7 @@ export type StartContainerOptions = {
   network?: StartedNetwork;
 
   /**
-   * Optional network aliases (e.g. ["minio"]).
+   * Optional network aliases (e.g. ["rustfs"]).
    */
   networkAliases?: string[];
 
@@ -89,7 +89,7 @@ export type StartContainerOptions = {
 
   /**
    * Command override passed to Docker (ENTRYPOINT stays, CMD replaced).
-   * Use for images like minio where you might want e.g. ["server","/data"].
+   * Use for images like RustFS where you might want e.g. ["server","/data"].
    */
   cmd?: string[];
 
@@ -175,7 +175,7 @@ export function uniqueContainerName(base: string, testInfo?: TestInfo | BeforeAl
 /**
  * Start a network for a test.
  *
- * Use this when a container needs to reach another container via alias (e.g. Kellnr -> minio).
+ * Use this when a container needs to reach another container via alias (e.g. Kellnr -> rustfs).
  */
 export async function createNetwork(
   name: string,
@@ -190,7 +190,7 @@ export async function createNetwork(
 }
 
 /**
- * Build the custom MinIO image used by the S3 smoke test from the repository Dockerfile.
+ * Build the custom RustFS image used by the S3 smoke test from the repository Dockerfile.
  *
  * The `testcontainers` build-from-Dockerfile helper is not available in the currently used
  * `testcontainers` package API here, so we centralize a Docker CLI fallback in this library.
@@ -203,14 +203,35 @@ export async function createNetwork(
  *
  * NOTE: This function assumes it's called from within tests (process.cwd() == tests root).
  */
-export async function buildS3MinioImage(options: {
+/**
+ * Check if a Docker image exists locally.
+ */
+async function dockerImageExists(imageName: string): Promise<boolean> {
+  try {
+    const result = await execa("docker", ["inspect", imageName], {
+      reject: false,
+    });
+    return result.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function buildS3RustFsImage(options: {
   imageName: string;
   cratesBucket: string;
   cratesioBucket: string;
+  toolchainBucket?: string;
 }): Promise<void> {
+  // Check if image already exists
+  if (await dockerImageExists(options.imageName)) {
+    console.log(`[docker] Image ${options.imageName} already exists, skipping build`);
+    return;
+  }
+
   const repoRoot = path.resolve(process.cwd(), "..");
 
-  // We build the MinIO fixture image from `tests/fixtures/test-s3-storage`.
+  // We build the RustFS fixture image from `tests/fixtures/test-s3-storage`.
   const contextDir = path.resolve(
     repoRoot,
     "tests",
@@ -229,8 +250,13 @@ export async function buildS3MinioImage(options: {
     `CRATES_BUCKET=${options.cratesBucket}`,
     "--build-arg",
     `CRATESIO_BUCKET=${options.cratesioBucket}`,
-    contextDir,
   ];
+
+  if (options.toolchainBucket) {
+    args.push("--build-arg", `TOOLCHAIN_BUCKET=${options.toolchainBucket}`);
+  }
+
+  args.push(contextDir);
 
   const res = await execa("docker", args, {
     cwd: repoRoot,
@@ -239,7 +265,7 @@ export async function buildS3MinioImage(options: {
 
   if (res.exitCode !== 0) {
     throw new Error(
-      `Failed to build MinIO image ${options.imageName} (exitCode=${res.exitCode})`,
+      `Failed to build RustFS image ${options.imageName} (exitCode=${res.exitCode})`,
     );
   }
 }
@@ -501,14 +527,14 @@ export function waitForHttp(
 }
 
 /**
- * Start the MinIO container for the S3 smoke test on the given network with a stable alias.
+ * Start the RustFS container for the S3 smoke test on the given network with a stable alias.
  *
  * This is a thin convenience wrapper around `startContainer` to avoid repeating:
  * - env wiring
  * - network alias
  * - (optional) wait strategy
  */
-export async function startS3MinioContainer(
+export async function startS3RustFsContainer(
   options: {
     name: string;
     image: string;
@@ -518,7 +544,7 @@ export async function startS3MinioContainer(
     /**
      * If true, expose port 9000 to a random host port.
      * Use container.getMappedPort(9000) to get the assigned port.
-     * Required when Kellnr runs locally (not in Docker) and needs to access MinIO.
+     * Required when Kellnr runs locally (not in Docker) and needs to access RustFS.
      */
     exposeToHost?: boolean;
   },
@@ -529,15 +555,15 @@ export async function startS3MinioContainer(
       name: options.name,
       image: options.image,
       network: options.network,
-      networkAliases: ["minio"],
+      networkAliases: ["rustfs"],
       env: {
-        MINIO_ROOT_USER: options.rootUser,
-        MINIO_ROOT_PASSWORD: options.rootPassword,
+        RUSTFS_ACCESS_KEY: options.rootUser,
+        RUSTFS_SECRET_KEY: options.rootPassword,
       },
       // Expose port 9000 to a random host port if requested (for local Kellnr access)
       ...(options.exposeToHost ? { exposedPorts: [9000] } : {}),
-      // MinIO images typically listen quickly; the default listening-ports wait is sufficient.
-      // If you want stricter readiness, replace with `waitFor: waitForHttp(9000, "/minio/health/live")`
+      // RustFS images typically listen quickly; the default listening-ports wait is sufficient.
+      // Note: caller should add a delay if needed for bucket initialization
     },
     testInfo,
   );

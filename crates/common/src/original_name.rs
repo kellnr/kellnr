@@ -4,10 +4,12 @@ use std::ops::Deref;
 
 use regex::Regex;
 use thiserror::Error;
+use utoipa::ToSchema;
 
 use crate::normalized_name::NormalizedName;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Hash, ToSchema)]
+#[schema(value_type = String)]
 pub struct OriginalName(String);
 
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -24,6 +26,9 @@ impl OriginalName {
     }
     pub fn from_unchecked(name: String) -> Self {
         Self(name)
+    }
+    pub fn into_inner(self) -> String {
+        self.0
     }
 }
 

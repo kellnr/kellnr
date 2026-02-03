@@ -11,6 +11,9 @@ documentation.workspace = true
 
 [dependencies]
 # External dependencies from crates.io
+clap.workspace = true
+clap-serde-derive.workspace = true
+utoipa.workspace = true
 config.workspace = true
 serde.workspace = true
 tracing.workspace = true

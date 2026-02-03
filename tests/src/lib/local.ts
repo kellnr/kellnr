@@ -29,125 +29,125 @@ const TEST_DATA_BASE_DIR = "/tmp/kellnr-test-ui";
  * Result of starting a local Kellnr instance.
  */
 export type StartedLocalKellnr = {
-  /** The spawned child process */
-  process: ChildProcess;
+    /** The spawned child process */
+    process: ChildProcess;
 
-  /** Base URL for accessing the Kellnr server (e.g., "http://localhost:8000") */
-  baseUrl: string;
+    /** Base URL for accessing the Kellnr server (e.g., "http://localhost:8000") */
+    baseUrl: string;
 
-  /** Path to the data directory for this instance */
-  dataDir: string;
+    /** Path to the data directory for this instance */
+    dataDir: string;
 
-  /** Path to the log file for this instance */
-  logFile: string;
+    /** Path to the log file for this instance */
+    logFile: string;
 
-  /** Stop the process and clean up the data directory */
-  stop: () => Promise<void>;
+    /** Stop the process and clean up the data directory */
+    stop: () => Promise<void>;
 };
 
 export type StartLocalKellnrOptions = {
-  /**
-   * Name prefix for logging/debugging purposes.
-   */
-  name: string;
+    /**
+     * Name prefix for logging/debugging purposes.
+     */
+    name: string;
 
-  /**
-   * Extra environment variables to pass to the Kellnr process.
-   * These are merged with the default environment variables.
-   */
-  env?: Record<string, string>;
+    /**
+     * Extra environment variables to pass to the Kellnr process.
+     * These are merged with the default environment variables.
+     */
+    env?: Record<string, string>;
 
-  /**
-   * Port to run Kellnr on. Defaults to 8000.
-   */
-  port?: number;
+    /**
+     * Port to run Kellnr on. Defaults to 8000.
+     */
+    port?: number;
 
-  /**
-   * Log level. Defaults to "debug".
-   */
-  logLevel?: string;
+    /**
+     * Log level. Defaults to "debug".
+     */
+    logLevel?: string;
 
-  /**
-   * Web server log level. Defaults to "debug".
-   */
-  webLogLevel?: string;
+    /**
+     * Web server log level. Defaults to "debug".
+     */
+    webLogLevel?: string;
 
-  /**
-   * Whether to keep the data directory after stopping.
-   * Useful for debugging. Defaults to false.
-   */
-  keepDataDir?: boolean;
+    /**
+     * Whether to keep the data directory after stopping.
+     * Useful for debugging. Defaults to false.
+     */
+    keepDataDir?: boolean;
 
-  /**
-   * Whether to also write logs to stdout.
-   * Useful for debugging. Defaults to false.
-   */
-  logToStdout?: boolean;
+    /**
+     * Whether to also write logs to stdout.
+     * Useful for debugging. Defaults to false.
+     */
+    logToStdout?: boolean;
 
-  /**
-   * Path to use for the health check. Defaults to "/".
-   * Set this when using KELLNR_ORIGIN__PATH to match the path prefix.
-   */
-  healthCheckPath?: string;
+    /**
+     * Path to use for the health check. Defaults to "/".
+     * Set this when using KELLNR_ORIGIN__PATH to match the path prefix.
+     */
+    healthCheckPath?: string;
 };
 
 /**
  * Ensure the test data base directory exists.
  */
 function ensureTestDataBaseDir(): void {
-  fs.mkdirSync(TEST_DATA_BASE_DIR, { recursive: true });
+    fs.mkdirSync(TEST_DATA_BASE_DIR, { recursive: true });
 }
 
 /**
  * Create a unique data directory for a test instance.
  */
 function createDataDir(name: string): string {
-  ensureTestDataBaseDir();
-  const uuid = randomUUID();
-  const safeName = name.replace(/[^\w.-]+/g, "_").slice(0, 40);
-  const dirName = `${safeName}-${uuid}`;
-  const dataDir = path.resolve(TEST_DATA_BASE_DIR, dirName);
-  fs.mkdirSync(dataDir, { recursive: true });
-  return dataDir;
+    ensureTestDataBaseDir();
+    const uuid = randomUUID();
+    const safeName = name.replace(/[^\w.-]+/g, "_").slice(0, 40);
+    const dirName = `${safeName}-${uuid}`;
+    const dataDir = path.resolve(TEST_DATA_BASE_DIR, dirName);
+    fs.mkdirSync(dataDir, { recursive: true });
+    return dataDir;
 }
 
 /**
  * Remove a data directory.
  */
 function removeDataDir(dataDir: string): void {
-  try {
-    fs.rmSync(dataDir, { recursive: true, force: true });
-  } catch {
-    // Best effort cleanup
-  }
+    try {
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+        // Best effort cleanup
+    }
 }
 
 /**
  * Wait for HTTP 200 on a URL.
  */
 async function waitForHttpOk(
-  url: string,
-  options?: { timeoutMs?: number; intervalMs?: number },
+    url: string,
+    options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<void> {
-  const timeoutMs = options?.timeoutMs ?? 60_000;
-  const intervalMs = options?.intervalMs ?? 500;
-  const start = Date.now();
+    const timeoutMs = options?.timeoutMs ?? 60_000;
+    const intervalMs = options?.intervalMs ?? 500;
+    const start = Date.now();
 
-  while (true) {
-    try {
-      const res = await fetch(url, { redirect: "manual" });
-      if (res.status === 200) return;
-    } catch {
-      // Server not ready yet
-    }
+    while (true) {
+        try {
+            const res = await fetch(url, { redirect: "manual" });
+            if (res.status === 200) return;
+        } catch {
+            // Server not ready yet
+        }
 
-    if (Date.now() - start > timeoutMs) {
-      throw new Error(
-        `Timed out after ${timeoutMs}ms waiting for HTTP 200 from ${url}`,
-      );
+        if (Date.now() - start > timeoutMs) {
+            throw new Error(
+                `Timed out after ${timeoutMs}ms waiting for HTTP 200 from ${url}`,
+            );
+        }
+        await sleep(intervalMs);
     }
-    await sleep(intervalMs);
-  }
 }
 
 /**
@@ -167,123 +167,150 @@ async function waitForHttpOk(
  * ```
  */
 export async function startLocalKellnr(
-  options: StartLocalKellnrOptions,
-  _testInfo?: TestInfo | BeforeAllTestInfo,
+    options: StartLocalKellnrOptions,
+    _testInfo?: TestInfo | BeforeAllTestInfo,
 ): Promise<StartedLocalKellnr> {
-  const binaryPath = getKellnrBinaryPath();
-  const port = options.port ?? 8000;
-  const logLevel = options.logLevel ?? "debug";
-  const webLogLevel = options.webLogLevel ?? "debug";
-  const baseUrl = `http://localhost:${port}`;
+    const binaryPath = getKellnrBinaryPath();
+    const port = options.port ?? 8000;
+    const logLevel = options.logLevel ?? "debug";
+    const webLogLevel = options.webLogLevel ?? "debug";
+    const baseUrl = `http://localhost:${port}`;
 
-  // Check if user provided an explicit data directory via env
-  const userProvidedDataDir = options.env?.KELLNR_REGISTRY__DATA_DIR;
-  const isExternalDataDir = !!userProvidedDataDir;
+    // Check if user provided an explicit data directory via env
+    const userProvidedDataDir = options.env?.KELLNR_REGISTRY__DATA_DIR;
+    const isExternalDataDir = !!userProvidedDataDir;
 
-  // Create or use existing data directory
-  const dataDir = isExternalDataDir
-    ? userProvidedDataDir
-    : createDataDir(options.name);
+    // Create or use existing data directory
+    const dataDir = isExternalDataDir
+        ? userProvidedDataDir
+        : createDataDir(options.name);
 
-  // Ensure data directory exists (in case it's an external directory that needs to be created)
-  fs.mkdirSync(dataDir, { recursive: true });
+    // Ensure data directory exists (in case it's an external directory that needs to be created)
+    fs.mkdirSync(dataDir, { recursive: true });
 
-  // Create log file
-  const logFile = path.resolve(dataDir, "kellnr.log");
+    // Create log file
+    const logFile = path.resolve(dataDir, "kellnr.log");
 
-  // Build environment
-  const env: Record<string, string> = {
-    ...process.env,
-    // Core settings
-    KELLNR_REGISTRY__DATA_DIR: dataDir,
-    KELLNR_ORIGIN__PORT: String(port),
-    KELLNR_ORIGIN__HOSTNAME: "localhost",
-    // Logging
-    KELLNR_LOG__LEVEL: logLevel,
-    KELLNR_LOG__LEVEL_WEB_SERVER: webLogLevel,
-    // Merge user-provided environment
-    ...(options.env ?? {}),
-  };
+    // Build environment
+    // Start with process.env but filter out KELLNR_CONFIG_FILE to ensure test isolation
+    const baseEnv = Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => key !== "KELLNR_CONFIG_FILE"),
+    ) as Record<string, string>;
 
-  // Open log file for writing
-  const logFd = fs.openSync(logFile, "w");
-  const logStream = fs.createWriteStream("", { fd: logFd });
+    const env: Record<string, string> = {
+        ...baseEnv,
+        // Core settings
+        KELLNR_REGISTRY__DATA_DIR: dataDir,
+        KELLNR_ORIGIN__PORT: String(port),
+        KELLNR_ORIGIN__HOSTNAME: "localhost",
+        // Logging
+        KELLNR_LOG__LEVEL: logLevel,
+        KELLNR_LOG__LEVEL_WEB_SERVER: webLogLevel,
+        // Set default admin token
+        KELLNR_SETUP__ADMIN_TOKEN: "Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD",
+        // Disable OAuth2 by default to ensure test isolation.
+        // Tests that need OAuth2 should explicitly set KELLNR_OAUTH2__ENABLED=true
+        // along with required config (issuer_url, client_id, client_secret).
+        KELLNR_OAUTH2__ENABLED: "false",
+        // Merge user-provided environment (can override the defaults above)
+        ...(options.env ?? {}),
+    };
 
-  // Spawn the process
-  const childProcess = spawn(binaryPath, [], {
-    cwd: dataDir,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-    detached: false,
-  });
+    // Open log file for writing
+    const logFd = fs.openSync(logFile, "w");
+    const logStream = fs.createWriteStream("", { fd: logFd });
 
-  // Pipe stdout/stderr to log file (and optionally to console)
-  const handleOutput = (stream: NodeJS.ReadableStream, prefix: string) => {
-    stream.on("data", (chunk: Buffer) => {
-      const text = chunk.toString("utf8");
-      logStream.write(`[${prefix}] ${text}`);
-      if (options.logToStdout) {
-        process.stdout.write(`[${options.name}:${prefix}] ${text}`);
-      }
+    // Spawn the process with "start" subcommand
+    const childProcess = spawn(binaryPath, ["start"], {
+        cwd: dataDir,
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+        detached: false,
     });
-  };
 
-  if (childProcess.stdout) handleOutput(childProcess.stdout, "stdout");
-  if (childProcess.stderr) handleOutput(childProcess.stderr, "stderr");
+    // Pipe stdout/stderr to log file (and optionally to console)
+    const handleOutput = (stream: NodeJS.ReadableStream, prefix: string) => {
+        stream.on("data", (chunk: Buffer) => {
+            const text = chunk.toString("utf8");
+            logStream.write(`[${prefix}] ${text}`);
+            if (options.logToStdout) {
+                process.stdout.write(`[${options.name}:${prefix}] ${text}`);
+            }
+        });
+    };
 
-  // Track if we've already stopped
-  let stopped = false;
+    if (childProcess.stdout) handleOutput(childProcess.stdout, "stdout");
+    if (childProcess.stderr) handleOutput(childProcess.stderr, "stderr");
 
-  const stop = async (): Promise<void> => {
-    if (stopped) return;
-    stopped = true;
+    // Track if we've already stopped
+    let stopped = false;
 
-    // Close log stream
-    try {
-      logStream.end();
-    } catch {
-      // Ignore
-    }
+    const stop = async (): Promise<void> => {
+        if (stopped) return;
+        stopped = true;
 
-    // Kill the process
-    if (childProcess.pid && !childProcess.killed) {
-      try {
-        // Try graceful shutdown first
-        childProcess.kill("SIGTERM");
-
-        // Wait for process to exit (with timeout)
-        await Promise.race([
-          new Promise<void>((resolve) => {
-            childProcess.on("exit", () => resolve());
-          }),
-          sleep(5000),
-        ]);
-
-        // Force kill if still running
-        if (!childProcess.killed) {
-          childProcess.kill("SIGKILL");
+        // Close log stream
+        try {
+            logStream.end();
+        } catch {
+            // Ignore
         }
-      } catch {
-        // Best effort
-      }
-    }
 
-    // Clean up data directory (only if we created it, not if externally provided)
-    if (!options.keepDataDir && !isExternalDataDir) {
-      removeDataDir(dataDir);
-    }
-  };
+        // Kill the process
+        if (childProcess.pid && !childProcess.killed) {
+            try {
+                // Try graceful shutdown first
+                childProcess.kill("SIGTERM");
 
-  // Handle unexpected process exit
-  childProcess.on("error", (err) => {
-    console.error(`[${options.name}] Process error:`, err);
-  });
+                // Wait for process to exit (with timeout)
+                await Promise.race([
+                    new Promise<void>((resolve) => {
+                        childProcess.on("exit", () => resolve());
+                    }),
+                    sleep(5000),
+                ]);
 
-  childProcess.on("exit", (code, signal) => {
-    if (!stopped) {
-      console.log(
-        `[${options.name}] Process exited unexpectedly: code=${code}, signal=${signal}`,
-      );
+                // Force kill if still running
+                if (!childProcess.killed) {
+                    childProcess.kill("SIGKILL");
+                }
+            } catch {
+                // Best effort
+            }
+        }
+
+        // Clean up data directory (only if we created it, not if externally provided)
+        if (!options.keepDataDir && !isExternalDataDir) {
+            removeDataDir(dataDir);
+        }
+    };
+
+    // Handle unexpected process exit
+    childProcess.on("error", (err) => {
+        console.error(`[${options.name}] Process error:`, err);
+    });
+
+    childProcess.on("exit", (code, signal) => {
+        if (!stopped) {
+            console.log(
+                `[${options.name}] Process exited unexpectedly: code=${code}, signal=${signal}`,
+            );
+        }
+    });
+
+    // Wait for server to be ready
+    const healthCheckUrl = options.healthCheckPath
+        ? `${baseUrl}${options.healthCheckPath}`
+        : baseUrl;
+    try {
+        await waitForHttpOk(healthCheckUrl, { timeoutMs: 60_000, intervalMs: 500 });
+    } catch (e) {
+        // Server failed to start - clean up and rethrow
+        await stop();
+        throw new Error(
+            `Failed to start Kellnr at ${baseUrl}: ${(e as Error).message}. ` +
+            `Check logs at ${logFile}`,
+        );
     }
   });
 
@@ -316,27 +343,27 @@ export async function startLocalKellnr(
  * Mirrors the kellnrDefaults() function from kellnr.ts.
  */
 export function localKellnrDefaults(options?: {
-  baseUrl?: string;
-  logLevel?: string;
-  webLogLevel?: string;
+    baseUrl?: string;
+    logLevel?: string;
+    webLogLevel?: string;
 }): {
-  baseUrl: string;
-  port: number;
-  env: Record<string, string>;
+    baseUrl: string;
+    port: number;
+    env: Record<string, string>;
 } {
-  const port = 8000;
-  const baseUrl =
-    options?.baseUrl ?? process.env.KELLNR_BASE_URL ?? `http://localhost:${port}`;
-  const logLevel = options?.logLevel ?? "debug";
-  const webLogLevel = options?.webLogLevel ?? "debug";
+    const port = 8000;
+    const baseUrl =
+        options?.baseUrl ?? process.env.KELLNR_BASE_URL ?? `http://localhost:${port}`;
+    const logLevel = options?.logLevel ?? "debug";
+    const webLogLevel = options?.webLogLevel ?? "debug";
 
-  return {
-    baseUrl,
-    port,
-    env: {
-      KELLNR_LOG__LEVEL: logLevel,
-      KELLNR_LOG__LEVEL_WEB_SERVER: webLogLevel,
-      KELLNR_ORIGIN__PORT: String(port),
-    },
-  };
+    return {
+        baseUrl,
+        port,
+        env: {
+            KELLNR_LOG__LEVEL: logLevel,
+            KELLNR_LOG__LEVEL_WEB_SERVER: webLogLevel,
+            KELLNR_ORIGIN__PORT: String(port),
+        },
+    };
 }

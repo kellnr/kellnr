@@ -28,6 +28,23 @@ pub async fn cratesio_enabled(
     }
 }
 
+/// Search crates.io
+///
+/// Proxies search requests to crates.io and returns the results.
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "cratesio",
+    params(
+        ("q" = String, Query, description = "Search query"),
+        ("per_page" = Option<u32>, Query, description = "Results per page")
+    ),
+    responses(
+        (status = 200, description = "Search results from crates.io"),
+        (status = 404, description = "Crates.io proxy disabled")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn search(params: SearchParams) -> ApiResult<String> {
     let url = Url::parse(&format!(
         "https://crates.io/api/v1/crates?q={}&per_page={}",
@@ -46,6 +63,25 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
     Ok(body)
 }
 
+/// Download a crate from crates.io
+///
+/// Downloads and caches a crate from crates.io. Returns the cached version
+/// if available.
+#[utoipa::path(
+    get,
+    path = "/dl/{package}/{version}/download",
+    tag = "cratesio",
+    params(
+        ("package" = String, Path, description = "Package name"),
+        ("version" = String, Path, description = "Package version")
+    ),
+    responses(
+        (status = 200, description = "Crate archive", content_type = "application/octet-stream"),
+        (status = 404, description = "Crate not found or proxy disabled"),
+        (status = 422, description = "Failed to save crate")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn download(
     Path((name, version)): Path<(OriginalName, Version)>,
     State(crate_storage): CrateIoStorageState,

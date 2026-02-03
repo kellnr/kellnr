@@ -4,17 +4,11 @@
 // Some of the values here can be overridden at runtime via configuration files or environment
 // variables. Have a look at the documentation for more information.
 
-pub const KELLNR_DATA_DIR: &str = match option_env!("KELLNR_DATA_DIR") {
-    Some(v) => v,
-    None => "/opt/kdata",
-};
+pub const KELLNR_COMPTIME__DATA_DIR: Option<&str> = option_env!("KELLNR_COMPTIME__DATA_DIR");
 
-pub const KELLNR_CONFIG_DIR: &str = match option_env!("KELLNR_CONFIG_DIR") {
-    Some(v) => v,
-    None => "./config",
-};
+pub const KELLNR_COMPTIME__CONFIG_FILE: Option<&str> = option_env!("KELLNR_COMPTIME__CONFIG_FILE");
 
-pub const KELLNR_VERSION: &str = match option_env!("KELLNR_VERSION") {
+pub const KELLNR_COMPTIME__VERSION: &str = match option_env!("KELLNR_COMPTIME__VERSION") {
     Some(v) => v,
     None => "0.0.0-unknown",
 };

@@ -12,6 +12,7 @@ documentation.workspace = true
 [dependencies]
 axum.workspace = true
 chrono.workspace = true
+utoipa.workspace = true
 moka.workspace = true
 rand.workspace = true
 regex.workspace = true

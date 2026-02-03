@@ -1,7 +1,7 @@
 /**
  * User API service
  */
-import { apiGet, apiPost, apiDelete } from './api'
+import { apiGet, apiPost, apiPut, apiDelete } from './api'
 import type { ApiResult } from '../types/api'
 import type {
   User,
@@ -59,7 +59,7 @@ export async function deleteUser(name: string): Promise<ApiResult<void>> {
  * Reset a user's password
  */
 export async function resetPassword(name: string): Promise<ApiResult<PasswordResetResponse>> {
-  return apiPost<PasswordResetResponse>(RESET_PWD(name))
+  return apiPut<PasswordResetResponse>(RESET_PWD(name), null)
 }
 
 /**
@@ -105,7 +105,7 @@ export async function login(credentials: LoginCredentials): Promise<ApiResult<Lo
  * Logout the current user
  */
 export async function logout(): Promise<ApiResult<void>> {
-  return apiGet<void>(LOGOUT, undefined, {
+  return apiPost<void>(LOGOUT, null, undefined, {
     redirectOnAuthError: false,
   })
 }
@@ -128,10 +128,9 @@ export async function changePassword(
   newPwd1: string,
   newPwd2: string
 ): Promise<ApiResult<void>> {
-  return apiPost<void>(
+  return apiPut<void>(
     CHANGE_PWD,
     { old_pwd: oldPwd, new_pwd1: newPwd1, new_pwd2: newPwd2 },
-    undefined,
     {
       customErrors: {
         400: 'New passwords do not match.',

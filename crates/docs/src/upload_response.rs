@@ -1,14 +1,20 @@
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::compute_doc_url;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+/// Response after successfully uploading documentation
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct DocUploadResponse {
+    /// Status message
     pub message: String,
+    /// URL to access the uploaded documentation
     pub url: String,
+    /// Name of the crate
     pub crate_name: String,
+    /// Version of the crate
     pub crate_version: String,
 }
 
