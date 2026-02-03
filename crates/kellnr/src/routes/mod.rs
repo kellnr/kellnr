@@ -4,7 +4,7 @@ use axum::routing::{get, get_service};
 use axum::{Extension, Router, middleware};
 use kellnr_appstate::AppStateData;
 use kellnr_auth::oauth2::OAuth2Handler;
-use kellnr_embedded_resources::embedded_static_handler;
+use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};
 use kellnr_web_ui::session;
 use tower_http::services::ServeDir;
 use utoipa::OpenApi;
@@ -42,6 +42,7 @@ pub fn create_router(
     // Build API routes using OpenApiRouter with the base OpenAPI document
     let mut api_router: OpenApiRouter<AppStateData> =
         OpenApiRouter::with_openapi(ApiDoc::openapi())
+            .route("/", get(embedded_static_root_handler))
             .nest("/api/v1/ui", ui_routes::create_routes(state.clone()))
             .nest("/api/v1/auth", auth_routes::create_routes())
             .nest("/api/v1/users", user_routes::create_routes())
