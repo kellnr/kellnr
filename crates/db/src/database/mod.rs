@@ -327,6 +327,33 @@ impl Database {
             .await?
             .ok_or(DbError::WebhookNotFound)
     }
+
+    async fn get_owner_by_crate_and_user(
+        &self,
+        crate_name: &str,
+        owner_name: &str,
+    ) -> DbResult<Option<owner::Model>> {
+        owner::Entity::find()
+            .join(JoinType::InnerJoin, owner::Relation::Krate.def())
+            .join(JoinType::InnerJoin, owner::Relation::User.def())
+            .filter(
+                Cond::all()
+                    .add(krate::Column::Name.eq(crate_name))
+                    .add(user::Column::Name.eq(owner_name)),
+            )
+            .one(&self.db_con)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn delete_or_not_found<M, A>(&self, model: Option<M>, err: DbError) -> DbResult<()>
+    where
+        M: ModelTrait + sea_orm::IntoActiveModel<A>,
+        A: ActiveModelTrait<Entity = M::Entity> + sea_orm::ActiveModelBehavior + Send,
+    {
+        model.ok_or(err)?.delete(&self.db_con).await?;
+        Ok(())
+    }
 }
 
 fn webhook_model_to_obj(w: webhook::Model) -> DbResult<Webhook> {
@@ -842,48 +869,27 @@ impl DbProvider for Database {
     }
 
     async fn delete_owner(&self, crate_name: &str, owner: &str) -> DbResult<()> {
-        let owner = owner::Entity::find()
-            .join(JoinType::InnerJoin, owner::Relation::Krate.def())
-            .join(JoinType::InnerJoin, owner::Relation::User.def())
-            .filter(
-                Cond::all()
-                    .add(krate::Column::Name.eq(crate_name))
-                    .add(user::Column::Name.eq(owner)),
-            )
-            .one(&self.db_con)
-            .await?
-            .ok_or_else(|| DbError::OwnerNotFound(owner.to_string()))?;
-
-        owner.delete(&self.db_con).await?;
-
-        Ok(())
+        let model = self.get_owner_by_crate_and_user(crate_name, owner).await?;
+        self.delete_or_not_found(model, DbError::OwnerNotFound(owner.to_string()))
+            .await
     }
 
     async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
-        self.get_crate_user_by_crate_and_user(crate_name, user)
-            .await?
-            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?
-            .delete(&self.db_con)
-            .await?;
-        Ok(())
+        let model = self.get_crate_user_by_crate_and_user(crate_name, user).await?;
+        self.delete_or_not_found(model, DbError::UserNotFound(user.to_string()))
+            .await
     }
 
     async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()> {
-        self.get_crate_group_by_name_and_group(crate_name, group)
-            .await?
-            .ok_or_else(|| DbError::GroupNotFound(group.to_string()))?
-            .delete(&self.db_con)
-            .await?;
-        Ok(())
+        let model = self.get_crate_group_by_name_and_group(crate_name, group).await?;
+        self.delete_or_not_found(model, DbError::GroupNotFound(group.to_string()))
+            .await
     }
 
     async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()> {
-        self.get_group_user_by_group_and_user(group_name, user)
-            .await?
-            .ok_or_else(|| DbError::UserNotFound(user.to_string()))?
-            .delete(&self.db_con)
-            .await?;
-        Ok(())
+        let model = self.get_group_user_by_group_and_user(group_name, user).await?;
+        self.delete_or_not_found(model, DbError::UserNotFound(user.to_string()))
+            .await
     }
 
     async fn add_user(
