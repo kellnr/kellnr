@@ -84,7 +84,7 @@ tracing-subscriber = { version = "0.3.22", features = ["json", "fmt"] }
 url = { version = "2.5.8", features = ["serde"] }
 utoipa = { version = "5", features = ["axum_extras", "chrono"] }
 utoipa-axum = "0.2"
-utoipa-swagger-ui = { version = "9", features = ["axum"] }
+utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.19.0", features = ["v4"] }
 zip = "6.0.0"
 clap = { version = "4", features = ["derive"] }

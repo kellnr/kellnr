@@ -83,7 +83,7 @@ test.describe("User Management UI Tests", () => {
     await expect(userMgmtHeader).toBeVisible();
 
     // Verify admin user is listed
-    const adminUserItem = page.locator(".user-item").filter({ hasText: DEFAULT_ADMIN_USER });
+    const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
     await expect(adminUserItem).toBeVisible();
 
     // Verify the admin badge is shown
@@ -111,7 +111,7 @@ test.describe("User Management UI Tests", () => {
     await page.waitForTimeout(500);
 
     // Find the admin user's row
-    const adminUserItem = page.locator(".user-item").filter({ hasText: DEFAULT_ADMIN_USER });
+    const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
     await expect(adminUserItem).toBeVisible();
 
     // Find the Demote button within the admin user's row
@@ -155,7 +155,7 @@ test.describe("User Management UI Tests", () => {
     await createButton.click();
 
     // Wait for the user to appear in the list
-    const newUserItem = page.locator(".user-item").filter({ hasText: "testuser" });
+    const newUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: "testuser" });
     await expect(newUserItem).toBeVisible({ timeout: 10000 });
 
     // Verify the new user has "User" badge (not admin)
@@ -188,7 +188,7 @@ test.describe("User Management UI Tests", () => {
     await page.waitForTimeout(500);
 
     // Find the test user created in the previous test
-    const testUserItem = page.locator(".user-item").filter({ hasText: "testuser" });
+    const testUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: "testuser" });
     await expect(testUserItem).toBeVisible();
 
     // Verify user starts as non-admin
@@ -262,7 +262,7 @@ test.describe("User Management UI Tests", () => {
     await page.waitForTimeout(500);
 
     // Find the admin user's row
-    const adminUserItem = page.locator(".user-item").filter({ hasText: DEFAULT_ADMIN_USER });
+    const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
     await expect(adminUserItem).toBeVisible();
 
     // Find the Lock button within the admin user's row (it has icon mdi-lock-outline)
@@ -293,7 +293,7 @@ test.describe("User Management UI Tests", () => {
     await page.waitForTimeout(500);
 
     // Find the admin user's row
-    const adminUserItem = page.locator(".user-item").filter({ hasText: DEFAULT_ADMIN_USER });
+    const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
     await expect(adminUserItem).toBeVisible();
 
     // Find the Delete button within the admin user's row (it has icon mdi-delete-outline)
