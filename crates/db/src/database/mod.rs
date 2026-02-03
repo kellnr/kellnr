@@ -189,6 +189,98 @@ impl Database {
             .map_err(Into::into)
     }
 
+    /// Shared implementation for crate overview listing: optional name filter, optional limit/offset, cache union.
+    async fn query_crates(
+        &self,
+        contains: Option<&str>,
+        limit_offset: Option<(u64, u64)>,
+        cache: bool,
+    ) -> DbResult<Vec<CrateOverview>> {
+        let mut query = Query::select();
+        query
+            .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
+            .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
+            .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
+            .expr_as(
+                Expr::col(CrateIden::TotalDownloads),
+                Alias::new("total_downloads"),
+            )
+            .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
+            .expr_as(
+                Expr::col(CrateMetaIden::Documentation),
+                Alias::new("documentation"),
+            )
+            .expr_as(Expr::cust("false"), Alias::new("is_cache"))
+            .from(CrateMetaIden::Table)
+            .inner_join(
+                CrateIden::Table,
+                Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
+                    .equals((CrateIden::Table, CrateIden::Id)),
+            )
+            .and_where(
+                Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
+                    .equals((CrateIden::Table, CrateIden::MaxVersion)),
+            );
+
+        // Optional name filter
+        if let Some(contains) = contains {
+            query.and_where(
+                Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{contains}%")),
+            );
+        }
+
+        // UNION with cached crates
+        if cache {
+            let mut query2 = Query::select();
+            query2
+                .expr_as(Expr::col(CratesIoIden::OriginalName), Alias::new("name"))
+                .expr_as(Expr::col(CratesIoIden::MaxVersion), Alias::new("version"))
+                .expr_as(Expr::col(CratesIoIden::LastModified), Alias::new("date"))
+                .expr_as(
+                    Expr::col(CratesIoIden::TotalDownloads),
+                    Alias::new("total_downloads"),
+                )
+                .expr_as(
+                    Expr::col(CratesIoIden::Description),
+                    Alias::new("description"),
+                )
+                .expr_as(
+                    Expr::col(CratesIoMetaIden::Documentation),
+                    Alias::new("documentation"),
+                )
+                .expr_as(Expr::cust("true"), Alias::new("is_cache"))
+                .from(CratesIoMetaIden::Table)
+                .inner_join(
+                    CratesIoIden::Table,
+                    Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::CratesIoFk))
+                        .equals((CratesIoIden::Table, CratesIoIden::Id)),
+                )
+                .and_where(
+                    Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Version))
+                        .equals((CratesIoIden::Table, CratesIoIden::MaxVersion)),
+                );
+            if let Some(contains) = contains {
+                query2.and_where(
+                    Expr::col((CratesIoIden::Table, CratesIoIden::OriginalName))
+                        .like(format!("%{contains}%")),
+                );
+            }
+            query.union(UnionType::All, query2);
+        }
+
+        // Ordering and optional limit/offset
+        query.order_by(Alias::new("name"), Order::Asc);
+        if let Some((limit, offset)) = limit_offset {
+            query.limit(limit).offset(offset);
+        }
+
+        let builder = self.db_con.get_database_backend();
+        CrateOverview::find_by_statement(builder.build(&query))
+            .all(&self.db_con)
+            .await
+            .map_err(DbError::from)
+    }
+
     /// Executes a count query `SELECT COUNT(id_column) FROM table` and returns the count as u64.
     async fn count<T>(&self, table: T, id_column: T, error: DbError) -> DbResult<u64>
     where
@@ -1049,83 +1141,7 @@ impl DbProvider for Database {
         contains: &str,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
-        let mut stmt_kellnr = Query::select()
-            .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
-            .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
-            .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
-            .expr_as(
-                Expr::col(CrateIden::TotalDownloads),
-                Alias::new("total_downloads"),
-            )
-            .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
-            .expr_as(
-                Expr::col(CrateMetaIden::Documentation),
-                Alias::new("documentation"),
-            )
-            .expr_as(Expr::cust("false"), Alias::new("is_cache"))
-            .from(CrateMetaIden::Table)
-            .inner_join(
-                CrateIden::Table,
-                Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
-                    .equals((CrateIden::Table, CrateIden::Id)),
-            )
-            .and_where(Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{contains}%")))
-            .and_where(
-                Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
-                    .equals((CrateIden::Table, CrateIden::MaxVersion)),
-            )
-            .to_owned();
-
-        let stmt = if !cache {
-            stmt_kellnr
-                .order_by(CrateIden::OriginalName, Order::Asc)
-                .to_owned()
-        } else {
-            stmt_kellnr
-                .union(
-                    UnionType::All,
-                    Query::select()
-                        .expr_as(Expr::col(CratesIoIden::OriginalName), Alias::new("name"))
-                        .expr_as(Expr::col(CratesIoIden::MaxVersion), Alias::new("version"))
-                        .expr_as(Expr::col(CratesIoIden::LastModified), Alias::new("date"))
-                        .expr_as(
-                            Expr::col(CratesIoIden::TotalDownloads),
-                            Alias::new("total_downloads"),
-                        )
-                        .expr_as(
-                            Expr::col(CratesIoIden::Description),
-                            Alias::new("description"),
-                        )
-                        .expr_as(
-                            Expr::col(CratesIoMetaIden::Documentation),
-                            Alias::new("documentation"),
-                        )
-                        .expr_as(Expr::cust("true"), Alias::new("is_cache"))
-                        .from(CratesIoMetaIden::Table)
-                        .inner_join(
-                            CratesIoIden::Table,
-                            Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::CratesIoFk))
-                                .equals((CratesIoIden::Table, CratesIoIden::Id)),
-                        )
-                        .and_where(
-                            Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Version))
-                                .equals((CratesIoIden::Table, CratesIoIden::MaxVersion)),
-                        )
-                        .and_where(
-                            Expr::col((CratesIoIden::Table, CrateIden::OriginalName))
-                                .like(format!("%{contains}%")),
-                        )
-                        .to_owned(),
-                )
-                .order_by(Alias::new("name"), Order::Asc)
-                .to_owned()
-        };
-        let builder = self.db_con.get_database_backend();
-        let result = CrateOverview::find_by_statement(builder.build(&stmt))
-            .all(&self.db_con)
-            .await?;
-
-        Ok(result)
+        self.query_crates(Some(contains), None, cache).await
     }
 
     async fn get_crate_overview_list(
@@ -1134,83 +1150,7 @@ impl DbProvider for Database {
         offset: u64,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
-        let mut stmt_kellnr = Query::select()
-            .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
-            .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
-            .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
-            .expr_as(
-                Expr::col(CrateIden::TotalDownloads),
-                Alias::new("total_downloads"),
-            )
-            .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
-            .expr_as(
-                Expr::col(CrateMetaIden::Documentation),
-                Alias::new("documentation"),
-            )
-            .expr_as(Expr::cust("false"), Alias::new("is_cache"))
-            .from(CrateMetaIden::Table)
-            .inner_join(
-                CrateIden::Table,
-                Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
-                    .equals((CrateIden::Table, CrateIden::Id)),
-            )
-            .and_where(
-                Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
-                    .equals((CrateIden::Table, CrateIden::MaxVersion)),
-            )
-            .to_owned();
-
-        let stmt = if !cache {
-            stmt_kellnr
-                .order_by(CrateIden::OriginalName, Order::Asc)
-                .limit(limit)
-                .offset(offset)
-                .to_owned()
-        } else {
-            stmt_kellnr
-                .union(
-                    UnionType::All,
-                    Query::select()
-                        .expr_as(Expr::col(CratesIoIden::OriginalName), Alias::new("name"))
-                        .expr_as(Expr::col(CratesIoIden::MaxVersion), Alias::new("version"))
-                        .expr_as(Expr::col(CratesIoIden::LastModified), Alias::new("date"))
-                        .expr_as(
-                            Expr::col(CratesIoIden::TotalDownloads),
-                            Alias::new("total_downloads"),
-                        )
-                        .expr_as(
-                            Expr::col(CratesIoIden::Description),
-                            Alias::new("description"),
-                        )
-                        .expr_as(
-                            Expr::col(CratesIoMetaIden::Documentation),
-                            Alias::new("documentation"),
-                        )
-                        .expr_as(Expr::cust("true"), Alias::new("is_cache"))
-                        .from(CratesIoMetaIden::Table)
-                        .inner_join(
-                            CratesIoIden::Table,
-                            Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::CratesIoFk))
-                                .equals((CratesIoIden::Table, CratesIoIden::Id)),
-                        )
-                        .and_where(
-                            Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Version))
-                                .equals((CratesIoIden::Table, CratesIoIden::MaxVersion)),
-                        )
-                        .to_owned(),
-                )
-                .order_by(Alias::new("name"), Order::Asc)
-                .limit(limit)
-                .offset(offset)
-                .to_owned()
-        };
-
-        let builder = self.db_con.get_database_backend();
-        let result = CrateOverview::find_by_statement(builder.build(&stmt))
-            .all(&self.db_con)
-            .await?;
-
-        Ok(result)
+        self.query_crates(None, Some((limit, offset)), cache).await
     }
 
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {
