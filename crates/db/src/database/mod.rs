@@ -261,7 +261,7 @@ impl Database {
                 );
             if let Some(contains) = contains {
                 query2.and_where(
-                    Expr::col((CratesIoIden::Table, CrateIden::OriginalName))
+                    Expr::col((CratesIoIden::Table, CratesIoIden::OriginalName))
                         .like(format!("%{contains}%")),
                 );
             }
