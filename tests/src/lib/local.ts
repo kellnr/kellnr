@@ -301,7 +301,7 @@ export async function startLocalKellnr(
     // Wait for server to be ready
     const healthCheckUrl = options.healthCheckPath
         ? `${baseUrl}${options.healthCheckPath}`
-        : baseUrl;
+        : `${baseUrl}/api/v1/health`;
     try {
         await waitForHttpOk(healthCheckUrl, { timeoutMs: 60_000, intervalMs: 500 });
     } catch (e) {
@@ -309,33 +309,17 @@ export async function startLocalKellnr(
         await stop();
         throw new Error(
             `Failed to start Kellnr at ${baseUrl}: ${(e as Error).message}. ` +
-            `Check logs at ${logFile}`,
+                `Check logs at ${logFile}`,
         );
     }
-  });
 
-  // Wait for server to be ready
-  const healthCheckUrl = options.healthCheckPath
-    ? `${baseUrl}${options.healthCheckPath}`
-    : `${baseUrl}/api/v1/health`;
-  try {
-    await waitForHttpOk(healthCheckUrl, { timeoutMs: 60_000, intervalMs: 500 });
-  } catch (e) {
-    // Server failed to start - clean up and rethrow
-    await stop();
-    throw new Error(
-      `Failed to start Kellnr at ${baseUrl}: ${(e as Error).message}. ` +
-        `Check logs at ${logFile}`,
-    );
-  }
-
-  return {
-    process: childProcess,
-    baseUrl,
-    dataDir,
-    logFile,
-    stop,
-  };
+    return {
+        process: childProcess,
+        baseUrl,
+        dataDir,
+        logFile,
+        stop,
+    };
 }
 
 /**
