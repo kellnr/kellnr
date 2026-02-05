@@ -126,7 +126,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
 import type { CrateData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
-import { crateService } from "../services";
+import { crateService, settingsService } from "../services";
 import { isSuccess } from "../services/api";
 import { useStore } from "../store/store";
 
@@ -140,6 +140,7 @@ const selected_version = ref<CrateVersionData>(defaultCrateVersionData)
 const defaultTab = ref<string>("meta")
 const tab = ref(defaultTab.value);
 const store = useStore();
+const docsEnabled = ref(false);
 
 // Snackbar refs
 const showSnackbar = ref(false);
@@ -202,6 +203,9 @@ function handleOwnersChanged(owners: string[]) {
 }
 
 function showBuildRustdoc(): boolean {
+  if (!docsEnabled.value) {
+    return false;
+  }
   // Show the option to build the docs, if the current logged-in user is admin
   if (store.loggedInUserIsAdmin) {
     return true
@@ -270,12 +274,17 @@ async function getCrateData(name: string, version?: string) {
   }
 }
 
-function getAllData() {
+async function getAllData() {
   const version = route.query.version?.toString();
   const name = route.query.name?.toString() ?? "";
 
   if (name !== "") {
     getCrateData(name, version);
+  }
+
+  const settingsResult = await settingsService.getSettings();
+  if (isSuccess(settingsResult)) {
+    docsEnabled.value = settingsResult.data.docs.enabled;
   }
 }
 
