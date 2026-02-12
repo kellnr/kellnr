@@ -439,6 +439,10 @@ pub async fn build_rustdoc(
     State(state): AppState,
     user: MaybeUser,
 ) -> Result<(), StatusCode> {
+    if !state.settings.docs.enabled {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let normalized_name = NormalizedName::from(params.package);
     let db = state.db;
     let version = params.version;
@@ -595,7 +599,8 @@ mod tests {
             .expect_validate_session()
             .with(eq("cookie"))
             .returning(move |_| Ok(("user".to_string(), false)));
-        let (settings, storage) = test_deps();
+        let (mut settings, storage) = test_deps();
+        settings.docs.enabled = true;
         let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings, storage),
@@ -633,7 +638,8 @@ mod tests {
             .expect_crate_version_exists()
             .with(eq(1), eq("1.0.0"))
             .returning(move |_, _| Ok(false));
-        let (settings, storage) = test_deps();
+        let (mut settings, storage) = test_deps();
+        settings.docs.enabled = true;
         let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings, storage),
@@ -692,7 +698,8 @@ mod tests {
                     created: String::new(),
                 })
             });
-        let (settings, storage) = test_deps();
+        let (mut settings, storage) = test_deps();
+        settings.docs.enabled = true;
         let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings, storage),
@@ -761,7 +768,8 @@ mod tests {
             .times(1)
             .returning(move |_, _, _| Ok(()));
 
-        let (settings, storage) = test_deps();
+        let (mut settings, storage) = test_deps();
+        settings.docs.enabled = true;
         let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings, storage),
@@ -830,7 +838,8 @@ mod tests {
             .times(1)
             .returning(move |_, _, _| Ok(()));
 
-        let (settings, storage) = test_deps();
+        let (mut settings, storage) = test_deps();
+        settings.docs.enabled = true;
         let r = app(
             mock_db,
             KellnrCrateStorage::new(&settings, storage),
