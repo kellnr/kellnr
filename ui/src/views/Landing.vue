@@ -4,10 +4,10 @@
     <v-row class="mb-6">
       <v-col cols="12">
         <div class="text-center mb-4">
-          <h1 class="text-h4 text-md-h3 font-weight-bold welcome-title mb-2">
+          <h1 class="text-h4 text-md-h3 font-weight-bold welcome-title mb-2" :class="{ 'dark-mode': isDark }">
             Welcome to Kellnr
           </h1>
-          <p class="text-body-1 welcome-subtitle">
+          <p class="text-body-1 welcome-subtitle" :class="{ 'dark-mode': isDark }">
             Your private Rust crate registry
           </p>
         </div>
@@ -141,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, ref } from "vue"
+import { onBeforeMount, ref, computed } from "vue"
 import StatisticsCard from '../components/StatisticsCard.vue'
 import HeroStatCard from '../components/HeroStatCard.vue'
 import RecentCrateCard from '../components/RecentCrateCard.vue'
@@ -150,10 +150,15 @@ import { crateService } from '../services'
 import { isSuccess } from '../services/api'
 import router from '../router'
 import { useStore } from '../store/store'
+import { useTheme } from 'vuetify'
 
 const statistics = ref<Statistics>()
 const searchText = ref("")
 const store = useStore()
+const theme = useTheme()
+
+// Computed property to check if dark mode is active
+const isDark = computed(() => theme.global.current.value.dark)
 
 onBeforeMount(async () => {
   const result = await crateService.getStatistics()
@@ -187,14 +192,42 @@ function navigateToCrate(crateName: string) {
 .landing-container {
   max-width: 1400px;
   margin: 0 auto;
+  padding-bottom: 80px; /* Space for footer */
 }
 
 .welcome-title {
-  color: rgba(var(--v-theme-on-background), 0.9);
+  color: #333333;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.5);
+}
+
+.welcome-title.dark-mode {
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
 }
 
 .welcome-subtitle {
-  color: rgba(var(--v-theme-on-background), 0.6);
+  color: #555555;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+.welcome-subtitle.dark-mode {
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Mobile-specific styles */
+@media (max-width: 600px) {
+  .welcome-title {
+    font-size: 1.5rem !important;
+  }
+
+  .welcome-subtitle {
+    font-size: 0.9rem !important;
+  }
 }
 
 .loading-text {
@@ -281,14 +314,6 @@ function navigateToCrate(crateName: string) {
   color: rgb(var(--v-theme-on-surface-variant));
 }
 
-/* Dark mode adjustments */
-:deep(.v-theme--dark) .search-wrapper {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-:deep(.v-theme--dark) .search-wrapper:hover {
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
-}
 
 /* Gap utility for older browsers */
 .gap-3 {

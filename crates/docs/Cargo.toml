@@ -23,6 +23,7 @@ kellnr-storage.workspace = true
 # External dependencies from crates.io
 axum.workspace = true
 cargo.workspace = true
+utoipa.workspace = true
 flate2.workspace = true
 fs_extra.workspace = true
 http-body-util.workspace = true

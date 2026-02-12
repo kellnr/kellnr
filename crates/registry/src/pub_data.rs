@@ -8,10 +8,11 @@ use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_error::api_error::ApiError;
 use kellnr_settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
 use serde::Deserialize;
+use utoipa::ToSchema;
 
 use crate::registry_error::RegistryError;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct EmptyCrateData {
     pub name: String,
 }

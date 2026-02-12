@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Define constants
-PLATFORMS="linux/arm/v7,linux/arm64/v8,linux/amd64"
+# Note: armv7 removed - kellnr binaries are not built for that architecture
+PLATFORMS="linux/arm64/v8,linux/amd64"
 
 function parse_args {
     echo "STEP: Parse arguments"

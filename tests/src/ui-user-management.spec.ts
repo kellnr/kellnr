@@ -6,6 +6,8 @@
  * - Admin cannot demote themselves (button disabled)
  * - Admin can create a new user
  * - Admin can promote and demote a user
+ * - Admin cannot lock themselves (button disabled)
+ * - Admin cannot delete themselves (button disabled)
  * - Non-admin users cannot access user management
  *
  * Performance: All tests share a single local Kellnr instance.
@@ -81,7 +83,7 @@ test.describe("User Management UI Tests", () => {
     await expect(userMgmtHeader).toBeVisible();
 
     // Verify admin user is listed
-    const adminUserItem = page.locator(".user-item").filter({ hasText: DEFAULT_ADMIN_USER });
+    const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
     await expect(adminUserItem).toBeVisible();
 
     // Verify the admin badge is shown
@@ -109,7 +111,7 @@ test.describe("User Management UI Tests", () => {
     await page.waitForTimeout(500);
 
     // Find the admin user's row
-    const adminUserItem = page.locator(".user-item").filter({ hasText: DEFAULT_ADMIN_USER });
+    const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
     await expect(adminUserItem).toBeVisible();
 
     // Find the Demote button within the admin user's row
@@ -153,7 +155,7 @@ test.describe("User Management UI Tests", () => {
     await createButton.click();
 
     // Wait for the user to appear in the list
-    const newUserItem = page.locator(".user-item").filter({ hasText: "testuser" });
+    const newUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: "testuser" });
     await expect(newUserItem).toBeVisible({ timeout: 10000 });
 
     // Verify the new user has "User" badge (not admin)
@@ -186,7 +188,7 @@ test.describe("User Management UI Tests", () => {
     await page.waitForTimeout(500);
 
     // Find the test user created in the previous test
-    const testUserItem = page.locator(".user-item").filter({ hasText: "testuser" });
+    const testUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: "testuser" });
     await expect(testUserItem).toBeVisible();
 
     // Verify user starts as non-admin
@@ -238,6 +240,68 @@ test.describe("User Management UI Tests", () => {
     // Verify the button now says "Promote" instead of "Demote"
     const promoteButtonAfterDemotion = testUserItem.getByRole("button", { name: "Promote" });
     await expect(promoteButtonAfterDemotion).toBeVisible();
+  });
+
+  test("admin cannot lock themselves", async ({ page }) => {
+    // Login as admin
+    await page.goto(`${baseUrl}/login`);
+    const loginPage = new LoginPage(page);
+    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await loginPage.waitForNavigation("/");
+
+    // Give the session time to establish
+    await page.waitForTimeout(1000);
+
+    // Navigate to settings page
+    await page.goto(`${baseUrl}/settings`);
+    await page.waitForTimeout(500);
+
+    // Click on User Management in the sidebar navigation
+    const userMgmtNavItem = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    await userMgmtNavItem.click();
+    await page.waitForTimeout(500);
+
+    // Find the admin user's row
+    const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
+    await expect(adminUserItem).toBeVisible();
+
+    // Find the Lock button within the admin user's row (it has icon mdi-lock-outline)
+    const lockButton = adminUserItem.locator("button").filter({ has: page.locator(".mdi-lock-outline") });
+    await expect(lockButton).toBeVisible();
+
+    // Verify the lock button is disabled (self-locking prevention)
+    await expect(lockButton).toBeDisabled();
+  });
+
+  test("admin cannot delete themselves", async ({ page }) => {
+    // Login as admin
+    await page.goto(`${baseUrl}/login`);
+    const loginPage = new LoginPage(page);
+    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await loginPage.waitForNavigation("/");
+
+    // Give the session time to establish
+    await page.waitForTimeout(1000);
+
+    // Navigate to settings page
+    await page.goto(`${baseUrl}/settings`);
+    await page.waitForTimeout(500);
+
+    // Click on User Management in the sidebar navigation
+    const userMgmtNavItem = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    await userMgmtNavItem.click();
+    await page.waitForTimeout(500);
+
+    // Find the admin user's row
+    const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
+    await expect(adminUserItem).toBeVisible();
+
+    // Find the Delete button within the admin user's row (it has icon mdi-delete-outline)
+    const deleteButton = adminUserItem.locator("button").filter({ has: page.locator(".mdi-delete-outline") });
+    await expect(deleteButton).toBeVisible();
+
+    // Verify the delete button is disabled (self-deletion prevention)
+    await expect(deleteButton).toBeDisabled();
   });
 
   test("non-admin user cannot access user management", async ({ page }) => {

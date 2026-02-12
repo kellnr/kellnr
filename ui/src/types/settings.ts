@@ -2,6 +2,23 @@ export type Version = {
   version: string
 }
 
+export type ConfigSource = 'default' | 'toml' | 'env' | 'cli';
+
+export type SourceMap = Record<string, ConfigSource>;
+
+// Type for default values (same structure as settings sections, no sources)
+export type SettingsDefaults = {
+  docs: Docs
+  local: Local
+  log: Log
+  origin: Origin
+  postgresql: Postgresql
+  proxy: Proxy
+  registry: Registry
+  s3: S3
+  toolchain: Toolchain
+}
+
 export type Settings = {
   docs: Docs
   local: Local
@@ -11,6 +28,14 @@ export type Settings = {
   proxy: Proxy
   registry: Registry
   s3: S3
+  toolchain: Toolchain
+  sources: SourceMap
+  defaults?: SettingsDefaults
+}
+
+export type Toolchain = {
+  enabled: boolean
+  max_size: number
 }
 
 export type Docs = {
@@ -33,6 +58,7 @@ export type Origin = {
   hostname: string
   port: number
   protocol: string
+  path: string
 }
 
 export type Postgresql = {
@@ -60,6 +86,7 @@ export type Registry = {
   auth_required: boolean
   required_crate_fields: string[]
   new_crates_restricted: boolean
+  cookie_signing_key: string | null
   allow_ownerless_crates: boolean
   token_cache_enabled: boolean
   token_cache_ttl_seconds: number
@@ -77,6 +104,7 @@ export type S3 = {
   allow_http: boolean
   crates_bucket: string
   cratesio_bucket: string
+  toolchain_bucket: string
 }
 
 export const emptySettings: Settings = {
@@ -96,7 +124,8 @@ export const emptySettings: Settings = {
   origin: {
     hostname: "",
     port: 0,
-    protocol: "0"
+    protocol: "0",
+    path: ""
   },
   postgresql: {
     enabled: false,
@@ -121,6 +150,7 @@ export const emptySettings: Settings = {
     auth_required: false,
     required_crate_fields: [],
     new_crates_restricted: false,
+    cookie_signing_key: null,
     allow_ownerless_crates: false,
     token_cache_enabled: true,
     token_cache_ttl_seconds: 1800,
@@ -136,6 +166,13 @@ export const emptySettings: Settings = {
     endpoint: "",
     allow_http: false,
     crates_bucket: "",
-    cratesio_bucket: ""
-  }
+    cratesio_bucket: "",
+    toolchain_bucket: ""
+  },
+  toolchain: {
+    enabled: false,
+    max_size: 500
+  },
+  sources: {},
+  defaults: undefined
 }

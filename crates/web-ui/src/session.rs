@@ -1,12 +1,44 @@
 use axum::RequestPartsExt;
-use axum::extract::{Request, State};
+use axum::extract::{FromRequestParts, OptionalFromRequestParts, Request, State};
+use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum::middleware::Next;
 use axum::response::Response;
 use axum_extra::extract::PrivateCookieJar;
-use kellnr_settings::constants;
+use axum_extra::extract::cookie::Cookie;
+use cookie::{SameSite, time};
+use kellnr_appstate::AppStateData;
+use kellnr_common::util::generate_rand_string;
+use kellnr_settings::constants::COOKIE_SESSION_ID;
+use time::Duration;
+use tracing::error;
 
 use crate::error::RouteError;
+
+/// Creates a new session for the user and returns a cookie jar with the session cookie set.
+/// Generates a token, persists it via db, and adds the cookie using `app_state` settings.
+pub(crate) async fn create_session_jar(
+    cookies: PrivateCookieJar,
+    app_state: &AppStateData,
+    username: &str,
+) -> Result<PrivateCookieJar, RouteError> {
+    let session_token = generate_rand_string(12);
+    app_state
+        .db
+        .add_session_token(username, &session_token)
+        .await
+        .map_err(|e| {
+            error!("Failed to create session: {e}");
+            RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+    let session_age_seconds = app_state.settings.registry.session_age_seconds as i64;
+    Ok(cookies.add(
+        Cookie::build((COOKIE_SESSION_ID, session_token))
+            .max_age(Duration::seconds(session_age_seconds))
+            .same_site(SameSite::Strict)
+            .path("/"),
+    ))
+}
 
 pub trait Name {
     fn name(&self) -> String;
@@ -14,12 +46,39 @@ pub trait Name {
 }
 
 pub struct AdminUser(pub String);
+
+impl AdminUser {
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+}
+
 impl Name for AdminUser {
     fn name(&self) -> String {
         self.0.clone()
     }
     fn new(name: String) -> Self {
         Self(name)
+    }
+}
+
+impl FromRequestParts<AppStateData> for AdminUser {
+    type Rejection = RouteError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppStateData,
+    ) -> Result<Self, Self::Rejection> {
+        let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
+        let session_cookie = jar.get(COOKIE_SESSION_ID);
+        match session_cookie {
+            Some(cookie) => match state.db.validate_session(cookie.value()).await {
+                Ok((name, true)) => Ok(Self(name)),
+                Ok((_, false)) => Err(RouteError::InsufficientPrivileges),
+                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
+            },
+            None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
+        }
     }
 }
 
@@ -72,44 +131,44 @@ impl MaybeUser {
     }
 }
 
-impl axum::extract::FromRequestParts<kellnr_appstate::AppStateData> for MaybeUser {
+impl FromRequestParts<AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &kellnr_appstate::AppStateData,
+        state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
-        let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+        let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
             Some(cookie) => match state.db.validate_session(cookie.value()).await {
                 // admin
                 Ok((name, true)) => Ok(Self::Admin(name)),
                 // not admin
                 Ok((name, false)) => Ok(Self::Normal(name)),
-                Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
             },
-            None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+            None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
         }
     }
 }
 
-impl axum::extract::OptionalFromRequestParts<kellnr_appstate::AppStateData> for MaybeUser {
+impl OptionalFromRequestParts<AppStateData> for MaybeUser {
     type Rejection = RouteError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &kellnr_appstate::AppStateData,
+        state: &AppStateData,
     ) -> Result<Option<Self>, Self::Rejection> {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
-        let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+        let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
             Some(cookie) => match state.db.validate_session(cookie.value()).await {
                 // admin
                 Ok((name, true)) => Ok(Some(Self::Admin(name))),
                 // not admin
                 Ok((name, false)) => Ok(Some(Self::Normal(name))),
-                Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
             },
             None => Ok(None),
         }
@@ -119,7 +178,7 @@ impl axum::extract::OptionalFromRequestParts<kellnr_appstate::AppStateData> for 
 /// Middleware that checks if a user is logged in when `settings.registry.auth_required` is `true`
 /// If the user is not logged in, a 401 is returned.
 pub async fn session_auth_when_required(
-    State(state): State<kellnr_appstate::AppStateData>,
+    State(state): State<AppStateData>,
     jar: PrivateCookieJar,
     request: Request,
     next: Next,
@@ -128,48 +187,48 @@ pub async fn session_auth_when_required(
         // If "auth_required" is "false", pass through.
         return Ok(next.run(request).await);
     }
-    let session_cookie = jar.get(constants::COOKIE_SESSION_ID);
+    let session_cookie = jar.get(COOKIE_SESSION_ID);
     match session_cookie {
         Some(cookie) => match state.db.validate_session(cookie.value()).await {
             // user is logged in
             Ok(_) => Ok(next.run(request).await),
             // user is not logged in
-            Err(_) => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+            Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
         },
         // user is not logged in
-        None => Err(RouteError::Status(axum::http::StatusCode::UNAUTHORIZED)),
+        None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
     }
 }
 
 #[cfg(test)]
 mod session_tests {
-    use std::result;
     use std::sync::Arc;
 
     use axum::Router;
     use axum::body::Body;
+    use axum::http::header;
     use axum::routing::get;
-    use axum_extra::extract::cookie::Key;
-    use hyper::{Request, StatusCode, header};
-    use kellnr_appstate::AppStateData;
+    use cookie::Key;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
-    use mockall::predicate::*;
+    use mockall::predicate::eq;
     use tower::ServiceExt;
 
     use super::*;
     use crate::test_helper::encode_cookies;
 
-    async fn admin_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
+    type Result<T = (), E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
+
+    async fn admin_endpoint(user: MaybeUser) -> Result<(), RouteError> {
         user.assert_admin()?;
         Ok(())
     }
 
-    async fn normal_endpoint(user: MaybeUser) -> result::Result<(), RouteError> {
+    async fn normal_endpoint(user: MaybeUser) -> Result<(), RouteError> {
         user.assert_normal()?;
         Ok(())
     }
@@ -194,10 +253,8 @@ mod session_tests {
 
     // AdminUser tests
 
-    type Result<T = ()> = result::Result<T, Box<dyn std::error::Error>>;
-
     fn c1234() -> String {
-        encode_cookies([(constants::COOKIE_SESSION_ID, "1234")])
+        encode_cookies([(COOKIE_SESSION_ID, "1234")])
     }
 
     #[tokio::test]
@@ -213,7 +270,7 @@ mod session_tests {
                 Request::get("/admin")
                     .header(
                         header::COOKIE,
-                        encode_cookies([(constants::COOKIE_SESSION_ID, "1234")]),
+                        encode_cookies([(COOKIE_SESSION_ID, "1234")]),
                     )
                     .body(Body::empty())?,
             )
@@ -429,16 +486,15 @@ mod auth_middleware_tests {
 
     use axum::Router;
     use axum::body::Body;
+    use axum::http::header;
     use axum::middleware::from_fn_with_state;
     use axum::routing::get;
-    use axum_extra::extract::cookie::Key;
-    use hyper::{Request, StatusCode, header};
-    use kellnr_appstate::AppStateData;
+    use cookie::Key;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::Settings;
-    use mockall::predicate::*;
+    use mockall::predicate::eq;
     use tower::ServiceExt;
 
     use super::*;
@@ -488,7 +544,7 @@ mod auth_middleware_tests {
     type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
     fn c1234() -> String {
-        encode_cookies([(constants::COOKIE_SESSION_ID, "1234")])
+        encode_cookies([(COOKIE_SESSION_ID, "1234")])
     }
 
     #[tokio::test]

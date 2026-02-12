@@ -1,7 +1,10 @@
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromQueryResult)]
+#[derive(
+    Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromQueryResult, ToSchema,
+)]
 pub struct CrateOverview {
     pub name: String,
     pub version: String,
