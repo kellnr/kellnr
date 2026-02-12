@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - v6.0.0
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -80,3 +81,17 @@ jobs:
 
       - name: Tests
         run: nix develop --command just test-ui
+
+  nix-build:
+    name: Nix Build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+
+      - name: Build with Nix
+        run: nix build

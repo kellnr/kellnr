@@ -15,6 +15,7 @@ export * as groupService from './groupService'
 export * as crateService from './crateService'
 export * as tokenService from './tokenService'
 export * as settingsService from './settingsService'
+export * as toolchainService from './toolchainService'
 
 // Re-export API utilities
 export { apiGet, apiPost, apiPut, apiDelete, isSuccess, isError } from './api'

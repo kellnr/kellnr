@@ -1,11 +1,12 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::index_metadata::IndexDep;
 use crate::publish_metadata::RegistryDep;
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateData {
     pub name: String,
     // additional information from kellnr about the crate
@@ -23,7 +24,7 @@ pub struct CrateData {
     pub versions: Vec<CrateVersionData>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateVersionData {
     pub version: String,
     // additional information about the crate version from kellnr
@@ -42,7 +43,7 @@ pub struct CrateVersionData {
     pub v: i32,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateRegistryDep {
     // Name of the dependency.
     // If the dependency is renamed from the original package name,

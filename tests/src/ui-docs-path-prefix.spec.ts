@@ -71,7 +71,7 @@ test.describe("Documentation Generation UI Tests with Path Prefix", () => {
         KELLNR_DOCS__ENABLED: "true",
         KELLNR_ORIGIN__PATH: pathPrefix,
       },
-      healthCheckPath: pathPrefix,
+      healthCheckPath: `${pathPrefix}/api/v1/health`,
     });
 
     // The base URL includes the path prefix for navigation

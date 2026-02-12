@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Webhook {
     pub id: Option<String>,
     pub event: WebhookEvent,
@@ -18,7 +19,7 @@ pub struct WebhookQueue {
     pub next_attempt: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[allow(clippy::enum_variant_names)]
 pub enum WebhookEvent {
     #[serde(rename = "crate_add")]

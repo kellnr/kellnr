@@ -37,7 +37,7 @@ impl ConString {
         }
     }
 
-    pub fn admin_token(&self) -> String {
+    pub fn admin_token(&self) -> Option<String> {
         match self {
             ConString::Postgres(p) => p.admin.token.clone(),
             ConString::Sqlite(s) => s.admin_token.clone(),
@@ -48,12 +48,12 @@ impl ConString {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AdminUser {
     pub pwd: String,
-    pub token: String,
+    pub token: Option<String>,
     pub salt: String,
 }
 
 impl AdminUser {
-    pub fn new(pwd: String, token: String, salt: String) -> Self {
+    pub fn new(pwd: String, token: Option<String>, salt: String) -> Self {
         Self { pwd, token, salt }
     }
 }
@@ -113,7 +113,7 @@ pub struct SqliteConString {
     pub path: PathBuf,
     pub salt: String,
     pub admin_pwd: String,
-    pub admin_token: String,
+    pub admin_token: Option<String>,
     pub session_age: Duration,
 }
 
@@ -122,14 +122,14 @@ impl SqliteConString {
         path: &Path,
         salt: &str,
         admin_pwd: &str,
-        admin_token: &str,
+        admin_token: Option<String>,
         session_age: Duration,
     ) -> Self {
         Self {
             path: path.to_owned(),
             salt: salt.to_owned(),
             admin_pwd: admin_pwd.to_owned(),
-            admin_token: admin_token.to_owned(),
+            admin_token,
             session_age,
         }
     }

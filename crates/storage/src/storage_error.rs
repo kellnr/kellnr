@@ -44,4 +44,23 @@ pub enum StorageError {
     S3Error(#[from] object_store::Error),
     #[error("S3 path error: {0}")]
     S3PathError(#[from] object_store::path::Error),
+    #[error("Toolchain archive already exists: {name}-{version}-{target}")]
+    ToolchainArchiveExists {
+        name: String,
+        version: String,
+        target: String,
+    },
+    #[error("Failed to store toolchain archive {name}-{version}-{target}: {reason}")]
+    ToolchainStoreFailed {
+        name: String,
+        version: String,
+        target: String,
+        reason: String,
+    },
+    #[error("Toolchain archive not found: {path}")]
+    ToolchainNotFound { path: String },
+    #[error("Failed to retrieve toolchain archive {path}: {reason}")]
+    ToolchainGetFailed { path: String, reason: String },
+    #[error("Failed to delete toolchain archive {path}: {reason}")]
+    ToolchainDeleteFailed { path: String, reason: String },
 }

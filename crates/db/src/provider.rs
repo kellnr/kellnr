@@ -13,16 +13,101 @@ use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
 use kellnr_common::webhook::{Webhook, WebhookEvent, WebhookQueue};
 use sea_orm::prelude::async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use crate::error::DbError;
 use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta};
 
 pub type DbResult<T> = Result<T, DbError>;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum PrefetchState {
     UpToDate,
     NeedsUpdate(Prefetch),
     NotFound,
+}
+
+/// Data stored during `OAuth2` authentication flow for CSRF/PKCE verification
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OAuth2StateData {
+    pub state: String,
+    pub pkce_verifier: String,
+    pub nonce: String,
+}
+
+/// Toolchain target information (e.g., a specific archive for a target triple)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ToolchainTargetInfo {
+    /// Target ID
+    pub id: i64,
+    /// Target triple (e.g., "x86_64-unknown-linux-gnu")
+    pub target: String,
+    /// Path to the stored archive
+    pub storage_path: String,
+    /// SHA256 hash of the archive
+    pub hash: String,
+    /// Archive size in bytes
+    pub size: i64,
+}
+
+impl From<kellnr_entity::toolchain_target::Model> for ToolchainTargetInfo {
+    fn from(t: kellnr_entity::toolchain_target::Model) -> Self {
+        Self {
+            id: t.id,
+            target: t.target,
+            storage_path: t.storage_path,
+            hash: t.hash,
+            size: t.size,
+        }
+    }
+}
+
+/// Toolchain with all its targets
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ToolchainWithTargets {
+    /// Toolchain ID
+    pub id: i64,
+    /// Toolchain name (e.g., "rust")
+    pub name: String,
+    /// Toolchain version (e.g., "1.75.0")
+    pub version: String,
+    /// Release date
+    pub date: String,
+    /// Channel (e.g., "stable", "beta", "nightly")
+    pub channel: Option<String>,
+    /// Creation timestamp
+    pub created: String,
+    /// Available targets for this toolchain
+    pub targets: Vec<ToolchainTargetInfo>,
+}
+
+impl ToolchainWithTargets {
+    /// Build from toolchain entity model and its target models.
+    pub fn from_model(
+        tc: kellnr_entity::toolchain::Model,
+        targets: Vec<kellnr_entity::toolchain_target::Model>,
+    ) -> Self {
+        Self {
+            id: tc.id,
+            name: tc.name,
+            version: tc.version,
+            date: tc.date,
+            channel: tc.channel,
+            created: tc.created,
+            targets: targets.into_iter().map(ToolchainTargetInfo::from).collect(),
+        }
+    }
+}
+
+/// Channel information (e.g., "stable" -> "1.75.0")
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ChannelInfo {
+    /// Channel name (e.g., "stable", "beta", "nightly")
+    pub name: String,
+    /// Toolchain version pointed to by this channel
+    pub version: String,
+    /// Release date
+    pub date: String,
 }
 
 #[async_trait]
@@ -70,7 +155,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>>;
     async fn delete_auth_token(&self, id: i32) -> DbResult<()>;
     async fn delete_owner(&self, crate_name: &str, owner: &str) -> DbResult<()>;
-    async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()>;
+    async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
     async fn add_user(
         &self,
         name: &str,
@@ -93,10 +178,10 @@ pub trait DbProvider: Send + Sync {
     async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>>;
     async fn is_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<bool>;
     async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>;
-    async fn get_total_unique_crates(&self) -> DbResult<u32>;
-    async fn get_total_crate_versions(&self) -> DbResult<u32>;
+    async fn get_total_unique_crates(&self) -> DbResult<u64>;
+    async fn get_total_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_downloads(&self) -> DbResult<u64>;
-    async fn get_top_crates_downloads(&self, top: u32) -> DbResult<Vec<(String, u64)>>;
+    async fn get_top_crates_downloads(&self, top: u64) -> DbResult<Vec<(String, u64)>>;
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64>;
     async fn get_total_cached_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_cached_downloads(&self) -> DbResult<u64>;
@@ -186,6 +271,105 @@ pub trait DbProvider: Send + Sync {
         next_attempt: DateTime<Utc>,
     ) -> DbResult<()>;
     async fn delete_webhook_queue(&self, id: &str) -> DbResult<()>;
+
+    // `OAuth2` identity methods
+    /// Look up a user by their `OAuth2` identity (issuer + subject)
+    async fn get_user_by_oauth2_identity(
+        &self,
+        issuer: &str,
+        subject: &str,
+    ) -> DbResult<Option<User>>;
+
+    /// Create a new user from `OAuth2` authentication and link their identity
+    async fn create_oauth2_user(
+        &self,
+        username: &str,
+        issuer: &str,
+        subject: &str,
+        email: Option<String>,
+        is_admin: bool,
+        is_read_only: bool,
+    ) -> DbResult<User>;
+
+    /// Link an `OAuth2` identity to an existing user
+    async fn link_oauth2_identity(
+        &self,
+        user_id: i64,
+        issuer: &str,
+        subject: &str,
+        email: Option<String>,
+    ) -> DbResult<()>;
+
+    // `OAuth2` state methods (CSRF/PKCE during auth flow)
+    /// Store `OAuth2` state for CSRF/PKCE verification during auth flow
+    async fn store_oauth2_state(
+        &self,
+        state: &str,
+        pkce_verifier: &str,
+        nonce: &str,
+    ) -> DbResult<()>;
+
+    /// Retrieve and delete `OAuth2` state (single use)
+    async fn get_and_delete_oauth2_state(&self, state: &str) -> DbResult<Option<OAuth2StateData>>;
+
+    /// Clean up expired `OAuth2` states (older than 10 minutes)
+    async fn cleanup_expired_oauth2_states(&self) -> DbResult<u64>;
+
+    /// Check if username is available (for `OAuth2` auto-provisioning)
+    async fn is_username_available(&self, username: &str) -> DbResult<bool>;
+
+    // Toolchain distribution methods
+    /// Add a new toolchain release
+    async fn add_toolchain(
+        &self,
+        name: &str,
+        version: &str,
+        date: &str,
+        channel: Option<String>,
+    ) -> DbResult<i64>;
+
+    /// Add a target archive to an existing toolchain
+    async fn add_toolchain_target(
+        &self,
+        toolchain_id: i64,
+        target: &str,
+        storage_path: &str,
+        hash: &str,
+        size: i64,
+    ) -> DbResult<()>;
+
+    /// Get a toolchain by its channel (e.g., "stable", "nightly")
+    async fn get_toolchain_by_channel(
+        &self,
+        channel: &str,
+    ) -> DbResult<Option<ToolchainWithTargets>>;
+
+    /// Get a toolchain by name and version
+    async fn get_toolchain_by_version(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> DbResult<Option<ToolchainWithTargets>>;
+
+    /// List all toolchains
+    async fn list_toolchains(&self) -> DbResult<Vec<ToolchainWithTargets>>;
+
+    /// Delete a toolchain and all its targets
+    async fn delete_toolchain(&self, name: &str, version: &str) -> DbResult<()>;
+
+    /// Delete a specific toolchain target
+    async fn delete_toolchain_target(
+        &self,
+        name: &str,
+        version: &str,
+        target: &str,
+    ) -> DbResult<()>;
+
+    /// Set a channel to point to a specific toolchain version
+    async fn set_channel(&self, channel: &str, name: &str, version: &str) -> DbResult<()>;
+
+    /// Get all channels with their current versions
+    async fn get_channels(&self) -> DbResult<Vec<ChannelInfo>>;
 }
 
 pub mod mock {
@@ -337,7 +521,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn delete_crate_user(&self, crate_name: &str, user: &str) -> DbResult<()>{
+            async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>{
                 unimplemented!()
             }
 
@@ -349,15 +533,15 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_total_unique_crates(&self) -> DbResult<u32> {
+            async fn get_total_unique_crates(&self) -> DbResult<u64> {
                 unimplemented!()
             }
 
-            async fn get_total_crate_versions(&self) -> DbResult<u32> {
+            async fn get_total_crate_versions(&self) -> DbResult<u64> {
                 unimplemented!()
             }
 
-            async fn get_top_crates_downloads(&self, _top: u32) -> DbResult<Vec<(String, u64)>> {
+            async fn get_top_crates_downloads(&self, _top: u64) -> DbResult<Vec<(String, u64)>> {
                 unimplemented!()
             }
 
@@ -531,6 +715,118 @@ pub mod mock {
                 unimplemented!()
             }
             async fn delete_webhook_queue(&self, id: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn get_user_by_oauth2_identity(
+                &self,
+                issuer: &str,
+                subject: &str,
+            ) -> DbResult<Option<User>> {
+                unimplemented!()
+            }
+
+            async fn create_oauth2_user(
+                &self,
+                username: &str,
+                issuer: &str,
+                subject: &str,
+                email: Option<String>,
+                is_admin: bool,
+                is_read_only: bool,
+            ) -> DbResult<User> {
+                unimplemented!()
+            }
+
+            async fn link_oauth2_identity(
+                &self,
+                user_id: i64,
+                issuer: &str,
+                subject: &str,
+                email: Option<String>,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn store_oauth2_state(
+                &self,
+                state: &str,
+                pkce_verifier: &str,
+                nonce: &str,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn get_and_delete_oauth2_state(
+                &self,
+                state: &str,
+            ) -> DbResult<Option<OAuth2StateData>> {
+                unimplemented!()
+            }
+
+            async fn cleanup_expired_oauth2_states(&self) -> DbResult<u64> {
+                unimplemented!()
+            }
+
+            async fn is_username_available(&self, username: &str) -> DbResult<bool> {
+                unimplemented!()
+            }
+
+            async fn add_toolchain(
+                &self,
+                name: &str,
+                version: &str,
+                date: &str,
+                channel: Option<String>,
+            ) -> DbResult<i64> {
+                unimplemented!()
+            }
+
+            async fn add_toolchain_target(
+                &self,
+                toolchain_id: i64,
+                target: &str,
+                storage_path: &str,
+                hash: &str,
+                size: i64,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn get_toolchain_by_channel(&self, channel: &str) -> DbResult<Option<ToolchainWithTargets>> {
+                unimplemented!()
+            }
+
+            async fn get_toolchain_by_version(
+                &self,
+                name: &str,
+                version: &str,
+            ) -> DbResult<Option<ToolchainWithTargets>> {
+                unimplemented!()
+            }
+
+            async fn list_toolchains(&self) -> DbResult<Vec<ToolchainWithTargets>> {
+                unimplemented!()
+            }
+
+            async fn delete_toolchain(&self, name: &str, version: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn delete_toolchain_target(
+                &self,
+                name: &str,
+                version: &str,
+                target: &str,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn set_channel(&self, channel: &str, name: &str, version: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn get_channels(&self) -> DbResult<Vec<ChannelInfo>> {
                 unimplemented!()
             }
         }

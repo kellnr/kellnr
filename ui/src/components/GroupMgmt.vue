@@ -1,17 +1,18 @@
 <template>
   <div>
-    <!-- Header -->
-    <div class="section-header">
-      <v-icon icon="mdi-account-group" size="small" color="primary" class="me-3"></v-icon>
-      <span class="text-h6 font-weight-bold">{{ editingGroup ? `Edit Group: ${editingGroup}` : 'Group Management' }}</span>
-      <span v-if="!editingGroup && groups.length > 0" class="group-count">{{ groups.length }}</span>
-      <v-btn v-if="editingGroup" variant="text" size="small" class="ms-auto" @click="cancelEditGroup">
-        <v-icon icon="mdi-arrow-left" size="small" class="me-1"></v-icon>
-        Back
-      </v-btn>
-    </div>
+    <SectionHeader
+      :icon="editingGroup ? 'mdi-account-group' : 'mdi-account-group'"
+      :title="editingGroup ? `Edit Group: ${editingGroup}` : 'Group Management'"
+      :count="!editingGroup ? groups.length : undefined"
+    >
+      <template v-if="editingGroup" #actions>
+        <v-btn variant="text" size="small" class="ms-auto" @click="cancelEditGroup">
+          <v-icon icon="mdi-arrow-left" size="small" class="me-1"></v-icon>
+          Back
+        </v-btn>
+      </template>
+    </SectionHeader>
 
-    <!-- Content -->
     <div class="section-content">
       <!-- Groups List View -->
       <template v-if="!editingGroup">
@@ -21,20 +22,16 @@
 
         <!-- Groups List -->
         <div v-if="groups.length > 0" class="groups-section mb-6">
-          <div class="subsection-header">
-            <v-icon icon="mdi-folder-account" size="x-small" class="me-2" color="primary"></v-icon>
-            <span class="text-body-2 font-weight-medium">Existing Groups</span>
-          </div>
+          <SubsectionHeader icon="mdi-folder-account" title="Existing Groups" />
 
-          <div class="group-list">
-            <div v-for="group in groups" :key="group.name" class="group-item">
-              <div class="group-info">
-                <div class="group-avatar">
-                  <v-icon icon="mdi-account-group" size="small"></v-icon>
-                </div>
-                <span class="group-name">{{ group.name }}</span>
-              </div>
-              <div class="group-actions">
+          <div class="list-container">
+            <ListItem
+              v-for="group in groups"
+              :key="group.name"
+              icon="mdi-account-group"
+              :title="group.name"
+            >
+              <template #actions>
                 <v-btn
                   color="primary"
                   variant="tonal"
@@ -53,23 +50,20 @@
                 >
                   <v-icon icon="mdi-delete-outline" size="small"></v-icon>
                 </v-btn>
-              </div>
-            </div>
+              </template>
+            </ListItem>
           </div>
         </div>
 
-        <div v-else class="empty-state mb-6">
-          <v-icon icon="mdi-account-group-outline" size="large" class="mb-3 text-medium-emphasis"></v-icon>
-          <p class="text-body-2 text-medium-emphasis mb-0">No groups created yet.</p>
-        </div>
+        <EmptyState
+          v-else
+          icon="mdi-account-group-outline"
+          message="No groups created yet."
+          class="mb-6"
+        />
 
         <!-- Add Group Form -->
-        <div class="add-group-section">
-          <div class="subsection-header">
-            <v-icon icon="mdi-folder-plus" size="x-small" class="me-2" color="primary"></v-icon>
-            <span class="text-body-2 font-weight-medium">Create New Group</span>
-          </div>
-
+        <FormSection icon="mdi-folder-plus" title="Create New Group">
           <v-form @submit.prevent="handleAddGroup" class="add-group-form">
             <div class="form-row">
               <v-text-field
@@ -98,42 +92,42 @@
           >
             {{ addGroupStatus.message }}
           </v-alert>
-        </div>
+        </FormSection>
       </template>
 
       <!-- Edit Group View -->
       <template v-else>
         <!-- Group Members Section -->
         <div class="members-section mb-6">
-          <div class="subsection-header">
-            <v-icon icon="mdi-account-multiple" size="x-small" class="me-2" color="primary"></v-icon>
-            <span class="text-body-2 font-weight-medium">Group Members</span>
-            <span class="member-count">{{ groupMembers.length }}</span>
+          <SubsectionHeader icon="mdi-account-multiple" title="Group Members" :count="groupMembers.length" />
+
+          <div v-if="groupMembers.length > 0" class="list-container">
+            <ListItem
+              v-for="member in groupMembers"
+              :key="member.name"
+              icon="mdi-account"
+              :title="member.name"
+              compact
+            >
+              <template #actions>
+                <v-btn
+                  color="error"
+                  variant="text"
+                  size="small"
+                  @click="handleRemoveMember(member.name)"
+                >
+                  <v-icon icon="mdi-close" size="small"></v-icon>
+                </v-btn>
+              </template>
+            </ListItem>
           </div>
 
-          <div v-if="groupMembers.length > 0" class="member-list">
-            <div v-for="member in groupMembers" :key="member.name" class="member-item">
-              <div class="member-info">
-                <div class="member-avatar">
-                  <v-icon icon="mdi-account" size="small"></v-icon>
-                </div>
-                <span class="member-name">{{ member.name }}</span>
-              </div>
-              <v-btn
-                color="error"
-                variant="text"
-                size="small"
-                @click="handleRemoveMember(member.name)"
-              >
-                <v-icon icon="mdi-close" size="small"></v-icon>
-              </v-btn>
-            </div>
-          </div>
-
-          <div v-else class="empty-state-small">
-            <v-icon icon="mdi-account-off" size="small" class="me-2 text-medium-emphasis"></v-icon>
-            <span class="text-body-2 text-medium-emphasis">No members in this group yet.</span>
-          </div>
+          <EmptyState
+            v-else
+            icon="mdi-account-off"
+            message="No members in this group yet."
+            compact
+          />
 
           <v-alert
             v-if="memberStatus.hasStatus"
@@ -148,12 +142,7 @@
         </div>
 
         <!-- Add Member Section -->
-        <div class="add-member-section">
-          <div class="subsection-header">
-            <v-icon icon="mdi-account-plus" size="x-small" class="me-2" color="primary"></v-icon>
-            <span class="text-body-2 font-weight-medium">Add Member</span>
-          </div>
-
+        <FormSection icon="mdi-account-plus" title="Add Member">
           <v-form @submit.prevent="handleAddMember" class="add-member-form">
             <div class="form-row">
               <v-select
@@ -185,42 +174,27 @@
               All users are already members of this group.
             </p>
           </v-form>
-        </div>
+        </FormSection>
       </template>
     </div>
 
     <!-- Snackbar for notifications -->
-    <v-snackbar
+    <NotificationSnackbar
       v-model="notification.snackbar.show"
+      :message="notification.snackbar.message"
       :color="notification.snackbar.color"
       :timeout="notification.snackbar.timeout"
-      location="bottom"
-    >
-      {{ notification.snackbar.message }}
-      <template v-slot:actions>
-        <v-btn variant="text" @click="notification.close()">Close</v-btn>
-      </template>
-    </v-snackbar>
+    />
 
     <!-- Confirmation Dialog -->
-    <v-dialog v-model="dialogOpen" max-width="450">
-      <v-card class="confirm-dialog">
-        <div class="dialog-header">
-          <v-icon icon="mdi-alert-circle" color="warning" size="small" class="me-3"></v-icon>
-          <span class="text-h6 font-weight-bold">{{ dialog.title }}</span>
-        </div>
-
-        <v-card-text class="pa-5">
-          <p class="text-body-1 mb-0">{{ dialog.message }}</p>
-        </v-card-text>
-
-        <v-card-actions class="pa-4 pt-0">
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="dialog.cancel()">Cancel</v-btn>
-          <v-btn :color="dialog.confirmColor" variant="flat" @click="dialog.confirm()">Confirm</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <ConfirmDialog
+      v-model="dialogOpen"
+      :title="dialog.title"
+      :message="dialog.message"
+      :confirm-color="dialog.confirmColor"
+      @confirm="dialog.confirm()"
+      @cancel="dialog.cancel()"
+    />
   </div>
 </template>
 
@@ -231,6 +205,15 @@ import { groupService, userService } from "../services"
 import { isSuccess } from "../services/api"
 import type { Group, GroupUser } from "../types/group"
 import type { User } from "../types/user"
+import {
+  SectionHeader,
+  SubsectionHeader,
+  ListItem,
+  EmptyState,
+  FormSection,
+  ConfirmDialog,
+  NotificationSnackbar,
+} from "./common"
 
 // State
 const groups = ref<Group[]>([])
@@ -246,7 +229,7 @@ const memberStatus = useStatusMessage()
 const { dialog, showConfirm } = useConfirmCallback()
 const notification = useNotification()
 
-// Computed wrapper for dialog.isOpen to properly handle ref unwrapping in v-model
+// Computed wrapper for dialog.isOpen
 const dialogOpen = computed({
   get: () => dialog.isOpen.value,
   set: (val: boolean) => { dialog.isOpen.value = val }
@@ -379,168 +362,16 @@ function handleRemoveMember(userName: string) {
 </script>
 
 <style scoped>
-.section-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 24px;
-  background: rgba(var(--v-theme-primary), 0.05);
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
-}
-
-.group-count {
-  margin-left: auto;
-  background: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 12px;
-}
-
 .section-content {
   padding: 24px;
 }
 
-/* Subsection Header */
-.subsection-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
-}
-
-.member-count {
-  margin-left: auto;
-  background: rgba(var(--v-theme-primary), 0.1);
-  color: rgb(var(--v-theme-primary));
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 10px;
-}
-
-/* Group List */
-.group-list {
+.list-container {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.group-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: rgba(var(--v-theme-primary), 0.03);
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.group-item:hover {
-  border-color: rgb(var(--v-theme-primary));
-  background: rgba(var(--v-theme-primary), 0.06);
-}
-
-.group-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.group-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: rgba(var(--v-theme-primary), 0.15);
-  color: rgb(var(--v-theme-primary));
-}
-
-.group-name {
-  font-weight: 600;
-  font-size: 15px;
-  color: rgb(var(--v-theme-on-surface));
-}
-
-.group-actions {
-  display: flex;
-  gap: 8px;
-}
-
-/* Member List */
-.member-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.member-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.member-item:hover {
-  border-color: rgb(var(--v-theme-primary));
-  background: rgba(var(--v-theme-primary), 0.03);
-}
-
-.member-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.member-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: rgba(var(--v-theme-primary), 0.08);
-  color: rgb(var(--v-theme-primary));
-}
-
-.member-name {
-  font-weight: 500;
-  font-size: 14px;
-  color: rgb(var(--v-theme-on-surface));
-}
-
-/* Empty States */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 32px;
-  background: rgba(var(--v-theme-primary), 0.03);
-  border: 1px dashed rgb(var(--v-theme-outline));
-  border-radius: 8px;
-}
-
-.empty-state-small {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: rgb(var(--v-theme-surface));
-  border: 1px dashed rgb(var(--v-theme-outline));
-  border-radius: 6px;
-}
-
-/* Add Group/Member Sections */
-.add-group-section,
-.add-member-section,
 .members-section {
   padding: 20px;
   background: rgba(var(--v-theme-primary), 0.03);
@@ -570,26 +401,8 @@ function handleRemoveMember(userName: string) {
   background: rgb(var(--v-theme-surface));
 }
 
-/* Confirm Dialog */
-.confirm-dialog {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.dialog-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 20px;
-  background: rgba(var(--v-theme-warning), 0.08);
-  border-bottom: 1px solid rgba(var(--v-theme-warning), 0.2);
-}
-
 /* Responsive */
 @media (max-width: 600px) {
-  .section-header {
-    padding: 16px 20px;
-  }
-
   .section-content {
     padding: 20px;
   }
@@ -600,16 +413,6 @@ function handleRemoveMember(userName: string) {
 
   .group-input,
   .member-select {
-    width: 100%;
-  }
-
-  .group-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .group-actions {
     width: 100%;
   }
 }
