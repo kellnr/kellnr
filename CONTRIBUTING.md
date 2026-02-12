@@ -87,10 +87,10 @@ just run
 When updating any Node.js dependencies, make sure to run:
 
 ```bash
-just node2nix
+just update-npm-hash
 ```
 
-This will update the Node dependencies for Nix as well.
+This will update the `npmDepsHash` in `flake.nix` to match the current `ui/package-lock.json`.
 
 ## Database Migrations
 

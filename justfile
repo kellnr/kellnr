@@ -219,33 +219,14 @@ npm-install:
 npm-install:
     cd ui; npm ci
 
-##########################################
-# Commands used by the Nix package manager
-##########################################
-# Used to create the needed Nix expressions for the Node.js dependencies.
-
-# Run this command everytime you edit the ui/package.json file.
+# Update the npmDepsHash in flake.nix after ui/package-lock.json changes
 [unix]
-node2nix: clean-node patch-package
-    node2nix --development \
-    	--input ui/nix/package.json \
-    	--node-env ui/nix/node-env.nix \
-    	--composition ui/nix/default.nix \
-    	--output ui/nix/node-package.nix
-
-[unix]
-patch-package:
-    jd -o ui/nix/package.json \
-    -p \
-    -f patch ui/nix/package-patch.json ui/package.json || true
-
-[windows]
-node2nix:
-    @echo "node2nix is not supported on Windows (Nix is Linux/macOS only)"
-
-[windows]
-patch-package:
-    @echo "patch-package is not supported on Windows (Nix is Linux/macOS only)"
+update-npm-hash:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    NEW_HASH=$(nix run nixpkgs#prefetch-npm-deps -- ui/package-lock.json)
+    sed -i.bak "s|npmDepsHash = \".*\"|npmDepsHash = \"$NEW_HASH\"|" flake.nix && rm flake.nix.bak
+    echo "Updated npmDepsHash to: $NEW_HASH"
 
 ##########################################
 # Commands used by the Github Actions CI
