@@ -51,28 +51,28 @@
         <!-- Dependencies Tab -->
         <template v-if="tab === 'deps'">
           <!-- Normal Dependencies -->
-          <v-card v-if="sortedDeps.length > 0" class="mb-4 content-card" elevation="0">
+          <v-card v-if="sortedDependencies.normal.length > 0" class="mb-4 content-card" elevation="0">
             <v-card-title>Dependencies</v-card-title>
             <v-card-text>
-              <Dependency v-for="dep in sortedDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
+              <Dependency v-for="dep in sortedDependencies.normal" :key="dep.name" :name="dep.name" :version="dep.version_req"
                 :registry="dep.registry" />
             </v-card-text>
           </v-card>
 
           <!-- Dev Dependencies -->
-          <v-card v-if="sortedDevDeps.length > 0" class="mb-4 content-card" elevation="0">
+          <v-card v-if="sortedDependencies.dev.length > 0" class="mb-4 content-card" elevation="0">
             <v-card-title>Development Dependencies</v-card-title>
             <v-card-text>
-              <Dependency v-for="dep in sortedDevDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
+              <Dependency v-for="dep in sortedDependencies.dev" :key="dep.name" :name="dep.name" :version="dep.version_req"
                 :registry="dep.registry" />
             </v-card-text>
           </v-card>
 
           <!-- Build Dependencies -->
-          <v-card v-if="sortedBuildDeps.length > 0" class="mb-4 content-card" elevation="0">
+          <v-card v-if="sortedDependencies.build.length > 0" class="mb-4 content-card" elevation="0">
             <v-card-title>Build Dependencies</v-card-title>
             <v-card-text>
-              <Dependency v-for="dep in sortedBuildDeps" :key="dep.name" :name="dep.name" :version="dep.version_req"
+              <Dependency v-for="dep in sortedDependencies.build" :key="dep.name" :name="dep.name" :version="dep.version_req"
                 :registry="dep.registry" :desc="dep.description" />
             </v-card-text>
           </v-card>
@@ -156,26 +156,17 @@ const humanizedLastUpdated = computed(() => {
   return dayjs.utc(crateData.value.last_updated).fromNow();
 })
 
-const sortedDeps = computed(() => {
-  const normalDeps = selected_version.value.dependencies.filter((dep: CrateRegistryDep) => {
-    return dep.kind == "normal";
-  });
-  return sortByName(normalDeps);
-});
+function getDependenciesByKind(kind: string): CrateRegistryDep[] {
+  return sortByName(
+    selected_version.value.dependencies.filter(dep => dep.kind === kind)
+  );
+}
 
-const sortedDevDeps = computed(() => {
-  const devDeps = selected_version.value.dependencies.filter((dep: CrateRegistryDep) => {
-    return dep.kind == "dev";
-  });
-  return sortByName(devDeps);
-});
-
-const sortedBuildDeps = computed(() => {
-  const buildDeps = selected_version.value.dependencies.filter((dep: CrateRegistryDep) => {
-    return dep.kind == "build";
-  });
-  return sortByName(buildDeps);
-});
+const sortedDependencies = computed(() => ({
+  normal: getDependenciesByKind('normal'),
+  dev: getDependenciesByKind('dev'),
+  build: getDependenciesByKind('build'),
+}));
 
 const flattenedFeatures = computed(() => {
   const features = selected_version.value.features;

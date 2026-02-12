@@ -1,22 +1,20 @@
-use axum::Router;
-use axum::routing::{delete, get, post};
 use kellnr_appstate::AppStateData;
 use kellnr_web_ui::user;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-/// Creates the user routes
-pub fn create_routes() -> Router<AppStateData> {
-    Router::new()
-        .route("/login", post(user::login))
-        .route("/logout", get(user::logout))
-        .route("/change_pwd", post(user::change_pwd))
-        .route("/add", post(user::add))
-        .route("/delete/{name}", delete(user::delete))
-        .route("/reset_pwd/{name}", post(user::reset_pwd))
-        .route("/read_only/{name}", post(user::read_only))
-        .route("/admin/{name}", post(user::admin))
-        .route("/add_token", post(user::add_token))
-        .route("/delete_token/{id}", delete(user::delete_token))
-        .route("/list_tokens", get(user::list_tokens))
-        .route("/list_users", get(user::list_users))
-        .route("/login_state", get(user::login_state))
+/// Creates the user management routes
+pub fn create_routes() -> OpenApiRouter<AppStateData> {
+    OpenApiRouter::new()
+        // User CRUD
+        .routes(routes!(user::list_users, user::add))
+        .routes(routes!(user::delete))
+        // User attributes
+        .routes(routes!(user::reset_pwd))
+        .routes(routes!(user::admin))
+        .routes(routes!(user::read_only))
+        // Current user (self-service)
+        .routes(routes!(user::change_pwd))
+        .routes(routes!(user::list_tokens, user::add_token))
+        .routes(routes!(user::delete_token))
 }

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct EmptyCrateSuccess {
     ok: bool,
 }
@@ -16,12 +17,12 @@ impl Default for EmptyCrateSuccess {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
 pub struct PubDataSuccess {
     pub warnings: Option<Warnings>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, ToSchema)]
 pub struct Warnings {
     pub invalid_categories: Option<Vec<String>>,
     pub invalid_badges: Option<Vec<String>>,

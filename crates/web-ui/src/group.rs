@@ -4,36 +4,58 @@ use axum::http::StatusCode;
 use kellnr_appstate::DbState;
 use kellnr_db::{self, Group};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::error::RouteError;
-use crate::session::MaybeUser;
+use crate::session::AdminUser;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct NewTokenResponse {
     name: String,
     token: String,
 }
 
+/// List all groups (admin only)
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "groups",
+    responses(
+        (status = 200, description = "List of all groups", body = Vec<Group>),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_groups(
-    user: MaybeUser,
+    _user: AdminUser,
     State(db): DbState,
 ) -> Result<Json<Vec<Group>>, RouteError> {
-    user.assert_admin()?;
-
     Ok(Json(db.get_groups().await?))
 }
 
+/// Delete a group (admin only)
+#[utoipa::path(
+    delete,
+    path = "/{name}",
+    tag = "groups",
+    params(
+        ("name" = String, Path, description = "Group name to delete")
+    ),
+    responses(
+        (status = 200, description = "Group deleted successfully"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete(
-    user: MaybeUser,
+    _user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     Ok(db.delete_group(&name).await?)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct NewGroup {
     pub name: String,
 }
@@ -47,25 +69,36 @@ impl NewGroup {
     }
 }
 
+/// Create a new group (admin only)
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "groups",
+    request_body = NewGroup,
+    responses(
+        (status = 200, description = "Group created successfully"),
+        (status = 400, description = "Validation failed"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn add(
-    user: MaybeUser,
+    _user: AdminUser,
     State(db): DbState,
     Json(new_group): Json<NewGroup>,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     new_group.validate()?;
 
     Ok(db.add_group(&new_group.name).await?)
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct GroupUser {
     pub id: i32,
     pub name: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct GroupUserList {
     pub users: Vec<GroupUser>,
 }
@@ -76,13 +109,25 @@ impl From<Vec<GroupUser>> for GroupUserList {
     }
 }
 
+/// List members of a group (admin only)
+#[utoipa::path(
+    get,
+    path = "/{group_name}/members",
+    tag = "groups",
+    params(
+        ("group_name" = String, Path, description = "Group name")
+    ),
+    responses(
+        (status = 200, description = "List of group members", body = GroupUserList),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_users(
-    user: MaybeUser,
+    _user: AdminUser,
     Path(group_name): Path<String>,
     State(db): DbState,
 ) -> Result<Json<GroupUserList>, RouteError> {
-    user.assert_admin()?;
-
     let users: Vec<GroupUser> = db
         .get_group_users(&group_name)
         .await?
@@ -96,13 +141,26 @@ pub async fn list_users(
     Ok(Json(GroupUserList::from(users)))
 }
 
+/// Add a user to a group (admin only)
+#[utoipa::path(
+    put,
+    path = "/{group_name}/members/{name}",
+    tag = "groups",
+    params(
+        ("group_name" = String, Path, description = "Group name"),
+        ("name" = String, Path, description = "Username to add")
+    ),
+    responses(
+        (status = 200, description = "User added to group successfully"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn add_user(
-    user: MaybeUser,
+    _user: AdminUser,
     Path((group_name, name)): Path<(String, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     if !db.is_group_user(&group_name, &name).await? {
         db.add_group_user(&group_name, &name).await?;
     }
@@ -110,12 +168,25 @@ pub async fn add_user(
     Ok(())
 }
 
+/// Remove a user from a group (admin only)
+#[utoipa::path(
+    delete,
+    path = "/{group_name}/members/{name}",
+    tag = "groups",
+    params(
+        ("group_name" = String, Path, description = "Group name"),
+        ("name" = String, Path, description = "Username to remove")
+    ),
+    responses(
+        (status = 200, description = "User removed from group successfully"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete_user(
-    user: MaybeUser,
+    _user: AdminUser,
     Path((group_name, name)): Path<(String, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-
     Ok(db.delete_group_user(&group_name, &name).await?)
 }

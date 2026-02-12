@@ -14,8 +14,7 @@ tests/playwright-report/
 **/*.rs.bk
 
 # Don't check the local config in
-**/config/local.toml
-**/config/new.toml
+**/config/
 
 # VS Code
 .ionide/
@@ -48,3 +47,6 @@ tests/**/logs/
 tests/**/data/
 tests/**/kdata/
 .certs/
+
+# Generated SBOM files
+*.cdx.json

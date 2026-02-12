@@ -10,6 +10,7 @@ import { BasePage } from "./BasePage";
  * - Remember me checkbox
  * - Confirm/Submit button
  * - Login status alerts
+ * - OAuth2/SSO login button (when enabled)
  */
 export class LoginPage extends BasePage {
   // Locators
@@ -19,6 +20,8 @@ export class LoginPage extends BasePage {
   readonly confirmButton: Locator;
   readonly signInTitle: Locator;
   readonly alertMessage: Locator;
+  readonly oauth2Button: Locator;
+  readonly oauth2Divider: Locator;
 
   constructor(page: Page) {
     super(page);
@@ -31,6 +34,9 @@ export class LoginPage extends BasePage {
     // Title is now an h1 with class login-title
     this.signInTitle = page.locator(".login-title");
     this.alertMessage = page.locator(".v-alert");
+    // OAuth2/SSO button (uses the oauth2-button class)
+    this.oauth2Button = page.locator(".oauth2-button");
+    this.oauth2Divider = page.locator(".oauth2-divider");
   }
 
   /**
@@ -163,5 +169,37 @@ export class LoginPage extends BasePage {
    */
   async isConfirmButtonEnabled(): Promise<boolean> {
     return await this.confirmButton.isEnabled();
+  }
+
+  /**
+   * Check if the OAuth2/SSO button is visible.
+   */
+  async isOAuth2ButtonVisible(): Promise<boolean> {
+    return await this.oauth2Button.isVisible();
+  }
+
+  /**
+   * Get the OAuth2 button text.
+   */
+  async getOAuth2ButtonText(): Promise<string | null> {
+    if (await this.oauth2Button.isVisible()) {
+      return await this.oauth2Button.textContent();
+    }
+    return null;
+  }
+
+  /**
+   * Click the OAuth2/SSO login button.
+   * This will redirect to the OAuth2 provider.
+   */
+  async clickOAuth2Login(): Promise<void> {
+    await this.oauth2Button.click();
+  }
+
+  /**
+   * Wait for OAuth2 button to be visible.
+   */
+  async waitForOAuth2Button(timeout: number = 5000): Promise<void> {
+    await this.oauth2Button.waitFor({ state: "visible", timeout });
   }
 }

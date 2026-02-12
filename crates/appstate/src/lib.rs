@@ -11,6 +11,7 @@ use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+use kellnr_storage::toolchain_storage::ToolchainStorage;
 
 pub type AppState = axum::extract::State<AppStateData>;
 
@@ -22,6 +23,7 @@ pub type CrateIoStorageState = axum::extract::State<Arc<CratesIoCrateStorage>>;
 pub type SigningKeyState = axum::extract::State<Key>;
 pub type CratesIoPrefetchSenderState = axum::extract::State<Sender<CratesioPrefetchMsg>>;
 pub type TokenCacheState = axum::extract::State<Arc<TokenCacheManager>>;
+pub type ToolchainStorageState = axum::extract::State<Option<Arc<ToolchainStorage>>>;
 
 #[derive(Clone, FromRef)]
 pub struct AppStateData {
@@ -33,6 +35,7 @@ pub struct AppStateData {
     pub cratesio_storage: Arc<CratesIoCrateStorage>,
     pub cratesio_prefetch_sender: Sender<CratesioPrefetchMsg>,
     pub token_cache: Arc<TokenCacheManager>,
+    pub toolchain_storage: Option<Arc<ToolchainStorage>>,
 }
 
 pub fn test_state() -> AppStateData {
@@ -55,5 +58,6 @@ pub fn test_state() -> AppStateData {
         cratesio_storage,
         cratesio_prefetch_sender,
         token_cache,
+        toolchain_storage: None, // Toolchain storage disabled in tests by default
     }
 }

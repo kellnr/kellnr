@@ -38,7 +38,7 @@ pub fn db_test(_attr: TokenStream, stream: TokenStream) -> TokenStream {
                 path: path.to_owned(),
                 salt: "salt".to_string(),
                 admin_pwd: "123".to_string(),
-                admin_token: "token".to_string(),
+                admin_token: Some("token".to_string()),
                 session_age: std::time::Duration::from_secs(1),
             };
             let con_string = kellnr_db::ConString::Sqlite(con_string);
@@ -58,7 +58,7 @@ pub fn db_test(_attr: TokenStream, stream: TokenStream) -> TokenStream {
 
             let pg_container = image::Postgres::default().start().await.expect("Failed to start postgres container");
             let port = pg_container.get_host_port_ipv4(image::Postgres::PG_PORT).await.expect("Failed to get port");
-            let admin = kellnr_db::AdminUser::new("123".to_string(), "token".to_string(), "salt".to_string());
+            let admin = kellnr_db::AdminUser::new("123".to_string(), Some("token".to_string()), "salt".to_string());
             let pg_db = kellnr_db::PgConString::new("localhost", port, "kellnr", "admin", "admin", admin);
             let pg_db = kellnr_db::ConString::Postgres(pg_db);
             let test_db = kellnr_db::Database::new(&pg_db, 10).await.unwrap();

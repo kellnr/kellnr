@@ -3,37 +3,40 @@
 ##################
 FROM alpine:3.23 AS builder
 
-ARG ADMINPWD=admin
-ENV INSTALLDIR=/opt
-ENV DATADIR=/opt/kdata
-ARG AUTHTOKEN=Zy9HhJ02RJmg0GCrgLfaCVfU6IwDfhXD
 ARG VERSION
 
 # Install only what's needed for downloading and extracting
-RUN apk add --no-cache curl zip lscpu sed
+RUN apk add --no-cache curl zip lscpu sed bash
 
-# Download and extract in one layer to reduce image size
-WORKDIR ${INSTALLDIR}
-RUN curl -s https://raw.githubusercontent.com/kellnr/installer/main/install.sh | /bin/sh -s -- -m -d ${DATADIR} -p ${ADMINPWD} -t ${AUTHTOKEN} -v ${VERSION}
+# Download and install kellnr
+RUN curl -sL https://github.com/kellnr/installer/releases/download/v0.1.2/install.sh -o /tmp/install.sh && \
+    bash /tmp/install.sh -m -v ${VERSION} && \
+    rm /tmp/install.sh
 
 ##################
 # Runtime image  #
 ##################
 FROM alpine:3.23
 
-ENV INSTALLDIR=/opt
-ENV DATADIR=/opt/kdata
+ARG DATADIR=/var/lib/kellnr
+ENV KELLNR_CONFIG_FILE=/etc/kellnr/kellnr.toml
+ENV KELLNR_SETUP__ADMIN_PWD=admin
 
 # Install only runtime dependencies
 RUN apk add --no-cache ca-certificates curl
 
-# Copy only the necessary files from the builder stage
-COPY --from=builder ${DATADIR} ${DATADIR}
-COPY --from=builder ${INSTALLDIR}/kellnr ${INSTALLDIR}/kellnr
+# Copy the kellnr binary from the builder stage
+COPY --from=builder /usr/local/bin/kellnr /usr/local/bin/kellnr
+
+# COPY the config file from the builder stage
+RUN mkdir -p /etc/kellnr
+COPY --from=builder /etc/kellnr/kellnr.toml /etc/kellnr/kellnr.toml
+
+# Create the data directory
+RUN mkdir -p ${DATADIR}
 
 HEALTHCHECK --interval=5m --timeout=3s CMD curl -sf http://localhost:8000/api/v1/health || exit 1
 
 EXPOSE 8000
 
-WORKDIR ${INSTALLDIR}/kellnr
-ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && ./kellnr"]
+ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && kellnr start"]
