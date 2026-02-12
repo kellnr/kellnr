@@ -1,13 +1,7 @@
 <template>
   <div>
-    <!-- Header -->
-    <div class="section-header">
-      <v-icon icon="mdi-shield-key" size="small" color="primary" class="me-3"></v-icon>
-      <span class="text-h6 font-weight-bold">Authentication Tokens</span>
-      <span v-if="tokens.length > 0" class="token-count">{{ tokens.length }}</span>
-    </div>
+    <SectionHeader icon="mdi-shield-key" title="Authentication Tokens" :count="tokens.length" />
 
-    <!-- Content -->
     <div class="section-content">
       <p class="text-body-2 text-medium-emphasis mb-5">
         Authentication tokens allow you to publish crates via <code>cargo</code> without using your password.
@@ -16,42 +10,39 @@
 
       <!-- Existing Tokens -->
       <div v-if="tokens.length > 0" class="tokens-section mb-6">
-        <div class="subsection-header">
-          <v-icon icon="mdi-key-chain" size="x-small" class="me-2" color="primary"></v-icon>
-          <span class="text-body-2 font-weight-medium">Active Tokens</span>
-        </div>
+        <SubsectionHeader icon="mdi-key-chain" title="Active Tokens" />
 
-        <div class="token-list">
-          <div v-for="token in tokens" :key="token.id" class="token-item">
-            <div class="token-info">
-              <v-icon icon="mdi-key" size="small" class="me-3 token-icon"></v-icon>
-              <span class="token-name">{{ token.name }}</span>
-            </div>
-            <v-btn
-              size="small"
-              color="error"
-              variant="tonal"
-              @click="handleDeleteToken(token)"
-            >
-              <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
-              Delete
-            </v-btn>
-          </div>
+        <div class="list-container">
+          <ListItem
+            v-for="token in tokens"
+            :key="token.id"
+            icon="mdi-key"
+            :title="token.name"
+          >
+            <template #actions>
+              <v-btn
+                size="small"
+                color="error"
+                variant="tonal"
+                @click="handleDeleteToken(token)"
+              >
+                <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                Delete
+              </v-btn>
+            </template>
+          </ListItem>
         </div>
       </div>
 
-      <div v-else class="empty-state mb-6">
-        <v-icon icon="mdi-key-remove" size="large" class="mb-3 text-medium-emphasis"></v-icon>
-        <p class="text-body-2 text-medium-emphasis mb-0">No authentication tokens created yet.</p>
-      </div>
+      <EmptyState
+        v-else
+        icon="mdi-key-remove"
+        message="No authentication tokens created yet."
+        class="mb-6"
+      />
 
       <!-- Add New Token Form -->
-      <div class="add-token-section">
-        <div class="subsection-header">
-          <v-icon icon="mdi-key-plus" size="x-small" class="me-2" color="primary"></v-icon>
-          <span class="text-body-2 font-weight-medium">Create New Token</span>
-        </div>
-
+      <FormSection icon="mdi-key-plus" title="Create New Token">
         <v-form @submit.prevent="handleCreateToken" class="token-form">
           <div class="form-row">
             <v-text-field
@@ -116,38 +107,21 @@
         >
           {{ createStatus.message }}
         </v-alert>
-      </div>
+      </FormSection>
     </div>
 
     <!-- Delete Confirmation Dialog -->
-    <v-dialog v-model="dialogOpen" max-width="450">
-      <v-card class="delete-dialog">
-        <div class="dialog-header">
-          <v-icon icon="mdi-alert-circle" color="error" size="small" class="me-3"></v-icon>
-          <span class="text-h6 font-weight-bold">{{ dialog.title }}</span>
-        </div>
-
-        <v-card-text class="pa-5">
-          <p class="text-body-1 mb-2">
-            {{ dialog.message }}
-          </p>
-          <p class="text-body-2 text-medium-emphasis mb-0">
-            Any applications using this token will no longer be able to authenticate.
-          </p>
-        </v-card-text>
-
-        <v-card-actions class="pa-4 pt-0">
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="dialog.cancel()">
-            Cancel
-          </v-btn>
-          <v-btn color="error" variant="flat" @click="dialog.confirm()">
-            <v-icon icon="mdi-delete" size="small" class="me-1"></v-icon>
-            Delete Token
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <ConfirmDialog
+      v-model="dialogOpen"
+      :title="dialog.title"
+      :message="dialog.message"
+      sub-message="Any applications using this token will no longer be able to authenticate."
+      confirm-text="Delete Token"
+      confirm-color="error"
+      confirm-icon="mdi-delete"
+      @confirm="dialog.confirm()"
+      @cancel="dialog.cancel()"
+    />
   </div>
 </template>
 
@@ -157,6 +131,14 @@ import { useStatusMessage, useConfirmCallback } from "../composables"
 import { tokenService } from "../services"
 import { isSuccess } from "../services/api"
 import type { Token } from "../types/token"
+import {
+  SectionHeader,
+  SubsectionHeader,
+  ListItem,
+  EmptyState,
+  FormSection,
+  ConfirmDialog,
+} from "./common"
 
 // State
 const tokens = ref<Token[]>([])
@@ -168,7 +150,7 @@ const createLoading = ref(false)
 const createStatus = useStatusMessage()
 const { dialog, showConfirm } = useConfirmCallback()
 
-// Computed wrapper for dialog.isOpen to properly handle ref unwrapping in v-model
+// Computed wrapper for dialog.isOpen
 const dialogOpen = computed({
   get: () => dialog.isOpen.value,
   set: (val: boolean) => { dialog.isOpen.value = val }
@@ -244,24 +226,6 @@ function copyToken() {
 </script>
 
 <style scoped>
-.section-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 24px;
-  background: rgba(var(--v-theme-primary), 0.05);
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
-}
-
-.token-count {
-  margin-left: auto;
-  background: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 12px;
-}
-
 .section-content {
   padding: 24px;
 }
@@ -275,71 +239,10 @@ function copyToken() {
   font-family: 'Roboto Mono', monospace;
 }
 
-/* Subsection Header */
-.subsection-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
-}
-
-/* Token List */
-.token-list {
+.list-container {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.token-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: rgba(var(--v-theme-primary), 0.03);
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.token-item:hover {
-  border-color: rgb(var(--v-theme-primary));
-  background: rgba(var(--v-theme-primary), 0.06);
-}
-
-.token-info {
-  display: flex;
-  align-items: center;
-}
-
-.token-icon {
-  color: rgb(var(--v-theme-primary));
-  opacity: 0.7;
-}
-
-.token-name {
-  font-weight: 500;
-  font-size: 15px;
-  color: rgb(var(--v-theme-on-surface));
-}
-
-/* Empty State */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 32px;
-  background: rgba(var(--v-theme-primary), 0.03);
-  border: 1px dashed rgb(var(--v-theme-outline));
-  border-radius: 8px;
-}
-
-/* Add Token Section */
-.add-token-section {
-  padding: 20px;
-  background: rgba(var(--v-theme-primary), 0.03);
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
 }
 
 .token-form {
@@ -387,26 +290,8 @@ function copyToken() {
   color: rgb(var(--v-theme-on-surface));
 }
 
-/* Delete Dialog */
-.delete-dialog {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.dialog-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 20px;
-  background: rgba(var(--v-theme-error), 0.08);
-  border-bottom: 1px solid rgba(var(--v-theme-error), 0.2);
-}
-
 /* Responsive */
 @media (max-width: 600px) {
-  .section-header {
-    padding: 16px 20px;
-  }
-
   .section-content {
     padding: 20px;
   }

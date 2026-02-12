@@ -2,7 +2,7 @@
  * Page Object Model exports for Kellnr UI tests.
  *
  * Usage:
- *   import { LoginPage, HeaderComponent, CratesPage, LandingPage, CratePage } from "./pages";
+ *   import { LoginPage, HeaderComponent, CratesPage, LandingPage, CratePage, ToolchainsPage } from "./pages";
  */
 
 export { BasePage } from "./BasePage";
@@ -11,3 +11,4 @@ export { HeaderComponent } from "./HeaderComponent";
 export { CratesPage } from "./CratesPage";
 export { LandingPage } from "./LandingPage";
 export { CratePage } from "./CratePage";
+export { ToolchainsPage } from "./ToolchainsPage";

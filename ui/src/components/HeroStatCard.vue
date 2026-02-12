@@ -171,4 +171,37 @@ function textToTestId(text: string): string {
 :deep(.v-theme--dark) .hero-stat-card:hover {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5) !important;
 }
+
+/* Mobile responsive styles */
+@media (max-width: 600px) {
+  .hero-stat-card {
+    min-height: 120px;
+  }
+
+  .hero-stat-card :deep(.v-card-text) {
+    padding: 16px !important;
+  }
+
+  .stat-number {
+    font-size: 2rem !important;
+  }
+
+  .stat-label {
+    font-size: 0.95rem !important;
+  }
+
+  .stat-subtitle {
+    font-size: 0.8rem !important;
+    margin-top: 8px !important;
+  }
+
+  .icon-avatar {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  .icon-avatar .v-icon {
+    font-size: 24px !important;
+  }
+}
 </style>

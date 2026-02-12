@@ -14,6 +14,7 @@ import {
   LandingPage,
   CratePage,
 } from "../pages";
+import { startCoverage, stopCoverage } from "./coverage";
 
 /**
  * Default admin credentials for Kellnr.
@@ -50,6 +51,13 @@ export type UITestFixtures = {
  *   });
  */
 export const test = base.extend<UITestFixtures>({
+  // Wrap page with coverage collection
+  page: async ({ page }, use, testInfo) => {
+    await startCoverage(page);
+    await use(page);
+    await stopCoverage(page, testInfo.title);
+  },
+
   loginPage: async ({ page }, use) => {
     const loginPage = new LoginPage(page);
     await use(loginPage);

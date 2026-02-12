@@ -33,6 +33,33 @@ jobs:
             ui) nix develop --command just test-ui ;;
           esac
 
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-24.04
+    needs: [test]
+    permissions: { contents: write }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+
+      - name: Extract Version
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+
+      - name: Generate SBOM
+        run: nix develop --command just sbom
+
+      - name: Upload SBOM to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: crates/kellnr/kellnr.cdx.json
+          asset_name: kellnr-${{ env.VERSION }}.cdx.json
+          tag: ${{ github.ref }}
+
   build-kellnr:
     name: Build Binaries
     runs-on: ubuntu-24.04
@@ -76,22 +103,17 @@ jobs:
 
       - name: Extract Version
         run: |
-          echo "KELLNR_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-          echo $KELLNR_VERSION
+          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo $KELLNR_COMPTIME__VERSION
 
       - name: Build Release ${{ matrix.target }}
         run: just target=${{ matrix.target }} ci-release
 
       - name: Set Package Name
-        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_VERSION.zip" >> $GITHUB_ENV
+        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_COMPTIME__VERSION.zip" >> $GITHUB_ENV
 
       - name: Print Package Name
         run: echo $KELLNR_PACKAGE
-
-      - name: Package Config
-        uses: montudor/action-zip@v1.0.0
-        with:
-          args: zip -qq -r ${{ env.KELLNR_PACKAGE }} config
 
       - name: Package Kellnr
         uses: montudor/action-zip@v1.0.0
@@ -107,6 +129,62 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.KELLNR_PACKAGE }}
           asset_name: ${{ env.KELLNR_ASSET }}
+          tag: ${{ github.ref }}
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    needs: [test]
+    permissions: { contents: write }
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            artifact: kellnr-x86_64-windows
+          - target: aarch64-pc-windows-msvc
+            artifact: kellnr-aarch64-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: hecrj/setup-rust-action@v2
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with: { tool: just }
+
+      - name: Extract Version
+        shell: bash
+        run: |
+          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+
+      - name: Build UI assets
+        run: just npm-build
+
+      - name: Build Release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package Kellnr
+        uses: montudor/action-zip@v1.0.0
+        with:
+          args: zip -qq -j ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip target/${{ matrix.target }}/release/kellnr.exe
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
+          asset_name: ${{ matrix.artifact }}.zip
           tag: ${{ github.ref }}
 
   crates-io-release:

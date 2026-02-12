@@ -1,15 +1,13 @@
-use axum::Router;
-use axum::routing::{delete, get, post, put};
 use kellnr_appstate::AppStateData;
 use kellnr_web_ui::group;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
 /// Creates the group routes
-pub fn create_routes() -> Router<AppStateData> {
-    Router::new()
-        .route("/", get(group::list_groups))
-        .route("/add", post(group::add))
-        .route("/delete/{name}", delete(group::delete))
-        .route("/{group_name}/users", get(group::list_users))
-        .route("/{group_name}/users/{name}", put(group::add_user))
-        .route("/{group_name}/users/{name}", delete(group::delete_user))
+pub fn create_routes() -> OpenApiRouter<AppStateData> {
+    OpenApiRouter::new()
+        .routes(routes!(group::list_groups, group::add))
+        .routes(routes!(group::delete))
+        .routes(routes!(group::list_users))
+        .routes(routes!(group::add_user, group::delete_user))
 }

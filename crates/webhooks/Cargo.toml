@@ -20,6 +20,7 @@ kellnr-error.workspace = true
 # External dependencies
 axum.workspace = true
 chrono.workspace = true
+utoipa.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

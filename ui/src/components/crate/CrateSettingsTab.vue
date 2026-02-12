@@ -171,11 +171,9 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useStore } from '../../store/store'
 import { useStatusMessage } from '../../composables'
-import { crateService } from '../../services'
-import { groupService } from '../../services'
+import { crateService, groupService } from '../../services'
 import { isSuccess } from '../../services/api'
 import type { CrateGroup } from '../../types/crate_data'
 
@@ -189,8 +187,7 @@ const emit = defineEmits<{
   (e: 'owners-changed', owners: string[]): void
 }>()
 
-// Router and store
-const router = useRouter()
+// Store
 const store = useStore()
 
 // Status messages
@@ -256,20 +253,10 @@ async function handleAddOwner() {
   }
 
   const result = await crateService.addCrateOwner(props.crateName, newOwnerName.value)
+  addOwnerStatus.setFromResult(result, 'Crate owner successfully added.')
   if (isSuccess(result)) {
-    addOwnerStatus.setSuccess('Crate owner successfully added.')
     newOwnerName.value = ''
     await loadOwners()
-  } else {
-    if (result.error.status === 401) {
-      router.push('/login')
-    } else if (result.error.status === 403) {
-      addOwnerStatus.setError('Not allowed. Only existing owners or admins can add owners.')
-    } else if (result.error.status === 404) {
-      addOwnerStatus.setError('User not found. Did you provide an existing user name?')
-    } else {
-      addOwnerStatus.setError('Crate owner could not be added.')
-    }
   }
 }
 
@@ -287,19 +274,9 @@ async function handleDeleteOwner(name: string) {
   if (!confirm(`Delete crate owner "${name}"?`)) return
 
   const result = await crateService.deleteCrateOwner(props.crateName, name)
+  deleteOwnerStatus.setFromResult(result, 'Crate owner successfully deleted.')
   if (isSuccess(result)) {
-    deleteOwnerStatus.setSuccess('Crate owner successfully deleted.')
     await loadOwners()
-  } else {
-    if (result.error.status === 401) {
-      router.push('/login')
-    } else if (result.error.status === 403) {
-      deleteOwnerStatus.setError('Not allowed. Only existing owners or admins can remove owners.')
-    } else if (result.error.status === 409) {
-      deleteOwnerStatus.setError('A crate must have at least one owner.')
-    } else {
-      deleteOwnerStatus.setError('Crate owner could not be deleted.')
-    }
   }
 }
 
@@ -315,18 +292,10 @@ async function loadUsers() {
 
 async function handleAddUser() {
   const result = await crateService.addCrateUser(props.crateName, newUserName.value)
+  addUserStatus.setFromResult(result, 'Crate user successfully added.')
   if (isSuccess(result)) {
-    addUserStatus.setSuccess('Crate user successfully added.')
     newUserName.value = ''
     await loadUsers()
-  } else {
-    if (result.error.status === 401 || result.error.status === 403) {
-      router.push('/login')
-    } else if (result.error.status === 404) {
-      addUserStatus.setError('User not found. Did you provide an existing user name?')
-    } else {
-      addUserStatus.setError('Crate user could not be added.')
-    }
   }
 }
 
@@ -334,15 +303,9 @@ async function handleDeleteUser(name: string) {
   if (!confirm(`Delete crate user "${name}"?`)) return
 
   const result = await crateService.deleteCrateUser(props.crateName, name)
+  deleteUserStatus.setFromResult(result, 'Crate user successfully deleted.')
   if (isSuccess(result)) {
-    deleteUserStatus.setSuccess('Crate user successfully deleted.')
     await loadUsers()
-  } else {
-    if (result.error.status === 404) {
-      router.push('/login')
-    } else {
-      deleteUserStatus.setError('Crate user could not be deleted.')
-    }
   }
 }
 
@@ -367,18 +330,10 @@ async function loadAllGroups() {
 
 async function handleAddGroup() {
   const result = await crateService.addCrateGroup(props.crateName, newGroupName.value)
+  addGroupStatus.setFromResult(result, 'Crate group successfully added.')
   if (isSuccess(result)) {
-    addGroupStatus.setSuccess('Crate group successfully added.')
     newGroupName.value = ''
     await loadGroups()
-  } else {
-    if (result.error.status === 401 || result.error.status === 403) {
-      router.push('/login')
-    } else if (result.error.status === 404) {
-      addGroupStatus.setError('Group not found. Did you provide an existing group name?')
-    } else {
-      addGroupStatus.setError('Crate group could not be added.')
-    }
   }
 }
 
@@ -386,15 +341,9 @@ async function handleDeleteGroup(name: string) {
   if (!confirm(`Delete crate group "${name}"?`)) return
 
   const result = await crateService.deleteCrateGroup(props.crateName, name)
+  deleteGroupStatus.setFromResult(result, 'Crate group successfully deleted.')
   if (isSuccess(result)) {
-    deleteGroupStatus.setSuccess('Crate group successfully deleted.')
     await loadGroups()
-  } else {
-    if (result.error.status === 404) {
-      router.push('/login')
-    } else {
-      deleteGroupStatus.setError('Crate group could not be deleted.')
-    }
   }
 }
 
@@ -409,18 +358,13 @@ async function loadAccessData() {
 async function handleSaveAccessData() {
   const result = await crateService.setCrateAccessData(props.crateName, isDownloadRestricted.value)
   if (isSuccess(result)) {
-    if (result.data.download_restricted) {
-      accessStatus.setSuccess('Crate access restricted to crate users only.')
-    } else {
-      accessStatus.setSuccess('Crate access open to all.')
-    }
+    const message = result.data.download_restricted
+      ? 'Crate access restricted to crate users only.'
+      : 'Crate access open to all.'
+    accessStatus.setSuccess(message)
     await loadAccessData()
   } else {
-    if (result.error.status === 401 || result.error.status === 403) {
-      router.push('/login')
-    } else {
-      accessStatus.setError('Crate access data could not be changed.')
-    }
+    accessStatus.setError(result.error.message)
   }
 }
 </script>

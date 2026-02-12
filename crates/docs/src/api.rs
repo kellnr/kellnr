@@ -14,11 +14,38 @@ use crate::docs_error::DocsError;
 use crate::upload_response::DocUploadResponse;
 use crate::{compute_doc_url, get_latest_version_with_doc};
 
+/// Get documentation build queue
+///
+/// Returns the list of crates currently in the documentation build queue.
+#[utoipa::path(
+    get,
+    path = "/builds",
+    tag = "docs",
+    responses(
+        (status = 200, description = "Documentation build queue", body = DocQueueResponse)
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn docs_in_queue(State(db): DbState) -> ApiResult<Json<DocQueueResponse>> {
     let doc = db.get_doc_queue().await?;
     Ok(Json(DocQueueResponse::from(doc)))
 }
 
+/// Redirect to latest documentation
+///
+/// Redirects to the latest documentation for a given package.
+#[utoipa::path(
+    get,
+    path = "/{package}/latest",
+    tag = "docs",
+    params(
+        ("package" = String, Path, description = "Package name")
+    ),
+    responses(
+        (status = 302, description = "Redirect to latest documentation")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn latest_docs(
     Path(package): Path<OriginalName>,
     State(settings): SettingsState,
@@ -38,6 +65,27 @@ pub async fn latest_docs(
     Redirect::temporary("/")
 }
 
+/// Publish documentation for a crate version
+///
+/// Upload documentation for a specific crate and version.
+/// Requires ownership of the crate (via cargo token).
+#[utoipa::path(
+    put,
+    path = "/{package}/{version}",
+    tag = "docs",
+    params(
+        ("package" = String, Path, description = "Package name"),
+        ("version" = String, Path, description = "Package version")
+    ),
+    request_body(content = Vec<u8>, description = "Documentation archive (tar.gz or zip)", content_type = "application/octet-stream"),
+    responses(
+        (status = 200, description = "Documentation published successfully", body = DocUploadResponse),
+        (status = 400, description = "Crate or version does not exist"),
+        (status = 401, description = "Not authorized"),
+        (status = 403, description = "Not an owner of the crate")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn publish_docs(
     Path((package, version)): Path<(OriginalName, Version)>,
     token: Token,

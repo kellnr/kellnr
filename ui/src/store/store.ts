@@ -24,9 +24,9 @@ export const useStore = defineStore('store', {
         rememberMe: false,
         rememberMeUser: null,
         searchCache: false,
-        lightBackgroundImage: 'img/blob-scene-haikei3.svg',
-        darkBackgroundImage: 'img/layered-peaks-haikei.svg',
-        currentBackgroundImage: 'img/blob-scene-haikei3.svg', // Default to light
+        lightBackgroundImage: 'img/bg-light-dev.svg',
+        darkBackgroundImage: 'img/bg-dark-dev.svg',
+        currentBackgroundImage: 'img/bg-light-dev.svg', // Default to light
     }),
     getters: {
         loggedIn: (state) => state.loggedInUser !== null,
