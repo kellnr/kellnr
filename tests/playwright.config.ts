@@ -68,12 +68,18 @@ export default defineConfig({
 
   projects: enableAllBrowsers
     ? [
+        // CLI tests - no browser needed, run first
+        {
+          name: "cli",
+          testMatch: /cli\.spec\.ts/,
+        },
         // Run in all browsers - sequentially to avoid port conflicts
         // Each browser project depends on the previous one to ensure serial execution
         {
           name: "chromium",
           use: { ...devices["Desktop Chrome"] },
           testMatch: /ui-.*\.spec\.ts/,
+          dependencies: ["cli"],
         },
         {
           name: "firefox",
@@ -89,6 +95,11 @@ export default defineConfig({
         },
       ]
     : [
+        // CLI tests - no browser needed
+        {
+          name: "cli",
+          testMatch: /cli\.spec\.ts/,
+        },
         // Default: Chromium only (fast)
         {
           name: "chromium",

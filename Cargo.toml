@@ -1,6 +1,5 @@
 [workspace]
 default-members = ["crates/kellnr"]
-exclude = ["crates/test_data"]
 members = ["crates/*", "crates/db/entity", "crates/db/migration"]
 resolver = "3"
 
@@ -28,7 +27,7 @@ kellnr-entity = { version = "5.14.1", path = "./crates/db/entity" }
 kellnr-error = { version = "5.14.1", path = "./crates/error" }
 kellnr-index = { version = "5.14.1", path = "./crates/index" }
 kellnr-migration = { version = "5.14.1", path = "./crates/db/migration" }
-kellnr-minio-testcontainer = { version = "5.14.1", path = "./crates/storage/minio-testcontainer" }
+kellnr-rustfs-testcontainer = { version = "5.14.1", path = "./crates/storage/rustfs-testcontainer" }
 kellnr-registry = { version = "5.14.1", path = "./crates/registry" }
 kellnr-settings = { version = "5.14.1", path = "./crates/settings" }
 kellnr-storage = { version = "5.14.1", path = "./crates/storage" }
@@ -56,6 +55,7 @@ mime_guess = "2.0.5"
 mockall = "0.14.0"
 moka = { version = "0.12.12", features = ["future"] }
 object_store = { version = "0.13.1", default-features = false, features = ["aws", "fs"] }
+openidconnect = "4"
 quote = "1.0.44"
 rand = "0.9.2"
 regex = "1.12.2"
@@ -70,6 +70,7 @@ serde_json = "1.0.149"
 sha256 = "1.6.0"
 syn = { version = "2.0.114", features = ["full"] }
 tar = "0.4.44"
+tempfile = "3"
 testcontainers = "0.26.3"
 thiserror = "2.0.18"
 time = "0.3.46"
@@ -80,8 +81,13 @@ tower-http = { version = "0.6.8", features = ["fs", "trace"] }
 tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["json", "fmt"] }
 url = { version = "2.5.8", features = ["serde"] }
+utoipa = { version = "5", features = ["axum_extras", "chrono"] }
+utoipa-axum = "0.2"
+utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.19.0", features = ["v4"] }
 zip = "6.0.0"
+clap = { version = "4", features = ["derive"] }
+clap-serde-derive = "0.2"
 
 [profile.release]
 lto = "thin"

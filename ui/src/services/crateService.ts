@@ -19,18 +19,17 @@ import {
   SEARCH,
   CRATE_DATA,
   CRATESIO_DATA,
+  CRATE_DELETE,
   CRATE_DELETE_VERSION,
-  CRATE_DELETE_ALL,
   STATISTICS,
-  CRATE_USERS,
-  CRATE_USER,
-  CRATE_GROUPS,
-  CRATE_GROUP,
+  CRATE_ACL,
+  CRATE_ACL_USERS,
+  CRATE_ACL_USER,
+  CRATE_ACL_GROUPS,
+  CRATE_ACL_GROUP,
   CRATE_OWNERS,
   CRATE_OWNER,
-  CRATE_ACCESS_DATA,
-  DOCS_BUILD,
-  DOCS_QUEUE,
+  DOCS_BUILDS,
 } from '../remote-routes'
 import type { DocQueueItem } from '../types/doc_queue_item'
 
@@ -76,7 +75,7 @@ export async function deleteCrateVersion(
   name: string,
   version: string
 ): Promise<ApiResult<void>> {
-  return apiDelete<void>(CRATE_DELETE_VERSION, { name, version })
+  return apiDelete<void>(CRATE_DELETE_VERSION(name, version))
 }
 
 // Alias for consistency
@@ -86,7 +85,7 @@ export const deleteVersion = deleteCrateVersion
  * Delete all versions of a crate
  */
 export async function deleteCrate(name: string): Promise<ApiResult<void>> {
-  return apiDelete<void>(CRATE_DELETE_ALL, { name })
+  return apiDelete<void>(CRATE_DELETE(name))
 }
 
 /**
@@ -102,7 +101,7 @@ export async function getStatistics(): Promise<ApiResult<Statistics>> {
  * Get users with access to a crate
  */
 export async function getCrateUsers(crateName: string): Promise<ApiResult<CrateUsersResponse>> {
-  return apiGet<CrateUsersResponse>(CRATE_USERS(crateName), undefined, { noCache: true })
+  return apiGet<CrateUsersResponse>(CRATE_ACL_USERS(crateName), undefined, { noCache: true })
 }
 
 /**
@@ -112,7 +111,7 @@ export async function addCrateUser(
   crateName: string,
   userName: string
 ): Promise<ApiResult<void>> {
-  return apiPut<void>(CRATE_USER(crateName, userName), null, {
+  return apiPut<void>(CRATE_ACL_USER(crateName, userName), null, {
     customErrors: {
       404: 'User not found. Did you provide an existing user name?',
     },
@@ -126,7 +125,7 @@ export async function removeCrateUser(
   crateName: string,
   userName: string
 ): Promise<ApiResult<void>> {
-  return apiDelete<void>(CRATE_USER(crateName, userName))
+  return apiDelete<void>(CRATE_ACL_USER(crateName, userName))
 }
 
 // Alias for consistency
@@ -138,7 +137,7 @@ export const deleteCrateUser = removeCrateUser
 export async function getCrateGroups(
   crateName: string
 ): Promise<ApiResult<CrateGroupsResponse>> {
-  return apiGet<CrateGroupsResponse>(CRATE_GROUPS(crateName), undefined, { noCache: true })
+  return apiGet<CrateGroupsResponse>(CRATE_ACL_GROUPS(crateName), undefined, { noCache: true })
 }
 
 /**
@@ -148,7 +147,7 @@ export async function addCrateGroup(
   crateName: string,
   groupName: string
 ): Promise<ApiResult<void>> {
-  return apiPut<void>(CRATE_GROUP(crateName, groupName), null, {
+  return apiPut<void>(CRATE_ACL_GROUP(crateName, groupName), null, {
     customErrors: {
       404: 'Group not found. Did you provide an existing group name?',
     },
@@ -162,7 +161,7 @@ export async function removeCrateGroup(
   crateName: string,
   groupName: string
 ): Promise<ApiResult<void>> {
-  return apiDelete<void>(CRATE_GROUP(crateName, groupName))
+  return apiDelete<void>(CRATE_ACL_GROUP(crateName, groupName))
 }
 
 // Alias for consistency
@@ -220,7 +219,7 @@ export const deleteCrateOwner = removeCrateOwner
 export async function getCrateAccessData(
   crateName: string
 ): Promise<ApiResult<CrateAccessDataResponse>> {
-  return apiGet<CrateAccessDataResponse>(CRATE_ACCESS_DATA(crateName), undefined, { noCache: true })
+  return apiGet<CrateAccessDataResponse>(CRATE_ACL(crateName), undefined, { noCache: true })
 }
 
 /**
@@ -231,7 +230,7 @@ export async function setCrateAccessData(
   downloadRestricted: boolean
 ): Promise<ApiResult<CrateAccessDataResponse>> {
   const data: CrateAccessDataRequest = { download_restricted: downloadRestricted }
-  return apiPut<CrateAccessDataResponse>(CRATE_ACCESS_DATA(crateName), data)
+  return apiPut<CrateAccessDataResponse>(CRATE_ACL(crateName), data)
 }
 
 // --- Documentation ---
@@ -243,7 +242,7 @@ export async function buildDocs(
   crateName: string,
   version: string
 ): Promise<ApiResult<void>> {
-  return apiPost<void>(DOCS_BUILD, null, { package: crateName, version })
+  return apiPost<void>(DOCS_BUILDS, null, { package: crateName, version })
 }
 
 /**
@@ -251,7 +250,7 @@ export async function buildDocs(
  */
 export async function getDocsQueue(): Promise<ApiResult<DocQueueItem[]>> {
   // Backend returns { queue: [...] }, we need to extract the array
-  const result = await apiGet<{ queue: DocQueueItem[] }>(DOCS_QUEUE, undefined, { noCache: true })
+  const result = await apiGet<{ queue: DocQueueItem[] }>(DOCS_BUILDS, undefined, { noCache: true })
   if (result.error) {
     return { data: null, error: result.error }
   }

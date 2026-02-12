@@ -1,21 +1,22 @@
-use axum::routing::{delete, get};
-use axum::{Router, middleware};
+use axum::middleware;
 use kellnr_appstate::AppStateData;
 use kellnr_web_ui::{session, ui};
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
 /// Creates the UI API routes (JSON endpoints used by the web frontend).
-pub fn create_routes(state: AppStateData) -> Router<AppStateData> {
-    Router::new()
-        .route("/version", get(ui::kellnr_version))
-        .route("/crates", get(ui::crates))
-        .route("/search", get(ui::search))
-        .route("/statistic", get(ui::statistic))
-        .route("/crate_data", get(ui::crate_data))
-        .route("/cratesio_data", get(ui::cratesio_data))
-        .route("/delete_version", delete(ui::delete_version))
-        .route("/delete_crate", delete(ui::delete_crate))
-        .route("/settings", get(ui::settings))
-        .route_layer(middleware::from_fn_with_state(
+pub fn create_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
+    OpenApiRouter::new()
+        .routes(routes!(ui::kellnr_version))
+        .routes(routes!(ui::crates))
+        .routes(routes!(ui::delete_crate_all))
+        .routes(routes!(ui::delete_crate_version))
+        .routes(routes!(ui::search))
+        .routes(routes!(ui::statistic))
+        .routes(routes!(ui::crate_data))
+        .routes(routes!(ui::cratesio_data))
+        .routes(routes!(ui::settings))
+        .layer(middleware::from_fn_with_state(
             state,
             session::session_auth_when_required,
         ))

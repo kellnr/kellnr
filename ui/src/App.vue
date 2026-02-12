@@ -89,6 +89,13 @@ onMounted(() => {
   }
 }
 
+/* Ensure main content has space for footer and stacks above bg */
+.v-main {
+  padding-bottom: 64px !important;
+  position: relative;
+  z-index: 1;
+}
+
 :root {
   --bg-image: url('');
 }

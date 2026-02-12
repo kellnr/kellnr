@@ -1,17 +1,16 @@
+use clap_serde_derive::ClapSerde;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
 #[serde(default)]
 pub struct Docs {
+    /// Enable documentation hosting
+    #[default(false)]
+    #[arg(id = "docs-enabled", long = "docs-enabled")]
     pub enabled: bool,
-    pub max_size: usize,
-}
 
-impl Default for Docs {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            max_size: 100,
-        }
-    }
+    /// Max docs size in MB
+    #[default(100)]
+    #[arg(id = "docs-max-size", long = "docs-max-size")]
+    pub max_size: usize,
 }
