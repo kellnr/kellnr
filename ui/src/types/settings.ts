@@ -2,6 +2,10 @@ export type Version = {
   version: string
 }
 
+export type DocsEnabled = {
+  enabled: boolean
+}
+
 export type ConfigSource = 'default' | 'toml' | 'env' | 'cli';
 
 export type SourceMap = Record<string, ConfigSource>;

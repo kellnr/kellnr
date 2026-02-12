@@ -270,12 +270,12 @@ async function getAllData() {
   const name = route.query.name?.toString() ?? "";
 
   if (name !== "") {
-    getCrateData(name, version);
+    await getCrateData(name, version);
   }
 
-  const settingsResult = await settingsService.getSettings();
-  if (isSuccess(settingsResult)) {
-    docsEnabled.value = settingsResult.data.docs.enabled;
+  const docsResult = await settingsService.getDocsEnabled();
+  if (isSuccess(docsResult)) {
+    docsEnabled.value = docsResult.data.enabled;
   }
 }
 

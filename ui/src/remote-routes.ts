@@ -41,6 +41,7 @@ export const CRATE_DELETE_VERSION = (name: string, version: string) =>
   `./api/v1/ui/crates/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
 export const VERSION = "./api/v1/ui/version";
 export const SETTINGS = "./api/v1/ui/settings";
+export const DOCS_ENABLED = "./api/v1/ui/docs_enabled";
 export const STATISTICS = "./api/v1/ui/statistics";
 export const SEARCH = "./api/v1/ui/search";
 

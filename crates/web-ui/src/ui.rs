@@ -50,6 +50,27 @@ pub async fn settings(
     }))
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
+pub struct DocsEnabledResponse {
+    pub enabled: bool,
+}
+
+/// Check if documentation generation is enabled
+#[utoipa::path(
+    get,
+    path = "/docs_enabled",
+    tag = "ui",
+    responses(
+        (status = 200, description = "Documentation generation status", body = DocsEnabledResponse)
+    )
+)]
+#[allow(clippy::unused_async)] // part of the router
+pub async fn docs_enabled(State(settings): SettingsState) -> Json<DocsEnabledResponse> {
+    Json(DocsEnabledResponse {
+        enabled: settings.docs.enabled,
+    })
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct KellnrVersion {
     pub version: String,
@@ -586,6 +607,65 @@ mod tests {
         assert_eq!(result_response.settings, expected_state);
         // Verify that sources are present in the response
         assert!(result_response.sources.contains_key("registry.data_dir"));
+    }
+
+    #[tokio::test]
+    async fn docs_enabled_no_auth_returns_ok() {
+        let mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(Request::get("/docs_enabled").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn docs_enabled_returns_false_by_default() {
+        let mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(Request::get("/docs_enabled").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+        let result_status = r.status();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let result = serde_json::from_slice::<DocsEnabledResponse>(&result_msg).unwrap();
+
+        assert_eq!(StatusCode::OK, result_status);
+        assert!(!result.enabled);
+    }
+
+    #[tokio::test]
+    async fn docs_enabled_returns_true_when_enabled() {
+        let mock_db = MockDb::new();
+        let (mut settings, storage) = test_deps();
+        settings.docs.enabled = true;
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(Request::get("/docs_enabled").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+        let result_status = r.status();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let result = serde_json::from_slice::<DocsEnabledResponse>(&result_msg).unwrap();
+
+        assert_eq!(StatusCode::OK, result_status);
+        assert!(result.enabled);
     }
 
     #[tokio::test]
@@ -1390,6 +1470,7 @@ mod tests {
             .route("/build", post(build_rustdoc))
             .route("/cratesio_data", get(cratesio_data))
             .route("/settings", get(crate::ui::settings))
+            .route("/docs_enabled", get(docs_enabled))
             .with_state(AppStateData {
                 db: Arc::new(mock_db),
                 signing_key: Key::from(TEST_KEY),

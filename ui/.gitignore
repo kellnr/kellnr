@@ -13,6 +13,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Build cache
+*.tsbuildinfo
+
 # Editor directories and files
 .idea
 .vscode
