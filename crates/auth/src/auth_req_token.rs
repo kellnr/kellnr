@@ -216,6 +216,7 @@ mod test {
                     salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
+                    created: String::new(),
                 })
             });
         mock_db
@@ -223,14 +224,11 @@ mod test {
             .with(eq("wrong_token"))
             .returning(move |_| Err(DbError::UserNotFound("user".to_string())));
 
-        println!("settings: {:?}", settings.registry);
         let state = AppStateData {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
             ..kellnr_appstate::test_state()
         };
-
-        println!("Appstate registry: {:?}", state.settings.registry);
 
         Router::new()
             .route("/test", get(test_auth_req_token))

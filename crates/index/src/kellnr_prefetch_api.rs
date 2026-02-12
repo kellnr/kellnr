@@ -11,11 +11,42 @@ use kellnr_db::DbProvider;
 
 use super::config_json::ConfigJson;
 
+/// Get registry configuration
+///
+/// Returns the configuration JSON for the Kellnr registry index.
+#[utoipa::path(
+    get,
+    path = "/config.json",
+    tag = "crates",
+    responses(
+        (status = 200, description = "Registry configuration")
+    ),
+    security(("cargo_token" = []))
+)]
 #[allow(clippy::unused_async)] // part of the router
 pub async fn config_kellnr(State(settings): SettingsState) -> Json<ConfigJson> {
     Json(ConfigJson::from((&(*settings), "crates", true)))
 }
 
+/// Prefetch crate index data
+///
+/// Returns sparse index data for a crate (3+ character names).
+#[utoipa::path(
+    get,
+    path = "/{a}/{b}/{package}",
+    tag = "crates",
+    params(
+        ("a" = String, Path, description = "First path segment"),
+        ("b" = String, Path, description = "Second path segment"),
+        ("package" = String, Path, description = "Package name")
+    ),
+    responses(
+        (status = 200, description = "Crate index data"),
+        (status = 304, description = "Not modified"),
+        (status = 404, description = "Crate not found")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn prefetch_kellnr(
     Path((_a, _b, package)): Path<(String, String, OriginalName)>,
     headers: HeaderMap,
@@ -25,6 +56,24 @@ pub async fn prefetch_kellnr(
     internal_kellnr_prefetch(&index_name, &headers, &db).await
 }
 
+/// Prefetch crate index data for short names
+///
+/// Returns sparse index data for a crate (1-2 character names).
+#[utoipa::path(
+    get,
+    path = "/{a}/{package}",
+    tag = "crates",
+    params(
+        ("a" = String, Path, description = "First path segment"),
+        ("package" = String, Path, description = "Package name")
+    ),
+    responses(
+        (status = 200, description = "Crate index data"),
+        (status = 304, description = "Not modified"),
+        (status = 404, description = "Crate not found")
+    ),
+    security(("cargo_token" = []))
+)]
 pub async fn prefetch_len2_kellnr(
     Path((_a, package)): Path<(String, OriginalName)>,
     headers: HeaderMap,

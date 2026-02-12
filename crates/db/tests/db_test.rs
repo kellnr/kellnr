@@ -14,7 +14,7 @@ use kellnr_common::webhook::{Webhook, WebhookEvent};
 use kellnr_db::password::hash_pwd;
 use kellnr_db::provider::PrefetchState;
 use kellnr_db::test_utils::*;
-use kellnr_db::{DbProvider, DocQueueEntry, User};
+use kellnr_db::{DbProvider, DocQueueEntry};
 use kellnr_db_testcontainer::db_test;
 use serde_json::json;
 mod image;
@@ -855,16 +855,15 @@ async fn add_user_works(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    let expected = User {
-        id: 2,
-        name: "user".to_owned(),
-        pwd: hash_pwd("pwd", "salt"),
-        salt: "salt".to_owned(),
-        is_admin: false,
-        is_read_only: false,
-    };
     let user = test_db.get_user("user").await.unwrap();
-    assert_eq!(expected, user);
+    // Compare fields individually since created is dynamic
+    assert_eq!(2, user.id);
+    assert_eq!("user", user.name);
+    assert_eq!(hash_pwd("pwd", "salt"), user.pwd);
+    assert_eq!("salt", user.salt);
+    assert!(!user.is_admin);
+    assert!(!user.is_read_only);
+    assert!(!user.created.is_empty());
 }
 
 #[db_test]

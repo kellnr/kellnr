@@ -20,11 +20,13 @@ kellnr-settings.workspace = true
 # External dependencies from crates.io
 chrono.workspace = true
 mockall.workspace = true
+utoipa.workspace = true
 sea-orm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha256.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 rm_rf.workspace = true

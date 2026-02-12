@@ -1,6 +1,6 @@
 use sea_orm_migration::prelude::*;
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum UserIden {
     #[iden = "user"]
     Table,
@@ -10,9 +10,10 @@ pub enum UserIden {
     Salt,
     IsAdmin,
     IsReadOnly,
+    Created,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum SessionIden {
     #[iden = "session"]
     Table,
@@ -23,7 +24,7 @@ pub enum SessionIden {
     UserFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateIden {
     #[iden = "krate"]
     Table,
@@ -40,7 +41,7 @@ pub enum CrateIden {
     RestrictedDownload,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateMetaIden {
     #[iden = "crate_meta"]
     Table,
@@ -56,7 +57,7 @@ pub enum CrateMetaIden {
     CrateFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum OwnerIden {
     #[iden = "owner"]
     Table,
@@ -67,7 +68,7 @@ pub enum OwnerIden {
     UserFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateUserIden {
     #[iden = "crate_user"]
     Table,
@@ -78,7 +79,7 @@ pub enum CrateUserIden {
     UserFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum AuthTokenIden {
     #[iden = "auth_token"]
     Table,
@@ -89,7 +90,7 @@ pub enum AuthTokenIden {
     UserFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum DocQueueIden {
     #[iden = "doc_queue"]
     Table,
@@ -98,7 +99,7 @@ pub enum DocQueueIden {
     Version,
     Path,
 }
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateAuthorIden {
     #[iden = "crate_author"]
     Table,
@@ -106,7 +107,7 @@ pub enum CrateAuthorIden {
     Author,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateAuthorToCrateIden {
     #[iden = "crate_author_to_crate"]
     Table,
@@ -115,7 +116,7 @@ pub enum CrateAuthorToCrateIden {
     CrateFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateKeywordIden {
     #[iden = "crate_keyword"]
     Table,
@@ -123,7 +124,7 @@ pub enum CrateKeywordIden {
     Keyword,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateKeywordToCrateIden {
     #[iden = "crate_keyword_to_crate"]
     Table,
@@ -132,7 +133,7 @@ pub enum CrateKeywordToCrateIden {
     CrateFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateCategory {
     #[iden = "crate_category"]
     Table,
@@ -140,7 +141,7 @@ pub enum CrateCategory {
     Category,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateCategoryToCrateIden {
     #[iden = "crate_category_to_crate"]
     Table,
@@ -149,7 +150,7 @@ pub enum CrateCategoryToCrateIden {
     CrateFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateIndexIden {
     #[iden = "crate_index"]
     Table,
@@ -164,7 +165,7 @@ pub enum CrateIndexIden {
     CrateFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CratesIoIden {
     #[iden = "cratesio_crate"]
     Table,
@@ -178,7 +179,7 @@ pub enum CratesIoIden {
     MaxVersion,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CratesIoIndexIden {
     #[iden = "cratesio_index"]
     Table,
@@ -193,7 +194,7 @@ pub enum CratesIoIndexIden {
     CratesIoFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CratesIoMetaIden {
     #[iden = "cratesio_meta"]
     Table,
@@ -204,7 +205,7 @@ pub enum CratesIoMetaIden {
     Documentation,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum GroupIden {
     #[iden = "group"]
     Table,
@@ -212,7 +213,7 @@ pub enum GroupIden {
     Name,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum GroupUserIden {
     #[iden = "group_user"]
     Table,
@@ -223,7 +224,7 @@ pub enum GroupUserIden {
     UserFk,
 }
 
-#[derive(Iden)]
+#[derive(Iden, Copy, Clone)]
 pub enum CrateGroupIden {
     #[iden = "crate_group"]
     Table,
@@ -232,4 +233,53 @@ pub enum CrateGroupIden {
     CrateFk,
     #[iden = "group_fk"]
     GroupFk,
+}
+
+#[derive(Iden, Copy, Clone)]
+pub enum OAuth2IdentityIden {
+    #[iden = "oauth2_identity"]
+    Table,
+    Id,
+    #[iden = "user_fk"]
+    UserFk,
+    ProviderIssuer,
+    Subject,
+    Email,
+    Created,
+}
+
+#[derive(Iden, Copy, Clone)]
+pub enum OAuth2StateIden {
+    #[iden = "oauth2_state"]
+    Table,
+    Id,
+    State,
+    PkceVerifier,
+    Nonce,
+    Created,
+}
+
+#[derive(Iden, Copy, Clone)]
+pub enum ToolchainIden {
+    #[iden = "toolchain"]
+    Table,
+    Id,
+    Name,
+    Version,
+    Date,
+    Channel,
+    Created,
+}
+
+#[derive(Iden, Copy, Clone)]
+pub enum ToolchainTargetIden {
+    #[iden = "toolchain_target"]
+    Table,
+    Id,
+    #[iden = "toolchain_fk"]
+    ToolchainFk,
+    Target,
+    StoragePath,
+    Hash,
+    Size,
 }

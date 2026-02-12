@@ -4,486 +4,71 @@
     <div class="section-header">
       <v-icon icon="mdi-tune" size="small" color="primary" class="me-3"></v-icon>
       <span class="text-h6 font-weight-bold">Startup Configuration</span>
-      <span class="section-count">8 sections</span>
+      <span v-if="totalConfigured > 0" class="section-count configured">{{ totalConfigured }}/{{ totalSettings }} configured</span>
+      <span class="section-count">{{ visibleSectionsCount }} sections</span>
     </div>
 
     <!-- Content -->
     <div class="section-content">
-      <p class="text-body-2 text-medium-emphasis mb-5">
+      <p class="text-body-2 text-medium-emphasis mb-4">
         Configuration values are set on application startup and cannot be changed at runtime.
         See the <a href="https://kellnr.io/documentation" class="text-primary font-weight-medium">Kellnr Documentation</a> for details.
       </p>
 
+      <ConfigToolbar
+        v-model:filter-active="showOnlyConfigured"
+        @expand-all="expandAll"
+        @collapse-all="collapseAll"
+      />
+
       <!-- Config Sections -->
-      <v-expansion-panels variant="accordion" class="config-panels">
-        <!-- Registry Section -->
-        <v-expansion-panel>
+      <v-expansion-panels v-model="expandedPanels" multiple class="config-panels">
+        <v-expansion-panel
+          v-for="section in sections"
+          :key="section.key"
+          v-show="isSectionVisible(section.key)"
+        >
           <v-expansion-panel-title class="panel-title">
             <div class="panel-header">
               <div class="panel-icon-wrapper">
-                <v-icon icon="mdi-package-variant-closed" size="small"></v-icon>
+                <v-icon :icon="section.icon" size="small"></v-icon>
               </div>
-              <span class="text-body-1 font-weight-medium">Registry</span>
-              <v-chip size="x-small" class="ms-2" color="primary" variant="tonal">14 settings</v-chip>
-            </div>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <div class="config-list">
-              <div class="config-row">
-                <div class="config-label">Data Directory</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.data_dir) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.data_dir</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__DATA_DIR</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Session Age (seconds)</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.session_age_seconds) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.session_age_seconds</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__SESSION_AGE_SECONDS</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Cache Size</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.cache_size) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.cache_size</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__CACHE_SIZE</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Max Crate Size</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.max_crate_size) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.max_crate_size</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__MAX_CRATE_SIZE</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Max DB Connections</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.max_db_connections) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.max_db_connections</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__MAX_DB_CONNECTIONS</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Auth Required</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.registry.auth_required ? 'enabled' : 'disabled']">{{ settings.registry.auth_required ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.auth_required</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__AUTH_REQUIRED</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Required Crate Fields</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.required_crate_fields) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.required_crate_fields</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__REQUIRED_CRATE_FIELDS</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">New Crates Restricted</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.registry.new_crates_restricted ? 'enabled' : 'disabled']">{{ settings.registry.new_crates_restricted ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.new_crates_restricted</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__NEW_CRATES_RESTRICTED</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Allow Ownerless Crates</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.registry.allow_ownerless_crates ? 'enabled' : 'disabled']">{{ settings.registry.allow_ownerless_crates ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.allow_ownerless_crates</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__ALLOW_OWNERLESS_CRATES</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Token Cache Enabled</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.registry.token_cache_enabled ? 'enabled' : 'disabled']">{{ settings.registry.token_cache_enabled ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.token_cache_enabled</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__TOKEN_CACHE_ENABLED</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Token Cache TTL (seconds)</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.token_cache_ttl_seconds) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.token_cache_ttl_seconds</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__TOKEN_CACHE_TTL_SECONDS</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Token Cache Max Capacity</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.token_cache_max_capacity) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.token_cache_max_capacity</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__TOKEN_CACHE_MAX_CAPACITY</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Token DB Retry Count</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.token_db_retry_count) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.token_db_retry_count</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__TOKEN_DB_RETRY_COUNT</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Token DB Retry Delay (ms)</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.registry.token_db_retry_delay_ms) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">registry.token_db_retry_delay_ms</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_REGISTRY__TOKEN_DB_RETRY_DELAY_MS</code></div>
-                </div>
-              </div>
-            </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-
-        <!-- Local Section -->
-        <v-expansion-panel>
-          <v-expansion-panel-title class="panel-title">
-            <div class="panel-header">
-              <div class="panel-icon-wrapper">
-                <v-icon icon="mdi-server" size="small"></v-icon>
-              </div>
-              <span class="text-body-1 font-weight-medium">Local</span>
-              <v-chip size="x-small" class="ms-2" color="primary" variant="tonal">2 settings</v-chip>
-            </div>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <div class="config-list">
-              <div class="config-row">
-                <div class="config-label">IP</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.local.ip) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">local.ip</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_LOCAL__IP</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Port</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.local.port) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">local.port</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_LOCAL__PORT</code></div>
-                </div>
-              </div>
-            </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-
-        <!-- Origin Section -->
-        <v-expansion-panel>
-          <v-expansion-panel-title class="panel-title">
-            <div class="panel-header">
-              <div class="panel-icon-wrapper">
-                <v-icon icon="mdi-earth" size="small"></v-icon>
-              </div>
-              <span class="text-body-1 font-weight-medium">Origin</span>
-              <v-chip size="x-small" class="ms-2" color="primary" variant="tonal">4 settings</v-chip>
-            </div>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <div class="config-list">
-              <div class="config-row">
-                <div class="config-label">Hostname</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.origin.hostname) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">origin.hostname</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_ORIGIN__HOSTNAME</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Port</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.origin.port) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">origin.port</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_ORIGIN__PORT</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Protocol</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.origin.protocol) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">origin.protocol</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_ORIGIN__PROTOCOL</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Path</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.origin.path) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">origin.path</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_ORIGIN__PATH</code></div>
-                </div>
-              </div>
-            </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-
-        <!-- Log Section -->
-        <v-expansion-panel>
-          <v-expansion-panel-title class="panel-title">
-            <div class="panel-header">
-              <div class="panel-icon-wrapper">
-                <v-icon icon="mdi-file-document-outline" size="small"></v-icon>
-              </div>
-              <span class="text-body-1 font-weight-medium">Log</span>
-              <v-chip size="x-small" class="ms-2" color="primary" variant="tonal">3 settings</v-chip>
-            </div>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <div class="config-list">
-              <div class="config-row">
-                <div class="config-label">Level</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.log.level) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">log.level</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_LOG__LEVEL</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Format</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.log.format) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">log.format</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_LOG__FORMAT</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Level Web Server</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.log.level_web_server) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">log.level_web_server</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_LOG__LEVEL_WEB_SERVER</code></div>
-                </div>
-              </div>
-            </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-
-        <!-- Proxy Section -->
-        <v-expansion-panel>
-          <v-expansion-panel-title class="panel-title">
-            <div class="panel-header">
-              <div class="panel-icon-wrapper">
-                <v-icon icon="mdi-transit-connection-variant" size="small"></v-icon>
-              </div>
-              <span class="text-body-1 font-weight-medium">Proxy</span>
-              <v-chip size="x-small" class="ms-2" :color="settings.proxy.enabled ? 'success' : 'default'" variant="tonal">
-                {{ settings.proxy.enabled ? 'Enabled' : 'Disabled' }}
+              <span class="text-body-1 font-weight-medium">{{ section.title }}</span>
+              <v-chip
+                v-if="section.hasEnabledToggle"
+                size="x-small"
+                class="ms-2"
+                :color="getSettingValue(section.key + '.enabled') ? 'success' : 'default'"
+                variant="tonal"
+              >
+                {{ getSettingValue(section.key + '.enabled') ? 'Enabled' : 'Disabled' }}
+              </v-chip>
+              <v-chip
+                size="x-small"
+                class="ms-2"
+                :color="configuredCounts[section.key] > 0 ? 'success' : 'primary'"
+                variant="tonal"
+              >
+                {{ badgeText(section.key) }}
               </v-chip>
             </div>
           </v-expansion-panel-title>
           <v-expansion-panel-text>
             <div class="config-list">
-              <div class="config-row">
-                <div class="config-label">Enabled</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.proxy.enabled ? 'enabled' : 'disabled']">{{ settings.proxy.enabled ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">proxy.enabled</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_PROXY__ENABLED</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Number of Threads</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.proxy.num_threads) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">proxy.num_threads</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_PROXY__NUM_THREADS</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Download on Update</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.proxy.download_on_update ? 'enabled' : 'disabled']">{{ settings.proxy.download_on_update ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">proxy.download_on_update</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_PROXY__DOWNLOAD_ON_UPDATE</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">URL</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.proxy.url) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">proxy.url</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_PROXY__URL</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Index URL</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.proxy.index) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">proxy.index</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_PROXY__INDEX</code></div>
-                </div>
-              </div>
-            </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-
-        <!-- Docs Section -->
-        <v-expansion-panel>
-          <v-expansion-panel-title class="panel-title">
-            <div class="panel-header">
-              <div class="panel-icon-wrapper">
-                <v-icon icon="mdi-file-document-multiple-outline" size="small"></v-icon>
-              </div>
-              <span class="text-body-1 font-weight-medium">Docs</span>
-              <v-chip size="x-small" class="ms-2" :color="settings.docs.enabled ? 'success' : 'default'" variant="tonal">
-                {{ settings.docs.enabled ? 'Enabled' : 'Disabled' }}
-              </v-chip>
-            </div>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <div class="config-list">
-              <div class="config-row">
-                <div class="config-label">Enabled</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.docs.enabled ? 'enabled' : 'disabled']">{{ settings.docs.enabled ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">docs.enabled</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_DOCS__ENABLED</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Max Size</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.docs.max_size) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">docs.max_size</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_DOCS__MAX_SIZE</code></div>
-                </div>
-              </div>
-            </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-
-        <!-- PostgreSQL Section -->
-        <v-expansion-panel>
-          <v-expansion-panel-title class="panel-title">
-            <div class="panel-header">
-              <div class="panel-icon-wrapper">
-                <v-icon icon="mdi-database" size="small"></v-icon>
-              </div>
-              <span class="text-body-1 font-weight-medium">PostgreSQL</span>
-              <v-chip size="x-small" class="ms-2" :color="settings.postgresql.enabled ? 'success' : 'default'" variant="tonal">
-                {{ settings.postgresql.enabled ? 'Enabled' : 'Disabled' }}
-              </v-chip>
-            </div>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <div class="config-list">
-              <div class="config-row">
-                <div class="config-label">Enabled</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.postgresql.enabled ? 'enabled' : 'disabled']">{{ settings.postgresql.enabled ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">postgresql.enabled</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_POSTGRESQL__ENABLED</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Address</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.postgresql.address) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">postgresql.address</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_POSTGRESQL__ADDRESS</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Port</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.postgresql.port) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">postgresql.port</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_POSTGRESQL__PORT</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Database</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.postgresql.db) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">postgresql.db</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_POSTGRESQL__DB</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">User</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.postgresql.user) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">postgresql.user</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_POSTGRESQL__USER</code></div>
-                </div>
-              </div>
-            </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-
-        <!-- S3 Section -->
-        <v-expansion-panel>
-          <v-expansion-panel-title class="panel-title">
-            <div class="panel-header">
-              <div class="panel-icon-wrapper">
-                <v-icon icon="mdi-cloud-outline" size="small"></v-icon>
-              </div>
-              <span class="text-body-1 font-weight-medium">S3 Storage</span>
-              <v-chip size="x-small" class="ms-2" :color="settings.s3.enabled ? 'success' : 'default'" variant="tonal">
-                {{ settings.s3.enabled ? 'Enabled' : 'Disabled' }}
-              </v-chip>
-            </div>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <div class="config-list">
-              <div class="config-row">
-                <div class="config-label">Enabled</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.s3.enabled ? 'enabled' : 'disabled']">{{ settings.s3.enabled ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.enabled</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__ENABLED</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Access Key</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.s3.access_key) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.access_key</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__ACCESS_KEY</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Secret Key</div>
-                <div class="config-value-cell"><span class="value-text secret">{{ settings.s3.secret_key ? '********' : '-' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.secret_key</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__SECRET_KEY</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Region</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.s3.region) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.region</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__REGION</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Endpoint</div>
-                <div class="config-value-cell"><span class="value-text">{{ formatValue(settings.s3.endpoint) }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.endpoint</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__ENDPOINT</code></div>
-                </div>
-              </div>
-              <div class="config-row">
-                <div class="config-label">Allow HTTP</div>
-                <div class="config-value-cell"><span :class="['boolean-badge', settings.s3.allow_http ? 'warning' : 'disabled']">{{ settings.s3.allow_http ? 'true' : 'false' }}</span></div>
-                <div class="config-refs">
-                  <div class="config-ref"><span class="ref-badge toml">TOML</span><code class="ref-value">s3.allow_http</code></div>
-                  <div class="config-ref"><span class="ref-badge env">ENV</span><code class="ref-value">KELLNR_S3__ALLOW_HTTP</code></div>
-                </div>
-              </div>
+              <ConfigRow
+                v-for="item in section.items"
+                :key="item.key"
+                :config-key="item.key"
+                :label="item.label"
+                :value="getSettingValue(item.key)"
+                :default-value="getDefaultValue(item.key)"
+                :source="getSource(item.key)"
+                :type="item.type"
+                :cli="item.cli"
+                :secret="item.secret"
+                :warning-when-true="item.warningWhenTrue"
+                :show-only-configured="showOnlyConfigured"
+              />
             </div>
           </v-expansion-panel-text>
         </v-expansion-panel>
@@ -493,31 +78,226 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, ref } from "vue";
+import { onBeforeMount, ref, computed } from "vue";
 import { emptySettings } from "../types/settings";
-import type { Settings } from "../types/settings";
+import type { Settings, ConfigSource } from "../types/settings";
 import { settingsService } from "../services";
 import { isSuccess } from "../services/api";
+import ConfigRow from "./ConfigRow.vue";
+import ConfigToolbar from "./ConfigToolbar.vue";
+
+// Types for config schema
+interface ConfigItem {
+  key: string;
+  label: string;
+  type?: 'boolean' | 'string' | 'number' | 'array';
+  cli?: string;
+  secret?: boolean;
+  warningWhenTrue?: boolean;
+}
+
+interface ConfigSection {
+  key: string;
+  title: string;
+  icon: string;
+  hasEnabledToggle?: boolean;
+  items: ConfigItem[];
+}
+
+// Configuration schema
+const sections: ConfigSection[] = [
+  {
+    key: 'registry',
+    title: 'Registry',
+    icon: 'mdi-package-variant-closed',
+    items: [
+      { key: 'registry.data_dir', label: 'Data Directory', cli: '--registry-data-dir, -d' },
+      { key: 'registry.session_age_seconds', label: 'Session Age (seconds)', cli: '--registry-session-age' },
+      { key: 'registry.cache_size', label: 'Cache Size', cli: '--registry-cache-size' },
+      { key: 'registry.max_crate_size', label: 'Max Crate Size', cli: '--registry-max-crate-size' },
+      { key: 'registry.max_db_connections', label: 'Max DB Connections', cli: '--registry-max-db-connections' },
+      { key: 'registry.auth_required', label: 'Auth Required', type: 'boolean', cli: '--registry-auth-required' },
+      { key: 'registry.required_crate_fields', label: 'Required Crate Fields', type: 'array', cli: '--registry-required-crate-fields' },
+      { key: 'registry.new_crates_restricted', label: 'New Crates Restricted', type: 'boolean', cli: '--registry-new-crates-restricted' },
+      { key: 'registry.cookie_signing_key', label: 'Cookie Signing Key', secret: true, cli: '--registry-cookie-signing-key' },
+      { key: 'registry.allow_ownerless_crates', label: 'Allow Ownerless Crates', type: 'boolean', cli: '--registry-allow-ownerless-crates' },
+      { key: 'registry.token_cache_enabled', label: 'Token Cache Enabled', type: 'boolean', cli: '--registry-token-cache-enabled' },
+      { key: 'registry.token_cache_ttl_seconds', label: 'Token Cache TTL (seconds)', cli: '--registry-token-cache-ttl' },
+      { key: 'registry.token_cache_max_capacity', label: 'Token Cache Max Capacity', cli: '--registry-token-cache-max-capacity' },
+      { key: 'registry.token_db_retry_count', label: 'Token DB Retry Count', cli: '--registry-token-db-retry-count' },
+      { key: 'registry.token_db_retry_delay_ms', label: 'Token DB Retry Delay (ms)', cli: '--registry-token-db-retry-delay' },
+    ]
+  },
+  {
+    key: 'local',
+    title: 'Local',
+    icon: 'mdi-server',
+    items: [
+      { key: 'local.ip', label: 'IP', cli: '--local-ip' },
+      { key: 'local.port', label: 'Port', cli: '--local-port, -p' },
+    ]
+  },
+  {
+    key: 'origin',
+    title: 'Origin',
+    icon: 'mdi-earth',
+    items: [
+      { key: 'origin.hostname', label: 'Hostname', cli: '--origin-hostname' },
+      { key: 'origin.port', label: 'Port', cli: '--origin-port' },
+      { key: 'origin.protocol', label: 'Protocol' },
+      { key: 'origin.path', label: 'Path', cli: '--origin-path' },
+    ]
+  },
+  {
+    key: 'log',
+    title: 'Log',
+    icon: 'mdi-file-document-outline',
+    items: [
+      { key: 'log.level', label: 'Level', cli: '--log-level, -l' },
+      { key: 'log.format', label: 'Format', cli: '--log-format' },
+      { key: 'log.level_web_server', label: 'Level Web Server', cli: '--log-level-web-server' },
+    ]
+  },
+  {
+    key: 'proxy',
+    title: 'Proxy',
+    icon: 'mdi-transit-connection-variant',
+    hasEnabledToggle: true,
+    items: [
+      { key: 'proxy.enabled', label: 'Enabled', type: 'boolean', cli: '--proxy-enabled' },
+      { key: 'proxy.num_threads', label: 'Number of Threads', cli: '--proxy-num-threads' },
+      { key: 'proxy.download_on_update', label: 'Download on Update', type: 'boolean', cli: '--proxy-download-on-update' },
+      { key: 'proxy.url', label: 'URL', cli: '--proxy-url' },
+      { key: 'proxy.index', label: 'Index URL', cli: '--proxy-index' },
+    ]
+  },
+  {
+    key: 'docs',
+    title: 'Docs',
+    icon: 'mdi-file-document-multiple-outline',
+    hasEnabledToggle: true,
+    items: [
+      { key: 'docs.enabled', label: 'Enabled', type: 'boolean', cli: '--docs-enabled' },
+      { key: 'docs.max_size', label: 'Max Size', cli: '--docs-max-size' },
+    ]
+  },
+  {
+    key: 'postgresql',
+    title: 'PostgreSQL',
+    icon: 'mdi-database',
+    hasEnabledToggle: true,
+    items: [
+      { key: 'postgresql.enabled', label: 'Enabled', type: 'boolean', cli: '--postgresql-enabled' },
+      { key: 'postgresql.address', label: 'Address', cli: '--postgresql-address' },
+      { key: 'postgresql.port', label: 'Port', cli: '--postgresql-port' },
+      { key: 'postgresql.db', label: 'Database', cli: '--postgresql-db' },
+      { key: 'postgresql.user', label: 'User', cli: '--postgresql-user' },
+    ]
+  },
+  {
+    key: 's3',
+    title: 'S3 Storage',
+    icon: 'mdi-cloud-outline',
+    hasEnabledToggle: true,
+    items: [
+      { key: 's3.enabled', label: 'Enabled', type: 'boolean', cli: '--s3-enabled' },
+      { key: 's3.access_key', label: 'Access Key', cli: '--s3-access-key' },
+      { key: 's3.secret_key', label: 'Secret Key', secret: true, cli: '--s3-secret-key' },
+      { key: 's3.region', label: 'Region', cli: '--s3-region' },
+      { key: 's3.endpoint', label: 'Endpoint', cli: '--s3-endpoint' },
+      { key: 's3.allow_http', label: 'Allow HTTP', type: 'boolean', warningWhenTrue: true, cli: '--s3-allow-http' },
+      { key: 's3.crates_bucket', label: 'Crates Bucket', cli: '--s3-crates-bucket' },
+      { key: 's3.cratesio_bucket', label: 'Crates.io Bucket', cli: '--s3-cratesio-bucket' },
+      { key: 's3.toolchain_bucket', label: 'Toolchain Bucket', cli: '--s3-toolchain-bucket' },
+    ]
+  },
+  {
+    key: 'toolchain',
+    title: 'Toolchain',
+    icon: 'mdi-wrench',
+    hasEnabledToggle: true,
+    items: [
+      { key: 'toolchain.enabled', label: 'Enabled', type: 'boolean', cli: '--toolchain-enabled' },
+      { key: 'toolchain.max_size', label: 'Max Size (MB)', cli: '--toolchain-max-size' },
+    ]
+  },
+];
 
 const settings = ref<Settings>(emptySettings);
+const showOnlyConfigured = ref(false);
+const expandedPanels = ref<number[]>([]);
 
-onBeforeMount(() => {
-  getStartupConfig();
+// Computed properties
+const configuredCounts = computed(() => {
+  const counts: Record<string, number> = {};
+  for (const section of sections) {
+    counts[section.key] = section.items.filter(item => getSource(item.key) !== 'default').length;
+  }
+  return counts;
 });
 
-async function getStartupConfig() {
+const totalConfigured = computed(() => Object.values(configuredCounts.value).reduce((sum, n) => sum + n, 0));
+const totalSettings = computed(() => sections.reduce((sum, s) => sum + s.items.length, 0));
+const visibleSectionsCount = computed(() => {
+  if (!showOnlyConfigured.value) return sections.length;
+  return sections.filter(s => configuredCounts.value[s.key] > 0).length;
+});
+
+// Helper functions
+function getSettingValue(key: string): unknown {
+  const [section, field] = key.split('.');
+  const sectionObj = settings.value[section as keyof Settings];
+  if (!sectionObj || typeof sectionObj !== 'object') return undefined;
+  return (sectionObj as Record<string, unknown>)[field];
+}
+
+function getDefaultValue(key: string): unknown {
+  if (!settings.value.defaults) return undefined;
+  const [section, field] = key.split('.');
+  const sectionObj = settings.value.defaults[section as keyof typeof settings.value.defaults];
+  if (!sectionObj || typeof sectionObj !== 'object') return undefined;
+  return (sectionObj as Record<string, unknown>)[field];
+}
+
+function getSource(key: string): ConfigSource {
+  return settings.value.sources[key] || 'default';
+}
+
+function isSectionVisible(sectionKey: string): boolean {
+  if (!showOnlyConfigured.value) return true;
+  return configuredCounts.value[sectionKey] > 0;
+}
+
+function badgeText(sectionKey: string): string {
+  const section = sections.find(s => s.key === sectionKey);
+  if (!section) return '';
+  const configured = configuredCounts.value[sectionKey];
+  const total = section.items.length;
+  return configured > 0 ? `${configured}/${total} configured` : `${total} settings`;
+}
+
+// Expand/collapse
+const visibleSectionIndices = computed(() =>
+  sections
+    .map((s, i) => ({ key: s.key, index: i }))
+    .filter(({ key }) => isSectionVisible(key))
+    .map(({ index }) => index)
+);
+
+function expandAll() {
+  expandedPanels.value = [...visibleSectionIndices.value];
+}
+
+function collapseAll() {
+  expandedPanels.value = [];
+}
+
+onBeforeMount(async () => {
   const result = await settingsService.getSettings();
   if (isSuccess(result)) {
     settings.value = result.data;
   }
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) return '-';
-  if (typeof value === 'boolean') return value ? 'true' : 'false';
-  if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : '-';
-  return String(value) || '-';
-}
+});
 </script>
 
 <style scoped>
@@ -530,7 +310,7 @@ function formatValue(value: unknown): string {
 }
 
 .section-count {
-  margin-left: auto;
+  margin-left: 8px;
   background: rgb(var(--v-theme-primary));
   color: rgb(var(--v-theme-on-primary));
   font-size: 12px;
@@ -539,11 +319,19 @@ function formatValue(value: unknown): string {
   border-radius: 12px;
 }
 
+.section-count:first-of-type {
+  margin-left: auto;
+}
+
+.section-count.configured {
+  background: rgb(var(--v-theme-success));
+  color: rgb(var(--v-theme-on-success));
+}
+
 .section-content {
   padding: 24px;
 }
 
-/* Panel Styling */
 .config-panels {
   display: flex;
   flex-direction: column;
@@ -586,133 +374,9 @@ function formatValue(value: unknown): string {
   margin-right: 12px;
 }
 
-/* Config List */
 .config-list {
   display: flex;
   flex-direction: column;
-}
-
-.config-row {
-  display: grid;
-  grid-template-columns: 200px 160px 1fr;
-  gap: 16px;
-  align-items: start;
-  padding: 12px 0;
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
-}
-
-.config-row:last-child {
-  border-bottom: none;
-}
-
-.config-label {
-  font-weight: 500;
-  font-size: 14px;
-  color: rgb(var(--v-theme-on-surface));
-}
-
-.config-value-cell {
-  display: flex;
-  align-items: center;
-}
-
-.value-text {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 13px;
-  background: rgba(var(--v-theme-primary), 0.08);
-  color: rgb(var(--v-theme-on-surface));
-  padding: 4px 8px;
-  border-radius: 4px;
-  word-break: break-all;
-}
-
-.value-text.secret {
-  letter-spacing: 2px;
-}
-
-.boolean-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.boolean-badge.enabled {
-  background: rgba(var(--v-theme-success), 0.15);
-  color: rgb(var(--v-theme-success));
-}
-
-.boolean-badge.disabled {
-  background: rgba(var(--v-theme-on-surface), 0.08);
-  color: rgb(var(--v-theme-on-surface-variant));
-}
-
-.boolean-badge.warning {
-  background: rgba(var(--v-theme-warning), 0.15);
-  color: rgb(var(--v-theme-warning));
-}
-
-.config-refs {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.config-ref {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ref-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 42px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.ref-badge.toml {
-  background: rgba(103, 58, 183, 0.15);
-  color: #7c4dff;
-}
-
-.ref-badge.env {
-  background: rgba(0, 150, 136, 0.15);
-  color: #00bfa5;
-}
-
-.ref-value {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 12px;
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: rgb(var(--v-theme-on-surface-variant));
-}
-
-/* Responsive */
-@media (max-width: 960px) {
-  .config-row {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .config-label {
-    font-weight: 600;
-  }
-
-  .config-refs {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
 }
 
 @media (max-width: 600px) {

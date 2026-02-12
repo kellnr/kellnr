@@ -1,5 +1,5 @@
 use axum::Json;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use kellnr_appstate::{AppState, DbState, SettingsState};
 use kellnr_common::crate_data::CrateData;
@@ -8,48 +8,93 @@ use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
-use kellnr_settings::{Settings, compile_time_config};
+use kellnr_settings::{Settings, SourceMap, compile_time_config};
+use serde::{Deserialize, Serialize};
 use tracing::error;
+use utoipa::ToSchema;
 
 use crate::error::RouteError;
-use crate::session::MaybeUser;
+use crate::session::{AdminUser, MaybeUser};
 
-#[allow(clippy::unused_async)] // part of the router
-pub async fn settings(
-    user: MaybeUser,
-    State(settings): SettingsState,
-) -> Result<Json<Settings>, RouteError> {
-    user.assert_admin()?;
-    let s: Settings = (*settings).clone();
-    Ok(Json(s))
+/// Settings response that includes source tracking.
+/// This wrapper is needed because Settings uses `#[serde(skip)]` on sources
+/// to prevent it from being serialized to TOML config files.
+#[derive(Serialize, Deserialize)]
+pub struct SettingsResponse {
+    #[serde(flatten)]
+    pub settings: Settings,
+    pub sources: SourceMap,
+    pub defaults: Settings,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+/// Get Kellnr settings (admin only)
+#[utoipa::path(
+    get,
+    path = "/settings",
+    tag = "ui",
+    responses(
+        (status = 200, description = "Kellnr settings with source tracking"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
+#[allow(clippy::unused_async)] // part of the router
+pub async fn settings(
+    _user: AdminUser,
+    State(settings): SettingsState,
+) -> Result<Json<SettingsResponse>, RouteError> {
+    Ok(Json(SettingsResponse {
+        sources: settings.sources.clone(),
+        settings: (*settings).clone(),
+        defaults: Settings::default(),
+    }))
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct KellnrVersion {
     pub version: String,
 }
 
+/// Get Kellnr version
+#[utoipa::path(
+    get,
+    path = "/version",
+    tag = "ui",
+    responses(
+        (status = 200, description = "Kellnr version", body = KellnrVersion)
+    )
+)]
 #[allow(clippy::unused_async)] // part of the router
 pub async fn kellnr_version() -> Json<KellnrVersion> {
     Json(KellnrVersion {
-        version: compile_time_config::KELLNR_VERSION.to_string(),
+        version: compile_time_config::KELLNR_COMPTIME__VERSION.to_string(),
     })
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct CratesParams {
     page: Option<u64>,
     page_size: Option<u64>,
     cache: Option<bool>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct Pagination {
     crates: Vec<CrateOverview>,
     page_size: u64,
     page: u64,
 }
 
+/// Get paginated list of crates
+#[utoipa::path(
+    get,
+    path = "/crates",
+    tag = "ui",
+    params(CratesParams),
+    responses(
+        (status = 200, description = "Paginated crate list", body = Pagination)
+    )
+)]
 pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
     let page = params.page.unwrap_or(0);
@@ -66,12 +111,22 @@ pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> J
     })
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct SearchParams {
     name: OriginalName,
     cache: Option<bool>,
 }
 
+/// Search for crates by name
+#[utoipa::path(
+    get,
+    path = "/search",
+    tag = "ui",
+    params(SearchParams),
+    responses(
+        (status = 200, description = "Search results", body = Pagination)
+    )
+)]
 pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
     let crates = db
         .search_in_crate_name(&params.name, params.cache.unwrap_or(false))
@@ -84,11 +139,22 @@ pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> J
     })
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct CrateDataParams {
     name: OriginalName,
 }
 
+/// Get detailed crate data
+#[utoipa::path(
+    get,
+    path = "/crate_data",
+    tag = "ui",
+    params(CrateDataParams),
+    responses(
+        (status = 200, description = "Crate details", body = CrateData),
+        (status = 404, description = "Crate not found")
+    )
+)]
 pub async fn crate_data(
     Query(params): Query<CrateDataParams>,
     State(db): DbState,
@@ -103,11 +169,22 @@ pub async fn crate_data(
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct CratesIoDataParams {
     name: OriginalName,
 }
 
+/// Get crate data from crates.io
+#[utoipa::path(
+    get,
+    path = "/cratesio_data",
+    tag = "ui",
+    params(CratesIoDataParams),
+    responses(
+        (status = 200, description = "Crates.io crate data", body = String),
+        (status = 404, description = "Crate not found")
+    )
+)]
 pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<String, StatusCode> {
     let url = format!("https://crates.io/api/v1/crates/{}", params.name);
 
@@ -143,67 +220,46 @@ pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<S
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct DeleteCrateVersionParams {
     name: OriginalName,
     version: Version,
 }
 
-pub async fn delete_version(
-    Query(params): Query<DeleteCrateVersionParams>,
-    user: MaybeUser,
-    State(state): AppState,
-) -> Result<(), RouteError> {
-    user.assert_admin()?;
-    let version = params.version;
-    let name = params.name;
-
-    if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
-        error!("Failed to delete crate from database: {e:?}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-    }
-
-    if let Err(e) = state.crate_storage.delete(&name, &version).await {
-        error!("Failed to delete crate from storage: {e}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-    }
-
-    if let Err(e) = kellnr_docs::delete(&name, &version, &state.settings).await {
-        error!("Failed to delete crate from docs: {e}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-    }
-
-    Ok(())
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct DeleteCrateParams {
     name: OriginalName,
 }
 
-pub async fn delete_crate(
-    Query(params): Query<DeleteCrateParams>,
-    user: MaybeUser,
-    State(state): AppState,
+/// Helper function to delete crate versions from db, storage, and docs.
+/// If `versions` is `None`, all versions of the crate are deleted.
+async fn delete_crate_versions_impl(
+    state: &kellnr_appstate::AppStateData,
+    name: &OriginalName,
+    versions: Option<Vec<Version>>,
 ) -> Result<(), RouteError> {
-    user.assert_admin()?;
-    let name = params.name;
+    let versions_to_delete = if let Some(v) = versions {
+        v
+    } else {
+        let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
+        crate_meta
+            .iter()
+            .map(|cm| Version::from_unchecked_str(&cm.version))
+            .collect()
+    };
 
-    let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
-
-    for cm in &crate_meta {
-        let version = Version::from_unchecked_str(&cm.version);
-        if let Err(e) = state.db.delete_crate(&name.to_normalized(), &version).await {
+    for version in &versions_to_delete {
+        if let Err(e) = state.db.delete_crate(&name.to_normalized(), version).await {
             error!("Failed to delete crate from database: {e:?}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
 
-        if let Err(e) = state.crate_storage.delete(&name, &version).await {
+        if let Err(e) = state.crate_storage.delete(name, version).await {
             error!("Failed to delete crate from storage: {e}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
 
-        if let Err(e) = kellnr_docs::delete(&name, &cm.version, &state.settings).await {
+        if let Err(e) = kellnr_docs::delete(name, version, &state.settings).await {
             error!("Failed to delete crate from docs: {e}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
@@ -212,10 +268,81 @@ pub async fn delete_crate(
     Ok(())
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub async fn delete_version(
+    Query(params): Query<DeleteCrateVersionParams>,
+    _user: AdminUser,
+    State(state): AppState,
+) -> Result<(), RouteError> {
+    delete_crate_versions_impl(&state, &params.name, Some(vec![params.version])).await
+}
+
+pub async fn delete_crate(
+    Query(params): Query<DeleteCrateParams>,
+    _user: AdminUser,
+    State(state): AppState,
+) -> Result<(), RouteError> {
+    delete_crate_versions_impl(&state, &params.name, None).await
+}
+
+/// Delete a specific version of a crate (path parameter version)
+#[utoipa::path(
+    delete,
+    path = "/crates/{name}/{version}",
+    tag = "ui",
+    params(
+        ("name" = String, Path, description = "Crate name"),
+        ("version" = String, Path, description = "Version to delete")
+    ),
+    responses(
+        (status = 200, description = "Crate version deleted"),
+        (status = 400, description = "Invalid parameters"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
+pub async fn delete_crate_version(
+    Path((name, version)): Path<(String, String)>,
+    _user: AdminUser,
+    State(state): AppState,
+) -> Result<(), RouteError> {
+    let name = OriginalName::try_from(name.as_str())
+        .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
+    let version = Version::try_from(version.as_str())
+        .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
+
+    delete_crate_versions_impl(&state, &name, Some(vec![version])).await
+}
+
+/// Delete all versions of a crate (path parameter version)
+#[utoipa::path(
+    delete,
+    path = "/crates/{name}",
+    tag = "ui",
+    params(
+        ("name" = String, Path, description = "Crate name")
+    ),
+    responses(
+        (status = 200, description = "All crate versions deleted"),
+        (status = 400, description = "Invalid parameters"),
+        (status = 403, description = "Admin access required")
+    ),
+    security(("session_cookie" = []))
+)]
+pub async fn delete_crate_all(
+    Path(name): Path<String>,
+    _user: AdminUser,
+    State(state): AppState,
+) -> Result<(), RouteError> {
+    let name = OriginalName::try_from(name.as_str())
+        .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
+
+    delete_crate_versions_impl(&state, &name, None).await
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
 pub struct Statistic {
-    pub num_crates: u32,
-    pub num_crate_versions: u32,
+    pub num_crates: u64,
+    pub num_crate_versions: u64,
     pub num_crate_downloads: u64,
     pub num_proxy_crates: u64,
     pub num_proxy_crate_versions: u64,
@@ -225,13 +352,22 @@ pub struct Statistic {
     pub proxy_enabled: bool,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
 pub struct TopCrates {
     pub first: (String, u64),
     pub second: (String, u64),
     pub third: (String, u64),
 }
 
+/// Get registry statistics
+#[utoipa::path(
+    get,
+    path = "/statistics",
+    tag = "ui",
+    responses(
+        (status = 200, description = "Registry statistics", body = Statistic)
+    )
+)]
 pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Json<Statistic> {
     fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
         if tops.len() > i {
@@ -273,12 +409,31 @@ pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Js
     })
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+/// Parameters for triggering a documentation build
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct BuildParams {
+    /// Package name
     package: OriginalName,
+    /// Package version
     version: Version,
 }
 
+/// Trigger documentation build for a crate
+///
+/// Add a crate version to the documentation build queue.
+/// Requires ownership of the crate or admin access.
+#[utoipa::path(
+    post,
+    path = "/builds",
+    tag = "docs",
+    params(BuildParams),
+    responses(
+        (status = 200, description = "Build queued successfully"),
+        (status = 400, description = "Crate or version does not exist"),
+        (status = 401, description = "Not authorized or not an owner")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn build_rustdoc(
     Query(params): Query<BuildParams>,
     State(state): AppState,
@@ -414,7 +569,7 @@ mod tests {
 
         let result_status = r.status();
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_state = serde_json::from_slice::<Settings>(&result_msg).unwrap();
+        let result_response = serde_json::from_slice::<SettingsResponse>(&result_msg).unwrap();
 
         // Set the password to empty string because it is not serialized
         let tmp = kellnr_settings::test_settings();
@@ -428,7 +583,9 @@ mod tests {
         };
 
         assert_eq!(result_status, StatusCode::OK);
-        assert_eq!(result_state, expected_state);
+        assert_eq!(result_response.settings, expected_state);
+        // Verify that sources are present in the response
+        assert!(result_response.sources.contains_key("registry.data_dir"));
     }
 
     #[tokio::test]
@@ -538,6 +695,7 @@ mod tests {
                     salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
+                    created: String::new(),
                 })
             });
         let (mut settings, storage) = test_deps();
@@ -597,6 +755,7 @@ mod tests {
                     salt: String::new(),
                     is_admin: false,
                     is_read_only: false,
+                    created: String::new(),
                 })
             });
         mock_db
@@ -666,6 +825,7 @@ mod tests {
                     salt: String::new(),
                     is_admin: true,
                     is_read_only: false,
+                    created: String::new(),
                 })
             });
         mock_db

@@ -1,0 +1,21 @@
+[package]
+name = "kellnr-rustfs-testcontainer"
+autotests = false
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote.workspace = true
+syn.workspace = true
+
+[lints]
+workspace = true

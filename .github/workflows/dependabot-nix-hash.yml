@@ -1,0 +1,43 @@
+# Auto-update npmDepsHash in flake.nix when Dependabot updates package-lock.json
+# Based on: https://sitr.us/2024/03/08/nix-npm-and-dependabot.html/
+name: Dependabot Nix hash update
+
+on:
+  push:
+    branches:
+      - 'dependabot/npm_and_yarn/**'
+
+jobs:
+  update-hash:
+    name: Update NPM dependencies hash
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Update npmDepsHash
+        run: |
+          NEW_HASH=$(nix run nixpkgs#prefetch-npm-deps -- ui/package-lock.json 2>/dev/null)
+          echo "New hash: $NEW_HASH"
+          sed -i "s|npmDepsHash = \"sha256-[^\"]*\";|npmDepsHash = \"$NEW_HASH\";|" flake.nix
+
+      - name: Commit and push
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+          if ! git diff --quiet flake.nix; then
+            git add flake.nix
+            git commit -m "build(deps): update npmDepsHash in flake.nix [dependabot skip]"
+            git push
+            echo "Pushed npmDepsHash update"
+          else
+            echo "No changes needed"
+          fi

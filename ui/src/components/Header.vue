@@ -1,13 +1,15 @@
 <template>
   <div>
     <!-- App Bar -->
-    <v-app-bar class="app-header" elevation="0" height="64">
+    <v-app-bar :class="['app-header', { 'app-header-light': store.theme === 'light' }]" elevation="0" height="64">
       <!-- Mobile menu toggle -->
       <v-app-bar-nav-icon class="d-md-none nav-toggle" @click="drawer = !drawer" />
 
       <!-- Logo -->
       <v-app-bar-title class="logo-title">
-        <span class="logo-text">&lt;'kellnr&gt;</span>
+        <span class="logo-text">
+          <span class="logo-bracket">&lt;</span><span class="logo-lifetime">'</span><span class="logo-name">kellnr</span><span class="logo-bracket">&gt;</span>
+        </span>
       </v-app-bar-title>
 
       <!-- Desktop Navigation Links -->
@@ -29,7 +31,7 @@
           :target="item.href ? '_blank' : undefined"
           :ripple="false"
           variant="text"
-          class="nav-btn"
+          :class="['nav-btn', { 'nav-btn-active': item.route && route.path.startsWith(item.route) }]"
           :prepend-icon="item.icon"
           @click="item.action ? item.action() : undefined"
         >
@@ -51,7 +53,9 @@
     <!-- Mobile Navigation Drawer -->
     <v-navigation-drawer v-model="drawer" temporary location="left" class="mobile-drawer">
       <div class="drawer-header">
-        <span class="drawer-logo">&lt;'kellnr&gt;</span>
+        <span class="drawer-logo">
+          <span class="logo-bracket">&lt;</span><span class="logo-lifetime">'</span><span class="logo-name">kellnr</span><span class="logo-bracket">&gt;</span>
+        </span>
       </div>
       <v-divider />
       <v-list nav class="drawer-list">
@@ -93,10 +97,12 @@ import LoginButton from "./LoginButton.vue";
 import ThemeToggle from "./ThemeToggle.vue";
 import { useStore } from "../store/store";
 import router from "../router";
+import { useRoute } from "vue-router";
 import { useTheme } from "vuetify";
 
 const store = useStore();
 const vuetifyTheme = useTheme();
+const route = useRoute();
 const drawer = ref(false);
 
 // Snackbar state
@@ -114,12 +120,18 @@ const navItems = computed(() => [
   {
     title: "Settings",
     icon: "mdi-cog",
+    route: "/settings",
     action: goToSettings
   },
   {
     title: "Doc Queue",
     icon: "mdi-layers",
     route: "/docqueue"
+  },
+  {
+    title: "API Docs",
+    icon: "mdi-api",
+    href: "/api/docs"
   }
 ]);
 
@@ -157,8 +169,16 @@ function showNotification(message: string, isError: boolean = false) {
 
 <style scoped>
 .app-header {
-  background: rgb(var(--v-theme-surface)) !important;
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
+  background: rgba(var(--v-theme-surface), 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.5);
+}
+
+/* Light theme: more transparent to show gradient background */
+.app-header-light {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
 .nav-toggle {
@@ -174,8 +194,27 @@ function showNotification(message: string, isError: boolean = false) {
 .logo-text {
   font-size: 1.5rem;
   font-weight: 700;
-  color: rgb(var(--v-theme-primary));
   letter-spacing: -0.5px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  display: inline-flex;
+  align-items: center;
+}
+
+.logo-bracket {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.logo-lifetime {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.logo-name {
+  color: rgb(var(--v-theme-primary));
+  font-weight: 700;
 }
 
 .nav-links {
@@ -200,12 +239,20 @@ function showNotification(message: string, isError: boolean = false) {
   color: rgb(var(--v-theme-primary));
 }
 
+.nav-btn.nav-btn-active,
+.nav-btn.v-btn--active {
+  background: rgba(var(--v-theme-primary), 0.12) !important;
+  color: rgb(var(--v-theme-primary)) !important;
+}
+
 .nav-btn :deep(.v-icon) {
   font-size: 18px;
   opacity: 0.8;
 }
 
-.nav-btn:hover :deep(.v-icon) {
+.nav-btn:hover :deep(.v-icon),
+.nav-btn.nav-btn-active :deep(.v-icon),
+.nav-btn.v-btn--active :deep(.v-icon) {
   opacity: 1;
 }
 
@@ -226,7 +273,26 @@ function showNotification(message: string, isError: boolean = false) {
 .drawer-logo {
   font-size: 1.25rem;
   font-weight: 700;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  display: inline-flex;
+  align-items: center;
+}
+
+.drawer-logo .logo-bracket {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.drawer-logo .logo-lifetime {
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.drawer-logo .logo-name {
   color: rgb(var(--v-theme-primary));
+  font-weight: 700;
 }
 
 .drawer-list {

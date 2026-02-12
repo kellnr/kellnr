@@ -5,11 +5,11 @@ use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use serde_json::json;
 
-mod endpoints;
+pub mod endpoints;
 mod service;
 #[cfg(test)]
 mod tests;
-mod types;
+pub mod types;
 
 pub use endpoints::{
     delete_webhook, get_all_webhooks, get_webhook, register_webhook, test_webhook,
