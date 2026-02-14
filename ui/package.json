@@ -19,7 +19,7 @@
     "dayjs": "^1.11.10",
     "dompurify": "^3.2.4",
     "js-cookie": "^3.0.5",
-    "marked": "^17.0.0",
+    "marked": "^17.0.2",
     "marked-gfm-heading-id": "^4.1.1",
     "marked-highlight": "^2.2.1",
     "marked-mangle": "^1.1.10",
