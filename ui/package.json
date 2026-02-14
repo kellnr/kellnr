@@ -38,7 +38,7 @@
     "@vitejs/plugin-vue": "^6.0.4",
     "@vue/tsconfig": "^0.8.1",
     "esbuild": "~0.27.3",
-    "eslint": "^9.21.0",
+    "eslint": "^10.0.0",
     "eslint-plugin-vue": "^10.0.0",
     "globals": "^17.3.0",
     "typescript": "~5.9.2",
