@@ -172,6 +172,9 @@ test.describe("Migration UI Tests", () => {
               ...k.env,
               // Explicitly set data directory to ensure it uses the mounted path
               KELLNR_REGISTRY__DATA_DIR: kdataMount,
+              // Since v6.0.0 the Docker image no longer provisions a default admin
+              // token.  We need to set it explicitly so `cargo publish` can authenticate.
+              KELLNR_SETUP__ADMIN_TOKEN: registryToken,
             },
             bindMounts: {
               [kdataDir]: kdataMount,
