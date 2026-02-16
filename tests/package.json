@@ -20,10 +20,10 @@
         "install:browsers:with-deps": "playwright install --with-deps"
     },
     "devDependencies": {
-        "@playwright/test": "1.57.0",
-        "@types/node": "^22.10.2",
-        "execa": "^9.5.1",
+        "@playwright/test": "1.58.2",
+        "@types/node": "^25.2.3",
+        "execa": "^9.6.1",
         "testcontainers": "^11.11.0",
-        "typescript": "^5.7.2"
+        "typescript": "^5.9.3"
     }
 }
