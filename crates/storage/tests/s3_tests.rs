@@ -30,9 +30,9 @@ impl TestS3Storage {
             },
             s3: S3 {
                 enabled: true,
-                access_key: "rustfsadmin".into(),
-                secret_key: "rustfsadmin".into(),
-                endpoint: url.to_string(),
+                access_key: Some("rustfsadmin".into()),
+                secret_key: Some("rustfsadmin".into()),
+                endpoint: Some(url.to_string()),
                 allow_http: true,
                 ..S3::default()
             },

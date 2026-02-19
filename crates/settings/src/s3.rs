@@ -8,21 +8,21 @@ pub struct S3 {
     #[arg(id = "s3-enabled", long = "s3-enabled")]
     pub enabled: bool,
 
-    #[default("access-key".to_string())]
+    #[default(None)]
     #[arg(id = "s3-access-key", long = "s3-access-key")]
-    pub access_key: String,
+    pub access_key: Option<String>,
 
-    #[default("secret-key".to_string())]
+    #[default(None)]
     #[arg(id = "s3-secret-key", long = "s3-secret-key")]
-    pub secret_key: String,
+    pub secret_key: Option<String>,
 
-    #[default("us-east-1".to_string())]
+    #[default(None)]
     #[arg(id = "s3-region", long = "s3-region")]
-    pub region: String,
+    pub region: Option<String>,
 
-    #[default("http://localhost:9000".to_string())]
+    #[default(None)]
     #[arg(id = "s3-endpoint", long = "s3-endpoint")]
-    pub endpoint: String,
+    pub endpoint: Option<String>,
 
     #[default(true)]
     #[arg(id = "s3-allow-http", long = "s3-allow-http")]

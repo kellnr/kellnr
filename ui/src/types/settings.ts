@@ -101,10 +101,10 @@ export type Registry = {
 
 export type S3 = {
   enabled: boolean
-  access_key: string
-  secret_key: string
-  region: string
-  endpoint: string
+  access_key: string | null
+  secret_key: string | null
+  region: string | null
+  endpoint: string | null
   allow_http: boolean
   crates_bucket: string
   cratesio_bucket: string
@@ -164,10 +164,10 @@ export const emptySettings: Settings = {
   },
   s3: {
     enabled: false,
-    access_key: "",
-    secret_key: "",
-    region: "",
-    endpoint: "",
+    access_key: null,
+    secret_key: null,
+    region: null,
+    endpoint: null,
     allow_http: false,
     crates_bucket: "",
     cratesio_bucket: "",
