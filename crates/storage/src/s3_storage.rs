@@ -69,36 +69,16 @@ impl TryFrom<(&str, &Settings)> for S3Storage {
             .with_bucket_name(bucket)
             .with_allow_http(settings.s3.allow_http)
             .with_conditional_put(object_store::aws::S3ConditionalPut::ETagMatch);
-        if let Some(endpoint) = settings
-            .s3
-            .endpoint
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
+        if let Some(endpoint) = &settings.s3.endpoint {
             s3 = s3.with_endpoint(endpoint);
         }
-        if let Some(region) = settings
-            .s3
-            .region
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
+        if let Some(region) = &settings.s3.region {
             s3 = s3.with_region(region);
         }
-        if let Some(access_key) = settings
-            .s3
-            .access_key
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
+        if let Some(access_key) = &settings.s3.access_key {
             s3 = s3.with_access_key_id(access_key);
         }
-        if let Some(secret_key) = settings
-            .s3
-            .secret_key
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
+        if let Some(secret_key) = &settings.s3.secret_key {
             s3 = s3.with_secret_access_key(secret_key);
         }
         // S3-compatible (RustFS, MinIO, etc.)
