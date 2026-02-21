@@ -16,7 +16,6 @@ use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use kellnr_error::api_error::{ApiError, ApiResult};
-use tracing::warn;
 
 use crate::pub_data::{EmptyCrateData, PubData};
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
@@ -598,12 +597,10 @@ pub async fn download(
     let cs = state.crate_storage;
     check_download_auth(&package.to_normalized(), &token, &db).await?;
 
-    if let Err(e) = db
-        .increase_download_counter(&package.to_normalized(), &version)
-        .await
-    {
-        warn!("Failed to increase download counter: {e}");
-    }
+    // In-memory increment — no DB call, nanoseconds
+    state
+        .download_counter
+        .increment(package.to_normalized(), version.clone());
 
     match cs.get(&package, &version).await {
         Some(file) => {

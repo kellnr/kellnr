@@ -2,14 +2,13 @@ use axum::extract::{Path, Request, State};
 use axum::http::{StatusCode, header, HeaderValue};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use kellnr_appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
+use kellnr_appstate::{CrateIoStorageState, DownloadCounterState, SettingsState};
 use kellnr_common::cratesio_downloader::{CLIENT, download_crate};
-use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_error::api_error::ApiResult;
 use reqwest::Url;
-use tracing::{error, trace, warn};
+use tracing::{error, trace};
 
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
@@ -85,19 +84,14 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
 pub async fn download(
     Path((name, version)): Path<(OriginalName, Version)>,
     State(crate_storage): CrateIoStorageState,
-    State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
+    State(download_counter): DownloadCounterState,
 ) -> Result<Response, StatusCode> {
     trace!("Downloading crate: {name} ({version})");
 
     let file = if let Some(file) = crate_storage.get(&name, &version).await {
-        let msg = DownloadData {
-            name: name.clone().into(),
-            version: version.clone(),
-        };
-        if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
-            warn!("Failed to send IncDownloadCnt message: {e}");
-        }
+        // In-memory increment — no DB call, nanoseconds
+        download_counter.increment_cached(name.to_normalized(), version.clone());
 
         file
     } else {

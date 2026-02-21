@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
 use sea_orm::Value;
@@ -96,6 +97,17 @@ impl PartialEq for Version {
         let sv1 = semver::Version::parse(&self.to_string()).unwrap();
         let sv2 = semver::Version::parse(&other.to_string()).unwrap();
         sv1 == sv2
+    }
+}
+
+impl Hash for Version {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Must be consistent with PartialEq which uses parsed semver.
+        // Fall back to string hashing for invalid semver (e.g. "0.a.0").
+        match semver::Version::parse(&self.0) {
+            Ok(sv) => sv.hash(state),
+            Err(_) => self.0.hash(state),
+        }
     }
 }
 
