@@ -20,6 +20,41 @@ permissions:
   contents: read
 
 jobs:
+  update-npm-hash:
+    name: Update NPM dependencies hash
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.update.outputs.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Update npmDepsHash
+        id: update
+        run: |
+          NEW_HASH=$(nix run nixpkgs#prefetch-npm-deps -- ui/package-lock.json 2>/dev/null)
+          echo "New hash: $NEW_HASH"
+          sed -i "s|npmDepsHash = \"sha256-[^\"]*\";|npmDepsHash = \"$NEW_HASH\";|" flake.nix
+
+          if ! git diff --quiet flake.nix; then
+            git config user.name "${GITHUB_ACTOR}"
+            git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+            git add flake.nix
+            git commit -m "build(deps): update npmDepsHash in flake.nix [dependabot skip]"
+            git push
+          fi
+
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
   lint:
     name: Format & Clippy
     runs-on: ubuntu-24.04
@@ -84,11 +119,15 @@ jobs:
 
   nix-build:
     name: Nix Build
+    needs: [update-npm-hash]
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
 
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
