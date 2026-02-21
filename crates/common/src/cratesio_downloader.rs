@@ -1,9 +1,11 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use reqwest::{Client, ClientBuilder, StatusCode, Url};
 use tracing::error;
 
-pub static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
+/// Build a reqwest client with the given timeouts.
+pub fn build_client(connect_timeout: Duration, request_timeout: Duration) -> Client {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert(
         reqwest::header::USER_AGENT,
@@ -11,9 +13,16 @@ pub static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
     );
     ClientBuilder::new()
         .gzip(true)
+        .connect_timeout(connect_timeout)
+        .timeout(request_timeout)
         .default_headers(headers)
         .build()
         .unwrap()
+}
+
+/// Default client with sensible timeouts (5s connect, 30s request).
+pub static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
+    build_client(Duration::from_secs(5), Duration::from_secs(30))
 });
 
 #[derive(Debug, thiserror::Error)]

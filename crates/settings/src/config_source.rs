@@ -35,6 +35,8 @@ const SETTING_KEYS: &[&str] = &[
     "registry.token_cache_max_capacity",
     "registry.token_db_retry_count",
     "registry.token_db_retry_delay_ms",
+    "registry.download_timeout_seconds",
+    "registry.download_max_concurrent",
     // Local settings
     "local.ip",
     "local.port",
@@ -56,6 +58,8 @@ const SETTING_KEYS: &[&str] = &[
     "proxy.download_on_update",
     "proxy.url",
     "proxy.index",
+    "proxy.connect_timeout_seconds",
+    "proxy.request_timeout_seconds",
     // PostgreSQL settings
     "postgresql.enabled",
     "postgresql.address",
@@ -73,6 +77,8 @@ const SETTING_KEYS: &[&str] = &[
     "s3.crates_bucket",
     "s3.cratesio_bucket",
     "s3.toolchain_bucket",
+    "s3.connect_timeout_seconds",
+    "s3.request_timeout_seconds",
     // Setup settings
     "setup.admin_pwd",
     "setup.admin_token",

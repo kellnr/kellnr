@@ -17,7 +17,7 @@ use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use moka::future::Cache;
-use reqwest::{Client, ClientBuilder, Url};
+use reqwest::{Client, Url};
 use serde::Deserialize;
 use tracing::{error, trace, warn};
 
@@ -26,16 +26,10 @@ use super::config_json::ConfigJson;
 pub static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 pub static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
 static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        reqwest::header::USER_AGENT,
-        reqwest::header::HeaderValue::from_static("kellnr.io/kellnr"),
-    );
-    ClientBuilder::new()
-        .gzip(true)
-        .default_headers(headers)
-        .build()
-        .unwrap()
+    kellnr_common::cratesio_downloader::build_client(
+        Duration::from_secs(5),
+        Duration::from_secs(30),
+    )
 });
 
 /// Get crates.io proxy configuration

@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use kellnr_settings::Settings;
+use object_store::ClientOptions;
 use object_store::aws::{AmazonS3, AmazonS3Builder};
 use object_store::path::Path;
 use object_store::{ObjectStore, ObjectStoreExt, PutMode};
@@ -81,6 +84,12 @@ impl TryFrom<(&str, &Settings)> for S3Storage {
         if let Some(secret_key) = &settings.s3.secret_key {
             s3 = s3.with_secret_access_key(secret_key);
         }
+
+        let client_options = ClientOptions::new()
+            .with_connect_timeout(Duration::from_secs(settings.s3.connect_timeout_seconds))
+            .with_timeout(Duration::from_secs(settings.s3.request_timeout_seconds));
+        s3 = s3.with_client_options(client_options);
+
         // S3-compatible (RustFS, MinIO, etc.)
         Ok(Self(s3.build()?))
     }

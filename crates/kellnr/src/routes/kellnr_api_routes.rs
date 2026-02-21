@@ -1,4 +1,7 @@
+use std::time::Duration;
+
 use axum::extract::DefaultBodyLimit;
+use axum::http::StatusCode;
 use axum::routing::{get, put};
 use axum::{Router, middleware};
 use kellnr_appstate::AppStateData;
@@ -6,11 +9,14 @@ use kellnr_auth::auth_req_token;
 use kellnr_index::kellnr_prefetch_api;
 use kellnr_registry::kellnr_api;
 use tower::limit::ConcurrencyLimitLayer;
+use tower_http::timeout::TimeoutLayer;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 /// Creates the kellnr API routes
 pub fn create_routes(state: AppStateData, max_crate_size: usize) -> OpenApiRouter<AppStateData> {
+    let settings = &state.settings.registry;
+
     // Publish route needs custom body size limit, keep as regular Router
     let publish_router: OpenApiRouter<AppStateData> = Router::new()
         .route(
@@ -19,11 +25,18 @@ pub fn create_routes(state: AppStateData, max_crate_size: usize) -> OpenApiRoute
         )
         .into();
 
-    // Download route with concurrency limit to prevent I/O starvation
-    let download_router: OpenApiRouter<AppStateData> = Router::new()
-        .route("/dl/{package}/{version}/download", get(kellnr_api::download))
-        .layer(ConcurrencyLimitLayer::new(20))
-        .into();
+    // Download route with concurrency limit and timeout to prevent I/O starvation
+    let mut download_router = Router::new()
+        .route("/dl/{package}/{version}/download", get(kellnr_api::download));
+
+    if settings.download_max_concurrent > 0 {
+        download_router = download_router.layer(ConcurrencyLimitLayer::new(settings.download_max_concurrent));
+    }
+    if settings.download_timeout_seconds > 0 {
+        download_router = download_router.layer(TimeoutLayer::with_status_code(StatusCode::GATEWAY_TIMEOUT, Duration::from_secs(settings.download_timeout_seconds)));
+    }
+
+    let download_router: OpenApiRouter<AppStateData> = download_router.into();
 
     OpenApiRouter::new()
         // Prefetch routes
@@ -56,7 +69,7 @@ pub fn create_routes(state: AppStateData, max_crate_size: usize) -> OpenApiRoute
         .routes(routes!(kellnr_api::list_crate_versions))
         // Search
         .routes(routes!(kellnr_api::search))
-        // Download (with concurrency limit)
+        // Download (with concurrency limit and timeout)
         .merge(download_router)
         // Publish routes (merge the custom-layer router)
         .merge(publish_router)
