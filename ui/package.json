@@ -30,7 +30,7 @@
     "vue-class-component": "^8.0.0-0",
     "vue-router": "^5.0.2",
     "vue3-highlightjs": "^1.0.5",
-    "vuetify": "^3.11.8"
+    "vuetify": "^3.12.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
