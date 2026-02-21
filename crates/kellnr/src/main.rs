@@ -316,7 +316,14 @@ async fn init_oauth2_handler(settings: &Settings) -> Option<Arc<OAuth2Handler>> 
     let protocol = &settings.origin.protocol; // Protocol enum implements Display
     let host = &settings.origin.hostname;
     let port = settings.origin.port;
-    let path_prefix = settings.origin.path.trim();
+
+    // FIX: Normalize path prefix to avoid double slashes
+    let raw_path = settings.origin.path.trim();
+    let path_prefix = if raw_path.is_empty() || raw_path == "/" {
+        String::new()
+    } else {
+        raw_path.trim_end_matches('/').to_string()
+    };
 
     let callback_url = if port == 443 || port == 80 {
         format!("{protocol}://{host}{path_prefix}/api/v1/oauth2/callback")
