@@ -2405,6 +2405,137 @@ mod reg_api_tests {
         );
     }
 
+    #[tokio::test]
+    async fn download_returns_cache_headers() {
+        // Publish a crate first, then download and verify headers
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let settings = get_settings();
+        let kellnr = TestKellnr::fake(settings).await;
+
+        // Publish the crate
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Download the crate
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/test_lib/0.2.0/download")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+
+        // Verify Cache-Control header
+        let cache_control = r.headers().get(header::CACHE_CONTROL).unwrap();
+        assert_eq!(
+            cache_control,
+            "public, max-age=31536000, immutable",
+        );
+
+        // Verify ETag header
+        let etag = r.headers().get(header::ETAG).unwrap();
+        assert_eq!(etag, "\"test_lib-0.2.0\"");
+
+        // Verify Content-Type header
+        let content_type = r.headers().get(header::CONTENT_TYPE).unwrap();
+        assert_eq!(content_type, "application/octet-stream");
+
+        // Verify the body is non-empty
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        assert!(!body.is_empty());
+    }
+
+    #[tokio::test]
+    async fn download_second_call_uses_cache() {
+        // Publish, download twice, verify cache hit on second call
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let settings = get_settings();
+        let kellnr = TestKellnr::fake(settings).await;
+
+        // Publish the crate
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // First download
+        let r1 = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/test_lib/0.2.0/download")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(r1.status(), StatusCode::OK);
+        let body1 = r1.into_body().collect().await.unwrap().to_bytes();
+
+        // Second download (should come from cache)
+        let r2 = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/test_lib/0.2.0/download")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(r2.status(), StatusCode::OK);
+        let body2 = r2.into_body().collect().await.unwrap().to_bytes();
+
+        // Both should return same content
+        assert_eq!(body1, body2);
+        // And the cache should have the entry
+        assert!(
+            kellnr
+                .client
+                .clone()
+                .oneshot(
+                    Request::get("/api/v1/crates/test_lib/0.2.0/download")
+                        .header(header::AUTHORIZATION, TOKEN)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status()
+                == StatusCode::OK,
+        );
+    }
+
     struct TestKellnr {
         path: PathBuf,
         client: Router,
