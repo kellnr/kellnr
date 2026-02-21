@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use bytes::Bytes;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_settings::Settings;
@@ -9,7 +10,7 @@ use moka::future::Cache;
 use crate::storage::Storage;
 use crate::storage_error::StorageError;
 
-pub type CrateCache = Cache<String, Vec<u8>>;
+pub type CrateCache = Cache<String, Bytes>;
 pub type DynStorage = Box<dyn Storage + Send + Sync>;
 
 pub struct CachedCrateStorage {
@@ -21,7 +22,15 @@ pub struct CachedCrateStorage {
 impl CachedCrateStorage {
     pub fn new(settings: &Settings, storage: DynStorage) -> Self {
         let cache = if settings.registry.cache_size > 0 {
-            Some(Cache::new(settings.registry.cache_size))
+            let max_bytes = settings.registry.cache_size * 1024 * 1024; // cache_size is in MB
+            Some(
+                Cache::builder()
+                    .weigher(|_key: &String, value: &Bytes| -> u32 {
+                        u32::try_from(value.len()).unwrap_or(u32::MAX)
+                    })
+                    .max_capacity(max_bytes)
+                    .build(),
+            )
         } else {
             None
         };
@@ -68,19 +77,20 @@ impl CachedCrateStorage {
         Ok(sha256::digest(&*crate_data))
     }
 
-    pub async fn get(&self, name: &OriginalName, version: &Version) -> Option<Vec<u8>> {
+    pub async fn get(&self, name: &OriginalName, version: &Version) -> Option<Bytes> {
         let file_name = Self::file_name(name, version);
         match self.cache {
             Some(ref cache) => {
-                if let Some(data) = cache.get(&file_name).await {
-                    Some(data)
-                } else {
-                    let data = self.storage.get(&file_name).await.ok()?.to_vec();
-                    cache.insert(file_name.clone(), data.clone()).await;
-                    Some(data)
-                }
+                let storage = &self.storage;
+                let key = file_name.clone();
+                cache
+                    .try_get_with(file_name, async move {
+                        storage.get(&key).await
+                    })
+                    .await
+                    .ok()
             }
-            None => self.storage.get(&file_name).await.map(<Vec<u8>>::from).ok(),
+            None => self.storage.get(&file_name).await.ok(),
         }
     }
 

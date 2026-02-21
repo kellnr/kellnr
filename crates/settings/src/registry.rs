@@ -25,8 +25,8 @@ pub struct Registry {
     #[arg(id = "registry-session-age", long = "registry-session-age")]
     pub session_age_seconds: u64,
 
-    /// Cache size
-    #[default(1000)]
+    /// Cache size in MB (0 = disabled)
+    #[default(512)]
     #[arg(id = "registry-cache-size", long = "registry-cache-size")]
     pub cache_size: u64,
 

@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header, HeaderValue};
+use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
 use kellnr_auth::{maybe_user, token};
@@ -592,7 +593,7 @@ pub async fn download(
     State(state): AppState,
     token: token::OptionToken,
     Path((package, version)): Path<(OriginalName, Version)>,
-) -> ApiResult<Vec<u8>> {
+) -> Result<Response, ApiError> {
     let db = state.db;
     let cs = state.crate_storage;
     check_download_auth(&package.to_normalized(), &token, &db).await?;
@@ -605,7 +606,17 @@ pub async fn download(
     }
 
     match cs.get(&package, &version).await {
-        Some(file) => Ok(file),
+        Some(file) => {
+            let etag = format!("\"{package}-{version}\"");
+            Ok((
+                [
+                    (header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream")),
+                    (header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable")),
+                    (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
+                ],
+                file,
+            ).into_response())
+        }
         None => Err(RegistryError::CrateNotFound.into()),
     }
 }
