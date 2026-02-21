@@ -124,6 +124,18 @@ pub trait DbProvider: Send + Sync {
         crate_name: &NormalizedName,
         crate_version: &Version,
     ) -> DbResult<()>;
+    async fn increase_download_counter_by(
+        &self,
+        crate_name: &NormalizedName,
+        crate_version: &Version,
+        count: u64,
+    ) -> DbResult<()>;
+    async fn increase_cached_download_counter_by(
+        &self,
+        crate_name: &NormalizedName,
+        crate_version: &Version,
+        count: u64,
+    ) -> DbResult<()>;
     async fn validate_session(&self, session_token: &str) -> DbResult<(String, bool)>;
     async fn add_session_token(&self, name: &str, session_token: &str) -> DbResult<()>;
     async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
@@ -405,6 +417,24 @@ pub mod mock {
                 &self,
                 _crate_name: &NormalizedName,
                 _crate_version: &Version,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn increase_download_counter_by(
+                &self,
+                _crate_name: &NormalizedName,
+                _crate_version: &Version,
+                _count: u64,
+            ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn increase_cached_download_counter_by(
+                &self,
+                _crate_name: &NormalizedName,
+                _crate_version: &Version,
+                _count: u64,
             ) -> DbResult<()> {
                 unimplemented!()
             }
