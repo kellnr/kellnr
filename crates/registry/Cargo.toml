@@ -33,6 +33,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 url.workspace = true
+sha256.workspace = true
 
 [dev-dependencies]
 cookie.workspace = true

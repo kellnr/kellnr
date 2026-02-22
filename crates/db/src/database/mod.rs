@@ -553,6 +553,8 @@ impl DbProvider for Database {
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()> {
+        let txn = self.db_con.begin().await?;
+
         // Atomic update for crate total_downloads
         krate::Entity::update_many()
             .col_expr(
@@ -560,13 +562,13 @@ impl DbProvider for Database {
                 Expr::col(krate::Column::TotalDownloads).add(count as i64),
             )
             .filter(krate::Column::Name.eq(crate_name))
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
         // Need to get crate_id for the version-specific update
         let crate_id = krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
-            .one(&self.db_con)
+            .one(&txn)
             .await?
             .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
             .id;
@@ -582,9 +584,10 @@ impl DbProvider for Database {
                     .add(crate_meta::Column::Version.eq(crate_version))
                     .add(crate_meta::Column::CrateFk.eq(crate_id)),
             )
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
+        txn.commit().await?;
         Ok(())
     }
 
@@ -594,6 +597,8 @@ impl DbProvider for Database {
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()> {
+        let txn = self.db_con.begin().await?;
+
         // Atomic update for crate total_downloads
         cratesio_crate::Entity::update_many()
             .col_expr(
@@ -601,13 +606,13 @@ impl DbProvider for Database {
                 Expr::col(cratesio_crate::Column::TotalDownloads).add(count as i64),
             )
             .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
         // Need to get crate_id for the version-specific update
         let crate_id = cratesio_crate::Entity::find()
             .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .one(&self.db_con)
+            .one(&txn)
             .await?
             .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
             .id;
@@ -623,9 +628,10 @@ impl DbProvider for Database {
                     .add(cratesio_meta::Column::Version.eq(crate_version))
                     .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
             )
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
+        txn.commit().await?;
         Ok(())
     }
 

@@ -597,14 +597,16 @@ pub async fn download(
     let cs = state.crate_storage;
     check_download_auth(&package.to_normalized(), &token, &db).await?;
 
-    // In-memory increment — no DB call, nanoseconds
+    // Increment download counter (immediate DB call when flush_interval=0)
     state
         .download_counter
-        .increment(package.to_normalized(), version.clone());
+        .increment_and_maybe_flush(package.to_normalized(), version.clone())
+        .await;
 
     match cs.get(&package, &version).await {
         Some(file) => {
-            let etag = format!("\"{package}-{version}\"");
+            let hash = sha256::digest(file.as_ref());
+            let etag = format!("\"{hash}\"");
             Ok((
                 [
                     (
@@ -613,9 +615,14 @@ pub async fn download(
                     ),
                     (
                         header::CACHE_CONTROL,
-                        HeaderValue::from_static("public, max-age=31536000, immutable"),
+                        HeaderValue::from_static("public, must-revalidate"),
                     ),
-                    (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
+                    (
+                        header::ETAG,
+                        HeaderValue::from_str(&etag).map_err(|_| {
+                            ApiError::new("Invalid ETag value", "", StatusCode::INTERNAL_SERVER_ERROR)
+                        })?,
+                    ),
                 ],
                 file,
             )
@@ -2447,13 +2454,14 @@ mod reg_api_tests {
 
         assert_eq!(r.status(), StatusCode::OK);
 
-        // Verify Cache-Control header
+        // Verify Cache-Control header (kellnr crates are mutable, so no immutable)
         let cache_control = r.headers().get(header::CACHE_CONTROL).unwrap();
-        assert_eq!(cache_control, "public, max-age=31536000, immutable",);
+        assert_eq!(cache_control, "public, must-revalidate");
 
-        // Verify ETag header
-        let etag = r.headers().get(header::ETAG).unwrap();
-        assert_eq!(etag, "\"test_lib-0.2.0\"");
+        // Verify ETag header (content-based SHA-256 hash)
+        let etag = r.headers().get(header::ETAG).unwrap().to_str().unwrap();
+        assert!(etag.starts_with('"') && etag.ends_with('"'), "ETag should be quoted");
+        assert_eq!(etag.len(), 66, "ETag should be a quoted SHA-256 hash (64 hex chars + 2 quotes)");
 
         // Verify Content-Type header
         let content_type = r.headers().get(header::CONTENT_TYPE).unwrap();
@@ -2465,7 +2473,7 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
-    async fn download_second_call_uses_cache() {
+    async fn download_second_call_returns_same_content() {
         // Publish, download twice, verify cache hit on second call
         let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await

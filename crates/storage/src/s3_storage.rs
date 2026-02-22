@@ -87,8 +87,7 @@ impl TryFrom<(&str, &Settings)> for S3Storage {
 
         let client_options = ClientOptions::new()
             .with_connect_timeout(Duration::from_secs(settings.s3.connect_timeout_seconds))
-            .with_timeout(Duration::from_secs(settings.s3.request_timeout_seconds))
-            .with_allow_http(settings.s3.allow_http);
+            .with_timeout(Duration::from_secs(settings.s3.request_timeout_seconds));
         s3 = s3.with_client_options(client_options);
 
         // S3-compatible (RustFS, MinIO, etc.)

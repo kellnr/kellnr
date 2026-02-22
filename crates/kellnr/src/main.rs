@@ -146,6 +146,7 @@ async fn run_server(settings: Settings) {
         storage: cratesio_storage.clone(),
         url: settings.proxy.url.clone(),
         index: settings.proxy.index.clone(),
+        proxy_settings: Arc::new(settings.proxy.clone()),
     };
 
     init_cratesio_prefetch_thread(
@@ -179,8 +180,8 @@ async fn run_server(settings: Settings) {
     let oauth2_handler = init_oauth2_handler(&settings).await;
 
     // Initialize download counter with periodic flush
-    let download_counter = Arc::new(DownloadCounter::new(db.clone()));
     let flush_interval = settings.registry.download_counter_flush_seconds;
+    let download_counter = Arc::new(DownloadCounter::new(db.clone(), flush_interval));
     if flush_interval > 0 {
         let counter = download_counter.clone();
         info!("Starting download counter flush task (interval: {flush_interval}s)");
@@ -194,6 +195,8 @@ async fn run_server(settings: Settings) {
             }
         });
     }
+
+    let download_counter_for_shutdown = download_counter.clone();
 
     let state = AppStateData {
         db,
@@ -228,12 +231,26 @@ async fn run_server(settings: Settings) {
             );
     }
 
-    // Start the server
+    // Start the server with graceful shutdown
     let listener = TcpListener::bind(addr)
         .await
         .unwrap_or_else(|_| panic!("Failed to bind to {addr}"));
     info!("Kellnr has been started on http://{addr}/");
-    axum::serve(listener, app).await.unwrap();
+
+    tokio::select! {
+        result = axum::serve(listener, app) => {
+            if let Err(e) = result {
+                error!("Server error: {e}");
+            }
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Shutdown signal received, flushing download counters...");
+        }
+    }
+
+    // Flush any accumulated download counts before exiting
+    download_counter_for_shutdown.flush().await;
+    info!("Download counters flushed. Shutting down.");
 }
 
 fn init_cookie_signing_key(settings: &Settings) -> Key {

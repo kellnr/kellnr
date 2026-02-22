@@ -53,7 +53,7 @@ pub fn test_state() -> AppStateData {
     ));
     let (cratesio_prefetch_sender, _) = flume::unbounded();
     let token_cache = Arc::new(TokenCacheManager::new(false, 60, 1000));
-    let download_counter = Arc::new(DownloadCounter::new(db.clone()));
+    let download_counter = Arc::new(DownloadCounter::new(db.clone(), 30));
     AppStateData {
         db,
         signing_key,

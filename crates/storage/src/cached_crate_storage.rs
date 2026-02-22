@@ -22,13 +22,9 @@ pub struct CachedCrateStorage {
 impl CachedCrateStorage {
     pub fn new(settings: &Settings, storage: DynStorage) -> Self {
         let cache = if settings.registry.cache_size > 0 {
-            let max_bytes = settings.registry.cache_size * 1024 * 1024; // cache_size is in MB
             Some(
                 Cache::builder()
-                    .weigher(|_key: &String, value: &Bytes| -> u32 {
-                        u32::try_from(value.len()).unwrap_or(u32::MAX)
-                    })
-                    .max_capacity(max_bytes)
+                    .max_capacity(settings.registry.cache_size)
                     .build(),
             )
         } else {
@@ -128,6 +124,8 @@ mod tests {
     /// Shared state for tracking storage call counts.
     struct StorageMetrics {
         get_count: AtomicUsize,
+        /// When true, storage.get() returns immediately. When false, it waits.
+        ready: std::sync::atomic::AtomicBool,
     }
 
     /// In-memory storage that tracks call counts for observing coalescing.
@@ -150,8 +148,10 @@ mod tests {
     impl Storage for CountingStorage {
         async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
             self.metrics.get_count.fetch_add(1, Ordering::SeqCst);
-            // Simulate slow storage
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            // Wait until the test signals readiness
+            while !self.metrics.ready.load(Ordering::SeqCst) {
+                tokio::task::yield_now().await;
+            }
             self.data
                 .get(key)
                 .cloned()
@@ -191,11 +191,11 @@ mod tests {
         }
     }
 
-    fn test_settings(cache_size_mb: u64) -> Settings {
+    fn test_settings(cache_size: u64) -> Settings {
         Settings {
             registry: kellnr_settings::Registry {
                 data_dir: "/tmp/kellnr-test-cache".to_string(),
-                cache_size: cache_size_mb,
+                cache_size,
                 ..kellnr_settings::Registry::default()
             },
             ..Settings::default()
@@ -213,6 +213,7 @@ mod tests {
     fn metrics() -> Arc<StorageMetrics> {
         Arc::new(StorageMetrics {
             get_count: AtomicUsize::new(0),
+            ready: std::sync::atomic::AtomicBool::new(true),
         })
     }
 
@@ -261,7 +262,10 @@ mod tests {
 
     #[tokio::test]
     async fn concurrent_gets_coalesce_into_single_storage_read() {
-        let m = metrics();
+        let m = Arc::new(StorageMetrics {
+            get_count: AtomicUsize::new(0),
+            ready: std::sync::atomic::AtomicBool::new(false),
+        });
         let storage = Arc::new(CountingStorage::new(
             vec![("popular-2.0.0.crate", b"data")],
             Arc::clone(&m),
@@ -278,6 +282,10 @@ mod tests {
             let cs = Arc::clone(&cs);
             join_set.spawn(async move { cs.get(&name("popular"), &ver("2.0.0")).await });
         }
+
+        // Let all tasks start and queue up, then release them
+        tokio::task::yield_now().await;
+        m.ready.store(true, Ordering::SeqCst);
 
         let mut results = Vec::new();
         while let Some(result) = join_set.join_next().await {
@@ -373,7 +381,10 @@ mod tests {
 
     #[tokio::test]
     async fn concurrent_gets_for_missing_crate_all_return_none() {
-        let m = metrics();
+        let m = Arc::new(StorageMetrics {
+            get_count: AtomicUsize::new(0),
+            ready: std::sync::atomic::AtomicBool::new(false),
+        });
         let storage = Arc::new(CountingStorage::new(vec![], Arc::clone(&m)));
 
         let cs = Arc::new(CachedCrateStorage::new(
@@ -388,6 +399,10 @@ mod tests {
             join_set.spawn(async move { cs.get(&name("absent"), &ver("1.0.0")).await });
         }
 
+        // Let all tasks start and queue up, then release them
+        tokio::task::yield_now().await;
+        m.ready.store(true, Ordering::SeqCst);
+
         let mut results = Vec::new();
         while let Some(result) = join_set.join_next().await {
             results.push(result.unwrap());
@@ -401,7 +416,10 @@ mod tests {
 
     #[tokio::test]
     async fn concurrent_gets_for_different_crates_are_independent() {
-        let m = metrics();
+        let m = Arc::new(StorageMetrics {
+            get_count: AtomicUsize::new(0),
+            ready: std::sync::atomic::AtomicBool::new(false),
+        });
         let storage = Arc::new(CountingStorage::new(
             vec![
                 ("crate-a-1.0.0.crate", b"aaa"),
@@ -422,6 +440,10 @@ mod tests {
             let crate_name = if i % 2 == 0 { "crate-a" } else { "crate-b" };
             join_set.spawn(async move { cs.get(&name(crate_name), &ver("1.0.0")).await });
         }
+
+        // Let all tasks start and queue up, then release them
+        tokio::task::yield_now().await;
+        m.ready.store(true, Ordering::SeqCst);
 
         let mut results = Vec::new();
         while let Some(result) = join_set.join_next().await {

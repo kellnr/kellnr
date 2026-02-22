@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::version::Version;
-use tracing::{info, warn};
+use tracing::{trace, warn};
 
 use crate::DbProvider;
 
@@ -16,14 +16,40 @@ pub struct DownloadCounter {
     db: Arc<dyn DbProvider>,
     counts: Mutex<HashMap<(NormalizedName, Version), u64>>,
     cached_counts: Mutex<HashMap<(NormalizedName, Version), u64>>,
+    flush_interval: u64,
 }
 
 impl DownloadCounter {
-    pub fn new(db: Arc<dyn DbProvider>) -> Self {
+    pub fn new(db: Arc<dyn DbProvider>, flush_interval: u64) -> Self {
         Self {
             db,
             counts: Mutex::new(HashMap::new()),
             cached_counts: Mutex::new(HashMap::new()),
+            flush_interval,
+        }
+    }
+
+    /// Record a download for a kellnr-hosted crate.
+    /// When flush_interval is 0, flushes directly to DB.
+    pub async fn increment_and_maybe_flush(&self, name: NormalizedName, version: Version) {
+        if self.flush_interval == 0 {
+            if let Err(e) = self.db.increase_download_counter(&name, &version).await {
+                warn!("Failed to increment download counter for {name} {version}: {e}");
+            }
+        } else {
+            self.increment(name, version);
+        }
+    }
+
+    /// Record a download for a cached crates.io crate.
+    /// When flush_interval is 0, flushes directly to DB.
+    pub async fn increment_cached_and_maybe_flush(&self, name: NormalizedName, version: Version) {
+        if self.flush_interval == 0 {
+            if let Err(e) = self.db.increase_cached_download_counter(&name, &version).await {
+                warn!("Failed to increment cached download counter for {name} {version}: {e}");
+            }
+        } else {
+            self.increment_cached(name, version);
         }
     }
 
@@ -88,7 +114,7 @@ impl DownloadCounter {
             }
         }
 
-        info!(
+        trace!(
             "Flushed download counters: {total_kellnr} kellnr crates, {total_cached} cached crates"
         );
     }

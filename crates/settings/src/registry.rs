@@ -25,8 +25,8 @@ pub struct Registry {
     #[arg(id = "registry-session-age", long = "registry-session-age")]
     pub session_age_seconds: u64,
 
-    /// Cache size in MB (0 = disabled)
-    #[default(512)]
+    /// Number of cached entries (0 = disabled)
+    #[default(1000)]
     #[arg(id = "registry-cache-size", long = "registry-cache-size")]
     pub cache_size: u64,
 
@@ -36,7 +36,7 @@ pub struct Registry {
     pub max_crate_size: u64,
 
     /// Max database connections (0 = unlimited)
-    #[default(50)]
+    #[default(0)]
     #[arg(
         id = "registry-max-db-connections",
         long = "registry-max-db-connections"

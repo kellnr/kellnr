@@ -90,9 +90,6 @@ pub async fn download(
     trace!("Downloading crate: {name} ({version})");
 
     let file = if let Some(file) = crate_storage.get(&name, &version).await {
-        // In-memory increment — no DB call, nanoseconds
-        download_counter.increment_cached(name.to_normalized(), version.clone());
-
         file
     } else {
         let crate_data = download_crate(&name, &version, &settings.proxy.url).await?;
@@ -111,6 +108,11 @@ pub async fn download(
             .ok_or(StatusCode::NOT_FOUND)?
     };
 
+    // Count ALL downloads (both cache hits and upstream fetches)
+    download_counter
+        .increment_cached_and_maybe_flush(name.to_normalized(), version.clone())
+        .await;
+
     let etag = format!("\"{name}-{version}\"");
     Ok((
         [
@@ -122,7 +124,11 @@ pub async fn download(
                 header::CACHE_CONTROL,
                 HeaderValue::from_static("public, max-age=31536000, immutable"),
             ),
-            (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
+            (
+                header::ETAG,
+                HeaderValue::from_str(&etag)
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+            ),
         ],
         file,
     )
