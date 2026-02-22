@@ -21,9 +21,8 @@ pub fn build_client(connect_timeout: Duration, request_timeout: Duration) -> Cli
 }
 
 /// Default client with sensible timeouts (5s connect, 30s request).
-pub static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
-    build_client(Duration::from_secs(5), Duration::from_secs(30))
-});
+pub static CLIENT: std::sync::LazyLock<Client> =
+    std::sync::LazyLock::new(|| build_client(Duration::from_secs(5), Duration::from_secs(30)));
 
 #[derive(Debug, thiserror::Error)]
 pub enum DownloadCrateError {

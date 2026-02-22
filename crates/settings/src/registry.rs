@@ -120,10 +120,7 @@ pub struct Registry {
 
     /// Download request timeout in seconds (0 = disabled)
     #[default(60)]
-    #[arg(
-        id = "registry-download-timeout",
-        long = "registry-download-timeout"
-    )]
+    #[arg(id = "registry-download-timeout", long = "registry-download-timeout")]
     pub download_timeout_seconds: u64,
 
     /// Max concurrent download requests (0 = unlimited)

@@ -18,14 +18,20 @@ pub fn create_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
     let settings = &state.settings.registry;
 
     // Download route with concurrency limit and timeout to prevent I/O starvation
-    let mut download_router = Router::new()
-        .route("/dl/{package}/{version}/download", get(cratesio_api::download));
+    let mut download_router = Router::new().route(
+        "/dl/{package}/{version}/download",
+        get(cratesio_api::download),
+    );
 
     if settings.download_max_concurrent > 0 {
-        download_router = download_router.layer(ConcurrencyLimitLayer::new(settings.download_max_concurrent));
+        download_router =
+            download_router.layer(ConcurrencyLimitLayer::new(settings.download_max_concurrent));
     }
     if settings.download_timeout_seconds > 0 {
-        download_router = download_router.layer(TimeoutLayer::with_status_code(StatusCode::GATEWAY_TIMEOUT, Duration::from_secs(settings.download_timeout_seconds)));
+        download_router = download_router.layer(TimeoutLayer::with_status_code(
+            StatusCode::GATEWAY_TIMEOUT,
+            Duration::from_secs(settings.download_timeout_seconds),
+        ));
     }
 
     let download_router: OpenApiRouter<AppStateData> = download_router.into();

@@ -84,9 +84,7 @@ impl CachedCrateStorage {
                 let storage = &self.storage;
                 let key = file_name.clone();
                 cache
-                    .try_get_with(file_name, async move {
-                        storage.get(&key).await
-                    })
+                    .try_get_with(file_name, async move { storage.get(&key).await })
                     .await
                     .ok()
             }
@@ -241,10 +239,8 @@ mod tests {
     #[tokio::test]
     async fn get_caches_result_on_second_call() {
         let m = metrics();
-        let storage = CountingStorage::new(
-            vec![("mycrate-1.0.0.crate", b"cached")],
-            Arc::clone(&m),
-        );
+        let storage =
+            CountingStorage::new(vec![("mycrate-1.0.0.crate", b"cached")], Arc::clone(&m));
         let cs = CachedCrateStorage::new(&test_settings(1), Box::new(storage));
 
         // First call hits storage
@@ -280,9 +276,7 @@ mod tests {
         let mut join_set = tokio::task::JoinSet::new();
         for _ in 0..50 {
             let cs = Arc::clone(&cs);
-            join_set.spawn(async move {
-                cs.get(&name("popular"), &ver("2.0.0")).await
-            });
+            join_set.spawn(async move { cs.get(&name("popular"), &ver("2.0.0")).await });
         }
 
         let mut results = Vec::new();
@@ -307,10 +301,8 @@ mod tests {
     #[tokio::test]
     async fn cache_disabled_when_size_is_zero() {
         let m = metrics();
-        let storage = CountingStorage::new(
-            vec![("mycrate-1.0.0.crate", b"no-cache")],
-            Arc::clone(&m),
-        );
+        let storage =
+            CountingStorage::new(vec![("mycrate-1.0.0.crate", b"no-cache")], Arc::clone(&m));
         let cs = CachedCrateStorage::new(&test_settings(0), Box::new(storage));
 
         // Call twice
@@ -350,10 +342,8 @@ mod tests {
     #[tokio::test]
     async fn cache_has_path_reflects_cached_entries() {
         let m = metrics();
-        let storage = CountingStorage::new(
-            vec![("mycrate-1.0.0.crate", b"present")],
-            Arc::clone(&m),
-        );
+        let storage =
+            CountingStorage::new(vec![("mycrate-1.0.0.crate", b"present")], Arc::clone(&m));
         let cs = CachedCrateStorage::new(&test_settings(1), Box::new(storage));
 
         // Before first get, cache doesn't have the entry
@@ -367,10 +357,8 @@ mod tests {
     #[tokio::test]
     async fn delete_invalidates_cache() {
         let m = metrics();
-        let storage = CountingStorage::new(
-            vec![("mycrate-1.0.0.crate", b"to-delete")],
-            Arc::clone(&m),
-        );
+        let storage =
+            CountingStorage::new(vec![("mycrate-1.0.0.crate", b"to-delete")], Arc::clone(&m));
         let cs = CachedCrateStorage::new(&test_settings(1), Box::new(storage));
 
         // Populate cache
@@ -397,9 +385,7 @@ mod tests {
         let mut join_set = tokio::task::JoinSet::new();
         for _ in 0..20 {
             let cs = Arc::clone(&cs);
-            join_set.spawn(async move {
-                cs.get(&name("absent"), &ver("1.0.0")).await
-            });
+            join_set.spawn(async move { cs.get(&name("absent"), &ver("1.0.0")).await });
         }
 
         let mut results = Vec::new();
@@ -434,9 +420,7 @@ mod tests {
         for i in 0..20 {
             let cs = Arc::clone(&cs);
             let crate_name = if i % 2 == 0 { "crate-a" } else { "crate-b" };
-            join_set.spawn(async move {
-                cs.get(&name(crate_name), &ver("1.0.0")).await
-            });
+            join_set.spawn(async move { cs.get(&name(crate_name), &ver("1.0.0")).await });
         }
 
         let mut results = Vec::new();

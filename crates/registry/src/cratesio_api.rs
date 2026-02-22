@@ -1,5 +1,5 @@
 use axum::extract::{Path, Request, State};
-use axum::http::{StatusCode, header, HeaderValue};
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use kellnr_appstate::{CrateIoStorageState, DownloadCounterState, SettingsState};
@@ -114,12 +114,19 @@ pub async fn download(
     let etag = format!("\"{name}-{version}\"");
     Ok((
         [
-            (header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream")),
-            (header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable")),
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/octet-stream"),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=31536000, immutable"),
+            ),
             (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
         ],
         file,
-    ).into_response())
+    )
+        .into_response())
 }
 
 #[cfg(test)]

@@ -71,9 +71,7 @@ impl DownloadCounter {
                 .increase_download_counter_by(&name, &version, count)
                 .await
             {
-                warn!(
-                    "Failed to flush download counter for {name} {version} (count={count}): {e}"
-                );
+                warn!("Failed to flush download counter for {name} {version} (count={count}): {e}");
             }
         }
 

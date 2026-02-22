@@ -185,8 +185,7 @@ async fn run_server(settings: Settings) {
         let counter = download_counter.clone();
         info!("Starting download counter flush task (interval: {flush_interval}s)");
         tokio::spawn(async move {
-            let mut interval =
-                tokio::time::interval(Duration::from_secs(flush_interval));
+            let mut interval = tokio::time::interval(Duration::from_secs(flush_interval));
             // First tick completes immediately, skip it
             interval.tick().await;
             loop {

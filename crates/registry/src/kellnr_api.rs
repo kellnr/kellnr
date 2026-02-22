@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::{StatusCode, header, HeaderValue};
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
@@ -607,12 +607,19 @@ pub async fn download(
             let etag = format!("\"{package}-{version}\"");
             Ok((
                 [
-                    (header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream")),
-                    (header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable")),
+                    (
+                        header::CONTENT_TYPE,
+                        HeaderValue::from_static("application/octet-stream"),
+                    ),
+                    (
+                        header::CACHE_CONTROL,
+                        HeaderValue::from_static("public, max-age=31536000, immutable"),
+                    ),
                     (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
                 ],
                 file,
-            ).into_response())
+            )
+                .into_response())
         }
         None => Err(RegistryError::CrateNotFound.into()),
     }
@@ -2442,10 +2449,7 @@ mod reg_api_tests {
 
         // Verify Cache-Control header
         let cache_control = r.headers().get(header::CACHE_CONTROL).unwrap();
-        assert_eq!(
-            cache_control,
-            "public, max-age=31536000, immutable",
-        );
+        assert_eq!(cache_control, "public, max-age=31536000, immutable",);
 
         // Verify ETag header
         let etag = r.headers().get(header::ETAG).unwrap();
