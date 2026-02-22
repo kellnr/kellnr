@@ -10,6 +10,7 @@ use kellnr_appstate::AppStateData;
 use kellnr_auth::oauth2::OAuth2Handler;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::token_cache::TokenCacheManager;
+use kellnr_db::download_counter::DownloadCounter;
 use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
@@ -177,6 +178,25 @@ async fn run_server(settings: Settings) {
     // Initialize OAuth2/OIDC handler if enabled
     let oauth2_handler = init_oauth2_handler(&settings).await;
 
+    // Initialize download counter with periodic flush
+    let flush_interval = settings.registry.download_counter_flush_seconds;
+    let download_counter = Arc::new(DownloadCounter::new(db.clone(), flush_interval));
+    if flush_interval > 0 {
+        let counter = download_counter.clone();
+        info!("Starting download counter flush task (interval: {flush_interval}s)");
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(flush_interval));
+            // First tick completes immediately, skip it
+            interval.tick().await;
+            loop {
+                interval.tick().await;
+                counter.flush().await;
+            }
+        });
+    }
+
+    let download_counter_for_shutdown = download_counter.clone();
+
     let state = AppStateData {
         db,
         signing_key,
@@ -186,6 +206,7 @@ async fn run_server(settings: Settings) {
         cratesio_prefetch_sender,
         token_cache,
         toolchain_storage,
+        download_counter,
     };
 
     // Create router using the route module
@@ -209,12 +230,26 @@ async fn run_server(settings: Settings) {
             );
     }
 
-    // Start the server
+    // Start the server with graceful shutdown
     let listener = TcpListener::bind(addr)
         .await
         .unwrap_or_else(|_| panic!("Failed to bind to {addr}"));
     info!("Kellnr has been started on http://{addr}/");
-    axum::serve(listener, app).await.unwrap();
+
+    tokio::select! {
+        result = axum::serve(listener, app) => {
+            if let Err(e) = result {
+                error!("Server error: {e}");
+            }
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Shutdown signal received, flushing download counters...");
+        }
+    }
+
+    // Flush any accumulated download counts before exiting
+    download_counter_for_shutdown.flush().await;
+    info!("Download counters flushed. Shutting down.");
 }
 
 fn init_cookie_signing_key(settings: &Settings) -> Key {

@@ -5,6 +5,7 @@ mod crate_summary;
 mod database;
 mod doc_queue_entry;
 pub mod error;
+pub mod download_counter;
 mod group;
 mod krate;
 pub mod password;

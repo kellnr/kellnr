@@ -117,4 +117,12 @@ pub struct Registry {
         long = "registry-token-db-retry-delay"
     )]
     pub token_db_retry_delay_ms: u64,
+
+    /// Download counter flush interval in seconds (0 = flush every download)
+    #[default(30)]
+    #[arg(
+        id = "registry-download-counter-flush",
+        long = "registry-download-counter-flush"
+    )]
+    pub download_counter_flush_seconds: u64,
 }
