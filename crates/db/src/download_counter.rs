@@ -14,8 +14,8 @@ use crate::DbProvider;
 /// 2-calls-per-unique-crate-per-flush.
 pub struct DownloadCounter {
     db: Arc<dyn DbProvider>,
-    counts: Mutex<HashMap<(NormalizedName, Version), u64>>,
-    cached_counts: Mutex<HashMap<(NormalizedName, Version), u64>>,
+    counts: Mutex<HashMap<(NormalizedName, String), u64>>,
+    cached_counts: Mutex<HashMap<(NormalizedName, String), u64>>,
     flush_interval: u64,
 }
 
@@ -37,7 +37,7 @@ impl DownloadCounter {
                 warn!("Failed to increment download counter for {name} {version}: {e}");
             }
         } else {
-            self.increment(name, version);
+            self.increment(name, &version);
         }
     }
 
@@ -53,23 +53,23 @@ impl DownloadCounter {
                 warn!("Failed to increment cached download counter for {name} {version}: {e}");
             }
         } else {
-            self.increment_cached(name, version);
+            self.increment_cached(name, &version);
         }
     }
 
     /// Record a download for a kellnr-hosted crate. Instant, no DB call.
-    pub fn increment(&self, name: NormalizedName, version: Version) {
+    fn increment(&self, name: NormalizedName, version: &Version) {
         let mut counts = self.counts.lock().expect("download counter lock poisoned");
-        *counts.entry((name, version)).or_insert(0) += 1;
+        *counts.entry((name, version.to_string())).or_insert(0) += 1;
     }
 
     /// Record a download for a cached crates.io crate. Instant, no DB call.
-    pub fn increment_cached(&self, name: NormalizedName, version: Version) {
+    fn increment_cached(&self, name: NormalizedName, version: &Version) {
         let mut counts = self
             .cached_counts
             .lock()
             .expect("cached download counter lock poisoned");
-        *counts.entry((name, version)).or_insert(0) += 1;
+        *counts.entry((name, version.to_string())).or_insert(0) += 1;
     }
 
     /// Flush all accumulated counts to the database.
@@ -96,6 +96,7 @@ impl DownloadCounter {
 
         // Flush kellnr crate counts
         for ((name, version), count) in counts {
+            let version = Version::from_unchecked_str(&version);
             if let Err(e) = self
                 .db
                 .increase_download_counter_by(&name, &version, count)
@@ -107,6 +108,7 @@ impl DownloadCounter {
 
         // Flush cached crates.io crate counts
         for ((name, version), count) in cached_counts {
+            let version = Version::from_unchecked_str(&version);
             if let Err(e) = self
                 .db
                 .increase_cached_download_counter_by(&name, &version, count)
