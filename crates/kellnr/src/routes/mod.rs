@@ -6,6 +6,7 @@ use kellnr_appstate::AppStateData;
 use kellnr_auth::oauth2::OAuth2Handler;
 use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};
 use kellnr_web_ui::session;
+use tokio::sync::Semaphore;
 use tower_http::services::ServeDir;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -39,6 +40,15 @@ pub fn create_router(
         middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
     );
 
+    // Shared download concurrency limiter across kellnr and crates.io routes
+    let download_semaphore = if state.settings.registry.download_max_concurrent > 0 {
+        Some(Arc::new(Semaphore::new(
+            state.settings.registry.download_max_concurrent,
+        )))
+    } else {
+        None
+    };
+
     // Build API routes using OpenApiRouter with the base OpenAPI document
     let mut api_router: OpenApiRouter<AppStateData> =
         OpenApiRouter::with_openapi(ApiDoc::openapi())
@@ -53,11 +63,11 @@ pub fn create_router(
             .nest("/api/v1/oauth2", oauth2_routes::create_routes())
             .nest(
                 "/api/v1/cratesio",
-                cratesio_api_routes::create_routes(state.clone()),
+                cratesio_api_routes::create_routes(state.clone(), download_semaphore.clone()),
             )
             .nest(
                 "/api/v1/crates",
-                kellnr_api_routes::create_routes(state.clone(), max_crate_size),
+                kellnr_api_routes::create_routes(state.clone(), max_crate_size, download_semaphore),
             )
             .nest("/api/v1", health_routes::create_routes());
 

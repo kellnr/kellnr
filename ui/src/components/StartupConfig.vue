@@ -126,6 +126,8 @@ const sections: ConfigSection[] = [
       { key: 'registry.token_cache_max_capacity', label: 'Token Cache Max Capacity', cli: '--registry-token-cache-max-capacity' },
       { key: 'registry.token_db_retry_count', label: 'Token DB Retry Count', cli: '--registry-token-db-retry-count' },
       { key: 'registry.token_db_retry_delay_ms', label: 'Token DB Retry Delay (ms)', cli: '--registry-token-db-retry-delay' },
+      { key: 'registry.download_timeout_seconds', label: 'Download Timeout (seconds)', cli: '--registry-download-timeout' },
+      { key: 'registry.download_max_concurrent', label: 'Download Max Concurrent', cli: '--registry-download-max-concurrent' },
     ]
   },
   {
@@ -169,6 +171,8 @@ const sections: ConfigSection[] = [
       { key: 'proxy.download_on_update', label: 'Download on Update', type: 'boolean', cli: '--proxy-download-on-update' },
       { key: 'proxy.url', label: 'URL', cli: '--proxy-url' },
       { key: 'proxy.index', label: 'Index URL', cli: '--proxy-index' },
+      { key: 'proxy.connect_timeout_seconds', label: 'Connect Timeout (seconds)', cli: '--proxy-connect-timeout' },
+      { key: 'proxy.request_timeout_seconds', label: 'Request Timeout (seconds)', cli: '--proxy-request-timeout' },
     ]
   },
   {
@@ -209,6 +213,8 @@ const sections: ConfigSection[] = [
       { key: 's3.crates_bucket', label: 'Crates Bucket', cli: '--s3-crates-bucket' },
       { key: 's3.cratesio_bucket', label: 'Crates.io Bucket', cli: '--s3-cratesio-bucket' },
       { key: 's3.toolchain_bucket', label: 'Toolchain Bucket', cli: '--s3-toolchain-bucket' },
+      { key: 's3.connect_timeout_seconds', label: 'Connect Timeout (seconds)', cli: '--s3-connect-timeout' },
+      { key: 's3.request_timeout_seconds', label: 'Request Timeout (seconds)', cli: '--s3-request-timeout' },
     ]
   },
   {
