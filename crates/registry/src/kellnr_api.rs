@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
+use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
 use kellnr_auth::{maybe_user, token};
@@ -15,7 +16,6 @@ use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use kellnr_error::api_error::{ApiError, ApiResult};
-use tracing::warn;
 
 use crate::pub_data::{EmptyCrateData, PubData};
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
@@ -592,7 +592,7 @@ pub async fn download(
     State(state): AppState,
     token: token::OptionToken,
     Path((package, version)): Path<(OriginalName, Version)>,
-) -> ApiResult<Vec<u8>> {
+) -> Result<Response, ApiError> {
     let db = state.db;
     let cs = state.crate_storage;
     check_download_auth(&package.to_normalized(), &token, &db).await?;
@@ -601,11 +601,38 @@ pub async fn download(
         .increase_download_counter(&package.to_normalized(), &version)
         .await
     {
-        warn!("Failed to increase download counter: {e}");
+        tracing::warn!("Failed to increase download counter: {e}");
     }
 
     match cs.get(&package, &version).await {
-        Some(file) => Ok(file),
+        Some(file) => {
+            let hash = sha256::digest(&*file);
+            let etag = format!("\"{hash}\"");
+            Ok((
+                [
+                    (
+                        header::CONTENT_TYPE,
+                        HeaderValue::from_static("application/octet-stream"),
+                    ),
+                    (
+                        header::CACHE_CONTROL,
+                        HeaderValue::from_static("public, must-revalidate"),
+                    ),
+                    (
+                        header::ETAG,
+                        HeaderValue::from_str(&etag).map_err(|_| {
+                            ApiError::new(
+                                "Invalid ETag value",
+                                "",
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                            )
+                        })?,
+                    ),
+                ],
+                file,
+            )
+                .into_response())
+        }
         None => Err(RegistryError::CrateNotFound.into()),
     }
 }
@@ -2509,4 +2536,128 @@ mod reg_api_tests {
                 ..kellnr_appstate::test_state()
             })
     }
+
+    #[tokio::test]
+    async fn download_returns_cache_headers() {
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let settings = get_settings();
+        let kellnr = TestKellnr::fake(settings).await;
+
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/test_lib/0.2.0/download")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+
+        let cache_control = r.headers().get(header::CACHE_CONTROL).unwrap();
+        assert_eq!(cache_control, "public, must-revalidate");
+
+        let etag = r.headers().get(header::ETAG).unwrap().to_str().unwrap();
+        assert!(
+            etag.starts_with('"') && etag.ends_with('"'),
+            "ETag should be quoted"
+        );
+        assert_eq!(
+            etag.len(),
+            66,
+            "ETag should be a quoted SHA-256 hash (64 hex chars + 2 quotes)"
+        );
+
+        let content_type = r.headers().get(header::CONTENT_TYPE).unwrap();
+        assert_eq!(content_type, "application/octet-stream");
+
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        assert!(!body.is_empty());
+    }
+
+    #[tokio::test]
+    async fn download_second_call_returns_same_content() {
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let settings = get_settings();
+        let kellnr = TestKellnr::fake(settings).await;
+
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let r1 = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/test_lib/0.2.0/download")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(r1.status(), StatusCode::OK);
+        let body1 = r1.into_body().collect().await.unwrap().to_bytes();
+
+        let r2 = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/test_lib/0.2.0/download")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(r2.status(), StatusCode::OK);
+        let body2 = r2.into_body().collect().await.unwrap().to_bytes();
+
+        assert_eq!(body1, body2);
+        assert!(
+            kellnr
+                .client
+                .clone()
+                .oneshot(
+                    Request::get("/api/v1/crates/test_lib/0.2.0/download")
+                        .header(header::AUTHORIZATION, TOKEN)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status()
+                == StatusCode::OK,
+        );
+    }
+
 }

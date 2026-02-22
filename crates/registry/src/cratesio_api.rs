@@ -1,7 +1,7 @@
 use axum::extract::{Path, Request, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::middleware::Next;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use kellnr_appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
 use kellnr_common::cratesio_downloader::{CLIENT, download_crate};
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData};
@@ -87,19 +87,18 @@ pub async fn download(
     State(crate_storage): CrateIoStorageState,
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
-) -> Result<Vec<u8>, StatusCode> {
+) -> Result<Response, StatusCode> {
     trace!("Downloading crate: {name} ({version})");
 
-    if let Some(file) = crate_storage.get(&name, &version).await {
+    let file = if let Some(file) = crate_storage.get(&name, &version).await {
         let msg = DownloadData {
-            name: name.into(),
-            version,
+            name: name.clone().into(),
+            version: version.clone(),
         };
         if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
             warn!("Failed to send IncDownloadCnt message: {e}");
         }
-
-        Ok(file)
+        file
     } else {
         let crate_data = download_crate(&name, &version, &settings.proxy.url).await?;
 
@@ -114,8 +113,28 @@ pub async fn download(
         crate_storage
             .get(&name, &version)
             .await
-            .ok_or(StatusCode::NOT_FOUND)
-    }
+            .ok_or(StatusCode::NOT_FOUND)?
+    };
+
+    let etag = format!("\"{name}-{version}\"");
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/octet-stream"),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=31536000, immutable"),
+            ),
+            (
+                header::ETAG,
+                HeaderValue::from_str(&etag).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+            ),
+        ],
+        file,
+    )
+        .into_response())
 }
 
 #[cfg(test)]
