@@ -99,7 +99,7 @@ pub async fn download(
             warn!("Failed to send IncDownloadCnt message: {e}");
         }
 
-        Ok(file)
+        Ok(file.to_vec())
     } else {
         let crate_data = download_crate(&name, &version, &settings.proxy.url).await?;
 
@@ -114,7 +114,7 @@ pub async fn download(
         crate_storage
             .get(&name, &version)
             .await
-            .ok_or(StatusCode::NOT_FOUND)
+            .map(|b| b.to_vec()).ok_or(StatusCode::NOT_FOUND)
     }
 }
 

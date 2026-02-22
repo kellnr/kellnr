@@ -605,7 +605,7 @@ pub async fn download(
     }
 
     match cs.get(&package, &version).await {
-        Some(file) => Ok(file),
+        Some(file) => Ok(file.to_vec()),
         None => Err(RegistryError::CrateNotFound.into()),
     }
 }
