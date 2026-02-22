@@ -171,7 +171,7 @@ mod tests {
         }
     }
 
-    /// Wrapper to make CountingStorage usable through Arc (needed for concurrent test)
+    /// Wrapper to make `CountingStorage` usable through `Arc` (needed for concurrent test)
     #[async_trait]
     impl Storage for Arc<CountingStorage> {
         async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
