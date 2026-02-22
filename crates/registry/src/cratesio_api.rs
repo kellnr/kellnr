@@ -126,8 +126,7 @@ pub async fn download(
             ),
             (
                 header::ETAG,
-                HeaderValue::from_str(&etag)
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+                HeaderValue::from_str(&etag).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
             ),
         ],
         file,

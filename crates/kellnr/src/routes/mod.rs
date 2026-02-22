@@ -67,11 +67,7 @@ pub fn create_router(
             )
             .nest(
                 "/api/v1/crates",
-                kellnr_api_routes::create_routes(
-                    state.clone(),
-                    max_crate_size,
-                    download_semaphore,
-                ),
+                kellnr_api_routes::create_routes(state.clone(), max_crate_size, download_semaphore),
             )
             .nest("/api/v1", health_routes::create_routes());
 

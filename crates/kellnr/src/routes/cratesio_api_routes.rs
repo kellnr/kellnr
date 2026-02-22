@@ -33,10 +33,7 @@ pub fn create_routes(
             move |req: axum::extract::Request, next: Next| {
                 let sem = semaphore.clone();
                 async move {
-                    let _permit = sem
-                        .acquire()
-                        .await
-                        .expect("download semaphore closed");
+                    let _permit = sem.acquire().await.expect("download semaphore closed");
                     next.run(req).await
                 }
             },

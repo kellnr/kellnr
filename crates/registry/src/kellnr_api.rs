@@ -620,7 +620,11 @@ pub async fn download(
                     (
                         header::ETAG,
                         HeaderValue::from_str(&etag).map_err(|_| {
-                            ApiError::new("Invalid ETag value", "", StatusCode::INTERNAL_SERVER_ERROR)
+                            ApiError::new(
+                                "Invalid ETag value",
+                                "",
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                            )
                         })?,
                     ),
                 ],
@@ -2460,8 +2464,15 @@ mod reg_api_tests {
 
         // Verify ETag header (content-based SHA-256 hash)
         let etag = r.headers().get(header::ETAG).unwrap().to_str().unwrap();
-        assert!(etag.starts_with('"') && etag.ends_with('"'), "ETag should be quoted");
-        assert_eq!(etag.len(), 66, "ETag should be a quoted SHA-256 hash (64 hex chars + 2 quotes)");
+        assert!(
+            etag.starts_with('"') && etag.ends_with('"'),
+            "ETag should be quoted"
+        );
+        assert_eq!(
+            etag.len(),
+            66,
+            "ETag should be a quoted SHA-256 hash (64 hex chars + 2 quotes)"
+        );
 
         // Verify Content-Type header
         let content_type = r.headers().get(header::CONTENT_TYPE).unwrap();
