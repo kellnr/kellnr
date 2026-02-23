@@ -30,8 +30,8 @@ pub struct Registry {
     #[arg(id = "registry-cache-size", long = "registry-cache-size")]
     pub cache_size: u64,
 
-    /// Max crate size in KB
-    #[default(10 * 1000)]
+    /// Max crate size in MB
+    #[default(10)]
     #[arg(id = "registry-max-crate-size", long = "registry-max-crate-size")]
     pub max_crate_size: u64,
 
