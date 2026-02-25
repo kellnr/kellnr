@@ -537,7 +537,10 @@ mod tests {
         ));
         let (cratesio_prefetch_sender, _) = flume::unbounded();
         let db: Arc<dyn kellnr_db::DbProvider> = Arc::new(mock_db);
-        let download_counter = Arc::new(kellnr_db::download_counter::DownloadCounter::new(db.clone(), 30));
+        let download_counter = Arc::new(kellnr_db::download_counter::DownloadCounter::new(
+            db.clone(),
+            30,
+        ));
 
         AppStateData {
             db,
