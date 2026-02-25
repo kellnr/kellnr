@@ -2659,5 +2659,4 @@ mod reg_api_tests {
                 == StatusCode::OK,
         );
     }
-
 }
