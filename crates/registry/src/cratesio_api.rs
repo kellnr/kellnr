@@ -114,7 +114,8 @@ pub async fn download(
         crate_storage
             .get(&name, &version)
             .await
-            .map(|b| b.to_vec()).ok_or(StatusCode::NOT_FOUND)
+            .map(|b| b.to_vec())
+            .ok_or(StatusCode::NOT_FOUND)
     }
 }
 
