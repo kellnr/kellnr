@@ -124,7 +124,7 @@ mod tests {
     /// Shared state for tracking storage call counts.
     struct StorageMetrics {
         get_count: AtomicUsize,
-        /// When true, storage.get() returns immediately. When false, it waits.
+        /// When true, `storage.get()` returns immediately. When false, it waits.
         ready: std::sync::atomic::AtomicBool,
     }
 
