@@ -14,7 +14,7 @@ use crate::origin::Origin;
 use crate::postgresql::Postgresql;
 use crate::proxy::Proxy;
 use crate::registry::Registry;
-use crate::s3::S3;
+use crate::storage::Storage;
 use crate::settings::Settings;
 use crate::setup::Setup;
 use crate::toolchain::Toolchain;
@@ -101,7 +101,7 @@ pub struct ServerArgs {
     pub postgresql: <Postgresql as ClapSerde>::Opt,
 
     #[command(flatten)]
-    pub s3: <S3 as ClapSerde>::Opt,
+    pub storage: <Storage as ClapSerde>::Opt,
 
     #[command(flatten)]
     pub setup: <Setup as ClapSerde>::Opt,
@@ -295,7 +295,7 @@ fn track_and_merge_cli(settings: &mut Settings, server: ServerArgs) {
     settings.docs = settings.docs.clone().merge(server.docs);
     settings.proxy = settings.proxy.clone().merge(server.proxy);
     settings.postgresql = settings.postgresql.clone().merge(server.postgresql);
-    settings.s3 = settings.s3.clone().merge(server.s3);
+    settings.storage = settings.storage.clone().merge(server.storage);
     settings.setup = settings.setup.clone().merge(server.setup);
     settings.oauth2 = settings.oauth2.clone().merge(server.oauth2);
     settings.toolchain = settings.toolchain.clone().merge(server.toolchain);

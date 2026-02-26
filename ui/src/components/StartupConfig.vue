@@ -195,20 +195,14 @@ const sections: ConfigSection[] = [
     ]
   },
   {
-    key: 's3',
-    title: 'S3 Storage',
-    icon: 'mdi-cloud-outline',
-    hasEnabledToggle: true,
+    key: 'storage',
+    title: 'Storage',
+    icon: 'mdi-file-document-outline',
+    hasEnabledToggle: false,
     items: [
-      { key: 's3.enabled', label: 'Enabled', type: 'boolean', cli: '--s3-enabled' },
-      { key: 's3.access_key', label: 'Access Key', cli: '--s3-access-key' },
-      { key: 's3.secret_key', label: 'Secret Key', secret: true, cli: '--s3-secret-key' },
-      { key: 's3.region', label: 'Region', cli: '--s3-region' },
-      { key: 's3.endpoint', label: 'Endpoint', cli: '--s3-endpoint' },
-      { key: 's3.allow_http', label: 'Allow HTTP', type: 'boolean', warningWhenTrue: true, cli: '--s3-allow-http' },
-      { key: 's3.crates_bucket', label: 'Crates Bucket', cli: '--s3-crates-bucket' },
-      { key: 's3.cratesio_bucket', label: 'Crates.io Bucket', cli: '--s3-cratesio-bucket' },
-      { key: 's3.toolchain_bucket', label: 'Toolchain Bucket', cli: '--s3-toolchain-bucket' },
+      { key: 'storage.kellnr_crates', label: 'Kellnr Crates', cli: '--storage-kellnr-crates' },
+      { key: 'storage.crates_io', label: 'Crates.io', cli: '--storage-crates-io' },
+      { key: 'storage.toolchain', label: 'Toolchain', cli: '--storage-toolchain' },
     ]
   },
   {

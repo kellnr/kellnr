@@ -14,7 +14,7 @@ use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
-use kellnr_settings::{CliResult, LogFormat, Settings, ShowConfigOptions, parse_cli};
+use kellnr_settings::{CliResult, LogFormat, Settings, ShowConfigOptions, parse_cli, storage::StorageBackend};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
@@ -119,8 +119,15 @@ async fn run_server(settings: Settings) {
         .await
         .expect("Failed to create data directory.");
 
-    // Initialize kellnr crate storage
-    let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).into();
+    // Initialize kellnr crate storage backend, Crates.io Proxy storage backend, 
+    // and toolchain storage backends.
+    let (
+        crate_storage,
+        cratesio_storage,
+        toolchain_storage
+    ) = init_storages(&settings);
+
+    // // Initialize kellnr crate storage
 
     // Create the database connection. Has to be done after the index and storage
     // as the needed folders for the sqlite database may not have been created before that.
@@ -130,8 +137,7 @@ async fn run_server(settings: Settings) {
         .expect("Failed to create database");
     let db = Arc::new(db) as Arc<dyn DbProvider>;
 
-    // Crates.io Proxy
-    let cratesio_storage: Arc<CratesIoCrateStorage> = init_cratesio_storage(&settings).into();
+    // // Crates.io Proxy
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
 
@@ -170,9 +176,6 @@ async fn run_server(settings: Settings) {
         settings.registry.token_cache_ttl_seconds,
         settings.registry.token_cache_max_capacity,
     ));
-
-    // Initialize toolchain storage if enabled
-    let toolchain_storage = init_toolchain_storage(&settings);
 
     // Initialize OAuth2/OIDC handler if enabled
     let oauth2_handler = init_oauth2_handler(&settings).await;
@@ -272,39 +275,51 @@ async fn init_docs_hosting(
     }
 }
 
-fn init_cratesio_storage(settings: &Settings) -> CratesIoCrateStorage {
-    let storage = init_storage(&settings.crates_io_path_or_bucket(), settings);
-    CratesIoCrateStorage::new(settings, storage)
-}
+fn init_storages(settings: &Settings) -> (Arc<KellnrCrateStorage>, Arc<CratesIoCrateStorage>, Option<Arc<ToolchainStorage>>) {
 
-fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
-    let storage = init_storage(&settings.crates_path_or_bucket(), settings);
-    KellnrCrateStorage::new(settings, storage)
-}
+    let kellnr_storage: Arc<KellnrCrateStorage> = {
+        match &settings.storage.kellnr_crates {
+            StorageBackend::File(config) => {
+                let storage = FSStorage::try_from(config).expect("Failed to create FS storage for 'kellnr_crates'");
+                KellnrCrateStorage::new(settings, Box::new(storage) as DynStorage).into()
+            },
+            StorageBackend::S3(config) => {
+                let storage = S3Storage::try_from(config).expect("Failed to create S3 storage for 'kellnr_crates'");
+                KellnrCrateStorage::new(settings, Box::new(storage) as DynStorage).into()
+            },
+        }
+    };
 
-fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
-    if settings.s3.enabled {
-        let s = S3Storage::try_from((folder, settings)).expect("Failed to create S3 storage.");
-        Box::new(s) as DynStorage
-    } else {
-        let s = FSStorage::new(folder).expect("Failed to create FS storage.");
-        Box::new(s) as DynStorage
+    let crates_io_storage: Arc<CratesIoCrateStorage> = {
+        match &settings.storage.crates_io {
+            StorageBackend::File(config) => {
+                let storage = FSStorage::try_from(config).expect("Failed to create FS storage for 'crates_io'");
+                CratesIoCrateStorage::new(settings, Box::new(storage) as DynStorage).into()
+            },
+            StorageBackend::S3(config) => {
+                let storage = S3Storage::try_from(config).expect("Failed to create S3 storage for 'crates_io'");
+                CratesIoCrateStorage::new(settings, Box::new(storage) as DynStorage).into()
+            }
+        }
+    };
+    let mut toolchain_storage = None;
+    if settings.toolchain.enabled {
+        match &settings.storage.toolchain {
+            StorageBackend::File(config) => {
+                let storage = FSStorage::try_from(config).expect("Failed to create FS storage for 'toolchain'");
+                toolchain_storage = Some(ToolchainStorage::new(Box::new(storage) as DynStorage).into());
+            },
+            StorageBackend::S3(config) => {
+                let storage = S3Storage::try_from(config).expect("Failed to create S3 storage for 'toolchain'");
+                toolchain_storage = Some(ToolchainStorage::new(Box::new(storage) as DynStorage).into());
+            }
+        }
     }
+    (kellnr_storage, crates_io_storage, toolchain_storage)
 }
 
 fn init_webhook_service(db: Arc<dyn DbProvider + 'static>) {
     kellnr_webhooks::run_webhook_service(db);
-}
-
-fn init_toolchain_storage(settings: &Arc<Settings>) -> Option<Arc<ToolchainStorage>> {
-    if !settings.toolchain.enabled {
-        return None;
-    }
-
-    let storage = init_storage(&settings.toolchain_path_or_bucket(), settings);
-    let toolchain_storage = ToolchainStorage::new(storage);
-
-    Some(Arc::new(toolchain_storage))
 }
 
 async fn init_oauth2_handler(settings: &Settings) -> Option<Arc<OAuth2Handler>> {

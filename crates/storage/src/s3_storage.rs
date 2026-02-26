@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use bytes::Bytes;
-use kellnr_settings::Settings;
+use kellnr_settings::s3::S3Config;
 use object_store::aws::{AmazonS3, AmazonS3Builder};
 use object_store::path::Path;
 use object_store::{ObjectStore, ObjectStoreExt, PutMode};
@@ -61,24 +61,25 @@ impl S3Storage {
     }
 }
 
-impl TryFrom<(&str, &Settings)> for S3Storage {
+impl TryFrom<&S3Config> for S3Storage {
     type Error = StorageError;
 
-    fn try_from((bucket, settings): (&str, &Settings)) -> Result<Self, Self::Error> {
+    fn try_from(config: &S3Config) -> Result<Self, Self::Error> {
+
         let mut s3 = AmazonS3Builder::from_env()
-            .with_bucket_name(bucket)
-            .with_allow_http(settings.s3.allow_http)
+            .with_bucket_name(&config.bucket)
+            .with_allow_http(config.allow_http)
             .with_conditional_put(object_store::aws::S3ConditionalPut::ETagMatch);
-        if let Some(endpoint) = &settings.s3.endpoint {
+        if let Some(endpoint) = &config.endpoint {
             s3 = s3.with_endpoint(endpoint);
         }
-        if let Some(region) = &settings.s3.region {
+        if let Some(region) = &config.region {
             s3 = s3.with_region(region);
         }
-        if let Some(access_key) = &settings.s3.access_key {
+        if let Some(access_key) = &config.access_key {
             s3 = s3.with_access_key_id(access_key);
         }
-        if let Some(secret_key) = &settings.s3.secret_key {
+        if let Some(secret_key) = &config.secret_key {
             s3 = s3.with_secret_access_key(secret_key);
         }
         // S3-compatible (RustFS, MinIO, etc.)
