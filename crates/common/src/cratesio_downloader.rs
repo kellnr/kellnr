@@ -55,6 +55,7 @@ impl From<DownloadCrateError> for StatusCode {
 }
 
 pub async fn download_crate(
+    client: &Client,
     name: &str,
     version: &str,
     url: &Url,
@@ -62,7 +63,7 @@ pub async fn download_crate(
     let path = format!("{name}/{version}/download");
     let target = url.join(&path)?;
 
-    let res = match CLIENT.get(target).send().await {
+    let res = match client.get(target).send().await {
         Ok(resp) if resp.status() == 404 => Err(DownloadCrateError::NotFound),
         Ok(resp) if resp.status() == 403 => Err(DownloadCrateError::NotFound), // Map 403 to 404 as
         // crates.io returns 403 for non-existent crates

@@ -1,13 +1,19 @@
 use std::sync::Arc;
+use std::time::Duration;
 
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::routing::{get, get_service};
 use axum::{Extension, Router, middleware};
+use axum::middleware::Next;
 use kellnr_appstate::AppStateData;
 use kellnr_auth::oauth2::OAuth2Handler;
 use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};
+use kellnr_settings::Registry;
 use kellnr_web_ui::session;
 use tokio::sync::Semaphore;
 use tower_http::services::ServeDir;
+use tower_http::timeout::TimeoutLayer;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
@@ -104,4 +110,57 @@ pub fn create_router(
         // Add OAuth2 handler as an extension (accessible via Extension<Option<Arc<OAuth2Handler>>>)
         .layer(Extension(oauth2_handler))
         .layer(tower_http::trace::TraceLayer::new_for_http())
+}
+
+/// Apply download concurrency and timeout limits to a router.
+///
+/// When the semaphore is provided, requests that exceed the concurrency limit
+/// receive 429 Too Many Requests immediately (via `try_acquire`).
+/// When `download_timeout_seconds > 0`, requests that exceed the timeout
+/// receive 504 Gateway Timeout.
+///
+/// Layer ordering: the timeout wraps the handler directly, so it measures
+/// actual request processing time (not time spent waiting for a permit).
+pub(crate) fn apply_download_limits(
+    mut router: Router<AppStateData>,
+    semaphore: Option<Arc<Semaphore>>,
+    settings: &Registry,
+) -> Router<AppStateData> {
+    // Apply timeout first (innermost layer = applied first to the handler)
+    if settings.download_timeout_seconds > 0 {
+        let timeout_secs = settings.download_timeout_seconds;
+        router = router
+            .layer(middleware::map_response(
+                move |response: axum::response::Response| async move {
+                    if response.status() == StatusCode::GATEWAY_TIMEOUT {
+                        tracing::warn!(
+                            "Download request timed out after {timeout_secs}s. \
+                             Consider increasing registry.download_timeout_seconds"
+                        );
+                    }
+                    response
+                },
+            ))
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::GATEWAY_TIMEOUT,
+                Duration::from_secs(timeout_secs),
+            ));
+    }
+
+    // Apply semaphore second (outermost layer = checked before timeout starts)
+    if let Some(semaphore) = semaphore {
+        router = router.layer(middleware::from_fn(
+            move |req: axum::extract::Request, next: Next| {
+                let sem = semaphore.clone();
+                async move {
+                    match sem.try_acquire() {
+                        Ok(_permit) => next.run(req).await,
+                        Err(_) => StatusCode::TOO_MANY_REQUESTS.into_response(),
+                    }
+                }
+            },
+        ));
+    }
+
+    router
 }
