@@ -25,7 +25,7 @@ use kellnr_storage::toolchain_storage::ToolchainStorage;
 use moka::future::Cache;
 use tokio::fs::create_dir_all;
 use tokio::net::TcpListener;
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 use tracing_subscriber::fmt::format;
 
 mod config_printer;
@@ -183,7 +183,7 @@ async fn run_server(settings: Settings) {
     let download_counter = Arc::new(DownloadCounter::new(db.clone(), flush_interval));
     if flush_interval > 0 {
         let counter = download_counter.clone();
-        info!("Starting download counter flush task (interval: {flush_interval}s)");
+        trace!("Starting download counter flush task (interval: {flush_interval}s)");
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(flush_interval));
             // First tick completes immediately, skip it
@@ -236,6 +236,16 @@ async fn run_server(settings: Settings) {
         .unwrap_or_else(|_| panic!("Failed to bind to {addr}"));
     info!("Kellnr has been started on http://{addr}/");
 
+    #[cfg(unix)]
+    let sigterm = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let sigterm = std::future::pending::<()>();
+
     tokio::select! {
         result = axum::serve(listener, app) => {
             if let Err(e) = result {
@@ -243,13 +253,16 @@ async fn run_server(settings: Settings) {
             }
         }
         _ = tokio::signal::ctrl_c() => {
-            info!("Shutdown signal received, flushing download counters...");
+            trace!("Shutdown signal received, flushing download counters...");
+        }
+        _ = sigterm => {
+            trace!("SIGTERM received, flushing download counters...");
         }
     }
 
     // Flush any accumulated download counts before exiting
     download_counter_for_shutdown.flush().await;
-    info!("Download counters flushed. Shutting down.");
+    trace!("Download counters flushed. Shutting down.");
 }
 
 fn init_cookie_signing_key(settings: &Settings) -> Key {

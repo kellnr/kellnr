@@ -472,25 +472,24 @@ impl DbProvider for Database {
         crate_name: &NormalizedName,
         crate_version: &Version,
     ) -> DbResult<()> {
-        // Atomic update for crate total_downloads (fixes race condition)
+        let txn = self.db_con.begin().await?;
+
         krate::Entity::update_many()
             .col_expr(
                 krate::Column::TotalDownloads,
                 Expr::col(krate::Column::TotalDownloads).add(1),
             )
             .filter(krate::Column::Name.eq(crate_name))
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
-        // Get crate_id for version-specific update
         let crate_id = krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
-            .one(&self.db_con)
+            .one(&txn)
             .await?
             .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
             .id;
 
-        // Update the downloads for the specific version (already atomic)
         crate_meta::Entity::update_many()
             .col_expr(
                 crate_meta::Column::Downloads,
@@ -501,9 +500,10 @@ impl DbProvider for Database {
                     .add(crate_meta::Column::Version.eq(crate_version))
                     .add(crate_meta::Column::CrateFk.eq(crate_id)),
             )
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
+        txn.commit().await?;
         Ok(())
     }
 
@@ -512,25 +512,24 @@ impl DbProvider for Database {
         crate_name: &NormalizedName,
         crate_version: &Version,
     ) -> DbResult<()> {
-        // Atomic update for crate total_downloads (fixes race condition)
+        let txn = self.db_con.begin().await?;
+
         cratesio_crate::Entity::update_many()
             .col_expr(
                 cratesio_crate::Column::TotalDownloads,
                 Expr::col(cratesio_crate::Column::TotalDownloads).add(1),
             )
             .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
-        // Get crate_id for version-specific update
         let crate_id = cratesio_crate::Entity::find()
             .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .one(&self.db_con)
+            .one(&txn)
             .await?
             .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
             .id;
 
-        // Update the downloads for the specific version
         cratesio_meta::Entity::update_many()
             .col_expr(
                 cratesio_meta::Column::Downloads,
@@ -541,9 +540,10 @@ impl DbProvider for Database {
                     .add(cratesio_meta::Column::Version.eq(crate_version))
                     .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
             )
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
+        txn.commit().await?;
         Ok(())
     }
 

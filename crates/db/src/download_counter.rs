@@ -14,8 +14,8 @@ use crate::DbProvider;
 /// 2-calls-per-unique-crate-per-flush.
 pub struct DownloadCounter {
     db: Arc<dyn DbProvider>,
-    counts: Mutex<HashMap<(NormalizedName, String), u64>>,
-    cached_counts: Mutex<HashMap<(NormalizedName, String), u64>>,
+    counts: Mutex<HashMap<(NormalizedName, Version), u64>>,
+    cached_counts: Mutex<HashMap<(NormalizedName, Version), u64>>,
     flush_interval: u64,
 }
 
@@ -60,7 +60,7 @@ impl DownloadCounter {
     /// Record a download for a kellnr-hosted crate. Instant, no DB call.
     fn increment(&self, name: NormalizedName, version: &Version) {
         let mut counts = self.counts.lock().expect("download counter lock poisoned");
-        *counts.entry((name, version.to_string())).or_insert(0) += 1;
+        *counts.entry((name, version.clone())).or_insert(0) += 1;
     }
 
     /// Record a download for a cached crates.io crate. Instant, no DB call.
@@ -69,7 +69,7 @@ impl DownloadCounter {
             .cached_counts
             .lock()
             .expect("cached download counter lock poisoned");
-        *counts.entry((name, version.to_string())).or_insert(0) += 1;
+        *counts.entry((name, version.clone())).or_insert(0) += 1;
     }
 
     /// Flush all accumulated counts to the database.
@@ -96,19 +96,19 @@ impl DownloadCounter {
 
         // Flush kellnr crate counts
         for ((name, version), count) in counts {
-            let version = Version::from_unchecked_str(&version);
             if let Err(e) = self
                 .db
                 .increase_download_counter_by(&name, &version, count)
                 .await
             {
                 warn!("Failed to flush download counter for {name} {version} (count={count}): {e}");
+                let mut lock = self.counts.lock().expect("download counter lock poisoned");
+                *lock.entry((name, version)).or_insert(0) += count;
             }
         }
 
         // Flush cached crates.io crate counts
         for ((name, version), count) in cached_counts {
-            let version = Version::from_unchecked_str(&version);
             if let Err(e) = self
                 .db
                 .increase_cached_download_counter_by(&name, &version, count)
@@ -117,6 +117,11 @@ impl DownloadCounter {
                 warn!(
                     "Failed to flush cached download counter for {name} {version} (count={count}): {e}"
                 );
+                let mut lock = self
+                    .cached_counts
+                    .lock()
+                    .expect("cached download counter lock poisoned");
+                *lock.entry((name, version)).or_insert(0) += count;
             }
         }
 
