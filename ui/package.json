@@ -13,7 +13,7 @@
   "dependencies": {
     "@mdi/font": "^7.4.47",
     "@mdi/js": "^7.4.47",
-    "axios": "^1.13.5",
+    "axios": "^1.13.6",
     "axios-cache-interceptor": "^1.11.4",
     "core-js": "^3.48.0",
     "dayjs": "^1.11.19",
@@ -25,24 +25,24 @@
     "marked-mangle": "^1.1.12",
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
-    "vue": "^3.5.28",
+    "vue": "^3.5.29",
     "vue-axios": "^3.5.2",
     "vue-class-component": "^8.0.0-0",
     "vue-router": "^5.0.3",
     "vue3-highlightjs": "^1.0.5",
-    "vuetify": "^3.12.0"
+    "vuetify": "^4.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^25.3.0",
+    "@types/node": "^25.3.2",
     "@vitejs/plugin-vue": "^6.0.4",
     "@vue/tsconfig": "^0.8.1",
     "esbuild": "~0.27.3",
-    "eslint": "^10.0.1",
+    "eslint": "^10.0.2",
     "eslint-plugin-vue": "^10.8.0",
     "globals": "^17.3.0",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.56.0",
+    "typescript-eslint": "^8.56.1",
     "vite": "^7.3.1",
     "vue-tsc": "^3.2.5"
   },
