@@ -6,7 +6,7 @@ use crate::original_name::OriginalName;
 
 /// Index name is a lowercase version of the crate name
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct NormalizedName(String);
 
 impl NormalizedName {

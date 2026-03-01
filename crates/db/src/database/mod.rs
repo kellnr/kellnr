@@ -472,16 +472,24 @@ impl DbProvider for Database {
         crate_name: &NormalizedName,
         crate_version: &Version,
     ) -> DbResult<()> {
-        let krate = self.get_krate_model(crate_name).await?;
-        let crate_id = krate.id;
-        let crate_total_downloads = krate.total_downloads;
+        let txn = self.db_con.begin().await?;
 
-        // Update the total downloads for the whole crate (all versions)
-        let mut k: krate::ActiveModel = krate.into();
-        k.total_downloads = Set(crate_total_downloads + 1);
-        k.update(&self.db_con).await?;
+        krate::Entity::update_many()
+            .col_expr(
+                krate::Column::TotalDownloads,
+                Expr::col(krate::Column::TotalDownloads).add(1),
+            )
+            .filter(krate::Column::Name.eq(crate_name))
+            .exec(&txn)
+            .await?;
 
-        // Update the downloads for the specific version
+        let crate_id = krate::Entity::find()
+            .filter(krate::Column::Name.eq(crate_name))
+            .one(&txn)
+            .await?
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+            .id;
+
         crate_meta::Entity::update_many()
             .col_expr(
                 crate_meta::Column::Downloads,
@@ -492,9 +500,10 @@ impl DbProvider for Database {
                     .add(crate_meta::Column::Version.eq(crate_version))
                     .add(crate_meta::Column::CrateFk.eq(crate_id)),
             )
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
+        txn.commit().await?;
         Ok(())
     }
 
@@ -503,20 +512,24 @@ impl DbProvider for Database {
         crate_name: &NormalizedName,
         crate_version: &Version,
     ) -> DbResult<()> {
-        let krate: cratesio_crate::Model = cratesio_crate::Entity::find()
+        let txn = self.db_con.begin().await?;
+
+        cratesio_crate::Entity::update_many()
+            .col_expr(
+                cratesio_crate::Column::TotalDownloads,
+                Expr::col(cratesio_crate::Column::TotalDownloads).add(1),
+            )
             .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .one(&self.db_con)
+            .exec(&txn)
+            .await?;
+
+        let crate_id = cratesio_crate::Entity::find()
+            .filter(cratesio_crate::Column::Name.eq(crate_name))
+            .one(&txn)
             .await?
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
-        let crate_id = krate.id;
-        let crate_total_downloads = krate.total_downloads;
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+            .id;
 
-        // Update the total downloads for the whole crate (all versions)
-        let mut k: cratesio_crate::ActiveModel = krate.into();
-        k.total_downloads = Set(crate_total_downloads + 1);
-        k.update(&self.db_con).await?;
-
-        // Update the downloads for the specific version
         cratesio_meta::Entity::update_many()
             .col_expr(
                 cratesio_meta::Column::Downloads,
@@ -527,9 +540,92 @@ impl DbProvider for Database {
                     .add(cratesio_meta::Column::Version.eq(crate_version))
                     .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
             )
-            .exec(&self.db_con)
+            .exec(&txn)
             .await?;
 
+        txn.commit().await?;
+        Ok(())
+    }
+
+    async fn increase_download_counter_by(
+        &self,
+        crate_name: &NormalizedName,
+        crate_version: &Version,
+        count: u64,
+    ) -> DbResult<()> {
+        let txn = self.db_con.begin().await?;
+
+        krate::Entity::update_many()
+            .col_expr(
+                krate::Column::TotalDownloads,
+                Expr::col(krate::Column::TotalDownloads).add(count as i64),
+            )
+            .filter(krate::Column::Name.eq(crate_name))
+            .exec(&txn)
+            .await?;
+
+        let crate_id = krate::Entity::find()
+            .filter(krate::Column::Name.eq(crate_name))
+            .one(&txn)
+            .await?
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+            .id;
+
+        crate_meta::Entity::update_many()
+            .col_expr(
+                crate_meta::Column::Downloads,
+                Expr::col(crate_meta::Column::Downloads).add(count as i64),
+            )
+            .filter(
+                Cond::all()
+                    .add(crate_meta::Column::Version.eq(crate_version))
+                    .add(crate_meta::Column::CrateFk.eq(crate_id)),
+            )
+            .exec(&txn)
+            .await?;
+
+        txn.commit().await?;
+        Ok(())
+    }
+
+    async fn increase_cached_download_counter_by(
+        &self,
+        crate_name: &NormalizedName,
+        crate_version: &Version,
+        count: u64,
+    ) -> DbResult<()> {
+        let txn = self.db_con.begin().await?;
+
+        cratesio_crate::Entity::update_many()
+            .col_expr(
+                cratesio_crate::Column::TotalDownloads,
+                Expr::col(cratesio_crate::Column::TotalDownloads).add(count as i64),
+            )
+            .filter(cratesio_crate::Column::Name.eq(crate_name))
+            .exec(&txn)
+            .await?;
+
+        let crate_id = cratesio_crate::Entity::find()
+            .filter(cratesio_crate::Column::Name.eq(crate_name))
+            .one(&txn)
+            .await?
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+            .id;
+
+        cratesio_meta::Entity::update_many()
+            .col_expr(
+                cratesio_meta::Column::Downloads,
+                Expr::col(cratesio_meta::Column::Downloads).add(count as i64),
+            )
+            .filter(
+                Cond::all()
+                    .add(cratesio_meta::Column::Version.eq(crate_version))
+                    .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
+            )
+            .exec(&txn)
+            .await?;
+
+        txn.commit().await?;
         Ok(())
     }
 

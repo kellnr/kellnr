@@ -7,7 +7,7 @@ use sea_orm::Value;
 use thiserror::Error;
 use utoipa::ToSchema;
 
-#[derive(Debug, Eq, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, Eq, Clone, Hash, serde::Serialize, serde::Deserialize, ToSchema)]
 #[schema(value_type = String)]
 pub struct Version(String);
 

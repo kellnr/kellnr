@@ -536,9 +536,14 @@ mod tests {
             Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage,
         ));
         let (cratesio_prefetch_sender, _) = flume::unbounded();
+        let db: Arc<dyn kellnr_db::DbProvider> = Arc::new(mock_db);
+        let download_counter = Arc::new(kellnr_db::download_counter::DownloadCounter::new(
+            db.clone(),
+            30,
+        ));
 
         AppStateData {
-            db: Arc::new(mock_db),
+            db,
             signing_key: Key::from(TEST_KEY),
             settings,
             crate_storage,
@@ -546,6 +551,7 @@ mod tests {
             cratesio_prefetch_sender,
             token_cache: cache,
             toolchain_storage: None,
+            download_counter,
         }
     }
 

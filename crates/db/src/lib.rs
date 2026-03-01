@@ -4,6 +4,7 @@ mod crate_meta;
 mod crate_summary;
 mod database;
 mod doc_queue_entry;
+pub mod download_counter;
 pub mod error;
 mod group;
 mod krate;

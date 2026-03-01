@@ -97,6 +97,7 @@ export type Registry = {
   token_cache_max_capacity: number
   token_db_retry_count: number
   token_db_retry_delay_ms: number
+  download_counter_flush_seconds: number
 }
 
 export type S3 = {
@@ -160,7 +161,8 @@ export const emptySettings: Settings = {
     token_cache_ttl_seconds: 1800,
     token_cache_max_capacity: 10000,
     token_db_retry_count: 3,
-    token_db_retry_delay_ms: 100
+    token_db_retry_delay_ms: 100,
+    download_counter_flush_seconds: 30
   },
   s3: {
     enabled: false,
