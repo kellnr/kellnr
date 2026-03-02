@@ -42,7 +42,7 @@ axum-extra = { version = "0.12.5", features = ["cookie", "cookie-private", "type
 base64 = "0.22.1"
 bytes = "1.11.1"
 cargo = "0.86.0"
-chrono = "0.4.41"
+chrono = "0.4.44"
 config = "0.15.19"
 cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
 flate2 = "1.1.9"
@@ -71,7 +71,7 @@ sha256 = "1.6.0"
 syn = { version = "2.0.117", features = ["full"] }
 tar = "0.4.44"
 tempfile = "3"
-testcontainers = "0.27.0"
+testcontainers = "0.27.1"
 thiserror = "2.0.18"
 time = "0.3.47"
 tokio = { version = "1.48.0", features = ["macros"] }
