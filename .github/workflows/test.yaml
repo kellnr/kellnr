@@ -57,11 +57,15 @@ jobs:
 
   lint:
     name: Format & Clippy
+    needs: [update-npm-hash]
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
 
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
@@ -77,11 +81,15 @@ jobs:
 
   test-kellnr:
     name: Unit Tests
+    needs: [update-npm-hash]
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
 
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
@@ -91,11 +99,15 @@ jobs:
 
   test-kellnr-pgdb:
     name: Postgresql Tests
+    needs: [update-npm-hash]
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
 
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
@@ -105,11 +117,15 @@ jobs:
 
   test-kellnr-ui:
     name: UI Tests (Playwright)
+    needs: [update-npm-hash]
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
 
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
