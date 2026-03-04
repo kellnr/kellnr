@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        test-type: [unit, pgdb, ui]
+        test-type: [unit, docker, ui]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -29,7 +29,7 @@ jobs:
         run: |
           case "${{ matrix.test-type }}" in
             unit) nix develop --command just test ;;
-            pgdb) nix develop --command just test-pgdb ;;
+            docker) nix develop --command just test-docker ;;
             ui) nix develop --command just test-ui ;;
           esac
 

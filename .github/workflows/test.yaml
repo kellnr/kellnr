@@ -97,8 +97,8 @@ jobs:
       - name: Tests
         run: nix develop --command just test
 
-  test-kellnr-pgdb:
-    name: Postgresql Tests
+  test-kellnr-docker:
+    name: Docker Tests (PostgreSQL, S3)
     needs: [update-npm-hash]
     if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
@@ -113,7 +113,7 @@ jobs:
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
 
       - name: Tests
-        run: nix develop --command just test-pgdb
+        run: nix develop --command just test-docker
 
   test-kellnr-ui:
     name: UI Tests (Playwright)
