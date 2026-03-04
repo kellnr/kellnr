@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use testcontainers::Image;
+use testcontainers::core::wait::HttpWaitStrategy;
 use testcontainers::core::{ContainerPort, WaitFor};
 
 const NAME: &str = "rustfs/rustfs";
@@ -39,7 +40,13 @@ impl Image for RustFs {
     }
 
     fn ready_conditions(&self) -> Vec<WaitFor> {
-        vec![WaitFor::message_on_stdout("Starting:")]
+        // Wait for the HTTP server to accept connections on port 9000.
+        // RustFS returns 403 on unauthenticated requests, which is fine — it means the server is up.
+        vec![WaitFor::http(
+            HttpWaitStrategy::new("/")
+                .with_port(Self::CONTAINER_PORT)
+                .with_expected_status_code(403_u16),
+        )]
     }
 
     fn entrypoint(&self) -> Option<&str> {
@@ -52,7 +59,6 @@ impl Image for RustFs {
             "-c",
             concat!(
                 "mkdir -p /data/kellnr-crates && ",
-                "echo 'Starting: rustfs /data' && ",
                 "exec /usr/bin/rustfs ",
                 "--access-key rustfsadmin ",
                 "--secret-key rustfsadmin ",
