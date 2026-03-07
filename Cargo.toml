@@ -53,7 +53,7 @@ hyper = "1.8.1"
 include_dir = "0.7.4"
 mime_guess = "2.0.5"
 mockall = "0.14.0"
-moka = { version = "0.12.12", features = ["future"] }
+moka = { version = "0.12.14", features = ["future"] }
 object_store = { version = "0.13.1", default-features = false, features = ["aws", "fs"] }
 openidconnect = "4"
 quote = "1.0.45"
