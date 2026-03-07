@@ -23,7 +23,7 @@ jobs:
   update-npm-hash:
     name: Update NPM dependencies hash
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
     outputs:
       sha: ${{ steps.update.outputs.sha }}
 
