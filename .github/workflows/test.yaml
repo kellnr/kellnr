@@ -24,16 +24,22 @@ jobs:
     name: Update NPM dependencies hash
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
-    permissions:
-      contents: write
     outputs:
       sha: ${{ steps.update.outputs.sha }}
 
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ github.head_ref }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
