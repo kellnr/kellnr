@@ -17,7 +17,7 @@
     "axios-cache-interceptor": "^1.11.4",
     "core-js": "^3.48.0",
     "dayjs": "^1.11.19",
-    "dompurify": "^3.3.1",
+    "dompurify": "^3.3.2",
     "js-cookie": "^3.0.5",
     "marked": "^17.0.3",
     "marked-gfm-heading-id": "^4.1.3",
