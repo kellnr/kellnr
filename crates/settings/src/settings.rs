@@ -13,7 +13,7 @@ use crate::origin::Origin;
 use crate::postgresql::Postgresql;
 use crate::proxy::Proxy;
 use crate::registry::Registry;
-use crate::s3::S3;
+use crate::storage::Storage;
 use crate::setup::Setup;
 use crate::toolchain::Toolchain;
 
@@ -28,7 +28,7 @@ pub struct Settings {
     pub local: Local,
     pub origin: Origin,
     pub postgresql: Postgresql,
-    pub s3: S3,
+    pub storage: Storage,
     pub oauth2: OAuth2,
     pub toolchain: Toolchain,
     /// Tracks the source (default, toml, env, cli) for each setting.
@@ -48,7 +48,7 @@ impl Default for Settings {
             local: Local::default(),
             origin: Origin::default(),
             postgresql: Postgresql::default(),
-            s3: S3::default(),
+            storage: Storage::default(),
             oauth2: OAuth2::default(),
             toolchain: Toolchain::default(),
             sources: init_default_sources(),
@@ -115,32 +115,8 @@ impl Settings {
         format!("{}/crates", self.registry.data_dir)
     }
 
-    pub fn crates_path_or_bucket(&self) -> String {
-        if self.s3.enabled {
-            self.s3.crates_bucket.clone()
-        } else {
-            self.crates_path()
-        }
-    }
-
-    pub fn crates_io_path_or_bucket(&self) -> String {
-        if self.s3.enabled {
-            self.s3.cratesio_bucket.clone()
-        } else {
-            self.crates_io_path()
-        }
-    }
-
     pub fn toolchain_path(&self) -> String {
         format!("{}/toolchains", self.registry.data_dir)
-    }
-
-    pub fn toolchain_path_or_bucket(&self) -> String {
-        if self.s3.enabled {
-            self.s3.toolchain_bucket.clone()
-        } else {
-            self.toolchain_path()
-        }
     }
 }
 

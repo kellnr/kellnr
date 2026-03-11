@@ -19,7 +19,7 @@ export type SettingsDefaults = {
   postgresql: Postgresql
   proxy: Proxy
   registry: Registry
-  s3: S3
+  storage: Storage
   toolchain: Toolchain
 }
 
@@ -31,7 +31,7 @@ export type Settings = {
   postgresql: Postgresql
   proxy: Proxy
   registry: Registry
-  s3: S3
+  storage: Storage
   toolchain: Toolchain
   sources: SourceMap
   defaults?: SettingsDefaults
@@ -99,16 +99,27 @@ export type Registry = {
   token_db_retry_delay_ms: number
 }
 
-export type S3 = {
-  enabled: boolean
+export type Storage = {
+  kellnr_crates: StorageBackend | null
+  crates_io: StorageBackend | null
+  toolchain: StorageBackend | null
+}
+
+export type StorageBackend = FileBackend | S3Backend;
+
+export type FileBackend = {
+  kind: 'file'
+  folder: string
+}
+
+export type S3Backend = {
+  kind: 's3'
+  bucket: string
   access_key: string | null
   secret_key: string | null
   region: string | null
   endpoint: string | null
   allow_http: boolean
-  crates_bucket: string
-  cratesio_bucket: string
-  toolchain_bucket: string
 }
 
 export const emptySettings: Settings = {
@@ -162,16 +173,16 @@ export const emptySettings: Settings = {
     token_db_retry_count: 3,
     token_db_retry_delay_ms: 100
   },
-  s3: {
-    enabled: false,
-    access_key: null,
-    secret_key: null,
-    region: null,
-    endpoint: null,
-    allow_http: false,
-    crates_bucket: "",
-    cratesio_bucket: "",
-    toolchain_bucket: ""
+  storage: {
+    kellnr_crates: {
+      kind: 'file',
+      folder: 'crates'
+    },
+    crates_io: {
+      kind: 'file',
+      folder: 'crates-io'
+    },
+    toolchain: null
   },
   toolchain: {
     enabled: false,

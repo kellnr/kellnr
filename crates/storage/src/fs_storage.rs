@@ -2,6 +2,7 @@ use std::fs::DirBuilder;
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use kellnr_settings::storage::FileConfig;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path;
 use object_store::{ObjectStore, ObjectStoreExt, PutMode};
@@ -61,5 +62,13 @@ impl FSStorage {
 
     fn storage(&self) -> &LocalFileSystem {
         &self.0
+    }
+}
+
+
+impl TryFrom<&FileConfig> for FSStorage {
+    type Error = StorageError;
+    fn try_from(config: &FileConfig) -> Result<Self, Self::Error> {
+        Self::new(&config.folder)
     }
 }

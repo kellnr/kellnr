@@ -63,16 +63,10 @@ const SETTING_KEYS: &[&str] = &[
     "postgresql.db",
     "postgresql.user",
     "postgresql.pwd",
-    // S3 settings
-    "s3.enabled",
-    "s3.access_key",
-    "s3.secret_key",
-    "s3.region",
-    "s3.endpoint",
-    "s3.allow_http",
-    "s3.crates_bucket",
-    "s3.cratesio_bucket",
-    "s3.toolchain_bucket",
+    // Storage settings
+    "storage.kellnr_crates",
+    "storage.crates_io",
+    "storage.toolchain",
     // Setup settings
     "setup.admin_pwd",
     "setup.admin_token",
