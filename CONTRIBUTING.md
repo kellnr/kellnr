@@ -45,14 +45,14 @@ The following tools are needed to build Kellnr:
 
 ### Using Nix
 
-For an easy development environment, you can use the provided `flake.nix`:
+For an easy development environment, you can use the provided `flake.nix`. Install nix from (download page)[https://nixos.org/download/].
 
 ```bash
 # Start a development shell
-nix develop
+nix develop --extra-experimental-features nix-command --extra-experimental-features flakes
 
 # Build the project
-nix build
+nix build --extra-experimental-features nix-command --extra-experimental-features flakes
 ```
 
 ### Build and Test
