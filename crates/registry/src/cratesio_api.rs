@@ -101,7 +101,7 @@ pub async fn download(
 
         Ok(file)
     } else {
-        let crate_data = download_crate(&name, &version, &settings.proxy.url).await?;
+        let crate_data = download_crate(&CLIENT, &name, &version, &settings.proxy.url).await?;
 
         let _save = crate_storage
             .put(&name, &version, crate_data.clone())

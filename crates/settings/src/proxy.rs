@@ -37,4 +37,14 @@ pub struct Proxy {
     #[default(default_index_url())]
     #[arg(id = "proxy-index", long = "proxy-index")]
     pub index: Url,
+
+    /// Connect timeout in seconds for upstream requests
+    #[default(5)]
+    #[arg(id = "proxy-connect-timeout", long = "proxy-connect-timeout")]
+    pub connect_timeout_seconds: u64,
+
+    /// Request timeout in seconds for upstream downloads
+    #[default(30)]
+    #[arg(id = "proxy-request-timeout", long = "proxy-request-timeout")]
+    pub request_timeout_seconds: u64,
 }
