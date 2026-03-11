@@ -4015,6 +4015,7 @@ name = "kellnr-registry"
 version = "6.0.3"
 dependencies = [
  "axum",
+ "bytes",
  "chrono",
  "cookie",
  "http-body-util",
