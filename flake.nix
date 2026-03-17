@@ -48,7 +48,7 @@
           version = "0.1.0";
           src = ./ui;
 
-          npmDepsHash = "sha256-QMkDxly2aAe5RURDeluz4D9pAoRaKExwlIAoPmBRf/w=";
+          npmDepsHash = "sha256-peTxkte1wVK48rjy+EoaepKNgXH7M3m3N6PHMYAMBQ4=";
 
           buildPhase = ''
             npm run build
@@ -62,9 +62,9 @@
         };
 
         # Source filtering for Rust
-        rustFilter = path: type:
-          (craneLib.filterCargoSources path type) ||
-          (lib.hasInfix "crates/embedded-resources/static" path);
+        rustFilter =
+          path: type:
+          (craneLib.filterCargoSources path type) || (lib.hasInfix "crates/embedded-resources/static" path);
 
         src = lib.cleanSourceWith {
           src = craneLib.path ./.;
@@ -80,13 +80,15 @@
           nativeBuildInputs = [
             pkgs.cmake
             pkgs.pkg-config
-          ] ++ lib.optionals pkgs.stdenv.isLinux [
+          ]
+          ++ lib.optionals pkgs.stdenv.isLinux [
             pkgs.rustPlatform.bindgenHook
           ];
 
           buildInputs = [
             pkgs.openssl.dev
-          ] ++ lib.optionals pkgs.stdenv.isDarwin [
+          ]
+          ++ lib.optionals pkgs.stdenv.isDarwin [
             pkgs.libiconv
           ];
 
@@ -101,16 +103,19 @@
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
         # Build the full package
-        kellnr = craneLib.buildPackage (commonArgs // {
-          inherit cargoArtifacts;
-          doCheck = false;
+        kellnr = craneLib.buildPackage (
+          commonArgs
+          // {
+            inherit cargoArtifacts;
+            doCheck = false;
 
-          # Copy UI assets before building
-          preBuild = ''
-            mkdir -p crates/embedded-resources/static
-            cp -r ${uiAssets}/* crates/embedded-resources/static/
-          '';
-        });
+            # Copy UI assets before building
+            preBuild = ''
+              mkdir -p crates/embedded-resources/static
+              cp -r ${uiAssets}/* crates/embedded-resources/static/
+            '';
+          }
+        );
       in
       {
         checks = {
@@ -118,10 +123,13 @@
 
           fmt = craneLib.cargoFmt { inherit src; };
 
-          clippy = craneLib.cargoClippy (commonArgs // {
-            inherit cargoArtifacts;
-            cargoClippyExtraArgs = "--workspace --all-targets -- --deny warnings";
-          });
+          clippy = craneLib.cargoClippy (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              cargoClippyExtraArgs = "--workspace --all-targets -- --deny warnings";
+            }
+          );
         };
 
         packages = {
@@ -137,36 +145,39 @@
 
           inputsFrom = [ kellnr ];
 
-          packages = with pkgs; [
-            # Rust tools
-            rust-analyzer
-            cargo-nextest
-            cargo-machete
-            cargo-cyclonedx
-            cargo-llvm-cov
+          packages =
+            with pkgs;
+            [
+              # Rust tools
+              rust-analyzer
+              cargo-nextest
+              cargo-machete
+              cargo-cyclonedx
+              cargo-llvm-cov
 
-            # Node.js for UI development
-            nodejs_24
+              # Node.js for UI development
+              nodejs_24
 
-            # Database tools
-            sea-orm-cli
+              # Database tools
+              sea-orm-cli
 
-            # Dev utilities
-            just
-            lazygit
-            jq
-            curl
-            gnused
+              # Dev utilities
+              just
+              lazygit
+              jq
+              curl
+              gnused
 
-            # Nix tools
-            nixpkgs-fmt
-            statix
+              # Nix tools
+              nixpkgs-fmt
+              statix
 
-            # Testing
-            python3
-            playwright-driver.browsers
-          ] ++ lib.optionals stdenv.isLinux [
-          ];
+              # Testing
+              python3
+              playwright-driver.browsers
+            ]
+            ++ lib.optionals stdenv.isLinux [
+            ];
 
           shellHook = ''
             echo "Kellnr Development Environment"
@@ -186,27 +197,6 @@
             export LLVM_COV="${pkgs.llvmPackages.bintools-unwrapped}/bin/llvm-cov"
             export LLVM_PROFDATA="${pkgs.llvmPackages.bintools-unwrapped}/bin/llvm-profdata"
 
-            # Setup custom CA certificate for testing
-            export CUSTOM_CERT_DIR="$PWD/.certs"
-            if [ -d "$CUSTOM_CERT_DIR" ]; then
-              rm -rf "$CUSTOM_CERT_DIR"
-            fi
-            mkdir -p "$CUSTOM_CERT_DIR"
-            chmod 755 "$CUSTOM_CERT_DIR"
-
-            export COMBINED_CERT_FILE="$CUSTOM_CERT_DIR/combined-ca-bundle.pem"
-            cp "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" "$COMBINED_CERT_FILE"
-            chmod 644 "$COMBINED_CERT_FILE"
-
-            if [ -f "$PWD/tests/ca.crt" ]; then
-              cat "$PWD/tests/ca.crt" >> "$COMBINED_CERT_FILE"
-            fi
-
-            export SSL_CERT_FILE="$COMBINED_CERT_FILE"
-            export NIX_SSL_CERT_FILE="$COMBINED_CERT_FILE"
-            export REQUESTS_CA_BUNDLE="$COMBINED_CERT_FILE"
-            export NODE_EXTRA_CA_CERTS="$COMBINED_CERT_FILE"
-
             # Playwright setup for NixOS
             # Use pre-patched browsers from nixpkgs instead of downloading
             export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
@@ -219,7 +209,8 @@
             alias c=cargo
             alias j=just
             alias lg=lazygit
-          '' + lib.optionalString pkgs.stdenv.isDarwin ''
+          ''
+          + lib.optionalString pkgs.stdenv.isDarwin ''
             export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
           '';
         };
