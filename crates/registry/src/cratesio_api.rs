@@ -2,6 +2,7 @@ use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
+use bytes::Bytes;
 use kellnr_appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
 use kellnr_common::cratesio_downloader::{CLIENT, download_crate};
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData};
@@ -87,7 +88,7 @@ pub async fn download(
     State(crate_storage): CrateIoStorageState,
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
-) -> Result<Vec<u8>, StatusCode> {
+) -> Result<Bytes, StatusCode> {
     trace!("Downloading crate: {name} ({version})");
 
     if let Some(file) = crate_storage.get(&name, &version).await {

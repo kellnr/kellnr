@@ -72,7 +72,10 @@ async fn add_and_get_crate() {
 
     assert!(put_result.is_ok());
     assert!(result_crate.is_some());
-    assert_eq!(Some(vec![0x00, 0x11, 0x22, 0x33, 0x44]), result_crate);
+    assert_eq!(
+        Some(bytes::Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44])),
+        result_crate
+    );
 }
 
 #[rustfs_testcontainer]
