@@ -3827,6 +3827,7 @@ dependencies = [
  "kellnr-db",
  "kellnr-settings",
  "kellnr-storage",
+ "reqwest 0.13.2",
 ]
 
 [[package]]

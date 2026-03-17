@@ -3,8 +3,8 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 use bytes::Bytes;
-use kellnr_appstate::{CrateIoStorageState, DownloadCounterState, SettingsState};
-use kellnr_common::cratesio_downloader::{CLIENT, download_crate};
+use kellnr_appstate::{CrateIoStorageState, DownloadCounterState, ProxyClientState, SettingsState};
+use kellnr_common::cratesio_downloader::download_crate;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_error::api_error::ApiResult;
@@ -45,14 +45,17 @@ pub async fn cratesio_enabled(
     ),
     security(("cargo_token" = []))
 )]
-pub async fn search(params: SearchParams) -> ApiResult<String> {
+pub async fn search(
+    State(proxy_client): ProxyClientState,
+    params: SearchParams,
+) -> ApiResult<String> {
     let url = Url::parse(&format!(
         "https://crates.io/api/v1/crates?q={}&per_page={}",
         params.q, params.per_page.0
     ))
     .map_err(RegistryError::UrlParseError)?;
 
-    let response = CLIENT
+    let response = proxy_client
         .get(url)
         .send()
         .await
@@ -87,13 +90,14 @@ pub async fn download(
     State(crate_storage): CrateIoStorageState,
     State(download_counter): DownloadCounterState,
     State(settings): SettingsState,
+    State(proxy_client): ProxyClientState,
 ) -> Result<Bytes, StatusCode> {
     trace!("Downloading crate: {name} ({version})");
 
     let file = if let Some(file) = crate_storage.get(&name, &version).await {
         file
     } else {
-        let crate_data = download_crate(&CLIENT, &name, &version, &settings.proxy.url).await?;
+        let crate_data = download_crate(&proxy_client, &name, &version, &settings.proxy.url).await?;
 
         let _save = crate_storage
             .put(&name, &version, crate_data.clone())
@@ -206,7 +210,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(r.status(), StatusCode::NOT_FOUND);
+        // Invalid semver is rejected during path deserialization (400 Bad Request)
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

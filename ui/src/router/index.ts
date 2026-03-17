@@ -1,13 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Crates from "../views/Crates.vue";
-import Login from "../views/Login.vue";
-import Settings from "../views/Settings.vue";
-import PublishDocs from "../views/PublishDocs.vue";
-import Crate from "../views/Crate.vue";
-import DocQueue from "../views/DocQueue.vue";
-import Landing from "../views/Landing.vue";
 import { auth_required } from "../common/auth";
 import { useStore } from "../store/store";
+
+const Crates = () => import("../views/Crates.vue")
+const Login = () => import("../views/Login.vue")
+const Settings = () => import("../views/Settings.vue")
+const PublishDocs = () => import("../views/PublishDocs.vue")
+const Crate = () => import("../views/Crate.vue")
+const DocQueue = () => import("../views/DocQueue.vue")
+const Landing = () => import("../views/Landing.vue")
 
 const routes = [
   {

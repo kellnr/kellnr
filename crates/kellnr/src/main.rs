@@ -8,6 +8,7 @@ use axum::routing::get;
 use axum_extra::extract::cookie::Key;
 use kellnr_appstate::AppStateData;
 use kellnr_auth::oauth2::OAuth2Handler;
+use kellnr_common::cratesio_downloader::build_client;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_db::download_counter::DownloadCounter;
@@ -198,6 +199,11 @@ async fn run_server(settings: Settings) {
 
     let download_counter_for_shutdown = download_counter.clone();
 
+    let proxy_client = build_client(
+        Duration::from_secs(settings.proxy.connect_timeout_seconds),
+        Duration::from_secs(settings.proxy.request_timeout_seconds),
+    );
+
     let state = AppStateData {
         db,
         signing_key,
@@ -208,6 +214,7 @@ async fn run_server(settings: Settings) {
         token_cache,
         toolchain_storage,
         download_counter,
+        proxy_client,
     };
 
     // Create router using the route module

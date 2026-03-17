@@ -552,6 +552,7 @@ mod tests {
             token_cache: cache,
             toolchain_storage: None,
             download_counter,
+            proxy_client: kellnr_common::cratesio_downloader::CLIENT.clone(),
         }
     }
 

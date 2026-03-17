@@ -1654,7 +1654,8 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        assert_eq!(r.status(), StatusCode::NOT_FOUND);
+        // Invalid semver is rejected during path deserialization (400 Bad Request)
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

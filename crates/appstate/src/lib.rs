@@ -6,6 +6,7 @@ use flume::Sender;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_db::DbProvider;
+use reqwest::Client;
 use kellnr_db::download_counter::DownloadCounter;
 use kellnr_settings::Settings;
 use kellnr_storage::cached_crate_storage::DynStorage;
@@ -26,6 +27,7 @@ pub type CratesIoPrefetchSenderState = axum::extract::State<Sender<CratesioPrefe
 pub type TokenCacheState = axum::extract::State<Arc<TokenCacheManager>>;
 pub type ToolchainStorageState = axum::extract::State<Option<Arc<ToolchainStorage>>>;
 pub type DownloadCounterState = axum::extract::State<Arc<DownloadCounter>>;
+pub type ProxyClientState = axum::extract::State<Client>;
 
 #[derive(Clone, FromRef)]
 pub struct AppStateData {
@@ -39,6 +41,7 @@ pub struct AppStateData {
     pub token_cache: Arc<TokenCacheManager>,
     pub toolchain_storage: Option<Arc<ToolchainStorage>>,
     pub download_counter: Arc<DownloadCounter>,
+    pub proxy_client: Client,
 }
 
 pub fn test_state() -> AppStateData {
@@ -64,5 +67,6 @@ pub fn test_state() -> AppStateData {
         token_cache,
         toolchain_storage: None, // Toolchain storage disabled in tests by default
         download_counter,
+        proxy_client: kellnr_common::cratesio_downloader::CLIENT.clone(),
     }
 }

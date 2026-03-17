@@ -9,6 +9,31 @@ export default defineConfig({
   base: './',
   build: {
     sourcemap: true,
+    chunkSizeWarningLimit: 1200,
+    rolldownOptions: {
+      output: {
+        codeSplitting: true,
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined
+          }
+
+          if (id.includes('/vuetify/')) {
+            return 'vendor-vuetify'
+          }
+
+          if (id.includes('/highlight.js/')) {
+            return 'vendor-highlight'
+          }
+
+          if (id.includes('/axios')) {
+            return 'vendor-axios'
+          }
+
+          return 'vendor'
+        },
+      },
+    },
   },
   resolve: {
     alias: {

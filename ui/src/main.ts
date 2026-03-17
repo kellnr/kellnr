@@ -1,9 +1,6 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import VueHighlightJS from 'vue3-highlightjs' // https://www.npmjs.com/package/vue3-highlightjs
-import Axios from 'axios'
-import { setupCache } from 'axios-cache-interceptor';
-import VueAxios from 'vue-axios'
 import { createPinia } from 'pinia'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import router from "./router";
@@ -19,7 +16,6 @@ import '@mdi/font/css/materialdesignicons.css'
 // Import both light and dark highlight.js themes
 import 'highlight.js/styles/github.css' // Light theme
 
-const axios = setupCache(Axios);
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
 
@@ -142,7 +138,5 @@ const vuetify = createVuetify({
 app
   .use(router)
   .use(VueHighlightJS)
-  // @ts-expect-error TS doesn't understand axios cache
-  .use(VueAxios, axios)
   .use(vuetify)
   .mount('#app')

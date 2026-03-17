@@ -20,6 +20,7 @@ kellnr-storage.workspace = true
 axum-extra.workspace = true
 axum.workspace = true
 flume.workspace = true
+reqwest.workspace = true
 
 [lints]
 workspace = true

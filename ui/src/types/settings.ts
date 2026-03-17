@@ -171,7 +171,7 @@ export const emptySettings: Settings = {
     token_db_retry_count: 3,
     token_db_retry_delay_ms: 100,
     download_timeout_seconds: 60,
-    download_max_concurrent: 20
+    download_max_concurrent: 20,
     download_counter_flush_seconds: 30
   },
   s3: {

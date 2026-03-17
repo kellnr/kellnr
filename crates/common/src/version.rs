@@ -8,9 +8,21 @@ use sea_orm::Value;
 use thiserror::Error;
 use utoipa::ToSchema;
 
-#[derive(Debug, Eq, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, Eq, Clone, serde::Serialize, ToSchema)]
 #[schema(value_type = String)]
 pub struct Version(String);
+
+impl<'de> serde::Deserialize<'de> for Version {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = <String as serde::Deserialize>::deserialize(deserializer)?;
+        semver::Version::parse(&s)
+            .map(|sv| Version(sv.to_string()))
+            .map_err(|e| serde::de::Error::custom(e.to_string()))
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Error)]
 pub enum VersionError {
