@@ -126,6 +126,7 @@ const sections: ConfigSection[] = [
       { key: 'registry.token_cache_max_capacity', label: 'Token Cache Max Capacity', cli: '--registry-token-cache-max-capacity' },
       { key: 'registry.token_db_retry_count', label: 'Token DB Retry Count', cli: '--registry-token-db-retry-count' },
       { key: 'registry.token_db_retry_delay_ms', label: 'Token DB Retry Delay (ms)', cli: '--registry-token-db-retry-delay' },
+      { key: 'registry.download_counter_flush_seconds', label: 'Download Counter Flush (seconds)', cli: '--registry-download-counter-flush' },
     ]
   },
   {

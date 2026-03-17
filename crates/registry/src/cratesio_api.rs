@@ -3,14 +3,13 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 use bytes::Bytes;
-use kellnr_appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, SettingsState};
+use kellnr_appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, DownloadCounterState, SettingsState};
 use kellnr_common::cratesio_downloader::{CLIENT, download_crate};
-use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, DownloadData};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_error::api_error::ApiResult;
 use reqwest::Url;
-use tracing::{error, trace, warn};
+use tracing::{error, trace};
 
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
@@ -86,24 +85,15 @@ pub async fn search(params: SearchParams) -> ApiResult<String> {
 pub async fn download(
     Path((name, version)): Path<(OriginalName, Version)>,
     State(crate_storage): CrateIoStorageState,
-    State(sender): CratesIoPrefetchSenderState,
+    State(download_counter): DownloadCounterState,
     State(settings): SettingsState,
 ) -> Result<Bytes, StatusCode> {
     trace!("Downloading crate: {name} ({version})");
 
-    if let Some(file) = crate_storage.get(&name, &version).await {
-        let msg = DownloadData {
-            name: name.into(),
-            version,
-        };
-        if let Err(e) = sender.send(CratesioPrefetchMsg::IncDownloadCnt(msg)) {
-            warn!("Failed to send IncDownloadCnt message: {e}");
-        }
-
-        Ok(file)
+    let file = if let Some(file) = crate_storage.get(&name, &version).await {
+        file
     } else {
         let crate_data = download_crate(&name, &version, &settings.proxy.url).await?;
-
         let _save = crate_storage
             .put(&name, &version, crate_data.clone())
             .await
@@ -111,12 +101,18 @@ pub async fn download(
                 error!("Failed to save crate to disk: {e}");
                 StatusCode::UNPROCESSABLE_ENTITY
             })?;
-
         crate_storage
             .get(&name, &version)
             .await
-            .ok_or(StatusCode::NOT_FOUND)
-    }
+            .ok_or(StatusCode::NOT_FOUND)?
+    };
+
+    // Count ALL downloads (both cache hits and upstream fetches)
+    download_counter
+        .increment_cached_and_maybe_flush(name.to_normalized(), version.clone())
+        .await;
+
+    Ok(file)
 }
 
 #[cfg(test)]
@@ -290,9 +286,7 @@ mod tests {
     fn app(settings: Settings) -> Router {
         let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
         let cs = CratesIoCrateStorage::new(&settings, storage);
-        let mut db = MockDb::new();
-        db.expect_increase_cached_download_counter()
-            .returning(|_, _| Ok(()));
+        let db = MockDb::new();
 
         let state = AppStateData {
             settings: settings.into(),
