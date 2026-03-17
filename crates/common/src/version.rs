@@ -1,13 +1,14 @@
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
 use sea_orm::Value;
 use thiserror::Error;
 use utoipa::ToSchema;
 
-#[derive(Debug, Eq, Clone, Hash, serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, Eq, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
 #[schema(value_type = String)]
 pub struct Version(String);
 
@@ -96,6 +97,13 @@ impl PartialEq for Version {
         let sv1 = semver::Version::parse(&self.to_string()).unwrap();
         let sv2 = semver::Version::parse(&other.to_string()).unwrap();
         sv1 == sv2
+    }
+}
+
+impl Hash for Version {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let sv = semver::Version::parse(&self.to_string()).unwrap();
+        sv.hash(state);
     }
 }
 

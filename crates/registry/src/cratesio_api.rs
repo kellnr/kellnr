@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 use bytes::Bytes;
-use kellnr_appstate::{CrateIoStorageState, CratesIoPrefetchSenderState, DownloadCounterState, SettingsState};
+use kellnr_appstate::{CrateIoStorageState, DownloadCounterState, SettingsState};
 use kellnr_common::cratesio_downloader::{CLIENT, download_crate};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;

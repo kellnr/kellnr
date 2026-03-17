@@ -4,6 +4,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use bytes::Bytes;
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
 use kellnr_auth::{maybe_user, token};
@@ -14,7 +15,6 @@ use kellnr_common::search_result::{Crate, SearchResult};
 use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
-use bytes::Bytes;
 use kellnr_error::api_error::{ApiError, ApiResult};
 
 use crate::pub_data::{EmptyCrateData, PubData};

@@ -255,7 +255,7 @@ async fn run_server(settings: Settings) {
         _ = tokio::signal::ctrl_c() => {
             trace!("Shutdown signal received, flushing download counters...");
         }
-        _ = sigterm => {
+        () = sigterm => {
             trace!("SIGTERM received, flushing download counters...");
         }
     }
