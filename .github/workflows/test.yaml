@@ -23,17 +23,23 @@ jobs:
   update-npm-hash:
     name: Update NPM dependencies hash
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
-    permissions:
-      contents: write
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
     outputs:
       sha: ${{ steps.update.outputs.sha }}
 
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ github.head_ref }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
@@ -57,11 +63,15 @@ jobs:
 
   lint:
     name: Format & Clippy
+    needs: [update-npm-hash]
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
 
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
@@ -77,11 +87,15 @@ jobs:
 
   test-kellnr:
     name: Unit Tests
+    needs: [update-npm-hash]
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
 
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
@@ -89,27 +103,35 @@ jobs:
       - name: Tests
         run: nix develop --command just test
 
-  test-kellnr-pgdb:
-    name: Postgresql Tests
+  test-kellnr-docker:
+    name: Docker Tests (PostgreSQL, S3)
+    needs: [update-npm-hash]
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
 
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
 
       - name: Tests
-        run: nix develop --command just test-pgdb
+        run: nix develop --command just test-docker
 
   test-kellnr-ui:
     name: UI Tests (Playwright)
+    needs: [update-npm-hash]
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
 
       - uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }

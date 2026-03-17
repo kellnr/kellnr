@@ -82,11 +82,11 @@ run *ARGS='start': npm-build build
 
 [unix]
 test: npm-build
-    cargo nextest run --workspace -E 'not test(~postgres_)'
+    cargo nextest run --workspace -E 'not test(~postgres_) and not binary(s3_tests)'
 
 [windows]
 test: npm-build
-    {{ setup-msvc }} cargo nextest run --workspace --no-default-features -E 'not test(~postgres_)'
+    {{ setup-msvc }} cargo nextest run --workspace --no-default-features -E 'not test(~postgres_) and not binary(s3_tests)'
 
 [unix]
 test-ui:
@@ -137,15 +137,15 @@ test-ui-headed:
     @echo "UI tests with Docker are not supported on Windows yet"
 
 [unix]
-test-pgdb: npm-build
-    {{ test_pgdb }}
+test-docker: npm-build
+    {{ test_docker }}
 
 [windows]
-test-pgdb: npm-build
-    @echo "PostgreSQL Docker tests are not supported on Windows yet"
+test-docker: npm-build
+    @echo "Docker tests are not supported on Windows yet"
 
 [unix]
-test-all: test test-pgdb test-ui
+test-all: test test-docker test-ui
 
 [windows]
 test-all: test
@@ -212,12 +212,12 @@ npm-build: npm-install
 # Install NPM dependencies without updating package-lock.json
 [unix]
 npm-install:
-    cd ui && npm ci
+    cd ui && npm install
 
 # Install NPM dependencies without updating package-lock.json
 [windows]
 npm-install:
-    cd ui; npm ci
+    cd ui; npm install
 
 # Update the npmDepsHash in flake.nix after ui/package-lock.json changes
 [unix]
@@ -303,17 +303,17 @@ alias tui := test-ui
 alias tuic := test-ui-chromium
 
 # "true" if docker is installed, "false" otherwise
-# Docker is needed for the Postgresql integration tests
+# Docker is needed for the PostgreSQL and S3 integration tests
 # These variables only work on Unix systems
 
 has_docker := if os_family() == "unix" { if `command -v docker > /dev/null 2>&1; echo $?` == "0" { "true" } else { "false" } } else { "false" }
-test_pgdb := if has_docker == "true" { "cargo nextest run --workspace -E 'test(~postgres_)'" } else { "echo 'ERROR: Docker is not installed. The Postgresql integration tests require Docker'" }
-test_ui_all_browsers := if has_docker == "true" { "cd tests && npm ci && PLAYWRIGHT_UI=1 npx playwright test" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
-test_ui_chromium := if has_docker == "true" { "cd tests && npm ci && PLAYWRIGHT_UI=1 npx playwright test --project=chromium" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
-test_ui_firefox := if has_docker == "true" { "cd tests && npm ci && PLAYWRIGHT_UI=1 npx playwright test --project=firefox" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
-test_ui_webkit := if has_docker == "true" { "cd tests && npm ci && PLAYWRIGHT_UI=1 npx playwright test --project=webkit" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
-test_ui_headed := if has_docker == "true" { "cd tests && npm ci && PLAYWRIGHT_UI=1 npx playwright test --headed" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
-test_ui_cov := if has_docker == "true" { "cd tests && npm ci && COVERAGE=1 npx playwright test --project=chromium && echo '' && echo 'Coverage data saved to tests/coverage/*.json'" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_docker := if has_docker == "true" { "cargo nextest run --workspace -E 'test(~postgres_) or binary(s3_tests)'" } else { "echo 'ERROR: Docker is not installed. The Docker integration tests (PostgreSQL, S3) require Docker'" }
+test_ui_all_browsers := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_chromium := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=chromium" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_firefox := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=firefox" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_webkit := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=webkit" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_headed := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --headed" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
+test_ui_cov := if has_docker == "true" { "cd tests && npm install && COVERAGE=1 npx playwright test --project=chromium && echo '' && echo 'Coverage data saved to tests/coverage/*.json'" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 
 ##########################################
 # Coverage commands
@@ -324,10 +324,10 @@ test_ui_cov := if has_docker == "true" { "cd tests && npm ci && COVERAGE=1 npx p
 test-cov: npm-build
     cargo llvm-cov nextest --workspace -E 'not test(~postgres_)' --html --open
 
-# Run PostgreSQL tests with coverage, generate HTML report
+# Run Docker-dependent tests (PostgreSQL, S3) with coverage, generate HTML report
 [unix]
-test-pgdb-cov: npm-build
-    cargo llvm-cov nextest --workspace -E 'test(~postgres_)' --html --open
+test-docker-cov: npm-build
+    cargo llvm-cov nextest --workspace -E 'test(~postgres_) or binary(s3_tests)' --html --open
 
 # Run all Rust tests with combined coverage
 [unix]
