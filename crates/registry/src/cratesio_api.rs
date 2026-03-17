@@ -80,6 +80,7 @@ pub async fn search(
     ),
     responses(
         (status = 200, description = "Crate archive", content_type = "application/octet-stream"),
+        (status = 400, description = "Invalid package name or version"),
         (status = 404, description = "Crate not found or proxy disabled"),
         (status = 422, description = "Failed to save crate")
     ),

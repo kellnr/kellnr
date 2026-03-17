@@ -583,6 +583,7 @@ pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<
     ),
     responses(
         (status = 200, description = "Crate archive", content_type = "application/octet-stream"),
+        (status = 400, description = "Invalid package name or version"),
         (status = 404, description = "Crate not found"),
         (status = 401, description = "Unauthorized for restricted crate")
     ),
