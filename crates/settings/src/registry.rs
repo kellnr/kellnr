@@ -130,4 +130,11 @@ pub struct Registry {
         long = "registry-download-max-concurrent"
     )]
     pub download_max_concurrent: usize,
+    /// Download counter flush interval in seconds (0 = flush every download)
+    #[default(30)]
+    #[arg(
+        id = "registry-download-counter-flush",
+        long = "registry-download-counter-flush"
+    )]
+    pub download_counter_flush_seconds: u64,
 }

@@ -37,6 +37,7 @@ const SETTING_KEYS: &[&str] = &[
     "registry.token_db_retry_delay_ms",
     "registry.download_timeout_seconds",
     "registry.download_max_concurrent",
+    "registry.download_counter_flush_seconds",
     // Local settings
     "local.ip",
     "local.port",

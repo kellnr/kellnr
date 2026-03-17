@@ -128,6 +128,7 @@ const sections: ConfigSection[] = [
       { key: 'registry.token_db_retry_delay_ms', label: 'Token DB Retry Delay (ms)', cli: '--registry-token-db-retry-delay' },
       { key: 'registry.download_timeout_seconds', label: 'Download Timeout (seconds)', cli: '--registry-download-timeout' },
       { key: 'registry.download_max_concurrent', label: 'Download Max Concurrent', cli: '--registry-download-max-concurrent' },
+      { key: 'registry.download_counter_flush_seconds', label: 'Download Counter Flush (seconds)', cli: '--registry-download-counter-flush' },
     ]
   },
   {

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use bytes::Bytes;
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
 use kellnr_auth::{maybe_user, token};
@@ -15,7 +16,6 @@ use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use kellnr_error::api_error::{ApiError, ApiResult};
-use tracing::warn;
 
 use crate::pub_data::{EmptyCrateData, PubData};
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
@@ -592,17 +592,16 @@ pub async fn download(
     State(state): AppState,
     token: token::OptionToken,
     Path((package, version)): Path<(OriginalName, Version)>,
-) -> ApiResult<Vec<u8>> {
+) -> ApiResult<Bytes> {
     let db = state.db;
     let cs = state.crate_storage;
+    let download_counter = state.download_counter;
     check_download_auth(&package.to_normalized(), &token, &db).await?;
 
-    if let Err(e) = db
-        .increase_download_counter(&package.to_normalized(), &version)
-        .await
-    {
-        warn!("Failed to increase download counter: {e}");
-    }
+    // Increment download counter (immediate DB call when flush_interval=0)
+    download_counter
+        .increment_and_maybe_flush(package.to_normalized(), version.clone())
+        .await;
 
     match cs.get(&package, &version).await {
         Some(file) => Ok(file),
