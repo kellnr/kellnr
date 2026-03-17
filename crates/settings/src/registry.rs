@@ -118,6 +118,18 @@ pub struct Registry {
     )]
     pub token_db_retry_delay_ms: u64,
 
+    /// Download request timeout in seconds (0 = disabled)
+    #[default(60)]
+    #[arg(id = "registry-download-timeout", long = "registry-download-timeout")]
+    pub download_timeout_seconds: u64,
+
+    /// Max concurrent download requests (0 = unlimited)
+    #[default(20)]
+    #[arg(
+        id = "registry-download-max-concurrent",
+        long = "registry-download-max-concurrent"
+    )]
+    pub download_max_concurrent: usize,
     /// Download counter flush interval in seconds (0 = flush every download)
     #[default(30)]
     #[arg(

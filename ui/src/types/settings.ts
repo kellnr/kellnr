@@ -79,6 +79,8 @@ export type Proxy = {
   download_on_update: boolean
   url: string
   index: string
+  connect_timeout_seconds: number
+  request_timeout_seconds: number
 }
 
 export type Registry = {
@@ -97,6 +99,8 @@ export type Registry = {
   token_cache_max_capacity: number
   token_db_retry_count: number
   token_db_retry_delay_ms: number
+  download_timeout_seconds: number
+  download_max_concurrent: number
   download_counter_flush_seconds: number
 }
 
@@ -110,6 +114,8 @@ export type S3 = {
   crates_bucket: string
   cratesio_bucket: string
   toolchain_bucket: string
+  connect_timeout_seconds: number
+  request_timeout_seconds: number
 }
 
 export const emptySettings: Settings = {
@@ -144,7 +150,9 @@ export const emptySettings: Settings = {
     num_threads: 0,
     download_on_update: false,
     url: "",
-    index: ""
+    index: "",
+    connect_timeout_seconds: 5,
+    request_timeout_seconds: 30
   },
   registry: {
     data_dir: "",
@@ -162,6 +170,8 @@ export const emptySettings: Settings = {
     token_cache_max_capacity: 10000,
     token_db_retry_count: 3,
     token_db_retry_delay_ms: 100,
+    download_timeout_seconds: 60,
+    download_max_concurrent: 20
     download_counter_flush_seconds: 30
   },
   s3: {
@@ -173,7 +183,9 @@ export const emptySettings: Settings = {
     allow_http: false,
     crates_bucket: "",
     cratesio_bucket: "",
-    toolchain_bucket: ""
+    toolchain_bucket: "",
+    connect_timeout_seconds: 5,
+    request_timeout_seconds: 30
   },
   toolchain: {
     enabled: false,

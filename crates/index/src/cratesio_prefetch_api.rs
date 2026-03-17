@@ -17,7 +17,7 @@ use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use moka::future::Cache;
-use reqwest::{Client, ClientBuilder, Url};
+use reqwest::{Client, Url};
 use serde::Deserialize;
 use tracing::{error, trace, warn};
 
@@ -25,18 +25,16 @@ use super::config_json::ConfigJson;
 
 pub static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 pub static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
-static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        reqwest::header::USER_AGENT,
-        reqwest::header::HeaderValue::from_static("kellnr.io/kellnr"),
-    );
-    ClientBuilder::new()
-        .gzip(true)
-        .default_headers(headers)
-        .build()
-        .unwrap()
-});
+static CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
+
+fn get_client(settings: &kellnr_settings::Proxy) -> &'static Client {
+    CLIENT.get_or_init(|| {
+        kellnr_common::cratesio_downloader::build_client(
+            Duration::from_secs(settings.connect_timeout_seconds),
+            Duration::from_secs(settings.request_timeout_seconds),
+        )
+    })
+}
 
 /// Get crates.io proxy configuration
 ///
@@ -82,7 +80,15 @@ pub async fn prefetch_cratesio(
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
 ) -> Result<Prefetch, StatusCode> {
-    internal_prefetch_cratesio(name, headers, &db, &settings.proxy.index, &sender).await
+    internal_prefetch_cratesio(
+        name,
+        headers,
+        &db,
+        &settings.proxy.index,
+        &sender,
+        &settings.proxy,
+    )
+    .await
 }
 
 /// Prefetch crate metadata from crates.io (1-2 char names)
@@ -111,7 +117,15 @@ pub async fn prefetch_len2_cratesio(
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
 ) -> Result<Prefetch, StatusCode> {
-    internal_prefetch_cratesio(name, headers, &db, &settings.proxy.index, &sender).await
+    internal_prefetch_cratesio(
+        name,
+        headers,
+        &db,
+        &settings.proxy.index,
+        &sender,
+        &settings.proxy,
+    )
+    .await
 }
 
 pub fn init_cratesio_prefetch_thread(
@@ -141,6 +155,7 @@ async fn internal_prefetch_cratesio(
     db: &Arc<dyn DbProvider>,
     index_url: &Url,
     sender: &flume::Sender<CratesioPrefetchMsg>,
+    proxy_settings: &kellnr_settings::Proxy,
 ) -> Result<Prefetch, StatusCode> {
     let if_modified_since = headers
         .get("if-modified-since")
@@ -176,7 +191,9 @@ async fn internal_prefetch_cratesio(
             trace!("Prefetching {name} from crates.io cache: Up to Date");
             Err(StatusCode::NOT_MODIFIED)
         }
-        PrefetchState::NotFound => Ok(fetch_cratesio_prefetch(name, index_url, sender).await?),
+        PrefetchState::NotFound => {
+            Ok(fetch_cratesio_prefetch(name, index_url, sender, proxy_settings).await?)
+        }
     }
 }
 
@@ -218,7 +235,10 @@ async fn background_update_thread(
     }
 }
 
-async fn fetch_cratesio_description(name: &str) -> Result<Option<String>, StatusCode> {
+async fn fetch_cratesio_description(
+    name: &str,
+    proxy_settings: &kellnr_settings::Proxy,
+) -> Result<Option<String>, StatusCode> {
     #[derive(Deserialize)]
     struct Krate {
         description: Option<String>,
@@ -234,7 +254,7 @@ async fn fetch_cratesio_description(name: &str) -> Result<Option<String>, Status
         .join(name)
         .unwrap();
 
-    let response = CLIENT
+    let response = get_client(proxy_settings)
         .get(url)
         .send()
         .await
@@ -256,11 +276,20 @@ pub struct CratesIoPrefetchArgs {
     pub url: Url,
     pub index: Url,
     pub storage: Arc<CratesIoCrateStorage>,
+    pub proxy_settings: Arc<kellnr_settings::Proxy>,
 }
 
 async fn cratesio_prefetch_thread(args: CratesIoPrefetchArgs) -> ! {
     loop {
-        match handle_cratesio_prefetch_msg(&args.cache, &args.recv, &args.db, &args.index).await {
+        match handle_cratesio_prefetch_msg(
+            &args.cache,
+            &args.recv,
+            &args.db,
+            &args.index,
+            &args.proxy_settings,
+        )
+        .await
+        {
             UpdateNeeded::Update(data) => {
                 if let Err(e) = args
                     .db
@@ -306,7 +335,7 @@ async fn predownload_crate(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) {
         }
         Ok(false) => {
             trace!("Downloading version {} for crate {}", idx.vers, idx.name);
-            match download_crate(&idx.name, &idx.vers, &args.url).await {
+            match download_crate(get_client(&args.proxy_settings), &idx.name, &idx.vers, &args.url).await {
                 Ok(crate_data) => {
                     if let Err(e) = args
                         .storage
@@ -346,7 +375,11 @@ struct MetadataDescription {
     description: Option<String>,
 }
 
-async fn convert_index_data(name: &str, data: &str) -> MetadataDescription {
+async fn convert_index_data(
+    name: &str,
+    data: &str,
+    proxy_settings: &kellnr_settings::Proxy,
+) -> MetadataDescription {
     let metadata: Result<Vec<IndexMetadata>, serde_json::Error> = data
         .lines()
         .map(serde_json::from_str::<IndexMetadata>)
@@ -354,10 +387,12 @@ async fn convert_index_data(name: &str, data: &str) -> MetadataDescription {
 
     match metadata {
         Ok(m) => {
-            let desc = fetch_cratesio_description(name).await.unwrap_or_else(|e| {
-                error!("Could not fetch description for from crates.io {name}: {e:?}",);
-                None
-            });
+            let desc = fetch_cratesio_description(name, proxy_settings)
+                .await
+                .unwrap_or_else(|e| {
+                    error!("Could not fetch description for from crates.io {name}: {e:?}",);
+                    None
+                });
 
             MetadataDescription {
                 metadata: m,
@@ -421,13 +456,14 @@ async fn handle_cratesio_prefetch_msg(
     channel: &flume::Receiver<CratesioPrefetchMsg>,
     db: &Arc<dyn DbProvider>,
     index_url: &Url,
+    proxy_settings: &kellnr_settings::Proxy,
 ) -> UpdateNeeded {
     match channel.recv_async().await {
         Ok(CratesioPrefetchMsg::Insert(msg)) => {
             trace!("Inserting prefetch data from crates.io for {}", msg.name);
             let date = chrono::Utc::now().to_rfc3339();
             cache.insert(msg.name.clone(), date).await;
-            let metadata_desc = convert_index_data(&msg.name, &msg.data).await;
+            let metadata_desc = convert_index_data(&msg.name, &msg.data, proxy_settings).await;
             PrefetchData::new(msg.name, msg.etag, msg.last_modified, metadata_desc).into()
         }
         Ok(CratesioPrefetchMsg::Update(msg)) => {
@@ -439,7 +475,9 @@ async fn handle_cratesio_prefetch_msg(
                 cache
                     .insert(msg.name.clone(), chrono::Utc::now().to_rfc3339())
                     .await;
-                fetch_index_data(msg, index_url).await.into()
+                fetch_index_data(msg, index_url, proxy_settings)
+                    .await
+                    .into()
             }
         }
         Ok(CratesioPrefetchMsg::IncDownloadCnt(msg)) => {
@@ -459,7 +497,11 @@ async fn handle_cratesio_prefetch_msg(
     }
 }
 
-async fn fetch_index_data(msg: UpdateData, index_url: &Url) -> Option<PrefetchData> {
+async fn fetch_index_data(
+    msg: UpdateData,
+    index_url: &Url,
+    proxy_settings: &kellnr_settings::Proxy,
+) -> Option<PrefetchData> {
     let name = &msg.name;
     let etag = &msg.etag;
     let last_modified = &msg.last_modified;
@@ -475,7 +517,7 @@ async fn fetch_index_data(msg: UpdateData, index_url: &Url) -> Option<PrefetchDa
     let max_retries = 3;
     let mut i = 0;
     let r = loop {
-        match CLIENT
+        match get_client(proxy_settings)
             .get(url.clone())
             .header("If-None-Match", etag.clone().unwrap_or_default())
             .header(
@@ -526,7 +568,7 @@ async fn fetch_index_data(msg: UpdateData, index_url: &Url) -> Option<PrefetchDa
                     }
                 };
 
-                let metadata_desc = convert_index_data(&msg.name, &data).await;
+                let metadata_desc = convert_index_data(&msg.name, &data, proxy_settings).await;
                 let prefetch_data = PrefetchData::new(msg.name, etag, last_modified, metadata_desc);
                 Some(prefetch_data)
             }
@@ -544,12 +586,13 @@ async fn fetch_cratesio_prefetch(
     name: OriginalName,
     index_url: &Url,
     sender: &flume::Sender<CratesioPrefetchMsg>,
+    proxy_settings: &kellnr_settings::Proxy,
 ) -> Result<Prefetch, StatusCode> {
     let url = index_url
         .join(&crate_sub_path(&name.to_normalized()))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let response = CLIENT.get(url).send().await;
+    let response = get_client(proxy_settings).get(url).send().await;
 
     match response {
         Ok(r) => {
@@ -643,7 +686,10 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_cratesio_description_works() {
-        let desc = fetch_cratesio_description("rocket").await.unwrap();
+        let proxy_settings = kellnr_settings::Proxy::default();
+        let desc = fetch_cratesio_description("rocket", &proxy_settings)
+            .await
+            .unwrap();
         assert_eq!(
             Some(
                 "Web framework with a focus on usability, security, extensibility, and speed.\n"
@@ -655,7 +701,8 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_cratesio_description_not_existent_crate() {
-        let desc = fetch_cratesio_description("does_not_exists123").await;
+        let proxy_settings = kellnr_settings::Proxy::default();
+        let desc = fetch_cratesio_description("does_not_exists123", &proxy_settings).await;
         assert_eq!(Err(StatusCode::INTERNAL_SERVER_ERROR), desc);
     }
 

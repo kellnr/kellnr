@@ -39,4 +39,14 @@ pub struct S3 {
     #[default("kellnr-toolchains".to_string())]
     #[arg(id = "s3-toolchain-bucket", long = "s3-toolchain-bucket")]
     pub toolchain_bucket: String,
+
+    /// S3 connect timeout in seconds
+    #[default(5)]
+    #[arg(id = "s3-connect-timeout", long = "s3-connect-timeout")]
+    pub connect_timeout_seconds: u64,
+
+    /// S3 request timeout in seconds
+    #[default(30)]
+    #[arg(id = "s3-request-timeout", long = "s3-request-timeout")]
+    pub request_timeout_seconds: u64,
 }

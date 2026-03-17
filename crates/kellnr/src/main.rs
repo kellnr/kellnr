@@ -146,6 +146,7 @@ async fn run_server(settings: Settings) {
         storage: cratesio_storage.clone(),
         url: settings.proxy.url.clone(),
         index: settings.proxy.index.clone(),
+        proxy_settings: Arc::new(settings.proxy.clone()),
     };
 
     init_cratesio_prefetch_thread(
