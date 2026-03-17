@@ -15,6 +15,7 @@ pub mod registry;
 pub mod s3;
 pub mod settings;
 pub mod setup;
+pub mod storage;
 pub mod toolchain;
 
 pub use cli::{CliResult, ShowConfigOptions, get_settings_with_cli, parse_cli};

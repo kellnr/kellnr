@@ -6,7 +6,8 @@ use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
 use kellnr_rustfs_testcontainer::*;
 use kellnr_settings::Settings;
-use kellnr_settings::s3::S3;
+use kellnr_settings::storage::{Storage, StorageBackend};
+use kellnr_settings::s3::S3Config;
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::s3_storage::S3Storage;
@@ -28,20 +29,24 @@ impl TestS3Storage {
                 admin_pwd: String::new(),
                 ..kellnr_settings::Setup::default()
             },
-            s3: S3 {
-                enabled: true,
-                access_key: Some("rustfsadmin".into()),
-                secret_key: Some("rustfsadmin".into()),
-                endpoint: Some(url.to_string()),
-                allow_http: true,
-                ..S3::default()
+            storage: Storage {
+                kellnr_crates: StorageBackend::S3(S3Config {
+                    access_key: Some("rustfsadmin".into()),
+                    secret_key: Some("rustfsadmin".into()),
+                    endpoint: Some(url.to_string()),
+                    allow_http: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
             },
             ..Settings::default()
         };
-        let storage =
-            Box::new(S3Storage::try_from(("kellnr-crates", &settings)).unwrap()) as DynStorage;
-        let crate_storage = KellnrCrateStorage::new(&settings, storage);
-        TestS3Storage { crate_storage }
+        // let storage =
+        //     Box::new(S3Storage::try_from(("kellnr-crates", &settings)).unwrap()) as DynStorage;
+        // let crate_storage = KellnrCrateStorage::new(&settings, storage);
+        let storage = S3Storage::try_from(settings.storage.kellnr_crates.s3_config().unwrap()).unwrap();
+        // let crate_storage = KellnrCrateStorage::new()
+        TestS3Storage { crate_storage: KellnrCrateStorage::new(&settings, Box::new(storage) as DynStorage) }
     }
 }
 

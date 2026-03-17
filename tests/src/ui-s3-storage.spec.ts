@@ -124,13 +124,8 @@ test.describe("S3 Storage UI Tests", () => {
       name: `kellnr-s3-${suffix}`,
       env: {
         KELLNR_PROXY__ENABLED: "true",
-        KELLNR_S3__ENABLED: "true",
-        KELLNR_S3__ACCESS_KEY: s3RootUser,
-        KELLNR_S3__SECRET_KEY: s3RootPassword,
-        KELLNR_S3__ENDPOINT: s3UrlForLocalKellnr,
-        KELLNR_S3__ALLOW_HTTP: s3AllowHttp,
-        KELLNR_S3__CRATES_BUCKET: s3CratesBucket,
-        KELLNR_S3__CRATESIO_BUCKET: s3CratesioBucket,
+        KELLNR_STORAGE__KELLNR_CRATES: `kind=s3,access_key=${s3RootUser},secret_key=${s3RootPassword},endpoint=${s3UrlForLocalKellnr},allow_http=true,bucket=${s3CratesBucket}`,
+        KELLNR_STORAGE__CRATES_IO: `kind=s3,access_key=${s3RootUser},secret_key=${s3RootPassword},endpoint=${s3UrlForLocalKellnr},allow_http=true,bucket=${s3CratesioBucket}`,
       },
     });
 
