@@ -14,6 +14,7 @@ use kellnr_common::search_result::{Crate, SearchResult};
 use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
+use bytes::Bytes;
 use kellnr_error::api_error::{ApiError, ApiResult};
 use tracing::warn;
 
@@ -592,7 +593,7 @@ pub async fn download(
     State(state): AppState,
     token: token::OptionToken,
     Path((package, version)): Path<(OriginalName, Version)>,
-) -> ApiResult<Vec<u8>> {
+) -> ApiResult<Bytes> {
     let db = state.db;
     let cs = state.crate_storage;
     check_download_auth(&package.to_normalized(), &token, &db).await?;
