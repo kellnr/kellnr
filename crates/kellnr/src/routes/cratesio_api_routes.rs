@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use axum::Router;
-use axum::middleware;
 use axum::routing::get;
+use axum::{Router, middleware};
 use kellnr_appstate::AppStateData;
 use kellnr_auth::auth_req_token;
 use kellnr_index::cratesio_prefetch_api;

@@ -6,7 +6,6 @@ use flume::Sender;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_db::DbProvider;
-use reqwest::Client;
 use kellnr_db::download_counter::DownloadCounter;
 use kellnr_settings::Settings;
 use kellnr_storage::cached_crate_storage::DynStorage;
@@ -14,6 +13,7 @@ use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::toolchain_storage::ToolchainStorage;
+use reqwest::Client;
 
 pub type AppState = axum::extract::State<AppStateData>;
 

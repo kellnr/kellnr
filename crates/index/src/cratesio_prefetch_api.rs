@@ -335,7 +335,14 @@ async fn predownload_crate(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) {
         }
         Ok(false) => {
             trace!("Downloading version {} for crate {}", idx.vers, idx.name);
-            match download_crate(get_client(&args.proxy_settings), &idx.name, &idx.vers, &args.url).await {
+            match download_crate(
+                get_client(&args.proxy_settings),
+                &idx.name,
+                &idx.vers,
+                &args.url,
+            )
+            .await
+            {
                 Ok(crate_data) => {
                     if let Err(e) = args
                         .storage

@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::http::StatusCode;
+use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::{get, get_service};
 use axum::{Extension, Router, middleware};
-use axum::middleware::Next;
 use kellnr_appstate::AppStateData;
 use kellnr_auth::oauth2::OAuth2Handler;
 use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};

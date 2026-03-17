@@ -1,12 +1,11 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use kellnr_settings::Settings;
-use std::time::Duration;
-
-use object_store::ClientOptions;
 use object_store::aws::{AmazonS3, AmazonS3Builder};
 use object_store::path::Path;
-use object_store::{ObjectStore, ObjectStoreExt, PutMode};
+use object_store::{ClientOptions, ObjectStore, ObjectStoreExt, PutMode};
 
 use crate::storage::Storage;
 use crate::storage_error::StorageError;
