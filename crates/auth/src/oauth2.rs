@@ -382,14 +382,14 @@ impl OAuth2Handler {
         if let Some(username) = &user_info.preferred_username
             && !username.is_empty()
         {
-            return sanitize_username(username);
+            return sanitize_username_with_dots(username);
         }
 
         if let Some(email) = &user_info.email
             && let Some(local_part) = email.split('@').next()
             && !local_part.is_empty()
         {
-            return sanitize_username(local_part);
+            return sanitize_username_with_dots(local_part);
         }
 
         sanitize_username(&user_info.subject)
@@ -456,10 +456,19 @@ fn get_string_array_from_json(payload: &serde_json::Value, name: &str) -> Option
 /// - Replaces invalid characters with underscores
 /// - Ensures it starts with a letter
 fn sanitize_username(input: &str) -> String {
+    sanitize_username_impl(input, false)
+}
+
+/// Same as `sanitize_username`, but preserves dots.
+fn sanitize_username_with_dots(input: &str) -> String {
+    sanitize_username_impl(input, true)
+}
+
+fn sanitize_username_impl(input: &str, allow_dot: bool) -> String {
     let mut result: String = input
         .chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' || (allow_dot && c == '.') {
                 c.to_ascii_lowercase()
             } else {
                 '_'
@@ -534,6 +543,15 @@ mod tests {
     }
 
     #[test]
+    fn test_sanitize_username_with_dots() {
+        assert_eq!(sanitize_username_with_dots("john.doe"), "john.doe");
+        assert_eq!(
+            sanitize_username_with_dots("john@example.com"),
+            "john_example.com"
+        );
+    }
+
+    #[test]
     fn test_generate_username_preferred() {
         let user_info = UserInfo {
             subject: "sub123".to_string(),
@@ -547,6 +565,19 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_username_preferred_preserves_dot() {
+        let user_info = UserInfo {
+            subject: "sub123".to_string(),
+            email: Some("john@example.com".to_string()),
+            preferred_username: Some("john.doe".to_string()),
+            groups: vec![],
+            is_admin: false,
+            is_read_only: false,
+        };
+        assert_eq!(OAuth2Handler::generate_username(&user_info), "john.doe");
+    }
+
+    #[test]
     fn test_generate_username_email() {
         let user_info = UserInfo {
             subject: "sub123".to_string(),
@@ -557,6 +588,19 @@ mod tests {
             is_read_only: false,
         };
         assert_eq!(OAuth2Handler::generate_username(&user_info), "john");
+    }
+
+    #[test]
+    fn test_generate_username_email_preserves_dot_in_local_part() {
+        let user_info = UserInfo {
+            subject: "sub123".to_string(),
+            email: Some("john.doe@example.com".to_string()),
+            preferred_username: None,
+            groups: vec![],
+            is_admin: false,
+            is_read_only: false,
+        };
+        assert_eq!(OAuth2Handler::generate_username(&user_info), "john.doe");
     }
 
     #[test]
