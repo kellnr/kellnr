@@ -48,7 +48,7 @@
           version = "0.1.0";
           src = ./ui;
 
-          npmDepsHash = "sha256-7gTVTtGn0ePN8/hxC1NFwaiyQA/sI5qQ2g0Fv3C7pjw=";
+          npmDepsHash = "sha256-peTxkte1wVK48rjy+EoaepKNgXH7M3m3N6PHMYAMBQ4=";
 
           buildPhase = ''
             npm run build
