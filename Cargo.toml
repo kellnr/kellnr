@@ -85,7 +85,7 @@ utoipa = { version = "5", features = ["axum_extras", "chrono"] }
 utoipa-axum = "0.2"
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.22.0", features = ["v4"] }
-zip = "8.2.0"
+zip = "8.3.0"
 clap = { version = "4", features = ["derive"] }
 clap-serde-derive = "0.2"
 
