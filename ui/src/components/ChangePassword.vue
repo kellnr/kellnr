@@ -12,7 +12,7 @@
         Update your password to keep your account secure. Choose a strong password that you don't use elsewhere.
       </p>
 
-      <v-form @submit.prevent="handleChangePassword">
+      <v-form ref="form" @submit.prevent="handleChangePassword">
         <div class="mb-4">
           <label class="text-body-2 font-weight-medium d-block mb-2">Current Password</label>
           <v-text-field
@@ -96,6 +96,7 @@ const loading = ref(false)
 const oldPassword = ref("")
 const newPassword1 = ref("")
 const newPassword2 = ref("")
+const form = ref<InstanceType<typeof import('vuetify/components').VForm> | null>(null)
 
 // Composables
 const status = useStatusMessage()
@@ -127,10 +128,7 @@ async function handleChangePassword() {
 
   if (isSuccess(result)) {
     status.setSuccess("Password changed successfully")
-    // Reset form on success
-    oldPassword.value = ""
-    newPassword1.value = ""
-    newPassword2.value = ""
+    form.value?.reset()
   } else {
     status.setError(result.error.message)
   }
