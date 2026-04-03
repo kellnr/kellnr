@@ -3804,6 +3804,7 @@ dependencies = [
  "openssl",
  "serde",
  "serde_json",
+ "sha256",
  "tempfile",
  "tokio",
  "toml 1.1.0+spec-1.1.0",

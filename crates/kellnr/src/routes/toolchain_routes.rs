@@ -561,10 +561,16 @@ async fn get_channel_manifest(
 ) -> Result<Response, StatusCode> {
     trace!(manifest_file = %manifest_file, "Getting channel manifest");
 
-    // Parse the manifest filename: channel-rust-{channel}.toml
-    let channel = manifest_file
+    // Parse the manifest filename:
+    //   channel-rust-{channel}.toml         -> return the manifest
+    //   channel-rust-{channel}.toml.sha256  -> return the SHA256 hash of the manifest
+    let (channel, want_sha256) = manifest_file
         .strip_prefix("channel-rust-")
-        .and_then(|s| s.strip_suffix(".toml"))
+        .and_then(|s| {
+            s.strip_suffix(".toml.sha256")
+                .map(|c| (c, true))
+                .or_else(|| s.strip_suffix(".toml").map(|c| (c, false)))
+        })
         .ok_or(StatusCode::NOT_FOUND)?;
 
     let toolchain = db
@@ -575,13 +581,17 @@ async fn get_channel_manifest(
 
     let manifest = generate_manifest(&toolchain, &settings);
 
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        "text/toml; charset=utf-8".parse().unwrap(),
-    );
-
-    Ok((headers, manifest).into_response())
+    if want_sha256 {
+        let hash = sha256::digest(manifest.as_bytes());
+        Ok(hash.into_response())
+    } else {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CONTENT_TYPE,
+            "text/toml; charset=utf-8".parse().unwrap(),
+        );
+        Ok((headers, manifest).into_response())
+    }
 }
 
 /// Download a toolchain archive
@@ -1673,5 +1683,62 @@ mod tests {
         assert!(manifest.contains("available = true"));
         assert!(manifest.contains("url = \""));
         assert!(manifest.contains("hash = \"abc123def456\""));
+    }
+
+    #[tokio::test]
+    async fn test_get_manifest_sha256_returns_ok() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_toolchain_by_channel()
+            .with(eq("stable"))
+            .returning(|_| {
+                Ok(Some(ToolchainWithTargets {
+                    id: 1,
+                    name: "rust".to_string(),
+                    version: "1.0.0".to_string(),
+                    date: "2024-01-15".to_string(),
+                    channel: Some("stable".to_string()),
+                    created: "2024-01-15".to_string(),
+                    targets: vec![ToolchainTargetInfo {
+                        id: 1,
+                        target: "x86_64-unknown-linux-gnu".to_string(),
+                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
+                            .to_string(),
+                        hash: "abc123def456".to_string(),
+                        size: 1024,
+                    }],
+                }))
+            });
+
+        let state = create_app_state(Arc::new(mock_db), None);
+        let router = create_test_router(state);
+
+        // rustup requests the .sha256 of the manifest before downloading
+        // the manifest itself. This must return a valid SHA256 hash.
+        let response = router
+            .oneshot(
+                Request::get("/api/v1/toolchains/dist/channel-rust-stable.toml.sha256")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::OK, response.status());
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let hash_content = String::from_utf8(body.to_vec()).unwrap();
+
+        // Should be a valid hex-encoded SHA256 hash (64 characters)
+        let hash = hash_content.trim();
+        assert_eq!(
+            hash.len(),
+            64,
+            "SHA256 hash should be 64 hex characters, got: {hash}"
+        );
+        assert!(
+            hash.chars().all(|c| c.is_ascii_hexdigit()),
+            "SHA256 hash should only contain hex characters"
+        );
     }
 }

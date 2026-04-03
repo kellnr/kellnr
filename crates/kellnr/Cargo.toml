@@ -35,6 +35,7 @@ flume.workspace = true
 serde.workspace = true
 moka.workspace = true
 openssl = { version = "0.10", optional = true } # Not needed directly but for cross-compilation with the vendored-openssl feature
+sha256.workspace = true
 tokio.workspace = true
 toml.workspace = true
 tower-http.workspace = true
