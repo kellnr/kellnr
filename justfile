@@ -152,8 +152,8 @@ test-all: test
 
 # Generate SBOM (Software Bill of Materials) in CycloneDX format
 sbom:
-    cargo cyclonedx --format json --manifest-path crates/kellnr/Cargo.toml
-    @echo "SBOM generated: crates/kellnr/kellnr.cdx.json"
+    cdxgen -r -o kellnr.cdx.json .
+    @echo "SBOM generated: kellnr.cdx.json"
 
 clean:
     cargo clean
