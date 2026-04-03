@@ -422,6 +422,23 @@ test.describe("Toolchain API and Distribution Tests", () => {
     expect(manifest).toContain('hash = "');
   });
 
+  test("can fetch channel manifest sha256 hash", async () => {
+    // rustup fetches the .sha256 of the manifest before the manifest itself.
+    // If this returns 404, rustup gives up with "no release found".
+    const sha256Url = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml.sha256`;
+
+    const response = await fetch(sha256Url, {
+      headers: { "Cookie": sessionCookie },
+    });
+    expect(response.status).toBe(200);
+
+    const hash = (await response.text()).trim();
+    console.log(`[test] Manifest SHA256: ${hash}`);
+
+    // Should be a valid 64-character hex-encoded SHA256 hash
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   test("can download toolchain archive", async () => {
     // First get the manifest to find the archive URL
     const manifestUrl = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml`;
