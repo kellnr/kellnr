@@ -1731,7 +1731,14 @@ mod tests {
 
         // Should be a valid hex-encoded SHA256 hash (64 characters)
         let hash = hash_content.trim();
-        assert_eq!(hash.len(), 64, "SHA256 hash should be 64 hex characters, got: {hash}");
-        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "SHA256 hash should only contain hex characters");
+        assert_eq!(
+            hash.len(),
+            64,
+            "SHA256 hash should be 64 hex characters, got: {hash}"
+        );
+        assert!(
+            hash.chars().all(|c| c.is_ascii_hexdigit()),
+            "SHA256 hash should only contain hex characters"
+        );
     }
 }
