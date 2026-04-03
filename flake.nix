@@ -152,7 +152,7 @@
               rust-analyzer
               cargo-nextest
               cargo-machete
-              cargo-cyclonedx
+              cdxgen
               cargo-llvm-cov
 
               # Node.js for UI development

@@ -56,7 +56,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: crates/kellnr/kellnr.cdx.json
+          file: kellnr.cdx.json
           asset_name: kellnr-${{ env.VERSION }}.cdx.json
           tag: ${{ github.ref }}
 
