@@ -64,7 +64,7 @@ rm_rf = "0.6.2"
 sea-orm = { version = "2.0.0-rc.27", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
 sea-orm-migration = { version = "2.0.0-rc.27", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls"] }
 sea-query = "1.0.0-rc.29"
-semver = "1.0.27"
+semver = "1.0.28"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 sha256 = "1.6.0"
@@ -74,7 +74,7 @@ tempfile = "3"
 testcontainers = { version = "0.27.2", features = ["http_wait_plain"] }
 thiserror = "2.0.18"
 time = "0.3.47"
-tokio = { version = "1.50.0", features = ["macros", "signal"] }
+tokio = { version = "1.51.0", features = ["macros", "signal"] }
 toml = "1.1.0"
 tower = { version = "0.5.2", features = ["util", "limit"] }
 tower-http = { version = "0.6.8", features = ["fs", "trace", "timeout"] }
@@ -85,7 +85,7 @@ utoipa = { version = "5", features = ["axum_extras", "chrono"] }
 utoipa-axum = "0.2"
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.23.0", features = ["v4"] }
-zip = "8.4.0"
+zip = "8.5.0"
 clap = { version = "4", features = ["derive"] }
 clap-serde-derive = "0.2"
 
