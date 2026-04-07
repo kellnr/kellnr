@@ -282,4 +282,18 @@ pub enum ToolchainTargetIden {
     StoragePath,
     Hash,
     Size,
+    Status,
+}
+
+#[derive(Iden, Copy, Clone)]
+pub enum ToolchainComponentIden {
+    #[iden = "toolchain_component"]
+    Table,
+    Id,
+    #[iden = "toolchain_target_fk"]
+    ToolchainTargetFk,
+    Name,
+    StoragePath,
+    Hash,
+    Size,
 }

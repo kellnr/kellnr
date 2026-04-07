@@ -16,6 +16,17 @@ impl ToolchainStorage {
         format!("{date}/{name}-{version}-{target}.tar.xz")
     }
 
+    /// Storage path for an individual component archive. Same format as
+    /// `storage_path`, kept as a separate method for clarity at call sites.
+    pub fn component_storage_path(
+        date: &str,
+        component: &str,
+        version: &str,
+        target: &str,
+    ) -> String {
+        Self::storage_path(date, component, version, target)
+    }
+
     pub async fn put(
         &self,
         date: &str,
@@ -44,6 +55,18 @@ impl ToolchainStorage {
         })?;
 
         Ok((path, hash))
+    }
+
+    pub async fn put_raw(&self, path: &str, data: Bytes) -> Result<(), StorageError> {
+        self.storage
+            .put(path, data)
+            .await
+            .map_err(|e| StorageError::ToolchainStoreFailed {
+                name: format!("component at {path}"),
+                version: String::new(),
+                target: String::new(),
+                reason: e.to_string(),
+            })
     }
 
     pub async fn get(&self, path: &str) -> Result<Bytes, StorageError> {

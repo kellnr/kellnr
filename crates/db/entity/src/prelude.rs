@@ -23,6 +23,7 @@ pub use super::oauth2_state::Entity as OAuth2State;
 pub use super::owner::Entity as Owner;
 pub use super::session::Entity as Session;
 pub use super::toolchain::Entity as Toolchain;
+pub use super::toolchain_component::Entity as ToolchainComponent;
 pub use super::toolchain_target::Entity as ToolchainTarget;
 pub use super::user::Entity as User;
 pub use super::webhook::Entity as Webhook;

@@ -25,6 +25,7 @@ pub mod oauth2_state;
 pub mod owner;
 pub mod session;
 pub mod toolchain;
+pub mod toolchain_component;
 pub mod toolchain_target;
 pub mod user;
 pub mod webhook;
