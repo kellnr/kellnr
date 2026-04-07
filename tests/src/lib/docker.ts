@@ -111,6 +111,12 @@ export type StartContainerOptions = {
    * Useful for ensuring files created in bind mounts are owned by the host user.
    */
   user?: string;
+
+  /**
+   * Extra /etc/hosts entries (e.g. `{ host: "host.docker.internal", ipAddress: "host-gateway" }`).
+   * On Linux, use this to map host.docker.internal to the Docker host.
+   */
+  extraHosts?: Array<{ host: string; ipAddress: string }>;
 };
 
 export type Started = {
@@ -466,6 +472,10 @@ export async function startContainer(
 
   if (options.user) {
     container = container.withUser(options.user);
+  }
+
+  if (options.extraHosts?.length) {
+    container = container.withExtraHosts(options.extraHosts);
   }
 
   if (options.waitFor) {

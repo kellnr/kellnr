@@ -38,13 +38,10 @@ test.describe("Toolchain S3 Storage Tests", () => {
   let rustfsContainer: Started;
   let sessionCookie: string;
 
-  // Path to test archive
-  const testArchivePath = path.resolve(
-    process.cwd(),
-    "fixtures",
-    "test-toolchain",
-    "rust-1.0.0-test-x86_64-unknown-linux-gnu.tar.xz"
-  );
+  // Paths to test archives (both targets for architecture-independent testing)
+  const fixturesDir = path.resolve(process.cwd(), "fixtures", "test-toolchain");
+  const testArchivePath = path.resolve(fixturesDir, "rust-1.0.0-test-x86_64-unknown-linux-gnu.tar.xz");
+  const testArchivePathArm = path.resolve(fixturesDir, "rust-1.0.0-test-aarch64-unknown-linux-gnu.tar.xz");
 
   // S3 settings
   const s3RootUser = "rustfsadmin";
@@ -201,7 +198,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const archiveData = fs.readFileSync(testArchivePath);
 
     // Upload via API
-    const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-s3-test&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable`;
+    const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-test&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable`;
 
     const response = await fetch(uploadUrl, {
       method: "PUT",
@@ -223,25 +220,37 @@ test.describe("Toolchain S3 Storage Tests", () => {
   });
 
   test("can fetch channel manifest from S3-backed toolchain", async () => {
-    // The manifest should be available after upload
     const manifestUrl = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml`;
 
-    const response = await fetch(manifestUrl, {
-      headers: { "Cookie": sessionCookie },
-    });
-    expect(response.status).toBe(200);
+    // Wait for background component extraction to finish (target moves to "ready")
+    let manifest = "";
+    const maxWaitMs = 60_000;
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      try {
+        const response = await fetch(manifestUrl, {
+          headers: { "Cookie": sessionCookie },
+        });
+        if (response.ok) {
+          manifest = await response.text();
+          if (manifest.includes("x86_64-unknown-linux-gnu")) break;
+        }
+      } catch {
+        // Server might not be ready yet
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
 
-    const manifest = await response.text();
     console.log(`[test] Manifest content:\n${manifest}`);
 
     // Verify manifest structure
     expect(manifest).toContain('manifest-version = "2"');
     expect(manifest).toContain('[pkg.rust]');
-    expect(manifest).toContain('version = "1.0.0-s3-test"');
+    expect(manifest).toContain('version = "1.0.0-test"');
     expect(manifest).toContain('x86_64-unknown-linux-gnu');
     expect(manifest).toContain('available = true');
-    expect(manifest).toContain('url = "');
-    expect(manifest).toContain('hash = "');
+    expect(manifest).toContain('xz_url = "');
+    expect(manifest).toContain('xz_hash = "');
   });
 
   test("can download toolchain archive from S3 storage", async () => {
@@ -252,8 +261,8 @@ test.describe("Toolchain S3 Storage Tests", () => {
     });
     const manifest = await manifestResponse.text();
 
-    // Extract URL from manifest
-    const urlMatch = manifest.match(/url = "([^"]+)"/);
+    // Extract URL from manifest (xz_url for .tar.xz archives)
+    const urlMatch = manifest.match(/xz_url = "([^"]+)"/);
     expect(urlMatch).toBeDefined();
     const archiveUrl = urlMatch![1];
     console.log(`[test] Archive URL: ${archiveUrl}`);
@@ -300,7 +309,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     expect(toolchains.length).toBeGreaterThanOrEqual(1);
 
     const uploaded = toolchains.find(
-      (t: any) => t.name === "rust" && t.version === "1.0.0-s3-test"
+      (t: any) => t.name === "rust" && t.version === "1.0.0-test"
     );
     expect(uploaded).toBeDefined();
     expect(uploaded.targets.length).toBe(1);
@@ -333,7 +342,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
 
     const stableChannel = channels.find((c: any) => c.name === "stable");
     expect(stableChannel).toBeDefined();
-    expect(stableChannel.version).toBe("1.0.0-s3-test");
+    expect(stableChannel.version).toBe("1.0.0-test");
   });
 
   test("toolchain stored in S3 is visible in the UI", async ({ page }) => {
@@ -375,11 +384,10 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const session = cookies.find(c => c.name === "kellnr_session_id");
     const cookie = `kellnr_session_id=${session!.value}`;
 
-    // Read the test archive
-    const archiveData = fs.readFileSync(testArchivePath);
+    // Upload the aarch64 archive as a second target for the same toolchain
+    const archiveData = fs.readFileSync(testArchivePathArm);
 
-    // Upload same version but different target
-    const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-s3-test&target=aarch64-unknown-linux-gnu&date=2024-01-15`;
+    const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-test&target=aarch64-unknown-linux-gnu&date=2024-01-15`;
 
     const response = await fetch(uploadUrl, {
       method: "PUT",
@@ -394,12 +402,21 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const result = await response.json();
     expect(result.success).toBe(true);
 
-    // Verify both targets are now in the manifest
+    // Wait for both targets to appear in the manifest (extraction must finish)
     const manifestUrl = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml`;
-    const manifestResponse = await fetch(manifestUrl, {
-      headers: { "Cookie": cookie },
-    });
-    const manifest = await manifestResponse.text();
+    let manifest = "";
+    const maxWaitMs = 60_000;
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      try {
+        const r = await fetch(manifestUrl, { headers: { "Cookie": cookie } });
+        if (r.ok) {
+          manifest = await r.text();
+          if (manifest.includes("x86_64-unknown-linux-gnu") && manifest.includes("aarch64-unknown-linux-gnu")) break;
+        }
+      } catch { /* retry */ }
+      await new Promise(r => setTimeout(r, 1000));
+    }
     console.log(`[test] Updated manifest:\n${manifest}`);
 
     expect(manifest).toContain('x86_64-unknown-linux-gnu');
@@ -419,7 +436,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const cookie = `kellnr_session_id=${session!.value}`;
 
     // Delete the aarch64 target
-    const deleteUrl = `${baseUrl}/api/v1/toolchains/rust/1.0.0-s3-test/targets/aarch64-unknown-linux-gnu`;
+    const deleteUrl = `${baseUrl}/api/v1/toolchains/rust/1.0.0-test/targets/aarch64-unknown-linux-gnu`;
     const response = await fetch(deleteUrl, {
       method: "DELETE",
       headers: { "Cookie": cookie },
@@ -437,7 +454,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
     const toolchains = await listResponse.json();
 
     const toolchain = toolchains.find(
-      (t: any) => t.name === "rust" && t.version === "1.0.0-s3-test"
+      (t: any) => t.name === "rust" && t.version === "1.0.0-test"
     );
     expect(toolchain).toBeDefined();
     expect(toolchain.targets.length).toBe(1);

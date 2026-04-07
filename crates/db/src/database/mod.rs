@@ -21,8 +21,8 @@ use kellnr_entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
     cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate,
-    oauth2_identity, oauth2_state, owner, session, toolchain, toolchain_target, user, webhook,
-    webhook_queue,
+    oauth2_identity, oauth2_state, owner, session, toolchain, toolchain_component,
+    toolchain_target, user, webhook, webhook_queue,
 };
 use kellnr_migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
@@ -39,7 +39,8 @@ use sea_orm::{
 use crate::error::DbError;
 use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{
-    ChannelInfo, DbResult, OAuth2StateData, PrefetchState, ToolchainWithTargets,
+    ChannelInfo, DbResult, OAuth2StateData, PrefetchState, ToolchainComponentInfo,
+    ToolchainTargetInfo, ToolchainWithTargets,
 };
 use crate::tables::init_database;
 use crate::{
@@ -96,13 +97,42 @@ impl Database {
             .ok_or_else(|| DbError::GroupNotFound(name.to_owned()))
     }
 
-    /// Loads targets for a toolchain and returns a `ToolchainWithTargets`.
+    /// Loads targets (with their components) for a toolchain and returns a `ToolchainWithTargets`.
     async fn toolchain_with_targets(&self, tc: toolchain::Model) -> DbResult<ToolchainWithTargets> {
         let targets = toolchain_target::Entity::find()
             .filter(toolchain_target::Column::ToolchainFk.eq(tc.id))
             .all(&self.db_con)
             .await?;
-        Ok(ToolchainWithTargets::from_model(tc, targets))
+
+        let mut target_infos = Vec::with_capacity(targets.len());
+        for t in targets {
+            let components = toolchain_component::Entity::find()
+                .filter(toolchain_component::Column::ToolchainTargetFk.eq(t.id))
+                .all(&self.db_con)
+                .await?;
+            target_infos.push(ToolchainTargetInfo {
+                id: t.id,
+                target: t.target,
+                storage_path: t.storage_path,
+                hash: t.hash,
+                size: t.size,
+                status: t.status,
+                components: components
+                    .into_iter()
+                    .map(ToolchainComponentInfo::from)
+                    .collect(),
+            });
+        }
+
+        Ok(ToolchainWithTargets {
+            id: tc.id,
+            name: tc.name,
+            version: tc.version,
+            date: tc.date,
+            channel: tc.channel,
+            created: tc.created,
+            targets: target_infos,
+        })
     }
 
     /// Looks up a crate index by name and version; returns the entity model or [`DbError::CrateIndexNotFound`].
@@ -2044,11 +2074,42 @@ impl DbProvider for Database {
         storage_path: &str,
         hash: &str,
         size: i64,
-    ) -> DbResult<()> {
+    ) -> DbResult<i64> {
         let model = toolchain_target::ActiveModel {
             id: ActiveValue::NotSet,
             toolchain_fk: Set(toolchain_id),
             target: Set(target.to_string()),
+            storage_path: Set(storage_path.to_string()),
+            hash: Set(hash.to_string()),
+            size: Set(size),
+            status: Set("processing".to_string()),
+        };
+
+        let result = model.insert(&self.db_con).await?;
+        Ok(result.id)
+    }
+
+    async fn set_target_status(&self, target_id: i64, status: &str) -> DbResult<()> {
+        toolchain_target::Entity::update_many()
+            .col_expr(toolchain_target::Column::Status, Expr::value(status))
+            .filter(toolchain_target::Column::Id.eq(target_id))
+            .exec(&self.db_con)
+            .await?;
+        Ok(())
+    }
+
+    async fn add_toolchain_component(
+        &self,
+        target_id: i64,
+        name: &str,
+        storage_path: &str,
+        hash: &str,
+        size: i64,
+    ) -> DbResult<()> {
+        let model = toolchain_component::ActiveModel {
+            id: ActiveValue::NotSet,
+            toolchain_target_fk: Set(target_id),
+            name: Set(name.to_string()),
             storage_path: Set(storage_path.to_string()),
             hash: Set(hash.to_string()),
             size: Set(size),

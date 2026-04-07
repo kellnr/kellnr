@@ -15,6 +15,8 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub hash: String,
     pub size: i64,
+    #[sea_orm(column_type = "Text")]
+    pub status: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -27,11 +29,19 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Toolchain,
+    #[sea_orm(has_many = "super::toolchain_component::Entity")]
+    ToolchainComponents,
 }
 
 impl Related<super::toolchain::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Toolchain.def()
+    }
+}
+
+impl Related<super::toolchain_component::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ToolchainComponents.def()
     }
 }
 

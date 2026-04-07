@@ -35,6 +35,30 @@ pub struct OAuth2StateData {
     pub nonce: String,
 }
 
+/// Information about an individual toolchain component (e.g., rustc, cargo)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ToolchainComponentInfo {
+    /// Component name (e.g., "rustc", "cargo", "rust-std-x86_64-unknown-linux-gnu")
+    pub name: String,
+    /// Path to the stored component archive
+    pub storage_path: String,
+    /// SHA256 hash of the component archive
+    pub hash: String,
+    /// Component archive size in bytes
+    pub size: i64,
+}
+
+impl From<kellnr_entity::toolchain_component::Model> for ToolchainComponentInfo {
+    fn from(c: kellnr_entity::toolchain_component::Model) -> Self {
+        Self {
+            name: c.name,
+            storage_path: c.storage_path,
+            hash: c.hash,
+            size: c.size,
+        }
+    }
+}
+
 /// Toolchain target information (e.g., a specific archive for a target triple)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ToolchainTargetInfo {
@@ -48,18 +72,10 @@ pub struct ToolchainTargetInfo {
     pub hash: String,
     /// Archive size in bytes
     pub size: i64,
-}
-
-impl From<kellnr_entity::toolchain_target::Model> for ToolchainTargetInfo {
-    fn from(t: kellnr_entity::toolchain_target::Model) -> Self {
-        Self {
-            id: t.id,
-            target: t.target,
-            storage_path: t.storage_path,
-            hash: t.hash,
-            size: t.size,
-        }
-    }
+    /// Processing status: "processing", "ready", or "failed"
+    pub status: String,
+    /// Individual components extracted from the combined archive
+    pub components: Vec<ToolchainComponentInfo>,
 }
 
 /// Toolchain with all its targets
@@ -79,24 +95,6 @@ pub struct ToolchainWithTargets {
     pub created: String,
     /// Available targets for this toolchain
     pub targets: Vec<ToolchainTargetInfo>,
-}
-
-impl ToolchainWithTargets {
-    /// Build from toolchain entity model and its target models.
-    pub fn from_model(
-        tc: kellnr_entity::toolchain::Model,
-        targets: Vec<kellnr_entity::toolchain_target::Model>,
-    ) -> Self {
-        Self {
-            id: tc.id,
-            name: tc.name,
-            version: tc.version,
-            date: tc.date,
-            channel: tc.channel,
-            created: tc.created,
-            targets: targets.into_iter().map(ToolchainTargetInfo::from).collect(),
-        }
-    }
 }
 
 /// Channel information (e.g., "stable" -> "1.75.0")
@@ -348,7 +346,20 @@ pub trait DbProvider: Send + Sync {
         storage_path: &str,
         hash: &str,
         size: i64,
+    ) -> DbResult<i64>;
+
+    /// Add a component to a toolchain target
+    async fn add_toolchain_component(
+        &self,
+        target_id: i64,
+        name: &str,
+        storage_path: &str,
+        hash: &str,
+        size: i64,
     ) -> DbResult<()>;
+
+    /// Update the processing status of a toolchain target
+    async fn set_target_status(&self, target_id: i64, status: &str) -> DbResult<()>;
 
     /// Get a toolchain by its channel (e.g., "stable", "nightly")
     async fn get_toolchain_by_channel(
@@ -819,7 +830,22 @@ pub mod mock {
                 storage_path: &str,
                 hash: &str,
                 size: i64,
+            ) -> DbResult<i64> {
+                unimplemented!()
+            }
+
+            async fn add_toolchain_component(
+                &self,
+                target_id: i64,
+                name: &str,
+                storage_path: &str,
+                hash: &str,
+                size: i64,
             ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn set_target_status(&self, target_id: i64, status: &str) -> DbResult<()> {
                 unimplemented!()
             }
 

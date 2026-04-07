@@ -401,15 +401,26 @@ test.describe("Toolchain API and Distribution Tests", () => {
   });
 
   test("can fetch channel manifest", async () => {
-    // The manifest should be available after upload (requires auth when auth_required is true)
     const manifestUrl = `${baseUrl}/api/v1/toolchains/dist/channel-rust-stable.toml`;
 
-    const response = await fetch(manifestUrl, {
-      headers: { "Cookie": sessionCookie },
-    });
-    expect(response.status).toBe(200);
-
-    const manifest = await response.text();
+    // Wait for background component extraction to finish (target status -> "ready")
+    let manifest = "";
+    const maxWaitMs = 60_000;
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      try {
+        const response = await fetch(manifestUrl, {
+          headers: { "Cookie": sessionCookie },
+        });
+        if (response.ok) {
+          manifest = await response.text();
+          if (manifest.includes("x86_64-unknown-linux-gnu")) break;
+        }
+      } catch {
+        // Server might not be ready yet
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
     console.log(`[test] Manifest content:\n${manifest}`);
 
     // Verify manifest structure
@@ -418,8 +429,8 @@ test.describe("Toolchain API and Distribution Tests", () => {
     expect(manifest).toContain('version = "1.0.0-test"');
     expect(manifest).toContain('x86_64-unknown-linux-gnu');
     expect(manifest).toContain('available = true');
-    expect(manifest).toContain('url = "');
-    expect(manifest).toContain('hash = "');
+    expect(manifest).toContain('xz_url = "');
+    expect(manifest).toContain('xz_hash = "');
   });
 
   test("can fetch channel manifest sha256 hash", async () => {
@@ -447,8 +458,8 @@ test.describe("Toolchain API and Distribution Tests", () => {
     });
     const manifest = await manifestResponse.text();
 
-    // Extract URL from manifest
-    const urlMatch = manifest.match(/url = "([^"]+)"/);
+    // Extract URL from manifest (xz_url for .tar.xz archives)
+    const urlMatch = manifest.match(/xz_url = "([^"]+)"/);
     expect(urlMatch).toBeDefined();
     const archiveUrl = urlMatch![1];
     console.log(`[test] Archive URL: ${archiveUrl}`);
@@ -799,15 +810,13 @@ test.describe("Toolchain Docker Integration Test", () => {
   let baseUrl: string;
   let rustupContainer: Started;
 
-  // Path to test archive
-  const testArchivePath = path.resolve(
-    process.cwd(),
-    "fixtures",
-    "test-toolchain",
-    "rust-1.0.0-test-x86_64-unknown-linux-gnu.tar.xz"
-  );
-
-  const testScriptPath = path.resolve(process.cwd(), "fixtures", "test-toolchain", "test-rustup.sh");
+  // Test archives for both architectures so the test works on ARM Macs and x86 CI
+  const fixturesDir = path.resolve(process.cwd(), "fixtures", "test-toolchain");
+  const targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+  ];
+  const testScriptPath = path.resolve(fixturesDir, "test-rustup.sh");
 
   test.beforeAll(async () => {
     // Docker tests need more time
@@ -819,21 +828,25 @@ test.describe("Toolchain Docker Integration Test", () => {
     await assertDockerAvailable();
     console.log("[setup] Docker is available");
 
-    // Verify test archive exists
-    if (!fs.existsSync(testArchivePath)) {
-      throw new Error(`Test archive not found at ${testArchivePath}. Run create-test-archive.sh first.`);
-    }
-
-    // Verify test script exists
+    // Verify test fixtures exist
     if (!fs.existsSync(testScriptPath)) {
       throw new Error(`Test script not found at ${testScriptPath}`);
+    }
+    for (const target of targets) {
+      const archivePath = path.resolve(fixturesDir, `rust-1.0.0-test-${target}.tar.xz`);
+      if (!fs.existsSync(archivePath)) {
+        throw new Error(`Test archive not found at ${archivePath}. Run create-test-archive.sh first.`);
+      }
     }
 
     const suffix = `${Date.now()}`;
 
-    // Start Kellnr
-    // Note: auth_required is false for Docker test since rustup doesn't support auth
-    // The toolchain dist server should be public for rustup to work
+    // Start Kellnr with origin hostname reachable from inside Docker.
+    // auth_required is false since rustup does not support auth.
+    // Always use host.docker.internal; on Linux we add a host-gateway mapping
+    // to the container (see extraHosts below) so this resolves everywhere.
+    const dockerHostname = "host.docker.internal";
+
     started = await startLocalKellnr({
       name: `kellnr-toolchain-docker-${suffix}`,
       logLevel: "info",
@@ -841,6 +854,7 @@ test.describe("Toolchain Docker Integration Test", () => {
       env: {
         KELLNR_REGISTRY__AUTH_REQUIRED: "false",
         KELLNR_TOOLCHAIN__ENABLED: "true",
+        KELLNR_ORIGIN__HOSTNAME: dockerHostname,
       },
     });
 
@@ -874,24 +888,30 @@ test.describe("Toolchain Docker Integration Test", () => {
     const sessionCookie = `kellnr_session_id=${sessionCookieMatch[1]}`;
     console.log("[setup] Login successful");
 
-    // Upload the test toolchain
-    console.log("[setup] Uploading test toolchain...");
-    const archiveData = fs.readFileSync(testArchivePath);
-    const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-test&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable`;
+    // Upload the test toolchain for each target
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const archivePath = path.resolve(fixturesDir, `rust-1.0.0-test-${target}.tar.xz`);
+      console.log(`[setup] Uploading toolchain for ${target}...`);
+      const archiveData = fs.readFileSync(archivePath);
+      // Only the first upload sets the channel
+      const channelParam = i === 0 ? "&channel=stable" : "";
+      const uploadUrl = `${baseUrl}/api/v1/toolchains?name=rust&version=1.0.0-test&target=${target}&date=2024-01-15${channelParam}`;
 
-    const uploadResponse = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "Cookie": sessionCookie,
-      },
-      body: archiveData,
-    });
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Cookie": sessionCookie,
+        },
+        body: archiveData,
+      });
 
-    if (!uploadResponse.ok) {
-      throw new Error(`Failed to upload toolchain: ${await uploadResponse.text()}`);
+      if (!uploadResponse.ok) {
+        throw new Error(`Failed to upload toolchain for ${target}: ${await uploadResponse.text()}`);
+      }
+      console.log(`[setup] Toolchain for ${target} uploaded`);
     }
-    console.log("[setup] Toolchain uploaded successfully");
     console.log("[setup] Done");
   });
 
@@ -922,19 +942,23 @@ test.describe("Toolchain Docker Integration Test", () => {
     console.log("[teardown] Cleanup complete");
   });
 
-  test("rustup can connect to Kellnr and parse manifest", async ({}, testInfo) => {
-    console.log("[test] Starting rustup container with official rust:slim-trixie image...");
+  test("rustup can install toolchain from Kellnr and run rustc/cargo", async ({}, testInfo) => {
+    const testTimeoutMs = 5 * 60 * 1000;
+    test.setTimeout(testTimeoutMs);
 
-    // Use host.docker.internal on macOS/Windows, or the host IP on Linux
-    const kellnrUrl = process.platform === "linux"
-      ? `http://172.17.0.1:8000/api/v1/toolchains` // Docker bridge IP on Linux
-      : `http://host.docker.internal:8000/api/v1/toolchains`; // macOS/Windows
+    console.log("[test] Starting rustup container...");
 
-    // Use the official rust:slim-trixie image which has rustup pre-installed
-    // Install curl first (not in slim image), then run the test script
+    const kellnrUrl = "http://host.docker.internal:8000/api/v1/toolchains";
+
+    // On Linux, host.docker.internal does not resolve by default.
+    // Map it to host-gateway so the container can reach the host.
+    const extraHosts = process.platform === "linux"
+      ? [{ host: "host.docker.internal", ipAddress: "host-gateway" }]
+      : [];
+
     rustupContainer = await startContainer(
       {
-        name: `rustup-test-${Date.now()}`,
+        name: `rustup-install-test-${Date.now()}`,
         image: "rust:slim-trixie",
         env: {
           KELLNR_DIST_URL: kellnrUrl,
@@ -946,54 +970,49 @@ test.describe("Toolchain Docker Integration Test", () => {
         },
         cmd: [
           "bash", "-c",
-          "apt-get update && apt-get install -y curl && bash /test-rustup.sh"
+          "apt-get update -qq && apt-get install -y -qq curl > /dev/null 2>&1 && bash /test-rustup.sh"
         ],
-        // Don't wait for ports - this is a one-shot test script
+        extraHosts,
         waitFor: undefined,
       },
       testInfo,
     );
 
-    console.log("[test] Waiting for rustup container to complete...");
+    console.log("[test] Waiting for container to complete...");
 
-    // Wait for container to exit (test completion)
-    // Use docker inspect to check container state and get exit code
     const { execa } = await import("execa");
     let exitCode: number | null = null;
-    let attempts = 0;
-    const maxAttempts = 180; // 3 minutes (pulling image may take time)
+    // Align poll limit with test timeout, leaving room for log collection
+    const maxWaitSec = Math.floor(testTimeoutMs / 1000) - 30;
 
-    while (attempts < maxAttempts) {
+    for (let elapsed = 0; elapsed < maxWaitSec; elapsed++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
-
       try {
-        // Check if container is still running
         const stateResult = await execa("docker", [
           "inspect", "-f", "{{.State.Running}}", rustupContainer.name
         ]);
-        const isRunning = stateResult.stdout.trim() === "true";
-
-        if (!isRunning) {
-          // Container has stopped - get exit code
+        if (stateResult.stdout.trim() !== "true") {
           const exitResult = await execa("docker", [
             "inspect", "-f", "{{.State.ExitCode}}", rustupContainer.name
           ]);
           exitCode = parseInt(exitResult.stdout.trim(), 10);
           break;
         }
-      } catch (e) {
-        // Container might have been removed or other error
-        console.log("[test] Container check error:", e);
+      } catch {
         break;
       }
-      attempts++;
+    }
+
+    // Print container logs for debugging
+    try {
+      const logs = await execa("docker", ["logs", rustupContainer.name]);
+      console.log("[test] Container output:\n" + logs.stdout);
+      if (logs.stderr) console.log("[test] Container stderr:\n" + logs.stderr);
+    } catch {
+      // best effort
     }
 
     console.log(`[test] Container exited with code: ${exitCode}`);
-
-    // The test script should exit with 0 if it could connect and parse the manifest
-    // It may show warnings about installation failing (expected with minimal archive)
-    // but the important thing is that the distribution mechanism works
     expect(exitCode).toBe(0);
   });
 });
