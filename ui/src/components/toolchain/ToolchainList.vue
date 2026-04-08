@@ -76,6 +76,14 @@
                 >
                   <template #title>
                     <span class="target-name">{{ target.target }}</span>
+                    <v-chip
+                      size="x-small"
+                      :color="getStatusColor(target.status)"
+                      variant="tonal"
+                      class="ms-2"
+                    >
+                      {{ target.status }}
+                    </v-chip>
                     <span class="target-size">{{ formatSize(target.size) }}</span>
                   </template>
                   <template #actions>
@@ -136,6 +144,16 @@ function getChannelColor(channel: string): string {
     default: return "primary"
   }
 }
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case "ready": return "success"
+    case "processing": return "warning"
+    case "failed": return "error"
+    default: return "default"
+  }
+}
+
 </script>
 
 <style scoped>

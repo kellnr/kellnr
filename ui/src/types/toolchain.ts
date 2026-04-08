@@ -9,6 +9,7 @@ export interface ToolchainTarget {
   storage_path: string
   hash: string
   size: number
+  status: string
 }
 
 /** Toolchain with all its targets */
