@@ -8,6 +8,7 @@ use kellnr_common::cratesio_downloader::download_crate;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_error::api_error::ApiResult;
+use kellnr_storage::storage_error::StorageError;
 use reqwest::Url;
 use tracing::{error, trace};
 
@@ -101,17 +102,27 @@ pub async fn download(
         let crate_data =
             download_crate(&proxy_client, &name, &version, &settings.proxy.url).await?;
 
-        let _save = crate_storage
-            .put(&name, &version, crate_data.clone())
-            .await
-            .map_err(|e| {
-                error!("Failed to save crate to disk: {e}");
-                StatusCode::UNPROCESSABLE_ENTITY
-            })?;
-        crate_storage
-            .get(&name, &version)
-            .await
-            .ok_or(StatusCode::NOT_FOUND)?
+        match crate_storage.put(&name, &version, crate_data.clone()).await {
+            Ok(_) => crate_storage
+                .get(&name, &version)
+                .await
+                .ok_or(StatusCode::NOT_FOUND)?,
+            Err(StorageError::CrateExists(_, _)) => {
+                trace!(
+                    "Crate cache population raced for {name} ({version}); using the cached copy"
+                );
+                crate_storage.get(&name, &version).await.ok_or_else(|| {
+                    error!(
+                        "Crate {name} ({version}) already existed after a cache race but could not be read afterward"
+                    );
+                    StatusCode::UNPROCESSABLE_ENTITY
+                })?
+            }
+            Err(error) => {
+                error!("Failed to save crate to disk: {error}");
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            }
+        }
     };
 
     // Count ALL downloads (both cache hits and upstream fetches)
