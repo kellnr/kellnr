@@ -642,7 +642,8 @@ async fn set_channel(
     ),
     responses(
         (status = 200, description = "Channel manifest (TOML)", content_type = "text/toml"),
-        (status = 404, description = "Channel not found")
+        (status = 404, description = "Channel not found or no targets available"),
+        (status = 503, description = "Targets are still being processed")
     ),
     security(("session_cookie" = []))
 )]
@@ -670,6 +671,17 @@ async fn get_channel_manifest(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Check if any targets are ready before generating the manifest.
+    // If none are ready, the manifest would be invalid (missing required `target` field).
+    let has_ready_targets = toolchain.targets.iter().any(|t| t.status == "ready");
+    if !has_ready_targets {
+        let has_processing = toolchain.targets.iter().any(|t| t.status == "processing");
+        if has_processing {
+            return Err(StatusCode::SERVICE_UNAVAILABLE);
+        }
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     let manifest = generate_manifest(&toolchain, &settings);
 
