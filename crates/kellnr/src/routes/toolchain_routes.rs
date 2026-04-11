@@ -8,12 +8,12 @@ use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::put;
-use axum::{Json, Router, middleware};
+use axum::{Json, Router};
 use bytes::Bytes;
 use kellnr_appstate::{AppStateData, DbState, SettingsState, ToolchainStorageState};
 use kellnr_db::{ChannelInfo, ToolchainWithTargets};
 use kellnr_storage::toolchain_storage::ToolchainStorage;
-use kellnr_web_ui::session::{self, AdminUser};
+use kellnr_web_ui::session::AdminUser;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 use utoipa::ToSchema;
@@ -75,16 +75,13 @@ pub fn create_api_routes(_state: AppStateData, max_size: usize) -> OpenApiRouter
 }
 
 /// Creates the toolchain distribution routes (download endpoints)
-pub fn create_dist_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
+pub fn create_dist_routes(_state: AppStateData) -> OpenApiRouter<AppStateData> {
+    // No authentication on dist routes — rustup does not support HTTP authentication
     OpenApiRouter::new()
         // Use a full segment parameter and parse the manifest filename in the handler
         // because Axum doesn't allow parameters in the middle of a path segment
         .routes(routes!(get_channel_manifest))
         .routes(routes!(download_archive))
-        .layer(middleware::from_fn_with_state(
-            state,
-            session::session_auth_when_required,
-        ))
 }
 
 /// List all toolchains
