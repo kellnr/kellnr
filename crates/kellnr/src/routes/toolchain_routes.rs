@@ -663,11 +663,20 @@ async fn get_channel_manifest(
         })
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    let toolchain = db
+    // Try channel lookup first (e.g. "stable"), then fall back to version lookup
+    // (e.g. "1.94.0") so that `rustup install 1.94.0` works too.
+    let toolchain = match db
         .get_toolchain_by_channel(channel)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    {
+        Some(tc) => tc,
+        None => db
+            .get_toolchain_by_version("rust", channel)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::NOT_FOUND)?,
+    };
 
     // Check if any targets are ready before generating the manifest.
     // If none are ready, the manifest would be invalid (missing required `target` field).
@@ -1984,6 +1993,10 @@ mod tests {
             .expect_get_toolchain_by_channel()
             .with(eq("nonexistent"))
             .returning(|_| Ok(None));
+        mock_db
+            .expect_get_toolchain_by_version()
+            .with(eq("rust"), eq("nonexistent"))
+            .returning(|_, _| Ok(None));
 
         let state = create_app_state(Arc::new(mock_db), None);
         let router = create_test_router(state);
@@ -2105,6 +2118,61 @@ mod tests {
         assert!(manifest.contains("available = true"));
         assert!(manifest.contains("xz_url = \""));
         assert!(manifest.contains("xz_hash = \"abc123def456\""));
+    }
+
+    #[tokio::test]
+    async fn test_get_manifest_by_version_falls_back_when_no_channel() {
+        let mut mock_db = MockDb::new();
+        // Channel lookup returns None — version "1.0.0" is not a channel name
+        mock_db
+            .expect_get_toolchain_by_channel()
+            .with(eq("1.0.0"))
+            .returning(|_| Ok(None));
+        // Fallback: version lookup succeeds
+        mock_db
+            .expect_get_toolchain_by_version()
+            .with(eq("rust"), eq("1.0.0"))
+            .returning(|_, _| {
+                Ok(Some(ToolchainWithTargets {
+                    id: 1,
+                    name: "rust".to_string(),
+                    version: "1.0.0".to_string(),
+                    date: "2024-01-15".to_string(),
+                    channel: None,
+                    created: "2024-01-15".to_string(),
+                    targets: vec![ToolchainTargetInfo {
+                        id: 1,
+                        target: "x86_64-unknown-linux-gnu".to_string(),
+                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
+                            .to_string(),
+                        hash: "abc123def456".to_string(),
+                        size: 1024,
+                        components: vec![],
+                        status: "ready".to_string(),
+                    }],
+                }))
+            });
+
+        let state = create_app_state(Arc::new(mock_db), None);
+        let router = create_test_router(state);
+
+        let response = router
+            .oneshot(
+                Request::get("/api/v1/toolchains/dist/channel-rust-1.0.0.toml")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::OK, response.status());
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let manifest = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(manifest.contains("manifest-version = \"2\""));
+        assert!(manifest.contains("version = \"1.0.0\""));
+        assert!(manifest.contains("[pkg.rust.target.x86_64-unknown-linux-gnu]"));
     }
 
     #[tokio::test]

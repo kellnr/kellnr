@@ -942,11 +942,14 @@ test.describe("Toolchain Docker Integration Test", () => {
     console.log("[teardown] Cleanup complete");
   });
 
-  test("rustup can install toolchain from Kellnr and run rustc/cargo", async ({}, testInfo) => {
-    const testTimeoutMs = 5 * 60 * 1000;
-    test.setTimeout(testTimeoutMs);
-
-    console.log("[test] Starting rustup container...");
+  /** Run the test-rustup.sh script in a Docker container with the given channel/version. */
+  async function runRustupContainer(
+    channel: string,
+    containerName: string,
+    testInfo: any,
+    testTimeoutMs: number,
+  ): Promise<{ container: Started; exitCode: number | null }> {
+    console.log(`[test] Starting rustup container (channel=${channel})...`);
 
     const kellnrUrl = "http://host.docker.internal:8000/api/v1/toolchains";
 
@@ -956,13 +959,13 @@ test.describe("Toolchain Docker Integration Test", () => {
       ? [{ host: "host.docker.internal", ipAddress: "host-gateway" }]
       : [];
 
-    rustupContainer = await startContainer(
+    const container = await startContainer(
       {
-        name: `rustup-install-test-${Date.now()}`,
+        name: containerName,
         image: "rust:slim-trixie",
         env: {
           KELLNR_DIST_URL: kellnrUrl,
-          CHANNEL: "stable",
+          CHANNEL: channel,
           VERBOSE: "1",
         },
         bindMounts: {
@@ -982,18 +985,17 @@ test.describe("Toolchain Docker Integration Test", () => {
 
     const { execa } = await import("execa");
     let exitCode: number | null = null;
-    // Align poll limit with test timeout, leaving room for log collection
     const maxWaitSec = Math.floor(testTimeoutMs / 1000) - 30;
 
     for (let elapsed = 0; elapsed < maxWaitSec; elapsed++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       try {
         const stateResult = await execa("docker", [
-          "inspect", "-f", "{{.State.Running}}", rustupContainer.name
+          "inspect", "-f", "{{.State.Running}}", container.name
         ]);
         if (stateResult.stdout.trim() !== "true") {
           const exitResult = await execa("docker", [
-            "inspect", "-f", "{{.State.ExitCode}}", rustupContainer.name
+            "inspect", "-f", "{{.State.ExitCode}}", container.name
           ]);
           exitCode = parseInt(exitResult.stdout.trim(), 10);
           break;
@@ -1005,7 +1007,7 @@ test.describe("Toolchain Docker Integration Test", () => {
 
     // Print container logs for debugging
     try {
-      const logs = await execa("docker", ["logs", rustupContainer.name]);
+      const logs = await execa("docker", ["logs", container.name]);
       console.log("[test] Container output:\n" + logs.stdout);
       if (logs.stderr) console.log("[test] Container stderr:\n" + logs.stderr);
     } catch {
@@ -1013,6 +1015,44 @@ test.describe("Toolchain Docker Integration Test", () => {
     }
 
     console.log(`[test] Container exited with code: ${exitCode}`);
-    expect(exitCode).toBe(0);
+    return { container, exitCode };
+  }
+
+  test("rustup can install toolchain by channel name", async ({}, testInfo) => {
+    const testTimeoutMs = 5 * 60 * 1000;
+    test.setTimeout(testTimeoutMs);
+
+    const result = await runRustupContainer(
+      "stable",
+      `rustup-channel-test-${Date.now()}`,
+      testInfo,
+      testTimeoutMs,
+    );
+    rustupContainer = result.container;
+    expect(result.exitCode).toBe(0);
+  });
+
+  test("manifest is served when requesting by version number", async () => {
+    const testTimeoutMs = 60 * 1000;
+    test.setTimeout(testTimeoutMs);
+
+    const distUrl = `${baseUrl}/api/v1/toolchains/dist`;
+
+    // Request manifest by version (not by channel name)
+    const manifestResponse = await fetch(`${distUrl}/channel-rust-1.0.0-test.toml`);
+    expect(manifestResponse.ok).toBe(true);
+    expect(manifestResponse.headers.get("content-type")).toContain("text/toml");
+
+    const manifest = await manifestResponse.text();
+    expect(manifest).toContain('manifest-version = "2"');
+    expect(manifest).toContain('[pkg.rust]');
+    expect(manifest).toContain('version = "1.0.0-test"');
+    expect(manifest).toContain('available = true');
+
+    // SHA256 hash endpoint should also work for version-based lookup
+    const sha256Response = await fetch(`${distUrl}/channel-rust-1.0.0-test.toml.sha256`);
+    expect(sha256Response.ok).toBe(true);
+    const hash = (await sha256Response.text()).trim();
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });
 });
