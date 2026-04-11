@@ -115,7 +115,7 @@ pub fn create_router(
 /// Apply download concurrency and timeout limits to a router.
 ///
 /// When the semaphore is provided, requests that exceed the concurrency limit
-/// receive 429 Too Many Requests immediately (via `try_acquire`).
+/// wait for a permit before they enter the handler.
 /// When `download_timeout_seconds > 0`, requests that exceed the timeout
 /// receive 504 Gateway Timeout.
 ///
@@ -153,9 +153,12 @@ pub(crate) fn apply_download_limits(
             move |req: axum::extract::Request, next: Next| {
                 let sem = semaphore.clone();
                 async move {
-                    match sem.try_acquire() {
+                    match sem.acquire_owned().await {
                         Ok(_permit) => next.run(req).await,
-                        Err(_) => StatusCode::TOO_MANY_REQUESTS.into_response(),
+                        Err(error) => {
+                            tracing::error!("Download semaphore closed unexpectedly: {error}");
+                            StatusCode::SERVICE_UNAVAILABLE.into_response()
+                        }
                     }
                 }
             },
