@@ -206,12 +206,19 @@ pub struct CratesIoDataParams {
         (status = 404, description = "Crate not found")
     )
 )]
-pub async fn cratesio_data(Query(params): Query<CratesIoDataParams>) -> Result<String, StatusCode> {
-    let url = format!("https://crates.io/api/v1/crates/{}", params.name);
+pub async fn cratesio_data(
+    State(settings): SettingsState,
+    Query(params): Query<CratesIoDataParams>,
+) -> Result<String, StatusCode> {
+    let url = settings
+        .proxy
+        .api
+        .join(&params.name)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let client = reqwest::Client::new();
     let req = client
-        .get(&url)
+        .get(url)
         .header("User-Agent", "kellnr")
         .header("Accept", "application/json");
     let resp = req.send().await;

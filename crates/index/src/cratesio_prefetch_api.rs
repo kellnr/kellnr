@@ -249,10 +249,10 @@ async fn fetch_cratesio_description(
         krate: Krate,
     }
 
-    let url = Url::parse("https://crates.io/api/v1/crates/")
-        .unwrap()
+    let url = proxy_settings
+        .api
         .join(name)
-        .unwrap();
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let response = get_client(proxy_settings)
         .get(url)
