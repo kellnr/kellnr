@@ -10,6 +10,10 @@ fn default_index_url() -> Url {
     Url::parse("https://index.crates.io/").unwrap()
 }
 
+fn default_api_url() -> Url {
+    Url::parse("https://crates.io/api/v1/crates/").unwrap()
+}
+
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
 #[serde(default)]
 pub struct Proxy {
@@ -38,6 +42,11 @@ pub struct Proxy {
     #[arg(id = "proxy-index", long = "proxy-index")]
     pub index: Url,
 
+    /// Crates.io API URL
+    #[default(default_api_url())]
+    #[arg(id = "proxy-api", long = "proxy-api")]
+    pub api: Url,
+
     /// Connect timeout in seconds for upstream requests
     #[default(5)]
     #[arg(id = "proxy-connect-timeout", long = "proxy-connect-timeout")]
@@ -47,4 +56,58 @@ pub struct Proxy {
     #[default(30)]
     #[arg(id = "proxy-request-timeout", long = "proxy-request-timeout")]
     pub request_timeout_seconds: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_api_url_is_cratesio() {
+        let proxy = Proxy::default();
+        assert_eq!(
+            proxy.api,
+            Url::parse("https://crates.io/api/v1/crates/").unwrap()
+        );
+    }
+
+    #[test]
+    fn deserialize_custom_api_url_from_toml() {
+        let toml = r#"
+            api = "https://rsproxy.cn/api/v1/crates/"
+        "#;
+        let proxy: Proxy = toml::from_str(toml).unwrap();
+        assert_eq!(
+            proxy.api,
+            Url::parse("https://rsproxy.cn/api/v1/crates/").unwrap()
+        );
+    }
+
+    #[test]
+    fn missing_api_url_uses_default() {
+        let toml = r#"
+            enabled = true
+            url = "https://rsproxy.cn/api/v1/crates/"
+            index = "https://rsproxy.cn/index/"
+        "#;
+        let proxy: Proxy = toml::from_str(toml).unwrap();
+        assert_eq!(
+            proxy.api,
+            Url::parse("https://crates.io/api/v1/crates/").unwrap()
+        );
+    }
+
+    #[test]
+    fn api_url_join_produces_correct_crate_url() {
+        let proxy: Proxy = toml::from_str(r#"api = "https://rsproxy.cn/api/v1/crates/""#).unwrap();
+        let url = proxy.api.join("serde").unwrap();
+        assert_eq!(url.as_str(), "https://rsproxy.cn/api/v1/crates/serde");
+    }
+
+    #[test]
+    fn default_url_join_produces_correct_crate_url() {
+        let proxy = Proxy::default();
+        let url = proxy.api.join("tokio").unwrap();
+        assert_eq!(url.as_str(), "https://crates.io/api/v1/crates/tokio");
+    }
 }

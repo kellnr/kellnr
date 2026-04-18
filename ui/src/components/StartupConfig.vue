@@ -172,6 +172,7 @@ const sections: ConfigSection[] = [
       { key: 'proxy.download_on_update', label: 'Download on Update', type: 'boolean', cli: '--proxy-download-on-update' },
       { key: 'proxy.url', label: 'URL', cli: '--proxy-url' },
       { key: 'proxy.index', label: 'Index URL', cli: '--proxy-index' },
+      { key: 'proxy.api', label: 'API URL', cli: '--proxy-api' },
       { key: 'proxy.connect_timeout_seconds', label: 'Connect Timeout (seconds)', cli: '--proxy-connect-timeout' },
       { key: 'proxy.request_timeout_seconds', label: 'Request Timeout (seconds)', cli: '--proxy-request-timeout' },
     ]

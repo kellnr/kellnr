@@ -48,12 +48,16 @@ pub async fn cratesio_enabled(
 )]
 pub async fn search(
     State(proxy_client): ProxyClientState,
+    State(settings): SettingsState,
     params: SearchParams,
 ) -> ApiResult<String> {
-    let url = Url::parse(&format!(
-        "https://crates.io/api/v1/crates?q={}&per_page={}",
-        params.q, params.per_page.0
-    ))
+    let url = Url::parse_with_params(
+        settings.proxy.api.as_str(),
+        &[
+            ("q", params.q.as_str()),
+            ("per_page", &params.per_page.0.to_string()),
+        ],
+    )
     .map_err(RegistryError::UrlParseError)?;
 
     let response = proxy_client

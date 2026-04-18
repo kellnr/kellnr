@@ -79,6 +79,7 @@ export type Proxy = {
   download_on_update: boolean
   url: string
   index: string
+  api: string
   connect_timeout_seconds: number
   request_timeout_seconds: number
 }
@@ -151,6 +152,7 @@ export const emptySettings: Settings = {
     download_on_update: false,
     url: "",
     index: "",
+    api: "",
     connect_timeout_seconds: 5,
     request_timeout_seconds: 30
   },

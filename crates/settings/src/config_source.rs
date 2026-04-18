@@ -59,6 +59,7 @@ const SETTING_KEYS: &[&str] = &[
     "proxy.download_on_update",
     "proxy.url",
     "proxy.index",
+    "proxy.api",
     "proxy.connect_timeout_seconds",
     "proxy.request_timeout_seconds",
     // PostgreSQL settings
