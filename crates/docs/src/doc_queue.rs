@@ -5,7 +5,7 @@ use cargo::GlobalContext;
 use cargo::core::Workspace;
 use cargo::core::resolver::CliFeatures;
 use cargo::ops::{self, CompileOptions, DocOptions, OutputFormat};
-use cargo::util::command_prelude::CompileMode;
+use cargo::core::compiler::UserIntent;
 use flate2::read::GzDecoder;
 use fs_extra::dir::{CopyOptions, copy};
 use kellnr_common::original_name::OriginalName;
@@ -123,7 +123,7 @@ fn generate_docs(crate_path: impl AsRef<Path>) -> Result<(), DocsError> {
         cli_features: CliFeatures::new_all(true),
         ..CompileOptions::new(
             &ctx,
-            CompileMode::Doc {
+            UserIntent::Doc {
                 deps: false,
                 json: false,
             },
