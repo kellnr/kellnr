@@ -38,7 +38,7 @@ kellnr-embedded-resources = { version = "6.3.0", path = "./crates/embedded-resou
 # External dependencies from crates.io
 async-trait = "0.1.89"
 axum = { version = "0.8.9", features = ["macros", "http2"] }
-axum-extra = { version = "0.12.5", features = ["cookie", "cookie-private", "typed-header"] }
+axum-extra = { version = "0.12.6", features = ["cookie", "cookie-private", "typed-header"] }
 base64 = "0.22.1"
 bytes = "1.11.1"
 cargo = "0.96.0"
