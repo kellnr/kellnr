@@ -13,12 +13,12 @@
   "dependencies": {
     "@mdi/font": "^7.4.47",
     "@mdi/js": "^7.4.47",
-    "axios": "^1.16.0",
+    "axios": "^1.16.1",
     "axios-cache-interceptor": "^1.12.0",
     "core-js": "^3.48.0",
     "dayjs": "^1.11.20",
-    "dompurify": "^3.4.2",
-    "js-cookie": "^3.0.5",
+    "dompurify": "^3.4.3",
+    "js-cookie": "^3.0.7",
     "marked": "^18.0.3",
     "marked-gfm-heading-id": "^4.1.4",
     "marked-highlight": "^2.2.4",
@@ -28,23 +28,23 @@
     "vue": "^3.5.34",
     "vue-axios": "^3.5.2",
     "vue-class-component": "^8.0.0-0",
-    "vue-router": "^5.0.6",
+    "vue-router": "^5.0.7",
     "vue3-highlightjs": "^1.0.5",
     "vuetify": "^4.0.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^25.6.2",
-    "@vitejs/plugin-vue": "^6.0.6",
+    "@types/node": "^25.8.0",
+    "@vitejs/plugin-vue": "^6.0.7",
     "@vue/tsconfig": "^0.9.1",
     "esbuild": "~0.28.0",
-    "eslint": "^10.3.0",
+    "eslint": "^10.4.0",
     "eslint-plugin-vue": "^10.9.1",
     "globals": "^17.6.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.11",
-    "vue-tsc": "^3.2.8"
+    "typescript-eslint": "^8.59.3",
+    "vite": "^8.0.13",
+    "vue-tsc": "^3.2.9"
   },
   "overrides": {
     "vite": {
