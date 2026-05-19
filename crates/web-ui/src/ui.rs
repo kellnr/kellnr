@@ -1,14 +1,17 @@
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use kellnr_appstate::{AppState, DbState, SettingsState};
+use kellnr_appstate::{AppState, DbState, SettingsProvState, SettingsState};
 use kellnr_common::crate_data::CrateData;
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
-use kellnr_settings::{Settings, SourceMap, compile_time_config};
+use kellnr_settings::{
+    ConfigSource, Provenance, Settings, SettingsProv, SourceMap, cli_flag_map,
+    compile_time_config, erased_serde, leaf_label, sources_from_prov,
+};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use utoipa::ToSchema;
@@ -16,15 +19,131 @@ use utoipa::ToSchema;
 use crate::error::RouteError;
 use crate::session::{AdminUser, MaybeUser};
 
-/// Settings response that includes source tracking.
-/// This wrapper is needed because Settings uses `#[serde(skip)]` on sources
-/// to prevent it from being serialized to TOML config files.
+/// Settings response — the flattened `Settings`, the per-leaf source map
+/// derived from the `SettingsProv`, and the compiled-in defaults the UI
+/// uses to show "default: X" next to overridden values.
+///
+/// `leaves` is the new dynamic schema: one entry per `SettingsProv` leaf with
+/// the value, default, source, type, secret flag, optional CLI flag string
+/// (auto-derived from clap) and optional label override. The Vue UI iterates
+/// over this list instead of hand-maintaining a parallel per-leaf table.
 #[derive(Serialize, Deserialize)]
 pub struct SettingsResponse {
     #[serde(flatten)]
     pub settings: Settings,
     pub sources: SourceMap,
     pub defaults: Settings,
+    pub leaves: Vec<LeafMeta>,
+}
+
+/// Per-leaf metadata for the dynamic UI. All fields except `value`/`source`
+/// are stable per build (or, in the case of `default`, per binary), so the UI
+/// can treat the response as both data and schema.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LeafMeta {
+    /// Dotted path, e.g. `"registry.data_dir"`.
+    pub key: String,
+    /// Active value as a JSON value (boolean, number, string, array, null).
+    pub value: serde_json::Value,
+    /// Compiled-in default value in the same shape as `value`.
+    pub default: serde_json::Value,
+    /// Where the active value came from.
+    pub source: ConfigSource,
+    /// JSON-flavoured type tag the UI uses to pick a renderer.
+    #[serde(rename = "type")]
+    pub kind: LeafKind,
+    /// `true` for `#[configurable(secret)]` leaves — the UI masks the value.
+    pub secret: bool,
+    /// CLI flag string (e.g. `"--registry-data-dir, -d"`) when one exists.
+    pub cli_flag: Option<String>,
+    /// Optional display label override; `None` means the UI humanizes the key.
+    pub label: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LeafKind {
+    Boolean,
+    Number,
+    String,
+    Array,
+}
+
+/// Build the leaf metadata vector by walking `SettingsProv` once and joining
+/// with `Settings::default()` (for defaults) and `cli_flag_map()` (for flags).
+fn build_leaves(prov: &SettingsProv) -> Vec<LeafMeta> {
+    let defaults = Settings::default();
+    let defaults_json =
+        serde_json::to_value(&defaults).expect("Settings serializes as JSON for the defaults map");
+    let flag_map = cli_flag_map();
+
+    let mut leaves: Vec<LeafMeta> = Vec::new();
+    prov.walk_leaves("", &mut |path, value, category, secret| {
+        // Re-serialize the type-erased value to JSON so the UI gets the same
+        // shape as the surrounding `settings` block.
+        let Ok(value_json) = json_from_erased(value) else {
+            return;
+        };
+        let leaf_default = lookup_default(&defaults_json, path);
+        let kind = LeafKind::from_json(&value_json);
+        leaves.push(LeafMeta {
+            key: path.to_string(),
+            value: value_json,
+            default: leaf_default,
+            source: category.into(),
+            kind,
+            secret,
+            cli_flag: flag_map.get(path).cloned(),
+            label: leaf_label(path).map(String::from),
+        });
+    });
+    // Stable order: alphabetic by dotted path. The UI groups by section
+    // prefix anyway, so any consistent order is fine — alphabetic keeps the
+    // response diff-friendly across runs.
+    leaves.sort_by(|a, b| a.key.cmp(&b.key));
+    leaves
+}
+
+/// Serialize an erased value into a `serde_json::Value` via the same shim
+/// pattern used by `kellnr/src/config_printer.rs::toml_from_erased`.
+fn json_from_erased(
+    value: &dyn erased_serde::Serialize,
+) -> Result<serde_json::Value, serde_json::Error> {
+    struct Erased<'a>(&'a dyn erased_serde::Serialize);
+    impl Serialize for Erased<'_> {
+        fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+            erased_serde::serialize(self.0, ser)
+        }
+    }
+    serde_json::to_value(Erased(value))
+}
+
+/// Look up `dotted_path` inside a JSON-serialized `Settings` and return the
+/// matching leaf. Returns `Null` if the path is missing (shouldn't happen for
+/// any walked leaf, but the JSON null keeps the UI's renderer happy).
+fn lookup_default(defaults_json: &serde_json::Value, dotted_path: &str) -> serde_json::Value {
+    let mut current = defaults_json;
+    for segment in dotted_path.split('.') {
+        let Some(next) = current.get(segment) else {
+            return serde_json::Value::Null;
+        };
+        current = next;
+    }
+    current.clone()
+}
+
+impl LeafKind {
+    fn from_json(value: &serde_json::Value) -> Self {
+        match value {
+            serde_json::Value::Bool(_) => Self::Boolean,
+            serde_json::Value::Number(_) => Self::Number,
+            serde_json::Value::Array(_) => Self::Array,
+            // String, null, object → fall back to string. `null` represents
+            // `Option::None`; objects shouldn't appear (only leaves are
+            // visited), but if they do the UI prints them via String(_) too.
+            _ => Self::String,
+        }
+    }
 }
 
 /// Get Kellnr settings (admin only)
@@ -42,9 +161,11 @@ pub struct SettingsResponse {
 pub async fn settings(
     _user: AdminUser,
     State(settings): SettingsState,
+    State(prov): SettingsProvState,
 ) -> Result<Json<SettingsResponse>, RouteError> {
     Ok(Json(SettingsResponse {
-        sources: settings.sources.clone(),
+        sources: sources_from_prov(&prov),
+        leaves: build_leaves(&prov),
         settings: (*settings).clone(),
         defaults: Settings::default(),
     }))
@@ -612,8 +733,114 @@ mod tests {
 
         assert_eq!(result_status, StatusCode::OK);
         assert_eq!(result_response.settings, expected_state);
-        // Verify that sources are present in the response
-        assert!(result_response.sources.contains_key("registry.data_dir"));
+        // `sources` is structurally part of `SettingsResponse` — successful
+        // deserialization on line above is sufficient proof it round-trips.
+        // The companion test below asserts that an override actually flows
+        // into the `sources` map.
+    }
+
+    #[tokio::test]
+    async fn settings_response_sources_reflect_prov_overrides() {
+        use kellnr_settings::{Config, ConfigSource, SettingsProv};
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .returning(|_| Ok(("admin".to_string(), true)));
+
+        let (settings, storage) = test_deps();
+
+        // Build a real `SettingsProv` with one non-default leaf so the
+        // handler must emit a non-empty `sources` entry for it. Using only
+        // TOML keeps the test independent of any `KELLNR_*` process env.
+        let prov: SettingsProv = Config::new()
+            .add_toml_str(
+                "override.toml",
+                "[registry]\ndata_dir = \"/tmp/from-toml\"\n",
+            )
+            .build::<SettingsProv>()
+            .unwrap();
+
+        let app: Router = Router::new()
+            .route("/settings", get(crate::ui::settings))
+            .with_state(AppStateData {
+                db: Arc::new(mock_db),
+                signing_key: Key::from(TEST_KEY),
+                settings: Arc::new(settings.clone()),
+                settings_prov: Arc::new(prov),
+                crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
+                ..kellnr_appstate::test_state()
+            });
+
+        let r = app
+            .oneshot(
+                Request::get("/settings")
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, "token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        let response: SettingsResponse = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(
+            response.sources.get("registry.data_dir"),
+            Some(&ConfigSource::Toml),
+            "TOML-set leaf must report ConfigSource::Toml"
+        );
+        // An untouched leaf must surface as Default — confirms the map covers
+        // every leaf and that File→Toml mapping doesn't bleed across keys.
+        assert_eq!(
+            response.sources.get("docs.enabled"),
+            Some(&ConfigSource::Default),
+        );
+
+        // The new `leaves` field must mirror the same data with the schema
+        // metadata the dynamic UI consumes.
+        let data_dir_leaf = response
+            .leaves
+            .iter()
+            .find(|l| l.key == "registry.data_dir")
+            .expect("registry.data_dir leaf must be present");
+        assert_eq!(
+            data_dir_leaf.value,
+            serde_json::json!("/tmp/from-toml"),
+            "leaf value matches the TOML override"
+        );
+        assert_eq!(data_dir_leaf.source, ConfigSource::Toml);
+        assert_eq!(data_dir_leaf.kind, LeafKind::String);
+        assert!(!data_dir_leaf.secret);
+        assert_eq!(
+            data_dir_leaf.cli_flag.as_deref(),
+            Some("--registry-data-dir, -d"),
+            "cli_flag comes from clap reflection — long + short"
+        );
+
+        let docs_enabled = response
+            .leaves
+            .iter()
+            .find(|l| l.key == "docs.enabled")
+            .expect("docs.enabled leaf must be present");
+        assert_eq!(docs_enabled.kind, LeafKind::Boolean);
+        assert_eq!(docs_enabled.source, ConfigSource::Default);
+        assert_eq!(docs_enabled.default, serde_json::json!(false));
+
+        // Secret leaves carry the secret flag — the UI uses it to mask the
+        // value before rendering.
+        let secret_leaf = response
+            .leaves
+            .iter()
+            .find(|l| l.key == "s3.secret_key")
+            .expect("s3.secret_key leaf must be present");
+        assert!(secret_leaf.secret, "s3.secret_key must be flagged secret");
     }
 
     #[tokio::test]

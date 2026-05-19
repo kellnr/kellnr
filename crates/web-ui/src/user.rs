@@ -546,6 +546,7 @@ mod tests {
             db,
             signing_key: Key::from(TEST_KEY),
             settings,
+            settings_prov: kellnr_appstate::default_settings_prov(),
             crate_storage,
             cratesio_storage,
             cratesio_prefetch_sender,

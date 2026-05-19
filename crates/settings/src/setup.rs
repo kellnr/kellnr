@@ -1,20 +1,28 @@
-use clap_serde_derive::ClapSerde;
+use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 
 fn default_admin_pwd() -> String {
     "admin".to_string()
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
+#[configurable(clap_prefix = "setup")]
 pub struct Setup {
     /// Initial admin password
-    #[default(default_admin_pwd())]
-    #[arg(id = "setup-admin-pwd", long = "setup-admin-pwd")]
+    #[configurable(secret)]
     pub admin_pwd: String,
 
     /// Initial admin API token
-    #[default(None)]
-    #[arg(id = "setup-admin-token", long = "setup-admin-token")]
+    #[configurable(secret)]
     pub admin_token: Option<String>,
+}
+
+impl Default for Setup {
+    fn default() -> Self {
+        Self {
+            admin_pwd: default_admin_pwd(),
+            admin_token: None,
+        }
+    }
 }
