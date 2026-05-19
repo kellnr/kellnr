@@ -102,6 +102,16 @@
         # Build dependencies separately for caching
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
+        # Playwright version sync check (tests/package.json vs nixpkgs)
+        testsPackageJson = builtins.fromJSON (builtins.readFile ./tests/package.json);
+        testsPlaywrightVersion =
+          let
+            raw = testsPackageJson.devDependencies."@playwright/test";
+          in
+          lib.removePrefix "~" (lib.removePrefix "^" raw);
+        nixpkgsPlaywrightVersion = pkgs.playwright-driver.version;
+        playwrightVersionsMatch = testsPlaywrightVersion == nixpkgsPlaywrightVersion;
+
         # Build the full package
         kellnr = craneLib.buildPackage (
           commonArgs
@@ -203,8 +213,20 @@
             export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
             export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
             echo "Playwright browsers: $PLAYWRIGHT_BROWSERS_PATH"
-            echo "Nixpkgs playwright version: ${pkgs.playwright-driver.version}"
-            echo "NOTE: Your tests/package.json @playwright/test version must match!"
+            echo "Nixpkgs playwright version: ${nixpkgsPlaywrightVersion}"
+            ${
+              if playwrightVersionsMatch then ''
+                echo "tests/package.json @playwright/test version: ${testsPlaywrightVersion} (matches)"
+              '' else ''
+                echo ""
+                echo "WARNING: Playwright version mismatch!"
+                echo "  Nixpkgs playwright-driver:    ${nixpkgsPlaywrightVersion}"
+                echo "  tests/package.json @playwright/test: ${testsPlaywrightVersion}"
+                echo "  Update tests/package.json so @playwright/test matches the nixpkgs version,"
+                echo "  otherwise the bundled browsers will not be compatible with your tests."
+                echo ""
+              ''
+            }
 
             alias c=cargo
             alias j=just
