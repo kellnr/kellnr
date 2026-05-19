@@ -894,7 +894,7 @@ mod reg_api_tests {
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use mockall::predicate::*;
     use rand::distr::Alphanumeric;
-    use rand::{Rng, rng};
+    use rand::{RngExt, rng};
     use tokio::fs::read;
     use tower::ServiceExt;
 

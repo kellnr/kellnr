@@ -13,7 +13,7 @@ use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
 use kellnr_settings::Settings;
 use rand::distr::Alphanumeric;
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use serde::Deserialize;
 use tokio::time::sleep;
 use tracing::warn;
