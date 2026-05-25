@@ -1,4 +1,4 @@
-FROM rustfs/rustfs:latest
+FROM rustfs/rustfs:1.0.0-alpha.85-glibc
 
 # Set build-time arguments for the bucket names
 ARG CRATES_BUCKET=kellnr-crates

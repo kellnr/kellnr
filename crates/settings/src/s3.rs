@@ -1,52 +1,52 @@
-use clap_serde_derive::ClapSerde;
+use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
+#[configurable(clap_prefix = "s3")]
 pub struct S3 {
-    #[default(false)]
-    #[arg(id = "s3-enabled", long = "s3-enabled")]
     pub enabled: bool,
 
-    #[default(None)]
-    #[arg(id = "s3-access-key", long = "s3-access-key")]
     pub access_key: Option<String>,
 
-    #[default(None)]
-    #[arg(id = "s3-secret-key", long = "s3-secret-key")]
+    #[configurable(secret)]
     pub secret_key: Option<String>,
 
-    #[default(None)]
-    #[arg(id = "s3-region", long = "s3-region")]
     pub region: Option<String>,
 
-    #[default(None)]
-    #[arg(id = "s3-endpoint", long = "s3-endpoint")]
     pub endpoint: Option<String>,
 
-    #[default(true)]
-    #[arg(id = "s3-allow-http", long = "s3-allow-http")]
     pub allow_http: bool,
 
-    #[default("kellnr-crates".to_string())]
-    #[arg(id = "s3-crates-bucket", long = "s3-crates-bucket")]
     pub crates_bucket: String,
 
-    #[default("kellnr-cratesio".to_string())]
-    #[arg(id = "s3-cratesio-bucket", long = "s3-cratesio-bucket")]
     pub cratesio_bucket: String,
 
-    #[default("kellnr-toolchains".to_string())]
-    #[arg(id = "s3-toolchain-bucket", long = "s3-toolchain-bucket")]
     pub toolchain_bucket: String,
 
     /// S3 connect timeout in seconds
-    #[default(5)]
-    #[arg(id = "s3-connect-timeout", long = "s3-connect-timeout")]
+    #[arg(long = "s3-connect-timeout")]
     pub connect_timeout_seconds: u64,
 
     /// S3 request timeout in seconds
-    #[default(30)]
-    #[arg(id = "s3-request-timeout", long = "s3-request-timeout")]
+    #[arg(long = "s3-request-timeout")]
     pub request_timeout_seconds: u64,
+}
+
+impl Default for S3 {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            access_key: None,
+            secret_key: None,
+            region: None,
+            endpoint: None,
+            allow_http: true,
+            crates_bucket: "kellnr-crates".to_string(),
+            cratesio_bucket: "kellnr-cratesio".to_string(),
+            toolchain_bucket: "kellnr-toolchains".to_string(),
+            connect_timeout_seconds: 5,
+            request_timeout_seconds: 30,
+        }
+    }
 }
