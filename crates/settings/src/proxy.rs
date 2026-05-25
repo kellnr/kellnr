@@ -1,4 +1,4 @@
-use clap_serde_derive::ClapSerde;
+use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -14,48 +14,50 @@ fn default_api_url() -> Url {
     Url::parse("https://crates.io/api/v1/crates/").unwrap()
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
+#[configurable(clap_prefix = "proxy")]
 pub struct Proxy {
     /// Enable crates.io proxy
-    #[default(false)]
-    #[arg(id = "proxy-enabled", long = "proxy-enabled")]
     pub enabled: bool,
 
     /// Number of proxy threads
-    #[default(10)]
-    #[arg(id = "proxy-num-threads", long = "proxy-num-threads")]
     pub num_threads: usize,
 
     /// Download crates on index update
-    #[default(false)]
-    #[arg(id = "proxy-download-on-update", long = "proxy-download-on-update")]
     pub download_on_update: bool,
 
     /// Crates.io download URL
-    #[default(default_proxy_url())]
-    #[arg(id = "proxy-url", long = "proxy-url")]
     pub url: Url,
 
     /// Crates.io index URL
-    #[default(default_index_url())]
-    #[arg(id = "proxy-index", long = "proxy-index")]
     pub index: Url,
 
     /// Crates.io API URL
-    #[default(default_api_url())]
-    #[arg(id = "proxy-api", long = "proxy-api")]
     pub api: Url,
 
     /// Connect timeout in seconds for upstream requests
-    #[default(5)]
-    #[arg(id = "proxy-connect-timeout", long = "proxy-connect-timeout")]
+    #[arg(long = "proxy-connect-timeout")]
     pub connect_timeout_seconds: u64,
 
     /// Request timeout in seconds for upstream downloads
-    #[default(30)]
-    #[arg(id = "proxy-request-timeout", long = "proxy-request-timeout")]
+    #[arg(long = "proxy-request-timeout")]
     pub request_timeout_seconds: u64,
+}
+
+impl Default for Proxy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            num_threads: 10,
+            download_on_update: false,
+            url: default_proxy_url(),
+            index: default_index_url(),
+            api: default_api_url(),
+            connect_timeout_seconds: 5,
+            request_timeout_seconds: 30,
+        }
+    }
 }
 
 #[cfg(test)]

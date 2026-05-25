@@ -55,8 +55,10 @@ test.describe("S3 Storage UI Tests", () => {
     const registry = "kellnr-test";
 
     // S3 settings
-    const s3RootUser = "rustfsadmin";
-    const s3RootPassword = "rustfsadmin";
+    // RustFS rejects its built-in default credentials on non-loopback
+    // listeners since v1.0.0-alpha.85 — use distinct values for the tests.
+    const s3RootUser = "kellnr-test-access";
+    const s3RootPassword = "kellnr-test-secret-1234567890";
     const s3AllowHttp = "true";
     const s3Image = "kellnr-rustfs-storage";
     const s3CratesBucket = "kellnr-crates";
