@@ -263,10 +263,9 @@ mod tests {
     #[test]
     fn cli_flag_overrides_toml_with_cli_provenance() {
         let file = write_toml("[registry]\ndata_dir = \"/tmp/from-toml\"\n");
-        let CliResult::RunServer(resolved) = run_start(
-            Some(file.path()),
-            &["--registry-data-dir", "/tmp/from-cli"],
-        ) else {
+        let CliResult::RunServer(resolved) =
+            run_start(Some(file.path()), &["--registry-data-dir", "/tmp/from-cli"])
+        else {
             panic!("expected RunServer");
         };
 
@@ -330,15 +329,28 @@ mod tests {
         // while the id (and therefore our lookup key) still follows the
         // section.field convention.
         assert_eq!(
-            map.get("registry.token_cache_ttl_seconds").map(String::as_str),
+            map.get("registry.token_cache_ttl_seconds")
+                .map(String::as_str),
             Some("--registry-token-cache-ttl"),
         );
         // Spot-check leaves from other sections so a missing wiring on any
         // single section shows up here.
-        assert_eq!(map.get("docs.enabled").map(String::as_str), Some("--docs-enabled"));
-        assert_eq!(map.get("s3.allow_http").map(String::as_str), Some("--s3-allow-http"));
-        assert_eq!(map.get("local.port").map(String::as_str), Some("--local-port, -p"));
+        assert_eq!(
+            map.get("docs.enabled").map(String::as_str),
+            Some("--docs-enabled")
+        );
+        assert_eq!(
+            map.get("s3.allow_http").map(String::as_str),
+            Some("--s3-allow-http")
+        );
+        assert_eq!(
+            map.get("local.port").map(String::as_str),
+            Some("--local-port, -p")
+        );
         // The top-level `--config` arg is not a settings leaf — must not leak in.
-        assert!(map.get("config").is_none(), "top-level `--config` is not a leaf");
+        assert!(
+            map.get("config").is_none(),
+            "top-level `--config` is not a leaf"
+        );
     }
 }

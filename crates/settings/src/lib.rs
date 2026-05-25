@@ -18,9 +18,9 @@ pub mod setup;
 pub mod toolchain;
 
 pub use cli::{CliResult, ResolvedSettings, ShowConfigOptions, cli_flag_map, parse_cli};
-pub use leaf_labels::leaf_label;
 pub use config_source::{ConfigSource, SourceMap};
 pub use docs::Docs;
+pub use leaf_labels::leaf_label;
 pub use local::Local;
 pub use log::{LogFormat, LogLevel};
 pub use oauth2::OAuth2;

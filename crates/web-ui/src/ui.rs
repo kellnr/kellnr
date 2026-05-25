@@ -9,8 +9,8 @@ use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
 use kellnr_settings::{
-    ConfigSource, Provenance, Settings, SettingsProv, SourceMap, cli_flag_map,
-    compile_time_config, erased_serde, leaf_label, sources_from_prov,
+    ConfigSource, Provenance, Settings, SettingsProv, SourceMap, cli_flag_map, compile_time_config,
+    erased_serde, leaf_label, sources_from_prov,
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
