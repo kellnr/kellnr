@@ -23,7 +23,7 @@
         "@playwright/test": "1.58.2",
         "@types/node": "^25.2.3",
         "execa": "^9.6.1",
-        "testcontainers": "^11.11.0",
+        "testcontainers": "^12.0.0",
         "typescript": "^5.9.3"
     }
 }
