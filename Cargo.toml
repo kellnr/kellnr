@@ -56,6 +56,9 @@ mockall = "0.14.0"
 moka = { version = "0.12.15", features = ["future"] }
 object_store = { version = "0.13.2", default-features = false, features = ["aws", "fs"] }
 openidconnect = "4"
+# `env` comes from provcfg's default features; kellnr opts into the rest.
+# `json` is intentionally left out — kellnr has no JSON config sources.
+provcfg = { version = "0.1.0", features = ["toml", "cli", "clap-derive"] }
 quote = "1.0.45"
 rand = "0.10.1"
 regex = "1.12.3"
@@ -88,7 +91,6 @@ uuid = { version = "1.23.1", features = ["v4"] }
 xz2 = "0.1"
 zip = "8.6.0"
 clap = { version = "4", features = ["derive"] }
-clap-serde-derive = "0.2"
 
 # Patch sqlx 0.8.6 to relax libsqlite3-sys so the `cargo` crate (which uses
 # rusqlite -> libsqlite3-sys 0.36.x) can coexist in the dep graph.

@@ -1,4 +1,4 @@
-use clap_serde_derive::ClapSerde;
+use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 
 use crate::compile_time_config;
@@ -11,130 +11,95 @@ fn default_data_dir() -> String {
         .unwrap_or_default()
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
+#[configurable(clap_prefix = "registry")]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Registry {
     /// Data directory for crates, index, and database
-    #[default(default_data_dir())]
-    #[arg(id = "registry-data-dir", long = "registry-data-dir", short = 'd')]
+    #[arg(short = 'd')]
     pub data_dir: String,
 
     /// Session timeout in seconds
-    #[default(60 * 60 * 8)]
-    #[arg(id = "registry-session-age", long = "registry-session-age")]
+    #[arg(long = "registry-session-age")]
     pub session_age_seconds: u64,
 
     /// Cache size
-    #[default(1000)]
-    #[arg(id = "registry-cache-size", long = "registry-cache-size")]
     pub cache_size: u64,
 
     /// Max crate size in MB
-    #[default(10)]
-    #[arg(id = "registry-max-crate-size", long = "registry-max-crate-size")]
     pub max_crate_size: u64,
 
     /// Max database connections (0 = unlimited)
-    #[default(0)]
-    #[arg(
-        id = "registry-max-db-connections",
-        long = "registry-max-db-connections"
-    )]
     pub max_db_connections: u32,
 
     /// Require authentication for all operations
-    #[default(false)]
-    #[arg(id = "registry-auth-required", long = "registry-auth-required")]
     pub auth_required: bool,
 
     /// Required crate fields (comma-separated)
-    #[default(Vec::new())]
-    #[arg(
-        id = "registry-required-crate-fields",
-        long = "registry-required-crate-fields",
-        value_delimiter = ','
-    )]
+    #[configurable(env_list)]
+    #[arg(value_delimiter = ',')]
     pub required_crate_fields: Vec<String>,
 
     /// Restrict new crate uploads to admins
-    #[default(false)]
-    #[arg(
-        id = "registry-new-crates-restricted",
-        long = "registry-new-crates-restricted"
-    )]
     pub new_crates_restricted: bool,
 
     /// Cookie signing key (for multi-instance setups)
-    #[default(None)]
-    #[arg(
-        id = "registry-cookie-signing-key",
-        long = "registry-cookie-signing-key"
-    )]
     pub cookie_signing_key: Option<String>,
 
     /// Allow crates without owners
-    #[default(false)]
-    #[arg(
-        id = "registry-allow-ownerless-crates",
-        long = "registry-allow-ownerless-crates"
-    )]
     pub allow_ownerless_crates: bool,
 
     /// Enable token cache
-    #[default(true)]
-    #[arg(
-        id = "registry-token-cache-enabled",
-        long = "registry-token-cache-enabled"
-    )]
     pub token_cache_enabled: bool,
 
     /// Token cache TTL in seconds
-    #[default(1800)]
-    #[arg(id = "registry-token-cache-ttl", long = "registry-token-cache-ttl")]
+    #[arg(long = "registry-token-cache-ttl")]
     pub token_cache_ttl_seconds: u64,
 
     /// Token cache max capacity
-    #[default(10000)]
-    #[arg(
-        id = "registry-token-cache-max-capacity",
-        long = "registry-token-cache-max-capacity"
-    )]
     pub token_cache_max_capacity: u64,
 
     /// Token DB retry count
-    #[default(3)]
-    #[arg(
-        id = "registry-token-db-retry-count",
-        long = "registry-token-db-retry-count"
-    )]
     pub token_db_retry_count: u32,
 
     /// Token DB retry delay in ms
-    #[default(100)]
-    #[arg(
-        id = "registry-token-db-retry-delay",
-        long = "registry-token-db-retry-delay"
-    )]
+    #[arg(long = "registry-token-db-retry-delay")]
     pub token_db_retry_delay_ms: u64,
 
     /// Download request timeout in seconds (0 = disabled)
-    #[default(60)]
-    #[arg(id = "registry-download-timeout", long = "registry-download-timeout")]
+    #[arg(long = "registry-download-timeout")]
     pub download_timeout_seconds: u64,
 
     /// Max concurrent download requests (0 = unlimited)
-    #[default(20)]
-    #[arg(
-        id = "registry-download-max-concurrent",
-        long = "registry-download-max-concurrent"
-    )]
     pub download_max_concurrent: usize,
+
     /// Download counter flush interval in seconds (0 = flush every download)
-    #[default(30)]
-    #[arg(
-        id = "registry-download-counter-flush",
-        long = "registry-download-counter-flush"
-    )]
+    #[arg(long = "registry-download-counter-flush")]
     pub download_counter_flush_seconds: u64,
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Self {
+            data_dir: default_data_dir(),
+            session_age_seconds: 60 * 60 * 8,
+            cache_size: 1000,
+            max_crate_size: 10,
+            max_db_connections: 0,
+            auth_required: false,
+            required_crate_fields: Vec::new(),
+            new_crates_restricted: false,
+            cookie_signing_key: None,
+            allow_ownerless_crates: false,
+            token_cache_enabled: true,
+            token_cache_ttl_seconds: 1800,
+            token_cache_max_capacity: 10000,
+            token_db_retry_count: 3,
+            token_db_retry_delay_ms: 100,
+            download_timeout_seconds: 60,
+            download_max_concurrent: 20,
+            download_counter_flush_seconds: 30,
+        }
+    }
 }

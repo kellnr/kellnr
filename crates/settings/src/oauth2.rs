@@ -1,4 +1,4 @@
-use clap_serde_derive::ClapSerde;
+use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 
 fn default_scopes() -> Vec<String> {
@@ -14,73 +14,64 @@ fn default_button_text() -> String {
 }
 
 /// `OAuth2`/`OpenID` Connect authentication configuration
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
+#[configurable(clap_prefix = "oauth2")]
 pub struct OAuth2 {
     /// Enable `OAuth2`/OIDC authentication
-    #[default(false)]
-    #[arg(id = "oauth2-enabled", long = "oauth2-enabled")]
     pub enabled: bool,
 
     /// OIDC issuer URL (discovery URL, e.g., `<https://authentik.example.com/application/o/kellnr/>`)
-    #[default(None)]
-    #[arg(id = "oauth2-issuer-url", long = "oauth2-issuer-url")]
     pub issuer_url: Option<String>,
 
     /// `OAuth2` client ID
-    #[default(None)]
-    #[arg(id = "oauth2-client-id", long = "oauth2-client-id")]
     pub client_id: Option<String>,
 
     /// `OAuth2` client secret (prefer setting via `KELLNR_OAUTH2__CLIENT_SECRET` env var)
-    #[default(None)]
     #[serde(skip_serializing)]
-    #[arg(id = "oauth2-client-secret", long = "oauth2-client-secret")]
+    #[configurable(secret)]
     pub client_secret: Option<String>,
 
     /// `OAuth2` scopes to request (default: `["openid", "profile", "email"]`)
-    #[default(default_scopes())]
-    #[arg(id = "oauth2-scopes", long = "oauth2-scopes")]
+    #[configurable(env_list)]
+    #[arg(value_delimiter = ',')]
     pub scopes: Vec<String>,
 
     /// Automatically create local user accounts for new `OAuth2` users
-    #[default(true)]
-    #[arg(
-        id = "oauth2-auto-provision-users",
-        long = "oauth2-auto-provision-users"
-    )]
     pub auto_provision_users: bool,
 
     /// Claim name to check for admin group membership (e.g., "groups")
-    #[default(None)]
-    #[arg(id = "oauth2-admin-group-claim", long = "oauth2-admin-group-claim")]
     pub admin_group_claim: Option<String>,
 
     /// Value in the admin group claim that grants admin privileges (e.g., "kellnr-admins")
-    #[default(None)]
-    #[arg(id = "oauth2-admin-group-value", long = "oauth2-admin-group-value")]
     pub admin_group_value: Option<String>,
 
     /// Claim name to check for read-only group membership (e.g., "groups")
-    #[default(None)]
-    #[arg(
-        id = "oauth2-read-only-group-claim",
-        long = "oauth2-read-only-group-claim"
-    )]
     pub read_only_group_claim: Option<String>,
 
     /// Value in the read-only group claim that grants read-only access (e.g., "kellnr-readonly")
-    #[default(None)]
-    #[arg(
-        id = "oauth2-read-only-group-value",
-        long = "oauth2-read-only-group-value"
-    )]
     pub read_only_group_value: Option<String>,
 
     /// Text displayed on the `OAuth2` login button
-    #[default(default_button_text())]
-    #[arg(id = "oauth2-button-text", long = "oauth2-button-text")]
     pub button_text: String,
+}
+
+impl Default for OAuth2 {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            issuer_url: None,
+            client_id: None,
+            client_secret: None,
+            scopes: default_scopes(),
+            auto_provision_users: true,
+            admin_group_claim: None,
+            admin_group_value: None,
+            read_only_group_claim: None,
+            read_only_group_value: None,
+            button_text: default_button_text(),
+        }
+    }
 }
 
 impl OAuth2 {

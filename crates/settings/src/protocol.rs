@@ -1,8 +1,6 @@
 use clap::ValueEnum;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::deserialize_with::DeserializeWith;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
 pub enum Protocol {
     #[default]
@@ -24,23 +22,12 @@ impl<'de> Deserialize<'de> for Protocol {
     where
         D: Deserializer<'de>,
     {
-        Protocol::deserialize_with(de)
-    }
-}
-
-impl DeserializeWith for Protocol {
-    fn deserialize_with<'de, D>(de: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(de)?.to_lowercase();
-
-        match s.as_ref() {
-            "http" => Ok(Protocol::Http),
-            "https" => Ok(Protocol::Https),
-            _ => Err(serde::de::Error::custom(
-                "error trying to deserialize protocol config",
-            )),
+        match String::deserialize(de)?.to_lowercase().as_str() {
+            "http" => Ok(Self::Http),
+            "https" => Ok(Self::Https),
+            other => Err(serde::de::Error::custom(format!(
+                "unknown protocol {other:?}; expected \"http\" or \"https\""
+            ))),
         }
     }
 }
@@ -50,10 +37,7 @@ impl Serialize for Protocol {
     where
         S: serde::Serializer,
     {
-        match self {
-            Protocol::Http => serializer.serialize_str("http"),
-            Protocol::Https => serializer.serialize_str("https"),
-        }
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -71,7 +55,6 @@ mod tests {
 
     #[derive(Debug, Deserialize)]
     struct Settings {
-        #[serde(deserialize_with = "Protocol::deserialize_with")]
         protocol: Protocol,
     }
 

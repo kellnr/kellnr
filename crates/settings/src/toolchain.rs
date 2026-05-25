@@ -1,16 +1,22 @@
-use clap_serde_derive::ClapSerde;
+use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
+#[configurable(clap_prefix = "toolchain")]
 pub struct Toolchain {
     /// Enable toolchain distribution server
-    #[default(false)]
-    #[arg(id = "toolchain-enabled", long = "toolchain-enabled")]
     pub enabled: bool,
 
     /// Max toolchain archive size in MB
-    #[default(500)]
-    #[arg(id = "toolchain-max-size", long = "toolchain-max-size")]
     pub max_size: usize,
+}
+
+impl Default for Toolchain {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_size: 500,
+        }
+    }
 }
