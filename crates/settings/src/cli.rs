@@ -349,7 +349,7 @@ mod tests {
         );
         // The top-level `--config` arg is not a settings leaf — must not leak in.
         assert!(
-            map.get("config").is_none(),
+            !map.contains_key("config"),
             "top-level `--config` is not a leaf"
         );
     }
