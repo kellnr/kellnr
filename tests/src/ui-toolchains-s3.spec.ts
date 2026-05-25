@@ -44,8 +44,10 @@ test.describe("Toolchain S3 Storage Tests", () => {
   const testArchivePathArm = path.resolve(fixturesDir, "rust-1.0.0-test-aarch64-unknown-linux-gnu.tar.xz");
 
   // S3 settings
-  const s3RootUser = "rustfsadmin";
-  const s3RootPassword = "rustfsadmin";
+  // RustFS rejects its built-in default credentials on non-loopback
+  // listeners since v1.0.0-alpha.85 — use distinct values for the tests.
+  const s3RootUser = "kellnr-test-access";
+  const s3RootPassword = "kellnr-test-secret-1234567890";
   const s3CratesBucket = "kellnr-crates";
   const s3CratesioBucket = "kellnr-cratesio";
   const s3ToolchainBucket = "kellnr-toolchains";

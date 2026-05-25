@@ -1,4 +1,4 @@
-use clap_serde_derive::ClapSerde;
+use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::Protocol;
@@ -14,26 +14,31 @@ fn default_origin_port() -> u16 {
         .unwrap_or(8000)
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, ClapSerde)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
+#[configurable(clap_prefix = "origin")]
 pub struct Origin {
     /// External hostname for URLs
-    #[default(default_hostname())]
-    #[arg(id = "origin-hostname", long = "origin-hostname")]
     pub hostname: String,
 
     /// External port for URLs
-    #[default(default_origin_port())]
-    #[arg(id = "origin-port", long = "origin-port")]
     pub port: u16,
 
-    /// Protocol (http or https)
-    #[default(Protocol::Http)]
+    /// Protocol (http or https) — not exposed on the CLI; set via TOML/env
     #[arg(skip)]
     pub protocol: Protocol,
 
     /// URL path prefix
-    #[default(String::new())]
-    #[arg(id = "origin-path", long = "origin-path")]
     pub path: String,
+}
+
+impl Default for Origin {
+    fn default() -> Self {
+        Self {
+            hostname: default_hostname(),
+            port: default_origin_port(),
+            protocol: Protocol::Http,
+            path: String::new(),
+        }
+    }
 }

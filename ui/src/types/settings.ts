@@ -23,6 +23,21 @@ export type SettingsDefaults = {
   toolchain: Toolchain
 }
 
+export type LeafKind = 'boolean' | 'number' | 'string' | 'array';
+
+// Per-leaf metadata emitted by the backend. The StartupConfig view iterates
+// over this list instead of hand-maintaining a parallel per-key table.
+export type LeafMeta = {
+  key: string
+  value: unknown
+  default: unknown
+  source: ConfigSource
+  type: LeafKind
+  secret: boolean
+  cli_flag?: string | null
+  label?: string | null
+}
+
 export type Settings = {
   docs: Docs
   local: Local
@@ -35,6 +50,7 @@ export type Settings = {
   toolchain: Toolchain
   sources: SourceMap
   defaults?: SettingsDefaults
+  leaves?: LeafMeta[]
 }
 
 export type Toolchain = {
@@ -194,5 +210,6 @@ export const emptySettings: Settings = {
     max_size: 500
   },
   sources: {},
-  defaults: undefined
+  defaults: undefined,
+  leaves: []
 }

@@ -7,7 +7,7 @@ use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
-use kellnr_settings::Settings;
+use kellnr_settings::{Settings, SettingsProv};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
@@ -20,6 +20,7 @@ pub type AppState = axum::extract::State<AppStateData>;
 // Substates
 pub type DbState = axum::extract::State<Arc<dyn DbProvider>>;
 pub type SettingsState = axum::extract::State<Arc<Settings>>;
+pub type SettingsProvState = axum::extract::State<Arc<SettingsProv>>;
 pub type CrateStorageState = axum::extract::State<Arc<KellnrCrateStorage>>;
 pub type CrateIoStorageState = axum::extract::State<Arc<CratesIoCrateStorage>>;
 pub type SigningKeyState = axum::extract::State<Key>;
@@ -35,6 +36,9 @@ pub struct AppStateData {
     // key that is used for signing cookies
     pub signing_key: Key,
     pub settings: Arc<Settings>,
+    /// Per-leaf provenance for the merged `settings`. Only the `/settings`
+    /// web-ui handler reads this; everything else uses the plain `Settings`.
+    pub settings_prov: Arc<SettingsProv>,
     pub crate_storage: Arc<KellnrCrateStorage>,
     pub cratesio_storage: Arc<CratesIoCrateStorage>,
     pub cratesio_prefetch_sender: Sender<CratesioPrefetchMsg>,
@@ -44,10 +48,23 @@ pub struct AppStateData {
     pub proxy_client: Client,
 }
 
+/// Build a defaults-only `SettingsProv` — every leaf reports
+/// `Category::Default`. Convenient for ad-hoc test `AppStateData`
+/// construction where the `settings_prov` field isn't otherwise relevant.
+#[must_use]
+pub fn default_settings_prov() -> Arc<SettingsProv> {
+    Arc::new(
+        provcfg::Config::new()
+            .build::<SettingsProv>()
+            .expect("default SettingsProv build is infallible"),
+    )
+}
+
 pub fn test_state() -> AppStateData {
     let db: Arc<dyn DbProvider> = Arc::new(kellnr_db::mock::MockDb::new());
     let signing_key = Key::generate();
     let settings = Arc::new(kellnr_settings::test_settings());
+    let settings_prov = default_settings_prov();
     let kellnr_storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
     let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, kellnr_storage));
     let cratesio_storage = Arc::new(CratesIoCrateStorage::new(
@@ -61,6 +78,7 @@ pub fn test_state() -> AppStateData {
         db,
         signing_key,
         settings,
+        settings_prov,
         crate_storage,
         cratesio_storage,
         cratesio_prefetch_sender,

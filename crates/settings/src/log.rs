@@ -1,18 +1,17 @@
 use std::fmt::Display;
 
 use clap::ValueEnum;
+use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::deserialize_with::DeserializeWith;
-
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
 pub struct Log {
-    #[serde(deserialize_with = "LogFormat::deserialize_with")]
+    #[arg(long = "log-format", value_enum)]
     pub format: LogFormat,
-    #[serde(deserialize_with = "LogLevel::deserialize_with")]
+    #[arg(long = "log-level", short = 'l', value_enum)]
     pub level: LogLevel,
-    #[serde(deserialize_with = "LogLevel::deserialize_with")]
+    #[arg(long = "log-level-web-server", value_enum)]
     pub level_web_server: LogLevel,
 }
 
@@ -26,27 +25,26 @@ impl Default for Log {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum, Default)]
 pub enum LogFormat {
+    #[default]
     Compact,
     Pretty,
     Json,
 }
 
-impl DeserializeWith for LogFormat {
-    fn deserialize_with<'de, D>(de: D) -> Result<Self, D::Error>
+impl<'de> Deserialize<'de> for LogFormat {
+    fn deserialize<D>(de: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let s = String::deserialize(de)?.to_lowercase();
-
-        match s.as_ref() {
-            "compact" => Ok(LogFormat::Compact),
-            "pretty" => Ok(LogFormat::Pretty),
-            "json" => Ok(LogFormat::Json),
-            _ => Err(serde::de::Error::custom(
-                "error trying to deserialize log format: {s}",
-            )),
+        match String::deserialize(de)?.to_lowercase().as_str() {
+            "compact" => Ok(Self::Compact),
+            "pretty" => Ok(Self::Pretty),
+            "json" => Ok(Self::Json),
+            other => Err(serde::de::Error::custom(format!(
+                "unknown log format {other:?}; expected \"compact\", \"pretty\", or \"json\""
+            ))),
         }
     }
 }
@@ -70,13 +68,32 @@ impl Display for LogFormat {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum, Default)]
 pub enum LogLevel {
     Trace,
     Debug,
+    #[default]
     Info,
     Warn,
     Error,
+}
+
+impl<'de> Deserialize<'de> for LogLevel {
+    fn deserialize<D>(de: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match String::deserialize(de)?.to_lowercase().as_str() {
+            "trace" => Ok(Self::Trace),
+            "debug" => Ok(Self::Debug),
+            "info" => Ok(Self::Info),
+            "warn" => Ok(Self::Warn),
+            "error" => Ok(Self::Error),
+            other => Err(serde::de::Error::custom(format!(
+                "unknown log level {other:?}; expected one of trace, debug, info, warn, error"
+            ))),
+        }
+    }
 }
 
 impl Display for LogLevel {
@@ -97,26 +114,6 @@ impl Serialize for LogLevel {
         S: serde::Serializer,
     {
         serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl DeserializeWith for LogLevel {
-    fn deserialize_with<'de, D>(de: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(de)?.to_lowercase();
-
-        match s.as_ref() {
-            "trace" => Ok(LogLevel::Trace),
-            "debug" => Ok(LogLevel::Debug),
-            "info" => Ok(LogLevel::Info),
-            "warn" => Ok(LogLevel::Warn),
-            "error" => Ok(LogLevel::Error),
-            _ => Err(serde::de::Error::custom(
-                "error trying to deserialize log level: {s}",
-            )),
-        }
     }
 }
 
@@ -146,7 +143,6 @@ mod log_format_tests {
 
     #[derive(Debug, Deserialize)]
     struct Settings {
-        #[serde(deserialize_with = "LogFormat::deserialize_with")]
         log_format: LogFormat,
     }
 
@@ -199,7 +195,6 @@ mod log_level_tests {
 
     #[derive(Debug, Deserialize)]
     struct Settings {
-        #[serde(deserialize_with = "LogLevel::deserialize_with")]
         log_level: LogLevel,
     }
 

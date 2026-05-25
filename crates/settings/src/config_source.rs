@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use provcfg::Category;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -17,151 +18,34 @@ pub enum ConfigSource {
     Cli,
 }
 
-/// All setting keys used for configuration tracking.
-const SETTING_KEYS: &[&str] = &[
-    // Registry settings
-    "registry.data_dir",
-    "registry.session_age_seconds",
-    "registry.cache_size",
-    "registry.max_crate_size",
-    "registry.max_db_connections",
-    "registry.auth_required",
-    "registry.required_crate_fields",
-    "registry.new_crates_restricted",
-    "registry.cookie_signing_key",
-    "registry.allow_ownerless_crates",
-    "registry.token_cache_enabled",
-    "registry.token_cache_ttl_seconds",
-    "registry.token_cache_max_capacity",
-    "registry.token_db_retry_count",
-    "registry.token_db_retry_delay_ms",
-    "registry.download_timeout_seconds",
-    "registry.download_max_concurrent",
-    "registry.download_counter_flush_seconds",
-    // Local settings
-    "local.ip",
-    "local.port",
-    // Origin settings
-    "origin.hostname",
-    "origin.port",
-    "origin.protocol",
-    "origin.path",
-    // Log settings
-    "log.level",
-    "log.format",
-    "log.level_web_server",
-    // Docs settings
-    "docs.enabled",
-    "docs.max_size",
-    // Proxy settings
-    "proxy.enabled",
-    "proxy.num_threads",
-    "proxy.download_on_update",
-    "proxy.url",
-    "proxy.index",
-    "proxy.api",
-    "proxy.connect_timeout_seconds",
-    "proxy.request_timeout_seconds",
-    // PostgreSQL settings
-    "postgresql.enabled",
-    "postgresql.address",
-    "postgresql.port",
-    "postgresql.db",
-    "postgresql.user",
-    "postgresql.pwd",
-    // S3 settings
-    "s3.enabled",
-    "s3.access_key",
-    "s3.secret_key",
-    "s3.region",
-    "s3.endpoint",
-    "s3.allow_http",
-    "s3.crates_bucket",
-    "s3.cratesio_bucket",
-    "s3.toolchain_bucket",
-    "s3.connect_timeout_seconds",
-    "s3.request_timeout_seconds",
-    // Setup settings
-    "setup.admin_pwd",
-    "setup.admin_token",
-    // OAuth2 settings
-    "oauth2.enabled",
-    "oauth2.issuer_url",
-    "oauth2.client_id",
-    "oauth2.client_secret",
-    "oauth2.scopes",
-    "oauth2.auto_provision_users",
-    "oauth2.admin_group_claim",
-    "oauth2.admin_group_value",
-    "oauth2.read_only_group_claim",
-    "oauth2.read_only_group_value",
-    "oauth2.button_text",
-    // Toolchain settings
-    "toolchain.enabled",
-    "toolchain.max_size",
-];
-
-/// Maps setting keys (e.g., `"registry.data_dir"`) to their configuration source.
-pub type SourceMap = HashMap<String, ConfigSource>;
-
-/// Compute the environment variable name for a given setting key.
-/// E.g., `"registry.data_dir"` becomes `"KELLNR_REGISTRY__DATA_DIR"`.
-fn env_var_name(key: &str) -> String {
-    format!("KELLNR_{}", key.to_uppercase().replace('.', "__"))
-}
-
-/// Initialize a `SourceMap` with all settings set to Default.
-pub fn init_default_sources() -> SourceMap {
-    SETTING_KEYS
-        .iter()
-        .map(|k| (k.to_string(), ConfigSource::Default))
-        .collect()
-}
-
-/// Check which environment variables are set and mark them in the source map.
-pub fn track_env_sources(sources: &mut SourceMap) {
-    for key in SETTING_KEYS {
-        if std::env::var(env_var_name(key)).is_ok() {
-            sources.insert((*key).to_string(), ConfigSource::Env);
+/// Map provcfg's source categories onto kellnr's API-facing enum. kellnr only
+/// loads TOML files, so `Category::File` becomes `Toml`; `Category::Default`
+/// plus any future provcfg variants fall to `Default` via the wildcard arm.
+impl From<Category> for ConfigSource {
+    fn from(category: Category) -> Self {
+        match category {
+            Category::File => Self::Toml,
+            Category::Env => Self::Env,
+            Category::Cli => Self::Cli,
+            _ => Self::Default,
         }
     }
 }
+
+/// Maps setting keys (e.g., `"registry.data_dir"`) to their configuration source.
+///
+/// Built on demand by [`crate::settings::sources_from_prov`] from the
+/// `SettingsProv` produced by [`crate::settings::build_prov_with_cli`]. Keys
+/// not present in the map are treated as `Default` by every reader (see
+/// `crates/kellnr/src/config_printer.rs`), so it is not pre-populated.
+pub type SourceMap = HashMap<String, ConfigSource>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_init_default_sources() {
-        let sources = init_default_sources();
-        assert!(sources.len() > 50); // We have many settings
-        assert_eq!(
-            sources.get("registry.data_dir"),
-            Some(&ConfigSource::Default)
-        );
-        assert_eq!(sources.get("local.port"), Some(&ConfigSource::Default));
-    }
-
-    #[test]
-    fn test_setting_keys_count() {
-        assert!(SETTING_KEYS.len() > 50);
-    }
-
-    #[test]
-    fn test_env_var_name() {
-        assert_eq!(
-            env_var_name("registry.data_dir"),
-            "KELLNR_REGISTRY__DATA_DIR"
-        );
-        assert_eq!(env_var_name("local.port"), "KELLNR_LOCAL__PORT");
-        assert_eq!(
-            env_var_name("oauth2.auto_provision_users"),
-            "KELLNR_OAUTH2__AUTO_PROVISION_USERS"
-        );
-    }
-
-    #[test]
-    fn test_config_source_serialization() {
+    fn config_source_serialization() {
         assert_eq!(
             serde_json::to_string(&ConfigSource::Default).unwrap(),
             "\"default\""
@@ -178,5 +62,19 @@ mod tests {
             serde_json::to_string(&ConfigSource::Cli).unwrap(),
             "\"cli\""
         );
+    }
+
+    #[test]
+    fn from_category_maps_file_env_cli_explicitly() {
+        assert_eq!(ConfigSource::from(Category::File), ConfigSource::Toml);
+        assert_eq!(ConfigSource::from(Category::Env), ConfigSource::Env);
+        assert_eq!(ConfigSource::from(Category::Cli), ConfigSource::Cli);
+    }
+
+    #[test]
+    fn from_category_falls_back_to_default_for_default_category() {
+        // The wildcard arm also catches any future `Category` variants provcfg
+        // may add — guarding the kellnr API against silent breakage.
+        assert_eq!(ConfigSource::from(Category::Default), ConfigSource::Default);
     }
 }
