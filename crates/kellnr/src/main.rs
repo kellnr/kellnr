@@ -16,7 +16,9 @@ use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
-use kellnr_settings::{CliResult, LogFormat, Settings, ShowConfigOptions, parse_cli};
+use kellnr_settings::{
+    CliResult, LogFormat, ResolvedSettings, Settings, ShowConfigOptions, parse_cli,
+};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
@@ -38,14 +40,14 @@ async fn main() {
     let cli_result = parse_cli().expect("Cannot read config");
 
     match cli_result {
-        CliResult::ShowConfig { settings, options } => {
-            show_config(&settings, &options);
+        CliResult::ShowConfig { resolved, options } => {
+            show_config(&resolved, &options);
         }
-        CliResult::InitConfig { settings, output } => {
-            init_config(&settings, &output);
+        CliResult::InitConfig { output } => {
+            init_config(&output);
         }
-        CliResult::RunServer(settings) => {
-            run_server(settings).await;
+        CliResult::RunServer(resolved) => {
+            run_server(resolved).await;
         }
         CliResult::ShowHelp => {
             // Help was already printed by parse_cli()
@@ -53,13 +55,13 @@ async fn main() {
     }
 }
 
-fn show_config(settings: &Settings, options: &ShowConfigOptions) {
+fn show_config(resolved: &ResolvedSettings, options: &ShowConfigOptions) {
     if options.no_defaults || options.show_sources {
         // Use custom formatting with source annotations and/or filtered output
-        config_printer::print_config_with_options(settings, options);
+        config_printer::print_config_with_options(&resolved.prov, options);
     } else {
         // Default: simple TOML output
-        match toml::to_string_pretty(settings) {
+        match toml::to_string_pretty(&resolved.settings) {
             Ok(toml) => println!("{toml}"),
             Err(e) => {
                 eprintln!("Error serializing config: {e}");
@@ -69,14 +71,14 @@ fn show_config(settings: &Settings, options: &ShowConfigOptions) {
     }
 }
 
-fn init_config(settings: &Settings, output: &Path) {
+fn init_config(output: &Path) {
     if output.exists() {
         eprintln!("Error: File already exists: {}", output.display());
         eprintln!("Remove the file or specify a different output path with -o");
         std::process::exit(1);
     }
 
-    match toml::to_string_pretty(settings) {
+    match toml::to_string_pretty(&Settings::default()) {
         Ok(toml) => match std::fs::write(output, toml) {
             Ok(()) => {
                 println!("Configuration file created: {}", output.display());
@@ -93,8 +95,9 @@ fn init_config(settings: &Settings, output: &Path) {
     }
 }
 
-async fn run_server(settings: Settings) {
-    let settings: Arc<Settings> = settings.into();
+async fn run_server(resolved: ResolvedSettings) {
+    let settings: Arc<Settings> = resolved.settings.into();
+    let settings_prov = resolved.prov;
 
     // Validate required settings
     if settings.registry.data_dir.is_empty() {
@@ -208,6 +211,7 @@ async fn run_server(settings: Settings) {
         db,
         signing_key,
         settings,
+        settings_prov,
         crate_storage,
         cratesio_storage,
         cratesio_prefetch_sender,
