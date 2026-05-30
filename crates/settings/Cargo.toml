@@ -10,6 +10,8 @@ repository.workspace = true
 documentation.workspace = true
 
 [dependencies]
+kellnr-common.workspace = true
+
 # External dependencies from crates.io
 clap.workspace = true
 provcfg.workspace = true

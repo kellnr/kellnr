@@ -30,6 +30,7 @@ static CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
 fn get_client(settings: &kellnr_settings::Proxy) -> &'static Client {
     CLIENT.get_or_init(|| {
         kellnr_common::cratesio_downloader::build_client(
+            &settings.user_agent,
             Duration::from_secs(settings.connect_timeout_seconds),
             Duration::from_secs(settings.request_timeout_seconds),
         )

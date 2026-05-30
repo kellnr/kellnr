@@ -4348,6 +4348,7 @@ name = "kellnr-settings"
 version = "6.3.0"
 dependencies = [
  "clap",
+ "kellnr-common",
  "provcfg",
  "serde",
  "serde_json",
