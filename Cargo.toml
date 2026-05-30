@@ -57,7 +57,7 @@ moka = { version = "0.12.15", features = ["future"] }
 object_store = { version = "0.13.2", default-features = false, features = ["aws", "fs"] }
 openidconnect = "4"
 # `env` comes from provcfg's default features; kellnr opts into the rest.
-# `json` is intentionally left out — kellnr has no JSON config sources.
+# `json` is intentionally left out, kellnr has no JSON config sources.
 provcfg = { version = "0.1.0", features = ["toml", "cli", "clap-derive"] }
 quote = "1.0.45"
 rand = "0.10.1"

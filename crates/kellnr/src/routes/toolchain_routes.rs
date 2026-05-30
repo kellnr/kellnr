@@ -76,7 +76,7 @@ pub fn create_api_routes(_state: AppStateData, max_size: usize) -> OpenApiRouter
 
 /// Creates the toolchain distribution routes (download endpoints)
 pub fn create_dist_routes(_state: AppStateData) -> OpenApiRouter<AppStateData> {
-    // No authentication on dist routes — rustup does not support HTTP authentication
+    // No authentication on dist routes, rustup does not support HTTP authentication
     OpenApiRouter::new()
         // Use a full segment parameter and parse the manifest filename in the handler
         // because Axum doesn't allow parameters in the middle of a path segment
@@ -1007,7 +1007,7 @@ date = "{}"
         toolchain.date
     );
 
-    // [pkg.rust] — the meta-package for the combined archive
+    // [pkg.rust], the meta-package for the combined archive
     let _ = write!(
         manifest,
         r#"
@@ -1051,7 +1051,7 @@ target = "{}"
         }
     }
 
-    // Individual component packages — rustup downloads these one by one
+    // Individual component packages, rustup downloads these one by one
     // Collect unique component names across all targets
     let mut component_pkgs: std::collections::BTreeMap<
         String,
@@ -2123,7 +2123,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_manifest_by_version_falls_back_when_no_channel() {
         let mut mock_db = MockDb::new();
-        // Channel lookup returns None — version "1.0.0" is not a channel name
+        // Channel lookup returns None, version "1.0.0" is not a channel name
         mock_db
             .expect_get_toolchain_by_channel()
             .with(eq("1.0.0"))

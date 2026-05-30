@@ -24,11 +24,20 @@ pub fn doc_extraction_queue(
     cs: Arc<KellnrCrateStorage>,
     docs_path: PathBuf,
     path_prefix: String,
+    cratesio_index: Option<String>,
 ) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-            if let Err(e) = inner_loop(db.clone(), &cs, &docs_path, &path_prefix).await {
+            if let Err(e) = inner_loop(
+                db.clone(),
+                &cs,
+                &docs_path,
+                &path_prefix,
+                cratesio_index.as_deref(),
+            )
+            .await
+            {
                 error!("Rustdoc generation loop failed: {e}");
             }
         }
@@ -40,11 +49,12 @@ async fn inner_loop(
     cs: &KellnrCrateStorage,
     docs_path: &Path,
     path_prefix: &str,
+    cratesio_index: Option<&str>,
 ) -> Result<(), DocsError> {
     let entries = db.get_doc_queue().await?;
 
     for entry in entries {
-        if let Err(e) = extract_docs(&entry, cs, docs_path).await {
+        if let Err(e) = extract_docs(&entry, cs, docs_path, cratesio_index).await {
             error!("Failed to extract docs from crate: {e}");
         } else {
             if let Err(e) = clean_up(&entry.path).await {
@@ -66,6 +76,7 @@ async fn extract_docs(
     doc: &DocQueueEntry,
     cs: &KellnrCrateStorage,
     docs_path: &Path,
+    cratesio_index: Option<&str>,
 ) -> Result<(), DocsError> {
     // Unpack crate
 
@@ -85,7 +96,7 @@ async fn extract_docs(
         .path
         .join(format!("{}-{}", doc.normalized_name, doc.version));
     strip_rust_toolchain_files(generated_docs_path).await?;
-    generate_docs(generated_docs_path)?;
+    generate_docs(generated_docs_path, cratesio_index)?;
 
     // Copy the docs directory
     let from = generated_docs_path.join("target").join("doc");
@@ -149,9 +160,33 @@ async fn copy_dir(from: &Path, to: &Path) -> Result<(), DocsError> {
     Ok(())
 }
 
-fn generate_docs(crate_path: impl AsRef<Path>) -> Result<(), DocsError> {
+/// Build the cargo [`GlobalContext`] used to document a crate.
+///
+/// When a custom crates.io proxy index is configured (`cratesio_index`), point
+/// cargo's `crates-io` source at it via source replacement so dependency
+/// resolution for `cargo doc` honors `proxy.index` instead of fetching from the
+/// upstream `index.crates.io`. See issue #1185.
+fn build_doc_context(cratesio_index: Option<&str>) -> Result<GlobalContext, DocsError> {
+    let mut ctx = GlobalContext::default().map_err(|e| DocsError::CargoError(e.to_string()))?;
+
+    if let Some(index) = cratesio_index {
+        let cli_config = vec![
+            "source.crates-io.replace-with=\"kellnr-proxy\"".to_string(),
+            format!("source.kellnr-proxy.registry=\"sparse+{index}\""),
+        ];
+        ctx.configure(0, false, None, false, false, false, &None, &[], &cli_config)
+            .map_err(|e| DocsError::CargoError(e.to_string()))?;
+    }
+
+    Ok(ctx)
+}
+
+fn generate_docs(
+    crate_path: impl AsRef<Path>,
+    cratesio_index: Option<&str>,
+) -> Result<(), DocsError> {
     let manifest_path = crate_path.as_ref().join("Cargo.toml").canonicalize()?;
-    let ctx = GlobalContext::default().map_err(|e| DocsError::CargoError(e.to_string()))?;
+    let ctx = build_doc_context(cratesio_index)?;
     let workspace =
         Workspace::new(&manifest_path, &ctx).map_err(|e| DocsError::CargoError(e.to_string()))?;
     let compile_opts = CompileOptions {
@@ -176,7 +211,53 @@ fn generate_docs(crate_path: impl AsRef<Path>) -> Result<(), DocsError> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
+    use cargo::core::SourceId;
+    use cargo::sources::SourceConfigMap;
+
     use super::*;
+
+    #[test]
+    fn no_index_override_does_not_inject_proxy_source() {
+        let ctx = build_doc_context(None).unwrap();
+        // Without an override we never define the kellnr-proxy source, so cargo
+        // keeps whatever crates.io source the ambient environment provides
+        // (the upstream index.crates.io in the kellnr container). Asserting on
+        // `crates-io.replace-with` directly would be environment-dependent,
+        // since a developer's ~/.cargo/config.toml may itself replace it.
+        assert!(
+            ctx.get_string("source.kellnr-proxy.registry")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn index_override_replaces_crates_io_source_with_proxy() {
+        let ctx = build_doc_context(Some("https://rsproxy.cn/index/")).unwrap();
+
+        // The CLI config overrides are well-formed and applied by cargo.
+        assert_eq!(
+            ctx.get_string("source.crates-io.replace-with")
+                .unwrap()
+                .map(|v| v.val),
+            Some("kellnr-proxy".to_string())
+        );
+
+        // Cargo's own source resolution maps the crates.io source to the
+        // configured proxy index instead of index.crates.io. See issue #1185.
+        let map = SourceConfigMap::new(&ctx).unwrap();
+        let crates_io = SourceId::crates_io(&ctx).unwrap();
+        let source = map.load(crates_io, &HashSet::new()).unwrap();
+        let replaced = source.replaced_source_id();
+        assert!(!replaced.is_crates_io());
+        assert!(
+            replaced.url().as_str().contains("rsproxy.cn/index/"),
+            "expected replacement source to point at the proxy index, got {}",
+            replaced.url()
+        );
+    }
 
     #[tokio::test]
     async fn strip_rust_toolchain_files_removes_both_variants() {

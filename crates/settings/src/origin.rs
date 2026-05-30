@@ -24,7 +24,7 @@ pub struct Origin {
     /// External port for URLs
     pub port: u16,
 
-    /// Protocol (http or https) — not exposed on the CLI; set via TOML/env
+    /// Protocol (http or https), not exposed on the CLI; set via TOML/env
     #[arg(skip)]
     pub protocol: Protocol,
 

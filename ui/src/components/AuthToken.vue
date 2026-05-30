@@ -186,7 +186,7 @@ async function handleCreateToken() {
 
   if (isSuccess(result)) {
     createdTokenValue.value = result.data.token
-    createStatus.setSuccess("Token created! Copy and save it now — it won't be shown again.")
+    createStatus.setSuccess("Token created! Copy and save it now, it won't be shown again.")
     tokenName.value = ""
     await loadTokens()
   } else {

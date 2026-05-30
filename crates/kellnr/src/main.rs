@@ -329,6 +329,10 @@ async fn init_docs_hosting(
             cs,
             settings.docs_path(),
             settings.origin.path.clone(),
+            settings
+                .proxy
+                .cratesio_index_override()
+                .map(ToString::to_string),
         );
     }
 }

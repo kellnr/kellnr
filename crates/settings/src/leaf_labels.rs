@@ -4,7 +4,7 @@
 //! `StartupConfig.vue`. That table drifted whenever a field was added or
 //! renamed. The Vue file now humanizes the dotted path by default
 //! (`data_dir` → `Data Directory`); this lookup only carries the
-//! *exceptions* — labels
+//! *exceptions*, labels
 //! that the humanizer can't get right because they encode acronyms (DB, URL),
 //! units ("(seconds)", "(MB)"), or a deliberate UI shortening.
 //!
@@ -30,7 +30,7 @@ pub fn leaf_label(dotted_path: &str) -> Option<&'static str> {
         }
         "toolchain.max_size" => "Max Size (MB)",
 
-        // Acronyms — humanizer would emit "Db", "Url", "Api", "Ip", "Http".
+        // Acronyms, humanizer would emit "Db", "Url", "Api", "Ip", "Http".
         "registry.max_db_connections" => "Max DB Connections",
         "registry.token_db_retry_count" => "Token DB Retry Count",
         "proxy.url" => "URL",
@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn returns_none_for_humanizable_keys() {
         // Keys whose humanized form is fine ("Enabled", "Cache Size") have no
-        // override — the UI synthesizes the label client-side.
+        // override, the UI synthesizes the label client-side.
         assert_eq!(leaf_label("docs.enabled"), None);
         assert_eq!(leaf_label("registry.cache_size"), None);
         assert_eq!(leaf_label("not.a.real.key"), None);

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-/// Error returned by settings construction. Aliases [`provcfg::Error`] —
+/// Error returned by settings construction. Aliases [`provcfg::Error`],
 /// every failure surfaces from there (source deserialization or
 /// config-file I/O), so kellnr-side code keeps a domain-flavoured name
 /// without inventing its own opaque box.
@@ -21,7 +21,7 @@ use crate::s3::{S3, S3Args, S3Partial, S3Prov};
 use crate::setup::{Setup, SetupArgs, SetupPartial, SetupProv};
 use crate::toolchain::{Toolchain, ToolchainArgs, ToolchainPartial, ToolchainProv};
 
-/// Pure configuration values — every leaf carries the active value, no
+/// Pure configuration values, every leaf carries the active value, no
 /// provenance attached. Provenance lives on the companion `SettingsProv`,
 /// which is built by [`build_prov_with_cli`] and stored in the app state for
 /// the one handler (`/settings`) that needs it.
@@ -55,7 +55,7 @@ pub struct Settings {
 /// Build a `SettingsProv` from the configured sources: optional TOML file,
 /// `KELLNR_*` environment variables, and optionally a CLI partial.
 ///
-/// Source order matters — later sources override earlier ones (TOML < env < CLI).
+/// Source order matters, later sources override earlier ones (TOML < env < CLI).
 ///
 /// Exposed publicly (in addition to being called by [`crate::cli::parse_cli`])
 /// so consumers like the `kellnr config show` printer can render per-leaf
@@ -176,7 +176,7 @@ mod tests {
         let prov = Config::new().build::<SettingsProv>().unwrap();
         let map = sources_from_prov(&prov);
 
-        // Spot-check a flat leaf and a nested one — every entry must be Default.
+        // Spot-check a flat leaf and a nested one, every entry must be Default.
         assert_eq!(map.get("registry.data_dir"), Some(&ConfigSource::Default));
         assert_eq!(map.get("docs.enabled"), Some(&ConfigSource::Default));
         assert_eq!(map.get("s3.enabled"), Some(&ConfigSource::Default));
@@ -199,7 +199,7 @@ mod tests {
 
         assert_eq!(map.get("registry.data_dir"), Some(&ConfigSource::Toml));
         assert_eq!(map.get("docs.enabled"), Some(&ConfigSource::Toml));
-        // Untouched leaves keep Default — File → Toml mapping must not bleed
+        // Untouched leaves keep Default, File → Toml mapping must not bleed
         // across leaves that the TOML source didn't supply.
         assert_eq!(map.get("registry.cache_size"), Some(&ConfigSource::Default));
         assert_eq!(map.get("s3.enabled"), Some(&ConfigSource::Default));

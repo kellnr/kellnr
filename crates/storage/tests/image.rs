@@ -41,7 +41,7 @@ impl Image for RustFs {
 
     fn ready_conditions(&self) -> Vec<WaitFor> {
         // Wait for the HTTP server to accept connections on port 9000.
-        // RustFS returns 403 on unauthenticated requests, which is fine — it means the server is up.
+        // RustFS returns 403 on unauthenticated requests, which is fine, it means the server is up.
         vec![WaitFor::http(
             HttpWaitStrategy::new("/")
                 .with_port(Self::CONTAINER_PORT)

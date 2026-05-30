@@ -74,7 +74,7 @@ mod tests {
     #[test]
     fn from_category_falls_back_to_default_for_default_category() {
         // The wildcard arm also catches any future `Category` variants provcfg
-        // may add — guarding the kellnr API against silent breakage.
+        // may add, guarding the kellnr API against silent breakage.
         assert_eq!(ConfigSource::from(Category::Default), ConfigSource::Default);
     }
 }
