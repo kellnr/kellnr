@@ -14,6 +14,10 @@ fn default_api_url() -> Url {
     Url::parse("https://crates.io/api/v1/crates/").unwrap()
 }
 
+fn default_user_agent() -> String {
+    kellnr_common::cratesio_downloader::DEFAULT_USER_AGENT.to_string()
+}
+
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
 #[configurable(clap_prefix = "proxy")]
@@ -43,6 +47,12 @@ pub struct Proxy {
     /// Request timeout in seconds for upstream downloads
     #[arg(long = "proxy-request-timeout")]
     pub request_timeout_seconds: u64,
+
+    /// User-agent sent with requests to crates.io. crates.io's data-access
+    /// policy asks for a user-agent that identifies the application and a way
+    /// to get in contact, e.g. "kellnr.io/kellnr (contact@example.com)".
+    #[arg(long = "proxy-user-agent")]
+    pub user_agent: String,
 }
 
 impl Default for Proxy {
@@ -56,6 +66,7 @@ impl Default for Proxy {
             api: default_api_url(),
             connect_timeout_seconds: 5,
             request_timeout_seconds: 30,
+            user_agent: default_user_agent(),
         }
     }
 }
@@ -111,5 +122,24 @@ mod tests {
         let proxy = Proxy::default();
         let url = proxy.api.join("tokio").unwrap();
         assert_eq!(url.as_str(), "https://crates.io/api/v1/crates/tokio");
+    }
+
+    #[test]
+    fn default_user_agent_is_kellnr() {
+        let proxy = Proxy::default();
+        assert_eq!(proxy.user_agent, "kellnr.io/kellnr");
+    }
+
+    #[test]
+    fn missing_user_agent_uses_default() {
+        let proxy: Proxy = toml::from_str("enabled = true").unwrap();
+        assert_eq!(proxy.user_agent, "kellnr.io/kellnr");
+    }
+
+    #[test]
+    fn deserialize_custom_user_agent_from_toml() {
+        let toml = r#"user_agent = "kellnr.io/kellnr (admin@example.com)""#;
+        let proxy: Proxy = toml::from_str(toml).unwrap();
+        assert_eq!(proxy.user_agent, "kellnr.io/kellnr (admin@example.com)");
     }
 }

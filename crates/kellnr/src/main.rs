@@ -203,6 +203,7 @@ async fn run_server(resolved: ResolvedSettings) {
     let download_counter_for_shutdown = download_counter.clone();
 
     let proxy_client = build_client(
+        &settings.proxy.user_agent,
         Duration::from_secs(settings.proxy.connect_timeout_seconds),
         Duration::from_secs(settings.proxy.request_timeout_seconds),
     );

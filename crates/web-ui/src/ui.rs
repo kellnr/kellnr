@@ -13,6 +13,7 @@ use kellnr_settings::{
     erased_serde, leaf_label, sources_from_prov,
 };
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tracing::error;
 use utoipa::ToSchema;
 
@@ -337,11 +338,12 @@ pub async fn cratesio_data(
         .join(&params.name)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let client = reqwest::Client::new();
-    let req = client
-        .get(url)
-        .header("User-Agent", "kellnr")
-        .header("Accept", "application/json");
+    let client = kellnr_common::cratesio_downloader::build_client(
+        &settings.proxy.user_agent,
+        Duration::from_secs(settings.proxy.connect_timeout_seconds),
+        Duration::from_secs(settings.proxy.request_timeout_seconds),
+    );
+    let req = client.get(url).header("Accept", "application/json");
     let resp = req.send().await;
 
     match resp {

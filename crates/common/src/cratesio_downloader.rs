@@ -4,13 +4,25 @@ use std::time::Duration;
 use reqwest::{Client, ClientBuilder, StatusCode, Url};
 use tracing::error;
 
-/// Build a reqwest client with the given timeouts.
-pub fn build_client(connect_timeout: Duration, request_timeout: Duration) -> Client {
+/// Default user-agent sent with requests to crates.io. This is the single source
+/// of truth for the default user-agent across the whole codebase.
+pub const DEFAULT_USER_AGENT: &str = "kellnr.io/kellnr";
+
+/// Build a reqwest client with the given user-agent and timeouts.
+///
+/// If `user_agent` is not a valid HTTP header value, the [`DEFAULT_USER_AGENT`]
+/// is used instead.
+pub fn build_client(
+    user_agent: &str,
+    connect_timeout: Duration,
+    request_timeout: Duration,
+) -> Client {
+    let user_agent = reqwest::header::HeaderValue::from_str(user_agent).unwrap_or_else(|_| {
+        error!("Invalid user-agent {user_agent:?}, falling back to default");
+        reqwest::header::HeaderValue::from_static(DEFAULT_USER_AGENT)
+    });
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        reqwest::header::USER_AGENT,
-        reqwest::header::HeaderValue::from_static("kellnr.io/kellnr"),
-    );
+    headers.insert(reqwest::header::USER_AGENT, user_agent);
     ClientBuilder::new()
         .gzip(true)
         .connect_timeout(connect_timeout)
@@ -20,9 +32,14 @@ pub fn build_client(connect_timeout: Duration, request_timeout: Duration) -> Cli
         .unwrap()
 }
 
-/// Default client with sensible timeouts (5s connect, 30s request).
-pub static CLIENT: std::sync::LazyLock<Client> =
-    std::sync::LazyLock::new(|| build_client(Duration::from_secs(5), Duration::from_secs(30)));
+/// Default client with the default user-agent and sensible timeouts (5s connect, 30s request).
+pub static CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
+    build_client(
+        DEFAULT_USER_AGENT,
+        Duration::from_secs(5),
+        Duration::from_secs(30),
+    )
+});
 
 #[derive(Debug, thiserror::Error)]
 pub enum DownloadCrateError {
