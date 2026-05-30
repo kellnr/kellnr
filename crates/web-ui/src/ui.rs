@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -13,7 +15,6 @@ use kellnr_settings::{
     erased_serde, leaf_label, sources_from_prov,
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use tracing::error;
 use utoipa::ToSchema;
 
