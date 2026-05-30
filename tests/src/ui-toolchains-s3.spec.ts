@@ -45,7 +45,7 @@ test.describe("Toolchain S3 Storage Tests", () => {
 
   // S3 settings
   // RustFS rejects its built-in default credentials on non-loopback
-  // listeners since v1.0.0-alpha.85 — use distinct values for the tests.
+  // listeners since v1.0.0-alpha.85, use distinct values for the tests.
   const s3RootUser = "kellnr-test-access";
   const s3RootPassword = "kellnr-test-secret-1234567890";
   const s3CratesBucket = "kellnr-crates";

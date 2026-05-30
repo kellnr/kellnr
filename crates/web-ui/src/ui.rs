@@ -21,7 +21,7 @@ use utoipa::ToSchema;
 use crate::error::RouteError;
 use crate::session::{AdminUser, MaybeUser};
 
-/// Settings response — the flattened `Settings`, the per-leaf source map
+/// Settings response, the flattened `Settings`, the per-leaf source map
 /// derived from the `SettingsProv`, and the compiled-in defaults the UI
 /// uses to show "default: X" next to overridden values.
 ///
@@ -54,7 +54,7 @@ pub struct LeafMeta {
     /// JSON-flavoured type tag the UI uses to pick a renderer.
     #[serde(rename = "type")]
     pub kind: LeafKind,
-    /// `true` for `#[configurable(secret)]` leaves — the UI masks the value.
+    /// `true` for `#[configurable(secret)]` leaves, the UI masks the value.
     pub secret: bool,
     /// CLI flag string (e.g. `"--registry-data-dir, -d"`) when one exists.
     pub cli_flag: Option<String>,
@@ -100,7 +100,7 @@ fn build_leaves(prov: &SettingsProv) -> Vec<LeafMeta> {
         });
     });
     // Stable order: alphabetic by dotted path. The UI groups by section
-    // prefix anyway, so any consistent order is fine — alphabetic keeps the
+    // prefix anyway, so any consistent order is fine, alphabetic keeps the
     // response diff-friendly across runs.
     leaves.sort_by(|a, b| a.key.cmp(&b.key));
     leaves
@@ -736,7 +736,7 @@ mod tests {
 
         assert_eq!(result_status, StatusCode::OK);
         assert_eq!(result_response.settings, expected_state);
-        // `sources` is structurally part of `SettingsResponse` — successful
+        // `sources` is structurally part of `SettingsResponse`, successful
         // deserialization on line above is sufficient proof it round-trips.
         // The companion test below asserts that an override actually flows
         // into the `sources` map.
@@ -799,7 +799,7 @@ mod tests {
             Some(&ConfigSource::Toml),
             "TOML-set leaf must report ConfigSource::Toml"
         );
-        // An untouched leaf must surface as Default — confirms the map covers
+        // An untouched leaf must surface as Default, confirms the map covers
         // every leaf and that File→Toml mapping doesn't bleed across keys.
         assert_eq!(
             response.sources.get("docs.enabled"),
@@ -824,7 +824,7 @@ mod tests {
         assert_eq!(
             data_dir_leaf.cli_flag.as_deref(),
             Some("--registry-data-dir, -d"),
-            "cli_flag comes from clap reflection — long + short"
+            "cli_flag comes from clap reflection, long + short"
         );
 
         let docs_enabled = response
@@ -836,7 +836,7 @@ mod tests {
         assert_eq!(docs_enabled.source, ConfigSource::Default);
         assert_eq!(docs_enabled.default, serde_json::json!(false));
 
-        // Secret leaves carry the secret flag — the UI uses it to mask the
+        // Secret leaves carry the secret flag, the UI uses it to mask the
         // value before rendering.
         let secret_leaf = response
             .leaves

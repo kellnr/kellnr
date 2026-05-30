@@ -58,7 +58,7 @@ pub async fn init_database(
 /// the migration history when the schema isn't at v5.14.0.
 async fn validate_pre_upgrade(db: &DatabaseConnection) -> Result<(), DbErr> {
     // Check if any old v5 migration entries exist.
-    // If not, this is either a fresh install or already upgraded — skip.
+    // If not, this is either a fresh install or already upgraded, skip.
     if !has_old_migration_entries(db).await? {
         return Ok(());
     }

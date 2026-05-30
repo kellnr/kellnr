@@ -156,7 +156,7 @@ jobs:
           set -euo pipefail
 
           if [ "${DRY_RUN}" = "true" ]; then
-            echo "dry_run=true — not dispatching."
+            echo "dry_run=true, not dispatching."
             exit 0
           fi
 

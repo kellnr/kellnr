@@ -3,7 +3,7 @@
 //! Walks the `SettingsProv` directly via [`provcfg::Provenance::walk_leaves`],
 //! grouping leaves into sections by their first path segment. The walker hands
 //! us `(dotted_path, &dyn erased_serde::Serialize, Category, is_secret)` per
-//! leaf — no re-serialization of `Settings` to `toml::Value` required.
+//! leaf, no re-serialization of `Settings` to `toml::Value` required.
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -31,7 +31,7 @@ fn render(prov: &SettingsProv, options: &ShowConfigOptions) -> String {
 
     prov.walk_leaves("", &mut |path, value, category, is_secret| {
         // Secrets (`#[configurable(secret)]` on the user struct) are never
-        // emitted — `config show` is safe to log.
+        // emitted, `config show` is safe to log.
         if is_secret {
             return;
         }
@@ -95,7 +95,7 @@ fn source_comment(options: &ShowConfigOptions, category: Category) -> &'static s
 }
 
 /// Serialize an erased value through serde into a `toml::Value`. The toml crate
-/// can directly consume any `serde::Serialize` — we shim through `erased_serde`
+/// can directly consume any `serde::Serialize`, we shim through `erased_serde`
 /// so the visitor signature stays type-erased.
 fn toml_from_erased(
     value: &dyn kellnr_settings::erased_serde::Serialize,

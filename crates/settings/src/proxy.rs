@@ -71,6 +71,25 @@ impl Default for Proxy {
     }
 }
 
+impl Proxy {
+    /// The upstream sparse-index URL that internal cargo invocations (e.g. the
+    /// docs builder) should resolve crates.io dependencies from, if it differs
+    /// from the built-in crates.io default.
+    ///
+    /// Returns `None` when the proxy is disabled or the default index is in
+    /// use. In both cases cargo's own default (`index.crates.io`) is correct
+    /// and source replacement would be redundant. When `Some`, callers should
+    /// point cargo's `crates-io` source at this URL so dependency resolution
+    /// honors `proxy.index` instead of hitting crates.io directly. See #1185.
+    pub fn cratesio_index_override(&self) -> Option<&Url> {
+        if self.enabled && self.index != default_index_url() {
+            Some(&self.index)
+        } else {
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,5 +160,31 @@ mod tests {
         let toml = r#"user_agent = "kellnr.io/kellnr (admin@example.com)""#;
         let proxy: Proxy = toml::from_str(toml).unwrap();
         assert_eq!(proxy.user_agent, "kellnr.io/kellnr (admin@example.com)");
+    }
+
+    #[test]
+    fn index_override_none_when_disabled() {
+        let proxy: Proxy = toml::from_str(r#"index = "https://rsproxy.cn/index/""#).unwrap();
+        assert!(!proxy.enabled);
+        assert_eq!(proxy.cratesio_index_override(), None);
+    }
+
+    #[test]
+    fn index_override_none_when_default_index() {
+        let proxy: Proxy = toml::from_str("enabled = true").unwrap();
+        assert_eq!(proxy.cratesio_index_override(), None);
+    }
+
+    #[test]
+    fn index_override_some_when_enabled_and_custom() {
+        let toml = r#"
+            enabled = true
+            index = "https://rsproxy.cn/index/"
+        "#;
+        let proxy: Proxy = toml::from_str(toml).unwrap();
+        assert_eq!(
+            proxy.cratesio_index_override().map(Url::as_str),
+            Some("https://rsproxy.cn/index/")
+        );
     }
 }

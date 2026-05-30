@@ -68,7 +68,7 @@ pub struct ShowConfigOptions {
 }
 
 /// A `Settings` paired with its per-leaf `SettingsProv`. Bundled because every
-/// non-init `CliResult` variant needs both — the active values for runtime use
+/// non-init `CliResult` variant needs both, the active values for runtime use
 /// and the provenance for source attribution (`/settings` API and
 /// `config show`). `prov` is `Arc` so it can move into the app state without a
 /// re-allocation; `SettingsProv` is also large enough that an inline owned
@@ -105,7 +105,7 @@ pub fn parse_cli() -> Result<CliResult, SettingsError> {
             Ok(CliResult::ShowHelp)
         }
 
-        // `config init` doesn't need to merge sources — it writes the
+        // `config init` doesn't need to merge sources, it writes the
         // compiled-in defaults.
         Some(Command::Config {
             action: ConfigAction::Init { output },
@@ -170,7 +170,7 @@ fn build_from_command(
 /// from the actual flags. Output format: `"--registry-data-dir, -d"` (long,
 /// then short if any). Args whose id doesn't follow the `<prefix>-<field>`
 /// convention (e.g. the top-level `--config` flag, clap's built-in `--help`)
-/// are skipped — they don't correspond to a settings leaf.
+/// are skipped, they don't correspond to a settings leaf.
 #[must_use]
 pub fn cli_flag_map() -> HashMap<String, String> {
     let cmd = Cli::command();
@@ -223,11 +223,11 @@ mod tests {
     use super::*;
 
     // Env-source precedence (env wins over TOML, CLI wins over env) is covered
-    // by provcfg's own suite — `full_layered_stack_defaults_toml_env_cli` in
+    // by provcfg's own suite, `full_layered_stack_defaults_toml_env_cli` in
     // `provcfg/src/tests/defaults.rs`. Re-asserting it here would require
     // mutating `KELLNR_*` process env vars, which means `unsafe` (edition 2024)
     // and is forbidden workspace-wide. These tests instead pin down the
-    // kellnr-level wiring — TOML and CLI — through the same `parse_cli` path,
+    // kellnr-level wiring, TOML and CLI, through the same `parse_cli` path,
     // and the `build_prov_with_cli` body documents the env layer's position.
 
     fn write_toml(contents: &str) -> NamedTempFile {
@@ -236,7 +236,7 @@ mod tests {
         file
     }
 
-    /// Drive `Cli::try_parse_from` + `build_from_command` end-to-end — the
+    /// Drive `Cli::try_parse_from` + `build_from_command` end-to-end, the
     /// same code path `parse_cli` takes once `Cli::parse()` has read argv.
     fn run_start(config_file: Option<&Path>, extra_args: &[&str]) -> CliResult {
         let mut argv: Vec<&str> = vec!["kellnr", "start"];
@@ -347,7 +347,7 @@ mod tests {
             map.get("local.port").map(String::as_str),
             Some("--local-port, -p")
         );
-        // The top-level `--config` arg is not a settings leaf — must not leak in.
+        // The top-level `--config` arg is not a settings leaf, must not leak in.
         assert!(
             !map.contains_key("config"),
             "top-level `--config` is not a leaf"

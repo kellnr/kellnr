@@ -86,7 +86,7 @@ import { isSuccess } from "../services/api";
 import ConfigRow from "./ConfigRow.vue";
 import ConfigToolbar from "./ConfigToolbar.vue";
 
-// Presentational metadata only — keys, types, CLI flags, secrets, and labels
+// Presentational metadata only, keys, types, CLI flags, secrets, and labels
 // now come from the backend's `leaves` field. The order of this array defines
 // the section display order; an `enabled` leaf in a section is treated as the
 // section's toggle automatically.
@@ -113,7 +113,7 @@ const sectionDescriptors: SectionDescriptor[] = [
 const WARNING_WHEN_TRUE = new Set<string>(['s3.allow_http']);
 
 // Hidden leaves: sections kellnr defines but the startup-config screen
-// deliberately doesn't expose (e.g. setup credentials, oauth2 — those have
+// deliberately doesn't expose (e.g. setup credentials, oauth2, those have
 // their own admin screens).
 const HIDDEN_SECTIONS = new Set<string>(['setup', 'oauth2']);
 

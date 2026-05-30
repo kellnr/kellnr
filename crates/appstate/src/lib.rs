@@ -48,7 +48,7 @@ pub struct AppStateData {
     pub proxy_client: Client,
 }
 
-/// Build a defaults-only `SettingsProv` — every leaf reports
+/// Build a defaults-only `SettingsProv`, every leaf reports
 /// `Category::Default`. Convenient for ad-hoc test `AppStateData`
 /// construction where the `settings_prov` field isn't otherwise relevant.
 #[must_use]
