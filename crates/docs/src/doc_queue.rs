@@ -84,6 +84,7 @@ async fn extract_docs(
     let generated_docs_path = &doc
         .path
         .join(format!("{}-{}", doc.normalized_name, doc.version));
+    strip_rust_toolchain_files(generated_docs_path).await?;
     generate_docs(generated_docs_path)?;
 
     // Copy the docs directory
@@ -98,6 +99,40 @@ async fn extract_docs(
 
 async fn clean_up(path: &Path) -> Result<(), DocsError> {
     remove_dir_all(path).await?;
+    Ok(())
+}
+
+/// Remove any `rust-toolchain.toml` (or legacy `rust-toolchain`) at the crate
+/// root before invoking cargo.
+///
+/// These files are a rustup feature for pinning a local development or CI
+/// toolchain. They were never intended as a contract with downstream
+/// consumers: the canonical way to declare a minimum supported Rust version
+/// is `package.rust-version` in `Cargo.toml`, which cargo's resolver honors
+/// without swapping out the compiler.
+///
+/// However, cargo does not exclude these files from `cargo publish` by
+/// default, so some crates accidentally ship them. When that happens, the
+/// rustup proxy that backs `rustc` inside the Kellnr container walks up from
+/// the working directory, finds the file, and silently switches to the
+/// pinned toolchain (downloading it if necessary). If the pin predates a
+/// stable feature the crate now relies on (e.g. `check-cfg`), `cargo doc`
+/// fails with errors that look like bugs in the crate or in Kellnr but are
+/// really an invisible toolchain swap. See issue #1176.
+///
+/// Dropping the file here only covers the crate currently being documented.
+/// Transitive dependencies that ship the same accident are unpacked by cargo
+/// into its own registry cache and need `RUSTUP_TOOLCHAIN` set in the
+/// container environment to neutralize.
+async fn strip_rust_toolchain_files(crate_path: &Path) -> Result<(), DocsError> {
+    for name in ["rust-toolchain.toml", "rust-toolchain"] {
+        let path = crate_path.join(name);
+        match tokio::fs::remove_file(&path).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
     Ok(())
 }
 
@@ -137,4 +172,55 @@ fn generate_docs(crate_path: impl AsRef<Path>) -> Result<(), DocsError> {
     };
     ops::doc(&workspace, &options).map_err(|e| DocsError::CargoError(e.to_string()))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn strip_rust_toolchain_files_removes_both_variants() {
+        let dir = tempfile::tempdir().unwrap();
+        let toml_path = dir.path().join("rust-toolchain.toml");
+        let legacy_path = dir.path().join("rust-toolchain");
+        tokio::fs::write(&toml_path, "[toolchain]\nchannel = \"1.65.0\"\n")
+            .await
+            .unwrap();
+        tokio::fs::write(&legacy_path, "1.65.0\n").await.unwrap();
+
+        strip_rust_toolchain_files(dir.path()).await.unwrap();
+
+        assert!(!toml_path.exists());
+        assert!(!legacy_path.exists());
+    }
+
+    #[tokio::test]
+    async fn strip_rust_toolchain_files_noop_when_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let unrelated = dir.path().join("Cargo.toml");
+        tokio::fs::write(&unrelated, "[package]\nname = \"x\"\n")
+            .await
+            .unwrap();
+
+        strip_rust_toolchain_files(dir.path()).await.unwrap();
+
+        assert!(unrelated.exists());
+    }
+
+    #[tokio::test]
+    async fn strip_rust_toolchain_files_only_removes_named_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let toml_path = dir.path().join("rust-toolchain.toml");
+        let cargo_toml = dir.path().join("Cargo.toml");
+        let src = dir.path().join("src");
+        tokio::fs::write(&toml_path, "").await.unwrap();
+        tokio::fs::write(&cargo_toml, "").await.unwrap();
+        tokio::fs::create_dir(&src).await.unwrap();
+
+        strip_rust_toolchain_files(dir.path()).await.unwrap();
+
+        assert!(!toml_path.exists());
+        assert!(cargo_toml.exists());
+        assert!(src.exists());
+    }
 }

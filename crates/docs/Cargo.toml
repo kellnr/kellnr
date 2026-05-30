@@ -38,6 +38,7 @@ zip.workspace = true
 
 [dev-dependencies]
 hyper.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 tower.workspace = true
 
