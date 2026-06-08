@@ -232,7 +232,7 @@ impl IndexMetadata {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IndexDep {
     // Name of the dependency.
     // If the dependency is renamed from the original package name,
@@ -270,7 +270,7 @@ pub struct IndexDep {
     pub package: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub enum DependencyKind {
     Normal,
     Build,

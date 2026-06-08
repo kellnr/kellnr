@@ -1366,15 +1366,13 @@ impl DbProvider for Database {
                         .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
 
                     let mut ft = Vec::new();
-                    for dep in ix {
+
+                    let dep_descs = operations::get_desc_for_deps(&self.db_con, ix.iter()).await?;
+
+                    for dep in &ix {
                         ft.push(CrateRegistryDep::from_index(
-                            operations::get_desc_for_crate_dep(
-                                &self.db_con,
-                                &dep.name,
-                                dep.registry.as_deref(),
-                            )
-                            .await?,
-                            dep,
+                            dep_descs.get(&dep).cloned(),
+                            dep.clone(),
                         ));
                     }
 

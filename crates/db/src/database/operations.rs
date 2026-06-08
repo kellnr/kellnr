@@ -4,7 +4,9 @@
 //! specific operations. Used by the Database impl to keep the main module
 //! focused on the `DbProvider` trait implementation.
 
-use kellnr_common::index_metadata::IndexMetadata;
+use std::collections::HashMap;
+
+use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_entity::{
@@ -21,28 +23,57 @@ use crate::error::DbError;
 use crate::password::{hash_pwd, hash_token};
 use crate::provider::DbResult;
 
-pub async fn get_desc_for_crate_dep<C: ConnectionTrait>(
+pub async fn get_desc_for_deps<'a, C, D>(
     db_con: &C,
-    name: &str,
-    registry: Option<&str>,
-) -> DbResult<Option<String>> {
-    let desc = if registry.unwrap_or_default() == "https://github.com/rust-lang/crates.io-index" {
-        let krate = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(name))
-            .one(db_con)
-            .await?;
-        krate.and_then(|krate| krate.description)
-    } else {
-        // Not a crates.io dependency.
-        // We cannot know that the crate is from this kellnr instance, but we give it a try.
-        let krate = krate::Entity::find()
-            .filter(krate::Column::Name.eq(name))
-            .one(db_con)
-            .await?;
-        krate.and_then(|krate| krate.description)
-    };
+    deps: D,
+) -> DbResult<HashMap<&'a IndexDep, String>>
+where
+    C: ConnectionTrait,
+    D: Iterator<Item = &'a IndexDep>,
+{
+    fn descriptions_by_dep<'a>(
+        models: impl IntoIterator<Item = (String, Option<String>)>,
+        deps: &[&'a IndexDep],
+    ) -> impl Iterator<Item = (&'a IndexDep, String)> {
+        models.into_iter().filter_map(move |(name, description)| {
+            let description = description?;
+            let dep = *deps.iter().find(|d| d.name == name)?;
+            Some((dep, description))
+        })
+    }
 
-    Ok(desc)
+    let mut crates = Vec::new();
+    let mut cratesio_crates = Vec::new();
+
+    for dep in deps {
+        match dep.registry.as_ref() {
+            Some(r) if r == "https://github.com/rust-lang/crates.io-index" => {
+                cratesio_crates.push(dep);
+            }
+            _ => crates.push(dep),
+        }
+    }
+
+    let cratesio_models = cratesio_crate::Entity::find()
+        .filter(cratesio_crate::Column::Name.is_in(cratesio_crates.iter().map(|d| &d.name)))
+        .all(db_con)
+        .await?;
+    let models = krate::Entity::find()
+        .filter(krate::Column::Name.is_in(crates.iter().map(|d| &d.name)))
+        .all(db_con)
+        .await?;
+
+    let res = descriptions_by_dep(
+        cratesio_models.into_iter().map(|m| (m.name, m.description)),
+        &cratesio_crates,
+    )
+    .chain(descriptions_by_dep(
+        models.into_iter().map(|m| (m.name, m.description)),
+        &crates,
+    ))
+    .collect();
+
+    Ok(res)
 }
 
 pub async fn insert_admin_credentials<C: ConnectionTrait>(
