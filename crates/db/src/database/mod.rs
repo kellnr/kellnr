@@ -1371,7 +1371,7 @@ impl DbProvider for Database {
 
                     for dep in &ix {
                         ft.push(CrateRegistryDep::from_index(
-                            dep_descs.get(&dep).cloned(),
+                            dep_descs.get(&dep.name).cloned(),
                             dep.clone(),
                         ));
                     }

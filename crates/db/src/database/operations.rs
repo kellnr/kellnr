@@ -23,27 +23,13 @@ use crate::error::DbError;
 use crate::password::{hash_pwd, hash_token};
 use crate::provider::DbResult;
 
-pub async fn get_desc_for_deps<'a, C, D>(
-    db_con: &C,
-    deps: D,
-) -> DbResult<HashMap<&'a IndexDep, String>>
+pub async fn get_desc_for_deps<'a, C, D>(db_con: &C, deps: D) -> DbResult<HashMap<String, String>>
 where
     C: ConnectionTrait,
     D: Iterator<Item = &'a IndexDep>,
 {
-    fn descriptions_by_dep<'a>(
-        models: impl IntoIterator<Item = (String, Option<String>)>,
-        deps: &[&'a IndexDep],
-    ) -> impl Iterator<Item = (&'a IndexDep, String)> {
-        models.into_iter().filter_map(move |(name, description)| {
-            let description = description?;
-            let dep = *deps.iter().find(|d| d.name == name)?;
-            Some((dep, description))
-        })
-    }
-
-    let mut crates = Vec::new();
     let mut cratesio_crates = Vec::new();
+    let mut crates = Vec::new();
 
     for dep in deps {
         match dep.registry.as_ref() {
@@ -63,17 +49,14 @@ where
         .all(db_con)
         .await?;
 
-    let res = descriptions_by_dep(
-        cratesio_models.into_iter().map(|m| (m.name, m.description)),
-        &cratesio_crates,
-    )
-    .chain(descriptions_by_dep(
-        models.into_iter().map(|m| (m.name, m.description)),
-        &crates,
-    ))
-    .collect();
+    let cratesio_desc = cratesio_models
+        .into_iter()
+        .filter_map(|m| Some((m.name, m.description?)));
+    let local_desc = models
+        .into_iter()
+        .filter_map(|m| Some((m.name, m.description?)));
 
-    Ok(res)
+    Ok(cratesio_desc.chain(local_desc).collect())
 }
 
 pub async fn insert_admin_credentials<C: ConnectionTrait>(
