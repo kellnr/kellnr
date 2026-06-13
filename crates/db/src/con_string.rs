@@ -43,6 +43,14 @@ impl ConString {
             ConString::Sqlite(s) => s.admin_token.clone(),
         }
     }
+
+    /// Maximum lifetime of a session before it is considered expired.
+    pub fn session_age(&self) -> Duration {
+        match self {
+            ConString::Postgres(p) => p.session_age,
+            ConString::Sqlite(s) => s.session_age,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -66,10 +74,19 @@ pub struct PgConString {
     user: String,
     pwd: String,
     admin: AdminUser,
+    pub session_age: Duration,
 }
 
 impl PgConString {
-    pub fn new(addr: &str, port: u16, db: &str, user: &str, pwd: &str, admin: AdminUser) -> Self {
+    pub fn new(
+        addr: &str,
+        port: u16,
+        db: &str,
+        user: &str,
+        pwd: &str,
+        admin: AdminUser,
+        session_age: Duration,
+    ) -> Self {
         Self {
             addr: addr.to_owned(),
             port,
@@ -77,6 +94,7 @@ impl PgConString {
             user: user.to_owned(),
             pwd: pwd.to_owned(),
             admin,
+            session_age,
         }
     }
 }
@@ -94,6 +112,7 @@ impl From<&Settings> for PgConString {
                 token: s.setup.admin_token.clone(),
                 salt: generate_salt(),
             },
+            session_age: Duration::from_secs(s.registry.session_age_seconds),
         }
     }
 }
