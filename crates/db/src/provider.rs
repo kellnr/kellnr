@@ -143,6 +143,9 @@ pub trait DbProvider: Send + Sync {
         count: u64,
     ) -> DbResult<()>;
     async fn validate_session(&self, session_token: &str) -> DbResult<SessionInfo>;
+    /// Delete all sessions that have outlived the configured session age.
+    /// Returns the number of rows removed.
+    async fn delete_expired_sessions(&self) -> DbResult<u64>;
     async fn add_session_token(&self, name: &str, session_token: &str) -> DbResult<()>;
     async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
     async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()>;
@@ -459,6 +462,10 @@ pub mod mock {
             }
 
             async fn validate_session(&self, _session_token: &str) -> DbResult<SessionInfo> {
+                unimplemented!()
+            }
+
+            async fn delete_expired_sessions(&self) -> DbResult<u64> {
                 unimplemented!()
             }
 

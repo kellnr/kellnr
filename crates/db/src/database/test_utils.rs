@@ -371,6 +371,35 @@ pub async fn clean_db(db: &Database, session_age: std::time::Duration) -> DbResu
     Ok(())
 }
 
+/// Insert a session whose `created` timestamp is `age` in the past.
+///
+/// Used to test session-expiry behavior without sleeping: pass an `age`
+/// larger than the configured session age to create an already-expired
+/// session, or a small one to create a still-valid session.
+pub async fn add_aged_session(
+    db: &Database,
+    user_name: &str,
+    token: &str,
+    age: std::time::Duration,
+) -> DbResult<()> {
+    let user = user::Entity::find()
+        .filter(user::Column::Name.eq(user_name))
+        .one(&db.db_con)
+        .await?
+        .ok_or_else(|| DbError::UserNotFound(user_name.to_owned()))?;
+
+    let age = chrono::Duration::from_std(age).expect("session age out of range");
+    let created = (Utc::now() - age).format(DB_DATE_FORMAT).to_string();
+    let s = session::ActiveModel {
+        token: Set(token.to_owned()),
+        created: Set(created),
+        user_fk: Set(user.id),
+        ..Default::default()
+    };
+    s.insert(&db.db_con).await?;
+    Ok(())
+}
+
 /// Get crate meta list by crate ID.
 pub async fn get_crate_meta_list(db: &Database, crate_id: i64) -> DbResult<Vec<CrateMeta>> {
     let cm: Vec<(crate_meta::Model, Option<krate::Model>)> = crate_meta::Entity::find()

@@ -49,13 +49,24 @@ use crate::{
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
+/// Convert a [`std::time::Duration`] to a [`chrono::Duration`], saturating to
+/// the maximum representable value instead of failing on overflow.
+fn to_chrono_duration(d: std::time::Duration) -> chrono::Duration {
+    chrono::Duration::from_std(d).unwrap_or(chrono::Duration::MAX)
+}
+
 pub struct Database {
     db_con: DatabaseConnection,
+    /// Maximum lifetime of a session before it is treated as expired.
+    session_age: chrono::Duration,
 }
 
 impl Database {
-    pub fn existing(db_con: DatabaseConnection) -> Self {
-        Self { db_con }
+    pub fn existing(db_con: DatabaseConnection, session_age: std::time::Duration) -> Self {
+        Self {
+            db_con,
+            session_age: to_chrono_duration(session_age),
+        }
     }
 
     pub async fn new(con: &ConString, max_con: u32) -> Result<Self, DbError> {
@@ -67,7 +78,18 @@ impl Database {
             operations::insert_admin_credentials(&db_con, con).await?;
         }
 
-        Ok(Self { db_con })
+        Ok(Self {
+            db_con,
+            session_age: to_chrono_duration(con.session_age()),
+        })
+    }
+
+    /// Timestamp (in [`DB_DATE_FORMAT`]) before which a session is expired.
+    /// Sessions with a `created` value older than this should not validate.
+    fn session_expiry_cutoff(&self) -> String {
+        (Utc::now() - self.session_age)
+            .format(DB_DATE_FORMAT)
+            .to_string()
     }
 
     /// Looks up a user by name; returns the entity model or [`DbError::UserNotFound`].
@@ -677,9 +699,12 @@ impl DbProvider for Database {
     }
 
     async fn validate_session(&self, session_token: &str) -> DbResult<SessionInfo> {
+        // An expired session is treated like a missing one: the age filter
+        // makes it invisible here so callers get the same SessionNotFound.
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::Session.def())
             .filter(session::Column::Token.eq(session_token))
+            .filter(session::Column::Created.gte(self.session_expiry_cutoff()))
             .one(&self.db_con)
             .await?
             .ok_or(DbError::SessionNotFound)?;
@@ -689,6 +714,14 @@ impl DbProvider for Database {
             is_admin: u.is_admin,
             is_read_only: u.is_read_only,
         })
+    }
+
+    async fn delete_expired_sessions(&self) -> DbResult<u64> {
+        let res = session::Entity::delete_many()
+            .filter(session::Column::Created.lt(self.session_expiry_cutoff()))
+            .exec(&self.db_con)
+            .await?;
+        Ok(res.rows_affected)
     }
 
     async fn add_session_token(&self, name: &str, session_token: &str) -> DbResult<()> {

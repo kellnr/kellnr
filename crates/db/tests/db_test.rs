@@ -1006,6 +1006,60 @@ async fn get_session_no_session_in_db(test_db: &kellnr_db::Database) {
     assert!(test_db.validate_session("no_session_token").await.is_err());
 }
 
+// Test harness configures a 3600s session age (see db-testcontainer).
+#[db_test]
+async fn validate_session_rejects_expired(test_db: &kellnr_db::Database) {
+    add_aged_session(
+        test_db,
+        "admin",
+        "fresh",
+        std::time::Duration::from_secs(60),
+    )
+    .await
+    .unwrap();
+    add_aged_session(
+        test_db,
+        "admin",
+        "stale",
+        std::time::Duration::from_secs(7200),
+    )
+    .await
+    .unwrap();
+
+    // A session within the age window validates.
+    assert!(test_db.validate_session("fresh").await.is_ok());
+    // An expired session is rejected (treated as not found), even though the
+    // row still exists in the DB.
+    assert!(test_db.validate_session("stale").await.is_err());
+}
+
+#[db_test]
+async fn delete_expired_sessions_removes_only_old(test_db: &kellnr_db::Database) {
+    add_aged_session(
+        test_db,
+        "admin",
+        "fresh",
+        std::time::Duration::from_secs(60),
+    )
+    .await
+    .unwrap();
+    add_aged_session(
+        test_db,
+        "admin",
+        "stale",
+        std::time::Duration::from_secs(7200),
+    )
+    .await
+    .unwrap();
+
+    let removed = test_db.delete_expired_sessions().await.unwrap();
+    assert_eq!(removed, 1);
+
+    // The fresh session survived; the expired one was removed.
+    assert!(test_db.validate_session("fresh").await.is_ok());
+    assert!(test_db.validate_session("stale").await.is_err());
+}
+
 #[db_test]
 async fn validate_session_returns_read_only_and_admin_flags(test_db: &kellnr_db::Database) {
     // read-only, non-admin user
