@@ -12,8 +12,9 @@ use axum::http::StatusCode;
 use axum::response::Redirect;
 use axum::{Extension, Json};
 use axum_extra::extract::PrivateCookieJar;
-use kellnr_appstate::{AppState, DbState, SettingsState};
-use kellnr_auth::oauth2::{OAuth2Handler, generate_unique_username};
+use kellnr_appstate::{AppState, AppStateData, DbState, SettingsState};
+use kellnr_auth::oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
+use kellnr_db::User;
 use serde::{Deserialize, Serialize};
 use tracing::{error, trace, warn};
 use utoipa::ToSchema;
@@ -191,7 +192,19 @@ pub async fn callback(
         })? {
         Some(user) => {
             trace!("Found existing user '{}' for OAuth2 identity", user.name);
-            user
+            // Re-sync admin / read-only state from the IdP on every login so
+            // that changes to the user's group membership take effect. Only
+            // flags whose group claim is configured are governed by the IdP;
+            // an unconfigured claim leaves the existing DB value untouched, so
+            // that admins are not silently demoted and manual changes stick.
+            sync_oauth2_privileges(
+                &app_state,
+                handler.admin_claim_configured(),
+                handler.read_only_claim_configured(),
+                user,
+                &user_info,
+            )
+            .await?
         }
         None => {
             // Check if auto-provisioning is enabled
@@ -248,6 +261,68 @@ pub async fn callback(
     Ok((jar, Redirect::to(&base_path)))
 }
 
+/// Re-sync an existing user's admin / read-only state from the current `IdP`
+/// token claims.
+///
+/// A flag is only updated when its group claim is configured (the `IdP` is then
+/// authoritative for it); an unconfigured claim leaves the existing value
+/// untouched, so unconfigured deployments never demote users and manual admin
+/// changes are preserved. When anything changed, the auth-token cache is
+/// invalidated so existing cargo tokens immediately reflect the new
+/// privileges; session auth reads the DB per request and needs no
+/// invalidation.
+async fn sync_oauth2_privileges(
+    app_state: &AppStateData,
+    admin_governed: bool,
+    read_only_governed: bool,
+    mut user: User,
+    user_info: &UserInfo,
+) -> Result<User, RouteError> {
+    let mut changed = false;
+
+    if admin_governed && user.is_admin != user_info.is_admin {
+        app_state
+            .db
+            .change_admin_state(&user.name, user_info.is_admin)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to sync OAuth2 admin state for '{}': {}",
+                    user.name, e
+                );
+                RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            })?;
+        user.is_admin = user_info.is_admin;
+        changed = true;
+    }
+
+    if read_only_governed && user.is_read_only != user_info.is_read_only {
+        app_state
+            .db
+            .change_read_only_state(&user.name, user_info.is_read_only)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to sync OAuth2 read-only state for '{}': {}",
+                    user.name, e
+                );
+                RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            })?;
+        user.is_read_only = user_info.is_read_only;
+        changed = true;
+    }
+
+    if changed {
+        app_state.token_cache.invalidate_all();
+        trace!(
+            "Synced OAuth2 privileges for '{}' (admin: {}, read_only: {})",
+            user.name, user.is_admin, user.is_read_only
+        );
+    }
+
+    Ok(user)
+}
+
 /// Error callback for `OAuth2` flow
 ///
 /// Handles errors from the `OAuth2` provider (e.g., user cancelled, access denied)
@@ -279,4 +354,123 @@ pub async fn error_callback(Query(query): Query<ErrorQuery>) -> Redirect {
     let error_msg = query.error_description.as_deref().unwrap_or(&query.error);
     let encoded_error = urlencoding::encode(error_msg);
     Redirect::to(&format!("/login?error={encoded_error}"))
+}
+
+#[cfg(test)]
+mod sync_tests {
+    use std::sync::Arc;
+
+    use kellnr_db::mock::MockDb;
+    use mockall::predicate::eq;
+
+    use super::*;
+
+    fn user(is_admin: bool, is_read_only: bool) -> User {
+        User {
+            id: 1,
+            name: "alice".to_string(),
+            pwd: String::new(),
+            salt: String::new(),
+            is_admin,
+            is_read_only,
+            created: String::new(),
+        }
+    }
+
+    fn user_info(is_admin: bool, is_read_only: bool) -> UserInfo {
+        UserInfo {
+            subject: "sub".to_string(),
+            email: None,
+            preferred_username: None,
+            groups: vec![],
+            is_admin,
+            is_read_only,
+        }
+    }
+
+    // `MockDb` panics on any method call without a matching expectation, so a
+    // mock with no expectations asserts that the DB is never written to.
+    fn state(db: MockDb) -> AppStateData {
+        AppStateData {
+            db: Arc::new(db),
+            ..kellnr_appstate::test_state()
+        }
+    }
+
+    #[tokio::test]
+    async fn read_only_governed_promotes_user() {
+        let mut db = MockDb::new();
+        db.expect_change_read_only_state()
+            .with(eq("alice"), eq(true))
+            .times(1)
+            .returning(|_, _| Ok(()));
+
+        let result = sync_oauth2_privileges(
+            &state(db),
+            false,
+            true,
+            user(false, false),
+            &user_info(false, true),
+        )
+        .await
+        .unwrap();
+
+        assert!(result.is_read_only);
+    }
+
+    #[tokio::test]
+    async fn admin_governed_demotes_user() {
+        let mut db = MockDb::new();
+        db.expect_change_admin_state()
+            .with(eq("alice"), eq(false))
+            .times(1)
+            .returning(|_, _| Ok(()));
+
+        let result = sync_oauth2_privileges(
+            &state(db),
+            true,
+            false,
+            user(true, false),
+            &user_info(false, false),
+        )
+        .await
+        .unwrap();
+
+        assert!(!result.is_admin);
+    }
+
+    #[tokio::test]
+    async fn unconfigured_claim_leaves_user_untouched() {
+        // Claims not governed by the IdP: the differing claim values must be
+        // ignored and no DB write performed (mock has no expectations).
+        let result = sync_oauth2_privileges(
+            &state(MockDb::new()),
+            false,
+            false,
+            user(true, false),
+            &user_info(false, true),
+        )
+        .await
+        .unwrap();
+
+        assert!(result.is_admin);
+        assert!(!result.is_read_only);
+    }
+
+    #[tokio::test]
+    async fn governed_but_unchanged_is_noop() {
+        // Governed but values already match: no DB write expected.
+        let result = sync_oauth2_privileges(
+            &state(MockDb::new()),
+            true,
+            true,
+            user(true, true),
+            &user_info(true, true),
+        )
+        .await
+        .unwrap();
+
+        assert!(result.is_admin);
+        assert!(result.is_read_only);
+    }
 }
