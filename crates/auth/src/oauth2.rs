@@ -404,6 +404,25 @@ impl OAuth2Handler {
     pub fn settings(&self) -> &OAuth2Settings {
         &self.settings
     }
+
+    /// Whether admin status is governed by an `IdP` group claim.
+    ///
+    /// Only when both the claim name and value are configured does the `IdP`
+    /// act as the source of truth for a user's admin state. Otherwise the
+    /// extracted `is_admin` is always `false` and must not be used to
+    /// overwrite an existing user's state.
+    pub fn admin_claim_configured(&self) -> bool {
+        self.settings.admin_group_claim.is_some() && self.settings.admin_group_value.is_some()
+    }
+
+    /// Whether read-only status is governed by an `IdP` group claim.
+    ///
+    /// See [`Self::admin_claim_configured`]; the same source-of-truth rule
+    /// applies to the read-only flag.
+    pub fn read_only_claim_configured(&self) -> bool {
+        self.settings.read_only_group_claim.is_some()
+            && self.settings.read_only_group_value.is_some()
+    }
 }
 
 /// Extract and decode the payload from a JWT
