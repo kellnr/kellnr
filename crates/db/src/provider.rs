@@ -27,6 +27,14 @@ pub enum PrefetchState {
     NotFound,
 }
 
+/// Authenticated user and privileges resolved from a valid session cookie.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionInfo {
+    pub name: String,
+    pub is_admin: bool,
+    pub is_read_only: bool,
+}
+
 /// Data stored during `OAuth2` authentication flow for CSRF/PKCE verification
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OAuth2StateData {
@@ -134,7 +142,7 @@ pub trait DbProvider: Send + Sync {
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()>;
-    async fn validate_session(&self, session_token: &str) -> DbResult<(String, bool)>;
+    async fn validate_session(&self, session_token: &str) -> DbResult<SessionInfo>;
     async fn add_session_token(&self, name: &str, session_token: &str) -> DbResult<()>;
     async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
     async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()>;
@@ -450,7 +458,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn validate_session(&self, _session_token: &str) -> DbResult<(String, bool)> {
+            async fn validate_session(&self, _session_token: &str) -> DbResult<SessionInfo> {
                 unimplemented!()
             }
 

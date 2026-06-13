@@ -675,9 +675,13 @@ mod tests {
     #[tokio::test]
     async fn settings_no_admin_returns_unauthorized() {
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .returning(|_| Ok(("admin".to_string(), true)));
+        mock_db.expect_validate_session().returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        });
 
         let (settings, storage) = test_deps();
         let r = app(
@@ -695,9 +699,13 @@ mod tests {
     #[tokio::test]
     async fn settings_returns_from_settings() {
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .returning(|_| Ok(("admin".to_string(), true)));
+        mock_db.expect_validate_session().returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        });
 
         let (settings, storage) = test_deps();
         let r = app(
@@ -747,9 +755,13 @@ mod tests {
         use kellnr_settings::{Config, ConfigSource, SettingsProv};
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .returning(|_| Ok(("admin".to_string(), true)));
+        mock_db.expect_validate_session().returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        });
 
         let (settings, storage) = test_deps();
 
@@ -915,7 +927,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("cookie"))
-            .returning(move |_| Ok(("user".to_string(), false)));
+            .returning(move |_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
         let (mut settings, storage) = test_deps();
         settings.docs.enabled = true;
         let r = app(
@@ -950,7 +968,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("cookie"))
-            .returning(move |_| Ok(("user".to_string(), false)));
+            .returning(move |_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_crate_version_exists()
             .with(eq(1), eq("1.0.0"))
@@ -989,7 +1013,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("cookie"))
-            .returning(move |_| Ok(("user".to_string(), false)));
+            .returning(move |_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_crate_version_exists()
             .with(eq(1), eq("1.0.0"))
@@ -1049,7 +1079,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("cookie"))
-            .returning(move |_| Ok(("user".to_string(), false)));
+            .returning(move |_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_crate_version_exists()
             .with(eq(1), eq("1.0.0"))
@@ -1119,7 +1155,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("cookie"))
-            .returning(move |_| Ok(("user".to_string(), true)));
+            .returning(move |_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_crate_version_exists()
             .with(eq(1), eq("1.0.0"))

@@ -576,10 +576,13 @@ mod tests {
         assert!(cache.get("existing_token").await.is_some());
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("test_user".to_string(), false)));
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "test_user".to_string(),
+                is_admin: false,
+                is_read_only: false,
+            })
+        });
         mock_db
             .expect_add_auth_token()
             .times(1)
@@ -631,10 +634,13 @@ mod tests {
         assert!(cache.get("token_to_keep").await.is_some());
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("test_user".to_string(), false)));
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "test_user".to_string(),
+                is_admin: false,
+                is_read_only: false,
+            })
+        });
         mock_db.expect_get_auth_tokens().times(1).returning(|_| {
             Ok(vec![AuthToken::new(
                 1,
@@ -693,10 +699,13 @@ mod tests {
         assert!(cache.get("user_token").await.is_some());
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_delete_user()
             .times(1)
@@ -748,10 +757,13 @@ mod tests {
         assert!(cache.get("user_token").await.is_some());
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_change_read_only_state()
             .times(1)
@@ -792,10 +804,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         // Note: change_read_only_state should NOT be called because self-locking is blocked
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -833,10 +848,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_change_read_only_state()
             .times(1)
@@ -874,10 +892,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_change_read_only_state()
             .times(1)
@@ -927,10 +948,13 @@ mod tests {
         assert!(cache.get("existing_token").await.is_some());
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_add_user()
             .times(1)
@@ -978,10 +1002,13 @@ mod tests {
         assert!(cache.get("existing_token").await.is_some());
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("test_user".to_string(), false)));
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "test_user".to_string(),
+                is_admin: false,
+                is_read_only: false,
+            })
+        });
         mock_db
             .expect_add_auth_token()
             .times(1)
@@ -1034,10 +1061,13 @@ mod tests {
         assert!(cache.get("user_token").await.is_some());
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_change_admin_state()
             .times(1)
@@ -1078,10 +1108,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         // Note: change_admin_state should NOT be called because self-demotion is blocked
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -1117,10 +1150,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("regular_user".to_string(), false))); // NOT admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "regular_user".to_string(),
+                is_admin: false,
+                is_read_only: false,
+            })
+        }); // NOT admin
 
         let state = test_state_with_cache(mock_db, cache.clone());
         let app = Router::new()
@@ -1155,10 +1191,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_change_admin_state()
             .times(1)
@@ -1196,10 +1235,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_change_admin_state()
             .times(1)
@@ -1241,10 +1283,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_change_admin_state()
             .times(1)
@@ -1282,10 +1327,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         // Note: delete_user should NOT be called because self-deletion is blocked
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -1320,10 +1368,13 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
 
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .times(1)
-            .returning(|_| Ok(("admin".to_string(), true))); // Must be admin
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        }); // Must be admin
         mock_db
             .expect_delete_user()
             .times(1)

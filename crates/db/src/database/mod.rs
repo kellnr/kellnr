@@ -39,7 +39,7 @@ use sea_orm::{
 use crate::error::DbError;
 use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{
-    ChannelInfo, DbResult, OAuth2StateData, PrefetchState, ToolchainComponentInfo,
+    ChannelInfo, DbResult, OAuth2StateData, PrefetchState, SessionInfo, ToolchainComponentInfo,
     ToolchainTargetInfo, ToolchainWithTargets,
 };
 use crate::tables::init_database;
@@ -676,7 +676,7 @@ impl DbProvider for Database {
         }
     }
 
-    async fn validate_session(&self, session_token: &str) -> DbResult<(String, bool)> {
+    async fn validate_session(&self, session_token: &str) -> DbResult<SessionInfo> {
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::Session.def())
             .filter(session::Column::Token.eq(session_token))
@@ -684,7 +684,11 @@ impl DbProvider for Database {
             .await?
             .ok_or(DbError::SessionNotFound)?;
 
-        Ok((u.name, u.is_admin))
+        Ok(SessionInfo {
+            name: u.name,
+            is_admin: u.is_admin,
+            is_read_only: u.is_read_only,
+        })
     }
 
     async fn add_session_token(&self, name: &str, session_token: &str) -> DbResult<()> {

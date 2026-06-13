@@ -1212,7 +1212,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db.expect_list_toolchains().returning(|| Ok(vec![]));
 
         let state = create_app_state(Arc::new(mock_db), None);
@@ -1237,7 +1243,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("user_session"))
-            .returning(|_| Ok(("user".to_string(), false)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let state = create_app_state(Arc::new(mock_db), None);
         let router = create_test_router(state);
@@ -1280,7 +1292,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("user_session"))
-            .returning(|_| Ok(("user".to_string(), false)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let state = create_app_state(Arc::new(mock_db), None);
         let router = create_test_router(state);
@@ -1307,7 +1325,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("user_session"))
-            .returning(|_| Ok(("user".to_string(), false)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let state = create_app_state(Arc::new(mock_db), None);
         let router = create_test_router(state);
@@ -1331,7 +1355,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("user_session"))
-            .returning(|_| Ok(("user".to_string(), false)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let state = create_app_state(Arc::new(mock_db), None);
         let router = create_test_router(state);
@@ -1355,7 +1385,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("user_session"))
-            .returning(|_| Ok(("user".to_string(), false)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let state = create_app_state(Arc::new(mock_db), None);
         let router = create_test_router(state);
@@ -1384,7 +1420,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db.expect_list_toolchains().returning(|| {
             Ok(vec![ToolchainWithTargets {
                 id: 1,
@@ -1434,7 +1476,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db.expect_get_channels().returning(|| {
             Ok(vec![ChannelInfo {
                 name: "stable".to_string(),
@@ -1475,7 +1523,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_get_toolchain_by_version()
             .with(eq("rust"), eq("1.0.0"))
@@ -1522,7 +1576,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_get_toolchain_by_version()
             .with(eq("rust"), eq("1.0.0"))
@@ -1575,7 +1635,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_get_toolchain_by_version()
             .with(eq("rust"), eq("1.0.0"))
@@ -1647,7 +1713,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_get_toolchain_by_version()
             .with(eq("rust"), eq("1.0.0"))
@@ -1715,7 +1787,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_get_toolchain_by_version()
             .with(eq("rust"), eq("1.0.0"))
@@ -1787,7 +1865,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_get_toolchain_by_version()
             .with(eq("rust"), eq("99.99.99"))
@@ -1819,7 +1903,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("user_session"))
-            .returning(|_| Ok(("user".to_string(), false)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let state = create_app_state(Arc::new(mock_db), None);
         let router = create_test_router(state);
@@ -1845,7 +1935,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
 
         // No toolchain storage configured
         let state = create_app_state(Arc::new(mock_db), None);
@@ -1882,7 +1978,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_get_toolchain_by_version()
             .with(eq("rust"), eq("1.0.0"))
@@ -1936,7 +2038,13 @@ mod tests {
         mock_db
             .expect_validate_session()
             .with(eq("admin_session"))
-            .returning(|_| Ok(("admin".to_string(), true)));
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
         mock_db
             .expect_get_toolchain_by_version()
             .with(eq("rust"), eq("99.99.99"))

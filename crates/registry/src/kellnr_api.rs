@@ -232,6 +232,11 @@ pub async fn remove_crate_group(
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, String)>,
 ) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
+    // Check if user is read-only and can't remove a crate group.
+    // Admin users bypass this check as they can modify
+    // their read-only status.
+    check_can_modify(&user)?;
+
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &user, &db).await?;
 
@@ -449,6 +454,11 @@ pub async fn add_crate_group(
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, String)>,
 ) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
+    // Check if user is read-only and can't add a crate group.
+    // Admin users bypass this check as they can modify
+    // their read-only status.
+    check_can_modify(&user)?;
+
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &user, &db).await?;
 
@@ -1458,7 +1468,143 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        // Session now decrypts and validates: a logged-in non-owner is
+        // rejected by the ownership check (403), not treated as anonymous.
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+    }
+
+    // A read-only user who is an owner must not be able to modify a crate
+    // through the web session. Read-only state is now resolved for session
+    // auth, so `check_can_modify` rejects the request.
+    #[tokio::test]
+    async fn add_owner_single_read_only_owner_session_is_forbidden() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        // publish crate as admin so `test_lib` exists
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // create a read-only user and make them an owner of the crate
+        kellnr
+            .db
+            .add_user("rouser", "123", "123", false, true)
+            .await
+            .unwrap();
+        kellnr
+            .db
+            .add_owner(
+                &NormalizedName::from_unchecked("test_lib".to_string()),
+                "rouser",
+            )
+            .await
+            .unwrap();
+
+        // create a session for the read-only owner
+        kellnr.db.add_session_token("rouser", "1234").await.unwrap();
+        let cookie_header = test_cookie_helper::cookies::encode_cookies([(
+            kellnr_settings::constants::COOKIE_SESSION_ID,
+            "1234",
+        )]);
+
+        // read-only owner tries to add an owner via the browser session
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/test_lib/owners/admin")
+                    .header(header::COOKIE, cookie_header)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // ReadOnlyModify maps to 400 Bad Request
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // Counterpart to the read-only test: a normal (writable) owner must still
+    // be able to modify the crate through the web session.
+    #[tokio::test]
+    async fn add_owner_single_writable_owner_session_is_allowed() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::new(settings).await;
+
+        // publish crate as admin so `test_lib` exists
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let _ = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // a writable owner and a target user to be added as owner
+        kellnr
+            .db
+            .add_user("rwowner", "123", "123", false, false)
+            .await
+            .unwrap();
+        kellnr
+            .db
+            .add_owner(
+                &NormalizedName::from_unchecked("test_lib".to_string()),
+                "rwowner",
+            )
+            .await
+            .unwrap();
+        kellnr
+            .db
+            .add_user("target", "123", "123", false, false)
+            .await
+            .unwrap();
+
+        // create a session for the writable owner
+        kellnr
+            .db
+            .add_session_token("rwowner", "1234")
+            .await
+            .unwrap();
+        let cookie_header = test_cookie_helper::cookies::encode_cookies([(
+            kellnr_settings::constants::COOKIE_SESSION_ID,
+            "1234",
+        )]);
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/test_lib/owners/target")
+                    .header(header::COOKIE, cookie_header)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
     }
 
     #[tokio::test]
@@ -1511,7 +1657,9 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        // Session now decrypts and validates: a logged-in non-owner is
+        // rejected by the ownership check (403), not treated as anonymous.
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
@@ -2481,6 +2629,9 @@ mod reg_api_tests {
             db: Arc::new(db),
             settings: settings.into(),
             crate_storage: cs.into(),
+            // Use a fixed signing key matching the test cookie helper so that
+            // session cookies actually decrypt and session auth is exercised.
+            signing_key: cookie::Key::from(test_cookie_helper::cookies::TEST_KEY),
             ..kellnr_appstate::test_state()
         };
 
