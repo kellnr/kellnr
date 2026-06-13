@@ -49,26 +49,34 @@ use crate::{
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
-/// Convert a [`std::time::Duration`] to a [`chrono::Duration`], saturating to
-/// the maximum representable value instead of failing on overflow.
-fn to_chrono_duration(d: std::time::Duration) -> chrono::Duration {
-    chrono::Duration::from_std(d).unwrap_or(chrono::Duration::MAX)
+/// Upper bound on the configured session age. Clamping to this keeps cutoff
+/// arithmetic well within `chrono::Duration`/`DateTime` range, avoiding
+/// overflow panics for absurd configuration values.
+const MAX_SESSION_AGE: std::time::Duration =
+    std::time::Duration::from_secs(100 * 365 * 24 * 60 * 60);
+
+/// Resolve a configured session age into the internal expiry duration.
+///
+/// A value of zero means sessions never expire ([`None`]). Any positive value
+/// is clamped to [`MAX_SESSION_AGE`] so cutoff calculations cannot overflow.
+fn session_age_to_duration(d: std::time::Duration) -> Option<chrono::Duration> {
+    if d.is_zero() {
+        return None;
+    }
+    let clamped = d.min(MAX_SESSION_AGE);
+    // `clamped` is at most MAX_SESSION_AGE, which fits comfortably in a
+    // `chrono::Duration`, so the conversion cannot fail.
+    Some(chrono::Duration::from_std(clamped).expect("clamped session age fits chrono::Duration"))
 }
 
 pub struct Database {
     db_con: DatabaseConnection,
-    /// Maximum lifetime of a session before it is treated as expired.
-    session_age: chrono::Duration,
+    /// Maximum lifetime of a session before it is treated as expired, or
+    /// `None` if sessions never expire (configured age of zero).
+    session_age: Option<chrono::Duration>,
 }
 
 impl Database {
-    pub fn existing(db_con: DatabaseConnection, session_age: std::time::Duration) -> Self {
-        Self {
-            db_con,
-            session_age: to_chrono_duration(session_age),
-        }
-    }
-
     pub async fn new(con: &ConString, max_con: u32) -> Result<Self, DbError> {
         let db_con = init_database(con, max_con)
             .await
@@ -80,16 +88,16 @@ impl Database {
 
         Ok(Self {
             db_con,
-            session_age: to_chrono_duration(con.session_age()),
+            session_age: session_age_to_duration(con.session_age()),
         })
     }
 
-    /// Timestamp (in [`DB_DATE_FORMAT`]) before which a session is expired.
-    /// Sessions with a `created` value older than this should not validate.
-    fn session_expiry_cutoff(&self) -> String {
-        (Utc::now() - self.session_age)
-            .format(DB_DATE_FORMAT)
-            .to_string()
+    /// Timestamp (in [`DB_DATE_FORMAT`]) before which a session is expired, or
+    /// `None` when sessions never expire. A session whose `created` value is
+    /// older than the returned cutoff should not validate.
+    fn session_expiry_cutoff(&self) -> Option<String> {
+        self.session_age
+            .map(|age| (Utc::now() - age).format(DB_DATE_FORMAT).to_string())
     }
 
     /// Looks up a user by name; returns the entity model or [`DbError::UserNotFound`].
@@ -701,10 +709,15 @@ impl DbProvider for Database {
     async fn validate_session(&self, session_token: &str) -> DbResult<SessionInfo> {
         // An expired session is treated like a missing one: the age filter
         // makes it invisible here so callers get the same SessionNotFound.
-        let u = user::Entity::find()
+        // With expiry disabled (no cutoff) the filter is omitted.
+        let mut query = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::Session.def())
-            .filter(session::Column::Token.eq(session_token))
-            .filter(session::Column::Created.gte(self.session_expiry_cutoff()))
+            .filter(session::Column::Token.eq(session_token));
+        if let Some(cutoff) = self.session_expiry_cutoff() {
+            query = query.filter(session::Column::Created.gte(cutoff));
+        }
+
+        let u = query
             .one(&self.db_con)
             .await?
             .ok_or(DbError::SessionNotFound)?;
@@ -717,8 +730,12 @@ impl DbProvider for Database {
     }
 
     async fn delete_expired_sessions(&self) -> DbResult<u64> {
+        // Expiry disabled: nothing to remove.
+        let Some(cutoff) = self.session_expiry_cutoff() else {
+            return Ok(0);
+        };
         let res = session::Entity::delete_many()
-            .filter(session::Column::Created.lt(self.session_expiry_cutoff()))
+            .filter(session::Column::Created.lt(cutoff))
             .exec(&self.db_con)
             .await?;
         Ok(res.rows_affected)
@@ -2268,4 +2285,33 @@ impl DbProvider for Database {
 
 fn parse_db_version(value: &str) -> DbResult<Version> {
     Version::try_from(value).map_err(|_| DbError::InvalidVersion(value.to_owned()))
+}
+
+#[cfg(test)]
+mod session_age_tests {
+    use super::{MAX_SESSION_AGE, session_age_to_duration};
+
+    #[test]
+    fn zero_means_never_expire() {
+        assert_eq!(session_age_to_duration(std::time::Duration::ZERO), None);
+    }
+
+    #[test]
+    fn positive_age_is_preserved() {
+        assert_eq!(
+            session_age_to_duration(std::time::Duration::from_secs(3600)),
+            Some(chrono::Duration::seconds(3600))
+        );
+    }
+
+    #[test]
+    fn absurd_age_is_clamped_without_panicking() {
+        // u64::MAX seconds would overflow chrono::Duration if not clamped.
+        let resolved = session_age_to_duration(std::time::Duration::from_secs(u64::MAX))
+            .expect("non-zero age yields Some");
+        assert_eq!(
+            resolved,
+            chrono::Duration::from_std(MAX_SESSION_AGE).unwrap()
+        );
+    }
 }
