@@ -73,8 +73,8 @@ impl FromRequestParts<AppStateData> for AdminUser {
         let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
             Some(cookie) => match state.db.validate_session(cookie.value()).await {
-                Ok((name, true)) => Ok(Self(name)),
-                Ok((_, false)) => Err(RouteError::InsufficientPrivileges),
+                Ok(session) if session.is_admin => Ok(Self(session.name)),
+                Ok(_) => Err(RouteError::InsufficientPrivileges),
                 Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
             },
             None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
@@ -142,10 +142,8 @@ impl FromRequestParts<AppStateData> for MaybeUser {
         let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
             Some(cookie) => match state.db.validate_session(cookie.value()).await {
-                // admin
-                Ok((name, true)) => Ok(Self::Admin(name)),
-                // not admin
-                Ok((name, false)) => Ok(Self::Normal(name)),
+                Ok(session) if session.is_admin => Ok(Self::Admin(session.name)),
+                Ok(session) => Ok(Self::Normal(session.name)),
                 Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
             },
             None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
@@ -164,10 +162,8 @@ impl OptionalFromRequestParts<AppStateData> for MaybeUser {
         let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
             Some(cookie) => match state.db.validate_session(cookie.value()).await {
-                // admin
-                Ok((name, true)) => Ok(Some(Self::Admin(name))),
-                // not admin
-                Ok((name, false)) => Ok(Some(Self::Normal(name))),
+                Ok(session) if session.is_admin => Ok(Some(Self::Admin(session.name))),
+                Ok(session) => Ok(Some(Self::Normal(session.name))),
                 Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
             },
             None => Ok(None),
@@ -263,7 +259,13 @@ mod session_tests {
         mock_db
             .expect_validate_session()
             .with(eq("1234"))
-            .returning(|_st| Ok(("admin".to_string(), true)));
+            .returning(|_st| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
 
         let r = app(Arc::new(mock_db))
             .oneshot(
@@ -286,7 +288,13 @@ mod session_tests {
         mock_db
             .expect_validate_session()
             .with(eq("1234"))
-            .returning(|_st| Ok(("admin".to_string(), false)));
+            .returning(|_st| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let r = app(Arc::new(mock_db))
             .oneshot(
@@ -340,7 +348,13 @@ mod session_tests {
         mock_db
             .expect_validate_session()
             .with(eq("1234"))
-            .returning(|_st| Ok(("normal".to_string(), false)));
+            .returning(|_st| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "normal".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let r = app(Arc::new(mock_db))
             .oneshot(
@@ -360,7 +374,13 @@ mod session_tests {
         mock_db
             .expect_validate_session()
             .with(eq("1234"))
-            .returning(|_st| Ok(("normal".to_string(), true)));
+            .returning(|_st| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "normal".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
 
         let r = app(Arc::new(mock_db))
             .oneshot(
@@ -414,7 +434,13 @@ mod session_tests {
         mock_db
             .expect_validate_session()
             .with(eq("1234"))
-            .returning(|_st| Ok(("guest".to_string(), false)));
+            .returning(|_st| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "guest".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let r = app(Arc::new(mock_db))
             .oneshot(
@@ -434,7 +460,13 @@ mod session_tests {
         mock_db
             .expect_validate_session()
             .with(eq("1234"))
-            .returning(|_st| Ok(("guest".to_string(), true)));
+            .returning(|_st| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "guest".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
 
         let r = app(Arc::new(mock_db))
             .oneshot(
@@ -553,7 +585,13 @@ mod auth_middleware_tests {
         mock_db
             .expect_validate_session()
             .with(eq("1234"))
-            .returning(|_st| Ok(("guest".to_string(), false)));
+            .returning(|_st| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "guest".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
 
         let r = app_required_auth(Arc::new(mock_db))
             .oneshot(

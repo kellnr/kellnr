@@ -949,8 +949,8 @@ async fn clean_db_after_time(test_db: &kellnr_db::Database) {
         .add_session_token("admin", "session_token")
         .await
         .unwrap();
-    let (name, _) = test_db.validate_session("session_token").await.unwrap();
-    assert_eq!("admin", name);
+    let session = test_db.validate_session("session_token").await.unwrap();
+    assert_eq!("admin", session.name);
 
     let duration = std::time::Duration::from_secs(2);
     std::thread::sleep(duration);
@@ -967,8 +967,8 @@ async fn delete_session_token_works(test_db: &kellnr_db::Database) {
         .add_session_token("admin", "session_token")
         .await
         .unwrap();
-    let (name, _) = test_db.validate_session("session_token").await.unwrap();
-    assert_eq!("admin", name);
+    let session = test_db.validate_session("session_token").await.unwrap();
+    assert_eq!("admin", session.name);
 
     test_db.delete_session_token("session_token").await.unwrap();
 
@@ -982,8 +982,8 @@ async fn delete_session_token_no_token(test_db: &kellnr_db::Database) {
         .add_session_token("admin", "session_token")
         .await
         .unwrap();
-    let (name, _) = test_db.validate_session("session_token").await.unwrap();
-    assert_eq!("admin", name);
+    let session = test_db.validate_session("session_token").await.unwrap();
+    assert_eq!("admin", session.name);
 
     let r = test_db.delete_session_token("no_token").await;
 
@@ -996,14 +996,41 @@ async fn get_name_valid_user_and_token(test_db: &kellnr_db::Database) {
         .add_session_token("admin", "session_token")
         .await
         .unwrap();
-    let (name, _) = test_db.validate_session("session_token").await.unwrap();
+    let session = test_db.validate_session("session_token").await.unwrap();
 
-    assert_eq!("admin", name);
+    assert_eq!("admin", session.name);
 }
 
 #[db_test]
 async fn get_session_no_session_in_db(test_db: &kellnr_db::Database) {
     assert!(test_db.validate_session("no_session_token").await.is_err());
+}
+
+#[db_test]
+async fn validate_session_returns_read_only_and_admin_flags(test_db: &kellnr_db::Database) {
+    // read-only, non-admin user
+    test_db
+        .add_user("rouser", "pwd", "salt", false, true)
+        .await
+        .unwrap();
+    test_db
+        .add_session_token("rouser", "ro_session")
+        .await
+        .unwrap();
+
+    let session = test_db.validate_session("ro_session").await.unwrap();
+    assert_eq!("rouser", session.name);
+    assert!(!session.is_admin);
+    assert!(session.is_read_only);
+
+    // default admin user is an admin and not read-only
+    test_db
+        .add_session_token("admin", "admin_session")
+        .await
+        .unwrap();
+    let admin = test_db.validate_session("admin_session").await.unwrap();
+    assert!(admin.is_admin);
+    assert!(!admin.is_read_only);
 }
 
 #[db_test]

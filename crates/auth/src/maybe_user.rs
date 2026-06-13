@@ -4,6 +4,7 @@ use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum_extra::extract::PrivateCookieJar;
 use kellnr_appstate::AppStateData;
+use kellnr_db::SessionInfo;
 use kellnr_settings::constants;
 
 use crate::token;
@@ -24,13 +25,11 @@ impl MaybeUser {
         }
     }
 
-    pub fn from_session(name: String, is_admin: bool) -> Self {
+    pub fn from_session(session: SessionInfo) -> Self {
         Self {
-            name,
-            is_admin,
-            // Session auth does not currently expose read-only state.
-            // Treat as not read-only for API actions.
-            is_read_only: false,
+            name: session.name,
+            is_admin: session.is_admin,
+            is_read_only: session.is_read_only,
         }
     }
 }
@@ -57,12 +56,12 @@ impl FromRequestParts<AppStateData> for MaybeUser {
             .get(constants::COOKIE_SESSION_ID)
             .ok_or(StatusCode::UNAUTHORIZED)?;
 
-        let (name, is_admin) = state
+        let session = state
             .db
             .validate_session(session_cookie.value())
             .await
             .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-        Ok(Self::from_session(name, is_admin))
+        Ok(Self::from_session(session))
     }
 }
