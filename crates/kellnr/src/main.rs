@@ -202,23 +202,27 @@ async fn run_server(resolved: ResolvedSettings) {
 
     // Periodically remove sessions that have outlived `session_age_seconds`.
     // validate_session already rejects expired sessions on read; this keeps the
-    // session table from growing unbounded. Run at most hourly, at least every
-    // minute, and once immediately on startup to clear sessions left by a
-    // previous run.
-    let session_cleanup_interval = settings.registry.session_age_seconds.clamp(60, 3600);
-    let session_cleanup_db = db.clone();
-    trace!("Starting session cleanup task (interval: {session_cleanup_interval}s)");
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(session_cleanup_interval));
-        loop {
-            interval.tick().await;
-            match session_cleanup_db.delete_expired_sessions().await {
-                Ok(n) if n > 0 => trace!("Removed {n} expired session(s)"),
-                Ok(_) => {}
-                Err(e) => warn!("Failed to delete expired sessions: {e}"),
+    // session table from growing unbounded. A configured age of zero disables
+    // expiry, so the cleanup task is not started. Otherwise run at most hourly,
+    // at least every minute, and once immediately on startup to clear sessions
+    // left by a previous run.
+    let session_age_seconds = settings.registry.session_age_seconds;
+    if session_age_seconds > 0 {
+        let session_cleanup_interval = session_age_seconds.clamp(60, 3600);
+        let session_cleanup_db = db.clone();
+        trace!("Starting session cleanup task (interval: {session_cleanup_interval}s)");
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(session_cleanup_interval));
+            loop {
+                interval.tick().await;
+                match session_cleanup_db.delete_expired_sessions().await {
+                    Ok(n) if n > 0 => trace!("Removed {n} expired session(s)"),
+                    Ok(_) => {}
+                    Err(e) => warn!("Failed to delete expired sessions: {e}"),
+                }
             }
-        }
-    });
+        });
+    }
 
     let download_counter_for_shutdown = download_counter.clone();
 
