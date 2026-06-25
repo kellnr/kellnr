@@ -216,13 +216,9 @@ impl IndexMetadata {
     }
 
     pub fn serialize_indices(indices: &[IndexMetadata]) -> Result<String, serde_json::Error> {
-        let indices = indices
-            .iter()
-            .map(serde_json::to_string)
-            .collect::<Result<Vec<_>, serde_json::Error>>()?;
         let mut index = String::new();
-        for ix in &indices {
-            writeln!(&mut index, "{ix}").unwrap();
+        for ix in indices {
+            writeln!(&mut index, "{}", serde_json::to_string(ix)?).unwrap();
         }
         Ok(index)
     }
