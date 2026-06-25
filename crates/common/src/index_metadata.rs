@@ -221,12 +221,8 @@ impl IndexMetadata {
             .map(serde_json::to_string)
             .collect::<Result<Vec<_>, serde_json::Error>>()?;
         let mut index = String::new();
-        for (i, ix) in indices.iter().enumerate() {
-            if i == indices.len() - 1 {
-                write!(&mut index, "{ix}").unwrap();
-            } else {
-                writeln!(&mut index, "{ix}").unwrap();
-            }
+        for ix in &indices {
+            writeln!(&mut index, "{ix}").unwrap();
         }
         Ok(index)
     }
@@ -552,5 +548,42 @@ mod tests {
         assert_eq!(pubtime.hour(), 9);
         assert_eq!(pubtime.minute(), 5);
         assert_eq!(pubtime.second(), 7);
+    }
+
+    #[test]
+    fn serialize_indices_ends_with_newline_and_one_line_per_entry() {
+        let mk = |vers: &str| IndexMetadata {
+            name: "crate".to_string(),
+            vers: vers.to_string(),
+            deps: vec![],
+            cksum: "cksum".to_string(),
+            features: BTreeMap::default(),
+            yanked: false,
+            links: None,
+            pubtime: None,
+            v: Some(1),
+            features2: None,
+        };
+        let indices = vec![mk("1.0.0"), mk("2.0.0")];
+
+        let out = IndexMetadata::serialize_indices(&indices).unwrap();
+
+        // crates.io terminates the sparse-index body with a trailing newline,
+        // including after the final entry. Cargo tolerates a missing final
+        // newline, but `cargo install-update` / `cargo outdated` stream the body
+        // and treat an unterminated last line as "trailing garbage". Guard
+        // against regressing to `write!` (no newline) on the last line.
+        assert!(
+            out.ends_with('\n'),
+            "sparse index body must end with a newline, got: {out:?}"
+        );
+
+        // Exactly one newline-terminated JSON line per entry; no blank trailing line.
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines.len(), indices.len());
+        for (line, meta) in lines.iter().zip(&indices) {
+            let parsed: IndexMetadata = serde_json::from_str(line).unwrap();
+            assert_eq!(parsed.vers, meta.vers);
+        }
     }
 }
