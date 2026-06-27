@@ -54,7 +54,7 @@ include_dir = "0.7.4"
 mime_guess = "2.0.5"
 mockall = "0.14.0"
 moka = { version = "0.12.15", features = ["future"] }
-object_store = { version = "0.13.2", default-features = false, features = ["aws", "fs"] }
+object_store = { version = "0.14.0", default-features = false, features = ["aws", "fs"] }
 openidconnect = "4"
 # `env` comes from provcfg's default features; kellnr opts into the rest.
 # `json` is intentionally left out, kellnr has no JSON config sources.
