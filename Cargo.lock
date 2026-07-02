@@ -4187,7 +4187,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4229,7 +4229,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-appstate"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4244,7 +4244,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-auth"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4272,7 +4272,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-common"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "chrono",
@@ -4293,7 +4293,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-db"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "chrono",
  "kellnr-common",
@@ -4316,7 +4316,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-db-testcontainer"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "quote",
  "syn 2.0.118",
@@ -4324,7 +4324,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-docs"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "cargo",
@@ -4354,7 +4354,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-embedded-resources"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "bytes",
@@ -4365,7 +4365,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-entity"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "sea-orm",
  "uuid",
@@ -4373,7 +4373,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-error"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "kellnr-common",
@@ -4385,7 +4385,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-index"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "chrono",
@@ -4410,7 +4410,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-migration"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "async-std",
  "chrono",
@@ -4427,7 +4427,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-registry"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "bytes",
@@ -4459,7 +4459,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-rustfs-testcontainer"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "quote",
  "syn 2.0.118",
@@ -4467,7 +4467,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-settings"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "clap",
  "kellnr-common",
@@ -4483,7 +4483,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-storage"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4500,7 +4500,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-web-ui"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4530,7 +4530,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-webhooks"
-version = "6.5.0"
+version = "6.5.1"
 dependencies = [
  "axum",
  "chrono",
