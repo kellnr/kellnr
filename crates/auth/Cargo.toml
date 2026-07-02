@@ -33,6 +33,7 @@ url.workspace = true
 
 
 [dev-dependencies]
+chrono.workspace = true
 hyper.workspace = true
 mockall.workspace = true
 sea-orm.workspace = true
