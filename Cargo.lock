@@ -1041,7 +1041,7 @@ dependencies = [
  "pasetors",
  "pathdiff",
  "portable-atomic",
- "rand 0.10.1",
+ "rand 0.10.2",
  "regex",
  "rusqlite",
  "rustc-hash",
@@ -2126,7 +2126,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee93edf3c501f0035bbeffeccfed0b79e14c311f12195ec0e661e114a0f60da4"
 dependencies = [
  "portable-atomic",
- "rand 0.10.1",
+ "rand 0.10.2",
  "web-time",
 ]
 
@@ -4258,7 +4258,7 @@ dependencies = [
  "kellnr-settings",
  "mockall",
  "openidconnect",
- "rand 0.10.1",
+ "rand 0.10.2",
  "reqwest 0.13.4",
  "sea-orm",
  "serde",
@@ -4278,7 +4278,7 @@ dependencies = [
  "axum",
  "chrono",
  "moka",
- "rand 0.10.1",
+ "rand 0.10.2",
  "regex",
  "reqwest 0.13.4",
  "sea-orm",
@@ -4445,7 +4445,7 @@ dependencies = [
  "kellnr-storage",
  "kellnr-webhooks",
  "mockall",
- "rand 0.10.1",
+ "rand 0.10.2",
  "reqwest 0.13.4",
  "rm_rf",
  "serde",
@@ -5348,7 +5348,7 @@ dependencies = [
  "parking_lot",
  "percent-encoding",
  "quick-xml",
- "rand 0.10.1",
+ "rand 0.10.2",
  "reqwest 0.13.4",
  "rustls-pki-types",
  "serde",
@@ -6174,9 +6174,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2e8e8bcc7961af1fdac401278c6a831614941f6164ee3bf4ce61b7edb162207"
+checksum = "c7f5fa3a058cd35567ef9bfa5e75732bee0f9e4c55fa90477bef2dfcdbc4be80"
 dependencies = [
  "chacha20",
  "getrandom 0.4.1",
@@ -7465,7 +7465,7 @@ dependencies = [
  "log",
  "md-5",
  "memchr",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -7690,7 +7690,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.1",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.52.0",
