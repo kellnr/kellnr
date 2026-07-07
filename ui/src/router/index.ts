@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { auth_required } from "../common/auth";
 import { useStore } from "../store/store";
+import { settingsService } from "../services";
+import { isSuccess } from "../services/api";
+import { OAUTH2_LOGIN } from "../remote-routes";
 
 const Crates = () => import("../views/Crates.vue")
 const Login = () => import("../views/Login.vue")
@@ -98,6 +101,15 @@ router.beforeEach(async (to) => {
     } else {
       // Not logged in - go to login with redirect flag
       return { name: 'Login', query: { redirect: 'me' } }
+    }
+  }
+
+  // With auto_redirect enabled, skip the login page and go straight to the provider.
+  if (to.name === 'Login' && !('error' in to.query)) {
+    const cfg = await settingsService.getOAuth2Config()
+    if (isSuccess(cfg) && cfg.data.enabled && cfg.data.auto_redirect) {
+      window.location.href = OAUTH2_LOGIN
+      return false
     }
   }
 

@@ -31,6 +31,10 @@ export interface PasswordResetResponse {
   new_pwd: string
 }
 
+export interface LogoutResponse {
+  logout_url: string | null
+}
+
 export interface ReadOnlyRequest {
   state: boolean
 }

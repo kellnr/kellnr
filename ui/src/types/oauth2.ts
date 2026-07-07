@@ -10,4 +10,8 @@ export interface OAuth2Config {
   enabled: boolean
   /** Text to display on the OAuth2 login button */
   button_text: string
+  /** Whether local password login is disabled (SSO-only) */
+  enforced: boolean
+  /** Whether the login page should redirect straight to the SSO provider */
+  auto_redirect: boolean
 }
