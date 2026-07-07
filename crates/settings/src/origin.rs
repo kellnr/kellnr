@@ -42,3 +42,17 @@ impl Default for Origin {
         }
     }
 }
+
+impl Origin {
+    pub fn base_url(&self) -> String {
+        let path_prefix = self.path.trim().trim_end_matches('/');
+        if self.port == 443 || self.port == 80 {
+            format!("{}://{}{}", self.protocol, self.hostname, path_prefix)
+        } else {
+            format!(
+                "{}://{}:{}{}",
+                self.protocol, self.hostname, self.port, path_prefix
+            )
+        }
+    }
+}

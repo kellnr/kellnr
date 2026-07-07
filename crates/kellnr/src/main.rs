@@ -112,6 +112,11 @@ async fn run_server(resolved: ResolvedSettings) {
         std::process::exit(1);
     }
 
+    if let Err(e) = settings.oauth2.validate() {
+        eprintln!("Error: invalid OAuth2 configuration: {e}");
+        std::process::exit(1);
+    }
+
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber
@@ -401,24 +406,7 @@ async fn init_oauth2_handler(settings: &Settings) -> Option<Arc<OAuth2Handler>> 
         return None;
     }
 
-    // Construct the callback URL based on settings
-    let protocol = &settings.origin.protocol; // Protocol enum implements Display
-    let host = &settings.origin.hostname;
-    let port = settings.origin.port;
-
-    // FIX: Normalize path prefix to avoid double slashes
-    let raw_path = settings.origin.path.trim();
-    let path_prefix = if raw_path.is_empty() || raw_path == "/" {
-        String::new()
-    } else {
-        raw_path.trim_end_matches('/').to_string()
-    };
-
-    let callback_url = if port == 443 || port == 80 {
-        format!("{protocol}://{host}{path_prefix}/api/v1/oauth2/callback")
-    } else {
-        format!("{protocol}://{host}:{port}{path_prefix}/api/v1/oauth2/callback")
-    };
+    let callback_url = format!("{}/api/v1/oauth2/callback", settings.origin.base_url());
 
     match OAuth2Handler::from_discovery(&settings.oauth2, &callback_url).await {
         Ok(handler) => Some(Arc::new(handler)),

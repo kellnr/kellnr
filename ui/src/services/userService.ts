@@ -8,6 +8,7 @@ import type {
   UserCredentials,
   LoginCredentials,
   LoginResponse,
+  LogoutResponse,
   PasswordResetResponse,
   ReadOnlyRequest,
   AdminRequest,
@@ -104,8 +105,8 @@ export async function login(credentials: LoginCredentials): Promise<ApiResult<Lo
 /**
  * Logout the current user
  */
-export async function logout(): Promise<ApiResult<void>> {
-  return apiPost<void>(LOGOUT, null, undefined, {
+export async function logout(): Promise<ApiResult<LogoutResponse>> {
+  return apiPost<LogoutResponse>(LOGOUT, null, undefined, {
     redirectOnAuthError: false,
   })
 }

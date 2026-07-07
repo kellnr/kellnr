@@ -10,13 +10,13 @@ use kellnr_settings::OAuth2 as OAuth2Settings;
 use openidconnect::core::{
     CoreAuthDisplay, CoreAuthPrompt, CoreAuthenticationFlow, CoreClient, CoreErrorResponseType,
     CoreGenderClaim, CoreIdTokenClaims, CoreJsonWebKey, CoreJweContentEncryptionAlgorithm,
-    CoreProviderMetadata, CoreRevocationErrorResponse, CoreTokenIntrospectionResponse,
-    CoreTokenResponse,
+    CoreRevocationErrorResponse, CoreTokenIntrospectionResponse, CoreTokenResponse,
 };
 use openidconnect::{
     AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret, CsrfToken,
     EmptyAdditionalClaims, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, Nonce,
-    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse, reqwest,
+    PkceCodeChallenge, PkceCodeVerifier, ProviderMetadataWithLogout, RedirectUrl, Scope,
+    TokenResponse, reqwest,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -109,6 +109,8 @@ pub struct TokenResult {
     pub claims: CoreIdTokenClaims,
     /// Raw JWT payload for extracting additional claims
     pub raw_payload: serde_json::Value,
+    /// Raw ID token JWT, used as `id_token_hint` for RP-initiated logout
+    pub id_token: String,
 }
 
 /// OAuth2/OIDC authentication handler
@@ -122,6 +124,7 @@ pub struct OAuth2Handler {
     settings: Arc<OAuth2Settings>,
     issuer_url: IssuerUrl,
     http_client: reqwest::Client,
+    end_session_endpoint: Option<String>,
 }
 
 impl OAuth2Handler {
@@ -169,8 +172,10 @@ impl OAuth2Handler {
 
         let redirect_url = RedirectUrl::new(redirect_url.to_string())?;
 
-        // Perform OIDC discovery and build the client from provider metadata
-        let client = Self::discover_client(
+        // Perform OIDC discovery and build the client from provider metadata.
+        // The same discovery fetch also yields the optional RP-initiated logout
+        // endpoint, which the openidconnect client does not expose.
+        let (client, end_session_endpoint) = Self::discover_client(
             &issuer_url,
             &client_id,
             client_secret.as_ref(),
@@ -187,29 +192,56 @@ impl OAuth2Handler {
             settings: Arc::new(settings.clone()),
             issuer_url,
             http_client,
+            end_session_endpoint,
         })
     }
 
     /// Perform OIDC discovery and build a configured client from the fetched
-    /// provider metadata (which includes the current JWKS signing keys).
+    /// provider metadata (which includes the current JWKS signing keys). Also
+    /// returns the optional `end_session_endpoint` (RP-Initiated Logout 1.0)
+    /// read from the same discovery document.
     async fn discover_client(
         issuer_url: &IssuerUrl,
         client_id: &ClientId,
         client_secret: Option<&ClientSecret>,
         redirect_url: &RedirectUrl,
         http_client: &reqwest::Client,
-    ) -> Result<ConfiguredCoreClient, OAuth2Error> {
+    ) -> Result<(ConfiguredCoreClient, Option<String>), OAuth2Error> {
         let provider_metadata =
-            CoreProviderMetadata::discover_async(issuer_url.clone(), http_client)
+            ProviderMetadataWithLogout::discover_async(issuer_url.clone(), http_client)
                 .await
                 .map_err(|e| OAuth2Error::DiscoveryError(e.to_string()))?;
 
-        Ok(CoreClient::from_provider_metadata(
+        let end_session_endpoint = provider_metadata
+            .additional_metadata()
+            .end_session_endpoint
+            .as_ref()
+            .map(ToString::to_string);
+
+        let client = CoreClient::from_provider_metadata(
             provider_metadata,
             client_id.clone(),
             client_secret.cloned(),
         )
-        .set_redirect_uri(redirect_url.clone()))
+        .set_redirect_uri(redirect_url.clone());
+
+        Ok((client, end_session_endpoint))
+    }
+
+    /// Build the RP-initiated logout URL to end the provider session, or `None`
+    /// if the provider does not advertise an `end_session_endpoint`.
+    pub fn end_session_url(
+        &self,
+        id_token_hint: &str,
+        post_logout_redirect_uri: &str,
+    ) -> Option<String> {
+        let endpoint = self.end_session_endpoint.as_ref()?;
+        let mut url = Url::parse(endpoint).ok()?;
+        url.query_pairs_mut()
+            .append_pair("id_token_hint", id_token_hint)
+            .append_pair("client_id", self.client_id.as_str())
+            .append_pair("post_logout_redirect_uri", post_logout_redirect_uri);
+        Some(url.into())
     }
 
     fn current_client(&self) -> Arc<ConfiguredCoreClient> {
@@ -232,7 +264,7 @@ impl OAuth2Handler {
             &self.http_client,
         )
         .await
-        .map(Arc::new)
+        .map(|(client, _end_session_endpoint)| Arc::new(client))
     }
 
     /// Generate an authorization URL for the `OAuth2` flow
@@ -335,6 +367,7 @@ impl OAuth2Handler {
         Ok(TokenResult {
             claims,
             raw_payload,
+            id_token: id_token.to_string(),
         })
     }
 

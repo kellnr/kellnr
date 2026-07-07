@@ -32,12 +32,23 @@ pub(crate) async fn create_session_jar(
             RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
     let session_age_seconds = app_state.settings.registry.session_age_seconds as i64;
-    Ok(cookies.add(
-        Cookie::build((COOKIE_SESSION_ID, session_token))
-            .max_age(Duration::seconds(session_age_seconds))
-            .same_site(SameSite::Strict)
-            .path("/"),
-    ))
+    Ok(cookies.add(session_cookie(
+        COOKIE_SESSION_ID,
+        session_token,
+        session_age_seconds,
+    )))
+}
+
+pub(crate) fn session_cookie(
+    name: &'static str,
+    value: String,
+    session_age_seconds: i64,
+) -> Cookie<'static> {
+    Cookie::build((name, value))
+        .max_age(Duration::seconds(session_age_seconds))
+        .same_site(SameSite::Strict)
+        .path("/")
+        .into()
 }
 
 pub trait Name {

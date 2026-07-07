@@ -5,3 +5,5 @@ pub const MIN_BODY_CRATE_AND_DOC_BYTES: usize = 10;
 pub const COOKIE_SESSION_ID: &str = "kellnr_session_id";
 
 pub const COOKIE_SESSION_USER: &str = "kellnr_session_user";
+
+pub const COOKIE_OIDC_ID_TOKEN: &str = "kellnr_oidc_id_token";

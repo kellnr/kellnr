@@ -17,6 +17,7 @@ fn default_button_text() -> String {
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
 #[serde(default)]
 #[configurable(clap_prefix = "oauth2")]
+#[allow(clippy::struct_excessive_bools)]
 pub struct OAuth2 {
     /// Enable `OAuth2`/OIDC authentication
     pub enabled: bool,
@@ -54,6 +55,12 @@ pub struct OAuth2 {
 
     /// Text displayed on the `OAuth2` login button
     pub button_text: String,
+
+    /// Enforce SSO-only login, disabling local password login/change/reset and user creation (requires `enabled`)
+    pub enforced: bool,
+
+    /// Skip the login page and redirect straight to the SSO provider (requires `enforced`)
+    pub auto_redirect: bool,
 }
 
 impl Default for OAuth2 {
@@ -70,6 +77,8 @@ impl Default for OAuth2 {
             read_only_group_claim: None,
             read_only_group_value: None,
             button_text: default_button_text(),
+            enforced: false,
+            auto_redirect: false,
         }
     }
 }
@@ -78,6 +87,18 @@ impl OAuth2 {
     /// Validate the `OAuth2` configuration
     /// Returns an error message if the configuration is invalid
     pub fn validate(&self) -> Result<(), String> {
+        if self.enforced && !self.enabled {
+            return Err("OAuth2 enforced is set but OAuth2 is not enabled; \
+                this would disable all login. Set oauth2.enabled = true"
+                .to_string());
+        }
+
+        if self.auto_redirect && !self.enforced {
+            return Err("OAuth2 auto_redirect is set but OAuth2 is not enforced; \
+                set oauth2.enforced = true to redirect straight to SSO"
+                .to_string());
+        }
+
         if !self.enabled {
             return Ok(());
         }
@@ -124,6 +145,8 @@ mod tests {
         assert_eq!(oauth2.scopes, vec!["openid", "profile", "email"]);
         assert!(oauth2.auto_provision_users);
         assert_eq!(oauth2.button_text, "Login with SSO");
+        assert!(!oauth2.enforced);
+        assert!(!oauth2.auto_redirect);
     }
 
     #[test]
@@ -193,6 +216,59 @@ mod tests {
         let result = oauth2.validate();
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("empty"));
+    }
+
+    #[test]
+    fn test_validate_enforced_without_enabled() {
+        let oauth2 = OAuth2 {
+            enforced: true,
+            ..Default::default()
+        };
+        let result = oauth2.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("enforced"));
+    }
+
+    #[test]
+    fn test_validate_enforced_with_valid_enabled() {
+        let oauth2 = OAuth2 {
+            enabled: true,
+            enforced: true,
+            issuer_url: Some("https://example.com".to_string()),
+            client_id: Some("client-id".to_string()),
+            client_secret: Some("client-secret".to_string()),
+            ..Default::default()
+        };
+        assert!(oauth2.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_auto_redirect_without_enforced() {
+        let oauth2 = OAuth2 {
+            enabled: true,
+            auto_redirect: true,
+            issuer_url: Some("https://example.com".to_string()),
+            client_id: Some("client-id".to_string()),
+            client_secret: Some("client-secret".to_string()),
+            ..Default::default()
+        };
+        let result = oauth2.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("auto_redirect"));
+    }
+
+    #[test]
+    fn test_validate_auto_redirect_with_enforced() {
+        let oauth2 = OAuth2 {
+            enabled: true,
+            enforced: true,
+            auto_redirect: true,
+            issuer_url: Some("https://example.com".to_string()),
+            client_id: Some("client-id".to_string()),
+            client_secret: Some("client-secret".to_string()),
+            ..Default::default()
+        };
+        assert!(oauth2.validate().is_ok());
     }
 
     #[test]

@@ -1,19 +1,29 @@
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::{Extension, Json};
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
-use kellnr_appstate::{AppState, DbState, TokenCacheState};
+use kellnr_appstate::{AppState, DbState, SettingsState, TokenCacheState};
 use kellnr_auth::token;
 use kellnr_common::util::generate_rand_string;
 use kellnr_db::password::generate_salt;
 use kellnr_db::{self, AuthToken, User};
-use kellnr_settings::constants::{COOKIE_SESSION_ID, COOKIE_SESSION_USER};
+use kellnr_settings::Settings;
+use kellnr_settings::constants::{COOKIE_OIDC_ID_TOKEN, COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::error::RouteError;
+use crate::oauth2::OAuth2Ext;
 use crate::session::{AdminUser, MaybeUser, create_session_jar};
+
+/// Reject local password operations when SSO is enforced.
+fn ensure_local_auth_enabled(settings: &Settings) -> Result<(), RouteError> {
+    if settings.oauth2.enforced {
+        return Err(RouteError::Status(StatusCode::FORBIDDEN));
+    }
+    Ok(())
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct NewTokenResponse {
@@ -146,7 +156,10 @@ pub async fn reset_pwd(
     user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
+    State(settings): SettingsState,
 ) -> Result<Json<ResetPwd>, RouteError> {
+    ensure_local_auth_enabled(&settings)?;
+
     let new_pwd = generate_rand_string(12);
     db.change_pwd(&name, &new_pwd).await?;
 
@@ -312,6 +325,7 @@ pub async fn login(
     State(state): AppState,
     Json(credentials): Json<Credentials>,
 ) -> Result<(PrivateCookieJar, Json<LoggedInUser>), RouteError> {
+    ensure_local_auth_enabled(&state.settings)?;
     credentials.validate()?;
 
     let user = state
@@ -364,29 +378,44 @@ pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
     .into()
 }
 
+#[derive(Serialize, ToSchema)]
+pub struct LogoutResponse {
+    pub logout_url: Option<String>,
+}
+
 /// Logout and clear session
 #[utoipa::path(
     post,
     path = "/logout",
     tag = "auth",
     responses(
-        (status = 200, description = "Successfully logged out")
+        (status = 200, description = "Successfully logged out", body = LogoutResponse)
     )
 )]
 pub async fn logout(
     mut jar: PrivateCookieJar,
     State(state): AppState,
-) -> Result<PrivateCookieJar, RouteError> {
+    Extension(oauth2_handler): OAuth2Ext,
+) -> Result<(PrivateCookieJar, Json<LogoutResponse>), RouteError> {
     let session_id = match jar.get(COOKIE_SESSION_ID) {
         Some(c) => c.value().to_owned(),
-        None => return Ok(jar), // Already logged out as no cookie can be found
+        None => return Ok((jar, Json(LogoutResponse { logout_url: None }))),
     };
+
+    let logout_url = jar
+        .get(COOKIE_OIDC_ID_TOKEN)
+        .zip(oauth2_handler.as_ref())
+        .and_then(|(id_token, handler)| {
+            let post_logout = format!("{}/", state.settings.origin.base_url());
+            handler.end_session_url(id_token.value(), &post_logout)
+        });
 
     jar = jar.remove(COOKIE_SESSION_ID);
     jar = jar.remove(Cookie::build((COOKIE_SESSION_USER, "")).path("/"));
+    jar = jar.remove(Cookie::build((COOKIE_OIDC_ID_TOKEN, "")).path("/"));
 
     state.db.delete_session_token(&session_id).await?;
-    Ok(jar)
+    Ok((jar, Json(LogoutResponse { logout_url })))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -427,8 +456,10 @@ impl PwdChange {
 pub async fn change_pwd(
     user: MaybeUser,
     State(db): DbState,
+    State(settings): SettingsState,
     Json(pwd_change): Json<PwdChange>,
 ) -> Result<(), RouteError> {
+    ensure_local_auth_enabled(&settings)?;
     pwd_change.validate()?;
 
     let Ok(user) = db.authenticate_user(user.name(), &pwd_change.old_pwd).await else {
@@ -482,8 +513,10 @@ pub async fn add(
     _user: AdminUser,
     State(db): DbState,
     State(cache): TokenCacheState,
+    State(settings): SettingsState,
     Json(new_user): Json<NewUser>,
 ) -> Result<(), RouteError> {
+    ensure_local_auth_enabled(&settings)?;
     new_user.validate()?;
 
     let salt = generate_salt();

@@ -11,7 +11,12 @@
 
           <!-- Form -->
           <v-card-text class="pa-6 pt-2">
-            <v-form ref="form" @submit.prevent="handleLogin" v-model="isFormValid">
+            <v-form
+              v-if="!ssoEnforced"
+              ref="form"
+              @submit.prevent="handleLogin"
+              v-model="isFormValid"
+            >
               <div class="input-group">
                 <label class="input-label">Username</label>
                 <v-text-field
@@ -81,7 +86,7 @@
 
             <!-- OAuth2/SSO Login -->
             <template v-if="oauth2Enabled">
-              <div class="oauth2-divider">
+              <div v-if="!ssoEnforced" class="oauth2-divider">
                 <span>or</span>
               </div>
 
@@ -125,6 +130,7 @@ const store = useStore()
 // OAuth2 state
 const oauth2Enabled = ref(false)
 const oauth2ButtonText = ref("Login with SSO")
+const ssoEnforced = ref(false)
 
 // Composables
 const status = useStatusMessage()
@@ -153,11 +159,12 @@ onMounted(async () => {
     }
   }
 
-  // Fetch OAuth2 configuration
+  // Fetch OAuth2 configuration (auto_redirect is handled by the router guard)
   const oauth2Result = await settingsService.getOAuth2Config()
   if (isSuccess(oauth2Result)) {
     oauth2Enabled.value = oauth2Result.data.enabled
     oauth2ButtonText.value = oauth2Result.data.button_text
+    ssoEnforced.value = oauth2Result.data.enforced
   }
 })
 

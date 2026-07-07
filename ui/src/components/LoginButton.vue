@@ -59,6 +59,10 @@ async function logOut() {
     const result = await userService.logout()
     if (isSuccess(result)) {
       store.logout()
+      if (result.data?.logout_url) {
+        window.location.href = result.data.logout_url
+        return
+      }
       router.push("/")
       showNotification("Successfully logged out")
     } else {

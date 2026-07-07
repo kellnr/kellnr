@@ -15,12 +15,13 @@ use axum_extra::extract::PrivateCookieJar;
 use kellnr_appstate::{AppState, AppStateData, DbState, SettingsState};
 use kellnr_auth::oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
 use kellnr_db::User;
+use kellnr_settings::constants::COOKIE_OIDC_ID_TOKEN;
 use serde::{Deserialize, Serialize};
 use tracing::{error, trace, warn};
 use utoipa::ToSchema;
 
 use crate::error::RouteError;
-use crate::session::create_session_jar;
+use crate::session::{create_session_jar, session_cookie};
 
 /// Type alias for the `OAuth2` handler extension
 pub type OAuth2Ext = Extension<Option<Arc<OAuth2Handler>>>;
@@ -32,6 +33,10 @@ pub struct OAuth2Config {
     pub enabled: bool,
     /// Text to display on the login button
     pub button_text: String,
+    /// Whether local password login is disabled (SSO-only)
+    pub enforced: bool,
+    /// Whether the login page should redirect straight to the SSO provider
+    pub auto_redirect: bool,
 }
 
 /// Query parameters received in the `OAuth2` callback
@@ -60,6 +65,8 @@ pub async fn get_config(State(settings): SettingsState) -> Json<OAuth2Config> {
     Json(OAuth2Config {
         enabled: settings.oauth2.enabled,
         button_text: settings.oauth2.button_text.clone(),
+        enforced: settings.oauth2.enforced,
+        auto_redirect: settings.oauth2.auto_redirect,
     })
 }
 
@@ -248,6 +255,11 @@ pub async fn callback(
     };
 
     let jar = create_session_jar(cookies, &app_state, &user.name).await?;
+    let jar = jar.add(session_cookie(
+        COOKIE_OIDC_ID_TOKEN,
+        token_result.id_token.clone(),
+        app_state.settings.registry.session_age_seconds as i64,
+    ));
     trace!("Created session for OAuth2 user: {}", user.name);
 
     // Redirect to UI root
