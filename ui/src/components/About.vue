@@ -8,7 +8,7 @@
           <v-icon icon="mdi-github" size="small"></v-icon>
         </div>
         <span class="info-label">Repository</span>
-        <a :href="crate.repository" target="_blank" class="external-link">
+        <a :href="crate.repository" target="_blank" class="external-link" data-testid="about-repository">
           {{ crate.repository }}
           <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
         </a>
@@ -20,7 +20,7 @@
           <v-icon icon="mdi-link-variant" size="small"></v-icon>
         </div>
         <span class="info-label">Homepage</span>
-        <a :href="crate.homepage" target="_blank" class="external-link">
+        <a :href="crate.homepage" target="_blank" class="external-link" data-testid="about-homepage">
           {{ crate.homepage }}
           <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
         </a>
@@ -32,7 +32,7 @@
           <v-icon icon="mdi-scale-balance" size="small"></v-icon>
         </div>
         <span class="info-label">License</span>
-        <span class="info-badge license-badge">{{ selectedVersion.license }}</span>
+        <span class="info-badge license-badge" data-testid="about-license">{{ selectedVersion.license }}</span>
       </div>
 
       <!-- Status (Yanked) -->
@@ -48,56 +48,58 @@
     <!-- Main Content Grid -->
     <div class="metadata-grid">
       <!-- Authors Section -->
-      <div v-if="crate.authors && crate.authors.length > 0" class="section-card">
+      <div v-if="crate.authors && crate.authors.length > 0" class="section-card" data-testid="about-authors">
         <div class="section-header">
           <v-icon icon="mdi-account-multiple" size="small" class="section-icon"></v-icon>
           <span class="section-title">Authors</span>
           <span class="count-badge">{{ crate.authors.length }}</span>
         </div>
         <div class="section-content">
-          <span v-for="(author, i) in crate.authors" :key="`author-${i}`" class="item-chip">
+          <span v-for="(author, i) in crate.authors" :key="`author-${i}`" class="item-chip" data-testid="about-author">
             {{ author }}
           </span>
         </div>
       </div>
 
       <!-- Owners Section -->
-      <div v-if="sortedOwners.length > 0" class="section-card">
+      <div v-if="sortedOwners.length > 0" class="section-card" data-testid="about-owners">
         <div class="section-header">
           <v-icon icon="mdi-shield-account" size="small" class="section-icon"></v-icon>
           <span class="section-title">Owners</span>
           <span class="count-badge">{{ sortedOwners.length }}</span>
         </div>
         <div class="section-content">
-          <span v-for="(owner, i) in sortedOwners" :key="`owner-${i}`" class="item-chip">
+          <span v-for="(owner, i) in sortedOwners" :key="`owner-${i}`" class="item-chip" data-testid="about-owner">
             {{ owner }}
           </span>
         </div>
       </div>
 
       <!-- Categories Section -->
-      <div v-if="crate.categories && crate.categories.length > 0" class="section-card">
+      <div v-if="crate.categories && crate.categories.length > 0" class="section-card" data-testid="about-categories">
         <div class="section-header">
           <v-icon icon="mdi-folder-multiple" size="small" class="section-icon"></v-icon>
           <span class="section-title">Categories</span>
           <span class="count-badge">{{ crate.categories.length }}</span>
         </div>
         <div class="section-content">
-          <span v-for="(category, i) in crate.categories" :key="`category-${i}`" class="item-chip">
+          <span v-for="(category, i) in crate.categories" :key="`category-${i}`" class="item-chip"
+            data-testid="about-category">
             {{ category }}
           </span>
         </div>
       </div>
 
       <!-- Keywords Section -->
-      <div v-if="crate.keywords && crate.keywords.length > 0" class="section-card">
+      <div v-if="crate.keywords && crate.keywords.length > 0" class="section-card" data-testid="about-keywords">
         <div class="section-header">
           <v-icon icon="mdi-tag-multiple" size="small" class="section-icon"></v-icon>
           <span class="section-title">Keywords</span>
           <span class="count-badge">{{ crate.keywords.length }}</span>
         </div>
         <div class="section-content">
-          <span v-for="(keyword, i) in crate.keywords" :key="`keyword-${i}`" class="item-chip">
+          <span v-for="(keyword, i) in crate.keywords" :key="`keyword-${i}`" class="item-chip"
+            data-testid="about-keyword">
             {{ keyword }}
           </span>
         </div>

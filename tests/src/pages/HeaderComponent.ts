@@ -27,22 +27,22 @@ export class HeaderComponent extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    this.appBar = page.locator(".v-app-bar");
+    this.appBar = page.getByTestId("header-app-bar");
     // Logo is now a non-clickable span with the kellnr text
     // Use Home link for navigation instead
-    this.logo = page.locator(".v-app-bar-title .logo-text");
+    this.logo = page.getByTestId("header-logo");
 
-    // Desktop navigation links - scoped to app bar to avoid mobile drawer duplicates
-    // The desktop nav is in a div with class "d-none d-md-flex"
-    const desktopNav = this.appBar.locator(".d-none.d-md-flex");
-    this.searchNavLink = desktopNav.getByRole("link", { name: "Search" });
-    this.settingsNavLink = desktopNav.getByRole("button", { name: "Settings" });
-    this.docQueueNavLink = desktopNav.getByRole("link", { name: "Doc Queue" });
+    // Desktop navigation links - each button has a dedicated testid,
+    // which avoids matching the mobile drawer duplicates
+    this.searchNavLink = page.getByTestId("header-nav-search");
+    this.settingsNavLink = page.getByTestId("header-nav-settings");
+    this.docQueueNavLink = page.getByTestId("header-nav-docqueue");
     // Help link was removed from navigation
+    const desktopNav = page.getByTestId("header-nav-desktop");
     this.helpNavLink = desktopNav.getByRole("link", { name: "Help" });
 
-    // Theme toggle button - look for button with weather icon
-    this.themeToggle = this.appBar.getByRole("button", { name: /switch to (dark|light) mode/i });
+    // Theme toggle button
+    this.themeToggle = page.getByTestId("theme-toggle");
 
     // Login/Logout buttons - scoped to app bar
     this.loginButton = this.appBar.getByRole("link", { name: "Log in" });
@@ -51,8 +51,8 @@ export class HeaderComponent extends BasePage {
     });
 
     // Mobile navigation
-    this.mobileMenuButton = page.locator(".v-app-bar-nav-icon");
-    this.navigationDrawer = page.locator(".v-navigation-drawer");
+    this.mobileMenuButton = page.getByTestId("header-nav-toggle");
+    this.navigationDrawer = page.getByTestId("header-drawer");
   }
 
   /**
@@ -61,7 +61,7 @@ export class HeaderComponent extends BasePage {
    */
   async clickLogo(): Promise<void> {
     // Use Home navigation button (v-btn with to="/") instead of clicking logo (which is now non-clickable)
-    const homeLink = this.appBar.locator(".d-none.d-md-flex").locator("a, button").filter({ hasText: "Home" });
+    const homeLink = this.page.getByTestId("header-nav-home");
     await homeLink.click();
     // Wait for Vue Router navigation to complete
     await this.page.waitForURL("**/", { timeout: 5000 }).catch(() => {
@@ -181,8 +181,8 @@ export class HeaderComponent extends BasePage {
    * Close the mobile navigation drawer.
    */
   async closeMobileMenu(): Promise<void> {
-    // Click outside the drawer to close it
-    await this.page.locator(".v-overlay__scrim").click();
+    // Press Escape to dismiss the temporary drawer (avoids depending on Vuetify's scrim element)
+    await this.page.keyboard.press("Escape");
     await this.navigationDrawer.waitFor({ state: "hidden" });
   }
 

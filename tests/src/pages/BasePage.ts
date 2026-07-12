@@ -35,12 +35,10 @@ export abstract class BasePage {
   }
 
   /**
-   * Get a Vuetify text field by its label.
+   * Get a text field by its label.
    */
   getTextField(label: string): Locator {
-    return this.page.locator(`input`).filter({
-      has: this.page.locator(`xpath=ancestor::*[contains(@class, "v-text-field")]//label[contains(text(), "${label}")]`),
-    }).first();
+    return this.page.getByLabel(label).first();
   }
 
   /**
@@ -68,7 +66,7 @@ export abstract class BasePage {
    * Check if a snackbar notification is visible with the given text.
    */
   async hasSnackbar(text: string): Promise<boolean> {
-    const snackbar = this.page.locator(".v-snackbar").filter({ hasText: text });
+    const snackbar = this.page.getByTestId("snackbar").filter({ hasText: text });
     return await snackbar.isVisible();
   }
 
@@ -77,7 +75,7 @@ export abstract class BasePage {
    */
   async waitForSnackbar(text: string, timeout: number = 5000): Promise<void> {
     await this.page
-      .locator(".v-snackbar")
+      .getByTestId("snackbar")
       .filter({ hasText: text })
       .waitFor({ state: "visible", timeout });
   }

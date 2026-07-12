@@ -42,30 +42,44 @@ export class ToolchainsPage extends BasePage {
 
     // Navigation - use data-testid for stability
     this.toolchainsNavItem = page.getByTestId("nav-toolchains");
-    this.sectionHeader = page.locator(".section-header").filter({ hasText: "Toolchain Management" });
-    this.toolchainCount = page.locator(".toolchain-count");
+    this.sectionHeader = page
+      .getByTestId("toolchain-section-header")
+      .filter({ hasText: "Toolchain Management" });
+    this.toolchainCount = this.sectionHeader.locator(".section-count");
 
     // Toolchains list
-    this.toolchainsList = page.locator(".toolchain-panels");
-    this.emptyState = page.locator(".empty-state").filter({ hasText: "No toolchains uploaded yet" });
+    this.toolchainsList = page.getByTestId("toolchain-panels");
+    this.emptyState = page
+      .getByTestId("toolchain-empty-state")
+      .filter({ hasText: "No toolchains uploaded yet" });
 
-    // Upload form
+    // Upload form (text fields keep semantic label-based selectors)
     this.nameInput = page.getByLabel("Component Name");
     this.versionInput = page.getByLabel("Version");
     this.targetInput = page.getByLabel("Target Triple");
     this.dateInput = page.getByLabel("Release Date");
     this.channelSelect = page.getByRole("combobox", { name: "Channel (Optional)" });
-    this.dropZone = page.locator(".drop-zone");
+    this.dropZone = page.getByTestId("toolchain-drop-zone");
     this.uploadButton = page.getByRole("button", { name: "Upload Toolchain" });
-    this.uploadAlert = page.locator(".upload-section .v-alert");
+    this.uploadAlert = page.getByTestId("toolchain-upload-alert");
 
-    // Dialogs
-    this.confirmDialog = page.locator(".confirm-dialog");
-    this.confirmButton = page.getByRole("button", { name: "Confirm" });
-    this.cancelButton = page.getByRole("button", { name: "Cancel" });
+    // Dialogs (shared ConfirmDialog component testids)
+    this.confirmDialog = page.getByTestId("confirm-dialog");
+    this.confirmButton = page.getByTestId("confirm-dialog-confirm");
+    this.cancelButton = page.getByTestId("confirm-dialog-cancel");
 
     // Snackbar notification
-    this.snackbar = page.locator(".v-snackbar");
+    this.snackbar = page.getByTestId("snackbar");
+  }
+
+  /**
+   * Locate the expansion panel for a specific toolchain (name + version).
+   * Panels share a constant testid, so we filter by the visible text.
+   */
+  private toolchainPanel(name: string, version: string): Locator {
+    return this.page.getByTestId("toolchain-panel").filter({
+      hasText: `${name} ${version}`,
+    });
   }
 
   /**
@@ -144,7 +158,8 @@ export class ToolchainsPage extends BasePage {
 
     if (data.channel) {
       await this.channelSelect.click();
-      await this.page.locator(".v-list-item-title").filter({ hasText: data.channel }).click();
+      // Vuetify renders select options in an overlay; use role-based selection
+      await this.page.getByRole("option", { name: data.channel }).click();
     }
   }
 
@@ -176,7 +191,7 @@ export class ToolchainsPage extends BasePage {
    * Check if there are any toolchains in the list.
    */
   async hasToolchains(): Promise<boolean> {
-    const panels = this.page.locator(".toolchain-panels .v-expansion-panel");
+    const panels = this.page.getByTestId("toolchain-panel");
     const count = await panels.count();
     return count > 0;
   }
@@ -185,7 +200,7 @@ export class ToolchainsPage extends BasePage {
    * Get the number of toolchains in the list.
    */
   async getToolchainCount(): Promise<number> {
-    const panels = this.page.locator(".toolchain-panels .v-expansion-panel");
+    const panels = this.page.getByTestId("toolchain-panel");
     return await panels.count();
   }
 
@@ -193,9 +208,7 @@ export class ToolchainsPage extends BasePage {
    * Expand a toolchain panel to see its targets.
    */
   async expandToolchain(name: string, version: string): Promise<void> {
-    const panel = this.page.locator(".v-expansion-panel").filter({
-      hasText: `${name} ${version}`
-    });
+    const panel = this.toolchainPanel(name, version);
     await panel.click();
     await this.page.waitForTimeout(300);
   }
@@ -207,10 +220,8 @@ export class ToolchainsPage extends BasePage {
     // Expand the toolchain panel first to make targets visible
     await this.expandToolchain(name, version);
 
-    const panel = this.page.locator(".v-expansion-panel").filter({
-      hasText: `${name} ${version}`
-    });
-    const targets = panel.locator(".target-name");
+    const panel = this.toolchainPanel(name, version);
+    const targets = panel.getByTestId("toolchain-target-name");
     const count = await targets.count();
     const result: string[] = [];
     for (let i = 0; i < count; i++) {
@@ -228,8 +239,8 @@ export class ToolchainsPage extends BasePage {
     await this.expandToolchain(name, version);
 
     // Find the target item and click delete
-    const targetItem = this.page.locator('[data-testid="target-item"]').filter({ hasText: target });
-    const deleteButton = targetItem.getByRole("button");
+    const targetItem = this.page.getByTestId("target-item").filter({ hasText: target });
+    const deleteButton = targetItem.getByTestId("toolchain-target-delete");
     await deleteButton.click();
 
     // Confirm deletion
@@ -245,10 +256,8 @@ export class ToolchainsPage extends BasePage {
     await this.expandToolchain(name, version);
 
     // Click the "Delete All" button in the targets header
-    const panel = this.page.locator(".v-expansion-panel").filter({
-      hasText: `${name} ${version}`
-    });
-    const deleteAllButton = panel.getByRole("button", { name: "Delete All" });
+    const panel = this.toolchainPanel(name, version);
+    const deleteAllButton = panel.getByTestId("toolchain-delete");
     await deleteAllButton.click();
 
     // Confirm deletion
@@ -260,10 +269,8 @@ export class ToolchainsPage extends BasePage {
    * Get the currently assigned channel for a toolchain (from the chip in the header).
    */
   async getToolchainChannel(name: string, version: string): Promise<string | null> {
-    const panel = this.page.locator(".v-expansion-panel").filter({
-      hasText: `${name} ${version}`
-    });
-    const chip = panel.locator(".toolchain-info .v-chip");
+    const panel = this.toolchainPanel(name, version);
+    const chip = panel.getByTestId("toolchain-channel-chip");
     if (await chip.isVisible()) {
       return await chip.textContent();
     }
@@ -277,14 +284,14 @@ export class ToolchainsPage extends BasePage {
     // First expand the toolchain
     await this.expandToolchain(name, version);
 
-    // Find the channel select dropdown inside the expanded panel
-    const panel = this.page.locator(".v-expansion-panel--active");
-    const channelSelect = panel.locator(".channel-select");
+    // Find the channel select dropdown inside the panel
+    const panel = this.toolchainPanel(name, version);
+    const channelSelect = panel.getByTestId("toolchain-channel-select");
     await channelSelect.click();
     await this.page.waitForTimeout(200);
 
-    // Click the channel option in the dropdown menu
-    await this.page.locator(".v-list-item-title").filter({ hasText: channel }).click();
+    // Vuetify renders select options in an overlay; use role-based selection
+    await this.page.getByRole("option", { name: channel }).click();
     await this.page.waitForTimeout(500);
   }
 
@@ -295,9 +302,10 @@ export class ToolchainsPage extends BasePage {
     // First expand the toolchain
     await this.expandToolchain(name, version);
 
-    // Find the channel select dropdown and click the clear button
-    const panel = this.page.locator(".v-expansion-panel--active");
-    const clearButton = panel.locator(".channel-select .v-field__clearable button");
+    // The clear icon is the only element with a button role inside the
+    // channel select wrapper (Vuetify renders it as an icon with role="button")
+    const panel = this.toolchainPanel(name, version);
+    const clearButton = panel.getByTestId("toolchain-channel-select").getByRole("button");
     if (await clearButton.isVisible()) {
       await clearButton.click();
       await this.page.waitForTimeout(500);
@@ -310,7 +318,7 @@ export class ToolchainsPage extends BasePage {
    */
   async waitForSnackbarAndGetText(): Promise<string | null> {
     // Use .last() to get the most recent snackbar (handles multiple visible snackbars)
-    const snackbar = this.page.locator(".v-snackbar").last();
+    const snackbar = this.snackbar.last();
     await snackbar.waitFor({ state: "visible", timeout: 5000 });
     return await snackbar.textContent();
   }
@@ -319,7 +327,7 @@ export class ToolchainsPage extends BasePage {
    * Check if snackbar is showing a success message.
    */
   async isSnackbarSuccess(): Promise<boolean> {
-    const snackbar = this.page.locator(".v-snackbar").last();
+    const snackbar = this.snackbar.last();
     if (await snackbar.isVisible()) {
       const classes = await snackbar.getAttribute("class") || "";
       return classes.includes("success") || classes.includes("bg-success");
@@ -331,7 +339,7 @@ export class ToolchainsPage extends BasePage {
    * Close the most recent snackbar if visible.
    */
   async dismissSnackbar(): Promise<void> {
-    const snackbar = this.page.locator(".v-snackbar").last();
+    const snackbar = this.snackbar.last();
     const closeButton = snackbar.getByRole("button", { name: "Close" });
     if (await closeButton.isVisible()) {
       await closeButton.click();

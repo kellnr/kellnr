@@ -23,13 +23,12 @@ export class CratesPage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    this.searchInput = page.getByPlaceholder("Search for crates");
-    // Vuetify switch with custom label slot - locate by the text within the switch container
-    this.cratesProxySwitch = page.locator(".v-switch").filter({ hasText: "Crates proxy" }).locator("input");
-    this.crateCards = page.locator(".v-card").filter({
-      has: page.locator('[class*="crate"]'),
-    });
-    this.loadingIndicator = page.locator(".v-progress-circular");
+    // Vuetify renders the data-testid on the component root, so scope to the
+    // inner <input> for fill/press/checked interactions
+    this.searchInput = page.getByTestId("crates-search").getByRole("textbox");
+    this.cratesProxySwitch = page.getByTestId("crates-proxy-toggle").getByRole("checkbox");
+    this.crateCards = page.getByTestId("crate-card");
+    this.loadingIndicator = page.getByTestId("crates-loading");
     this.emptyState = page.getByText("No crates found");
     this.endOfResults = page.getByText("End of crates");
   }
@@ -72,9 +71,8 @@ export class CratesPage extends BasePage {
    * Toggle the crates proxy switch.
    */
   async toggleCratesProxy(): Promise<void> {
-    // Click on the switch container, not the hidden input
-    const switchContainer = this.page.locator(".v-switch").filter({ hasText: "Crates proxy" });
-    await switchContainer.click();
+    // Click the visible switch label, not the hidden input
+    await this.page.getByTestId("crates-proxy-label").click();
     // Wait for crates to refresh
     await this.waitForSearchResults();
   }
@@ -106,8 +104,7 @@ export class CratesPage extends BasePage {
    */
   async getCrateCount(): Promise<number> {
     // Get all crate cards in the grid
-    const cards = this.page.locator(".v-col crate-card, crate-card");
-    return await cards.count();
+    return await this.crateCards.count();
   }
 
   /**
@@ -128,14 +125,13 @@ export class CratesPage extends BasePage {
    * Get crate names from visible cards.
    */
   async getCrateNames(): Promise<string[]> {
-    const cards = this.page.locator(".crate-card");
+    const cards = this.crateCards;
     const count = await cards.count();
     const names: string[] = [];
 
     for (let i = 0; i < count; i++) {
       const card = cards.nth(i);
-      // The crate name is in a span with crate-name class
-      const title = await card.locator(".crate-name").textContent();
+      const title = await card.getByTestId("crate-card-name").textContent();
       if (title) {
         names.push(title.trim());
       }
@@ -148,7 +144,7 @@ export class CratesPage extends BasePage {
    * Click on a crate card by name.
    */
   async clickCrate(crateName: string): Promise<void> {
-    const card = this.page.locator(".crate-card").filter({
+    const card = this.crateCards.filter({
       hasText: crateName,
     });
     await card.click();
@@ -158,7 +154,7 @@ export class CratesPage extends BasePage {
    * Check if a specific crate is visible in the list.
    */
   async hasCrate(crateName: string): Promise<boolean> {
-    const card = this.page.locator(".crate-card").filter({
+    const card = this.crateCards.filter({
       hasText: crateName,
     });
     return await card.isVisible();
@@ -168,7 +164,7 @@ export class CratesPage extends BasePage {
    * Scroll to load more crates (infinite scroll).
    */
   async scrollToLoadMore(): Promise<void> {
-    const container = this.page.locator(".content-container");
+    const container = this.page.getByTestId("crates-scroll-container");
     await container.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
