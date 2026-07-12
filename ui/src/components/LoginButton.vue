@@ -14,7 +14,7 @@
     </v-btn>
 
     <!-- Snackbar for notifications -->
-    <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000" location="bottom" class="mb-4">
+    <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000" location="bottom" class="mb-4" data-testid="snackbar">
       {{ snackbarText }}
       <template v-slot:actions>
         <v-btn variant="text" icon="mdi-close" @click="showSnackbar = false" size="small"></v-btn>

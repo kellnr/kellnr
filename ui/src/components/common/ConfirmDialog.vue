@@ -1,9 +1,9 @@
 <template>
   <v-dialog v-model="modelValue" max-width="450">
-    <v-card class="confirm-dialog">
+    <v-card class="confirm-dialog" data-testid="confirm-dialog">
       <div class="dialog-header" :class="headerColorClass">
         <v-icon :icon="icon" :color="iconColor" size="small" class="me-3"></v-icon>
-        <span class="text-h6 font-weight-bold">{{ title }}</span>
+        <span class="text-h6 font-weight-bold" data-testid="confirm-dialog-title">{{ title }}</span>
       </div>
 
       <v-card-text class="pa-5">
@@ -15,10 +15,10 @@
 
       <v-card-actions class="pa-4 pt-0">
         <v-spacer></v-spacer>
-        <v-btn variant="text" @click="handleCancel">
+        <v-btn variant="text" data-testid="confirm-dialog-cancel" @click="handleCancel">
           {{ cancelText }}
         </v-btn>
-        <v-btn :color="confirmColor" variant="flat" @click="handleConfirm">
+        <v-btn :color="confirmColor" variant="flat" data-testid="confirm-dialog-confirm" @click="handleConfirm">
           <v-icon v-if="confirmIcon" :icon="confirmIcon" size="small" class="me-1"></v-icon>
           {{ confirmText }}
         </v-btn>

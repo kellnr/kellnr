@@ -82,7 +82,7 @@
     </v-navigation-drawer>
 
     <!-- Snackbar for notifications -->
-    <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000" location="bottom">
+    <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000" location="bottom" data-testid="snackbar">
       {{ snackbarText }}
       <template v-slot:actions>
         <v-btn variant="text" icon="mdi-close" @click="showSnackbar = false" size="small" />

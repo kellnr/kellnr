@@ -25,7 +25,7 @@
     </v-card>
 
     <!-- Snackbar for copy notification -->
-    <v-snackbar v-model="showSnackbar" :timeout="3000" color="success" location="bottom">
+    <v-snackbar v-model="showSnackbar" :timeout="3000" color="success" location="bottom" data-testid="snackbar">
       {{ snackbarText }}
       <template v-slot:actions>
         <v-btn variant="text" icon="mdi-close" @click="showSnackbar = false"></v-btn>
