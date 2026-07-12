@@ -2,13 +2,13 @@
   <div>
     <!-- Login button for logged out users -->
     <v-btn v-if="store.loggedIn === false" :to="'/login'" variant="outlined" color="primary" density="comfortable"
-      prepend-icon="mdi-login" :loading="isLoading" :disabled="isLoading">
+      prepend-icon="mdi-login" :loading="isLoading" :disabled="isLoading" data-testid="login-button">
       Log in
     </v-btn>
 
     <!-- Logout button for logged in users -->
     <v-btn v-else variant="outlined" color="primary" density="comfortable" prepend-icon="mdi-logout" @click="logOut()"
-      :loading="isLoading" :disabled="isLoading">
+      :loading="isLoading" :disabled="isLoading" data-testid="logout-button">
       <span class="d-none d-sm-inline">{{ store.loggedInUser }}</span>
       <span class="d-sm-none">Logout</span>
     </v-btn>
