@@ -27,10 +27,10 @@ export class LoginPage extends BasePage {
     super(page);
 
     // Use data-testid selectors for the custom login form.
-    // Vuetify forwards attributes on v-text-field to the inner <input>,
-    // so these locators are directly fillable.
-    this.usernameInput = page.getByTestId("login-username");
-    this.passwordInput = page.getByTestId("login-password");
+    // Vuetify forwards data-* attributes to the component root, so scope
+    // down to the inner <input> to get a fillable locator.
+    this.usernameInput = page.getByTestId("login-username").locator("input");
+    this.passwordInput = page.getByTestId("login-password").locator("input");
     // Semantic selector that works reliably for the Vuetify checkbox input
     this.rememberMeCheckbox = page.getByLabel("Remember me");
     this.confirmButton = page.getByTestId("login-submit");

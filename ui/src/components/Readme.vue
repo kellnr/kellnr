@@ -1,6 +1,6 @@
 <template>
   <div class="readme-wrapper">
-    <div class="markdown-body" v-html="markedReadme"></div>
+    <div class="markdown-body" data-testid="crate-readme" v-html="markedReadme"></div>
   </div>
 </template>
 

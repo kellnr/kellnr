@@ -1,10 +1,10 @@
 <template>
-  <div class="version-item" @click="openCrateVersionPage">
+  <div class="version-item" data-testid="version-row" @click="openCrateVersionPage">
     <div class="version-main">
       <!-- Left: Version with tag icon -->
       <div class="version-info">
         <div class="version-header">
-          <span class="version-number">{{ version }}</span>
+          <span class="version-number" data-testid="version-number">{{ version }}</span>
           <v-icon icon="mdi-tag-outline" size="small" class="version-tag-icon"></v-icon>
         </div>
       </div>

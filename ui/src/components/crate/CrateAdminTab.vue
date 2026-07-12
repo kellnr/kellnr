@@ -28,7 +28,7 @@
               This action cannot be undone.
             </p>
           </div>
-          <v-btn color="error" variant="flat" @click="handleDeleteVersion">
+          <v-btn color="error" variant="flat" @click="handleDeleteVersion" data-testid="admin-delete-version">
             <v-icon icon="mdi-delete-outline" size="small" class="me-2"></v-icon>
             Delete Version
           </v-btn>
@@ -46,7 +46,7 @@
               This will break all crates that depend on it.
             </p>
           </div>
-          <v-btn color="error" variant="flat" @click="handleDeleteCrate">
+          <v-btn color="error" variant="flat" @click="handleDeleteCrate" data-testid="admin-delete-crate">
             <v-icon icon="mdi-delete-forever" size="small" class="me-2"></v-icon>
             Delete Crate
           </v-btn>

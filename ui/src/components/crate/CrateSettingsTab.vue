@@ -12,14 +12,14 @@
           Only existing crate owners or admins can add/remove crate owners.
         </v-alert>
 
-        <div v-if="crateOwners.length > 0" class="settings-list">
-          <div v-for="owner in crateOwners" :key="owner.login" class="settings-list-item">
+        <div v-if="crateOwners.length > 0" class="settings-list" data-testid="settings-owners">
+          <div v-for="owner in crateOwners" :key="owner.login" class="settings-list-item" data-testid="settings-owner-row">
             <div class="settings-list-item-info">
               <v-icon icon="mdi-account" size="small" class="me-3"></v-icon>
-              <span class="settings-list-item-name">{{ owner.login }}</span>
+              <span class="settings-list-item-name" data-testid="settings-owner-name">{{ owner.login }}</span>
             </div>
             <v-btn :disabled="!canManageOwners" color="error" variant="tonal" size="small"
-              @click="handleDeleteOwner(owner.login)">
+              @click="handleDeleteOwner(owner.login)" data-testid="settings-owner-remove">
               <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
               Remove
             </v-btn>
@@ -37,7 +37,7 @@
             <v-icon icon="mdi-account-plus" size="small" class="me-2"></v-icon>
             <span>Add crate owner</span>
           </div>
-          <v-form @submit.prevent="handleAddOwner" class="settings-form">
+          <v-form @submit.prevent="handleAddOwner" class="settings-form" data-testid="settings-add-owner">
             <v-text-field v-model="newOwnerName" placeholder="Enter username" prepend-inner-icon="mdi-account-star"
               variant="outlined" density="comfortable" :disabled="!canManageOwners" hide-details class="settings-input"></v-text-field>
             <v-btn :disabled="!canManageOwners" color="primary" type="submit" variant="flat">
@@ -68,7 +68,8 @@
           </div>
           <v-form @submit.prevent="handleSaveAccessData">
             <v-checkbox v-model="isDownloadRestricted" hide-details
-              label="Restrict downloads to crate users only" class="settings-checkbox"></v-checkbox>
+              label="Restrict downloads to crate users only" class="settings-checkbox"
+              data-testid="settings-download-restricted"></v-checkbox>
             <p class="settings-help-text">
               When enabled, only users explicitly added as crate users can download this crate.
               Requires <code>auth_required = true</code> in kellnr configuration.
@@ -78,7 +79,7 @@
               @click:close="accessStatus.clear()" class="mb-3">
               {{ accessStatus.message }}
             </v-alert>
-            <v-btn color="primary" type="submit" variant="flat" size="small">
+            <v-btn color="primary" type="submit" variant="flat" size="small" data-testid="settings-save-access">
               <v-icon icon="mdi-content-save" size="small" class="me-1"></v-icon>
               Save Changes
             </v-btn>
@@ -93,13 +94,14 @@
             <span class="settings-count-small">{{ crateUsers.length }}</span>
           </div>
 
-          <div v-if="crateUsers.length > 0" class="settings-list compact">
-            <div v-for="user in crateUsers" :key="user.login" class="settings-list-item">
+          <div v-if="crateUsers.length > 0" class="settings-list compact" data-testid="settings-users">
+            <div v-for="user in crateUsers" :key="user.login" class="settings-list-item" data-testid="settings-user-row">
               <div class="settings-list-item-info">
                 <v-icon icon="mdi-account" size="small" class="me-3"></v-icon>
-                <span class="settings-list-item-name">{{ user.login }}</span>
+                <span class="settings-list-item-name" data-testid="settings-user-name">{{ user.login }}</span>
               </div>
-              <v-btn color="error" variant="text" size="small" @click="handleDeleteUser(user.login)">
+              <v-btn color="error" variant="text" size="small" @click="handleDeleteUser(user.login)"
+                data-testid="settings-user-remove">
                 <v-icon icon="mdi-close" size="small"></v-icon>
               </v-btn>
             </div>
@@ -112,7 +114,7 @@
             {{ deleteUserStatus.message }}
           </v-alert>
 
-          <v-form @submit.prevent="handleAddUser" class="settings-form inline">
+          <v-form @submit.prevent="handleAddUser" class="settings-form inline" data-testid="settings-add-user">
             <v-text-field v-model="newUserName" placeholder="Enter username" prepend-inner-icon="mdi-account"
               variant="outlined" density="compact" hide-details class="settings-input"></v-text-field>
             <v-btn color="primary" type="submit" variant="tonal" size="small">
@@ -133,13 +135,14 @@
             <span class="settings-count-small">{{ crateGroups.length }}</span>
           </div>
 
-          <div v-if="crateGroups.length > 0" class="settings-list compact">
-            <div v-for="group in crateGroups" :key="group.name" class="settings-list-item">
+          <div v-if="crateGroups.length > 0" class="settings-list compact" data-testid="settings-groups">
+            <div v-for="group in crateGroups" :key="group.name" class="settings-list-item" data-testid="settings-group-row">
               <div class="settings-list-item-info">
                 <v-icon icon="mdi-account-group" size="small" class="me-3"></v-icon>
-                <span class="settings-list-item-name">{{ group.name }}</span>
+                <span class="settings-list-item-name" data-testid="settings-group-name">{{ group.name }}</span>
               </div>
-              <v-btn color="error" variant="text" size="small" @click="handleDeleteGroup(group.name)">
+              <v-btn color="error" variant="text" size="small" @click="handleDeleteGroup(group.name)"
+                data-testid="settings-group-remove">
                 <v-icon icon="mdi-close" size="small"></v-icon>
               </v-btn>
             </div>
@@ -152,7 +155,7 @@
             {{ deleteGroupStatus.message }}
           </v-alert>
 
-          <v-form @submit.prevent="handleAddGroup" class="settings-form inline">
+          <v-form @submit.prevent="handleAddGroup" class="settings-form inline" data-testid="settings-add-group">
             <v-select v-model="newGroupName" :items="availableGroups" label="Select group"
               prepend-inner-icon="mdi-account-group" variant="outlined" density="compact" hide-details class="settings-input" />
             <v-btn color="primary" type="submit" variant="tonal" size="small">

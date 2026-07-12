@@ -3,9 +3,9 @@
     <SubsectionHeader icon="mdi-package-variant" title="Available Toolchains" />
 
     <div class="toolchain-list">
-      <v-expansion-panels variant="accordion" class="toolchain-panels">
-        <v-expansion-panel v-for="toolchain in toolchains" :key="`${toolchain.name}-${toolchain.version}`">
-          <v-expansion-panel-title class="panel-title">
+      <v-expansion-panels variant="accordion" class="toolchain-panels" data-testid="toolchain-panels">
+        <v-expansion-panel v-for="toolchain in toolchains" :key="`${toolchain.name}-${toolchain.version}`" data-testid="toolchain-panel">
+          <v-expansion-panel-title class="panel-title" data-testid="toolchain-panel-title">
             <div class="toolchain-info">
               <div class="toolchain-avatar">
                 <v-icon icon="mdi-package-variant-closed" size="small"></v-icon>
@@ -20,6 +20,7 @@
                 :color="getChannelColor(toolchain.channel)"
                 variant="tonal"
                 class="ms-2"
+                data-testid="toolchain-channel-chip"
               >
                 {{ toolchain.channel }}
               </v-chip>
@@ -33,7 +34,7 @@
                   <v-icon icon="mdi-source-branch" size="x-small" class="me-2 text-medium-emphasis"></v-icon>
                   <span class="text-body-2">Release Channel</span>
                 </div>
-                <div class="channel-controls">
+                <div class="channel-controls" data-testid="toolchain-channel-select">
                   <v-select
                     v-model="toolchain.channel"
                     :items="channelOptions"
@@ -60,6 +61,7 @@
                   color="error"
                   variant="text"
                   size="small"
+                  data-testid="toolchain-delete"
                   @click.stop="$emit('delete-toolchain', toolchain.name, toolchain.version)"
                 >
                   <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
@@ -75,7 +77,7 @@
                   test-id="target-item"
                 >
                   <template #title>
-                    <span class="target-name">{{ target.target }}</span>
+                    <span class="target-name" data-testid="toolchain-target-name">{{ target.target }}</span>
                     <v-chip
                       size="x-small"
                       :color="getStatusColor(target.status)"
@@ -91,6 +93,7 @@
                       color="error"
                       variant="text"
                       size="small"
+                      data-testid="toolchain-target-delete"
                       @click.stop="$emit('delete-target', toolchain.name, toolchain.version, target.target)"
                     >
                       <v-icon icon="mdi-delete-outline" size="small"></v-icon>
@@ -110,6 +113,7 @@
     icon="mdi-hammer-wrench"
     message="No toolchains uploaded yet."
     class="mb-6"
+    data-testid="toolchain-empty-state"
   />
 </template>
 

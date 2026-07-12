@@ -15,8 +15,8 @@
           <v-col cols="12" sm="10" md="8" lg="6" class="mx-auto">
             <div class="search-wrapper">
               <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined"
-                density="comfortable" prepend-inner-icon="mdi-magnify" hide-details @keyup.enter="searchCrates()"
-                class="search-field" bg-color="surface" rounded="pill"></v-text-field>
+                density="comfortable" prepend-inner-icon="mdi-magnify" hide-details data-testid="landing-search"
+                @keyup.enter="searchCrates()" class="search-field" bg-color="surface" rounded="pill"></v-text-field>
             </div>
           </v-col>
         </v-row>
@@ -26,7 +26,8 @@
     <!-- Loading State -->
     <v-row v-if="!statistics" class="my-8">
       <v-col cols="12" class="text-center">
-        <v-progress-circular indeterminate color="primary" size="60" width="6"></v-progress-circular>
+        <v-progress-circular indeterminate color="primary" size="60" width="6"
+          data-testid="landing-loading"></v-progress-circular>
         <div class="mt-4 text-body-1 loading-text">Loading registry statistics...</div>
       </v-col>
     </v-row>
@@ -78,7 +79,7 @@
 
         <!-- Top Downloaded Crates - Compact -->
         <v-col v-if="statistics.top_crates.first[1] > 0" cols="12" md="6" lg="8">
-          <v-card class="top-crates-card h-100" elevation="2" rounded="xl">
+          <v-card class="top-crates-card h-100" elevation="2" rounded="xl" data-testid="landing-top-crates">
             <v-card-text class="pa-4">
               <div class="d-flex align-center mb-3">
                 <v-icon icon="mdi-trophy" color="amber-darken-1" size="small" class="mr-2"></v-icon>
@@ -119,7 +120,7 @@
       <v-row v-if="statistics.proxy_enabled" class="mb-6">
         <v-col cols="12">
           <div class="section-divider mb-5">
-            <span class="section-divider-text">Crates.io Proxy Cache</span>
+            <span class="section-divider-text" data-testid="landing-cached-section">Crates.io Proxy Cache</span>
           </div>
         </v-col>
 

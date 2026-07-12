@@ -1,6 +1,6 @@
 <template>
   <div>
-    <SectionHeader icon="mdi-hammer-wrench" title="Toolchain Management" :count="toolchains.length" />
+    <SectionHeader icon="mdi-hammer-wrench" title="Toolchain Management" :count="toolchains.length" data-testid="toolchain-section-header" />
 
     <div class="section-content">
       <p class="text-body-2 text-medium-emphasis mb-5">

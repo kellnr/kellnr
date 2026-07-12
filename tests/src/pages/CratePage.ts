@@ -11,6 +11,11 @@ import { BasePage } from "./BasePage";
  * - Owner management
  * - Access control settings
  * - Admin actions (delete)
+ *
+ * All locators are based on `data-testid` attributes defined in the
+ * crate-detail Vue components (Crate.vue, CrateSidebar.vue, About.vue,
+ * Version.vue, Dependency.vue, Readme.vue, CrateSettingsTab.vue,
+ * CrateAdminTab.vue).
  */
 export class CratePage extends BasePage {
   // Header locators
@@ -62,65 +67,53 @@ export class CratePage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    // Header - h1 is the crate name, version is sibling generic div, description is paragraph
-    // Use more specific selector to avoid matching h1 elements in markdown content
-    this.crateTitle = page.locator("h1.text-h3");
-    this.crateVersion = page.locator("h1.text-h3").locator("+ div, + span, + generic").first();
-    // Description is a paragraph near the h1 in the main content area
-    this.crateDescription = page.locator("main p").first();
+    // Header
+    this.crateTitle = page.getByTestId("crate-title");
+    this.crateVersion = page.getByTestId("crate-version");
+    this.crateDescription = page.getByTestId("crate-description");
 
     // Tabs
-    this.readmeTab = page.getByRole("tab", { name: "Readme" });
-    this.aboutTab = page.getByRole("tab", { name: "About" });
-    this.dependenciesTab = page.getByRole("tab", { name: "Dependencies" });
-    this.versionsTab = page.getByRole("tab", { name: "Versions" });
-    this.settingsTab = page.getByRole("tab", { name: "Settings" });
-    this.adminTab = page.getByRole("tab", { name: "Admin" });
+    this.readmeTab = page.getByTestId("crate-tab-readme");
+    this.aboutTab = page.getByTestId("crate-tab-about");
+    this.dependenciesTab = page.getByTestId("crate-tab-deps");
+    this.versionsTab = page.getByTestId("crate-tab-versions");
+    this.settingsTab = page.getByTestId("crate-tab-settings");
+    this.adminTab = page.getByTestId("crate-tab-admin");
 
     // Content areas
-    this.readmeContent = page.locator(".markdown-body, .v-card").filter({
-      has: page.locator("pre, p, h1, h2, h3"),
-    });
-    this.versionCards = page.locator(".v-card").filter({
-      has: page.locator('[class*="version"]'),
-    });
-    this.dependencyList = page
-      .locator(".v-card")
-      .filter({ hasText: "Dependencies" })
-      .first();
-    this.devDependencyList = page
-      .locator(".v-card")
-      .filter({ hasText: "Development Dependencies" });
-    this.buildDependencyList = page
-      .locator(".v-card")
-      .filter({ hasText: "Build Dependencies" });
+    this.readmeContent = page.getByTestId("crate-readme");
+    this.versionCards = page.getByTestId("version-row");
+    this.dependencyList = page.getByTestId("crate-deps-normal");
+    this.devDependencyList = page.getByTestId("crate-deps-dev");
+    this.buildDependencyList = page.getByTestId("crate-deps-build");
 
-    // Sidebar - located in the right column
-    this.sidebar = page.locator(".v-col").filter({ has: page.locator(".v-card") }).last();
-    this.installSection = page.locator(".v-card").filter({ hasText: "Install" });
-    this.copyButton = page.locator('button[aria-label*="copy"], .mdi-content-copy').first();
-    this.versionDownloads = page.locator("text=Version Downloads").locator("..");
-    this.totalDownloads = page.locator("text=Total Downloads").locator("..");
-    // "Open documentation" is a clickable div, not a button
-    this.openDocsButton = page.locator('div.cursor-pointer:has-text("Open documentation"), a:has-text("Open documentation")');
-    this.buildDocsButton = page.getByRole("button", { name: /Build|Rebuild/i });
+    // Sidebar
+    this.sidebar = page.getByTestId("crate-sidebar");
+    this.installSection = page.getByTestId("install-section");
+    this.copyButton = page.getByTestId("sidebar-copy-button");
+    this.versionDownloads = page.getByTestId("sidebar-version-downloads");
+    this.totalDownloads = page.getByTestId("sidebar-total-downloads");
+    this.openDocsButton = page.getByTestId("sidebar-open-docs");
+    this.buildDocsButton = page.getByTestId("sidebar-build-docs");
 
     // Settings tab
-    this.ownersList = page.locator(".v-card").filter({ hasText: "Crate owners" }).locator(".v-list");
-    this.addOwnerInput = page.getByPlaceholder("Username").first();
-    this.addOwnerButton = page.locator(".v-card").filter({ hasText: "Add crate owner" }).getByRole("button", { name: "Add" });
-    this.crateUsersList = page.locator(".v-card").filter({ hasText: "Crate users" }).locator(".v-list");
-    this.addUserInput = page.locator(".v-card").filter({ hasText: "Add crate user" }).getByPlaceholder("Username");
-    this.addUserButton = page.locator(".v-card").filter({ hasText: "Add crate user" }).getByRole("button", { name: "Add" });
-    this.downloadRestrictedCheckbox = page.getByLabel("Crate users only are allowed to download");
-    this.changeAccessButton = page.getByRole("button", { name: "Change crate access rules" });
+    this.ownersList = page.getByTestId("settings-owners");
+    this.addOwnerInput = page.getByTestId("settings-add-owner").getByRole("textbox");
+    this.addOwnerButton = page.getByTestId("settings-add-owner").getByRole("button", { name: "Add" });
+    this.crateUsersList = page.getByTestId("settings-users");
+    this.addUserInput = page.getByTestId("settings-add-user").getByRole("textbox");
+    this.addUserButton = page.getByTestId("settings-add-user").getByRole("button");
+    this.downloadRestrictedCheckbox = page
+      .getByTestId("settings-download-restricted")
+      .locator('input[type="checkbox"]');
+    this.changeAccessButton = page.getByTestId("settings-save-access");
 
     // Admin tab
-    this.deleteVersionButton = page.getByRole("button", { name: "Delete Version" });
-    this.deleteCrateButton = page.getByRole("button", { name: "Delete Crate" });
+    this.deleteVersionButton = page.getByTestId("admin-delete-version");
+    this.deleteCrateButton = page.getByTestId("admin-delete-crate");
 
     // Snackbar
-    this.snackbar = page.locator(".v-snackbar");
+    this.snackbar = page.getByTestId("snackbar");
   }
 
   /**
@@ -138,14 +131,14 @@ export class CratePage extends BasePage {
    * Get the crate name from the page.
    */
   async getCrateName(): Promise<string> {
-    return (await this.crateTitle.textContent()) ?? "";
+    return ((await this.crateTitle.textContent()) ?? "").trim();
   }
 
   /**
    * Get the displayed version.
    */
   async getVersion(): Promise<string> {
-    return (await this.crateVersion.textContent()) ?? "";
+    return ((await this.crateVersion.textContent()) ?? "").trim();
   }
 
   /**
@@ -201,7 +194,7 @@ export class CratePage extends BasePage {
    */
   async getRepositoryLink(): Promise<string | null> {
     await this.clickTab("about");
-    const link = this.page.locator("a").filter({ hasText: "Repository" });
+    const link = this.page.getByTestId("about-repository");
     if (await link.isVisible()) {
       return await link.getAttribute("href");
     }
@@ -213,7 +206,7 @@ export class CratePage extends BasePage {
    */
   async getHomepageLink(): Promise<string | null> {
     await this.clickTab("about");
-    const link = this.page.locator("a").filter({ hasText: "Homepage" });
+    const link = this.page.getByTestId("about-homepage");
     if (await link.isVisible()) {
       return await link.getAttribute("href");
     }
@@ -225,19 +218,10 @@ export class CratePage extends BasePage {
    */
   async getLicense(): Promise<string | null> {
     await this.clickTab("about");
-    const licenseLabel = this.page.locator("text=License").first();
-    if (await licenseLabel.isVisible()) {
-      const parent = licenseLabel.locator("..").locator("..");
-      const chips = parent.locator(".v-chip");
-      const count = await chips.count();
-      if (count > 0) {
-        const licenses: string[] = [];
-        for (let i = 0; i < count; i++) {
-          const text = await chips.nth(i).textContent();
-          if (text) licenses.push(text.trim());
-        }
-        return licenses.join(", ");
-      }
+    const license = this.page.getByTestId("about-license");
+    if (await license.isVisible()) {
+      const text = ((await license.textContent()) ?? "").trim();
+      return text.length > 0 ? text : null;
     }
     return null;
   }
@@ -247,15 +231,8 @@ export class CratePage extends BasePage {
    */
   async getAuthors(): Promise<string[]> {
     await this.clickTab("about");
-    const authorsSection = this.page.locator("text=Authors").first().locator("..").locator("..");
-    const chips = authorsSection.locator(".v-chip");
-    const count = await chips.count();
-    const authors: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const text = await chips.nth(i).textContent();
-      if (text) authors.push(text.trim());
-    }
-    return authors;
+    const texts = await this.page.getByTestId("about-author").allTextContents();
+    return texts.map((t) => t.trim()).filter((t) => t.length > 0);
   }
 
   /**
@@ -263,15 +240,8 @@ export class CratePage extends BasePage {
    */
   async getKeywords(): Promise<string[]> {
     await this.clickTab("about");
-    const keywordsSection = this.page.locator("text=Keywords").first().locator("..").locator("..");
-    const chips = keywordsSection.locator(".v-chip");
-    const count = await chips.count();
-    const keywords: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const text = await chips.nth(i).textContent();
-      if (text) keywords.push(text.trim());
-    }
-    return keywords;
+    const texts = await this.page.getByTestId("about-keyword").allTextContents();
+    return texts.map((t) => t.trim()).filter((t) => t.length > 0);
   }
 
   /**
@@ -279,15 +249,8 @@ export class CratePage extends BasePage {
    */
   async getCategories(): Promise<string[]> {
     await this.clickTab("about");
-    const categoriesSection = this.page.locator("text=Categories").first().locator("..").locator("..");
-    const chips = categoriesSection.locator(".v-chip");
-    const count = await chips.count();
-    const categories: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const text = await chips.nth(i).textContent();
-      if (text) categories.push(text.trim());
-    }
-    return categories;
+    const texts = await this.page.getByTestId("about-category").allTextContents();
+    return texts.map((t) => t.trim()).filter((t) => t.length > 0);
   }
 
   // === Dependencies Tab Methods ===
@@ -297,23 +260,8 @@ export class CratePage extends BasePage {
    */
   async getDependencies(): Promise<string[]> {
     await this.clickTab("dependencies");
-    const deps: string[] = [];
-    const depCards = this.page
-      .locator(".v-card")
-      .filter({ hasText: "Dependencies" })
-      .first()
-      .locator(".v-card-text")
-      .locator("> div, > a");
-    const count = await depCards.count();
-    for (let i = 0; i < count; i++) {
-      const text = await depCards.nth(i).textContent();
-      if (text) {
-        // Extract the dependency name (first word)
-        const name = text.trim().split(/\s+/)[0];
-        if (name) deps.push(name);
-      }
-    }
-    return deps;
+    const names = await this.dependencyList.getByTestId("dependency-name").allTextContents();
+    return names.map((n) => n.trim()).filter((n) => n.length > 0);
   }
 
   /**
@@ -339,20 +287,8 @@ export class CratePage extends BasePage {
    */
   async getVersions(): Promise<string[]> {
     await this.clickTab("versions");
-    const versions: string[] = [];
-    // Version cards contain version numbers
-    const versionElements = this.page.locator(".v-card-text").locator("div").filter({
-      has: this.page.locator('[class*="text-h"], text=/^\\d+\\.\\d+/'),
-    });
-    const count = await versionElements.count();
-    for (let i = 0; i < count; i++) {
-      const text = await versionElements.nth(i).textContent();
-      if (text) {
-        const match = text.match(/(\d+\.\d+\.\d+)/);
-        if (match) versions.push(match[1]);
-      }
-    }
-    return versions;
+    const texts = await this.page.getByTestId("version-number").allTextContents();
+    return texts.map((t) => t.trim()).filter((t) => t.length > 0);
   }
 
   /**
@@ -360,10 +296,10 @@ export class CratePage extends BasePage {
    */
   async clickVersion(version: string): Promise<void> {
     await this.clickTab("versions");
-    const versionCard = this.page.locator("div, .v-card").filter({
-      hasText: new RegExp(`^${version.replace(/\./g, "\\.")}\\b`),
+    const versionRow = this.page.getByTestId("version-row").filter({
+      has: this.page.getByText(version, { exact: true }),
     });
-    await versionCard.first().click();
+    await versionRow.first().click();
     await this.waitForPageLoad();
   }
 
@@ -375,14 +311,8 @@ export class CratePage extends BasePage {
   async getOwners(): Promise<string[]> {
     await this.clickTab("settings");
     await this.page.waitForTimeout(500); // Wait for data to load
-    const owners: string[] = [];
-    const ownerItems = this.ownersList.locator(".v-list-item");
-    const count = await ownerItems.count();
-    for (let i = 0; i < count; i++) {
-      const text = await ownerItems.nth(i).locator(".v-list-item-title").textContent();
-      if (text) owners.push(text.trim());
-    }
-    return owners;
+    const names = await this.page.getByTestId("settings-owner-name").allTextContents();
+    return names.map((n) => n.trim()).filter((n) => n.length > 0);
   }
 
   /**
@@ -402,8 +332,8 @@ export class CratePage extends BasePage {
     await this.clickTab("settings");
     // Handle confirmation dialog
     this.page.on("dialog", (dialog) => dialog.accept());
-    const ownerItem = this.ownersList.locator(".v-list-item").filter({ hasText: username });
-    await ownerItem.getByRole("button", { name: "Delete" }).click();
+    const ownerRow = this.page.getByTestId("settings-owner-row").filter({ hasText: username });
+    await ownerRow.getByTestId("settings-owner-remove").click();
     await this.page.waitForTimeout(500);
   }
 
@@ -413,14 +343,8 @@ export class CratePage extends BasePage {
   async getCrateUsers(): Promise<string[]> {
     await this.clickTab("settings");
     await this.page.waitForTimeout(500);
-    const users: string[] = [];
-    const userItems = this.crateUsersList.locator(".v-list-item");
-    const count = await userItems.count();
-    for (let i = 0; i < count; i++) {
-      const text = await userItems.nth(i).locator(".v-list-item-title").textContent();
-      if (text) users.push(text.trim());
-    }
-    return users;
+    const names = await this.page.getByTestId("settings-user-name").allTextContents();
+    return names.map((n) => n.trim()).filter((n) => n.length > 0);
   }
 
   /**
@@ -494,9 +418,7 @@ export class CratePage extends BasePage {
    * Copy install snippet to clipboard.
    */
   async copyInstallSnippet(): Promise<void> {
-    const installSection = this.page.getByTestId("install-section");
-    const copyBtn = installSection.locator("button, .v-btn").first();
-    await copyBtn.click();
+    await this.copyButton.click();
     await this.page.waitForTimeout(300);
   }
 
@@ -504,10 +426,9 @@ export class CratePage extends BasePage {
    * Get version downloads count.
    */
   async getVersionDownloads(): Promise<number | null> {
-    const card = this.page.locator(".v-card, div").filter({ hasText: "Version Downloads" });
-    const text = await card.textContent();
+    const text = await this.versionDownloads.textContent();
     if (text) {
-      const match = text.match(/(\d+)/);
+      const match = text.replace(/[,.\s]/g, "").match(/(\d+)/);
       return match ? parseInt(match[1], 10) : null;
     }
     return null;
@@ -517,10 +438,9 @@ export class CratePage extends BasePage {
    * Get total downloads count.
    */
   async getTotalDownloads(): Promise<number | null> {
-    const card = this.page.locator(".v-card, div").filter({ hasText: "Total Downloads" });
-    const text = await card.textContent();
+    const text = await this.totalDownloads.textContent();
     if (text) {
-      const match = text.match(/(\d+)/);
+      const match = text.replace(/[,.\s]/g, "").match(/(\d+)/);
       return match ? parseInt(match[1], 10) : null;
     }
     return null;
@@ -530,24 +450,21 @@ export class CratePage extends BasePage {
    * Check if documentation link is available.
    */
   async hasDocumentation(): Promise<boolean> {
-    const docsButton = this.page.getByRole("button", { name: /Open Documentation/i });
-    return await docsButton.isVisible();
+    return await this.openDocsButton.isVisible();
   }
 
   /**
    * Check if build docs button is visible (owner/admin only).
    */
   async canBuildDocs(): Promise<boolean> {
-    const buildBtn = this.page.getByRole("button", { name: /Build|Rebuild/i });
-    return await buildBtn.isVisible();
+    return await this.buildDocsButton.isVisible();
   }
 
   /**
    * Click build docs button.
    */
   async buildDocs(): Promise<void> {
-    const buildBtn = this.page.getByRole("button", { name: /Build|Rebuild/i });
-    await buildBtn.click();
+    await this.buildDocsButton.click();
     await this.waitForNavigation("/docqueue");
   }
 

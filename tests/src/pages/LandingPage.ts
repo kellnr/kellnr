@@ -23,8 +23,10 @@ export class LandingPage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    this.searchInput = page.getByPlaceholder("Search for crates");
-    this.loadingIndicator = page.locator(".v-progress-circular");
+    // Vuetify renders the data-testid on the component root, so scope to the
+    // inner <input> for fill/press interactions
+    this.searchInput = page.getByTestId("landing-search").getByRole("textbox");
+    this.loadingIndicator = page.getByTestId("landing-loading");
 
     // Statistics cards - using data-testid for reliable selection
     // HeroStatCard uses textToTestId: "Total Crates" -> "hero-stat-total-crates"
@@ -33,8 +35,8 @@ export class LandingPage extends BasePage {
     this.totalDownloadsCard = page.getByTestId("hero-stat-total-downloads");
 
     // Sections
-    this.topCratesSection = page.locator("text=Top Downloaded");
-    this.cachedCratesSection = page.locator(".section-divider-text").filter({ hasText: "Crates.io Proxy Cache" });
+    this.topCratesSection = page.getByTestId("landing-top-crates");
+    this.cachedCratesSection = page.getByTestId("landing-cached-section");
   }
 
   /**
