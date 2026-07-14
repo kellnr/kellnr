@@ -1,5 +1,5 @@
 <template>
-  <v-btn icon variant="text" @click="toggleTheme" class="mr-2"
+  <v-btn icon variant="text" @click="toggleTheme" class="mr-2" data-testid="theme-toggle"
     :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'">
     <v-icon>{{ isDark ? 'mdi-white-balance-sunny' : 'mdi-moon-waxing-crescent' }}</v-icon>
   </v-btn>

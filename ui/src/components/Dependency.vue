@@ -1,11 +1,11 @@
 <template>
-  <div class="dependency-item" @click="openCratePage">
+  <div class="dependency-item" data-testid="dependency-row" @click="openCratePage">
     <div class="dep-main">
       <!-- Left: Name, Version, Source -->
       <div class="dep-info">
         <div class="dep-header">
-          <span class="dep-name">{{ name }}</span>
-          <span class="dep-version">{{ version }}</span>
+          <span class="dep-name" data-testid="dependency-name">{{ name }}</span>
+          <span class="dep-version" data-testid="dependency-version">{{ version }}</span>
         </div>
         <div class="dep-source">
           <span class="source-badge" :class="isCratesIoDep(registry) ? 'crates-io' : 'kellnr'">

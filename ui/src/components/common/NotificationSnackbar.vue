@@ -4,6 +4,7 @@
     :color="color"
     :timeout="timeout"
     location="bottom"
+    data-testid="snackbar"
     @update:model-value="$emit('update:modelValue', $event)"
   >
     {{ message }}

@@ -26,17 +26,19 @@ export class LoginPage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    // Use placeholder-based selectors for the custom login form
-    this.usernameInput = page.getByPlaceholder("Enter your username");
-    this.passwordInput = page.getByPlaceholder("Enter your password");
+    // Use data-testid selectors for the custom login form.
+    // Vuetify forwards data-* attributes to the component root, so scope
+    // down to the inner <input> to get a fillable locator.
+    this.usernameInput = page.getByTestId("login-username").locator("input");
+    this.passwordInput = page.getByTestId("login-password").locator("input");
+    // Semantic selector that works reliably for the Vuetify checkbox input
     this.rememberMeCheckbox = page.getByLabel("Remember me");
-    this.confirmButton = page.getByRole("button", { name: "Sign In" });
-    // Title is now an h1 with class login-title
-    this.signInTitle = page.locator(".login-title");
-    this.alertMessage = page.locator(".v-alert");
-    // OAuth2/SSO button (uses the oauth2-button class)
-    this.oauth2Button = page.locator(".oauth2-button");
-    this.oauth2Divider = page.locator(".oauth2-divider");
+    this.confirmButton = page.getByTestId("login-submit");
+    this.signInTitle = page.getByTestId("login-title");
+    this.alertMessage = page.getByTestId("login-alert");
+    // OAuth2/SSO login elements
+    this.oauth2Button = page.getByTestId("login-oauth2-button");
+    this.oauth2Divider = page.getByTestId("login-oauth2-divider");
   }
 
   /**
@@ -129,8 +131,7 @@ export class LoginPage extends BasePage {
    * Check if a success alert is visible.
    */
   async hasSuccessAlert(): Promise<boolean> {
-    // Vuetify 3 uses different alert type classes
-    const alert = this.page.locator(".v-alert").filter({ hasText: "successful" });
+    const alert = this.alertMessage.filter({ hasText: "successful" });
     return await alert.isVisible();
   }
 
@@ -139,7 +140,7 @@ export class LoginPage extends BasePage {
    */
   async hasErrorAlert(): Promise<boolean> {
     // Look for alert with error-related text
-    const alert = this.page.locator(".v-alert").filter({ hasText: /wrong|error|failed/i });
+    const alert = this.alertMessage.filter({ hasText: /wrong|error|failed/i });
     return await alert.isVisible();
   }
 
@@ -148,8 +149,7 @@ export class LoginPage extends BasePage {
    */
   async waitForLoginError(timeout: number = 5000): Promise<void> {
     // Wait for any alert containing error text
-    await this.page
-      .locator(".v-alert")
+    await this.alertMessage
       .filter({ hasText: /wrong|error|failed/i })
       .waitFor({ state: "visible", timeout });
   }
@@ -158,8 +158,7 @@ export class LoginPage extends BasePage {
    * Wait for the login success message to appear.
    */
   async waitForLoginSuccess(timeout: number = 5000): Promise<void> {
-    await this.page
-      .locator(".v-alert")
+    await this.alertMessage
       .filter({ hasText: /success/i })
       .waitFor({ state: "visible", timeout });
   }

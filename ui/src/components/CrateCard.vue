@@ -1,5 +1,5 @@
 <template>
-  <v-card class="crate-card mb-3" elevation="0" rounded="lg" @click="navigateToCrate">
+  <v-card class="crate-card mb-3" elevation="0" rounded="lg" data-testid="crate-card" @click="navigateToCrate">
     <v-card-text class="pa-4">
       <div class="d-flex align-start">
         <!-- Origin Logo -->
@@ -15,8 +15,9 @@
           <!-- Header Row: Name + Version + Stats -->
           <div class="d-flex flex-wrap align-center justify-space-between mb-2">
             <div class="d-flex align-center flex-wrap crate-header">
-              <span class="crate-name font-weight-bold me-3">{{ crate }}</span>
-              <v-chip size="small" variant="tonal" color="primary" class="version-chip">
+              <span class="crate-name font-weight-bold me-3" data-testid="crate-card-name">{{ crate }}</span>
+              <v-chip size="small" variant="tonal" color="primary" class="version-chip"
+                data-testid="crate-card-version">
                 v{{ version }}
               </v-chip>
             </div>
@@ -27,7 +28,7 @@
                 <template v-slot:activator="{ props: tooltipProps }">
                   <div class="stat-item" v-bind="tooltipProps">
                     <v-icon icon="mdi-download" size="x-small" class="stat-icon" />
-                    <span class="stat-value">{{ formatNumber(downloads) }}</span>
+                    <span class="stat-value" data-testid="crate-card-downloads">{{ formatNumber(downloads) }}</span>
                   </div>
                 </template>
               </v-tooltip>
@@ -42,11 +43,12 @@
               </v-tooltip>
 
               <div class="doc-link-wrapper">
-                <a v-if="docLink && docLink.length > 0" :href="docLink" class="doc-button" target="_blank" @click.stop>
+                <a v-if="docLink && docLink.length > 0" :href="docLink" class="doc-button" target="_blank"
+                  data-testid="crate-card-docs-link" @click.stop>
                   <v-icon icon="mdi-file-document-outline" size="small" />
                   <span>Documentation</span>
                 </a>
-                <button v-else class="doc-button" @click.stop="goToPublishDocs">
+                <button v-else class="doc-button" data-testid="crate-card-docs-link" @click.stop="goToPublishDocs">
                   <v-icon icon="mdi-file-document-outline" size="small" />
                   <span>Documentation</span>
                 </button>

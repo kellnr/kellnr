@@ -5,14 +5,15 @@
       <v-row no-gutters align="center">
         <v-col cols="12" md="8" lg="6" class="pr-md-4">
           <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined" density="comfortable"
-            hide-details prepend-inner-icon="mdi-magnify" color="primary"
+            hide-details prepend-inner-icon="mdi-magnify" color="primary" data-testid="crates-search"
             @keyup.enter="handleSearch(searchText)" class="search-field" rounded="lg"></v-text-field>
         </v-col>
 
         <v-col cols="12" md="4" lg="6" class="mt-3 mt-md-0 d-flex align-center">
-          <v-switch v-model="store.searchCache" color="primary" hide-details @update:model-value="refreshCrates()">
+          <v-switch v-model="store.searchCache" color="primary" hide-details data-testid="crates-proxy-toggle"
+            @update:model-value="refreshCrates()">
             <template v-slot:label>
-              <div class="d-flex align-center">
+              <div class="d-flex align-center" data-testid="crates-proxy-label">
                 <span class="mr-2 switch-label">Crates proxy</span>
                 <v-tooltip location="top" text="Display crates from the crates.io proxy">
                   <template v-slot:activator="{ props }">
@@ -27,10 +28,10 @@
     </v-card>
 
     <!-- Scrollable Content Container -->
-    <div class="content-container" ref="scrollContainer" @scroll="handleScroll">
+    <div class="content-container" ref="scrollContainer" data-testid="crates-scroll-container" @scroll="handleScroll">
       <!-- Empty State -->
       <v-card v-if="crates.length === 0 && !isLoading" class="pa-6 text-center mx-auto my-8" max-width="500"
-        variant="outlined">
+        variant="outlined" data-testid="crates-empty-state">
         <v-card-title class="text-h6 font-weight-medium">No crates found</v-card-title>
         <v-card-text>
           <p>To learn how to publish crates to <strong>Kellnr</strong>, read the
@@ -52,13 +53,14 @@
       </v-row>
 
       <!-- Loading Indicator -->
-      <div v-if="isLoading" class="text-center my-4 pb-4">
+      <div v-if="isLoading" class="text-center my-4 pb-4" data-testid="crates-loading">
         <v-progress-circular indeterminate color="primary" :size="40"></v-progress-circular>
         <div class="text-body-2 mt-2">Loading crates...</div>
       </div>
 
       <!-- End of Results -->
-      <div v-if="allLoaded && crates.length > 0" class="text-center my-6 text-body-2 text-grey">
+      <div v-if="allLoaded && crates.length > 0" class="text-center my-6 text-body-2 text-grey"
+        data-testid="crates-end-of-results">
         — End of crates —
       </div>
     </div>

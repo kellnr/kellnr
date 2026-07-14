@@ -64,6 +64,7 @@
         />
         <div
           class="drop-zone"
+          data-testid="toolchain-drop-zone"
           :class="{ 'drag-over': isDragging, 'has-file': uploadForm.file }"
           @dragover.prevent="isDragging = true"
           @dragleave.prevent="isDragging = false"
@@ -105,6 +106,7 @@
       variant="tonal"
       class="mt-4"
       closable
+      data-testid="toolchain-upload-alert"
       @click:close="uploadStatus.clear()"
     >
       {{ uploadStatus.message }}

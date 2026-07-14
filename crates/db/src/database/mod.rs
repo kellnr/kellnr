@@ -52,8 +52,7 @@ const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 /// Upper bound on the configured session age. Clamping to this keeps cutoff
 /// arithmetic well within `chrono::Duration`/`DateTime` range, avoiding
 /// overflow panics for absurd configuration values.
-const MAX_SESSION_AGE: std::time::Duration =
-    std::time::Duration::from_secs(100 * 365 * 24 * 60 * 60);
+const MAX_SESSION_AGE: std::time::Duration = std::time::Duration::from_hours(876_000);
 
 /// Resolve a configured session age into the internal expiry duration.
 ///

@@ -3,29 +3,29 @@
     <!-- Title Section -->
     <v-card class="mb-4 title-card" elevation="0">
       <v-card-title class="d-flex flex-wrap align-baseline pa-5">
-        <h1 class="text-h3 font-weight-bold me-3 text-break crate-title">{{ crate.name }}</h1>
-        <span class="text-h5 version-text">{{ selected_version.version }}</span>
+        <h1 class="text-h3 font-weight-bold me-3 text-break crate-title" data-testid="crate-title">{{ crate.name }}</h1>
+        <span class="text-h5 version-text" data-testid="crate-version">{{ selected_version.version }}</span>
       </v-card-title>
 
       <v-card-text v-if="crate.description != null" class="pt-0 px-5 pb-5">
-        <p class="description-text mb-0">{{ crate.description }}</p>
+        <p class="description-text mb-0" data-testid="crate-description">{{ crate.description }}</p>
       </v-card-text>
     </v-card>
 
     <!-- Tab Navigation -->
     <v-card class="mb-4 tabs-card" elevation="0">
       <v-tabs v-model="tab" color="primary" grow slider-color="primary" class="crate-tabs">
-        <v-tab v-if="selected_version.readme" value="readme">Readme</v-tab>
-        <v-tab value="meta">About</v-tab>
-        <v-tab value="deps">Dependencies</v-tab>
-        <v-tab value="versions">Versions</v-tab>
-        <v-tab v-if="store.loggedInUserIsAdmin" value="crateSettings">Settings</v-tab>
-        <v-tab v-if="store.loggedInUserIsAdmin" value="administrate">Admin</v-tab>
+        <v-tab v-if="selected_version.readme" value="readme" data-testid="crate-tab-readme">Readme</v-tab>
+        <v-tab value="meta" data-testid="crate-tab-about">About</v-tab>
+        <v-tab value="deps" data-testid="crate-tab-deps">Dependencies</v-tab>
+        <v-tab value="versions" data-testid="crate-tab-versions">Versions</v-tab>
+        <v-tab v-if="store.loggedInUserIsAdmin" value="crateSettings" data-testid="crate-tab-settings">Settings</v-tab>
+        <v-tab v-if="store.loggedInUserIsAdmin" value="administrate" data-testid="crate-tab-admin">Admin</v-tab>
       </v-tabs>
     </v-card>
 
     <!-- Snackbar for copy notification -->
-    <v-snackbar v-model="showSnackbar" :timeout="3000" color="success" location="bottom">
+    <v-snackbar v-model="showSnackbar" :timeout="3000" color="success" location="bottom" data-testid="snackbar">
       {{ snackbarText }}
       <template v-slot:actions>
         <v-btn variant="text" icon="mdi-close" @click="showSnackbar = false"></v-btn>
@@ -41,7 +41,7 @@
         </v-card>
 
         <!-- Versions Tab -->
-        <v-card v-if="tab === 'versions'" class="mb-4 content-card" elevation="0">
+        <v-card v-if="tab === 'versions'" class="mb-4 content-card" elevation="0" data-testid="crate-versions">
           <v-card-text>
             <Version v-for="version in crate.versions" :key="version.version" :name="crate.name"
               :version="version.version" :last_updated="version.created" :downloads="version.downloads.toString()" />
@@ -51,7 +51,8 @@
         <!-- Dependencies Tab -->
         <template v-if="tab === 'deps'">
           <!-- Normal Dependencies -->
-          <v-card v-if="sortedDependencies.normal.length > 0" class="mb-4 content-card" elevation="0">
+          <v-card v-if="sortedDependencies.normal.length > 0" class="mb-4 content-card" elevation="0"
+            data-testid="crate-deps-normal">
             <v-card-title>Dependencies</v-card-title>
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.normal" :key="dep.name" :name="dep.name" :version="dep.version_req"
@@ -60,7 +61,8 @@
           </v-card>
 
           <!-- Dev Dependencies -->
-          <v-card v-if="sortedDependencies.dev.length > 0" class="mb-4 content-card" elevation="0">
+          <v-card v-if="sortedDependencies.dev.length > 0" class="mb-4 content-card" elevation="0"
+            data-testid="crate-deps-dev">
             <v-card-title>Development Dependencies</v-card-title>
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.dev" :key="dep.name" :name="dep.name" :version="dep.version_req"
@@ -69,7 +71,8 @@
           </v-card>
 
           <!-- Build Dependencies -->
-          <v-card v-if="sortedDependencies.build.length > 0" class="mb-4 content-card" elevation="0">
+          <v-card v-if="sortedDependencies.build.length > 0" class="mb-4 content-card" elevation="0"
+            data-testid="crate-deps-build">
             <v-card-title>Build Dependencies</v-card-title>
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.build" :key="dep.name" :name="dep.name" :version="dep.version_req"

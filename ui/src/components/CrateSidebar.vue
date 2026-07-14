@@ -1,5 +1,5 @@
 <template>
-  <v-card elevation="1" class="sidebar-card">
+  <v-card elevation="1" class="sidebar-card" data-testid="crate-sidebar">
     <!-- Header -->
     <v-card-title class="sidebar-header">
       <v-icon class="me-2">mdi-package-variant</v-icon>
@@ -19,7 +19,7 @@
           <v-tooltip text="Copy to clipboard">
             <template v-slot:activator="{ props }">
               <v-btn v-bind="props" icon variant="text" density="comfortable" color="primary"
-                @click="copyTomlToClipboard()" class="copy-btn ml-auto">
+                @click="copyTomlToClipboard()" class="copy-btn ml-auto" data-testid="sidebar-copy-button">
                 <v-icon size="small">mdi-content-copy</v-icon>
               </v-btn>
             </template>
@@ -67,12 +67,12 @@
         <div class="sidebar-content">
           <div class="download-item">
             <span class="download-label">Version:</span>
-            <span class="download-number">{{ versionDownloads.toLocaleString() }}</span>
+            <span class="download-number" data-testid="sidebar-version-downloads">{{ versionDownloads.toLocaleString() }}</span>
           </div>
 
           <div class="download-item mt-1">
             <span class="download-label">Total:</span>
-            <span class="download-number">{{ totalDownloads.toLocaleString() }}</span>
+            <span class="download-number" data-testid="sidebar-total-downloads">{{ totalDownloads.toLocaleString() }}</span>
           </div>
         </div>
       </div>
@@ -87,7 +87,8 @@
         </div>
 
         <div class="sidebar-content">
-          <div v-if="documentationLink" @click="openDocsPage" class="cursor-pointer text-primary">
+          <div v-if="documentationLink" @click="openDocsPage" class="cursor-pointer text-primary"
+            data-testid="sidebar-open-docs">
             <v-icon size="small" class="me-1">mdi-open-in-new</v-icon>
             Open documentation
           </div>
@@ -97,7 +98,7 @@
           </router-link>
 
           <v-btn v-if="canBuildDocs" color="primary" variant="outlined" size="small" density="comfortable"
-            prepend-icon="mdi-cog" @click="buildDocs" class="mt-2">
+            prepend-icon="mdi-cog" @click="buildDocs" class="mt-2" data-testid="sidebar-build-docs">
             {{ documentationLink ? 're-build docs' : 'build docs' }}
           </v-btn>
         </div>

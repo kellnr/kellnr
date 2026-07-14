@@ -5,7 +5,7 @@
         <v-card class="login-card" elevation="0" rounded="xl">
           <!-- Header -->
           <div class="login-header">
-            <h1 class="login-title">Welcome Back</h1>
+            <h1 class="login-title" data-testid="login-title">Welcome Back</h1>
             <p class="login-subtitle">Sign in to your Kellnr account</p>
           </div>
 
@@ -16,6 +16,7 @@
                 <label class="input-label">Username</label>
                 <v-text-field
                   v-model="username"
+                  data-testid="login-username"
                   placeholder="Enter your username"
                   prepend-inner-icon="mdi-account-outline"
                   variant="outlined"
@@ -31,6 +32,7 @@
                 <label class="input-label">Password</label>
                 <v-text-field
                   v-model="password"
+                  data-testid="login-password"
                   placeholder="Enter your password"
                   prepend-inner-icon="mdi-lock-outline"
                   type="password"
@@ -45,6 +47,7 @@
 
               <v-checkbox
                 v-model="store.rememberMe"
+                data-testid="login-remember-me"
                 label="Remember me"
                 color="primary"
                 hide-details
@@ -53,6 +56,7 @@
 
               <v-alert
                 v-if="status.hasStatus"
+                data-testid="login-alert"
                 :type="status.isSuccess ? 'success' : 'error'"
                 class="mt-4"
                 density="compact"
@@ -68,6 +72,7 @@
                 color="primary"
                 size="large"
                 type="submit"
+                data-testid="login-submit"
                 block
                 :disabled="!isFormValid"
                 :loading="loading"
@@ -81,7 +86,7 @@
 
             <!-- OAuth2/SSO Login -->
             <template v-if="oauth2Enabled">
-              <div class="oauth2-divider">
+              <div class="oauth2-divider" data-testid="login-oauth2-divider">
                 <span>or</span>
               </div>
 
@@ -90,6 +95,7 @@
                 size="large"
                 variant="outlined"
                 block
+                data-testid="login-oauth2-button"
                 class="oauth2-button"
                 rounded="lg"
                 @click="handleOAuth2Login"

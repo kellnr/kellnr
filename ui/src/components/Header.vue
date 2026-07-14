@@ -1,25 +1,26 @@
 <template>
   <div>
     <!-- App Bar -->
-    <v-app-bar :class="['app-header', { 'app-header-light': store.theme === 'light' }]" elevation="0" height="64">
+    <v-app-bar :class="['app-header', { 'app-header-light': store.theme === 'light' }]" elevation="0" height="64" data-testid="header-app-bar">
       <!-- Mobile menu toggle -->
-      <v-app-bar-nav-icon class="d-md-none nav-toggle" @click="drawer = !drawer" />
+      <v-app-bar-nav-icon class="d-md-none nav-toggle" data-testid="header-nav-toggle" @click="drawer = !drawer" />
 
       <!-- Logo -->
       <v-app-bar-title class="logo-title">
-        <span class="logo-text">
+        <span class="logo-text" data-testid="header-logo">
           <span class="logo-bracket">&lt;</span><span class="logo-lifetime">'</span><span class="logo-name">kellnr</span><span class="logo-bracket">&gt;</span>
         </span>
       </v-app-bar-title>
 
       <!-- Desktop Navigation Links -->
-      <nav class="d-none d-md-flex nav-links">
+      <nav class="d-none d-md-flex nav-links" data-testid="header-nav-desktop">
         <v-btn
           to="/"
           :ripple="false"
           variant="text"
           class="nav-btn"
           prepend-icon="mdi-home"
+          data-testid="header-nav-home"
         >
           Home
         </v-btn>
@@ -33,6 +34,7 @@
           variant="text"
           :class="['nav-btn', { 'nav-btn-active': item.route && route.path.startsWith(item.route) }]"
           :prepend-icon="item.icon"
+          :data-testid="`header-nav-${item.slug}`"
           @click="item.action ? item.action() : undefined"
         >
           {{ item.title }}
@@ -51,7 +53,7 @@
     </v-app-bar>
 
     <!-- Mobile Navigation Drawer -->
-    <v-navigation-drawer v-model="drawer" temporary location="left" class="mobile-drawer">
+    <v-navigation-drawer v-model="drawer" temporary location="left" class="mobile-drawer" data-testid="header-drawer">
       <div class="drawer-header">
         <span class="drawer-logo">
           <span class="logo-bracket">&lt;</span><span class="logo-lifetime">'</span><span class="logo-name">kellnr</span><span class="logo-bracket">&gt;</span>
@@ -63,6 +65,7 @@
           to="/"
           prepend-icon="mdi-home"
           class="drawer-item"
+          data-testid="header-drawer-home"
         >
           <v-list-item-title>Home</v-list-item-title>
         </v-list-item>
@@ -74,6 +77,7 @@
           :target="item.href ? '_blank' : undefined"
           :prepend-icon="item.icon"
           class="drawer-item"
+          :data-testid="`header-drawer-${item.slug}`"
           @click="item.action ? item.action() : undefined"
         >
           <v-list-item-title>{{ item.title }}</v-list-item-title>
@@ -82,7 +86,7 @@
     </v-navigation-drawer>
 
     <!-- Snackbar for notifications -->
-    <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000" location="bottom">
+    <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000" location="bottom" data-testid="snackbar">
       {{ snackbarText }}
       <template v-slot:actions>
         <v-btn variant="text" icon="mdi-close" @click="showSnackbar = false" size="small" />
@@ -114,22 +118,26 @@ const snackbarColor = ref("success");
 const navItems = computed(() => [
   {
     title: "Search",
+    slug: "search",
     icon: "mdi-magnify",
     route: "/crates"
   },
   {
     title: "Settings",
+    slug: "settings",
     icon: "mdi-cog",
     route: "/settings",
     action: goToSettings
   },
   {
     title: "Doc Queue",
+    slug: "docqueue",
     icon: "mdi-layers",
     route: "/docqueue"
   },
   {
     title: "API Docs",
+    slug: "api-docs",
     icon: "mdi-api",
     href: "/api/docs"
   }
