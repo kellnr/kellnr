@@ -712,10 +712,9 @@ pub async fn publish(
                 .into());
             }
         }
-        (None, true)
-            if !user.is_admin => {
-                return Err(RegistryError::NewCratesRestricted.into());
-            }
+        (None, true) if !user.is_admin => {
+            return Err(RegistryError::NewCratesRestricted.into());
+        }
 
         _ => (),
     }

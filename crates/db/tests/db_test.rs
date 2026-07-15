@@ -1009,14 +1009,9 @@ async fn get_session_no_session_in_db(test_db: &kellnr_db::Database) {
 // Test harness configures a 3600s session age (see db-testcontainer).
 #[db_test]
 async fn validate_session_rejects_expired(test_db: &kellnr_db::Database) {
-    add_aged_session(
-        test_db,
-        "admin",
-        "fresh",
-        std::time::Duration::from_mins(1),
-    )
-    .await
-    .unwrap();
+    add_aged_session(test_db, "admin", "fresh", std::time::Duration::from_mins(1))
+        .await
+        .unwrap();
     add_aged_session(
         test_db,
         "admin",
@@ -1035,14 +1030,9 @@ async fn validate_session_rejects_expired(test_db: &kellnr_db::Database) {
 
 #[db_test]
 async fn delete_expired_sessions_removes_only_old(test_db: &kellnr_db::Database) {
-    add_aged_session(
-        test_db,
-        "admin",
-        "fresh",
-        std::time::Duration::from_mins(1),
-    )
-    .await
-    .unwrap();
+    add_aged_session(test_db, "admin", "fresh", std::time::Duration::from_mins(1))
+        .await
+        .unwrap();
     add_aged_session(
         test_db,
         "admin",
