@@ -1013,7 +1013,7 @@ async fn validate_session_rejects_expired(test_db: &kellnr_db::Database) {
         test_db,
         "admin",
         "fresh",
-        std::time::Duration::from_secs(60),
+        std::time::Duration::from_mins(1),
     )
     .await
     .unwrap();
@@ -1021,7 +1021,7 @@ async fn validate_session_rejects_expired(test_db: &kellnr_db::Database) {
         test_db,
         "admin",
         "stale",
-        std::time::Duration::from_secs(7200),
+        std::time::Duration::from_hours(2),
     )
     .await
     .unwrap();
@@ -1039,7 +1039,7 @@ async fn delete_expired_sessions_removes_only_old(test_db: &kellnr_db::Database)
         test_db,
         "admin",
         "fresh",
-        std::time::Duration::from_secs(60),
+        std::time::Duration::from_mins(1),
     )
     .await
     .unwrap();
@@ -1047,7 +1047,7 @@ async fn delete_expired_sessions_removes_only_old(test_db: &kellnr_db::Database)
         test_db,
         "admin",
         "stale",
-        std::time::Duration::from_secs(7200),
+        std::time::Duration::from_hours(2),
     )
     .await
     .unwrap();
