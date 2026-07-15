@@ -2298,7 +2298,7 @@ mod session_age_tests {
     #[test]
     fn positive_age_is_preserved() {
         assert_eq!(
-            session_age_to_duration(std::time::Duration::from_secs(3600)),
+            session_age_to_duration(std::time::Duration::from_hours(1)),
             Some(chrono::Duration::seconds(3600))
         );
     }
