@@ -19,6 +19,13 @@ updates:
       npm-all:
         patterns:
           - "*"
+    # TypeScript 7 (native Go compiler) has no stable programmatic API yet,
+    # so vue-tsc/Volar and typescript-eslint can't run on it. Stay on TS 6.x
+    # (minor/patch bumps still allowed). Revisit once TS 7.1 ships (~Q4 2026)
+    # and both vue-tsc and typescript-eslint declare support.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
