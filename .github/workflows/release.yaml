@@ -186,6 +186,106 @@ jobs:
           asset_name: ${{ matrix.artifact }}.zip
           tag: ${{ github.ref }}
 
+  build-macos:
+    name: Build macOS
+    runs-on: macos-14
+    needs: [test]
+    permissions: { contents: write }
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            artifact: kellnr-aarch64-apple-darwin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: hecrj/setup-rust-action@v2
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with: { tool: just }
+
+      - name: Extract Version
+        run: |
+          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+
+      - name: Build UI assets
+        run: just npm-build
+
+      - name: Build Release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Import signing certificate
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          security list-keychains -d user -s build.keychain login.keychain
+          rm -f cert.p12
+
+      - name: Sign binary
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          codesign --force --options runtime --timestamp \
+            --sign "$MACOS_SIGN_IDENTITY" \
+            target/${{ matrix.target }}/release/kellnr
+          codesign --verify --strict --verbose=2 target/${{ matrix.target }}/release/kellnr
+
+      - name: Package Kellnr
+        run: |
+          ditto -c -k --keepParent \
+            target/${{ matrix.target }}/release/kellnr \
+            ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
+
+      - name: Notarize
+        env:
+          AC_API_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
+          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+        run: |
+          echo "$AC_API_KEY_P8" | base64 --decode > AuthKey.p8
+          xcrun notarytool submit \
+            ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip \
+            --key AuthKey.p8 \
+            --key-id "$AC_API_KEY_ID" \
+            --issuer "$AC_API_ISSUER_ID" \
+            --wait
+          rm -f AuthKey.p8
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
+          asset_name: ${{ matrix.artifact }}.zip
+          tag: ${{ github.ref }}
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          security delete-keychain build.keychain || true
+          rm -f cert.p12 AuthKey.p8
+
   crates-io-release:
     name: Publish to crates.io
     runs-on: ubuntu-24.04
