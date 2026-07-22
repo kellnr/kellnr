@@ -253,9 +253,9 @@ jobs:
 
       - name: Package Kellnr
         run: |
-          ditto -c -k --keepParent \
-            target/${{ matrix.target }}/release/kellnr \
-            ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
+          zip -qq -j \
+            ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip \
+            target/${{ matrix.target }}/release/kellnr
 
       - name: Notarize
         env:
