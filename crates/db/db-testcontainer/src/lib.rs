@@ -11,6 +11,7 @@ pub fn db_test(_attr: TokenStream, stream: TokenStream) -> TokenStream {
         vis,
         sig,
         block,
+        modifiers: _,
     } = input;
 
     // Clone the function signature for our implementation function

@@ -11,6 +11,7 @@ pub fn rustfs_testcontainer(_attr: TokenStream, stream: TokenStream) -> TokenStr
         vis,
         sig,
         block,
+        modifiers: _,
     } = input;
 
     let stmts = &block.stmts;
