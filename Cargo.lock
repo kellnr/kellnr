@@ -4341,7 +4341,7 @@ name = "kellnr-db-testcontainer"
 version = "6.5.3"
 dependencies = [
  "quote",
- "syn 2.0.118",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -4484,7 +4484,7 @@ name = "kellnr-rustfs-testcontainer"
 version = "6.5.3"
 dependencies = [
  "quote",
- "syn 2.0.118",
+ "syn 3.0.3",
 ]
 
 [[package]]
