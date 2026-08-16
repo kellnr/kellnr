@@ -42,9 +42,15 @@ pub fn create_router(
     oauth2_handler: Option<Arc<OAuth2Handler>>,
 ) -> Router {
     // Docs are served from disk and not from embedded assets
-    let docs_service = get_service(ServeDir::new(format!("{data_dir}/docs"))).route_layer(
-        middleware::from_fn_with_state(state.clone(), session::session_auth_when_required),
-    );
+    let docs_service = get_service(ServeDir::new(format!("{data_dir}/docs")))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            session::session_auth_when_required,
+        ))
+        // User-uploaded docs are served from the same origin as the UI and API.
+        // A restrictive CSP keeps rustdoc rendering while stopping any script in
+        // the uploaded content from reaching the API or exfiltrating data.
+        .layer(middleware::map_response(add_docs_csp));
 
     // Shared download concurrency limiter across kellnr and crates.io routes
     let download_semaphore = if state.settings.registry.download_max_concurrent > 0 {
@@ -127,6 +133,27 @@ async fn add_security_headers(mut response: axum::response::Response) -> axum::r
     headers.insert(X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     headers.insert(X_FRAME_OPTIONS, HeaderValue::from_static("SAMEORIGIN"));
     headers.insert(REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    response
+}
+
+/// Content-Security-Policy for the user-uploaded documentation served under
+/// `/docs`. `connect-src 'none'` and `form-action 'none'` neutralize the
+/// cross-endpoint attack path (a malicious docs page calling the authenticated
+/// API), while `'unsafe-inline'` scripts/styles are still allowed so generated
+/// rustdoc keeps working. True isolation would need a separate origin.
+async fn add_docs_csp(mut response: axum::response::Response) -> axum::response::Response {
+    use axum::http::HeaderValue;
+    use axum::http::header::CONTENT_SECURITY_POLICY;
+
+    response.headers_mut().insert(
+        CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; \
+             style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; \
+             connect-src 'none'; form-action 'none'; frame-ancestors 'self'; \
+             base-uri 'none'; object-src 'none'",
+        ),
+    );
     response
 }
 
