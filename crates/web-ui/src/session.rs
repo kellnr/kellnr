@@ -9,6 +9,7 @@ use axum_extra::extract::cookie::Cookie;
 use cookie::{SameSite, time};
 use kellnr_appstate::AppStateData;
 use kellnr_common::util::generate_rand_string;
+use kellnr_settings::Protocol;
 use kellnr_settings::constants::COOKIE_SESSION_ID;
 use time::Duration;
 use tracing::error;
@@ -32,10 +33,15 @@ pub(crate) async fn create_session_jar(
             RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
     let session_age_seconds = app_state.settings.registry.session_age_seconds as i64;
+    // Only mark the cookie `Secure` when the registry is served over HTTPS,
+    // otherwise the browser would drop it on plain-HTTP deployments.
+    let secure = app_state.settings.origin.protocol == Protocol::Https;
     Ok(cookies.add(
         Cookie::build((COOKIE_SESSION_ID, session_token))
             .max_age(Duration::seconds(session_age_seconds))
             .same_site(SameSite::Strict)
+            .http_only(true)
+            .secure(secure)
             .path("/"),
     ))
 }
