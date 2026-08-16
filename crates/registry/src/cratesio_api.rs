@@ -191,7 +191,9 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(r.status(), StatusCode::NOT_FOUND);
+        // An invalid crate name is rejected by the `OriginalName` extractor
+        // before reaching the handler.
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
