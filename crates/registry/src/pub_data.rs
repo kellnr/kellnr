@@ -41,6 +41,47 @@ fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
     }
 }
 
+/// Parse the length-prefixed publish body (`metadata_len | metadata | crate_len | crate`).
+///
+/// The two length fields are attacker-controlled, so every slice bound is
+/// validated against the actual buffer length before indexing. A mismatch
+/// returns an error instead of panicking on an out-of-bounds slice.
+fn parse_pub_data(data_bytes: &[u8]) -> Result<PubData, RegistryError> {
+    if data_bytes.len() < MIN_BODY_CRATE_AND_DOC_BYTES {
+        return Err(RegistryError::InvalidMinLength(
+            data_bytes.len(),
+            MIN_BODY_CRATE_AND_DOC_BYTES,
+        ));
+    }
+
+    let metadata_length = convert_length(&data_bytes[0..4])?;
+    let metadata_end = 4 + (metadata_length as usize);
+
+    // The metadata must fit and leave room for the 4-byte crate-length prefix
+    // that follows it.
+    if metadata_end + 4 > data_bytes.len() {
+        return Err(RegistryError::InvalidMetadataSize);
+    }
+
+    let metadata: PublishMetadata = deserialize_metadata(&data_bytes[4..metadata_end])?;
+    let crate_length = convert_length(&data_bytes[metadata_end..(metadata_end + 4)])?;
+    let crate_end = metadata_end + 4 + (crate_length as usize);
+
+    // The crate payload must be fully present in the body.
+    if crate_end > data_bytes.len() {
+        return Err(RegistryError::InvalidMetadataSize);
+    }
+
+    let cratedata = Arc::from(data_bytes[metadata_end + 4..crate_end].to_vec());
+
+    Ok(PubData {
+        metadata_length,
+        metadata,
+        crate_length,
+        cratedata,
+    })
+}
+
 impl FromRequest<AppStateData, Body> for PubData {
     type Rejection = ApiError;
 
@@ -53,34 +94,63 @@ impl FromRequest<AppStateData, Body> for PubData {
             .map_err(RegistryError::ExtractBytesFailed)?
             .to_vec();
 
-        if data_bytes.len() < MIN_BODY_CRATE_AND_DOC_BYTES {
-            return Err(RegistryError::InvalidMinLength(
-                data_bytes.len(),
-                MIN_BODY_CRATE_AND_DOC_BYTES,
-            )
-            .into());
-        }
+        Ok(parse_pub_data(&data_bytes)?)
+    }
+}
 
-        let metadata_length = convert_length(&data_bytes[0..4])?;
-        let metadata_end = 4 + (metadata_length as usize);
+#[cfg(test)]
+mod parse_tests {
+    use kellnr_common::publish_metadata::PublishMetadata;
 
-        if metadata_end >= data_bytes.len() {
-            return Err(RegistryError::InvalidMetadataSize.into());
-        }
+    use super::parse_pub_data;
 
-        let metadata: PublishMetadata = deserialize_metadata(&data_bytes[4..metadata_end])?;
-        let crate_length = convert_length(&data_bytes[metadata_end..(metadata_end + 4)])?;
-        let crate_end = metadata_end + 4 + (crate_length as usize);
-        let cratedata = Arc::from(data_bytes[metadata_end + 4..crate_end].to_vec());
+    fn body(metadata: &PublishMetadata, crate_length: u32, crate_bytes: &[u8]) -> Vec<u8> {
+        let meta = serde_json::to_vec(metadata).unwrap();
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&(meta.len() as u32).to_le_bytes());
+        buf.extend_from_slice(&meta);
+        buf.extend_from_slice(&crate_length.to_le_bytes());
+        buf.extend_from_slice(crate_bytes);
+        buf
+    }
 
-        let pub_data = PubData {
-            metadata_length,
-            metadata,
-            crate_length,
-            cratedata,
-        };
+    #[test]
+    fn parses_valid_body() {
+        let meta = PublishMetadata::minimal("test", "0.1.0");
+        let crate_bytes = [0x00, 0x11, 0x22, 0x33, 0x44];
+        let buf = body(&meta, crate_bytes.len() as u32, &crate_bytes);
 
-        Ok(pub_data)
+        let parsed = parse_pub_data(&buf).unwrap();
+
+        assert_eq!(parsed.metadata, meta);
+        assert_eq!(&*parsed.cratedata, &crate_bytes);
+    }
+
+    #[test]
+    fn oversized_crate_length_is_rejected_not_panicking() {
+        let meta = PublishMetadata::minimal("test", "0.1.0");
+        // Claim a huge crate length while sending only a couple of bytes.
+        let buf = body(&meta, u32::MAX, &[0x00, 0x11]);
+
+        assert!(parse_pub_data(&buf).is_err());
+    }
+
+    #[test]
+    fn missing_crate_length_prefix_is_rejected_not_panicking() {
+        // metadata_end lands 2 bytes short of the buffer end, leaving no room
+        // for the 4-byte crate-length prefix that must follow.
+        let meta = serde_json::to_vec(&PublishMetadata::minimal("test", "0.1.0")).unwrap();
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&(meta.len() as u32).to_le_bytes());
+        buf.extend_from_slice(&meta);
+        buf.extend_from_slice(&[0x00, 0x00]); // only 2 of the required 4 prefix bytes
+
+        assert!(parse_pub_data(&buf).is_err());
+    }
+
+    #[test]
+    fn too_short_body_is_rejected() {
+        assert!(parse_pub_data(&[0x00, 0x01, 0x02]).is_err());
     }
 }
 
