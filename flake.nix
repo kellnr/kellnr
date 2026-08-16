@@ -14,11 +14,12 @@
   };
 
   outputs =
-    { nixpkgs
-    , flake-utils
-    , crane
-    , rust-overlay
-    , ...
+    {
+      nixpkgs,
+      flake-utils,
+      crane,
+      rust-overlay,
+      ...
     }:
     flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ] (
       system:
@@ -81,14 +82,14 @@
             pkgs.cmake
             pkgs.pkg-config
           ]
-          ++ lib.optionals pkgs.stdenv.isLinux [
+          ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             pkgs.rustPlatform.bindgenHook
           ];
 
           buildInputs = [
             pkgs.openssl.dev
           ]
-          ++ lib.optionals pkgs.stdenv.isDarwin [
+          ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
             pkgs.libiconv
           ];
 
@@ -186,7 +187,7 @@
               python3
               playwright-driver.browsers
             ]
-            ++ lib.optionals stdenv.isLinux [
+            ++ lib.optionals stdenv.hostPlatform.isLinux [
             ];
 
           shellHook = ''
@@ -215,24 +216,27 @@
             echo "Playwright browsers: $PLAYWRIGHT_BROWSERS_PATH"
             echo "Nixpkgs playwright version: ${nixpkgsPlaywrightVersion}"
             ${
-              if playwrightVersionsMatch then ''
-                echo "tests/package.json @playwright/test version: ${testsPlaywrightVersion} (matches)"
-              '' else ''
-                echo ""
-                echo "WARNING: Playwright version mismatch!"
-                echo "  Nixpkgs playwright-driver:    ${nixpkgsPlaywrightVersion}"
-                echo "  tests/package.json @playwright/test: ${testsPlaywrightVersion}"
-                echo "  Update tests/package.json so @playwright/test matches the nixpkgs version,"
-                echo "  otherwise the bundled browsers will not be compatible with your tests."
-                echo ""
-              ''
+              if playwrightVersionsMatch then
+                ''
+                  echo "tests/package.json @playwright/test version: ${testsPlaywrightVersion} (matches)"
+                ''
+              else
+                ''
+                  echo ""
+                  echo "WARNING: Playwright version mismatch!"
+                  echo "  Nixpkgs playwright-driver:    ${nixpkgsPlaywrightVersion}"
+                  echo "  tests/package.json @playwright/test: ${testsPlaywrightVersion}"
+                  echo "  Update tests/package.json so @playwright/test matches the nixpkgs version,"
+                  echo "  otherwise the bundled browsers will not be compatible with your tests."
+                  echo ""
+                ''
             }
 
             alias c=cargo
             alias j=just
             alias lg=lazygit
           ''
-          + lib.optionalString pkgs.stdenv.isDarwin ''
+          + lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
             export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
           '';
         };
