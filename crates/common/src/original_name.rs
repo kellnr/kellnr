@@ -11,6 +11,11 @@ use crate::normalized_name::NormalizedName;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Hash, ToSchema)]
 #[schema(value_type = String)]
+// Validate the name on every deserialization (route params, JSON bodies, cached
+// index data) instead of only in the explicit `TryFrom` constructor. Otherwise a
+// name carrying `..`, `/`, etc. can slip through serde-based extractors and reach
+// filesystem paths. Mirrors the custom `Deserialize` on `Version`.
+#[serde(try_from = "String")]
 pub struct OriginalName(String);
 
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -173,6 +178,21 @@ mod tests {
             OriginalName::try_from("").unwrap_err(),
             NameError::InvalidCharacter
         );
+    }
+
+    #[test]
+    fn deserialize_accepts_valid_name() {
+        let name: OriginalName = serde_json::from_str(r#""test-lib""#).unwrap();
+        assert_eq!(name, OriginalName("test-lib".to_string()));
+    }
+
+    #[test]
+    fn deserialize_rejects_invalid_name() {
+        // Traversal / separator characters must be rejected by serde itself,
+        // not silently wrapped into an OriginalName.
+        assert!(serde_json::from_str::<OriginalName>(r#""../etc""#).is_err());
+        assert!(serde_json::from_str::<OriginalName>(r#""a/b""#).is_err());
+        assert!(serde_json::from_str::<OriginalName>(r#""..""#).is_err());
     }
 
     #[test]
