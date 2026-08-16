@@ -109,7 +109,25 @@ pub fn create_router(
         .with_state(state)
         // Add OAuth2 handler as an extension (accessible via Extension<Option<Arc<OAuth2Handler>>>)
         .layer(Extension(oauth2_handler))
+        // Baseline security headers on every response.
+        .layer(middleware::map_response(add_security_headers))
         .layer(tower_http::trace::TraceLayer::new_for_http())
+}
+
+/// Add baseline security response headers to every response.
+///
+/// `nosniff` stops MIME sniffing, `SAMEORIGIN` blocks cross-origin framing
+/// (clickjacking) while still allowing the UI to embed same-origin content,
+/// and `no-referrer` avoids leaking internal URLs to third parties.
+async fn add_security_headers(mut response: axum::response::Response) -> axum::response::Response {
+    use axum::http::HeaderValue;
+    use axum::http::header::{REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS};
+
+    let headers = response.headers_mut();
+    headers.insert(X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    headers.insert(X_FRAME_OPTIONS, HeaderValue::from_static("SAMEORIGIN"));
+    headers.insert(REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    response
 }
 
 /// Apply download concurrency and timeout limits to a router.
