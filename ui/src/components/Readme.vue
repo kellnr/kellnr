@@ -12,7 +12,8 @@ import { markedHighlight } from "marked-highlight";
 import DOMPurify from 'dompurify';
 import { computed, watchEffect } from "vue";
 import hljs from 'highlight.js';
-import 'highlight.js/styles/github.css';
+import githubLight from '@/assets/hljs-github.css?inline';
+import githubDark from '@/assets/hljs-github-dark.css?inline';
 import { useTheme } from 'vuetify';
 
 const theme = useTheme();
@@ -37,20 +38,20 @@ const markedReadme = computed(() => {
   return DOMPurify.sanitize(marked.parse(props.readme || ''));
 });
 
-// Switch highlight.js theme based on current Vuetify theme
+// Switch the highlight.js theme with the Vuetify theme, using locally bundled
+// stylesheets so no request is made to an external CDN (works offline /
+// air-gapped and keeps a strict CSP happy).
 watchEffect(() => {
-  const linkId = 'highlight-theme';
-  let link = document.getElementById(linkId) as HTMLLinkElement;
+  const styleId = 'highlight-theme';
+  let style = document.getElementById(styleId) as HTMLStyleElement | null;
 
-  if (!link) {
-    link = document.createElement('link');
-    link.id = linkId;
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
+  if (!style) {
+    style = document.createElement('style');
+    style.id = styleId;
+    document.head.appendChild(style);
   }
 
-  const themeName = theme.global.current.value.dark ? 'github-dark' : 'github';
-  link.href = `https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.7.0/build/styles/${themeName}.min.css`;
+  style.textContent = theme.global.current.value.dark ? githubDark : githubLight;
 });
 </script>
 
