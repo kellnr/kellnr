@@ -13,9 +13,6 @@ import * as directives from 'vuetify/directives'
 // Material Design Icons
 import '@mdi/font/css/materialdesignicons.css'
 
-// Import both light and dark highlight.js themes
-import 'highlight.js/styles/github.css' // Light theme
-
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
 
