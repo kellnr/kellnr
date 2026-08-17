@@ -8,7 +8,7 @@ use crate::types::WebhookError;
 
 pub fn run_webhook_service(db: Arc<dyn DbProvider>) {
     tokio::spawn(async move {
-        let http_client = reqwest::Client::new();
+        let http_client = crate::types::build_client();
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             if let Err(err) = handle_queue(&db, &http_client).await {
