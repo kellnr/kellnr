@@ -30,7 +30,7 @@ use kellnr_migration::iden::{
 use sea_orm::entity::prelude::Uuid;
 use sea_orm::prelude::async_trait::async_trait;
 use sea_orm::query::{QueryOrder, QuerySelect, TransactionTrait};
-use sea_orm::sea_query::{Alias, Cond, Expr, Iden, JoinType, Order, Query, UnionType};
+use sea_orm::sea_query::{Alias, Cond, Expr, Iden, JoinType, LikeExpr, Order, Query, UnionType};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
     FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set,
@@ -48,6 +48,17 @@ use crate::{
 };
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+
+/// Escape the LIKE wildcards `%` and `_` (and the escape character itself) in a
+/// user-supplied search term so it is matched literally. Callers wrap the result
+/// in `%...%` and pair it with `ESCAPE '\'`. Without this, a search for `%`
+/// matches every row and turns the search endpoint into a cheap DoS.
+fn escape_like_pattern(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
 
 /// Upper bound on the configured session age. Clamping to this keeps cutoff
 /// arithmetic well within `chrono::Duration`/`DateTime` range, avoiding
@@ -284,8 +295,10 @@ impl Database {
 
         // Optional name filter
         if let Some(contains) = contains {
+            let pattern = format!("%{}%", escape_like_pattern(contains));
             query.and_where(
-                Expr::col((CrateIden::Table, CrateIden::Name)).like(format!("%{contains}%")),
+                Expr::col((CrateIden::Table, CrateIden::Name))
+                    .like(LikeExpr::new(pattern).escape('\\')),
             );
         }
 
@@ -320,9 +333,10 @@ impl Database {
                         .equals((CratesIoIden::Table, CratesIoIden::MaxVersion)),
                 );
             if let Some(contains) = contains {
+                let pattern = format!("%{}%", escape_like_pattern(contains));
                 query2.and_where(
                     Expr::col((CratesIoIden::Table, CratesIoIden::OriginalName))
-                        .like(format!("%{contains}%")),
+                        .like(LikeExpr::new(pattern).escape('\\')),
                 );
             }
             query.union(UnionType::All, query2);
@@ -2284,6 +2298,24 @@ impl DbProvider for Database {
 
 fn parse_db_version(value: &str) -> DbResult<Version> {
     Version::try_from(value).map_err(|_| DbError::InvalidVersion(value.to_owned()))
+}
+
+#[cfg(test)]
+mod like_escape_tests {
+    use super::escape_like_pattern;
+
+    #[test]
+    fn escapes_wildcards_and_backslash() {
+        assert_eq!(escape_like_pattern("a%b_c"), "a\\%b\\_c");
+        assert_eq!(escape_like_pattern("100%"), "100\\%");
+        // Backslash is escaped first so it doesn't double-escape the wildcards.
+        assert_eq!(escape_like_pattern("a\\b"), "a\\\\b");
+    }
+
+    #[test]
+    fn leaves_plain_text_untouched() {
+        assert_eq!(escape_like_pattern("serde-json"), "serde-json");
+    }
 }
 
 #[cfg(test)]
