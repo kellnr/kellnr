@@ -23,7 +23,9 @@ pub(crate) async fn create_session_jar(
     app_state: &AppStateData,
     username: &str,
 ) -> Result<PrivateCookieJar, RouteError> {
-    let session_token = generate_rand_string(12);
+    // 32 alphanumeric chars (~190 bits) to match the API token length, well
+    // above the ~128-bit session-id recommendation.
+    let session_token = generate_rand_string(32);
     app_state
         .db
         .add_session_token(username, &session_token)
