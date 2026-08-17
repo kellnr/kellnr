@@ -25,25 +25,6 @@ function toggleTheme() {
   let body = document.getElementById("body");
   body?.setAttribute("color-theme", store.theme);
 
-  // Toggle highlight.js theme
-  toggleHighlightTheme(store.theme);
-}
-
-function toggleHighlightTheme(theme: string) {
-  const isDark = theme === 'dark';
-
-  // Select all highlight.js style links
-  const hlLight = document.querySelector('link[href*="highlight.js/styles/github.css"]');
-  const hlDark = document.querySelector('link[href*="highlight.js/styles/github-dark.css"]');
-
-  if (hlLight && hlDark) {
-    if (isDark) {
-      hlLight.setAttribute('disabled', 'true');
-      hlDark.removeAttribute('disabled');
-    } else {
-      hlLight.removeAttribute('disabled');
-      hlDark.setAttribute('disabled', 'true');
-    }
-  }
+  // Highlight.js theme follows the Vuetify theme reactively in Readme.vue.
 }
 </script>
