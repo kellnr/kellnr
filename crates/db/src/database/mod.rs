@@ -52,7 +52,7 @@ const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 /// Escape the LIKE wildcards `%` and `_` (and the escape character itself) in a
 /// user-supplied search term so it is matched literally. Callers wrap the result
 /// in `%...%` and pair it with `ESCAPE '\'`. Without this, a search for `%`
-/// matches every row and turns the search endpoint into a cheap DoS.
+/// matches every row and turns the search endpoint into a cheap `DoS`.
 fn escape_like_pattern(input: &str) -> String {
     input
         .replace('\\', "\\\\")
