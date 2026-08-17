@@ -156,7 +156,7 @@ pub async fn test_webhook(
     }
 
     let w = db.get_webhook(&id).await?;
-    let client = reqwest::Client::new();
+    let client = types::build_client();
     let resp = client
         .post(&w.callback_url)
         .json("Test Payload")
