@@ -143,15 +143,16 @@ pub struct ResetPwd {
     security(("session_cookie" = []))
 )]
 pub async fn reset_pwd(
-    user: AdminUser,
+    _user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
 ) -> Result<Json<ResetPwd>, RouteError> {
     let new_pwd = generate_rand_string(12);
     db.change_pwd(&name, &new_pwd).await?;
 
+    // Report the user whose password was reset, not the admin performing it.
     Ok(ResetPwd {
-        user: user.name().to_owned(),
+        user: name,
         new_pwd,
     }
     .into())
