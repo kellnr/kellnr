@@ -293,12 +293,14 @@ impl Database {
                     .equals((CrateIden::Table, CrateIden::MaxVersion)),
             );
 
-        // Optional name filter
+        // Optional filter by name and description
         if let Some(contains) = contains {
             let pattern = format!("%{}%", escape_like_pattern(contains));
             query.and_where(
                 Expr::col((CrateIden::Table, CrateIden::Name))
-                    .like(LikeExpr::new(pattern).escape('\\')),
+                    .like(LikeExpr::new(&pattern).escape('\\'))
+                    .or(Expr::col((CrateIden::Table, CrateIden::Description))
+                        .like(LikeExpr::new(&pattern).escape('\\'))),
             );
         }
 
@@ -1358,7 +1360,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn search_in_crate_name(
+    async fn search_in_crate_name_and_description(
         &self,
         contains: &str,
         cache: bool,

@@ -273,7 +273,7 @@ pub struct SearchParams {
 )]
 pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
     let crates = db
-        .search_in_crate_name(&params.name, params.cache.unwrap_or(false))
+        .search_in_crate_name_and_description(&params.name, params.cache.unwrap_or(false))
         .await
         .unwrap_or_default();
     Json(Pagination {
@@ -1441,7 +1441,7 @@ mod tests {
         let (settings, storage) = test_deps();
 
         mock_db
-            .expect_search_in_crate_name()
+            .expect_search_in_crate_name_and_description()
             .with(eq("doesnotexist"), eq(false))
             .returning(move |_name, _| Ok(vec![]));
 
@@ -1483,7 +1483,7 @@ mod tests {
 
         let tc = test_crate_summary.clone();
         mock_db
-            .expect_search_in_crate_name()
+            .expect_search_in_crate_name_and_description()
             .with(eq("hello"), eq(false))
             .returning(move |_, _| Ok(vec![tc.clone()]));
 

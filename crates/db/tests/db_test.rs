@@ -1381,7 +1381,7 @@ async fn delete_crate_only_versions(test_db: &kellnr_db::Database) {
 }
 
 #[db_test]
-async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
+async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created_string = created.format("%Y-%m-%d %H:%M:%S").to_string();
     test_add_crate_with_downloads(
@@ -1389,6 +1389,7 @@ async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
         "crate",
         "admin",
         &Version::try_from("1.0.0").unwrap(),
+        None,
         &created,
         Some(4),
     )
@@ -1399,6 +1400,7 @@ async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
         "crate",
         "admin",
         &Version::try_from("2.2.0").unwrap(),
+        None,
         &created,
         Some(4),
     )
@@ -1409,6 +1411,7 @@ async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
         "foo_crate",
         "admin",
         &Version::try_from("1.0.0").unwrap(),
+        None,
         &created,
         Some(3),
     )
@@ -1419,6 +1422,7 @@ async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
         "foo_crate",
         "admin",
         &Version::try_from("2.0.0").unwrap(),
+        Some("this is the foo crate"),
         &created,
         Some(3),
     )
@@ -1429,6 +1433,7 @@ async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
         "crate_foo",
         "admin",
         &Version::try_from("1.0.0").unwrap(),
+        None,
         &created,
         Some(5),
     )
@@ -1439,8 +1444,20 @@ async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
         "crate_foo",
         "admin",
         &Version::try_from("3.0.0").unwrap(),
+        None,
         &created,
         Some(5),
+    )
+    .await
+    .unwrap();
+    test_add_crate_with_downloads(
+        test_db,
+        "only_in_description",
+        "admin",
+        &Version::try_from("4.0.0").unwrap(),
+        Some("description contains the word 'crate' in it"),
+        &created,
+        Some(1),
     )
     .await
     .unwrap();
@@ -1449,6 +1466,7 @@ async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
         "no_match",
         "admin",
         &Version::try_from("1.0.0").unwrap(),
+        None,
         &created,
         Some(1),
     )
@@ -1459,6 +1477,7 @@ async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
         "no_match",
         "admin",
         &Version::try_from("2.0.0").unwrap(),
+        None,
         &created,
         Some(1),
     )
@@ -1482,13 +1501,25 @@ async fn search_in_crate_name_found_match(test_db: &kellnr_db::Database) {
         CrateOverview {
             name: "foo_crate".to_string(),
             version: "2.0.0".to_string(),
+            description: Some("this is the foo crate".to_string()),
             date: created_string.clone(),
             total_downloads: 6,
             ..CrateOverview::default()
         },
+        CrateOverview {
+            name: "only_in_description".to_string(),
+            version: "4.0.0".to_string(),
+            description: Some("description contains the word 'crate' in it".to_string()),
+            date: created_string.clone(),
+            total_downloads: 1,
+            ..CrateOverview::default()
+        },
     ];
 
-    let search_results = test_db.search_in_crate_name("crate", false).await.unwrap();
+    let search_results = test_db
+        .search_in_crate_name_and_description("crate", false)
+        .await
+        .unwrap();
 
     assert_eq!(expected, search_results);
 }
@@ -1502,6 +1533,7 @@ async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
         "crate",
         "admin",
         &Version::try_from("1.0.0").unwrap(),
+        None,
         &created,
         Some(4),
     )
@@ -1512,6 +1544,7 @@ async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
         "crate",
         "admin",
         &Version::try_from("2.2.0").unwrap(),
+        None,
         &created,
         Some(4),
     )
@@ -1522,6 +1555,7 @@ async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
         "foo_crate",
         "admin",
         &Version::try_from("1.0.0").unwrap(),
+        None,
         &created,
         Some(3),
     )
@@ -1532,6 +1566,7 @@ async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
         "foo_crate",
         "admin",
         &Version::try_from("2.0.0").unwrap(),
+        None,
         &created,
         Some(3),
     )
@@ -1542,6 +1577,7 @@ async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
         "crate_foo",
         "admin",
         &Version::try_from("1.0.0").unwrap(),
+        None,
         &created,
         Some(5),
     )
@@ -1552,6 +1588,7 @@ async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
         "crate_foo",
         "admin",
         &Version::try_from("3.0.0").unwrap(),
+        None,
         &created,
         Some(5),
     )

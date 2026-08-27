@@ -196,6 +196,7 @@ impl<'a> TestCrateBuilder<'a> {
                 name,
                 self.owner,
                 &version,
+                None,
                 &created,
                 Some(downloads),
             )
@@ -288,12 +289,14 @@ pub async fn test_add_crate_with_downloads(
     name: &str,
     owner: &str,
     version: &Version,
+    description: Option<&str>,
     created: &DateTime<Utc>,
     downloads: Option<i64>,
 ) -> DbResult<i64> {
     let pm = PublishMetadata {
         name: name.to_string(),
         vers: version.to_string(),
+        description: description.map(ToString::to_string),
         ..PublishMetadata::default()
     };
     let user = user::Entity::find()
