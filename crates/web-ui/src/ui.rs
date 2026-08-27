@@ -274,7 +274,12 @@ pub struct SearchParams {
 )]
 pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
     let crates = db
-        .search_in_crate_name_and_description(params.name.as_str(), params.cache.unwrap_or(false))
+        .search_in_crate_name_and_description(
+            params.name.as_str(),
+            100,
+            0,
+            params.cache.unwrap_or(false),
+        )
         .await
         .unwrap_or_default();
     Json(Pagination {
@@ -1443,8 +1448,8 @@ mod tests {
 
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("doesnotexist"), eq(false))
-            .returning(move |_name, _| Ok(vec![]));
+            .with(eq("doesnotexist"), eq(100), eq(0), eq(false))
+            .returning(move |_name, _, _, _| Ok(vec![]));
 
         let r = app(
             mock_db,
@@ -1499,8 +1504,8 @@ mod tests {
 
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("vcard parser"), eq(false))
-            .returning(|_, _| Ok(vec![]));
+            .with(eq("vcard parser"), eq(100), eq(0), eq(false))
+            .returning(|_, _, _, _| Ok(vec![]));
 
         let r = app(
             mock_db,
@@ -1534,8 +1539,8 @@ mod tests {
         let tc = test_crate_summary.clone();
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("hello"), eq(false))
-            .returning(move |_, _| Ok(vec![tc.clone()]));
+            .with(eq("hello"), eq(100), eq(0), eq(false))
+            .returning(move |_, _, _, _| Ok(vec![tc.clone()]));
 
         let r = app(
             mock_db,

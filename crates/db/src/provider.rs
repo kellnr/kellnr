@@ -221,6 +221,8 @@ pub trait DbProvider: Send + Sync {
     async fn search_in_crate_name_and_description(
         &self,
         contains: &str,
+        limit: u64,
+        offset: u64,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>>;
     async fn get_crate_overview_list(
@@ -645,7 +647,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn search_in_crate_name_and_description(&self, contains: &str, cache: bool) -> DbResult<Vec<CrateOverview>> {
+            async fn search_in_crate_name_and_description(&self, contains: &str, limit: u64, offset: u64, cache: bool) -> DbResult<Vec<CrateOverview>> {
                 unimplemented!()
             }
 

@@ -9,7 +9,28 @@ use kellnr_common::name_or_description::NameOrDescription;
 
 pub struct SearchParams {
     pub q: NameOrDescription,
+    pub page: Page,
     pub per_page: PerPage,
+}
+
+pub struct Page(pub usize);
+
+impl TryFrom<usize> for Page {
+    type Error = &'static str;
+
+    fn try_from(page: usize) -> Result<Self, Self::Error> {
+        if page < 1 {
+            Err("page has to be at least 1.")
+        } else {
+            Ok(Self(page))
+        }
+    }
+}
+
+impl From<Page> for usize {
+    fn from(pp: Page) -> Self {
+        pp.0
+    }
 }
 
 pub struct PerPage(pub usize);
@@ -57,6 +78,18 @@ where
         let q =
             NameOrDescription::try_from(q).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
+        let page = query_params
+            .get("page")
+            .unwrap_or(&"1".to_string())
+            .parse::<usize>()
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("Invalid value for page: {e}"),
+                )
+            })?;
+        let page = Page::try_from(page).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
         let per_page = query_params
             .get("per_page")
             .unwrap_or(&"10".to_string())
@@ -70,7 +103,7 @@ where
         let per_page =
             PerPage::try_from(per_page).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
-        Ok(Self { q, per_page })
+        Ok(Self { q, page, per_page })
     }
 }
 

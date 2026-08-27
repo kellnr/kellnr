@@ -1483,7 +1483,7 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
     )
     .await
     .unwrap();
-    let expected = vec![
+    let page_1 = vec![
         CrateOverview {
             name: "crate".to_string(),
             version: "2.2.0".to_string(),
@@ -1498,6 +1498,9 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
             total_downloads: 10,
             ..CrateOverview::default()
         },
+    ];
+
+    let page_2 = vec![
         CrateOverview {
             name: "foo_crate".to_string(),
             version: "2.0.0".to_string(),
@@ -1516,8 +1519,24 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
         },
     ];
 
+    let expected: Vec<_> = page_1.iter().chain(page_2.iter()).cloned().collect();
+
+    let results_1 = test_db
+        .search_in_crate_name_and_description("crate", 2, 0, false)
+        .await
+        .unwrap();
+
+    assert_eq!(page_1, results_1);
+
+    let results_2 = test_db
+        .search_in_crate_name_and_description("crate", 2, 2, false)
+        .await
+        .unwrap();
+
+    assert_eq!(page_2, results_2);
+
     let search_results = test_db
-        .search_in_crate_name_and_description("crate", false)
+        .search_in_crate_name_and_description("crate", 100, 0, false)
         .await
         .unwrap();
 
