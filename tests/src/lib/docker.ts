@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import type { TestInfo } from "@playwright/test";
 import type { BeforeAllTestInfo } from "../testUtils";
@@ -133,6 +134,13 @@ export type Started = {
    */
   stopLogStreaming?: () => void;
 };
+
+/**
+ * Result of `startGcsFakeServerContainer` when `exposeToHost` is set: carries the host port
+ * reserved up front and baked into fake-gcs-server's `-public-host`, so callers don't need
+ * (and shouldn't use) `container.getMappedPort(4443)` to find it.
+ */
+export type StartedGcs = Started & { hostPort?: number };
 
 function nowIsoNoMs(): string {
   return new Date()
@@ -272,6 +280,65 @@ export async function buildS3RustFsImage(options: {
   if (res.exitCode !== 0) {
     throw new Error(
       `Failed to build RustFS image ${options.imageName} (exitCode=${res.exitCode})`,
+    );
+  }
+}
+
+/**
+ * Build the custom fake-gcs-server image used by the GCS smoke test from the repository
+ * Dockerfile, mirroring `buildS3RustFsImage` above.
+ *
+ * - Dockerfile: <repoRoot>/tests/fixtures/test-gcs-storage/Dockerfile
+ * - Context:    <repoRoot>/tests/fixtures/test-gcs-storage
+ */
+export async function buildGcsFakeServerImage(options: {
+  imageName: string;
+  cratesBucket: string;
+  cratesioBucket: string;
+  toolchainBucket?: string;
+}): Promise<void> {
+  // Check if image already exists
+  if (await dockerImageExists(options.imageName)) {
+    console.log(`[docker] Image ${options.imageName} already exists, skipping build`);
+    return;
+  }
+
+  const repoRoot = path.resolve(process.cwd(), "..");
+
+  const contextDir = path.resolve(
+    repoRoot,
+    "tests",
+    "fixtures",
+    "test-gcs-storage",
+  );
+  const dockerfile = path.resolve(contextDir, "Dockerfile");
+
+  const args = [
+    "build",
+    "-t",
+    options.imageName,
+    "-f",
+    dockerfile,
+    "--build-arg",
+    `CRATES_BUCKET=${options.cratesBucket}`,
+    "--build-arg",
+    `CRATESIO_BUCKET=${options.cratesioBucket}`,
+  ];
+
+  if (options.toolchainBucket) {
+    args.push("--build-arg", `TOOLCHAIN_BUCKET=${options.toolchainBucket}`);
+  }
+
+  args.push(contextDir);
+
+  const res = await execa("docker", args, {
+    cwd: repoRoot,
+    stdio: "inherit",
+  });
+
+  if (res.exitCode !== 0) {
+    throw new Error(
+      `Failed to build fake-gcs-server image ${options.imageName} (exitCode=${res.exitCode})`,
     );
   }
 }
@@ -577,6 +644,87 @@ export async function startS3RustFsContainer(
     },
     testInfo,
   );
+}
+
+/**
+ * Reserve a free TCP port on the host by briefly binding to it, then releasing it.
+ *
+ * `fake-gcs-server`'s `-public-host` flag must match the exact host:port the client
+ * connects through for its flat, GCS-XML-API-style object routes (used by `object_store`)
+ * to dispatch correctly; a Docker-assigned random host port that differs from the
+ * `-public-host` baked into the container causes every GET/PUT to 404/405. The port must
+ * therefore be known and baked into the container's command *before* it starts, rather than
+ * read back afterwards via `getMappedPort`. This is inherently a little racy (another
+ * process could grab the port between release and Docker binding it), but it's the same
+ * technique used on the Rust test side (see `fakegcs-testcontainer`).
+ */
+async function reserveFreePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => {
+        if (address && typeof address === "object") {
+          resolve(address.port);
+        } else {
+          reject(new Error("Failed to reserve a free port for fake-gcs-server"));
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Start the fake-gcs-server container for the GCS smoke test on the given network with a
+ * stable alias, mirroring `startS3RustFsContainer` above.
+ */
+export async function startGcsFakeServerContainer(
+  options: {
+    name: string;
+    image: string;
+    network: StartedNetwork;
+    /**
+     * If true, reserve a free host port up front, publish container port 4443 on it, and
+     * bake that same host:port into `-public-host` so fake-gcs-server's flat object routes
+     * dispatch correctly. The reserved port is returned as `hostPort` on the result.
+     * Required when Kellnr runs locally (not in Docker) and needs to access fake-gcs-server.
+     */
+    exposeToHost?: boolean;
+  },
+  testInfo?: TestInfo | BeforeAllTestInfo,
+): Promise<StartedGcs> {
+  if (!options.exposeToHost) {
+    return await startContainer(
+      {
+        name: options.name,
+        image: options.image,
+        network: options.network,
+        networkAliases: ["fake-gcs-server"],
+        // The bucket-listing endpoint responds with 200 once the server is up.
+        waitFor: waitForHttp(4443, "/storage/v1/b"),
+      },
+      testInfo,
+    );
+  }
+
+  const hostPort = await reserveFreePort();
+
+  const started = await startContainer(
+    {
+      name: options.name,
+      image: options.image,
+      network: options.network,
+      networkAliases: ["fake-gcs-server"],
+      ports: { 4443: hostPort },
+      cmd: ["-public-host", `localhost:${hostPort}`],
+      // The bucket-listing endpoint responds with 200 once the server is up.
+      waitFor: waitForHttp(4443, "/storage/v1/b"),
+    },
+    testInfo,
+  );
+
+  return { ...started, hostPort };
 }
 
 /**

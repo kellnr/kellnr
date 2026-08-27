@@ -25,6 +25,7 @@ kellnr-db-testcontainer = { version = "6.7.0", path = "./crates/db/db-testcontai
 kellnr-docs = { version = "6.7.0", path = "./crates/docs" }
 kellnr-entity = { version = "6.7.0", path = "./crates/db/entity" }
 kellnr-error = { version = "6.7.0", path = "./crates/error" }
+kellnr-fakegcs-testcontainer = { version = "6.7.0", path = "./crates/storage/fakegcs-testcontainer" }
 kellnr-index = { version = "6.7.0", path = "./crates/index" }
 kellnr-migration = { version = "6.7.0", path = "./crates/db/migration" }
 kellnr-rustfs-testcontainer = { version = "6.7.0", path = "./crates/storage/rustfs-testcontainer" }
@@ -54,7 +55,7 @@ include_dir = "0.7.4"
 mime_guess = "2.0.5"
 mockall = "0.15.0"
 moka = { version = "0.12.15", features = ["future"] }
-object_store = { version = "0.14.0", default-features = false, features = ["aws", "fs"] }
+object_store = { version = "0.14.0", default-features = false, features = ["aws", "fs", "gcp"] }
 openidconnect = "4"
 # `env` comes from provcfg's default features; kellnr opts into the rest.
 # `json` is intentionally left out, kellnr has no JSON config sources.

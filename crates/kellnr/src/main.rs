@@ -22,6 +22,7 @@ use kellnr_settings::{
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::fs_storage::FSStorage;
+use kellnr_storage::gcs_storage::GCSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::s3_storage::S3Storage;
 use kellnr_storage::toolchain_storage::ToolchainStorage;
@@ -374,6 +375,9 @@ fn init_kellnr_crate_storage(settings: &Settings) -> KellnrCrateStorage {
 fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
     if settings.s3.enabled {
         let s = S3Storage::try_from((folder, settings)).expect("Failed to create S3 storage.");
+        Box::new(s) as DynStorage
+    } else if settings.gcs.enabled {
+        let s = GCSStorage::try_from((folder, settings)).expect("Failed to create GCS storage.");
         Box::new(s) as DynStorage
     } else {
         let s = FSStorage::new(folder).expect("Failed to create FS storage.");

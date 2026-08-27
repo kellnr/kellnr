@@ -105,6 +105,7 @@ const sectionDescriptors: SectionDescriptor[] = [
   { key: 'docs', title: 'Docs', icon: 'mdi-file-document-multiple-outline' },
   { key: 'postgresql', title: 'PostgreSQL', icon: 'mdi-database' },
   { key: 's3', title: 'S3 Storage', icon: 'mdi-cloud-outline' },
+  { key: 'gcs', title: 'GCS Storage', icon: 'mdi-cloud-outline' },
   { key: 'toolchain', title: 'Toolchain', icon: 'mdi-wrench' },
 ];
 
