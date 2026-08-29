@@ -1,20 +1,59 @@
 use std::borrow::Cow;
+use std::path::PathBuf;
 
-use testcontainers::Image;
 use testcontainers::core::wait::HttpWaitStrategy;
-use testcontainers::core::{ContainerPort, WaitFor};
+use testcontainers::core::{
+    BuildContextBuilder, ContainerPort, CopyToContainerCollection, WaitFor,
+};
+use testcontainers::{BuildableImage, Image};
 
-// The upstream `fsouza/fake-gcs-server` image doesn't implement the plain XML-style
-// `PUT /{bucket}/{object}` request that `object_store`'s GCS client sends (it 404s/405s
-// on it, see https://github.com/fsouza/fake-gcs-server/issues/1164). `object_store`'s own
-// CI works around this with a patched fork image, referenced directly in their workflow
-// (https://github.com/apache/arrow-rs-object-store/blob/main/.github/workflows/ci.yml).
-// Use the same fork here.
-// Pinned by digest: the fork only publishes a `latest` tag, so a plain tag reference
-// would silently change under CI. Docker accepts the `repo:tag@sha256:...` form, and
-// testcontainers builds the reference as `{name}:{tag}`.
-const NAME: &str = "tustvold/fake-gcs-server";
-const TAG: &str = "latest@sha256:dcd3aeacc07c731f1336e90c2889be2af8626ae993ee1fe2c0ba042ebbeb5a04";
+// Built from source rather than pulled: upstream `fsouza/fake-gcs-server` doesn't
+// implement the plain XML-style `PUT /{bucket}/{object}` request that `object_store`'s GCS
+// client sends (see https://github.com/fsouza/fake-gcs-server/issues/1164), and the fork
+// image `object_store`'s own CI uses is a personal, amd64-only `latest` tag. The Dockerfile
+// under `tests/fixtures/test-gcs-storage` builds a pinned upstream release with kellnr's
+// XML API patch applied, which also gives a native image on arm64. The Playwright UI tests
+// build the very same Dockerfile, see `tests/src/lib/docker.ts`.
+const IMAGE_NAME: &str = "kellnr-fake-gcs-server";
+const IMAGE_TAG: &str = "local";
+
+/// Build context for [`FakeGcsServer`], shared with the Playwright UI tests.
+pub struct FakeGcsServerImage {
+    host_port: u16,
+}
+
+impl FakeGcsServerImage {
+    pub fn new(host_port: u16) -> Self {
+        Self { host_port }
+    }
+
+    fn fixture_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/test-gcs-storage")
+    }
+}
+
+impl BuildableImage for FakeGcsServerImage {
+    type Built = FakeGcsServer;
+
+    fn build_context(&self) -> CopyToContainerCollection {
+        let dir = Self::fixture_dir();
+        BuildContextBuilder::default()
+            .with_dockerfile(dir.join("Dockerfile"))
+            .with_file(dir.join("xml_object.go"), "./xml_object.go")
+            .with_file(dir.join("xml-routes.patch"), "./xml-routes.patch")
+            .as_copy_to_container_collection()
+    }
+
+    fn descriptor(&self) -> String {
+        format!("{IMAGE_NAME}:{IMAGE_TAG}")
+    }
+
+    fn into_image(self) -> Self::Built {
+        FakeGcsServer {
+            host_port: self.host_port,
+        }
+    }
+}
 
 /// `fake-gcs-server`'s `-public-host` flag must match the exact `host:port` the client
 /// connects through for its flat, GCS-XML-API-style object routes (used by
@@ -31,19 +70,15 @@ pub struct FakeGcsServer {
 impl FakeGcsServer {
     pub const PORT: u16 = 4443;
     pub const CONTAINER_PORT: ContainerPort = ContainerPort::Tcp(Self::PORT);
-
-    pub fn new(host_port: u16) -> Self {
-        Self { host_port }
-    }
 }
 
 impl Image for FakeGcsServer {
     fn name(&self) -> &str {
-        NAME
+        IMAGE_NAME
     }
 
     fn tag(&self) -> &str {
-        TAG
+        IMAGE_TAG
     }
 
     fn ready_conditions(&self) -> Vec<WaitFor> {
@@ -55,19 +90,12 @@ impl Image for FakeGcsServer {
         )]
     }
 
-    fn entrypoint(&self) -> Option<&str> {
-        // Override entrypoint to create the bucket directories before starting.
-        Some("sh")
-    }
-
     fn cmd(&self) -> impl IntoIterator<Item = impl Into<Cow<'_, str>>> {
+        // The image's ENTRYPOINT already carries `-data /data -scheme http`, and the bucket
+        // directories are created at build time.
         vec![
-            "-c".to_string(),
-            format!(
-                "mkdir -p /data/kellnr-crates /data/kellnr-cratesio /data/kellnr-toolchains && \
-                 exec /bin/fake-gcs-server -data /data -scheme http -public-host localhost:{}",
-                self.host_port
-            ),
+            "-public-host".to_string(),
+            format!("localhost:{}", self.host_port),
         ]
     }
 

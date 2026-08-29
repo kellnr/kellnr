@@ -288,6 +288,11 @@ export async function buildS3RustFsImage(options: {
  * Build the custom fake-gcs-server image used by the GCS smoke test from the repository
  * Dockerfile, mirroring `buildS3RustFsImage` above.
  *
+ * The Dockerfile builds fake-gcs-server from a pinned upstream release with kellnr's GCS
+ * XML API patch applied, so the tests depend only on the public upstream repository and the
+ * image builds natively on every architecture. The Rust integration tests build the same
+ * Dockerfile, see `crates/storage/tests/gcs_image.rs`.
+ *
  * - Dockerfile: <repoRoot>/tests/fixtures/test-gcs-storage/Dockerfile
  * - Context:    <repoRoot>/tests/fixtures/test-gcs-storage
  */
