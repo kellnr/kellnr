@@ -86,7 +86,7 @@ jobs:
         run: sudo apt install -y sed zip
 
       - name: Install Just
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.8
         with: { tool: just }
 
       - name: Setup Rust
@@ -98,7 +98,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install cross-rs
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.8
         with: { tool: cross }
 
       - name: Extract Version
@@ -160,7 +160,7 @@ jobs:
           node-version: "24"
 
       - name: Install Just
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.8
         with: { tool: just }
 
       - name: Extract Version
@@ -213,7 +213,7 @@ jobs:
           node-version: "24"
 
       - name: Install Just
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.8
         with: { tool: just }
 
       - name: Extract Version
@@ -296,7 +296,7 @@ jobs:
         with: { fetch-depth: 0, persist-credentials: false }
 
       - name: Install Just
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.8
         with: { tool: just }
 
       - name: Setup Rust
