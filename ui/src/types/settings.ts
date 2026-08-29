@@ -140,6 +140,8 @@ export type S3 = {
 export type Gcs = {
   enabled: boolean
   endpoint: string | null
+  allow_http: boolean
+  skip_signature: boolean
   crates_bucket: string
   cratesio_bucket: string
   toolchain_bucket: string
@@ -155,6 +157,8 @@ export const emptySettings: Settings = {
   gcs: {
     enabled: false,
     endpoint: null,
+    allow_http: false,
+    skip_signature: false,
     crates_bucket: "",
     cratesio_bucket: "",
     toolchain_bucket: "",

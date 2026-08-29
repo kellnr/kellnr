@@ -6,13 +6,14 @@ All tests verify both backend functionality AND UI accessibility through browser
 
 ## Test Suite Overview
 
-**65 UI tests across 14 test files:**
+**108 UI tests across 19 test files:**
 
 | Test File | Tests | What It Verifies |
 |-----------|-------|------------------|
 | `ui-crate-settings.spec.ts` | 4 | Crate owner management, access control, version deletion |
 | `ui-crate-with-data.spec.ts` | 5 | Crate display, navigation, statistics, admin features |
 | `ui-crates.spec.ts` | 7 | Crates page, search, filters, empty states |
+| `ui-docs-path-prefix.spec.ts` | 2 | Documentation served under a path prefix |
 | `ui-docs.spec.ts` | 2 | Documentation generation + UI link verification |
 | `ui-gcs-storage.spec.ts` | 4 | GCS storage backend + UI verification |
 | `ui-landing-stats.spec.ts` | 5 | Landing page statistics cards clickability |
@@ -20,10 +21,17 @@ All tests verify both backend functionality AND UI accessibility through browser
 | `ui-me.spec.ts` | 4 | /me route, cargo login flow, token management |
 | `ui-migration.spec.ts` | 1 | Database migration + UI accessibility |
 | `ui-navigation.spec.ts` | 7 | Header nav, theme toggle, routing, branding |
+| `ui-oauth2.spec.ts` | 9 | OAuth2 login, auto-provisioning, session handling |
 | `ui-proxy-crates.spec.ts` | 3 | Proxy toggle, cached crates, statistics |
 | `ui-s3-storage.spec.ts` | 4 | S3 storage backend + UI verification |
+| `ui-startup-config.spec.ts` | 2 | Startup configuration page, setting sources |
 | `ui-toolchains-gcs.spec.ts` | 8 | Toolchain upload/download/manifests on GCS storage |
-| `ui-user-management.spec.ts` | 5 | User management, admin promotion/demotion |
+| `ui-toolchains-s3.spec.ts` | 8 | Toolchain upload/download/manifests on S3 storage |
+| `ui-toolchains.spec.ts` | 20 | Toolchain management on local filesystem storage |
+| `ui-user-management.spec.ts` | 7 | User management, admin promotion/demotion |
+
+`src/cli.spec.ts` adds 14 non-UI tests for the `kellnr` command line interface. They run in
+the same Playwright project but do not drive a browser.
 
 ## Prerequisites
 

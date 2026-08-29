@@ -124,6 +124,8 @@ test.describe("GCS Storage UI Tests", () => {
         KELLNR_PROXY__ENABLED: "true",
         KELLNR_GCS__ENABLED: "true",
         KELLNR_GCS__ENDPOINT: gcsUrlForLocalKellnr,
+        KELLNR_GCS__ALLOW_HTTP: "true",
+        KELLNR_GCS__SKIP_SIGNATURE: "true",
         KELLNR_GCS__CRATES_BUCKET: gcsCratesBucket,
         KELLNR_GCS__CRATESIO_BUCKET: gcsCratesioBucket,
       },

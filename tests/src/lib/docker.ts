@@ -597,8 +597,9 @@ export function waitForHttp(
   const statusCode = opts?.statusCode ?? 200;
   const startupTimeoutMs = opts?.startupTimeoutMs ?? 60_000;
 
-  return Wait.forHttp(pathName)
-    .forPort(port)
+  // The container port is the second argument of `Wait.forHttp`; `HttpWaitStrategy` has
+  // no `forPort` method.
+  return Wait.forHttp(pathName, port)
     .forStatusCode(statusCode)
     .withStartupTimeout(startupTimeoutMs);
 }

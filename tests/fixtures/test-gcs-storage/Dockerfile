@@ -5,7 +5,9 @@
 # (https://github.com/apache/arrow-rs-object-store/blob/main/.github/workflows/ci.yml).
 # Use the same fork here (see also crates/storage/tests/gcs_image.rs, which hit and fixed
 # the identical issue on the Rust integration-test side).
-FROM tustvold/fake-gcs-server:latest
+# Pinned by digest: the fork only publishes a `latest` tag, so a plain tag reference
+# would silently change under CI.
+FROM tustvold/fake-gcs-server@sha256:dcd3aeacc07c731f1336e90c2889be2af8626ae993ee1fe2c0ba042ebbeb5a04
 
 # Set build-time arguments for the bucket names
 ARG CRATES_BUCKET=kellnr-crates

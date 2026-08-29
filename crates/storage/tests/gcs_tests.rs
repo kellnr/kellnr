@@ -32,6 +32,8 @@ impl TestGCSStorage {
             gcs: Gcs {
                 enabled: true,
                 endpoint: Some(url.to_string()),
+                allow_http: true,
+                skip_signature: true,
                 ..Gcs::default()
             },
             ..Settings::default()
@@ -46,8 +48,10 @@ impl TestGCSStorage {
 #[fakegcs_testcontainer]
 #[tokio::test]
 async fn add_and_get_crate() {
-    let host = container.get_host().await.unwrap().to_string();
-    let url = format!("http://{host}:{port}");
+    // `localhost`, not `container.get_host()`: the reserved port is baked into
+    // fake-gcs-server's `-public-host` as `localhost:{port}`, and a mismatch makes every
+    // object route 404 (see `gcs_image.rs`).
+    let url = format!("http://localhost:{port}");
     let cratedata = Arc::new([0x00, 0x11, 0x22, 0x33, 0x44]);
     let metadata = PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0");
     let test_storage = TestGCSStorage::from("Test_Add_crate_binary_Upper-Case_gcs", &url);
@@ -74,8 +78,7 @@ async fn add_and_get_crate() {
 #[fakegcs_testcontainer]
 #[tokio::test]
 async fn remove_crate() {
-    let host = container.get_host().await.unwrap().to_string();
-    let url = format!("http://{host}:{port}");
+    let url = format!("http://localhost:{port}");
     let cratedata = Arc::new([0x00, 0x11, 0x22, 0x33, 0x44]);
     let test_storage = TestGCSStorage::from("test_delete_gcs", &url);
     let name = OriginalName::try_from("test").unwrap();

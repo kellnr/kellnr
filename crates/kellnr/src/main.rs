@@ -113,6 +113,17 @@ async fn run_server(resolved: ResolvedSettings) {
         std::process::exit(1);
     }
 
+    // Only one remote storage backend can be active at a time. Silently preferring one
+    // would put crates in a different place than the operator configured.
+    if settings.s3.enabled && settings.gcs.enabled {
+        eprintln!("Error: Both the S3 and the GCS storage backend are enabled.");
+        eprintln!();
+        eprintln!("Kellnr can only use one storage backend at a time.");
+        eprintln!("Disable one of them, for example:");
+        eprintln!("  KELLNR_S3__ENABLED=false or KELLNR_GCS__ENABLED=false");
+        std::process::exit(1);
+    }
+
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber

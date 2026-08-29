@@ -10,8 +10,11 @@ use testcontainers::core::{ContainerPort, WaitFor};
 // CI works around this with a patched fork image, referenced directly in their workflow
 // (https://github.com/apache/arrow-rs-object-store/blob/main/.github/workflows/ci.yml).
 // Use the same fork here.
+// Pinned by digest: the fork only publishes a `latest` tag, so a plain tag reference
+// would silently change under CI. Docker accepts the `repo:tag@sha256:...` form, and
+// testcontainers builds the reference as `{name}:{tag}`.
 const NAME: &str = "tustvold/fake-gcs-server";
-const TAG: &str = "latest";
+const TAG: &str = "latest@sha256:dcd3aeacc07c731f1336e90c2889be2af8626ae993ee1fe2c0ba042ebbeb5a04";
 
 /// `fake-gcs-server`'s `-public-host` flag must match the exact `host:port` the client
 /// connects through for its flat, GCS-XML-API-style object routes (used by
