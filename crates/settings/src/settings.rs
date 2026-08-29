@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config_source::SourceMap;
 use crate::docs::{Docs, DocsArgs, DocsPartial, DocsProv};
+use crate::gcs::{Gcs, GcsArgs, GcsPartial, GcsProv};
 use crate::local::{Local, LocalArgs, LocalPartial, LocalProv};
 use crate::log::{Log, LogArgs, LogPartial, LogProv};
 use crate::oauth2::{OAuth2, OAuth2Args, OAuth2Partial, OAuth2Prov};
@@ -46,6 +47,8 @@ pub struct Settings {
     pub postgresql: Postgresql,
     #[configurable(nested)]
     pub s3: S3,
+    #[configurable(nested)]
+    pub gcs: Gcs,
     #[configurable(nested)]
     pub oauth2: OAuth2,
     #[configurable(nested)]
@@ -127,6 +130,8 @@ impl Settings {
     pub fn crates_path_or_bucket(&self) -> String {
         if self.s3.enabled {
             self.s3.crates_bucket.clone()
+        } else if self.gcs.enabled {
+            self.gcs.crates_bucket.clone()
         } else {
             self.crates_path()
         }
@@ -135,6 +140,8 @@ impl Settings {
     pub fn crates_io_path_or_bucket(&self) -> String {
         if self.s3.enabled {
             self.s3.cratesio_bucket.clone()
+        } else if self.gcs.enabled {
+            self.gcs.cratesio_bucket.clone()
         } else {
             self.crates_io_path()
         }
@@ -147,6 +154,8 @@ impl Settings {
     pub fn toolchain_path_or_bucket(&self) -> String {
         if self.s3.enabled {
             self.s3.toolchain_bucket.clone()
+        } else if self.gcs.enabled {
+            self.gcs.toolchain_bucket.clone()
         } else {
             self.toolchain_path()
         }

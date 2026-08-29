@@ -13,6 +13,7 @@ export type SourceMap = Record<string, ConfigSource>;
 // Type for default values (same structure as settings sections, no sources)
 export type SettingsDefaults = {
   docs: Docs
+  gcs: Gcs
   local: Local
   log: Log
   origin: Origin
@@ -40,6 +41,7 @@ export type LeafMeta = {
 
 export type Settings = {
   docs: Docs
+  gcs: Gcs
   local: Local
   log: Log
   origin: Origin
@@ -135,10 +137,33 @@ export type S3 = {
   request_timeout_seconds: number
 }
 
+export type Gcs = {
+  enabled: boolean
+  endpoint: string | null
+  allow_http: boolean
+  skip_signature: boolean
+  crates_bucket: string
+  cratesio_bucket: string
+  toolchain_bucket: string
+  connect_timeout_seconds: number
+  request_timeout_seconds: number
+}
+
 export const emptySettings: Settings = {
   docs: {
     enabled: true,
     max_size: 0
+  },
+  gcs: {
+    enabled: false,
+    endpoint: null,
+    allow_http: false,
+    skip_signature: false,
+    crates_bucket: "",
+    cratesio_bucket: "",
+    toolchain_bucket: "",
+    connect_timeout_seconds: 5,
+    request_timeout_seconds: 30
   },
   local: {
     ip: "",

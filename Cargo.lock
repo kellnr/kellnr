@@ -4405,6 +4405,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kellnr-fakegcs-testcontainer"
+version = "6.7.0"
+dependencies = [
+ "quote",
+ "syn 3.0.4",
+]
+
+[[package]]
 name = "kellnr-index"
 version = "6.7.0"
 dependencies = [
@@ -4509,6 +4517,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "kellnr-common",
+ "kellnr-fakegcs-testcontainer",
  "kellnr-rustfs-testcontainer",
  "kellnr-settings",
  "moka",
