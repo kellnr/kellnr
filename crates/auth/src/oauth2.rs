@@ -306,8 +306,9 @@ impl OAuth2Handler {
 
         let nonce = Nonce::new(nonce.to_string());
 
-        // An ID token may contain multiple audiences. When configured, accept
-        // additional audiences while requiring the configured client ID.
+        // An ID token may contain multiple audiences. Require the configured
+        // client ID and accept additional audiences only when explicitly
+        // allowlisted.
         let verifier = client.id_token_verifier().set_other_audience_verifier_fn({
             let additional_audiences = self.settings.additional_audiences.clone();
             move |aud| {
