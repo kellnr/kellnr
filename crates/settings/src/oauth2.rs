@@ -32,8 +32,10 @@ pub struct OAuth2 {
     #[configurable(secret)]
     pub client_secret: Option<String>,
 
-    /// Accept additional audiences in the ID token when the client ID is present
-    pub allow_additional_audiences: bool,
+    /// Additional audiences accepted in the ID token besides the client ID
+    #[configurable(env_list)]
+    #[arg(value_delimiter = ',')]
+    pub additional_audiences: Vec<String>,
 
     /// `OAuth2` scopes to request (default: `["openid", "profile", "email"]`)
     #[configurable(env_list)]
@@ -66,7 +68,7 @@ impl Default for OAuth2 {
             issuer_url: None,
             client_id: None,
             client_secret: None,
-            allow_additional_audiences: false,
+            additional_audiences: Vec::new(),
             scopes: default_scopes(),
             auto_provision_users: true,
             admin_group_claim: None,
@@ -125,7 +127,7 @@ mod tests {
         assert!(oauth2.issuer_url.is_none());
         assert!(oauth2.client_id.is_none());
         assert!(oauth2.client_secret.is_none());
-        assert!(!oauth2.allow_additional_audiences);
+        assert!(oauth2.additional_audiences.is_empty());
         assert_eq!(oauth2.scopes, vec!["openid", "profile", "email"]);
         assert!(oauth2.auto_provision_users);
         assert_eq!(oauth2.button_text, "Login with SSO");

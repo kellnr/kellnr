@@ -309,8 +309,12 @@ impl OAuth2Handler {
         // An ID token may contain multiple audiences. When configured, accept
         // additional audiences while requiring the configured client ID.
         let verifier = client.id_token_verifier().set_other_audience_verifier_fn({
-            let allow_additional_audiences = self.settings.allow_additional_audiences;
-            move |_| allow_additional_audiences
+            let additional_audiences = self.settings.additional_audiences.clone();
+            move |aud| {
+                additional_audiences
+                    .iter()
+                    .any(|allowed| allowed == aud.as_str())
+            }
         });
 
         let claims = match id_token.claims(&verifier, &nonce) {
@@ -327,9 +331,12 @@ impl OAuth2Handler {
                     let verifier = refreshed
                         .id_token_verifier()
                         .set_other_audience_verifier_fn({
-                            let allow_additional_audiences =
-                                self.settings.allow_additional_audiences;
-                            move |_| allow_additional_audiences
+                            let additional_audiences = self.settings.additional_audiences.clone();
+                            move |aud| {
+                                additional_audiences
+                                    .iter()
+                                    .any(|allowed| allowed == aud.as_str())
+                            }
                         });
                     id_token
                         .claims(&verifier, &nonce)
@@ -884,6 +891,8 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         jwks_fetches: AtomicUsize,
         /// Whether the mock token includes the configured client ID in `aud`.
         include_client_audience: AtomicBool,
+        /// Whether the mock token includes the additional audience in `aud`.
+        include_other_audience: AtomicBool,
     }
 
     impl MockProvider {
@@ -897,14 +906,13 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
 
         /// Mint an ID token signed with the currently active key.
         fn sign_id_token(&self) -> String {
-            let audiences = if self.include_client_audience.load(Ordering::SeqCst) {
-                vec![
-                    Audience::new(OTHER_AUDIENCE.to_string()),
-                    Audience::new(CLIENT_ID.to_string()),
-                ]
-            } else {
-                vec![Audience::new(OTHER_AUDIENCE.to_string())]
-            };
+            let mut audiences = Vec::new();
+            if self.include_client_audience.load(Ordering::SeqCst) {
+                audiences.push(Audience::new(CLIENT_ID.to_string()));
+            }
+            if self.include_other_audience.load(Ordering::SeqCst) {
+                audiences.push(Audience::new(OTHER_AUDIENCE.to_string()));
+            }
 
             let claims = CoreIdTokenClaims::new(
                 IssuerUrl::new(self.issuer.clone()).unwrap(),
@@ -961,13 +969,13 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         }))
     }
 
-    fn test_settings(issuer: &str, allow_additional_audiences: bool) -> OAuth2Settings {
+    fn test_settings(issuer: &str, additional_audiences: Vec<String>) -> OAuth2Settings {
         OAuth2Settings {
             enabled: true,
             issuer_url: Some(issuer.to_string()),
             client_id: Some(CLIENT_ID.to_string()),
             client_secret: Some("test-secret".to_string()),
-            allow_additional_audiences,
+            additional_audiences,
             ..Default::default()
         }
     }
@@ -994,6 +1002,7 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             rotated: AtomicBool::new(false),
             jwks_fetches: AtomicUsize::new(0),
             include_client_audience: AtomicBool::new(true),
+            include_other_audience: AtomicBool::new(false),
         });
 
         let app = Router::new()
@@ -1009,7 +1018,7 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
 
         // Discovery caches key A (first JWKS fetch).
         let handler =
-            OAuth2Handler::from_discovery(&test_settings(&issuer, true), "http://localhost/cb")
+            OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), "http://localhost/cb")
                 .await
                 .expect("discovery should succeed");
         assert_eq!(provider.jwks_fetches.load(Ordering::SeqCst), 1);
@@ -1045,33 +1054,62 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         assert_eq!(result.claims.subject().as_str(), SUBJECT);
         assert_eq!(provider.jwks_fetches.load(Ordering::SeqCst), 2);
 
-        // The client ID remains mandatory even when additional audiences are
-        // accepted.
+        // The client ID remains mandatory, even if an additional audience is
+        // otherwise trusted.
         provider
             .include_client_audience
             .store(false, Ordering::SeqCst);
-        assert!(
-            handler
-                .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
-                .await
-                .is_err()
-        );
+        provider
+            .include_other_audience
+            .store(true, Ordering::SeqCst);
+        let error = handler
+            .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+            .await
+            .expect_err("a token without the client audience must be rejected");
+        match error {
+            OAuth2Error::TokenVerificationError(message) => {
+                assert!(
+                    message.to_ascii_lowercase().contains("audience"),
+                    "{message}"
+                );
+            }
+            error => panic!("expected an audience verification error, got {error:?}"),
+        }
 
-        // Strict mode rejects an otherwise valid token when it contains an
-        // audience other than the configured client ID.
+        // An explicitly allowlisted additional audience is accepted.
         provider
             .include_client_audience
             .store(true, Ordering::SeqCst);
+        let allowlisted_handler = OAuth2Handler::from_discovery(
+            &test_settings(&issuer, vec![OTHER_AUDIENCE.to_string()]),
+            "http://localhost/cb",
+        )
+        .await
+        .expect("allowlisted discovery should succeed");
+        allowlisted_handler
+            .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+            .await
+            .expect("allowlisted audience should be accepted");
+
+        // Strict mode rejects an otherwise valid token when it contains an
+        // audience other than the configured client ID.
         let strict_handler =
-            OAuth2Handler::from_discovery(&test_settings(&issuer, false), "http://localhost/cb")
+            OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), "http://localhost/cb")
                 .await
                 .expect("strict discovery should succeed");
-        assert!(
-            strict_handler
-                .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
-                .await
-                .is_err()
-        );
+        let error = strict_handler
+            .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+            .await
+            .expect_err("an untrusted additional audience must be rejected");
+        match error {
+            OAuth2Error::TokenVerificationError(message) => {
+                assert!(
+                    message.to_ascii_lowercase().contains("audience"),
+                    "{message}"
+                );
+            }
+            error => panic!("expected an audience verification error, got {error:?}"),
+        }
 
         server.abort();
     }
