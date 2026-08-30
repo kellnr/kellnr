@@ -306,7 +306,14 @@ impl OAuth2Handler {
 
         let nonce = Nonce::new(nonce.to_string());
 
-        let claims = match id_token.claims(&client.id_token_verifier(), &nonce) {
+        // An ID token may contain multiple audiences. When configured, accept
+        // additional audiences while requiring the configured client ID.
+        let verifier = client.id_token_verifier().set_other_audience_verifier_fn({
+            let allow_additional_audiences = self.settings.allow_additional_audiences;
+            move |_| allow_additional_audiences
+        });
+
+        let claims = match id_token.claims(&verifier, &nonce) {
             Ok(claims) => claims.clone(),
             // A signature failure typically means the provider rotated its
             // signing keys since discovery, so the JWKS cached at startup is
@@ -316,10 +323,19 @@ impl OAuth2Handler {
                     "ID token signature verification failed; refreshing OIDC JWKS and retrying (provider may have rotated signing keys)"
                 );
                 let refreshed = self.rediscover().await?;
-                let claims = id_token
-                    .claims(&refreshed.id_token_verifier(), &nonce)
-                    .map_err(|e| OAuth2Error::TokenVerificationError(e.to_string()))?
-                    .clone();
+                let claims = {
+                    let verifier = refreshed
+                        .id_token_verifier()
+                        .set_other_audience_verifier_fn({
+                            let allow_additional_audiences =
+                                self.settings.allow_additional_audiences;
+                            move |_| allow_additional_audiences
+                        });
+                    id_token
+                        .claims(&verifier, &nonce)
+                        .map_err(|e| OAuth2Error::TokenVerificationError(e.to_string()))?
+                        .clone()
+                };
                 // Persist the refreshed client so subsequent logins reuse the
                 // new keys instead of re-fetching on every request.
                 *self.client.lock().expect("OAuth2 client mutex poisoned") = refreshed;
@@ -852,6 +868,7 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
 -----END RSA PRIVATE KEY-----";
 
     const CLIENT_ID: &str = "test-client";
+    const OTHER_AUDIENCE: &str = "other-audience";
     const SUBJECT: &str = "user-subject-123";
     const NONCE: &str = "test-nonce";
 
@@ -865,6 +882,8 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         /// Number of times the JWKS endpoint was fetched, i.e. how often the
         /// handler ran discovery.
         jwks_fetches: AtomicUsize,
+        /// Whether the mock token includes the configured client ID in `aud`.
+        include_client_audience: AtomicBool,
     }
 
     impl MockProvider {
@@ -878,9 +897,18 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
 
         /// Mint an ID token signed with the currently active key.
         fn sign_id_token(&self) -> String {
+            let audiences = if self.include_client_audience.load(Ordering::SeqCst) {
+                vec![
+                    Audience::new(OTHER_AUDIENCE.to_string()),
+                    Audience::new(CLIENT_ID.to_string()),
+                ]
+            } else {
+                vec![Audience::new(OTHER_AUDIENCE.to_string())]
+            };
+
             let claims = CoreIdTokenClaims::new(
                 IssuerUrl::new(self.issuer.clone()).unwrap(),
-                vec![Audience::new(CLIENT_ID.to_string())],
+                audiences,
                 Utc::now() + Duration::minutes(5),
                 Utc::now(),
                 StandardClaims::new(SubjectIdentifier::new(SUBJECT.to_string()))
@@ -933,12 +961,13 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         }))
     }
 
-    fn test_settings(issuer: &str) -> OAuth2Settings {
+    fn test_settings(issuer: &str, allow_additional_audiences: bool) -> OAuth2Settings {
         OAuth2Settings {
             enabled: true,
             issuer_url: Some(issuer.to_string()),
             client_id: Some(CLIENT_ID.to_string()),
             client_secret: Some("test-secret".to_string()),
+            allow_additional_audiences,
             ..Default::default()
         }
     }
@@ -964,6 +993,7 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             .unwrap(),
             rotated: AtomicBool::new(false),
             jwks_fetches: AtomicUsize::new(0),
+            include_client_audience: AtomicBool::new(true),
         });
 
         let app = Router::new()
@@ -978,9 +1008,10 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         });
 
         // Discovery caches key A (first JWKS fetch).
-        let handler = OAuth2Handler::from_discovery(&test_settings(&issuer), "http://localhost/cb")
-            .await
-            .expect("discovery should succeed");
+        let handler =
+            OAuth2Handler::from_discovery(&test_settings(&issuer, true), "http://localhost/cb")
+                .await
+                .expect("discovery should succeed");
         assert_eq!(provider.jwks_fetches.load(Ordering::SeqCst), 1);
 
         // Baseline: a token signed with key A verifies against the cached JWKS
@@ -1013,6 +1044,34 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             .expect("exchange should reuse the refreshed JWKS");
         assert_eq!(result.claims.subject().as_str(), SUBJECT);
         assert_eq!(provider.jwks_fetches.load(Ordering::SeqCst), 2);
+
+        // The client ID remains mandatory even when additional audiences are
+        // accepted.
+        provider
+            .include_client_audience
+            .store(false, Ordering::SeqCst);
+        assert!(
+            handler
+                .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+                .await
+                .is_err()
+        );
+
+        // Strict mode rejects an otherwise valid token when it contains an
+        // audience other than the configured client ID.
+        provider
+            .include_client_audience
+            .store(true, Ordering::SeqCst);
+        let strict_handler =
+            OAuth2Handler::from_discovery(&test_settings(&issuer, false), "http://localhost/cb")
+                .await
+                .expect("strict discovery should succeed");
+        assert!(
+            strict_handler
+                .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+                .await
+                .is_err()
+        );
 
         server.abort();
     }
