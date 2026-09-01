@@ -82,7 +82,11 @@ pub fn build_prov_with_cli(
 /// Matches the kellnr 6.x behaviour driven by the `config` crate's
 /// `with_list_parse_key`.
 pub(crate) fn env_list_keys() -> &'static [&'static str] {
-    &["registry.required_crate_fields", "oauth2.scopes"]
+    &[
+        "registry.required_crate_fields",
+        "oauth2.scopes",
+        "oauth2.additional_audiences",
+    ]
 }
 
 /// Convert provcfg's per-leaf provenance map into kellnr's `SourceMap`.
