@@ -9,9 +9,9 @@ use std::sync::{Arc, Mutex};
 use kellnr_settings::OAuth2 as OAuth2Settings;
 use openidconnect::core::{
     CoreAuthDisplay, CoreAuthPrompt, CoreAuthenticationFlow, CoreClient, CoreErrorResponseType,
-    CoreGenderClaim, CoreIdTokenClaims, CoreJsonWebKey, CoreJweContentEncryptionAlgorithm,
-    CoreProviderMetadata, CoreRevocationErrorResponse, CoreTokenIntrospectionResponse,
-    CoreTokenResponse,
+    CoreGenderClaim, CoreIdTokenClaims, CoreIdTokenVerifier, CoreJsonWebKey,
+    CoreJweContentEncryptionAlgorithm, CoreProviderMetadata, CoreRevocationErrorResponse,
+    CoreTokenIntrospectionResponse, CoreTokenResponse,
 };
 use openidconnect::{
     AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret, CsrfToken,
@@ -235,6 +235,22 @@ impl OAuth2Handler {
         .map(Arc::new)
     }
 
+    /// Build the ID token verifier for `client`.
+    ///
+    /// An ID token may contain multiple audiences. The configured client ID is
+    /// always required; any further audience is accepted only when explicitly
+    /// allowlisted via `oauth2.additional_audiences`.
+    fn id_token_verifier<'a>(&self, client: &'a ConfiguredCoreClient) -> CoreIdTokenVerifier<'a> {
+        let additional_audiences = self.settings.additional_audiences.clone();
+        client
+            .id_token_verifier()
+            .set_other_audience_verifier_fn(move |aud| {
+                additional_audiences
+                    .iter()
+                    .any(|allowed| allowed == aud.as_str())
+            })
+    }
+
     /// Generate an authorization URL for the `OAuth2` flow
     ///
     /// Returns an `AuthRequest` containing the URL to redirect the user to,
@@ -306,17 +322,7 @@ impl OAuth2Handler {
 
         let nonce = Nonce::new(nonce.to_string());
 
-        // An ID token may contain multiple audiences. Require the configured
-        // client ID and accept additional audiences only when explicitly
-        // allowlisted.
-        let verifier = client.id_token_verifier().set_other_audience_verifier_fn({
-            let additional_audiences = self.settings.additional_audiences.clone();
-            move |aud| {
-                additional_audiences
-                    .iter()
-                    .any(|allowed| allowed == aud.as_str())
-            }
-        });
+        let verifier = self.id_token_verifier(&client);
 
         let claims = match id_token.claims(&verifier, &nonce) {
             Ok(claims) => claims.clone(),
@@ -328,17 +334,10 @@ impl OAuth2Handler {
                     "ID token signature verification failed; refreshing OIDC JWKS and retrying (provider may have rotated signing keys)"
                 );
                 let refreshed = self.rediscover().await?;
+                // Scoped so the verifier's borrow of `refreshed` ends before
+                // it is moved into the cached client below.
                 let claims = {
-                    let verifier = refreshed
-                        .id_token_verifier()
-                        .set_other_audience_verifier_fn({
-                            let additional_audiences = self.settings.additional_audiences.clone();
-                            move |aud| {
-                                additional_audiences
-                                    .iter()
-                                    .any(|allowed| allowed == aud.as_str())
-                            }
-                        });
+                    let verifier = self.id_token_verifier(&refreshed);
                     id_token
                         .claims(&verifier, &nonce)
                         .map_err(|e| OAuth2Error::TokenVerificationError(e.to_string()))?
@@ -793,13 +792,14 @@ mod tests {
     }
 }
 
-/// End-to-end tests for recovering from OIDC provider signing-key rotation.
+/// End-to-end tests against a mock OIDC provider.
 ///
 /// These spin up a minimal in-process OIDC provider (discovery, JWKS and token
 /// endpoints) whose active signing key can be swapped at runtime, mirroring a
-/// provider like Dex rotating its keys.
+/// provider like Dex rotating its keys, and whose ID token audiences can be
+/// varied to cover multi-audience providers such as Zitadel.
 #[cfg(test)]
-mod rotation_tests {
+mod provider_tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use axum::extract::State;
@@ -815,6 +815,7 @@ mod rotation_tests {
     };
     use serde_json::{Value, json};
     use tokio::net::TcpListener;
+    use tokio::task::JoinHandle;
 
     use super::*;
 
@@ -879,6 +880,7 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
     const OTHER_AUDIENCE: &str = "other-audience";
     const SUBJECT: &str = "user-subject-123";
     const NONCE: &str = "test-nonce";
+    const REDIRECT_URI: &str = "http://localhost/cb";
 
     /// State shared with the mock provider's request handlers.
     struct MockProvider {
@@ -981,10 +983,11 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         }
     }
 
-    /// A signing-key rotation makes the JWKS cached at discovery stale; the
-    /// handler must re-fetch it and still verify the freshly signed token.
-    #[tokio::test]
-    async fn exchange_recovers_from_signing_key_rotation() {
+    /// Serve the mock provider on an ephemeral port.
+    ///
+    /// Returns the shared provider state, its issuer URL and the server task,
+    /// which the caller must abort once done.
+    async fn start_mock_provider() -> (Arc<MockProvider>, String, JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let issuer = format!("http://{}", listener.local_addr().unwrap());
 
@@ -1017,11 +1020,31 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
                 .unwrap();
         });
 
+        (provider, issuer, server)
+    }
+
+    /// Assert that verification failed because of the `aud` claim rather than
+    /// for some unrelated reason such as an expired token or a nonce mismatch.
+    fn assert_audience_error(error: &OAuth2Error) {
+        match error {
+            OAuth2Error::TokenVerificationError(message) => assert!(
+                message.to_ascii_lowercase().contains("audience"),
+                "expected an audience verification error, got: {message}"
+            ),
+            error => panic!("expected an audience verification error, got {error:?}"),
+        }
+    }
+
+    /// A signing-key rotation makes the JWKS cached at discovery stale; the
+    /// handler must re-fetch it and still verify the freshly signed token.
+    #[tokio::test]
+    async fn exchange_recovers_from_signing_key_rotation() {
+        let (provider, issuer, server) = start_mock_provider().await;
+
         // Discovery caches key A (first JWKS fetch).
-        let handler =
-            OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), "http://localhost/cb")
-                .await
-                .expect("discovery should succeed");
+        let handler = OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), REDIRECT_URI)
+            .await
+            .expect("discovery should succeed");
         assert_eq!(provider.jwks_fetches.load(Ordering::SeqCst), 1);
 
         // Baseline: a token signed with key A verifies against the cached JWKS
@@ -1055,62 +1078,62 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         assert_eq!(result.claims.subject().as_str(), SUBJECT);
         assert_eq!(provider.jwks_fetches.load(Ordering::SeqCst), 2);
 
-        // The client ID remains mandatory, even if an additional audience is
-        // otherwise trusted.
-        provider
-            .include_client_audience
-            .store(false, Ordering::SeqCst);
-        provider
-            .include_other_audience
-            .store(true, Ordering::SeqCst);
-        let error = handler
-            .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
-            .await
-            .expect_err("a token without the client audience must be rejected");
-        match error {
-            OAuth2Error::TokenVerificationError(message) => {
-                assert!(
-                    message.to_ascii_lowercase().contains("audience"),
-                    "{message}"
-                );
-            }
-            error => panic!("expected an audience verification error, got {error:?}"),
-        }
+        server.abort();
+    }
 
-        // An explicitly allowlisted additional audience is accepted.
-        provider
-            .include_client_audience
-            .store(true, Ordering::SeqCst);
+    /// Providers such as Zitadel mint ID tokens listing several audiences. The
+    /// configured client ID is always required, while any further audience is
+    /// accepted only when allowlisted via `oauth2.additional_audiences`.
+    #[tokio::test]
+    async fn additional_audiences_are_accepted_only_when_allowlisted() {
+        let (provider, issuer, server) = start_mock_provider().await;
+
+        let strict_handler =
+            OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), REDIRECT_URI)
+                .await
+                .expect("strict discovery should succeed");
         let allowlisted_handler = OAuth2Handler::from_discovery(
             &test_settings(&issuer, vec![OTHER_AUDIENCE.to_string()]),
-            "http://localhost/cb",
+            REDIRECT_URI,
         )
         .await
         .expect("allowlisted discovery should succeed");
-        allowlisted_handler
+
+        // The common case: `aud` holds the client ID alone and needs no
+        // allowlist at all.
+        let result = strict_handler
             .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
             .await
-            .expect("allowlisted audience should be accepted");
+            .expect("a single-audience token should verify");
+        assert_eq!(result.claims.subject().as_str(), SUBJECT);
 
-        // Strict mode rejects an otherwise valid token when it contains an
-        // audience other than the configured client ID.
-        let strict_handler =
-            OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), "http://localhost/cb")
-                .await
-                .expect("strict discovery should succeed");
+        // An additional audience that is not allowlisted is rejected.
+        provider
+            .include_other_audience
+            .store(true, Ordering::SeqCst);
         let error = strict_handler
             .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
             .await
             .expect_err("an untrusted additional audience must be rejected");
-        match error {
-            OAuth2Error::TokenVerificationError(message) => {
-                assert!(
-                    message.to_ascii_lowercase().contains("audience"),
-                    "{message}"
-                );
-            }
-            error => panic!("expected an audience verification error, got {error:?}"),
-        }
+        assert_audience_error(&error);
+
+        // The very same token is accepted once that audience is allowlisted.
+        let result = allowlisted_handler
+            .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+            .await
+            .expect("an allowlisted additional audience should be accepted");
+        assert_eq!(result.claims.subject().as_str(), SUBJECT);
+
+        // The client ID stays mandatory even for a handler that trusts the
+        // additional audience.
+        provider
+            .include_client_audience
+            .store(false, Ordering::SeqCst);
+        let error = allowlisted_handler
+            .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+            .await
+            .expect_err("a token without the client audience must be rejected");
+        assert_audience_error(&error);
 
         server.abort();
     }
