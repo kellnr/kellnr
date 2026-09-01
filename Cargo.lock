@@ -172,7 +172,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -183,7 +183,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -573,7 +573,7 @@ checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.4",
 ]
 
 [[package]]
@@ -1325,7 +1325,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.4",
 ]
 
 [[package]]
@@ -1702,7 +1702,7 @@ dependencies = [
  "openssl-sys",
  "pkg-config",
  "vcpkg",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2075,7 +2075,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4208,7 +4208,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4250,7 +4250,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-appstate"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4265,7 +4265,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-auth"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4293,7 +4293,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-common"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "chrono",
@@ -4314,7 +4314,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-db"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "chrono",
  "kellnr-common",
@@ -4337,15 +4337,15 @@ dependencies = [
 
 [[package]]
 name = "kellnr-db-testcontainer"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "quote",
- "syn 3.0.3",
+ "syn 3.0.4",
 ]
 
 [[package]]
 name = "kellnr-docs"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "cargo",
@@ -4375,7 +4375,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-embedded-resources"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "bytes",
@@ -4386,7 +4386,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-entity"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "sea-orm",
  "uuid",
@@ -4394,7 +4394,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-error"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "kellnr-common",
@@ -4405,8 +4405,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kellnr-fakegcs-testcontainer"
+version = "6.8.0"
+dependencies = [
+ "quote",
+ "syn 3.0.4",
+]
+
+[[package]]
 name = "kellnr-index"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "chrono",
@@ -4431,7 +4439,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-migration"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "async-std",
  "chrono",
@@ -4448,7 +4456,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-registry"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "bytes",
@@ -4480,15 +4488,15 @@ dependencies = [
 
 [[package]]
 name = "kellnr-rustfs-testcontainer"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "quote",
- "syn 3.0.3",
+ "syn 3.0.4",
 ]
 
 [[package]]
 name = "kellnr-settings"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "clap",
  "kellnr-common",
@@ -4504,11 +4512,12 @@ dependencies = [
 
 [[package]]
 name = "kellnr-storage"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "async-trait",
  "bytes",
  "kellnr-common",
+ "kellnr-fakegcs-testcontainer",
  "kellnr-rustfs-testcontainer",
  "kellnr-settings",
  "moka",
@@ -4521,7 +4530,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-web-ui"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4551,7 +4560,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-webhooks"
-version = "6.7.0"
+version = "6.8.0"
 dependencies = [
  "axum",
  "chrono",
@@ -4938,7 +4947,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "536bfad37a309d62069485248eeaba1e8d9853aaf951caaeaed0585a95346f08"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5055,7 +5064,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5160,7 +5169,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.21.7",
  "chrono",
  "getrandom 0.2.17",
  "http",
@@ -5992,7 +6001,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.118",
@@ -6594,7 +6603,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6652,7 +6661,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6748,9 +6757,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e29e1a2e2e6da3d2486086f9d96b4bf5b7d8bf344e16c48bd87ce7977b8d0154"
+checksum = "a334e83ced3ae3ee44db0f84d1fcf8d2087a1ad9bb9036f00f9f6067156ea197"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -6816,9 +6825,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm-macros"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a6fd7ae2932a838d3bc7ca1e5483ffa10d6b25e4c43c8aebb4cd14773c2d08"
+checksum = "4039a86f9acc4d3b52747508b347dddc6fd725bbc429902ebeb6d26225fc2528"
 dependencies = [
  "heck 0.5.0",
  "itertools 0.14.0",
@@ -6848,9 +6857,9 @@ dependencies = [
 
 [[package]]
 name = "sea-query"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d190cfb3bcceb8a8d7d04dee5a0c77f60c7627979cdcb47fdcb8934f009badf"
+checksum = "546040c653a705e60ec65ecd3191a809603734bebbc225775916dea9ae409b31"
 dependencies = [
  "chrono",
  "itoa",
@@ -7013,7 +7022,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.4",
 ]
 
 [[package]]
@@ -7281,7 +7290,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7621,9 +7630,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.3"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
+checksum = "e6275cddf4610d1775e6d1fe9469b2e77d0f39fd98fb7450901b821e0c53649f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7701,10 +7710,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.1",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7714,7 +7723,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7792,7 +7801,7 @@ checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.4",
 ]
 
 [[package]]
@@ -8412,9 +8421,9 @@ checksum = "e2eebbbfe4093922c2b6734d7c679ebfebd704a0d7e56dfcb0d05818ce28977d"
 
 [[package]]
 name = "uuid"
-version = "1.24.1"
+version = "1.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
+checksum = "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
 dependencies = [
  "getrandom 0.4.1",
  "js-sys",
@@ -8661,7 +8670,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

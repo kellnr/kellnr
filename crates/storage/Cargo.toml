@@ -25,6 +25,7 @@ thiserror.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+kellnr-fakegcs-testcontainer.workspace = true
 testcontainers.workspace = true
 tokio.workspace = true
 

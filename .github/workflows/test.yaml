@@ -118,7 +118,7 @@ jobs:
         run: nix develop --command just test
 
   test-kellnr-docker:
-    name: Docker Tests (PostgreSQL, S3)
+    name: Docker Tests (PostgreSQL, S3, GCS)
     needs: [update-npm-hash]
     if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04

@@ -22,12 +22,12 @@ pub fn leaf_label(dotted_path: &str) -> Option<&'static str> {
         "registry.token_db_retry_delay_ms" => "Token DB Retry Delay (ms)",
         "registry.download_timeout_seconds" => "Download Timeout (seconds)",
         "registry.download_counter_flush_seconds" => "Download Counter Flush (seconds)",
-        "proxy.connect_timeout_seconds" | "s3.connect_timeout_seconds" => {
-            "Connect Timeout (seconds)"
-        }
-        "proxy.request_timeout_seconds" | "s3.request_timeout_seconds" => {
-            "Request Timeout (seconds)"
-        }
+        "proxy.connect_timeout_seconds"
+        | "s3.connect_timeout_seconds"
+        | "gcs.connect_timeout_seconds" => "Connect Timeout (seconds)",
+        "proxy.request_timeout_seconds"
+        | "s3.request_timeout_seconds"
+        | "gcs.request_timeout_seconds" => "Request Timeout (seconds)",
         "toolchain.max_size" => "Max Size (MB)",
 
         // Acronyms, humanizer would emit "Db", "Url", "Api", "Ip", "Http".
@@ -39,14 +39,14 @@ pub fn leaf_label(dotted_path: &str) -> Option<&'static str> {
         "postgresql.db" => "Database",
         "postgresql.address" => "Address",
         "local.ip" => "IP",
-        "s3.allow_http" => "Allow HTTP",
+        "s3.allow_http" | "gcs.allow_http" => "Allow HTTP",
 
         // Spelled-out forms preferred over the abbreviation in the field name.
         "registry.data_dir" => "Data Directory",
 
         // Shortenings the UI deliberately chose.
         "proxy.num_threads" => "Number of Threads",
-        "s3.cratesio_bucket" => "Crates.io Bucket",
+        "s3.cratesio_bucket" | "gcs.cratesio_bucket" => "Crates.io Bucket",
 
         _ => return None,
     })

@@ -76,7 +76,7 @@ The latest Kubernetes Helm chart can be found here: [Kellnr Helm Chart](https://
 - **Crates.io proxy**: Kellnr can act as a proxy for [crates.io](https://crates.io). This means that you can use Kellnr as a cache for crates.io to speed up the download of crates.
 - **Build in Rust**: Kellnr is written in Rust. This means that you can easily extend Kellnr with your own features or fix bugs. No other dependencies are needed.
 - **Multi-Db support**: Kellnr supports multiple databases. You can use Sqlite or PostgreSQL as the storage backend for Kellnr.
-- **Local File System or S3**: Kellnr supports the local file system or S3 as the storage backend for the crates.
+- **Local File System, S3 or GCS**: Kellnr supports the local file system, S3 or Google Cloud Storage as the storage backend for the crates.
 - **User and group management**: Kellnr supports user and group management. This means that you can create users and groups and assign them to crates. This is useful in a corporate environment, where you want to control the access to the crates. You can create read-only users or require authentication for crate-pulls.
 
 ## Differences to crates.io
