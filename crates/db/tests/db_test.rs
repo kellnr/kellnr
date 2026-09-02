@@ -1455,7 +1455,7 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
         "only_in_description",
         "admin",
         &Version::try_from("4.0.0").unwrap(),
-        Some("description contains the word 'crate' in it"),
+        Some("description contains the word 'Crate' in it"),
         &created,
         Some(1),
     )
@@ -1509,7 +1509,7 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
         CrateOverview {
             name: "only_in_description".to_string(),
             version: "4.0.0".to_string(),
-            description: Some("description contains the word 'crate' in it".to_string()),
+            description: Some("description contains the word 'Crate' in it".to_string()),
             date: created_string.clone(),
             total_downloads: 1,
             ..CrateOverview::default()
