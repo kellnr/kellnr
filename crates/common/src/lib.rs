@@ -3,6 +3,7 @@ pub mod crate_overview;
 pub mod cratesio_downloader;
 pub mod cratesio_prefetch_msg;
 pub mod index_metadata;
+pub mod name_or_description;
 pub mod normalized_name;
 pub mod original_name;
 pub mod prefetch;

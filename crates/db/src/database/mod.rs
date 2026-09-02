@@ -30,7 +30,9 @@ use kellnr_migration::iden::{
 use sea_orm::entity::prelude::Uuid;
 use sea_orm::prelude::async_trait::async_trait;
 use sea_orm::query::{QueryOrder, QuerySelect, TransactionTrait};
-use sea_orm::sea_query::{Alias, Cond, Expr, Iden, JoinType, LikeExpr, Order, Query, UnionType};
+use sea_orm::sea_query::{
+    Alias, Cond, Expr, Func, Iden, JoinType, LikeExpr, Order, Query, SelectStatement, UnionType,
+};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
     FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set,
@@ -267,6 +269,23 @@ impl Database {
         limit_offset: Option<(u64, u64)>,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
+        /// Adds a `where` clause for case-insensitive matching of name and description.
+        fn add_filter_by_name_and_description<T: Iden + Copy, N: Iden, D: Iden>(
+            query: &mut SelectStatement,
+            table: T,
+            name: N,
+            description: D,
+            contains: &str,
+        ) {
+            let pattern = format!("%{}%", escape_like_pattern(contains)).to_lowercase();
+            query.and_where(
+                Func::lower(Expr::col((table, name)))
+                    .like(LikeExpr::new(&pattern).escape('\\'))
+                    .or(Func::lower(Expr::col((table, description)))
+                        .like(LikeExpr::new(&pattern).escape('\\'))),
+            );
+        }
+
         let mut query = Query::select();
         query
             .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
@@ -295,12 +314,12 @@ impl Database {
 
         // Optional filter by name and description
         if let Some(contains) = contains {
-            let pattern = format!("%{}%", escape_like_pattern(contains));
-            query.and_where(
-                Expr::col((CrateIden::Table, CrateIden::Name))
-                    .like(LikeExpr::new(&pattern).escape('\\'))
-                    .or(Expr::col((CrateIden::Table, CrateIden::Description))
-                        .like(LikeExpr::new(&pattern).escape('\\'))),
+            add_filter_by_name_and_description(
+                &mut query,
+                CrateIden::Table,
+                CrateIden::Name,
+                CrateIden::Description,
+                contains,
             );
         }
 
@@ -335,10 +354,12 @@ impl Database {
                         .equals((CratesIoIden::Table, CratesIoIden::MaxVersion)),
                 );
             if let Some(contains) = contains {
-                let pattern = format!("%{}%", escape_like_pattern(contains));
-                query2.and_where(
-                    Expr::col((CratesIoIden::Table, CratesIoIden::OriginalName))
-                        .like(LikeExpr::new(pattern).escape('\\')),
+                add_filter_by_name_and_description(
+                    &mut query2,
+                    CratesIoIden::Table,
+                    CratesIoIden::OriginalName,
+                    CratesIoIden::Description,
+                    contains,
                 );
             }
             query.union(UnionType::All, query2);
