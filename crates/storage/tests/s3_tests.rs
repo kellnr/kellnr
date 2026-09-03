@@ -8,9 +8,33 @@ use kellnr_rustfs_testcontainer::*;
 use kellnr_settings::Settings;
 use kellnr_settings::s3::S3;
 use kellnr_storage::cached_crate_storage::DynStorage;
+use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::s3_storage::S3Storage;
 mod image;
+
+fn test_settings(data_dir: &str, url: &str) -> Settings {
+    Settings {
+        registry: kellnr_settings::Registry {
+            data_dir: data_dir.to_owned(),
+            session_age_seconds: 60,
+            ..kellnr_settings::Registry::default()
+        },
+        setup: kellnr_settings::Setup {
+            admin_pwd: String::new(),
+            ..kellnr_settings::Setup::default()
+        },
+        s3: S3 {
+            enabled: true,
+            access_key: Some("rustfsadmin".into()),
+            secret_key: Some("rustfsadmin".into()),
+            endpoint: Some(url.to_string()),
+            allow_http: true,
+            ..S3::default()
+        },
+        ..Settings::default()
+    }
+}
 
 struct TestS3Storage {
     crate_storage: KellnrCrateStorage,
@@ -18,31 +42,18 @@ struct TestS3Storage {
 
 impl TestS3Storage {
     fn from(data_dir: &str, url: &str) -> TestS3Storage {
-        let settings = Settings {
-            registry: kellnr_settings::Registry {
-                data_dir: data_dir.to_owned(),
-                session_age_seconds: 60,
-                ..kellnr_settings::Registry::default()
-            },
-            setup: kellnr_settings::Setup {
-                admin_pwd: String::new(),
-                ..kellnr_settings::Setup::default()
-            },
-            s3: S3 {
-                enabled: true,
-                access_key: Some("rustfsadmin".into()),
-                secret_key: Some("rustfsadmin".into()),
-                endpoint: Some(url.to_string()),
-                allow_http: true,
-                ..S3::default()
-            },
-            ..Settings::default()
-        };
+        let settings = test_settings(data_dir, url);
         let storage =
             Box::new(S3Storage::try_from(("kellnr-crates", &settings)).unwrap()) as DynStorage;
         let crate_storage = KellnrCrateStorage::new(&settings, storage);
         TestS3Storage { crate_storage }
     }
+}
+
+fn test_docs_storage(data_dir: &str, url: &str) -> DocsStorage {
+    let settings = test_settings(data_dir, url);
+    let storage = Box::new(S3Storage::try_from(("kellnr-docs", &settings)).unwrap()) as DynStorage;
+    DocsStorage::new(storage)
 }
 
 #[rustfs_testcontainer]
@@ -91,4 +102,46 @@ async fn remove_crate() {
     let res = test_storage.crate_storage.delete(&name, &version).await;
 
     assert!(res.is_ok());
+}
+
+#[rustfs_testcontainer]
+#[tokio::test]
+async fn docs_storage_delete_prefix_removes_only_matching_version() {
+    let host = container.get_host().await.unwrap().to_string();
+    let url = format!("http://{host}:{port}");
+    let docs = test_docs_storage("test_docs_delete_prefix", &url);
+
+    let v1 = DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/index.html");
+    let v2 = DocsStorage::file_key("my-crate", "2.0.0", "doc/my_crate/index.html");
+    docs.put(&v1, bytes::Bytes::from_static(b"a"))
+        .await
+        .unwrap();
+    docs.put(&v2, bytes::Bytes::from_static(b"b"))
+        .await
+        .unwrap();
+
+    docs.delete_prefix(&DocsStorage::version_prefix("my-crate", "1.0.0"))
+        .await
+        .unwrap();
+
+    assert!(!docs.exists(&v1).await.unwrap());
+    assert!(docs.exists(&v2).await.unwrap());
+}
+
+#[rustfs_testcontainer]
+#[tokio::test]
+async fn get_with_meta_returns_bytes_etag_and_last_modified() {
+    let host = container.get_host().await.unwrap().to_string();
+    let url = format!("http://{host}:{port}");
+    let docs = test_docs_storage("test_docs_get_with_meta", &url);
+    let key = DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/index.html");
+    docs.put(&key, bytes::Bytes::from_static(b"hello"))
+        .await
+        .unwrap();
+
+    let object = docs.get_with_meta(&key).await.unwrap();
+
+    assert_eq!(object.bytes, bytes::Bytes::from_static(b"hello"));
+    assert!(object.e_tag.is_some());
+    assert!(object.last_modified <= chrono::Utc::now());
 }

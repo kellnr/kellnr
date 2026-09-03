@@ -11,6 +11,7 @@ use utoipa_axum::routes;
 pub fn create_ui_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
     OpenApiRouter::new()
         .routes(routes!(api::docs_in_queue, ui::build_rustdoc))
+        .routes(routes!(ui::migrate_docs_storage))
         .routes(routes!(api::latest_docs))
         .layer(middleware::from_fn_with_state(
             state,

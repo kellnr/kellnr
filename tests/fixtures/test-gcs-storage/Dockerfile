@@ -36,11 +36,12 @@ FROM alpine:3.22
 ARG CRATES_BUCKET=kellnr-crates
 ARG CRATESIO_BUCKET=kellnr-cratesio
 ARG TOOLCHAIN_BUCKET=kellnr-toolchains
+ARG DOCS_BUCKET=kellnr-docs
 
 COPY --from=build /fake-gcs-server /bin/fake-gcs-server
 
 # fake-gcs-server pre-seeds buckets from directories under /data
-RUN mkdir -p /data/${CRATES_BUCKET} /data/${CRATESIO_BUCKET} /data/${TOOLCHAIN_BUCKET}
+RUN mkdir -p /data/${CRATES_BUCKET} /data/${CRATESIO_BUCKET} /data/${TOOLCHAIN_BUCKET} /data/${DOCS_BUCKET}
 
 # Run in HTTP mode (no TLS) so kellnr can talk to it without a trusted cert, and skip
 # request signing on the kellnr side (fake-gcs-server does not validate auth by default).

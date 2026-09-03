@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use axum::Json;
@@ -11,6 +12,7 @@ use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
+use kellnr_docs::upload::upload_dir_and_prune;
 use kellnr_settings::{
     ConfigSource, Provenance, Settings, SettingsProv, SourceMap, cli_flag_map, compile_time_config,
     erased_serde, leaf_label, sources_from_prov,
@@ -412,7 +414,7 @@ async fn delete_crate_versions_impl(
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
 
-        if let Err(e) = kellnr_docs::delete(name, version, &state.settings).await {
+        if let Err(e) = kellnr_docs::delete(name, version, &state.docs_storage).await {
             error!("Failed to delete crate from docs: {e}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
@@ -647,6 +649,120 @@ pub async fn build_rustdoc(
     Ok(())
 }
 
+/// Response for [`migrate_docs_storage`].
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct MigrateDocsStorageResponse {
+    /// `false` when there was no local docs directory to migrate from.
+    pub started: bool,
+    /// Number of crate/version pairs found under the local docs directory.
+    pub crate_versions_found: usize,
+}
+
+/// Copy locally-stored docs into the configured S3/GCS docs bucket
+///
+/// One-time backfill for existing deployments that switch `s3.docs_bucket`/
+/// `gcs.docs_bucket` from unset to a bucket name: copies every file already
+/// on local disk (both auto-generated and manually-published docs use the
+/// same on-disk layout) into the now-configured backend. Non-destructive —
+/// local files are left in place, so this is safe to re-run. Runs in the
+/// background since a large registry can take minutes to copy; admin-only.
+#[utoipa::path(
+    post,
+    path = "/migrate-storage",
+    tag = "docs",
+    responses(
+        (status = 200, description = "No local docs found to migrate", body = MigrateDocsStorageResponse),
+        (status = 202, description = "Migration started in the background", body = MigrateDocsStorageResponse),
+        (status = 400, description = "Docs are still backed by local disk, nothing to migrate to"),
+        (status = 401, description = "Not authorized"),
+        (status = 403, description = "Not an admin")
+    ),
+    security(("session_cookie" = []))
+)]
+pub async fn migrate_docs_storage(
+    State(state): AppState,
+    _admin: AdminUser,
+) -> Result<(StatusCode, Json<MigrateDocsStorageResponse>), RouteError> {
+    if state.settings.docs_backend_is_local() {
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+    }
+
+    let docs_path = PathBuf::from(state.settings.docs_path());
+    let crate_versions = match list_local_crate_versions(&docs_path).await {
+        Ok(crate_versions) => crate_versions,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(e) => {
+            error!("Failed to read local docs directory {docs_path:?}: {e}");
+            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        }
+    };
+
+    if crate_versions.is_empty() {
+        return Ok((
+            StatusCode::OK,
+            Json(MigrateDocsStorageResponse {
+                started: false,
+                crate_versions_found: 0,
+            }),
+        ));
+    }
+
+    let crate_versions_found = crate_versions.len();
+    let docs_storage = state.docs_storage.clone();
+    tokio::spawn(async move {
+        for (crate_name, version, dir) in crate_versions {
+            match upload_dir_and_prune(&dir, "", &crate_name, &version, &docs_storage).await {
+                Ok(()) => {
+                    tracing::info!(
+                        "Migrated local docs for {crate_name} {version} to configured storage backend"
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to migrate local docs for {crate_name} {version} to configured storage backend: {e}"
+                    );
+                }
+            }
+        }
+        tracing::info!(
+            "Finished docs storage migration for {crate_versions_found} crate/version(s)"
+        );
+    });
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(MigrateDocsStorageResponse {
+            started: true,
+            crate_versions_found,
+        }),
+    ))
+}
+
+/// Enumerate `{docs_path}/{crate_name}/{version}/` two levels deep. Cheap —
+/// only lists directory entries, doesn't read any doc file contents.
+async fn list_local_crate_versions(
+    docs_path: &std::path::Path,
+) -> std::io::Result<Vec<(String, String, PathBuf)>> {
+    let mut result = Vec::new();
+    let mut crate_dirs = tokio::fs::read_dir(docs_path).await?;
+    while let Some(crate_entry) = crate_dirs.next_entry().await? {
+        if !crate_entry.file_type().await?.is_dir() {
+            continue;
+        }
+        let crate_name = crate_entry.file_name().to_string_lossy().into_owned();
+
+        let mut version_dirs = tokio::fs::read_dir(crate_entry.path()).await?;
+        while let Some(version_entry) = version_dirs.next_entry().await? {
+            if !version_entry.file_type().await?.is_dir() {
+                continue;
+            }
+            let version = version_entry.file_name().to_string_lossy().into_owned();
+            result.push((crate_name.clone(), version, version_entry.path()));
+        }
+    }
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -656,6 +772,7 @@ mod tests {
     use axum::body::Body;
     use axum::routing::{get, post};
     use axum_extra::extract::cookie::Key;
+    use bytes::Bytes;
     use http_body_util::BodyExt;
     use hyper::{Request, header};
     use kellnr_appstate::AppStateData;
@@ -665,6 +782,7 @@ mod tests {
     use kellnr_db::mock::MockDb;
     use kellnr_settings::{Postgresql, Settings, constants};
     use kellnr_storage::cached_crate_storage::DynStorage;
+    use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use mockall::predicate::*;
@@ -1220,6 +1338,236 @@ mod tests {
         .unwrap();
 
         assert_eq!(r.status(), StatusCode::OK);
+    }
+
+    fn migrate_storage_app(
+        mock_db: MockDb,
+        settings: Settings,
+        docs_storage: DocsStorage,
+    ) -> Router {
+        Router::new()
+            .route("/migrate-storage", post(migrate_docs_storage))
+            .with_state(AppStateData {
+                db: Arc::new(mock_db),
+                signing_key: Key::from(TEST_KEY),
+                settings: Arc::new(settings),
+                docs_storage: Arc::new(docs_storage),
+                ..kellnr_appstate::test_state()
+            })
+    }
+
+    fn fs_docs_storage(dir: &std::path::Path) -> DocsStorage {
+        DocsStorage::new(Box::new(FSStorage::new(dir.to_str().unwrap()).unwrap()) as DynStorage)
+    }
+
+    /// Settings with a bucket configured, i.e. `docs_backend_is_local() == false`.
+    /// Only settings-level config is exercised here (no real S3 network access):
+    /// the endpoint's actual copy destination is whatever `docs_storage` the
+    /// caller wires into `AppStateData`, independent of this bucket name.
+    fn settings_with_docs_bucket_configured(data_dir: &std::path::Path) -> Settings {
+        let mut settings = kellnr_settings::test_settings();
+        settings.registry.data_dir = data_dir.to_str().unwrap().to_string();
+        settings.s3.enabled = true;
+        settings.s3.docs_bucket = Some("kellnr-docs".to_string());
+        settings
+    }
+
+    fn admin_session_mock_db() -> MockDb {
+        let mut mock_db = MockDb::new();
+        mock_db.expect_validate_session().returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        });
+        mock_db
+    }
+
+    #[tokio::test]
+    async fn migrate_docs_storage_returns_401_without_session() {
+        let local = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let settings = settings_with_docs_bucket_configured(local.path());
+
+        let r = migrate_storage_app(MockDb::new(), settings, fs_docs_storage(target.path()))
+            .oneshot(
+                Request::post("/migrate-storage")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn migrate_docs_storage_returns_403_for_non_admin() {
+        let mut mock_db = MockDb::new();
+        mock_db.expect_validate_session().returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "user".to_string(),
+                is_admin: false,
+                is_read_only: false,
+            })
+        });
+        let local = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let settings = settings_with_docs_bucket_configured(local.path());
+
+        let r = migrate_storage_app(mock_db, settings, fs_docs_storage(target.path()))
+            .oneshot(
+                Request::post("/migrate-storage")
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn migrate_docs_storage_returns_400_when_backend_is_local_disk() {
+        let local = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let mut settings = kellnr_settings::test_settings();
+        settings.registry.data_dir = local.path().to_str().unwrap().to_string();
+
+        let r = migrate_storage_app(
+            admin_session_mock_db(),
+            settings,
+            fs_docs_storage(target.path()),
+        )
+        .oneshot(
+            Request::post("/migrate-storage")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn migrate_docs_storage_returns_zero_count_when_local_dir_missing() {
+        let local = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        // `local` exists but nothing was ever generated locally, so
+        // `{data_dir}/docs` itself was never created.
+        let settings = settings_with_docs_bucket_configured(local.path());
+
+        let r = migrate_storage_app(
+            admin_session_mock_db(),
+            settings,
+            fs_docs_storage(target.path()),
+        )
+        .oneshot(
+            Request::post("/migrate-storage")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        let response: MigrateDocsStorageResponse = serde_json::from_slice(&body).unwrap();
+        assert!(!response.started);
+        assert_eq!(response.crate_versions_found, 0);
+    }
+
+    #[tokio::test]
+    async fn migrate_docs_storage_copies_local_docs_into_configured_backend() {
+        let local = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let settings = settings_with_docs_bucket_configured(local.path());
+
+        // Both auto-generated and manually-published docs land in this exact
+        // on-disk layout (see `upload_dir_and_prune`), so one local crate/
+        // version dir stands in for either origin.
+        let docs_path_string = settings.docs_path();
+        let docs_path = std::path::Path::new(&docs_path_string);
+        tokio::fs::create_dir_all(docs_path.join("crate-a/1.0.0/doc"))
+            .await
+            .unwrap();
+        tokio::fs::write(
+            docs_path.join("crate-a/1.0.0/doc/index.html"),
+            b"crate-a docs",
+        )
+        .await
+        .unwrap();
+        tokio::fs::create_dir_all(docs_path.join("crate-b/2.0.0/doc/nested"))
+            .await
+            .unwrap();
+        tokio::fs::write(
+            docs_path.join("crate-b/2.0.0/doc/nested/page.html"),
+            b"crate-b nested docs",
+        )
+        .await
+        .unwrap();
+
+        let target_docs_storage = fs_docs_storage(target.path());
+        let r = migrate_storage_app(
+            admin_session_mock_db(),
+            settings,
+            // `migrate_storage_app` wraps this in the `Arc` the handler needs,
+            // but we still need our own handle on the same backing directory
+            // to assert on afterwards, so build a second `DocsStorage` on top
+            // of the same `target` directory rather than reusing the moved value.
+            fs_docs_storage(target.path()),
+        )
+        .oneshot(
+            Request::post("/migrate-storage")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::ACCEPTED);
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        let response: MigrateDocsStorageResponse = serde_json::from_slice(&body).unwrap();
+        assert!(response.started);
+        assert_eq!(response.crate_versions_found, 2);
+
+        let key_a = DocsStorage::file_key("crate-a", "1.0.0", "doc/index.html");
+        let key_b = DocsStorage::file_key("crate-b", "2.0.0", "doc/nested/page.html");
+        for _ in 0..50 {
+            if target_docs_storage.exists(&key_a).await.unwrap()
+                && target_docs_storage.exists(&key_b).await.unwrap()
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        assert_eq!(
+            target_docs_storage.get(&key_a).await.unwrap(),
+            Bytes::from_static(b"crate-a docs")
+        );
+        assert_eq!(
+            target_docs_storage.get(&key_b).await.unwrap(),
+            Bytes::from_static(b"crate-b nested docs")
+        );
     }
 
     #[tokio::test]

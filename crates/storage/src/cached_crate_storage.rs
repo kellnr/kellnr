@@ -120,6 +120,7 @@ mod tests {
     use async_trait::async_trait;
 
     use super::*;
+    use crate::storage::ObjectWithMeta;
 
     /// Shared state for tracking storage call counts.
     struct StorageMetrics {
@@ -158,7 +159,20 @@ mod tests {
                 .ok_or_else(|| StorageError::GenericError(format!("not found: {key}")))
         }
 
+        async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
+            let bytes = self.get(key).await?;
+            Ok(ObjectWithMeta {
+                bytes,
+                e_tag: None,
+                last_modified: chrono::Utc::now(),
+            })
+        }
+
         async fn put(&self, _key: &str, _object: Bytes) -> Result<(), StorageError> {
+            Ok(())
+        }
+
+        async fn put_overwrite(&self, _key: &str, _object: Bytes) -> Result<(), StorageError> {
             Ok(())
         }
 
@@ -169,6 +183,15 @@ mod tests {
         async fn exists(&self, key: &str) -> Result<bool, StorageError> {
             Ok(self.data.contains_key(key))
         }
+
+        async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+            Ok(self
+                .data
+                .keys()
+                .filter(|k| k.starts_with(prefix))
+                .cloned()
+                .collect())
+        }
     }
 
     /// Wrapper to make `CountingStorage` usable through `Arc` (needed for concurrent test)
@@ -178,8 +201,16 @@ mod tests {
             (**self).get(key).await
         }
 
+        async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
+            (**self).get_with_meta(key).await
+        }
+
         async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
             (**self).put(key, object).await
+        }
+
+        async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+            (**self).put_overwrite(key, object).await
         }
 
         async fn delete(&self, key: &str) -> Result<(), StorageError> {
@@ -188,6 +219,10 @@ mod tests {
 
         async fn exists(&self, key: &str) -> Result<bool, StorageError> {
             (**self).exists(key).await
+        }
+
+        async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+            (**self).list(prefix).await
         }
     }
 

@@ -63,4 +63,14 @@ pub enum StorageError {
     ToolchainGetFailed { path: String, reason: String },
     #[error("Failed to delete toolchain archive {path}: {reason}")]
     ToolchainDeleteFailed { path: String, reason: String },
+    #[error("Docs file not found: {key}")]
+    DocsNotFound { key: String },
+    #[error("Failed to store docs file {key}: {reason}")]
+    DocsStoreFailed { key: String, reason: String },
+    #[error("Failed to retrieve docs file {key}: {reason}")]
+    DocsGetFailed { key: String, reason: String },
+    #[error("Failed to delete docs file {key}: {reason}")]
+    DocsDeleteFailed { key: String, reason: String },
+    #[error("Failed to list docs under prefix {prefix}: {reason}")]
+    DocsListFailed { prefix: String, reason: String },
 }

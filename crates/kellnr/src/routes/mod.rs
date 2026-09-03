@@ -4,7 +4,7 @@ use std::time::Duration;
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
-use axum::routing::{get, get_service};
+use axum::routing::get;
 use axum::{Extension, Router, middleware};
 use kellnr_appstate::AppStateData;
 use kellnr_auth::oauth2::OAuth2Handler;
@@ -12,7 +12,6 @@ use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_ha
 use kellnr_settings::Registry;
 use kellnr_web_ui::session;
 use tokio::sync::Semaphore;
-use tower_http::services::ServeDir;
 use tower_http::timeout::TimeoutLayer;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -24,6 +23,7 @@ mod auth_routes;
 mod crate_access_routes;
 mod cratesio_api_routes;
 mod docs_routes;
+mod docs_static;
 mod group_routes;
 mod health_routes;
 mod kellnr_api_routes;
@@ -35,14 +35,14 @@ mod webhook_routes;
 
 pub fn create_router(
     state: AppStateData,
-    data_dir: &str,
     max_docs_size: usize,
     max_crate_size: usize,
     max_toolchain_size: usize,
     oauth2_handler: Option<Arc<OAuth2Handler>>,
 ) -> Router {
-    // Docs are served from disk and not from embedded assets
-    let docs_service = get_service(ServeDir::new(format!("{data_dir}/docs")))
+    // Docs are served from the pluggable Storage backend, not embedded assets.
+    let docs_service: Router<AppStateData> = Router::new()
+        .route("/{*path}", get(docs_static::serve_doc_file))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             session::session_auth_when_required,
@@ -105,7 +105,7 @@ pub fn create_router(
             "/api/v1/docs",
             docs_routes::create_manual_routes(max_docs_size),
         )
-        .nest_service("/docs", docs_service)
+        .nest("/docs", docs_service)
         // Serve Swagger UI at /api/docs with OpenAPI spec at /api/openapi.json
         .merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", api));
 
@@ -211,4 +211,108 @@ pub(crate) fn apply_download_limits(
     }
 
     router
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode, header};
+    use bytes::Bytes;
+    use kellnr_storage::docs_storage::DocsStorage;
+    use tower::ServiceExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn docs_route_serves_stored_file_with_mime_and_csp() {
+        let state = kellnr_appstate::test_state();
+        let key = DocsStorage::file_key(
+            "routes-test-crate",
+            "1.0.0",
+            "doc/routes_test_crate/index.html",
+        );
+        state
+            .docs_storage
+            .put(&key, Bytes::from_static(b"<html>hi</html>"))
+            .await
+            .unwrap();
+
+        let app = create_router(state, 100, 100, 100, None);
+
+        let r = app
+            .oneshot(
+                Request::get(format!("/docs/{key}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(r.headers().get(header::CONTENT_TYPE).unwrap(), "text/html");
+        assert!(r.headers().contains_key(header::CONTENT_SECURITY_POLICY));
+        assert!(r.headers().contains_key(header::ETAG));
+        assert!(r.headers().contains_key(header::LAST_MODIFIED));
+    }
+
+    #[tokio::test]
+    async fn docs_route_returns_304_for_matching_if_none_match() {
+        let state = kellnr_appstate::test_state();
+        let key = DocsStorage::file_key(
+            "routes-test-crate",
+            "1.0.0",
+            "doc/routes_test_crate/index.html",
+        );
+        state
+            .docs_storage
+            .put(&key, Bytes::from_static(b"<html>hi</html>"))
+            .await
+            .unwrap();
+
+        let app = create_router(state, 100, 100, 100, None);
+
+        let first = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/docs/{key}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let etag = first.headers().get(header::ETAG).unwrap().clone();
+
+        let second = app
+            .oneshot(
+                Request::get(format!("/docs/{key}"))
+                    .header(header::IF_NONE_MATCH, etag)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(second.status(), StatusCode::NOT_MODIFIED);
+        let body = axum::body::to_bytes(second.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert!(body.is_empty());
+    }
+
+    #[tokio::test]
+    async fn docs_route_404_for_missing_file() {
+        let state = kellnr_appstate::test_state();
+        let app = create_router(state, 100, 100, 100, None);
+
+        let r = app
+            .oneshot(
+                Request::get("/docs/routes-test-crate/does-not-exist/index.html")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
+    }
 }

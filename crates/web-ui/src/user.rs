@@ -519,6 +519,7 @@ mod tests {
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
+    use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use mockall::predicate::*;
@@ -536,6 +537,9 @@ mod tests {
             &settings,
             Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage,
         ));
+        let docs_storage = Arc::new(DocsStorage::new(Box::new(
+            FSStorage::new(&settings.docs_path()).unwrap(),
+        ) as DynStorage));
         let (cratesio_prefetch_sender, _) = flume::unbounded();
         let db: Arc<dyn kellnr_db::DbProvider> = Arc::new(mock_db);
         let download_counter = Arc::new(kellnr_db::download_counter::DownloadCounter::new(
@@ -550,6 +554,7 @@ mod tests {
             settings_prov: kellnr_appstate::default_settings_prov(),
             crate_storage,
             cratesio_storage,
+            docs_storage,
             cratesio_prefetch_sender,
             token_cache: cache,
             toolchain_storage: None,

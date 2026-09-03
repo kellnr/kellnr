@@ -111,8 +111,8 @@ impl Settings {
         PathBuf::from(&self.registry.data_dir).join("db.sqlite")
     }
 
-    pub fn docs_path(&self) -> PathBuf {
-        PathBuf::from(&self.registry.data_dir).join("docs")
+    pub fn docs_path(&self) -> String {
+        format!("{}/docs", self.registry.data_dir)
     }
 
     pub fn base_path(&self) -> PathBuf {
@@ -163,6 +163,15 @@ impl Settings {
         } else {
             self.toolchain_path()
         }
+    }
+
+    /// `false` once an operator has opted into `s3.docs_bucket`/`gcs.docs_bucket`
+    /// (see `init_docs_storage`) — unlike the other `*_path_or_bucket` methods,
+    /// docs stay on local disk by default even when `s3.enabled`/`gcs.enabled`
+    /// is set, so this can't be derived from `enabled` alone.
+    pub fn docs_backend_is_local(&self) -> bool {
+        !(self.s3.enabled && self.s3.docs_bucket.is_some()
+            || self.gcs.enabled && self.gcs.docs_bucket.is_some())
     }
 }
 

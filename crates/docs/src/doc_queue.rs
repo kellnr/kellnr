@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use cargo::GlobalContext;
@@ -7,22 +7,23 @@ use cargo::core::compiler::UserIntent;
 use cargo::core::resolver::CliFeatures;
 use cargo::ops::{self, CompileOptions, DocOptions, OutputFormat};
 use flate2::read::GzDecoder;
-use fs_extra::dir::{CopyOptions, copy};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::{DbProvider, DocQueueEntry};
+use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use tar::Archive;
-use tokio::fs::{create_dir_all, remove_dir_all};
+use tokio::fs::remove_dir_all;
 use tracing::error;
 
 use crate::compute_doc_url;
 use crate::docs_error::DocsError;
+use crate::upload::upload_dir_and_prune;
 
 pub fn doc_extraction_queue(
     db: Arc<dyn DbProvider>,
     cs: Arc<KellnrCrateStorage>,
-    docs_path: PathBuf,
+    docs_storage: Arc<DocsStorage>,
     path_prefix: String,
     cratesio_index: Option<String>,
 ) {
@@ -32,7 +33,7 @@ pub fn doc_extraction_queue(
             if let Err(e) = inner_loop(
                 db.clone(),
                 &cs,
-                &docs_path,
+                &docs_storage,
                 &path_prefix,
                 cratesio_index.as_deref(),
             )
@@ -47,14 +48,14 @@ pub fn doc_extraction_queue(
 async fn inner_loop(
     db: Arc<dyn DbProvider>,
     cs: &KellnrCrateStorage,
-    docs_path: &Path,
+    docs_storage: &DocsStorage,
     path_prefix: &str,
     cratesio_index: Option<&str>,
 ) -> Result<(), DocsError> {
     let entries = db.get_doc_queue().await?;
 
     for entry in entries {
-        if let Err(e) = extract_docs(&entry, cs, docs_path, cratesio_index).await {
+        if let Err(e) = extract_docs(&entry, cs, docs_storage, cratesio_index).await {
             error!("Failed to extract docs from crate: {e}");
         } else {
             if let Err(e) = clean_up(&entry.path).await {
@@ -75,7 +76,7 @@ async fn inner_loop(
 async fn extract_docs(
     doc: &DocQueueEntry,
     cs: &KellnrCrateStorage,
-    docs_path: &Path,
+    docs_storage: &DocsStorage,
     cratesio_index: Option<&str>,
 ) -> Result<(), DocsError> {
     // Unpack crate
@@ -98,12 +99,19 @@ async fn extract_docs(
     strip_rust_toolchain_files(generated_docs_path).await?;
     generate_docs(generated_docs_path, cratesio_index)?;
 
-    // Copy the docs directory
+    // Upload the docs directory, pruning any stale pages from a previous build.
+    // The `doc` key prefix mirrors the manual-upload path (api.rs), where the
+    // uploaded zip already contains a top-level `doc/` folder: both must land
+    // under `{crate}/{version}/doc/...` to match `compute_doc_url`.
     let from = generated_docs_path.join("target").join("doc");
-    let to = docs_path
-        .join(doc.normalized_name.to_string())
-        .join(&doc.version);
-    copy_dir(&from, &to).await?;
+    upload_dir_and_prune(
+        &from,
+        "doc",
+        &doc.normalized_name.to_string(),
+        &doc.version,
+        docs_storage,
+    )
+    .await?;
 
     Ok(())
 }
@@ -144,19 +152,6 @@ async fn strip_rust_toolchain_files(crate_path: &Path) -> Result<(), DocsError> 
             Err(e) => return Err(e.into()),
         }
     }
-    Ok(())
-}
-
-async fn copy_dir(from: &Path, to: &Path) -> Result<(), DocsError> {
-    create_dir_all(to).await?;
-    copy(
-        from,
-        to,
-        &CopyOptions {
-            overwrite: true,
-            ..CopyOptions::default()
-        },
-    )?;
     Ok(())
 }
 

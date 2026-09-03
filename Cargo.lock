@@ -4228,6 +4228,7 @@ dependencies = [
  "kellnr-storage",
  "kellnr-web-ui",
  "kellnr-webhooks",
+ "mime_guess",
  "mockall",
  "moka",
  "openssl",
@@ -4348,6 +4349,7 @@ name = "kellnr-docs"
 version = "6.8.0"
 dependencies = [
  "axum",
+ "bytes",
  "cargo",
  "flate2",
  "fs_extra",
@@ -4361,6 +4363,7 @@ dependencies = [
  "kellnr-registry",
  "kellnr-settings",
  "kellnr-storage",
+ "mockall",
  "serde",
  "serde_json",
  "tar",
@@ -4516,6 +4519,8 @@ version = "6.8.0"
 dependencies = [
  "async-trait",
  "bytes",
+ "chrono",
+ "futures-util",
  "kellnr-common",
  "kellnr-fakegcs-testcontainer",
  "kellnr-rustfs-testcontainer",
@@ -4523,6 +4528,7 @@ dependencies = [
  "moka",
  "object_store",
  "sha256",
+ "tempfile",
  "testcontainers",
  "thiserror 2.0.20",
  "tokio",
@@ -4534,6 +4540,7 @@ version = "6.8.0"
 dependencies = [
  "axum",
  "axum-extra",
+ "bytes",
  "cookie",
  "flume",
  "http-body-util",
@@ -4550,6 +4557,7 @@ dependencies = [
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "tempfile",
  "time",
  "tokio",
  "tower",

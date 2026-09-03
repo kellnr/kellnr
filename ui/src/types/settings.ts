@@ -133,6 +133,7 @@ export type S3 = {
   crates_bucket: string
   cratesio_bucket: string
   toolchain_bucket: string
+  docs_bucket: string | null
   connect_timeout_seconds: number
   request_timeout_seconds: number
 }
@@ -145,6 +146,7 @@ export type Gcs = {
   crates_bucket: string
   cratesio_bucket: string
   toolchain_bucket: string
+  docs_bucket: string | null
   connect_timeout_seconds: number
   request_timeout_seconds: number
 }
@@ -162,6 +164,7 @@ export const emptySettings: Settings = {
     crates_bucket: "",
     cratesio_bucket: "",
     toolchain_bucket: "",
+    docs_bucket: null,
     connect_timeout_seconds: 5,
     request_timeout_seconds: 30
   },
@@ -227,6 +230,7 @@ export const emptySettings: Settings = {
     crates_bucket: "",
     cratesio_bucket: "",
     toolchain_bucket: "",
+    docs_bucket: null,
     connect_timeout_seconds: 5,
     request_timeout_seconds: 30
   },

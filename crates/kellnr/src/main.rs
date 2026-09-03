@@ -21,6 +21,7 @@ use kellnr_settings::{
 };
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
+use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::gcs_storage::GCSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
@@ -172,12 +173,17 @@ async fn run_server(resolved: ResolvedSettings) {
     );
 
     // Docs hosting
-    init_docs_hosting(&settings, crate_storage.clone(), db.clone()).await;
+    let docs_storage: Arc<DocsStorage> = init_docs_storage(&settings).into();
+    init_docs_hosting(
+        &settings,
+        crate_storage.clone(),
+        docs_storage.clone(),
+        db.clone(),
+    );
 
     // Webhook support
     init_webhook_service(db.clone());
 
-    let data_dir = settings.registry.data_dir.clone();
     let signing_key = init_cookie_signing_key(&settings);
     let max_docs_size = settings.docs.max_size;
     let max_crate_size = settings.registry.max_crate_size as usize;
@@ -251,6 +257,7 @@ async fn run_server(resolved: ResolvedSettings) {
         settings_prov,
         crate_storage,
         cratesio_storage,
+        docs_storage,
         cratesio_prefetch_sender,
         token_cache,
         toolchain_storage,
@@ -261,7 +268,6 @@ async fn run_server(resolved: ResolvedSettings) {
     // Create router using the route module
     let mut app = routes::create_router(
         state,
-        &data_dir,
         max_docs_size,
         max_crate_size,
         max_toolchain_size,
@@ -351,19 +357,17 @@ fn get_connect_string(settings: &Settings) -> ConString {
     }
 }
 
-async fn init_docs_hosting(
+fn init_docs_hosting(
     settings: &Settings,
     cs: Arc<KellnrCrateStorage>,
+    docs_storage: Arc<DocsStorage>,
     db: Arc<dyn DbProvider + 'static>,
 ) {
-    create_dir_all(settings.docs_path())
-        .await
-        .expect("Failed to create docs directory.");
     if settings.docs.enabled {
         kellnr_docs::doc_queue::doc_extraction_queue(
             db,
             cs,
-            settings.docs_path(),
+            docs_storage,
             settings.origin.path.clone(),
             settings
                 .proxy
@@ -371,6 +375,26 @@ async fn init_docs_hosting(
                 .map(ToString::to_string),
         );
     }
+}
+
+fn init_docs_storage(settings: &Settings) -> DocsStorage {
+    let storage: DynStorage = if settings.s3.enabled
+        && let Some(bucket) = &settings.s3.docs_bucket
+    {
+        Box::new(
+            S3Storage::try_from((bucket.as_str(), settings)).expect("Failed to create S3 storage."),
+        )
+    } else if settings.gcs.enabled
+        && let Some(bucket) = &settings.gcs.docs_bucket
+    {
+        Box::new(
+            GCSStorage::try_from((bucket.as_str(), settings))
+                .expect("Failed to create GCS storage."),
+        )
+    } else {
+        Box::new(FSStorage::new(&settings.docs_path()).expect("Failed to create FS storage."))
+    };
+    DocsStorage::new(storage)
 }
 
 fn init_cratesio_storage(settings: &Settings) -> CratesIoCrateStorage {
@@ -442,5 +466,32 @@ async fn init_oauth2_handler(settings: &Settings) -> Option<Arc<OAuth2Handler>> 
             warn!("OAuth2/OIDC authentication will be disabled");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+    use kellnr_settings::test_settings;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn init_docs_storage_falls_back_to_local_disk_when_bucket_unset() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut settings = test_settings();
+        settings.registry.data_dir = tmp.path().to_str().unwrap().to_string();
+        settings.s3.enabled = true;
+        settings.s3.docs_bucket = None;
+
+        let docs_storage = init_docs_storage(&settings);
+        let key = DocsStorage::file_key("my-crate", "1.0.0", "doc/index.html");
+        docs_storage
+            .put(&key, Bytes::from_static(b"hi"))
+            .await
+            .unwrap();
+
+        let expected_path = Path::new(&settings.docs_path()).join("my-crate/1.0.0/doc/index.html");
+        assert!(expected_path.exists());
     }
 }

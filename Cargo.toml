@@ -49,6 +49,7 @@ cookie = { version = "0.18.1", features = ["private", "percent-encode"] }
 flate2 = "1.1.9"
 flume = "0.12.0"
 fs_extra = "1.3.0"
+futures-util = "0.3"
 http-body-util = "0.1.3"
 hyper = "1.10.1"
 include_dir = "0.7.4"

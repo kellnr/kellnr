@@ -3,32 +3,33 @@ mod doc_archive;
 pub mod doc_queue;
 pub mod doc_queue_response;
 pub mod docs_error;
+pub mod upload;
 pub mod upload_response;
 
 use std::convert::TryFrom;
-use std::path::Path;
 
 use kellnr_common::version::Version;
-use kellnr_settings::Settings;
+use kellnr_storage::docs_storage::DocsStorage;
 
-pub fn get_latest_doc_url(crate_name: &str, settings: &Settings) -> Option<String> {
-    let version = get_latest_version_with_doc(crate_name, settings);
-    version.map(|v| compute_doc_url(crate_name, &v, &settings.origin.path))
-}
+use crate::docs_error::DocsError;
 
-pub fn get_doc_url(
+pub async fn get_latest_doc_url(
     crate_name: &str,
-    crate_version: &Version,
-    docs_path: &Path,
+    docs_storage: &DocsStorage,
     path_prefix: &str,
 ) -> Option<String> {
-    let docs_name = crate_name_to_docs_name(crate_name);
-    let path_prefix = path_prefix.trim();
+    let version = get_latest_version_with_doc(crate_name, docs_storage).await?;
+    Some(compute_doc_url(crate_name, &version, path_prefix))
+}
 
-    if doc_exists(crate_name, crate_version, docs_path) {
-        Some(format!(
-            "{path_prefix}/docs/{crate_name}/{crate_version}/doc/{docs_name}/index.html"
-        ))
+pub async fn get_doc_url(
+    crate_name: &str,
+    crate_version: &Version,
+    docs_storage: &DocsStorage,
+    path_prefix: &str,
+) -> Option<String> {
+    if doc_exists(crate_name, &crate_version.to_string(), docs_storage).await {
+        Some(compute_doc_url(crate_name, crate_version, path_prefix))
     } else {
         None
     }
@@ -46,62 +47,57 @@ fn crate_name_to_docs_name(crate_name: &str) -> String {
     crate_name.replace('-', "_")
 }
 
-fn doc_exists(crate_name: &str, crate_version: &str, docs_path: &Path) -> bool {
+async fn doc_exists(crate_name: &str, crate_version: &str, docs_storage: &DocsStorage) -> bool {
     let docs_name = crate_name_to_docs_name(crate_name);
-    docs_path
-        .join(crate_name)
-        .join(crate_version)
-        .join("doc")
-        .join(docs_name)
-        .join("index.html")
-        .exists()
+    let key = DocsStorage::file_key(
+        crate_name,
+        crate_version,
+        &format!("doc/{docs_name}/index.html"),
+    );
+    docs_storage.exists(&key).await.unwrap_or(false)
 }
 
-fn get_latest_version_with_doc(crate_name: &str, settings: &Settings) -> Option<Version> {
-    let versions_path = settings.docs_path().join(crate_name);
-    let Ok(version_folders) = std::fs::read_dir(versions_path) else {
-        return None;
-    };
-
-    let mut versions: Vec<Version> = version_folders
-        .flatten()
-        .filter(|entry| entry.path().is_dir())
-        .flat_map(|dir| Version::try_from(&dir.file_name().to_string_lossy().to_string()))
+async fn get_latest_version_with_doc(
+    crate_name: &str,
+    docs_storage: &DocsStorage,
+) -> Option<Version> {
+    let mut versions: Vec<Version> = docs_storage
+        .version_candidates(crate_name)
+        .await
+        .ok()?
+        .into_iter()
+        .flat_map(|v| Version::try_from(&v))
         .collect();
 
     // Sort and reverse the order such that the biggest version
     // for which docs exist will be returned.
     versions.sort();
     versions.reverse();
-    versions
-        .into_iter()
-        .find(|v| doc_exists(crate_name, &v.to_string(), &settings.docs_path()))
+
+    for version in versions {
+        if doc_exists(crate_name, &version.to_string(), docs_storage).await {
+            return Some(version);
+        }
+    }
+    None
 }
 
 pub async fn delete(
     crate_name: &str,
     crate_version: &str,
-    settings: &Settings,
-) -> Result<(), std::io::Error> {
-    // Delete the docs folder for the crate version.
-    let docs_path = settings.docs_path().join(crate_name).join(crate_version);
-    if docs_path.exists() {
-        tokio::fs::remove_dir_all(docs_path).await?;
-    }
-
-    // If it was the last version, delete the empty crate docs folder.
-    if get_latest_version_with_doc(crate_name, settings).is_none() {
-        let crate_path = settings.docs_path().join(crate_name);
-        if crate_path.exists() {
-            tokio::fs::remove_dir_all(crate_path).await?;
-        }
-    }
-
+    docs_storage: &DocsStorage,
+) -> Result<(), DocsError> {
+    docs_storage
+        .delete_prefix(&DocsStorage::version_prefix(crate_name, crate_version))
+        .await?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use bytes::Bytes;
+    use kellnr_storage::fs_storage::FSStorage;
+
     use super::*;
 
     #[test]
@@ -133,5 +129,64 @@ mod tests {
             url,
             "/docs/foo-bar-baz/2.0.0-beta1/doc/foo_bar_baz/index.html"
         );
+    }
+
+    fn docs_storage() -> (tempfile::TempDir, DocsStorage) {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = FSStorage::new(dir.path().to_str().unwrap()).unwrap();
+        (dir, DocsStorage::new(Box::new(storage)))
+    }
+
+    #[tokio::test]
+    async fn doc_exists_true_when_index_html_present() {
+        let (_dir, docs) = docs_storage();
+        let key = DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/index.html");
+        docs.put(&key, Bytes::from_static(b"x")).await.unwrap();
+
+        assert!(doc_exists("my-crate", "1.0.0", &docs).await);
+    }
+
+    #[tokio::test]
+    async fn doc_exists_false_when_missing() {
+        let (_dir, docs) = docs_storage();
+        assert!(!doc_exists("my-crate", "1.0.0", &docs).await);
+    }
+
+    #[tokio::test]
+    async fn get_latest_version_with_doc_returns_highest_version() {
+        let (_dir, docs) = docs_storage();
+        for v in ["1.0.0", "2.0.0", "1.5.0"] {
+            let key = DocsStorage::file_key("my-crate", v, "doc/my_crate/index.html");
+            docs.put(&key, Bytes::from_static(b"x")).await.unwrap();
+        }
+
+        let latest = get_latest_version_with_doc("my-crate", &docs)
+            .await
+            .unwrap();
+        assert_eq!(latest.to_string(), "2.0.0");
+    }
+
+    #[tokio::test]
+    async fn get_latest_version_with_doc_none_when_no_versions() {
+        let (_dir, docs) = docs_storage();
+        assert!(
+            get_latest_version_with_doc("my-crate", &docs)
+                .await
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_removes_only_targeted_version() {
+        let (_dir, docs) = docs_storage();
+        let v1 = DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/index.html");
+        let v2 = DocsStorage::file_key("my-crate", "2.0.0", "doc/my_crate/index.html");
+        docs.put(&v1, Bytes::from_static(b"a")).await.unwrap();
+        docs.put(&v2, Bytes::from_static(b"b")).await.unwrap();
+
+        delete("my-crate", "1.0.0", &docs).await.unwrap();
+
+        assert!(!docs.exists(&v1).await.unwrap());
+        assert!(docs.exists(&v2).await.unwrap());
     }
 }
