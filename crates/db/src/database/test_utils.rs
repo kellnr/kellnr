@@ -246,6 +246,7 @@ pub async fn test_add_cached_crate(db: &Database, name: &str, version: &str) -> 
         yanked: false,
         links: None,
         v: Some(1),
+        rust_version: None,
     }];
 
     db.add_cratesio_prefetch_data(

@@ -1766,6 +1766,7 @@ impl DbProvider for Database {
                     pubtime: Set(index.pubtime.map(|dt| dt.naive_utc())),
                     v: Set(index.v.unwrap_or(1) as i32),
                     crates_io_fk: Set(krate.id),
+                    rust_version: Set(index.rust_version.clone()),
                 };
 
                 new_index.insert(&txn).await?;

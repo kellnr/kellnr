@@ -6,6 +6,7 @@ mod m20260128_000001_oauth2_identity;
 mod m20260129_000001_database_improvements;
 mod m20260130_000001_toolchain;
 mod m20260406_000001_toolchain_component;
+mod m20260903_000001_index_rust_version;
 
 pub struct Migrator;
 
@@ -19,6 +20,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260129_000001_database_improvements::Migration),
             Box::new(m20260130_000001_toolchain::Migration),
             Box::new(m20260406_000001_toolchain_component::Migration),
+            Box::new(m20260903_000001_index_rust_version::Migration),
         ]
     }
 }

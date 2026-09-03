@@ -162,6 +162,7 @@ pub async fn add_crate_index<C: ConnectionTrait>(
         links: Set(index_data.links),
         v: Set(index_data.v.unwrap_or(1) as i32),
         crate_fk: Set(crate_id),
+        rust_version: Set(index_data.rust_version),
     };
 
     ci.insert(db_con).await?;
@@ -380,6 +381,7 @@ pub fn crate_index_model_to_index_metadata(
             links: ci.links,
             v: Some(ci.v as u32),
             features2: None,
+            rust_version: ci.rust_version,
         };
         index_metadata.push(cm);
     }
@@ -425,6 +427,7 @@ pub fn cratesio_index_model_to_index_metadata(
             yanked: ci.yanked,
             links: ci.links.clone(),
             v: Some(ci.v as u32),
+            rust_version: ci.rust_version.clone(),
         };
         index_metadata.push(cm);
     }

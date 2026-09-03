@@ -25,6 +25,8 @@ pub struct Model {
     pub v: i32,
     pub crates_io_fk: i64,
     pub pubtime: Option<DateTime>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub rust_version: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
