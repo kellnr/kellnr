@@ -543,7 +543,7 @@ pub async fn list_crate_versions(
 
 /// Search crates in Kellnr registry
 ///
-/// Searches for crates by name in the Kellnr registry.
+/// Searches for crates by name and description in the Kellnr registry.
 #[utoipa::path(
     get,
     path = "/",
@@ -559,7 +559,7 @@ pub async fn list_crate_versions(
 )]
 pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<SearchResult>> {
     let crates = db
-        .search_in_crate_name(&params.q, false)
+        .search_in_crate_name_and_description(&params.q.0, false)
         .await?
         .into_iter()
         .map(|c| Crate {
@@ -1809,7 +1809,7 @@ mod reg_api_tests {
     async fn search_verify_query_and_default() {
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_search_in_crate_name()
+            .expect_search_in_crate_name_and_description()
             .with(eq("foo"), eq(false))
             .returning(|_, _| Ok(vec![]));
 
@@ -1831,7 +1831,7 @@ mod reg_api_tests {
     async fn search_verify_per_page() {
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_search_in_crate_name()
+            .expect_search_in_crate_name_and_description()
             .with(eq("foo"), eq(false))
             .returning(|_, _| Ok(vec![]));
 

@@ -6,6 +6,7 @@ use axum::http::StatusCode;
 use kellnr_appstate::{AppState, DbState, SettingsProvState, SettingsState};
 use kellnr_common::crate_data::CrateData;
 use kellnr_common::crate_overview::CrateOverview;
+use kellnr_common::name_or_description::NameOrDescription;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
@@ -257,11 +258,11 @@ pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> J
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct SearchParams {
-    name: OriginalName,
+    name: NameOrDescription,
     cache: Option<bool>,
 }
 
-/// Search for crates by name
+/// Search for crates by name and description
 #[utoipa::path(
     get,
     path = "/search",
@@ -272,8 +273,9 @@ pub struct SearchParams {
     )
 )]
 pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
+    let name: String = params.name.into();
     let crates = db
-        .search_in_crate_name(&params.name, params.cache.unwrap_or(false))
+        .search_in_crate_name_and_description(&name, params.cache.unwrap_or(false))
         .await
         .unwrap_or_default();
     Json(Pagination {
@@ -1441,7 +1443,7 @@ mod tests {
         let (settings, storage) = test_deps();
 
         mock_db
-            .expect_search_in_crate_name()
+            .expect_search_in_crate_name_and_description()
             .with(eq("doesnotexist"), eq(false))
             .returning(move |_name, _| Ok(vec![]));
 
@@ -1483,7 +1485,7 @@ mod tests {
 
         let tc = test_crate_summary.clone();
         mock_db
-            .expect_search_in_crate_name()
+            .expect_search_in_crate_name_and_description()
             .with(eq("hello"), eq(false))
             .returning(move |_, _| Ok(vec![tc.clone()]));
 

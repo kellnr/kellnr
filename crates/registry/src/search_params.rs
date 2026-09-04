@@ -5,10 +5,10 @@ use axum::RequestPartsExt;
 use axum::extract::Query;
 use axum::http::request::Parts;
 use hyper::StatusCode;
-use kellnr_common::original_name::OriginalName;
+use kellnr_common::name_or_description::NameOrDescription;
 
 pub struct SearchParams {
-    pub q: OriginalName,
+    pub q: NameOrDescription,
     pub per_page: PerPage,
 }
 
@@ -52,8 +52,10 @@ where
 
         let q = query_params
             .get("q")
-            .ok_or((StatusCode::BAD_REQUEST, "missing q".to_owned()))?;
-        let q = OriginalName::try_from(q).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+            .ok_or((StatusCode::BAD_REQUEST, "missing q".to_owned()))?
+            .clone();
+        let q =
+            NameOrDescription::try_from(q).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
         let per_page = query_params
             .get("per_page")
