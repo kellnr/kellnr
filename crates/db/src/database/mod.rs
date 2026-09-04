@@ -270,6 +270,14 @@ impl Database {
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
         /// Adds a `where` clause for case-insensitive matching of name and description.
+        ///
+        /// Case folding is only reliable for ASCII. The pattern is lowercased by
+        /// Rust, which is Unicode-aware, while the columns are lowercased by the
+        /// database: PostgreSQL folds according to the locale, but SQLite ships
+        /// without ICU and folds ASCII only. A description containing "ÄPFEL"
+        /// therefore stays uppercase on SQLite and never matches the lowercased
+        /// pattern, for any spelling of the query. Crate names are unaffected,
+        /// since `OriginalName` restricts them to ASCII.
         fn add_filter_by_name_and_description<T: Iden + Copy, N: Iden, D: Iden>(
             query: &mut SelectStatement,
             table: T,

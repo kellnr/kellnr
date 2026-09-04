@@ -559,7 +559,7 @@ pub async fn list_crate_versions(
 )]
 pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<SearchResult>> {
     let crates = db
-        .search_in_crate_name_and_description(&params.q.0, false)
+        .search_in_crate_name_and_description(params.q.as_str(), false)
         .await?
         .into_iter()
         .map(|c| Crate {
