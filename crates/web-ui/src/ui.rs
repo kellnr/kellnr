@@ -1482,7 +1482,7 @@ mod tests {
             settings,
         )
         .oneshot(
-            Request::get(&format!("/search?name={}", "a".repeat(65)))
+            Request::get(format!("/search?name={}", "a".repeat(65)))
                 .body(Body::empty())
                 .unwrap(),
         )
