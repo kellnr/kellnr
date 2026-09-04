@@ -163,6 +163,7 @@ pub enum CrateIndexIden {
     Links,
     V,
     CrateFk,
+    RustVersion,
 }
 
 #[derive(Iden, Copy, Clone)]
@@ -192,6 +193,7 @@ pub enum CratesIoIndexIden {
     Links,
     V,
     CratesIoFk,
+    RustVersion,
 }
 
 #[derive(Iden, Copy, Clone)]

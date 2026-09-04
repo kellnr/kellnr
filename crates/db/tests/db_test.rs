@@ -2374,6 +2374,7 @@ async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &kellnr_db::Database) 
                 pubtime: None,
                 v: Some(1),
                 features2: None,
+                rust_version: None,
             }],
         )
         .await
@@ -2404,6 +2405,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
         pubtime: None,
         v: Some(1),
         features2: None,
+        rust_version: None,
     }];
     test_db
         .add_cratesio_prefetch_data(
@@ -2427,6 +2429,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
             pubtime: None,
             v: Some(1),
             features2: None,
+            rust_version: None,
         },
         IndexMetadata {
             name: "crate".to_string(),
@@ -2439,6 +2442,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
             pubtime: None,
             v: Some(1),
             features2: None,
+            rust_version: None,
         },
     ];
     test_db
@@ -2940,4 +2944,116 @@ async fn pubtime_stored_and_serialized_correctly(test_db: &kellnr_db::Database) 
         json_str.contains(&format!(r#""pubtime":"{formatted}""#)),
         "Expected pubtime '{formatted}' in JSON: {json_str}"
     );
+}
+
+#[db_test]
+async fn cratesio_index_keeps_rust_version(test_db: &kellnr_db::Database) {
+    let indices = vec![IndexMetadata {
+        name: "crate".to_string(),
+        vers: "1.0.0".to_string(),
+        deps: vec![],
+        cksum: "cksum".to_string(),
+        features: BTreeMap::default(),
+        yanked: false,
+        links: None,
+        pubtime: None,
+        v: Some(2),
+        features2: None,
+        rust_version: Some("1.85".to_string()),
+    }];
+    test_db
+        .add_cratesio_prefetch_data(
+            &OriginalName::from_unchecked("crate".to_string()),
+            "etag",
+            "last_modified",
+            None,
+            &indices,
+        )
+        .await
+        .unwrap();
+
+    // An outdated etag forces the index to be rebuilt from the database
+    // instead of being echoed back from the data passed in above.
+    let prefetch_state = test_db
+        .is_cratesio_cache_up_to_date(
+            &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
+            Some("old_etag".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    let PrefetchState::NeedsUpdate(prefetch) = prefetch_state else {
+        panic!("Expected the cratesio cache to need an update: {prefetch_state:?}");
+    };
+    let data = String::from_utf8(prefetch.data).unwrap();
+    let index: IndexMetadata = serde_json::from_str(data.lines().next().unwrap()).unwrap();
+
+    assert_eq!(Some("1.85".to_string()), index.rust_version);
+}
+
+#[db_test]
+async fn crate_index_keeps_rust_version(test_db: &kellnr_db::Database) {
+    let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
+    let mut pm = PublishMetadata::minimal("crate", "1.0.0");
+    pm.rust_version = Some("1.85".to_string());
+    test_db
+        .add_crate(&pm, "cksum", &created, "admin")
+        .await
+        .unwrap();
+
+    let prefetch = test_db.get_prefetch_data("crate").await.unwrap();
+    let data = String::from_utf8(prefetch.data).unwrap();
+    let index: IndexMetadata = serde_json::from_str(data.lines().next().unwrap()).unwrap();
+
+    assert_eq!(Some("1.85".to_string()), index.rust_version);
+}
+
+#[db_test]
+async fn cratesio_index_heals_missing_rust_version(test_db: &kellnr_db::Database) {
+    let mut index = IndexMetadata {
+        name: "crate".to_string(),
+        vers: "1.0.0".to_string(),
+        deps: vec![],
+        cksum: "cksum".to_string(),
+        features: BTreeMap::default(),
+        yanked: false,
+        links: None,
+        pubtime: None,
+        v: Some(2),
+        features2: None,
+        rust_version: None,
+    };
+    let name = OriginalName::from_unchecked("crate".to_string());
+
+    // A cache written before rust_version was known, e.g. by an older Kellnr.
+    test_db
+        .add_cratesio_prefetch_data(&name, "etag", "last_modified", None, &[index.clone()])
+        .await
+        .unwrap();
+
+    // The same version comes back from the background refresh, now with an
+    // MSRV. The row already exists, so only an update can heal it.
+    index.rust_version = Some("1.85".to_string());
+    test_db
+        .add_cratesio_prefetch_data(&name, "new_etag", "last_modified", None, &[index])
+        .await
+        .unwrap();
+
+    let prefetch_state = test_db
+        .is_cratesio_cache_up_to_date(
+            &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
+            Some("old_etag".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    let PrefetchState::NeedsUpdate(prefetch) = prefetch_state else {
+        panic!("Expected the cratesio cache to need an update: {prefetch_state:?}");
+    };
+    let data = String::from_utf8(prefetch.data).unwrap();
+    let served: IndexMetadata = serde_json::from_str(data.lines().next().unwrap()).unwrap();
+
+    assert_eq!(Some("1.85".to_string()), served.rust_version);
 }

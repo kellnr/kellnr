@@ -120,6 +120,13 @@ pub struct IndexMetadata {
     // }
     #[serde(skip_serializing_if = "Option::is_none")]
     pub features2: Option<BTreeMap<String, Vec<String>>>,
+    // The minimal supported Rust version of the package, or null if not
+    // specified. This field is optional and defaults to null.
+    //
+    // Note that the index spells this field `rust_version`, while the
+    // manifest key it originates from is `rust-version`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rust_version: Option<String>,
 }
 
 impl IndexMetadata {
@@ -197,6 +204,7 @@ impl IndexMetadata {
             links: registry_metadata.links.clone(),
             v: Some(1),
             features2: None,
+            rust_version: registry_metadata.rust_version.clone(),
         }
     }
 
@@ -212,6 +220,7 @@ impl IndexMetadata {
             pubtime: None,
             v: Some(1),
             features2: None,
+            rust_version: None,
         }
     }
 
@@ -475,6 +484,7 @@ mod tests {
             pubtime: Some(pubtime),
             v: Some(1),
             features2: None,
+            rust_version: None,
         };
 
         let json = metadata.to_json().unwrap();
@@ -499,6 +509,7 @@ mod tests {
             pubtime: None,
             v: Some(1),
             features2: None,
+            rust_version: None,
         };
 
         let json = metadata.to_json().unwrap();
@@ -547,6 +558,33 @@ mod tests {
     }
 
     #[test]
+    fn rust_version_round_trips_losslessly() {
+        // The index spells the MSRV field `rust_version`, unlike the
+        // `rust-version` manifest key it is derived from.
+        let json = r#"{"name":"anyhow","vers":"1.0.100","deps":[],"cksum":"abc","features":{},"yanked":false,"v":2,"rust_version":"1.39"}"#;
+
+        let metadata: IndexMetadata = serde_json::from_str(json).unwrap();
+
+        assert_eq!(metadata.rust_version, Some("1.39".to_string()));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&metadata.to_json().unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(json).unwrap()
+        );
+    }
+
+    #[test]
+    fn rust_version_none_is_omitted_from_serialization() {
+        let metadata = IndexMetadata::minimal("test", "1.0.0", "abc123");
+
+        let json = metadata.to_json().unwrap();
+
+        assert!(
+            !json.contains("rust_version"),
+            "Expected rust_version to be omitted when None, got: {json}"
+        );
+    }
+
+    #[test]
     fn serialize_indices_ends_with_newline_and_one_line_per_entry() {
         let mk = |vers: &str| IndexMetadata {
             name: "crate".to_string(),
@@ -559,6 +597,7 @@ mod tests {
             pubtime: None,
             v: Some(1),
             features2: None,
+            rust_version: None,
         };
         let indices = vec![mk("1.0.0"), mk("2.0.0")];
 

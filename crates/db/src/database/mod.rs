@@ -1754,11 +1754,25 @@ impl DbProvider for Database {
             .await?;
 
         for index in indices {
-            // Check if the version was yanked or un-yanked and update if so.
+            // Refresh the mutable parts of an already cached version. "yanked"
+            // can flip upstream at any time. "rust_version" is refreshed too
+            // because caches written before the column existed hold NULL for
+            // every row, and only a refresh can heal them.
             if let Some(current_index) = current_indices.iter().find(|ci| index.vers == ci.vers) {
+                let mut ci: cratesio_index::ActiveModel = current_index.to_owned().into();
+                let mut changed = false;
+
                 if index.yanked != current_index.yanked {
-                    let mut ci: cratesio_index::ActiveModel = current_index.to_owned().into();
                     ci.yanked = Set(index.yanked);
+                    changed = true;
+                }
+
+                if index.rust_version != current_index.rust_version {
+                    ci.rust_version = Set(index.rust_version.clone());
+                    changed = true;
+                }
+
+                if changed {
                     ci.update(&txn).await?;
                 }
             } else {
@@ -1789,6 +1803,7 @@ impl DbProvider for Database {
                     pubtime: Set(index.pubtime.map(|dt| dt.naive_utc())),
                     v: Set(index.v.unwrap_or(1) as i32),
                     crates_io_fk: Set(krate.id),
+                    rust_version: Set(index.rust_version.clone()),
                 };
 
                 new_index.insert(&txn).await?;
