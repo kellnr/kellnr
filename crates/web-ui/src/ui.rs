@@ -273,9 +273,8 @@ pub struct SearchParams {
     )
 )]
 pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
-    let name: String = params.name.into();
     let crates = db
-        .search_in_crate_name_and_description(&name, params.cache.unwrap_or(false))
+        .search_in_crate_name_and_description(params.name.as_str(), params.cache.unwrap_or(false))
         .await
         .unwrap_or_default();
     Json(Pagination {
@@ -1468,6 +1467,55 @@ mod tests {
         assert_eq!(0, result_crates.crates.len());
         assert_eq!(0, result_crates.page);
         assert_eq!(0, result_crates.page_size);
+    }
+
+    // The length bound lives on `NameOrDescription`. It has to hold here too,
+    // where the value arrives through serde rather than an explicit `TryFrom`.
+    #[tokio::test]
+    async fn search_rejects_overlong_query() {
+        let mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get(format!("/search?name={}", "a".repeat(65)))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(StatusCode::BAD_REQUEST, r.status());
+    }
+
+    #[tokio::test]
+    async fn search_accepts_multi_word_query() {
+        let mut mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+
+        mock_db
+            .expect_search_in_crate_name_and_description()
+            .with(eq("vcard parser"), eq(false))
+            .returning(|_, _| Ok(vec![]));
+
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/search?name=vcard%20parser")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(StatusCode::OK, r.status());
     }
 
     #[tokio::test]

@@ -54,7 +54,7 @@ pub async fn search(
     let url = Url::parse_with_params(
         settings.proxy.api.as_str(),
         &[
-            ("q", params.q.0.as_str()),
+            ("q", params.q.as_str()),
             ("per_page", &params.per_page.0.to_string()),
         ],
     )
