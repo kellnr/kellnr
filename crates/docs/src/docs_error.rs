@@ -1,5 +1,6 @@
 use hyper::StatusCode;
 use kellnr_error::api_error::ApiError;
+use kellnr_storage::storage_error::StorageError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -12,10 +13,14 @@ pub enum DocsError {
     DatabaseError(#[from] kellnr_db::error::DbError),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Failed to copy directory: {0}")]
-    CopyError(#[from] fs_extra::error::Error),
+    #[error("Failed to walk docs directory: {0}")]
+    DirWalkError(#[from] fs_extra::error::Error),
     #[error("Cargo error: {0}")]
     CargoError(String),
+    #[error("Docs storage error: {0}")]
+    StorageError(#[from] StorageError),
+    #[error("Path {path} is not inside {root}")]
+    PathPrefixMismatch { path: String, root: String },
 }
 
 impl From<DocsError> for ApiError {
@@ -29,7 +34,7 @@ impl From<DocsError> for ApiError {
             DocsError::IoError(error) => {
                 ApiError::from_err(&error, StatusCode::INTERNAL_SERVER_ERROR)
             }
-            DocsError::CopyError(error) => {
+            DocsError::DirWalkError(error) => {
                 ApiError::from_err(&error, StatusCode::INTERNAL_SERVER_ERROR)
             }
             DocsError::CargoError(error) => ApiError::new(
@@ -37,6 +42,10 @@ impl From<DocsError> for ApiError {
                 &String::default(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             ),
+            DocsError::StorageError(error) => ApiError::from(error),
+            DocsError::PathPrefixMismatch { .. } => {
+                ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR)
+            }
         }
     }
 }

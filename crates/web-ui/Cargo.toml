@@ -30,14 +30,16 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 time.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 urlencoding = "2"
 
 [dev-dependencies]
+bytes.workspace = true
 flume.workspace = true
 hyper.workspace = true
 mockall.workspace = true
-tokio.workspace = true
+tempfile.workspace = true
 tower.workspace = true
 
 [lints]

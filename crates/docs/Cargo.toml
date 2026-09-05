@@ -22,6 +22,7 @@ kellnr-storage.workspace = true
 
 # External dependencies from crates.io
 axum.workspace = true
+bytes.workspace = true
 cargo.workspace = true
 utoipa.workspace = true
 flate2.workspace = true
@@ -31,6 +32,7 @@ hyper.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tar.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -38,7 +40,7 @@ zip.workspace = true
 
 [dev-dependencies]
 hyper.workspace = true
-tempfile.workspace = true
+mockall.workspace = true
 tokio.workspace = true
 tower.workspace = true
 

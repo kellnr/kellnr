@@ -25,6 +25,8 @@ pub struct Gcs {
 
     pub toolchain_bucket: String,
 
+    pub docs_bucket: Option<String>,
+
     /// GCS connect timeout in seconds
     #[arg(long = "gcs-connect-timeout")]
     pub connect_timeout_seconds: u64,
@@ -44,6 +46,7 @@ impl Default for Gcs {
             crates_bucket: "kellnr-crates".to_string(),
             cratesio_bucket: "kellnr-cratesio".to_string(),
             toolchain_bucket: "kellnr-toolchains".to_string(),
+            docs_bucket: None,
             connect_timeout_seconds: 5,
             request_timeout_seconds: 30,
         }

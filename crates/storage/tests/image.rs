@@ -58,7 +58,7 @@ impl Image for RustFs {
         vec![
             "-c",
             concat!(
-                "mkdir -p /data/kellnr-crates && ",
+                "mkdir -p /data/kellnr-crates /data/kellnr-cratesio /data/kellnr-toolchains /data/kellnr-docs && ",
                 "exec /usr/bin/rustfs ",
                 "--access-key rustfsadmin ",
                 "--secret-key rustfsadmin ",

@@ -10,6 +10,7 @@ use kellnr_db::download_counter::DownloadCounter;
 use kellnr_settings::{Settings, SettingsProv};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
+use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::toolchain_storage::ToolchainStorage;
@@ -23,6 +24,7 @@ pub type SettingsState = axum::extract::State<Arc<Settings>>;
 pub type SettingsProvState = axum::extract::State<Arc<SettingsProv>>;
 pub type CrateStorageState = axum::extract::State<Arc<KellnrCrateStorage>>;
 pub type CrateIoStorageState = axum::extract::State<Arc<CratesIoCrateStorage>>;
+pub type DocsStorageState = axum::extract::State<Arc<DocsStorage>>;
 pub type SigningKeyState = axum::extract::State<Key>;
 pub type CratesIoPrefetchSenderState = axum::extract::State<Sender<CratesioPrefetchMsg>>;
 pub type TokenCacheState = axum::extract::State<Arc<TokenCacheManager>>;
@@ -41,6 +43,10 @@ pub struct AppStateData {
     pub settings_prov: Arc<SettingsProv>,
     pub crate_storage: Arc<KellnrCrateStorage>,
     pub cratesio_storage: Arc<CratesIoCrateStorage>,
+    /// Always present, unlike `toolchain_storage`: `/docs/*` serving and
+    /// manual doc publishing are mounted regardless of `settings.docs.enabled`
+    /// (that flag only gates the automatic generation queue).
+    pub docs_storage: Arc<DocsStorage>,
     pub cratesio_prefetch_sender: Sender<CratesioPrefetchMsg>,
     pub token_cache: Arc<TokenCacheManager>,
     pub toolchain_storage: Option<Arc<ToolchainStorage>>,
@@ -71,6 +77,9 @@ pub fn test_state() -> AppStateData {
         &settings,
         Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage,
     ));
+    let docs_storage = Arc::new(DocsStorage::new(Box::new(
+        FSStorage::new(&settings.docs_path()).unwrap(),
+    ) as DynStorage));
     let (cratesio_prefetch_sender, _) = flume::unbounded();
     let token_cache = Arc::new(TokenCacheManager::new(false, 60, 1000));
     let download_counter = Arc::new(DownloadCounter::new(db.clone(), 30));
@@ -81,6 +90,7 @@ pub fn test_state() -> AppStateData {
         settings_prov,
         crate_storage,
         cratesio_storage,
+        docs_storage,
         cratesio_prefetch_sender,
         token_cache,
         toolchain_storage: None, // Toolchain storage disabled in tests by default
