@@ -550,6 +550,7 @@ pub async fn list_crate_versions(
     tag = "crates",
     params(
         ("q" = String, Query, description = "Search query"),
+        ("page" = Option<u32>, Query, description = "Page to return"),
         ("per_page" = Option<u32>, Query, description = "Results per page")
     ),
     responses(
@@ -558,10 +559,13 @@ pub async fn list_crate_versions(
     security(("cargo_token" = []))
 )]
 pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<SearchResult>> {
+    let limit = params.per_page.0;
+    let offset = (params.page.0 - 1) * limit;
     let crates = db
-        .search_in_crate_name_and_description(params.q.as_str(), false)
+        .search_in_crate_name_and_description(params.q.as_str(), limit as u64, offset as u64, false)
         .await?
         .into_iter()
+        .take(params.per_page.0)
         .map(|c| Crate {
             name: c.name,
             max_version: c.version,
@@ -569,7 +573,6 @@ pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<
                 .description
                 .unwrap_or_else(|| "No description set".to_string()),
         })
-        .take(params.per_page.0)
         .collect::<Vec<Crate>>();
 
     Ok(Json(SearchResult {
@@ -1810,8 +1813,8 @@ mod reg_api_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("foo"), eq(false))
-            .returning(|_, _| Ok(vec![]));
+            .with(eq("foo"), eq(10), eq(0), eq(false))
+            .returning(|_, _, _, _| Ok(vec![]));
 
         let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
@@ -1828,12 +1831,34 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
+    async fn search_verify_page() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_search_in_crate_name_and_description()
+            .with(eq("foo"), eq(20), eq(40), eq(false))
+            .returning(|_, _, _, _| Ok(vec![]));
+
+        let kellnr = app_search(Arc::new(mock_db));
+        let r = kellnr
+            .oneshot(
+                Request::get("/api/v1/crates?q=foo&page=3&per_page=20")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_ok());
+    }
+
+    #[tokio::test]
     async fn search_verify_per_page() {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("foo"), eq(false))
-            .returning(|_, _| Ok(vec![]));
+            .with(eq("foo"), eq(20), eq(0), eq(false))
+            .returning(|_, _, _, _| Ok(vec![]));
 
         let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
@@ -1847,6 +1872,25 @@ mod reg_api_tests {
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_ok());
+    }
+
+    #[tokio::test]
+    async fn search_verify_page_out_of_range() {
+        let settings = get_settings();
+        let kellnr = TestKellnr::fake(settings).await;
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates?q=foo&page=0")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_err());
     }
 
     #[tokio::test]

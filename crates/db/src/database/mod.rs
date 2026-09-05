@@ -1392,9 +1392,12 @@ impl DbProvider for Database {
     async fn search_in_crate_name_and_description(
         &self,
         contains: &str,
+        limit: u64,
+        offset: u64,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(Some(contains), None, cache).await
+        self.query_crates(Some(contains), Some((limit, offset)), cache)
+            .await
     }
 
     async fn get_crate_overview_list(
