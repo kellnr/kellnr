@@ -1073,7 +1073,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "time",
- "toml 1.1.4+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
  "toml_edit 0.25.12+spec-1.1.0",
  "toml_parser",
  "toml_writer",
@@ -1181,7 +1181,7 @@ dependencies = [
  "serde-untagged",
  "serde-value",
  "thiserror 2.0.20",
- "toml 1.1.4+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
  "unicode-ident",
  "url",
 ]
@@ -4238,7 +4238,7 @@ dependencies = [
  "tar",
  "tempfile",
  "tokio",
- "toml 1.1.4+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
  "tower",
  "tower-http 0.7.1",
  "tracing",
@@ -4507,7 +4507,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "toml 1.1.4+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
  "tracing",
  "url",
  "utoipa",
@@ -7964,9 +7964,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.1.4+spec-1.1.0"
+version = "1.1.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aace63f4bbcdfc2c965b059de67119c89c4017a70d633be6c104910f67056f5"
+checksum = "920602543f0911ab71da12c50d59701da54c196d1a2bf5cb4b75667f137a406a"
 dependencies = [
  "indexmap 2.13.0",
  "serde_core",
