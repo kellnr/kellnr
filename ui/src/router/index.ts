@@ -105,7 +105,7 @@ router.beforeEach(async (to) => {
   }
 
   // With auto_redirect enabled, skip the login page and go straight to the provider.
-  if (to.name === 'Login' && !('error' in to.query)) {
+  if (to.name === 'Login' && to.query['from'] !== 'logout') {
     const cfg = await settingsService.getOAuth2Config()
     if (isSuccess(cfg) && cfg.data.enabled && cfg.data.auto_redirect) {
       window.location.href = OAUTH2_LOGIN
@@ -119,8 +119,9 @@ router.beforeEach(async (to) => {
   if (await auth_required()) {
     if (to.matched.some(record => record.meta.requiresAuth)) {
       if (!store.loggedIn) {
-        const redirectFlag = to.path === '/settings' ? 'settings' : undefined
-        return { name: 'Login', query: redirectFlag ? { redirect: redirectFlag } : {} }
+        const redirectQuery = to.path === '/settings' ? { redirect: 'settings' } : {};
+        const fromQuery = to.query['from'] ? { from: to.query['from'] } : {};
+        return { name: 'Login', query: { ...redirectQuery, ...fromQuery } }
       }
     }
   }

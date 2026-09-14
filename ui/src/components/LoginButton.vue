@@ -63,7 +63,7 @@ async function logOut() {
         window.location.href = result.data.logout_url
         return
       }
-      router.push("/")
+      router.push({ name: 'Landing', query: { from: 'logout' } })
       showNotification("Successfully logged out")
     } else {
       showNotification(result.error || "Logout failed", true)
