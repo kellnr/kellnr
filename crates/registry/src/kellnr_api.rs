@@ -565,7 +565,6 @@ pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<
         .search_in_crate_name_and_description(params.q.as_str(), limit as u64, offset as u64, false)
         .await?
         .into_iter()
-        .take(params.per_page.0)
         .map(|c| Crate {
             name: c.name,
             max_version: c.version,
@@ -575,9 +574,13 @@ pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<
         })
         .collect::<Vec<Crate>>();
 
+    let total = db
+        .count_by_crate_name_and_description(params.q.as_str(), false)
+        .await?;
+
     Ok(Json(SearchResult {
         meta: search_result::Meta {
-            total: crates.len() as i32,
+            total: total as i32,
         },
         crates,
     }))
@@ -1815,6 +1818,10 @@ mod reg_api_tests {
             .expect_search_in_crate_name_and_description()
             .with(eq("foo"), eq(10), eq(0), eq(false))
             .returning(|_, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .with(eq("foo"), eq(false))
+            .returning(|_, _| Ok(0));
 
         let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
@@ -1837,6 +1844,10 @@ mod reg_api_tests {
             .expect_search_in_crate_name_and_description()
             .with(eq("foo"), eq(20), eq(40), eq(false))
             .returning(|_, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .with(eq("foo"), eq(false))
+            .returning(|_, _| Ok(0));
 
         let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
@@ -1859,6 +1870,10 @@ mod reg_api_tests {
             .expect_search_in_crate_name_and_description()
             .with(eq("foo"), eq(20), eq(0), eq(false))
             .returning(|_, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .with(eq("foo"), eq(false))
+            .returning(|_, _| Ok(0));
 
         let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
@@ -1872,6 +1887,33 @@ mod reg_api_tests {
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
         assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_ok());
+    }
+
+    #[tokio::test]
+    async fn search_verify_total_is_count() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_search_in_crate_name_and_description()
+            .with(eq("foo"), eq(20), eq(0), eq(false))
+            .returning(|_, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .with(eq("foo"), eq(false))
+            .returning(|_, _| Ok(1234));
+
+        let kellnr = app_search(Arc::new(mock_db));
+        let r = kellnr
+            .oneshot(
+                Request::get("/api/v1/crates?q=foo&per_page=20")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let res = serde_json::from_slice::<SearchResult>(&result_msg).unwrap();
+        assert_eq!(1234, res.meta.total);
     }
 
     #[tokio::test]
