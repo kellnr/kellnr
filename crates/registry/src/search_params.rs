@@ -19,8 +19,8 @@ impl TryFrom<usize> for Page {
     type Error = &'static str;
 
     fn try_from(page: usize) -> Result<Self, Self::Error> {
-        if page < 1 {
-            Err("page has to be at least 1.")
+        if !(1..=1_000_000).contains(&page) {
+            Err("page has to be between 1 and 1000000.")
         } else {
             Ok(Self(page))
         }
