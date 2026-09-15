@@ -125,7 +125,7 @@ pub struct OAuth2Handler {
     settings: Arc<OAuth2Settings>,
     issuer_url: IssuerUrl,
     http_client: reqwest::Client,
-    end_session_endpoint: Option<String>,
+    end_session_endpoint: Mutex<Arc<Option<String>>>,
 }
 
 impl OAuth2Handler {
@@ -193,7 +193,7 @@ impl OAuth2Handler {
             settings: Arc::new(settings.clone()),
             issuer_url,
             http_client,
-            end_session_endpoint,
+            end_session_endpoint: Mutex::new(Arc::new(end_session_endpoint)),
         })
     }
 
@@ -236,8 +236,11 @@ impl OAuth2Handler {
         id_token_hint: &str,
         post_logout_redirect_uri: &str,
     ) -> Option<String> {
-        let endpoint = self.end_session_endpoint.as_ref()?;
-        let mut url = Url::parse(endpoint).ok()?;
+        let endpoint = self
+            .end_session_endpoint
+            .lock()
+            .expect("OAuth2 end session endpoint mutex poisoned");
+        let mut url = Url::parse(endpoint.as_ref().as_ref()?).ok()?;
         url.query_pairs_mut()
             .append_pair("id_token_hint", id_token_hint)
             .append_pair("client_id", self.client_id.as_str())
@@ -256,7 +259,9 @@ impl OAuth2Handler {
     ///
     /// Used to recover from provider signing-key rotation, after which the
     /// keys cached at startup can no longer verify newly issued tokens.
-    async fn rediscover(&self) -> Result<Arc<ConfiguredCoreClient>, OAuth2Error> {
+    async fn rediscover(
+        &self,
+    ) -> Result<(Arc<ConfiguredCoreClient>, Arc<Option<String>>), OAuth2Error> {
         Self::discover_client(
             &self.issuer_url,
             &self.client_id,
@@ -265,7 +270,7 @@ impl OAuth2Handler {
             &self.http_client,
         )
         .await
-        .map(|(client, _end_session_endpoint)| Arc::new(client))
+        .map(|(client, end_session_endpoint)| (Arc::new(client), Arc::new(end_session_endpoint)))
     }
 
     /// Build the ID token verifier for `client`.
@@ -366,11 +371,16 @@ impl OAuth2Handler {
                 trace!(
                     "ID token signature verification failed; refreshing OIDC JWKS and retrying (provider may have rotated signing keys)"
                 );
-                let refreshed = self.rediscover().await?;
+                let (refreshed_client, refreshed_end_session_endpoint) = self.rediscover().await?;
+                *self
+                    .end_session_endpoint
+                    .lock()
+                    .expect("OAuth2 end session endpoint mutex poisoned") =
+                    refreshed_end_session_endpoint;
                 // Scoped so the verifier's borrow of `refreshed` ends before
                 // it is moved into the cached client below.
                 let claims = {
-                    let verifier = self.id_token_verifier(&refreshed);
+                    let verifier = self.id_token_verifier(&refreshed_client);
                     id_token
                         .claims(&verifier, &nonce)
                         .map_err(|e| OAuth2Error::TokenVerificationError(e.to_string()))?
@@ -378,7 +388,7 @@ impl OAuth2Handler {
                 };
                 // Persist the refreshed client so subsequent logins reuse the
                 // new keys instead of re-fetching on every request.
-                *self.client.lock().expect("OAuth2 client mutex poisoned") = refreshed;
+                *self.client.lock().expect("OAuth2 client mutex poisoned") = refreshed_client;
                 claims
             }
             Err(e) => return Err(OAuth2Error::TokenVerificationError(e.to_string())),
@@ -916,12 +926,18 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
     const NONCE: &str = "test-nonce";
     const REDIRECT_URI: &str = "http://localhost/cb";
 
+    const END_SESSION_ENDPOINT_A: &str = "http://logout-a";
+    const END_SESSION_ENDPOINT_B: &str = "http://logout-b";
+
     /// State shared with the mock provider's request handlers.
     struct MockProvider {
         issuer: String,
         key_a: CoreRsaPrivateSigningKey,
         key_b: CoreRsaPrivateSigningKey,
-        /// When `true`, the provider signs tokens with (and advertises) `key_b`.
+        end_session_endpoint_a: String,
+        end_session_endpoint_b: String,
+        /// When `true`, the provider signs tokens with (and advertises) `key_b` and
+        /// advertises `end_session_endpoint_b` as the end session endpoint.
         rotated: AtomicBool,
         /// Number of times the JWKS endpoint was fetched, i.e. how often the
         /// handler ran discovery.
@@ -938,6 +954,14 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
                 &self.key_b
             } else {
                 &self.key_a
+            }
+        }
+
+        fn active_end_session_endpoint(&self) -> &str {
+            if self.rotated.load(Ordering::SeqCst) {
+                &self.end_session_endpoint_a
+            } else {
+                &self.end_session_endpoint_b
             }
         }
 
@@ -984,6 +1008,7 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             "issuer": state.issuer,
             "authorization_endpoint": format!("{}/authorize", state.issuer),
             "token_endpoint": format!("{}/token", state.issuer),
+            "end_session_endpoint": state.active_end_session_endpoint(),
             "jwks_uri": format!("{}/jwks", state.issuer),
             "response_types_supported": ["code"],
             "subject_types_supported": ["public"],
@@ -1037,6 +1062,8 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
                 Some(JsonWebKeyId::new("key-b".to_string())),
             )
             .unwrap(),
+            end_session_endpoint_a: END_SESSION_ENDPOINT_A.to_string(),
+            end_session_endpoint_b: END_SESSION_ENDPOINT_B.to_string(),
             rotated: AtomicBool::new(false),
             jwks_fetches: AtomicUsize::new(0),
             include_client_audience: AtomicBool::new(true),
@@ -1111,6 +1138,40 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             .expect("exchange should reuse the refreshed JWKS");
         assert_eq!(result.claims.subject().as_str(), SUBJECT);
         assert_eq!(provider.jwks_fetches.load(Ordering::SeqCst), 2);
+
+        server.abort();
+    }
+
+    /// When the handler rediscovers the client, it should also update the end session endpoint.
+    #[tokio::test]
+    async fn rediscovery_updates_end_session_endpoint() {
+        let (provider, issuer, server) = start_mock_provider().await;
+
+        // Discovery obtains the initial end session URL.
+        let handler = OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), REDIRECT_URI)
+            .await
+            .expect("discovery should succeed");
+        let end_session_url_before = handler
+            .end_session_endpoint
+            .lock()
+            .expect("OAuth2 end session endpoint mutex poisoned")
+            .clone();
+        assert!(end_session_url_before.is_some());
+
+        // The provider rotates (keys and) the end session endpoint.
+        provider.rotated.store(true, Ordering::SeqCst);
+
+        // Token validation should trigger rediscovery, which should update the end session endpoint.
+        let _: TokenResult = handler
+            .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+            .await
+            .expect("exchange should succeed after rotation");
+        let end_session_url_after = handler
+            .end_session_endpoint
+            .lock()
+            .expect("OAuth2 end session endpoint mutex poisoned")
+            .clone();
+        assert_ne!(end_session_url_before, end_session_url_after);
 
         server.abort();
     }
