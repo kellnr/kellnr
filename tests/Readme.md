@@ -21,7 +21,7 @@ All tests verify both backend functionality AND UI accessibility through browser
 | `ui-me.spec.ts` | 4 | /me route, cargo login flow, token management |
 | `ui-migration.spec.ts` | 1 | Database migration + UI accessibility |
 | `ui-navigation.spec.ts` | 7 | Header nav, theme toggle, routing, branding |
-| `ui-oauth2.spec.ts` | 9 | OAuth2 login, auto-provisioning, session handling |
+| `ui-oauth2.spec.ts` | 12 | OAuth2 login/logout, auto-provisioning, session handling |
 | `ui-proxy-crates.spec.ts` | 3 | Proxy toggle, cached crates, statistics |
 | `ui-s3-storage.spec.ts` | 4 | S3 storage backend + UI verification |
 | `ui-startup-config.spec.ts` | 2 | Startup configuration page, setting sources |
