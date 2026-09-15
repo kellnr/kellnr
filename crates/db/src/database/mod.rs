@@ -350,6 +350,7 @@ impl Database {
         };
 
         let query = &Self::filter_crates(select, select_cache, contains, None);
+        tracing::debug!("count statement: {query:#?}");
         let stmt = self.db_con.get_database_backend().build(query);
         CountResult::count_by_statement(self, stmt, DbError::FailedToCountCrates).await
     }
