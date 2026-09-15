@@ -35,7 +35,7 @@ use sea_orm::sea_query::{
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
-    FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set,
+    FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set, Statement,
 };
 
 use crate::error::DbError;
@@ -79,6 +79,27 @@ fn session_age_to_duration(d: std::time::Duration) -> Option<chrono::Duration> {
     // `clamped` is at most MAX_SESSION_AGE, which fits comfortably in a
     // `chrono::Duration`, so the conversion cannot fail.
     Some(chrono::Duration::from_std(clamped).expect("clamped session age fits chrono::Duration"))
+}
+
+#[derive(Debug, PartialEq, FromQueryResult)]
+struct CountResult {
+    count: Option<i64>,
+}
+
+impl CountResult {
+    async fn count_by_statement(
+        db: &Database,
+        statement: Statement,
+        error: DbError,
+    ) -> Result<u64, DbError> {
+        let Some(res) = CountResult::find_by_statement(statement)
+            .one(&db.db_con)
+            .await?
+        else {
+            return Err(error);
+        };
+        res.count.and_then(|v| u64::try_from(v).ok()).ok_or(error)
+    }
 }
 
 pub struct Database {
@@ -269,6 +290,85 @@ impl Database {
         limit_offset: Option<(u64, u64)>,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
+        /// Creates a SELECT statement for a given set of fields.
+        fn select_fields(fields: &[(Expr, &str)]) -> SelectStatement {
+            let mut query = Query::select();
+            for (col, alias) in fields {
+                query.expr_as(col.clone(), Alias::new(*alias));
+            }
+            query
+        }
+
+        let select = select_fields(&[
+            (Expr::col(CrateIden::OriginalName), "name"),
+            (Expr::col(CrateIden::MaxVersion), "version"),
+            (Expr::col(CrateIden::LastUpdated), "date"),
+            (Expr::col(CrateIden::TotalDownloads), "total_downloads"),
+            (Expr::col(CrateIden::Description), "description"),
+            (Expr::col(CrateMetaIden::Documentation), "documentation"),
+        ]);
+
+        let select_cache = if cache {
+            Some(select_fields(&[
+                (Expr::col(CratesIoIden::OriginalName), "name"),
+                (Expr::col(CratesIoIden::MaxVersion), "version"),
+                (Expr::col(CratesIoIden::LastModified), "date"),
+                (Expr::col(CratesIoIden::TotalDownloads), "total_downloads"),
+                (Expr::col(CratesIoIden::Description), "description"),
+                (Expr::col(CratesIoMetaIden::Documentation), "documentation"),
+            ]))
+        } else {
+            None
+        };
+
+        let query = &Self::filter_crates(select, select_cache, contains, limit_offset);
+
+        let stmt = self.db_con.get_database_backend().build(query);
+
+        CrateOverview::find_by_statement(stmt)
+            .all(&self.db_con)
+            .await
+            .map_err(DbError::from)
+    }
+
+    async fn count_crates(&self, contains: Option<&str>, cache: bool) -> DbResult<u64> {
+        let mut select = Query::select();
+        select.expr_as(
+            Expr::col((CrateIden::Table, CrateIden::Id)).count(),
+            Alias::new("count"),
+        );
+
+        let select_cache = if cache {
+            let mut select = Query::select();
+            select.expr_as(
+                Expr::col((CratesIoIden::Table, CratesIoIden::Id)).count(),
+                Alias::new("count"),
+            );
+            Some(select)
+        } else {
+            None
+        };
+
+        let query = &Self::filter_crates(select, select_cache, contains, None);
+        tracing::debug!("count statement: {query:#?}");
+        let stmt = self.db_con.get_database_backend().build(query);
+        CountResult::count_by_statement(self, stmt, DbError::FailedToCountCrates).await
+    }
+
+    /// Expands the given SELECT statement with optional filtering criteria.
+    ///
+    /// It can expand the lookup with an optional query for caching
+    /// (which produces a UNION with an auxiliary SELECT for the crates.io cache),
+    /// an optional string to be matched against name or description
+    /// (which produces a WHERE clause for case-insensitive matching),
+    /// and optional pagination criteria
+    /// (which produces LIMIT and OFFSET terms).
+    fn filter_crates(
+        select: SelectStatement,
+        select_cache: Option<SelectStatement>,
+        contains: Option<&str>,
+        limit_offset: Option<(u64, u64)>,
+    ) -> SelectStatement {
         /// Adds a `where` clause for case-insensitive matching of name and description.
         ///
         /// Case folding is only reliable for ASCII. The pattern is lowercased by
@@ -294,31 +394,34 @@ impl Database {
             );
         }
 
-        let mut query = Query::select();
-        query
-            .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
-            .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
-            .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
-            .expr_as(
-                Expr::col(CrateIden::TotalDownloads),
-                Alias::new("total_downloads"),
-            )
-            .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
-            .expr_as(
-                Expr::col(CrateMetaIden::Documentation),
-                Alias::new("documentation"),
-            )
-            .expr_as(Expr::cust("false"), Alias::new("is_cache"))
-            .from(CrateMetaIden::Table)
-            .inner_join(
-                CrateIden::Table,
-                Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
-                    .equals((CrateIden::Table, CrateIden::Id)),
-            )
-            .and_where(
-                Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
-                    .equals((CrateIden::Table, CrateIden::MaxVersion)),
-            );
+        /// Adds the foreign-key inner join between `table` and `meta-table`,
+        /// and the `where` clause matching `version` against `max_version`.
+        fn add_fk_and_version<T: Iden + Copy, U: Iden + Copy, F: Iden, G: Iden>(
+            query: &mut SelectStatement,
+            table: T,
+            meta_table: U,
+            fk: G,
+            id: F,
+            version: G,
+            max_version: F,
+        ) {
+            query
+                .inner_join(table, Expr::col((meta_table, fk)).equals((table, id)))
+                .and_where(Expr::col((meta_table, version)).equals((table, max_version)));
+        }
+
+        let mut query = select;
+        query.expr_as(Expr::cust("false"), Alias::new("is_cache"));
+        query.from(CrateMetaIden::Table);
+        add_fk_and_version(
+            &mut query,
+            CrateIden::Table,
+            CrateMetaIden::Table,
+            CrateMetaIden::CrateFk,
+            CrateIden::Id,
+            CrateMetaIden::Version,
+            CrateIden::MaxVersion,
+        );
 
         // Optional filter by name and description
         if let Some(contains) = contains {
@@ -332,35 +435,18 @@ impl Database {
         }
 
         // UNION with cached crates
-        if cache {
-            let mut query2 = Query::select();
-            query2
-                .expr_as(Expr::col(CratesIoIden::OriginalName), Alias::new("name"))
-                .expr_as(Expr::col(CratesIoIden::MaxVersion), Alias::new("version"))
-                .expr_as(Expr::col(CratesIoIden::LastModified), Alias::new("date"))
-                .expr_as(
-                    Expr::col(CratesIoIden::TotalDownloads),
-                    Alias::new("total_downloads"),
-                )
-                .expr_as(
-                    Expr::col(CratesIoIden::Description),
-                    Alias::new("description"),
-                )
-                .expr_as(
-                    Expr::col(CratesIoMetaIden::Documentation),
-                    Alias::new("documentation"),
-                )
-                .expr_as(Expr::cust("true"), Alias::new("is_cache"))
-                .from(CratesIoMetaIden::Table)
-                .inner_join(
-                    CratesIoIden::Table,
-                    Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::CratesIoFk))
-                        .equals((CratesIoIden::Table, CratesIoIden::Id)),
-                )
-                .and_where(
-                    Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Version))
-                        .equals((CratesIoIden::Table, CratesIoIden::MaxVersion)),
-                );
+        if let Some(mut query2) = select_cache {
+            query2.expr_as(Expr::cust("true"), Alias::new("is_cache"));
+            query2.from(CratesIoMetaIden::Table);
+            add_fk_and_version(
+                &mut query,
+                CratesIoIden::Table,
+                CratesIoMetaIden::Table,
+                CratesIoMetaIden::CratesIoFk,
+                CratesIoIden::Id,
+                CratesIoMetaIden::Version,
+                CratesIoIden::MaxVersion,
+            );
             if let Some(contains) = contains {
                 add_filter_by_name_and_description(
                     &mut query2,
@@ -379,11 +465,7 @@ impl Database {
             query.limit(limit).offset(offset);
         }
 
-        let builder = self.db_con.get_database_backend();
-        CrateOverview::find_by_statement(builder.build(&query))
-            .all(&self.db_con)
-            .await
-            .map_err(DbError::from)
+        query
     }
 
     /// Executes a count query `SELECT COUNT(id_column) FROM table` and returns the count as u64.
@@ -391,26 +473,12 @@ impl Database {
     where
         T: Iden + Copy,
     {
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct CountResult {
-            count: Option<i64>,
-        }
-
         let statement = self.db_con.get_database_backend().build(
             Query::select()
                 .expr_as(Expr::col((table, id_column)).count(), Alias::new("count"))
                 .from(table),
         );
-        let Some(result) = CountResult::find_by_statement(statement)
-            .one(&self.db_con)
-            .await?
-        else {
-            return Err(error);
-        };
-        result
-            .count
-            .and_then(|v| u64::try_from(v).ok())
-            .ok_or(error)
+        CountResult::count_by_statement(self, statement, error).await
     }
 
     async fn get_webhook_model(&self, id: &str) -> DbResult<webhook::Model> {
@@ -1392,9 +1460,20 @@ impl DbProvider for Database {
     async fn search_in_crate_name_and_description(
         &self,
         contains: &str,
+        limit: u64,
+        offset: u64,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(Some(contains), None, cache).await
+        self.query_crates(Some(contains), Some((limit, offset)), cache)
+            .await
+    }
+
+    async fn count_by_crate_name_and_description(
+        &self,
+        contains: &str,
+        cache: bool,
+    ) -> DbResult<u64> {
+        self.count_crates(Some(contains), cache).await
     }
 
     async fn get_crate_overview_list(

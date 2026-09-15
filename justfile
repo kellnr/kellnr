@@ -307,7 +307,7 @@ alias tuic := test-ui-chromium
 # These variables only work on Unix systems
 
 has_docker := if os_family() == "unix" { if `command -v docker > /dev/null 2>&1; echo $?` == "0" { "true" } else { "false" } } else { "false" }
-test_docker := if has_docker == "true" { "cargo nextest run --workspace -E 'test(~postgres_) or binary(s3_tests) or binary(gcs_tests)'" } else { "echo 'ERROR: Docker is not installed. The Docker integration tests (PostgreSQL, S3, GCS) require Docker'" }
+test_docker := if has_docker == "true" { "RUST_LOG=kellnr-registry=debug cargo nextest run --workspace -E 'test(~postgres_) or binary(s3_tests) or binary(gcs_tests)'" } else { "echo 'ERROR: Docker is not installed. The Docker integration tests (PostgreSQL, S3, GCS) require Docker'" }
 test_ui_all_browsers := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 test_ui_chromium := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=chromium" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
 test_ui_firefox := if has_docker == "true" { "cd tests && npm install && PLAYWRIGHT_UI=1 npx playwright test --project=firefox" } else { "echo 'ERROR: Docker is not installed. The UI tests require Docker'" }
