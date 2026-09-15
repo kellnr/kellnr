@@ -7,7 +7,7 @@ use axum::response::Redirect;
 use axum::routing::get;
 use axum_extra::extract::cookie::Key;
 use kellnr_appstate::AppStateData;
-use kellnr_auth::oauth2::OAuth2Handler;
+use kellnr_auth::oauth2::{OAuth2Error, OAuth2Handler};
 use kellnr_common::cratesio_downloader::build_client;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::token_cache::TokenCacheManager;
@@ -125,6 +125,11 @@ async fn run_server(resolved: ResolvedSettings) {
         std::process::exit(1);
     }
 
+    if let Err(e) = settings.oauth2.validate() {
+        eprintln!("Error: invalid OAuth2 configuration: {e}");
+        std::process::exit(1);
+    }
+
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber
@@ -199,7 +204,17 @@ async fn run_server(resolved: ResolvedSettings) {
     let toolchain_storage = init_toolchain_storage(&settings);
 
     // Initialize OAuth2/OIDC handler if enabled
-    let oauth2_handler = init_oauth2_handler(&settings).await;
+    let oauth2_handler = init_oauth2_handler(&settings).await.unwrap_or_else(|e| {
+        error!("Failed to initialize OAuth2/OIDC handler: {}", e);
+        if let OAuth2Error::DiscoveryError(_) = e &&  settings.oauth2.enforced {
+            error!(
+                "OAuth2 enforcement is enabled, so login is impossible in the absence of an OIDC provider"
+            );
+            std::process::exit(1);
+        }
+        warn!("OAuth2/OIDC authentication will be disabled");
+        None
+    });
 
     // Initialize download counter with periodic flush
     let flush_interval = settings.registry.download_counter_flush_seconds;
@@ -435,38 +450,18 @@ fn init_toolchain_storage(settings: &Arc<Settings>) -> Option<Arc<ToolchainStora
     Some(Arc::new(toolchain_storage))
 }
 
-async fn init_oauth2_handler(settings: &Settings) -> Option<Arc<OAuth2Handler>> {
+async fn init_oauth2_handler(
+    settings: &Settings,
+) -> Result<Option<Arc<OAuth2Handler>>, OAuth2Error> {
     if !settings.oauth2.enabled {
-        return None;
+        return Ok(None);
     }
 
-    // Construct the callback URL based on settings
-    let protocol = &settings.origin.protocol; // Protocol enum implements Display
-    let host = &settings.origin.hostname;
-    let port = settings.origin.port;
+    let callback_url = format!("{}/api/v1/oauth2/callback", settings.origin.base_url());
 
-    // FIX: Normalize path prefix to avoid double slashes
-    let raw_path = settings.origin.path.trim();
-    let path_prefix = if raw_path.is_empty() || raw_path == "/" {
-        String::new()
-    } else {
-        raw_path.trim_end_matches('/').to_string()
-    };
-
-    let callback_url = if port == 443 || port == 80 {
-        format!("{protocol}://{host}{path_prefix}/api/v1/oauth2/callback")
-    } else {
-        format!("{protocol}://{host}:{port}{path_prefix}/api/v1/oauth2/callback")
-    };
-
-    match OAuth2Handler::from_discovery(&settings.oauth2, &callback_url).await {
-        Ok(handler) => Some(Arc::new(handler)),
-        Err(e) => {
-            error!("Failed to initialize OAuth2/OIDC handler: {}", e);
-            warn!("OAuth2/OIDC authentication will be disabled");
-            None
-        }
-    }
+    OAuth2Handler::from_discovery(&settings.oauth2, &callback_url)
+        .await
+        .map(|handler| Some(Arc::new(handler)))
 }
 
 #[cfg(test)]

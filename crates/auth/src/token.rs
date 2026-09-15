@@ -68,6 +68,10 @@ impl Token {
 
         // Handle basic authentication (does NOT use token cache - queries DB directly)
         if token.starts_with("Basic ") || token.starts_with("basic ") {
+            if settings.oauth2.enforced {
+                return Err(StatusCode::FORBIDDEN);
+            }
+
             let decoded = STANDARD
                 .decode(&token[6..])
                 .map_err(|_| StatusCode::BAD_REQUEST)?;
