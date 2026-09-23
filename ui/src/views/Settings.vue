@@ -105,7 +105,7 @@
                 <v-card class="content-card" elevation="0">
                     <change-password v-if="activeTab === 'password'" />
                     <auth-token v-if="activeTab === 'tokens'" />
-                    <user-mgmt v-if="activeTab === 'users'" />
+                    <user-mgmt v-if="activeTab === 'users'" :sso-enforced=ssoEnforced />
                     <group-mgmt v-if="activeTab === 'groups'" />
                     <startup-config v-if="activeTab === 'config'" />
                     <toolchain-mgmt v-if="activeTab === 'toolchains'" />
@@ -149,7 +149,8 @@ const navItems: NavItem[] = [
         icon: 'mdi-key',
         desktopLabel: 'Change Password',
         mobileLabel: 'Change Password',
-        adminOnly: false
+        adminOnly: false,
+        condition: () => !ssoEnforced.value
     },
     {
         tab: 'tokens',
@@ -197,6 +198,7 @@ const navItems: NavItem[] = [
 const route = useRoute()
 
 const settings = ref<Settings>(emptySettings)
+const ssoEnforced = ref(false)
 const mobileNavOpen = ref(false)
 
 function getInitialTab(): SettingsTab {
@@ -242,6 +244,12 @@ onBeforeMount(async () => {
     const result = await settingsService.getSettings()
     if (isSuccess(result)) {
         settings.value = result.data
+    }
+
+    const oauth2Result = await settingsService.getOAuth2Config()
+    if (isSuccess(oauth2Result)) {
+        ssoEnforced.value = oauth2Result.data.enforced;
+        activeTab.value = 'tokens';
     }
 })
 </script>

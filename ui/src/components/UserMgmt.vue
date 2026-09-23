@@ -8,7 +8,7 @@
       </p>
 
       <!-- User List -->
-      <div v-if="users.length > 0" class="users-section mb-6">
+      <div v-if="users.length > 0" class="users-section" :class="{ 'mb-6': !ssoEnforced }">
         <SubsectionHeader icon="mdi-account-group" title="Registered Users" />
 
         <div class="list-container">
@@ -80,11 +80,11 @@
         v-else
         icon="mdi-account-off"
         message="No users registered yet."
-        class="mb-6"
+        :class="{ 'mb-6': !ssoEnforced }"
       />
 
       <!-- Add User Form -->
-      <FormSection icon="mdi-account-plus" title="Add New User">
+      <FormSection v-if="!props.ssoEnforced" icon="mdi-account-plus" title="Add New User">
         <v-form @submit.prevent="handleAddUser" class="add-user-form">
           <div class="form-grid">
             <div class="form-field">
@@ -213,6 +213,8 @@ import {
   ConfirmDialog,
   NotificationSnackbar,
 } from "./common"
+
+const props = defineProps<{ ssoEnforced: boolean }>();
 
 // State
 const users = ref<User[]>([])

@@ -4,8 +4,10 @@
  * Tests:
  * - OAuth2 button visibility when enabled/disabled
  * - OAuth2 button text customization
- * - OAuth2 login flow with mock OIDC server
+ * - OAuth2 login and logout flows with mock OIDC server
  * - User auto-provisioning
+ * - Hiding password login when SSO is enforced
+ * - Automatic redirection to the OIDC server from the login page when enabled
  *
  * Performance: Tests use a mock OIDC server for fast, reliable testing.
  *
@@ -254,6 +256,44 @@ test.describe("OAuth2 UI Tests - Enabled", () => {
     const isLoggedIn = await header.isLoggedIn();
     expect(isLoggedIn).toBe(true);
   });
+
+  test("logout redirects to OIDC provider", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+
+    const loginPage = new LoginPage(page);
+    const header = new HeaderComponent(page);
+
+    await loginPage.waitForOAuth2Button();
+
+    // Run log in flow
+    await loginPage.clickOAuth2Login();
+    await page.waitForURL(/.*\/authorize.*/, { timeout: 10000 });
+    const usernameInput = page.locator("input").first();
+    const signInButton = page.getByRole("button", { name: "Sign-in" });
+    await usernameInput.waitFor({ state: "visible", timeout: 10000 });
+    await usernameInput.fill("testuser");
+    await signInButton.click();
+    await page.waitForURL(`${baseUrl}/**`, { timeout: 15000 });
+
+    // User should be logged in
+    const isLoggedInBefore = await header.isLoggedIn();
+    expect(isLoggedInBefore).toBe(true);
+    expect(header.logoutButton).toBeVisible();
+
+    // Log out
+    await header.logoutButton.click();
+
+    // Wait for a redirect to the end session endpoint of the mock OIDC server,
+    // which should itself redirect back to Kellnr
+    const endSessionResponse = await page.waitForResponse(/.*\/endsession.*/, { timeout: 10000 });
+    expect(endSessionResponse.status()).toBe(302);
+    expect(await endSessionResponse.headerValue("location")).toBe(`${baseUrl}/`);
+    await page.waitForURL(`${baseUrl}/**`, { timeout: 15000 });
+
+    // User should not be logged in anymore
+    const isLoggedInAfter = await header.isLoggedIn();
+    expect(isLoggedInAfter).toBe(false);
+  });
 });
 
 test.describe("OAuth2 UI Tests - Custom Button Text", () => {
@@ -299,5 +339,107 @@ test.describe("OAuth2 UI Tests - Custom Button Text", () => {
 
     const buttonText = await loginPage.getOAuth2ButtonText();
     expect(buttonText).toContain("Sign in with Company SSO");
+  });
+});
+
+test.describe("OAuth2 UI Tests - SSO enforcement", () => {
+  // These tests use fixed localhost:8000 port
+  restrictToSingleWorkerBecauseFixedPorts();
+
+  let started: StartedLocalKellnr;
+  let mockOidc: StartedMockOidc;
+  let baseUrl: string;
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    assertKellnrBinaryExists();
+
+    const suffix = `${Date.now()}`;
+
+    // Start mock OIDC server
+    mockOidc = await startMockOidcServer({ name: `mock-oidc-custom-${suffix}` });
+
+    // Start Kellnr with SSO enforcement
+    started = await startLocalKellnr({
+      name: `kellnr-oauth2-custom-${suffix}`,
+      env: {
+        ...getOAuth2EnvVars(mockOidc.config),
+        KELLNR_OAUTH2__ENFORCED: "true",
+      },
+    });
+
+    baseUrl = started.baseUrl;
+    console.log(`[setup] Server ready at ${baseUrl} (custom button text)`);
+  });
+
+  test.afterAll(async () => {
+    if (started) await started.stop();
+    if (mockOidc) await mockOidc.stop();
+  });
+
+  test("password login is disabled", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+
+    const loginPage = new LoginPage(page);
+
+    // Wait for page to load
+    await expect(loginPage.signInTitle).toBeVisible();
+
+    // OAuth2 button should be visible
+    await loginPage.waitForOAuth2Button();
+    await expect(loginPage.oauth2Button).toBeVisible();
+
+    // Regular login form should not be visible
+    await expect(loginPage.usernameInput).not.toBeVisible();
+    await expect(loginPage.passwordInput).not.toBeVisible();
+    await expect(loginPage.confirmButton).not.toBeVisible();
+  });
+});
+
+test.describe("OAuth2 UI Tests - SSO enforcement with auto-redirect", () => {
+  // These tests use fixed localhost:8000 port
+  restrictToSingleWorkerBecauseFixedPorts();
+
+  let started: StartedLocalKellnr;
+  let mockOidc: StartedMockOidc;
+  let baseUrl: string;
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    assertKellnrBinaryExists();
+
+    const suffix = `${Date.now()}`;
+
+    // Start mock OIDC server
+    mockOidc = await startMockOidcServer({ name: `mock-oidc-custom-${suffix}` });
+
+    // Start Kellnr with SSO enforcement
+    started = await startLocalKellnr({
+      name: `kellnr-oauth2-custom-${suffix}`,
+      env: {
+        ...getOAuth2EnvVars(mockOidc.config),
+        KELLNR_OAUTH2__ENFORCED: "true",
+        KELLNR_OAUTH2__AUTO_REDIRECT: "true",
+      },
+    });
+
+    baseUrl = started.baseUrl;
+    console.log(`[setup] Server ready at ${baseUrl} (custom button text)`);
+  });
+
+  test.afterAll(async () => {
+    if (started) await started.stop();
+    if (mockOidc) await mockOidc.stop();
+  });
+
+  test("login page redirects to the OIDC server", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+
+    // Wait for redirect to mock OIDC server
+    await page.waitForURL(/.*\/authorize.*/, { timeout: 10000 });
+
+    // URL should contain the OIDC authorization endpoint
+    const url = page.url();
+    expect(url).toContain("/authorize");
   });
 });

@@ -10,13 +10,14 @@ use kellnr_settings::OAuth2 as OAuth2Settings;
 use openidconnect::core::{
     CoreAuthDisplay, CoreAuthPrompt, CoreAuthenticationFlow, CoreClient, CoreErrorResponseType,
     CoreGenderClaim, CoreIdTokenClaims, CoreIdTokenVerifier, CoreJsonWebKey,
-    CoreJweContentEncryptionAlgorithm, CoreProviderMetadata, CoreRevocationErrorResponse,
-    CoreTokenIntrospectionResponse, CoreTokenResponse,
+    CoreJweContentEncryptionAlgorithm, CoreRevocationErrorResponse, CoreTokenIntrospectionResponse,
+    CoreTokenResponse,
 };
 use openidconnect::{
     AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret, CsrfToken,
     EmptyAdditionalClaims, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, Nonce,
-    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse, reqwest,
+    PkceCodeChallenge, PkceCodeVerifier, ProviderMetadataWithLogout, RedirectUrl, Scope,
+    TokenResponse, reqwest,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -109,6 +110,8 @@ pub struct TokenResult {
     pub claims: CoreIdTokenClaims,
     /// Raw JWT payload for extracting additional claims
     pub raw_payload: serde_json::Value,
+    /// Raw ID token JWT, used as `id_token_hint` for RP-initiated logout
+    pub id_token: String,
 }
 
 /// OAuth2/OIDC authentication handler
@@ -122,6 +125,7 @@ pub struct OAuth2Handler {
     settings: Arc<OAuth2Settings>,
     issuer_url: IssuerUrl,
     http_client: reqwest::Client,
+    end_session_endpoint: Mutex<Arc<Option<String>>>,
 }
 
 impl OAuth2Handler {
@@ -169,8 +173,10 @@ impl OAuth2Handler {
 
         let redirect_url = RedirectUrl::new(redirect_url.to_string())?;
 
-        // Perform OIDC discovery and build the client from provider metadata
-        let client = Self::discover_client(
+        // Perform OIDC discovery and build the client from provider metadata.
+        // The same discovery fetch also yields the optional RP-initiated logout
+        // endpoint, which the openidconnect client does not expose.
+        let (client, end_session_endpoint) = Self::discover_client(
             &issuer_url,
             &client_id,
             client_secret.as_ref(),
@@ -187,29 +193,59 @@ impl OAuth2Handler {
             settings: Arc::new(settings.clone()),
             issuer_url,
             http_client,
+            end_session_endpoint: Mutex::new(Arc::new(end_session_endpoint)),
         })
     }
 
     /// Perform OIDC discovery and build a configured client from the fetched
-    /// provider metadata (which includes the current JWKS signing keys).
+    /// provider metadata (which includes the current JWKS signing keys). Also
+    /// returns the optional `end_session_endpoint` (RP-Initiated Logout 1.0)
+    /// read from the same discovery document.
     async fn discover_client(
         issuer_url: &IssuerUrl,
         client_id: &ClientId,
         client_secret: Option<&ClientSecret>,
         redirect_url: &RedirectUrl,
         http_client: &reqwest::Client,
-    ) -> Result<ConfiguredCoreClient, OAuth2Error> {
+    ) -> Result<(ConfiguredCoreClient, Option<String>), OAuth2Error> {
         let provider_metadata =
-            CoreProviderMetadata::discover_async(issuer_url.clone(), http_client)
+            ProviderMetadataWithLogout::discover_async(issuer_url.clone(), http_client)
                 .await
                 .map_err(|e| OAuth2Error::DiscoveryError(e.to_string()))?;
 
-        Ok(CoreClient::from_provider_metadata(
+        let end_session_endpoint = provider_metadata
+            .additional_metadata()
+            .end_session_endpoint
+            .as_ref()
+            .map(ToString::to_string);
+
+        let client = CoreClient::from_provider_metadata(
             provider_metadata,
             client_id.clone(),
             client_secret.cloned(),
         )
-        .set_redirect_uri(redirect_url.clone()))
+        .set_redirect_uri(redirect_url.clone());
+
+        Ok((client, end_session_endpoint))
+    }
+
+    /// Build the RP-initiated logout URL to end the provider session, or `None`
+    /// if the provider does not advertise an `end_session_endpoint`.
+    pub fn end_session_url(
+        &self,
+        id_token_hint: &str,
+        post_logout_redirect_uri: &str,
+    ) -> Option<String> {
+        let endpoint = self
+            .end_session_endpoint
+            .lock()
+            .expect("OAuth2 end session endpoint mutex poisoned");
+        let mut url = Url::parse(endpoint.as_ref().as_ref()?).ok()?;
+        url.query_pairs_mut()
+            .append_pair("id_token_hint", id_token_hint)
+            .append_pair("client_id", self.client_id.as_str())
+            .append_pair("post_logout_redirect_uri", post_logout_redirect_uri);
+        Some(url.into())
     }
 
     fn current_client(&self) -> Arc<ConfiguredCoreClient> {
@@ -223,7 +259,9 @@ impl OAuth2Handler {
     ///
     /// Used to recover from provider signing-key rotation, after which the
     /// keys cached at startup can no longer verify newly issued tokens.
-    async fn rediscover(&self) -> Result<Arc<ConfiguredCoreClient>, OAuth2Error> {
+    async fn rediscover(
+        &self,
+    ) -> Result<(Arc<ConfiguredCoreClient>, Arc<Option<String>>), OAuth2Error> {
         Self::discover_client(
             &self.issuer_url,
             &self.client_id,
@@ -232,7 +270,7 @@ impl OAuth2Handler {
             &self.http_client,
         )
         .await
-        .map(Arc::new)
+        .map(|(client, end_session_endpoint)| (Arc::new(client), Arc::new(end_session_endpoint)))
     }
 
     /// Build the ID token verifier for `client`.
@@ -333,11 +371,16 @@ impl OAuth2Handler {
                 trace!(
                     "ID token signature verification failed; refreshing OIDC JWKS and retrying (provider may have rotated signing keys)"
                 );
-                let refreshed = self.rediscover().await?;
+                let (refreshed_client, refreshed_end_session_endpoint) = self.rediscover().await?;
+                *self
+                    .end_session_endpoint
+                    .lock()
+                    .expect("OAuth2 end session endpoint mutex poisoned") =
+                    refreshed_end_session_endpoint;
                 // Scoped so the verifier's borrow of `refreshed` ends before
                 // it is moved into the cached client below.
                 let claims = {
-                    let verifier = self.id_token_verifier(&refreshed);
+                    let verifier = self.id_token_verifier(&refreshed_client);
                     id_token
                         .claims(&verifier, &nonce)
                         .map_err(|e| OAuth2Error::TokenVerificationError(e.to_string()))?
@@ -345,7 +388,7 @@ impl OAuth2Handler {
                 };
                 // Persist the refreshed client so subsequent logins reuse the
                 // new keys instead of re-fetching on every request.
-                *self.client.lock().expect("OAuth2 client mutex poisoned") = refreshed;
+                *self.client.lock().expect("OAuth2 client mutex poisoned") = refreshed_client;
                 claims
             }
             Err(e) => return Err(OAuth2Error::TokenVerificationError(e.to_string())),
@@ -358,6 +401,7 @@ impl OAuth2Handler {
         Ok(TokenResult {
             claims,
             raw_payload,
+            id_token: id_token.to_string(),
         })
     }
 
@@ -882,12 +926,18 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
     const NONCE: &str = "test-nonce";
     const REDIRECT_URI: &str = "http://localhost/cb";
 
+    const END_SESSION_ENDPOINT_A: &str = "http://logout-a";
+    const END_SESSION_ENDPOINT_B: &str = "http://logout-b";
+
     /// State shared with the mock provider's request handlers.
     struct MockProvider {
         issuer: String,
         key_a: CoreRsaPrivateSigningKey,
         key_b: CoreRsaPrivateSigningKey,
-        /// When `true`, the provider signs tokens with (and advertises) `key_b`.
+        end_session_endpoint_a: String,
+        end_session_endpoint_b: String,
+        /// When `true`, the provider signs tokens with (and advertises) `key_b` and
+        /// advertises `end_session_endpoint_b` as the end session endpoint.
         rotated: AtomicBool,
         /// Number of times the JWKS endpoint was fetched, i.e. how often the
         /// handler ran discovery.
@@ -904,6 +954,14 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
                 &self.key_b
             } else {
                 &self.key_a
+            }
+        }
+
+        fn active_end_session_endpoint(&self) -> &str {
+            if self.rotated.load(Ordering::SeqCst) {
+                &self.end_session_endpoint_a
+            } else {
+                &self.end_session_endpoint_b
             }
         }
 
@@ -950,6 +1008,7 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             "issuer": state.issuer,
             "authorization_endpoint": format!("{}/authorize", state.issuer),
             "token_endpoint": format!("{}/token", state.issuer),
+            "end_session_endpoint": state.active_end_session_endpoint(),
             "jwks_uri": format!("{}/jwks", state.issuer),
             "response_types_supported": ["code"],
             "subject_types_supported": ["public"],
@@ -1003,6 +1062,8 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
                 Some(JsonWebKeyId::new("key-b".to_string())),
             )
             .unwrap(),
+            end_session_endpoint_a: END_SESSION_ENDPOINT_A.to_string(),
+            end_session_endpoint_b: END_SESSION_ENDPOINT_B.to_string(),
             rotated: AtomicBool::new(false),
             jwks_fetches: AtomicUsize::new(0),
             include_client_audience: AtomicBool::new(true),
@@ -1077,6 +1138,40 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             .expect("exchange should reuse the refreshed JWKS");
         assert_eq!(result.claims.subject().as_str(), SUBJECT);
         assert_eq!(provider.jwks_fetches.load(Ordering::SeqCst), 2);
+
+        server.abort();
+    }
+
+    /// When the handler rediscovers the client, it should also update the end session endpoint.
+    #[tokio::test]
+    async fn rediscovery_updates_end_session_endpoint() {
+        let (provider, issuer, server) = start_mock_provider().await;
+
+        // Discovery obtains the initial end session URL.
+        let handler = OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), REDIRECT_URI)
+            .await
+            .expect("discovery should succeed");
+        let end_session_url_before = handler
+            .end_session_endpoint
+            .lock()
+            .expect("OAuth2 end session endpoint mutex poisoned")
+            .clone();
+        assert!(end_session_url_before.is_some());
+
+        // The provider rotates (keys and) the end session endpoint.
+        provider.rotated.store(true, Ordering::SeqCst);
+
+        // Token validation should trigger rediscovery, which should update the end session endpoint.
+        let _: TokenResult = handler
+            .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+            .await
+            .expect("exchange should succeed after rotation");
+        let end_session_url_after = handler
+            .end_session_endpoint
+            .lock()
+            .expect("OAuth2 end session endpoint mutex poisoned")
+            .clone();
+        assert_ne!(end_session_url_before, end_session_url_after);
 
         server.abort();
     }

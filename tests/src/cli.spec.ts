@@ -209,6 +209,28 @@ test.describe("CLI Tests", () => {
       expect(result.stderr).not.toContain("unexpected argument");
       expect(result.stderr).not.toContain("unknown");
     });
+
+    test("kellnr start with SSO enforcement and unreachable IDP fails", async () => {
+      const result = await exec(kellnrBinary, [
+        "start",
+        "-d",
+        tempDir,
+        "--oauth2-enabled",
+        "true",
+        "--oauth2-issuer-url",
+        "http://invalid",
+        "--oauth2-client-id",
+        "kellnr",
+        "--oauth2-client-secret",
+        "secret",
+        "--oauth2-enforced",
+        "true",
+      ]);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toContain("Failed to initialize OAuth2/OIDC handler");
+      expect(result.stdout).toContain("login is impossible");
+    });
   });
 
   test.describe("Config File Loading", () => {

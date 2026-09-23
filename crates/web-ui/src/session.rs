@@ -38,14 +38,27 @@ pub(crate) async fn create_session_jar(
     // Only mark the cookie `Secure` when the registry is served over HTTPS,
     // otherwise the browser would drop it on plain-HTTP deployments.
     let secure = app_state.settings.origin.protocol == Protocol::Https;
-    Ok(cookies.add(
-        Cookie::build((COOKIE_SESSION_ID, session_token))
-            .max_age(Duration::seconds(session_age_seconds))
-            .same_site(SameSite::Strict)
-            .http_only(true)
-            .secure(secure)
-            .path("/"),
-    ))
+    Ok(cookies.add(session_cookie(
+        COOKIE_SESSION_ID,
+        session_token,
+        session_age_seconds,
+        secure,
+    )))
+}
+
+pub(crate) fn session_cookie(
+    name: &'static str,
+    value: String,
+    session_age_seconds: i64,
+    secure: bool,
+) -> Cookie<'static> {
+    Cookie::build((name, value))
+        .max_age(Duration::seconds(session_age_seconds))
+        .same_site(SameSite::Strict)
+        .http_only(true)
+        .secure(secure)
+        .path("/")
+        .into()
 }
 
 pub trait Name {
