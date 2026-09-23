@@ -35,7 +35,7 @@ use sea_orm::sea_query::{
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
-    FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set,
+    FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set, Statement,
 };
 
 use crate::error::DbError;
@@ -79,6 +79,27 @@ fn session_age_to_duration(d: std::time::Duration) -> Option<chrono::Duration> {
     // `clamped` is at most MAX_SESSION_AGE, which fits comfortably in a
     // `chrono::Duration`, so the conversion cannot fail.
     Some(chrono::Duration::from_std(clamped).expect("clamped session age fits chrono::Duration"))
+}
+
+#[derive(Debug, PartialEq, FromQueryResult)]
+struct CountResult {
+    count: Option<i64>,
+}
+
+impl CountResult {
+    async fn count_by_statement(
+        db: &Database,
+        statement: Statement,
+        error: DbError,
+    ) -> Result<u64, DbError> {
+        let Some(res) = CountResult::find_by_statement(statement)
+            .one(&db.db_con)
+            .await?
+        else {
+            return Err(error);
+        };
+        res.count.and_then(|v| u64::try_from(v).ok()).ok_or(error)
+    }
 }
 
 pub struct Database {
@@ -262,6 +283,78 @@ impl Database {
             .map_err(Into::into)
     }
 
+    /// Expands the given SELECT statement with optional filtering criteria.
+    fn select_filter(
+        mut query: SelectStatement,
+        contains: Option<&str>,
+        name: Expr,
+        description: Expr,
+    ) -> SelectStatement {
+        // Optional filter by name and description
+        if let Some(contains) = contains {
+            // Adds a `where` clause for case-insensitive matching of name and description.
+            //
+            // Case folding is only reliable for ASCII. The pattern is lowercased by
+            // Rust, which is Unicode-aware, while the columns are lowercased by the
+            // database: `PostgreSQL` folds according to the locale, but `SQLite`
+            // ships without ICU and folds ASCII only. A description containing
+            // "ÄPFEL" therefore stays uppercase on `SQLite` and never matches the
+            // lowercased pattern, for any spelling of the query. Crate names are
+            // unaffected, since `OriginalName` restricts them to ASCII.
+            let pattern = format!("%{}%", escape_like_pattern(contains)).to_lowercase();
+            query.and_where(
+                Func::lower(name)
+                    .like(LikeExpr::new(&pattern).escape('\\'))
+                    .or(Func::lower(description).like(LikeExpr::new(&pattern).escape('\\'))),
+            );
+        }
+        query
+    }
+
+    fn select_filter_for_crates(
+        mut query: SelectStatement,
+        contains: Option<&str>,
+    ) -> SelectStatement {
+        let tbl = CrateIden::Table;
+        let fk = Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk));
+        let id = (CrateIden::Table, CrateIden::Id);
+        let version = Expr::col((CrateMetaIden::Table, CrateMetaIden::Version));
+        let max_version = (CrateIden::Table, CrateIden::MaxVersion);
+
+        query
+            .inner_join(tbl, fk.equals(id))
+            .and_where(version.equals(max_version));
+
+        Self::select_filter(
+            query,
+            contains,
+            Expr::col((CrateIden::Table, CrateIden::OriginalName)),
+            Expr::col((CrateIden::Table, CrateIden::Description)),
+        )
+    }
+
+    fn select_filter_for_cache(
+        mut query: SelectStatement,
+        contains: Option<&str>,
+    ) -> SelectStatement {
+        let tbl = CratesIoIden::Table;
+        let fk = Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::CratesIoFk));
+        let id = (CratesIoIden::Table, CratesIoIden::Id);
+        let version = Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Version));
+        let max_version = (CratesIoIden::Table, CratesIoIden::MaxVersion);
+
+        query
+            .inner_join(tbl, fk.equals(id))
+            .and_where(version.equals(max_version));
+
+        Self::select_filter(
+            query,
+            contains,
+            Expr::col((CratesIoIden::Table, CratesIoIden::OriginalName)),
+            Expr::col((CratesIoIden::Table, CratesIoIden::Description)),
+        )
+    }
+
     /// Shared implementation for crate overview listing: optional name filter, optional limit/offset, cache union.
     async fn query_crates(
         &self,
@@ -269,107 +362,41 @@ impl Database {
         limit_offset: Option<(u64, u64)>,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
-        /// Adds a `where` clause for case-insensitive matching of name and description.
-        ///
-        /// Case folding is only reliable for ASCII. The pattern is lowercased by
-        /// Rust, which is Unicode-aware, while the columns are lowercased by the
-        /// database: `PostgreSQL` folds according to the locale, but `SQLite`
-        /// ships without ICU and folds ASCII only. A description containing
-        /// "ÄPFEL" therefore stays uppercase on `SQLite` and never matches the
-        /// lowercased pattern, for any spelling of the query. Crate names are
-        /// unaffected, since `OriginalName` restricts them to ASCII.
-        fn add_filter_by_name_and_description<T: Iden + Copy, N: Iden, D: Iden>(
-            query: &mut SelectStatement,
-            table: T,
-            name: N,
-            description: D,
-            contains: &str,
-        ) {
-            let pattern = format!("%{}%", escape_like_pattern(contains)).to_lowercase();
-            query.and_where(
-                Func::lower(Expr::col((table, name)))
-                    .like(LikeExpr::new(&pattern).escape('\\'))
-                    .or(Func::lower(Expr::col((table, description)))
-                        .like(LikeExpr::new(&pattern).escape('\\'))),
-            );
+        /// Creates a SELECT statement for a given set of fields.
+        fn select_fields(fields: &[(Expr, &str)]) -> SelectStatement {
+            let mut query = Query::select();
+            for (col, alias) in fields {
+                query.expr_as(col.clone(), Alias::new(*alias));
+            }
+            query
         }
 
-        let mut query = Query::select();
-        query
-            .expr_as(Expr::col(CrateIden::OriginalName), Alias::new("name"))
-            .expr_as(Expr::col(CrateIden::MaxVersion), Alias::new("version"))
-            .expr_as(Expr::col(CrateIden::LastUpdated), Alias::new("date"))
-            .expr_as(
-                Expr::col(CrateIden::TotalDownloads),
-                Alias::new("total_downloads"),
-            )
-            .expr_as(Expr::col(CrateIden::Description), Alias::new("description"))
-            .expr_as(
-                Expr::col(CrateMetaIden::Documentation),
-                Alias::new("documentation"),
-            )
-            .expr_as(Expr::cust("false"), Alias::new("is_cache"))
-            .from(CrateMetaIden::Table)
-            .inner_join(
-                CrateIden::Table,
-                Expr::col((CrateMetaIden::Table, CrateMetaIden::CrateFk))
-                    .equals((CrateIden::Table, CrateIden::Id)),
-            )
-            .and_where(
-                Expr::col((CrateMetaIden::Table, CrateMetaIden::Version))
-                    .equals((CrateIden::Table, CrateIden::MaxVersion)),
-            );
-
-        // Optional filter by name and description
-        if let Some(contains) = contains {
-            add_filter_by_name_and_description(
-                &mut query,
-                CrateIden::Table,
-                CrateIden::Name,
-                CrateIden::Description,
-                contains,
-            );
-        }
+        let mut query = select_fields(&[
+            (Expr::col(CrateIden::OriginalName), "name"),
+            (Expr::col(CrateIden::MaxVersion), "version"),
+            (Expr::col(CrateIden::LastUpdated), "date"),
+            (Expr::col(CrateIden::TotalDownloads), "total_downloads"),
+            (Expr::col(CrateIden::Description), "description"),
+            (Expr::col(CrateMetaIden::Documentation), "documentation"),
+            (Expr::cust("false"), "is_cache"),
+        ]);
+        query.from(CrateMetaIden::Table);
+        query = Self::select_filter_for_crates(query, contains);
 
         // UNION with cached crates
         if cache {
-            let mut query2 = Query::select();
-            query2
-                .expr_as(Expr::col(CratesIoIden::OriginalName), Alias::new("name"))
-                .expr_as(Expr::col(CratesIoIden::MaxVersion), Alias::new("version"))
-                .expr_as(Expr::col(CratesIoIden::LastModified), Alias::new("date"))
-                .expr_as(
-                    Expr::col(CratesIoIden::TotalDownloads),
-                    Alias::new("total_downloads"),
-                )
-                .expr_as(
-                    Expr::col(CratesIoIden::Description),
-                    Alias::new("description"),
-                )
-                .expr_as(
-                    Expr::col(CratesIoMetaIden::Documentation),
-                    Alias::new("documentation"),
-                )
-                .expr_as(Expr::cust("true"), Alias::new("is_cache"))
-                .from(CratesIoMetaIden::Table)
-                .inner_join(
-                    CratesIoIden::Table,
-                    Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::CratesIoFk))
-                        .equals((CratesIoIden::Table, CratesIoIden::Id)),
-                )
-                .and_where(
-                    Expr::col((CratesIoMetaIden::Table, CratesIoMetaIden::Version))
-                        .equals((CratesIoIden::Table, CratesIoIden::MaxVersion)),
-                );
-            if let Some(contains) = contains {
-                add_filter_by_name_and_description(
-                    &mut query2,
-                    CratesIoIden::Table,
-                    CratesIoIden::OriginalName,
-                    CratesIoIden::Description,
-                    contains,
-                );
-            }
+            let mut query2 = select_fields(&[
+                (Expr::col(CratesIoIden::OriginalName), "name"),
+                (Expr::col(CratesIoIden::MaxVersion), "version"),
+                (Expr::col(CratesIoIden::LastModified), "date"),
+                (Expr::col(CratesIoIden::TotalDownloads), "total_downloads"),
+                (Expr::col(CratesIoIden::Description), "description"),
+                (Expr::col(CratesIoMetaIden::Documentation), "documentation"),
+                (Expr::cust("true"), "is_cache"),
+            ]);
+            query2.from(CratesIoMetaIden::Table);
+            query2 = Self::select_filter_for_cache(query2, contains);
+
             query.union(UnionType::All, query2);
         }
 
@@ -379,11 +406,50 @@ impl Database {
             query.limit(limit).offset(offset);
         }
 
-        let builder = self.db_con.get_database_backend();
-        CrateOverview::find_by_statement(builder.build(&query))
+        let stmt = self.db_con.get_database_backend().build(&query);
+
+        CrateOverview::find_by_statement(stmt)
             .all(&self.db_con)
             .await
             .map_err(DbError::from)
+    }
+
+    async fn count_crates(&self, contains: Option<&str>, cache: bool) -> DbResult<u64> {
+        let mut query = Query::select();
+        query.expr_as(
+            Expr::col((CrateIden::Table, CrateIden::Id)).count(),
+            Alias::new("count"),
+        );
+        query.from(CrateMetaIden::Table);
+        query = Self::select_filter_for_crates(query, contains);
+
+        let count = CountResult::count_by_statement(
+            self,
+            self.db_con.get_database_backend().build(&query),
+            DbError::FailedToCountCrates,
+        )
+        .await?;
+
+        let cache_count = if cache {
+            let mut query2 = Query::select();
+            query2.expr_as(
+                Expr::col((CratesIoIden::Table, CratesIoIden::Id)).count(),
+                Alias::new("count"),
+            );
+            query2.from(CratesIoMetaIden::Table);
+            query2 = Self::select_filter_for_cache(query2, contains);
+
+            CountResult::count_by_statement(
+                self,
+                self.db_con.get_database_backend().build(&query2),
+                DbError::FailedToCountCrates,
+            )
+            .await?
+        } else {
+            0
+        };
+
+        Ok(count + cache_count)
     }
 
     /// Executes a count query `SELECT COUNT(id_column) FROM table` and returns the count as u64.
@@ -391,26 +457,12 @@ impl Database {
     where
         T: Iden + Copy,
     {
-        #[derive(Debug, PartialEq, FromQueryResult)]
-        struct CountResult {
-            count: Option<i64>,
-        }
-
         let statement = self.db_con.get_database_backend().build(
             Query::select()
                 .expr_as(Expr::col((table, id_column)).count(), Alias::new("count"))
                 .from(table),
         );
-        let Some(result) = CountResult::find_by_statement(statement)
-            .one(&self.db_con)
-            .await?
-        else {
-            return Err(error);
-        };
-        result
-            .count
-            .and_then(|v| u64::try_from(v).ok())
-            .ok_or(error)
+        CountResult::count_by_statement(self, statement, error).await
     }
 
     async fn get_webhook_model(&self, id: &str) -> DbResult<webhook::Model> {
@@ -1392,9 +1444,20 @@ impl DbProvider for Database {
     async fn search_in_crate_name_and_description(
         &self,
         contains: &str,
+        limit: u64,
+        offset: u64,
         cache: bool,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(Some(contains), None, cache).await
+        self.query_crates(Some(contains), Some((limit, offset)), cache)
+            .await
+    }
+
+    async fn count_by_crate_name_and_description(
+        &self,
+        contains: &str,
+        cache: bool,
+    ) -> DbResult<u64> {
+        self.count_crates(Some(contains), cache).await
     }
 
     async fn get_crate_overview_list(

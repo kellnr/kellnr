@@ -1380,8 +1380,7 @@ async fn delete_crate_only_versions(test_db: &kellnr_db::Database) {
     assert!(krate.is_none());
 }
 
-#[db_test]
-async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::Database) {
+async fn search_and_count_test_fixtures(test_db: &kellnr_db::Database) -> Vec<CrateOverview> {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created_string = created.format("%Y-%m-%d %H:%M:%S").to_string();
     test_add_crate_with_downloads(
@@ -1483,7 +1482,9 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
     )
     .await
     .unwrap();
-    let expected = vec![
+
+    // Expected results when searching for "crate":
+    vec![
         CrateOverview {
             name: "crate".to_string(),
             version: "2.2.0".to_string(),
@@ -1514,14 +1515,94 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
             total_downloads: 1,
             ..CrateOverview::default()
         },
-    ];
+    ]
+}
+
+#[db_test]
+async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::Database) {
+    let expected = search_and_count_test_fixtures(test_db).await;
+
+    let results_1 = test_db
+        .search_in_crate_name_and_description("crate", 2, 0, false)
+        .await
+        .unwrap();
+
+    assert_eq!(expected[0..2].to_vec(), results_1);
+
+    let results_2 = test_db
+        .search_in_crate_name_and_description("crate", 2, 2, false)
+        .await
+        .unwrap();
+
+    assert_eq!(expected[2..4].to_vec(), results_2);
 
     let search_results = test_db
-        .search_in_crate_name_and_description("crate", false)
+        .search_in_crate_name_and_description("crate", 100, 0, false)
         .await
         .unwrap();
 
     assert_eq!(expected, search_results);
+}
+
+#[db_test]
+async fn count_by_crate_name_and_description_found_match(test_db: &kellnr_db::Database) {
+    let expected = search_and_count_test_fixtures(test_db).await;
+
+    let results = test_db
+        .count_by_crate_name_and_description("crate", false)
+        .await
+        .unwrap();
+
+    assert_eq!(expected.len(), results as usize);
+
+    let results = test_db
+        .count_by_crate_name_and_description("something not found", false)
+        .await
+        .unwrap();
+
+    assert_eq!(0, results);
+}
+
+#[db_test]
+async fn count_by_crate_name_and_description_with_cache(test_db: &kellnr_db::Database) {
+    test_db
+        .add_cratesio_prefetch_data(
+            &OriginalName::from_unchecked("crate".to_string()),
+            "etag",
+            "last_modified",
+            None,
+            &[IndexMetadata {
+                name: "crate".to_string(),
+                vers: "9.0.0".to_string(),
+                deps: vec![],
+                cksum: "cksum".to_string(),
+                features: BTreeMap::default(),
+                yanked: false,
+                links: None,
+                pubtime: None,
+                v: Some(1),
+                features2: None,
+                rust_version: None,
+            }],
+        )
+        .await
+        .unwrap();
+
+    let expected = search_and_count_test_fixtures(test_db).await;
+
+    let results = test_db
+        .count_by_crate_name_and_description("crate", true)
+        .await
+        .unwrap();
+
+    assert_eq!(expected.len() + 1, results as usize);
+
+    let results = test_db
+        .count_by_crate_name_and_description("something not found", false)
+        .await
+        .unwrap();
+
+    assert_eq!(0, results);
 }
 
 #[db_test]
