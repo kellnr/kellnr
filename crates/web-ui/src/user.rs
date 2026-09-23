@@ -596,6 +596,143 @@ mod tests {
         }
     }
 
+    /// Same state as `test_state_with_cache`, but with SSO-only login enforced.
+    fn sso_enforced_state(mock_db: MockDb, cache: Arc<TokenCacheManager>) -> AppStateData {
+        let mut state = test_state_with_cache(mock_db, cache);
+        let mut settings = (*state.settings).clone();
+        settings.oauth2.enabled = true;
+        settings.oauth2.enforced = true;
+        state.settings = Arc::new(settings);
+        state
+    }
+
+    fn admin_session_db() -> MockDb {
+        let mut mock_db = MockDb::new();
+        mock_db.expect_validate_session().returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        });
+        mock_db
+    }
+
+    fn session_cookie_header() -> String {
+        encode_cookies([(COOKIE_SESSION_ID, "session")])
+    }
+
+    // ==========================
+    // SSO Enforcement Tests
+    // ==========================
+
+    /// Password login must be refused outright, without consulting the DB, so
+    /// that a still-valid local password cannot be used to bypass SSO.
+    #[tokio::test]
+    async fn test_login_forbidden_when_sso_enforced() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let mut mock_db = MockDb::new();
+        mock_db.expect_authenticate_user().never();
+
+        let state = sso_enforced_state(mock_db, cache);
+        let app = Router::new().route("/login", post(login)).with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"user":"admin","pwd":"admin"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// Changing one's own password is meaningless under SSO and must not write
+    /// a new hash to the DB.
+    #[tokio::test]
+    async fn test_change_pwd_forbidden_when_sso_enforced() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let mut mock_db = admin_session_db();
+        mock_db.expect_authenticate_user().never();
+        mock_db.expect_change_pwd().never();
+
+        let state = sso_enforced_state(mock_db, cache);
+        let app = Router::new()
+            .route("/me/password", post(change_pwd))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/me/password")
+                    .header(header::COOKIE, session_cookie_header())
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        r#"{"old_pwd":"old","new_pwd1":"newpassword","new_pwd2":"newpassword"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// An admin resetting another user's password must not produce a usable
+    /// local credential while SSO is the only permitted login method.
+    #[tokio::test]
+    async fn test_reset_pwd_forbidden_when_sso_enforced() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let mut mock_db = admin_session_db();
+        mock_db.expect_change_pwd().never();
+
+        let state = sso_enforced_state(mock_db, cache);
+        let app = Router::new()
+            .route("/{name}/password", post(reset_pwd))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/someuser/password")
+                    .header(header::COOKIE, session_cookie_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// Users are provisioned by the `IdP` under enforcement, so creating a local
+    /// password-backed account must be refused.
+    #[tokio::test]
+    async fn test_add_user_forbidden_when_sso_enforced() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let mut mock_db = admin_session_db();
+        mock_db.expect_add_user().never();
+
+        let state = sso_enforced_state(mock_db, cache);
+        let app = Router::new().route("/add", post(add)).with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/add")
+                    .header(header::COOKIE, session_cookie_header())
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        r#"{"name":"new_user","pwd1":"password","pwd2":"password","is_admin":false,"is_read_only":false}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
     #[tokio::test]
     async fn test_add_token_invalidates_cache() {
         // Pre-populate cache with a token

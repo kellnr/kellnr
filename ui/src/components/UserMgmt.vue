@@ -53,6 +53,7 @@
               </v-btn>
 
               <v-btn
+                v-if="!ssoEnforced"
                 color="warning"
                 variant="tonal"
                 size="small"
@@ -84,7 +85,7 @@
       />
 
       <!-- Add User Form -->
-      <FormSection v-if="!props.ssoEnforced" icon="mdi-account-plus" title="Add New User">
+      <FormSection v-if="!ssoEnforced" icon="mdi-account-plus" title="Add New User">
         <v-form @submit.prevent="handleAddUser" class="add-user-form">
           <div class="form-grid">
             <div class="form-field">
@@ -214,7 +215,7 @@ import {
   NotificationSnackbar,
 } from "./common"
 
-const props = defineProps<{ ssoEnforced: boolean }>();
+const { ssoEnforced } = defineProps<{ ssoEnforced: boolean }>()
 
 // State
 const users = ref<User[]>([])

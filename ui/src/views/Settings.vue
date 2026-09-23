@@ -105,7 +105,7 @@
                 <v-card class="content-card" elevation="0">
                     <change-password v-if="activeTab === 'password'" />
                     <auth-token v-if="activeTab === 'tokens'" />
-                    <user-mgmt v-if="activeTab === 'users'" :sso-enforced=ssoEnforced />
+                    <user-mgmt v-if="activeTab === 'users'" :sso-enforced="ssoEnforced" />
                     <group-mgmt v-if="activeTab === 'groups'" />
                     <startup-config v-if="activeTab === 'config'" />
                     <toolchain-mgmt v-if="activeTab === 'toolchains'" />
@@ -248,8 +248,12 @@ onBeforeMount(async () => {
 
     const oauth2Result = await settingsService.getOAuth2Config()
     if (isSuccess(oauth2Result)) {
-        ssoEnforced.value = oauth2Result.data.enforced;
-        activeTab.value = 'tokens';
+        ssoEnforced.value = oauth2Result.data.enforced
+        // The password tab is hidden when SSO is enforced, so move off it.
+        // Any other tab, including a deep-linked one, stays as selected.
+        if (ssoEnforced.value && activeTab.value === 'password') {
+            activeTab.value = 'tokens'
+        }
     }
 })
 </script>

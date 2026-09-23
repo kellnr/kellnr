@@ -959,9 +959,9 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
 
         fn active_end_session_endpoint(&self) -> &str {
             if self.rotated.load(Ordering::SeqCst) {
-                &self.end_session_endpoint_a
-            } else {
                 &self.end_session_endpoint_b
+            } else {
+                &self.end_session_endpoint_a
             }
         }
 
@@ -1151,12 +1151,13 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         let handler = OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), REDIRECT_URI)
             .await
             .expect("discovery should succeed");
-        let end_session_url_before = handler
-            .end_session_endpoint
-            .lock()
-            .expect("OAuth2 end session endpoint mutex poisoned")
-            .clone();
-        assert!(end_session_url_before.is_some());
+        let url_before = handler
+            .end_session_url("id-token", "http://kellnr/")
+            .expect("discovery should pick up the end session endpoint");
+        assert!(
+            url_before.starts_with(END_SESSION_ENDPOINT_A),
+            "expected logout URL built from endpoint A, got {url_before}"
+        );
 
         // The provider rotates (keys and) the end session endpoint.
         provider.rotated.store(true, Ordering::SeqCst);
@@ -1166,12 +1167,43 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
             .await
             .expect("exchange should succeed after rotation");
-        let end_session_url_after = handler
-            .end_session_endpoint
-            .lock()
-            .expect("OAuth2 end session endpoint mutex poisoned")
-            .clone();
-        assert_ne!(end_session_url_before, end_session_url_after);
+
+        let url_after = handler
+            .end_session_url("id-token", "http://kellnr/")
+            .expect("rediscovery should keep an end session endpoint");
+        assert!(
+            url_after.starts_with(END_SESSION_ENDPOINT_B),
+            "expected logout URL built from endpoint B after rotation, got {url_after}"
+        );
+
+        server.abort();
+    }
+
+    /// The logout URL carries the hint, client ID and post-logout redirect the
+    /// provider needs for RP-initiated logout.
+    #[tokio::test]
+    async fn end_session_url_contains_logout_parameters() {
+        let (_provider, issuer, server) = start_mock_provider().await;
+
+        let handler = OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), REDIRECT_URI)
+            .await
+            .expect("discovery should succeed");
+
+        let url = handler
+            .end_session_url("the-id-token", "http://kellnr/")
+            .expect("provider advertises an end session endpoint");
+        let parsed = Url::parse(&url).expect("logout URL should be a valid URL");
+        let params: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+
+        assert_eq!(
+            params.get("id_token_hint").map(String::as_str),
+            Some("the-id-token")
+        );
+        assert_eq!(params.get("client_id").map(String::as_str), Some(CLIENT_ID));
+        assert_eq!(
+            params.get("post_logout_redirect_uri").map(String::as_str),
+            Some("http://kellnr/")
+        );
 
         server.abort();
     }

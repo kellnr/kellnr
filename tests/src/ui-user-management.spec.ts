@@ -9,6 +9,7 @@
  * - Admin cannot lock themselves (button disabled)
  * - Admin cannot delete themselves (button disabled)
  * - Non-admin users cannot access user management
+ * - Settings default tab and ?tab= deep links (regression guard)
  *
  * Performance: All tests share a single local Kellnr instance.
  * Note: Tests run serially and share state, so users created in earlier tests
@@ -89,6 +90,35 @@ test.describe("User Management UI Tests", () => {
     // Verify the admin badge is shown
     const adminBadge = adminUserItem.locator(".role-badge.admin");
     await expect(adminBadge).toBeVisible();
+  });
+
+  /// Regression guard: the OAuth2 config lookup on this page used to force the
+  /// Tokens tab unconditionally, which broke the default tab and every deep
+  /// link even on instances with OAuth2 switched off.
+  test("settings opens the password tab by default when SSO is not enforced", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+    const loginPage = new LoginPage(page);
+    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await loginPage.waitForNavigation("/");
+    await page.waitForTimeout(1000);
+
+    await page.goto(`${baseUrl}/settings`);
+
+    const changePwdHeader = page.locator(".section-header").filter({ hasText: "Change Password" });
+    await expect(changePwdHeader).toBeVisible();
+  });
+
+  test("settings honours the tab query parameter when SSO is not enforced", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+    const loginPage = new LoginPage(page);
+    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await loginPage.waitForNavigation("/");
+    await page.waitForTimeout(1000);
+
+    await page.goto(`${baseUrl}/settings?tab=users`);
+
+    const userMgmtHeader = page.locator(".section-header").filter({ hasText: "User Management" });
+    await expect(userMgmtHeader).toBeVisible();
   });
 
   test("admin promote/demote button is disabled for self", async ({ page }) => {

@@ -206,15 +206,33 @@ async fn run_server(resolved: ResolvedSettings) {
     // Initialize OAuth2/OIDC handler if enabled
     let oauth2_handler = init_oauth2_handler(&settings).await.unwrap_or_else(|e| {
         error!("Failed to initialize OAuth2/OIDC handler: {}", e);
-        if let OAuth2Error::DiscoveryError(_) = e &&  settings.oauth2.enforced {
+        // With enforcement on, password login is rejected, so a handler that
+        // failed to initialize for *any* reason leaves no way to log in at all.
+        // Refuse to start instead of serving an unusable registry.
+        if settings.oauth2.enforced {
             error!(
-                "OAuth2 enforcement is enabled, so login is impossible in the absence of an OIDC provider"
+                "OAuth2 enforcement is enabled, so login is impossible without a working OIDC provider"
             );
             std::process::exit(1);
         }
         warn!("OAuth2/OIDC authentication will be disabled");
         None
     });
+
+    // A fresh instance with enforcement on and no admin group mapping has no
+    // path to an administrator: the local admin cannot log in and provisioned
+    // users are never promoted. Existing instances may already have SSO admins
+    // in the database, so this is a warning and not a hard failure.
+    if settings.oauth2.enforced
+        && (settings.oauth2.admin_group_claim.is_none()
+            || settings.oauth2.admin_group_value.is_none())
+    {
+        warn!(
+            "OAuth2 enforcement is enabled without oauth2.admin_group_claim and \
+             oauth2.admin_group_value. Users provisioned via SSO will never gain admin \
+             rights, and the local admin account can no longer log in."
+        );
+    }
 
     // Initialize download counter with periodic flush
     let flush_interval = settings.registry.download_counter_flush_seconds;
