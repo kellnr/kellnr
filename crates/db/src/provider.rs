@@ -308,6 +308,13 @@ pub trait DbProvider: Send + Sync {
         subject: &str,
     ) -> DbResult<Option<User>>;
 
+    /// Whether any admin user has an `OAuth2` identity linked.
+    ///
+    /// Used at startup to tell a usable SSO-only deployment apart from one that
+    /// has locked itself out: the default local admin always exists, so the
+    /// presence of an admin alone says nothing.
+    async fn has_oauth2_admin(&self) -> DbResult<bool>;
+
     /// Create a new user from `OAuth2` authentication and link their identity
     async fn create_oauth2_user(
         &self,
@@ -790,6 +797,10 @@ pub mod mock {
                 issuer: &str,
                 subject: &str,
             ) -> DbResult<Option<User>> {
+                unimplemented!()
+            }
+
+            async fn has_oauth2_admin(&self) -> DbResult<bool> {
                 unimplemented!()
             }
 

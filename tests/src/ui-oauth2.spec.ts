@@ -8,6 +8,7 @@
  * - User auto-provisioning
  * - Hiding password login when SSO is enforced
  * - Automatic redirection to the OIDC server from the login page when enabled
+ * - Hiding the password tab, password reset and user creation when SSO is enforced
  *
  * Performance: Tests use a mock OIDC server for fast, reliable testing.
  *
@@ -278,7 +279,7 @@ test.describe("OAuth2 UI Tests - Enabled", () => {
     // User should be logged in
     const isLoggedInBefore = await header.isLoggedIn();
     expect(isLoggedInBefore).toBe(true);
-    expect(header.logoutButton).toBeVisible();
+    await expect(header.logoutButton).toBeVisible();
 
     // Log out
     await header.logoutButton.click();
@@ -357,11 +358,11 @@ test.describe("OAuth2 UI Tests - SSO enforcement", () => {
     const suffix = `${Date.now()}`;
 
     // Start mock OIDC server
-    mockOidc = await startMockOidcServer({ name: `mock-oidc-custom-${suffix}` });
+    mockOidc = await startMockOidcServer({ name: `mock-oidc-enforced-${suffix}` });
 
     // Start Kellnr with SSO enforcement
     started = await startLocalKellnr({
-      name: `kellnr-oauth2-custom-${suffix}`,
+      name: `kellnr-oauth2-enforced-${suffix}`,
       env: {
         ...getOAuth2EnvVars(mockOidc.config),
         KELLNR_OAUTH2__ENFORCED: "true",
@@ -369,12 +370,60 @@ test.describe("OAuth2 UI Tests - SSO enforcement", () => {
     });
 
     baseUrl = started.baseUrl;
-    console.log(`[setup] Server ready at ${baseUrl} (custom button text)`);
+    console.log(`[setup] Server ready at ${baseUrl} (SSO enforced)`);
   });
 
   test.afterAll(async () => {
     if (started) await started.stop();
     if (mockOidc) await mockOidc.stop();
+  });
+
+  test("settings skips the hidden password tab", async ({ page }) => {
+    // Log in via SSO, the only way in when enforcement is on.
+    await page.goto(`${baseUrl}/login`);
+    const loginPage = new LoginPage(page);
+    await loginPage.waitForOAuth2Button();
+    await loginPage.clickOAuth2Login();
+    await page.waitForURL(/.*\/authorize.*/, { timeout: 10000 });
+    const usernameInput = page.locator("input").first();
+    await usernameInput.waitFor({ state: "visible", timeout: 10000 });
+    await usernameInput.fill("testuser");
+    await page.getByRole("button", { name: "Sign-in" }).click();
+    await page.waitForURL(`${baseUrl}/**`, { timeout: 15000 });
+
+    await page.goto(`${baseUrl}/settings`);
+
+    // The Change Password tab is hidden, so the page must fall back to Tokens.
+    await expect(
+      page.locator(".section-header").filter({ hasText: "Authentication Tokens" }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".v-list-item-title").filter({ hasText: "Change Password" }),
+    ).toHaveCount(0);
+  });
+
+  test("admin cannot reset a user password", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+    const loginPage = new LoginPage(page);
+    await loginPage.waitForOAuth2Button();
+    await loginPage.clickOAuth2Login();
+    await page.waitForURL(/.*\/authorize.*/, { timeout: 10000 });
+    const usernameInput = page.locator("input").first();
+    await usernameInput.waitFor({ state: "visible", timeout: 10000 });
+    await usernameInput.fill("testuser");
+    await page.getByRole("button", { name: "Sign-in" }).click();
+    await page.waitForURL(`${baseUrl}/**`, { timeout: 15000 });
+
+    await page.goto(`${baseUrl}/settings?tab=users`);
+    await expect(
+      page.locator(".section-header").filter({ hasText: "User Management" }),
+    ).toBeVisible();
+
+    // No password reset affordance, since the backend refuses it anyway.
+    await expect(page.getByRole("button", { name: "Reset" })).toHaveCount(0);
+    await expect(
+      page.locator(".section-header").filter({ hasText: "Add New User" }),
+    ).toHaveCount(0);
   });
 
   test("password login is disabled", async ({ page }) => {
@@ -411,11 +460,11 @@ test.describe("OAuth2 UI Tests - SSO enforcement with auto-redirect", () => {
     const suffix = `${Date.now()}`;
 
     // Start mock OIDC server
-    mockOidc = await startMockOidcServer({ name: `mock-oidc-custom-${suffix}` });
+    mockOidc = await startMockOidcServer({ name: `mock-oidc-auto-redirect-${suffix}` });
 
     // Start Kellnr with SSO enforcement
     started = await startLocalKellnr({
-      name: `kellnr-oauth2-custom-${suffix}`,
+      name: `kellnr-oauth2-auto-redirect-${suffix}`,
       env: {
         ...getOAuth2EnvVars(mockOidc.config),
         KELLNR_OAUTH2__ENFORCED: "true",
@@ -424,7 +473,7 @@ test.describe("OAuth2 UI Tests - SSO enforcement with auto-redirect", () => {
     });
 
     baseUrl = started.baseUrl;
-    console.log(`[setup] Server ready at ${baseUrl} (custom button text)`);
+    console.log(`[setup] Server ready at ${baseUrl} (SSO enforced, auto-redirect)`);
   });
 
   test.afterAll(async () => {

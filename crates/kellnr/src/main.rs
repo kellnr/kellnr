@@ -206,15 +206,36 @@ async fn run_server(resolved: ResolvedSettings) {
     // Initialize OAuth2/OIDC handler if enabled
     let oauth2_handler = init_oauth2_handler(&settings).await.unwrap_or_else(|e| {
         error!("Failed to initialize OAuth2/OIDC handler: {}", e);
-        if let OAuth2Error::DiscoveryError(_) = e &&  settings.oauth2.enforced {
+        // With enforcement on, password login is rejected, so a handler that
+        // failed to initialize for *any* reason leaves no way to log in at all.
+        // Refuse to start instead of serving an unusable registry.
+        if settings.oauth2.enforced {
             error!(
-                "OAuth2 enforcement is enabled, so login is impossible in the absence of an OIDC provider"
+                "OAuth2 enforcement is enabled, so login is impossible without a working OIDC provider"
             );
             std::process::exit(1);
         }
         warn!("OAuth2/OIDC authentication will be disabled");
         None
     });
+
+    // With enforcement on, the local admin can no longer log in, so an
+    // administrator has to come from the IdP. That needs either an admin group
+    // mapping, which promotes SSO users, or an admin who already linked an
+    // OAuth2 identity. Warn when neither holds, rather than fail: the registry
+    // itself still works, only admin access is unreachable.
+    if settings.oauth2.enforced
+        && (settings.oauth2.admin_group_claim.is_none()
+            || settings.oauth2.admin_group_value.is_none())
+        && !db.has_oauth2_admin().await.unwrap_or(false)
+    {
+        warn!(
+            "OAuth2 enforcement is enabled without oauth2.admin_group_claim and \
+             oauth2.admin_group_value, and no admin has an OAuth2 identity linked. \
+             Users provisioned via SSO will never gain admin rights, and the local \
+             admin account can no longer log in."
+        );
+    }
 
     // Initialize download counter with periodic flush
     let flush_interval = settings.registry.download_counter_flush_seconds;

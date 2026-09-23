@@ -259,6 +259,21 @@ mod tests {
         })
     }
 
+    /// Settings with SSO-only login enforced.
+    fn sso_enforced_settings() -> Arc<Settings> {
+        let mut settings = Settings::clone(&test_settings());
+        settings.oauth2.enabled = true;
+        settings.oauth2.enforced = true;
+        Arc::new(settings)
+    }
+
+    fn basic_auth_header(user: &str, pwd: &str) -> HeaderMap {
+        let encoded = STANDARD.encode(format!("{user}:{pwd}"));
+        let mut headers = HeaderMap::new();
+        headers.insert("Authorization", format!("Basic {encoded}").parse().unwrap());
+        headers
+    }
+
     // ===================
     // Retry Logic Tests
     // ===================
@@ -467,6 +482,98 @@ mod tests {
         // Verify invalid token was NOT cached
         let cached = cache.get("bad_token").await;
         assert!(cached.is_none());
+    }
+
+    // ==========================
+    // SSO Enforcement Tests
+    // ==========================
+
+    /// Basic auth carries a username and password, so it must be rejected
+    /// outright when SSO is the only permitted login method. The DB is never
+    /// consulted, which is what stops a valid password from being accepted.
+    #[tokio::test]
+    async fn test_basic_auth_rejected_when_sso_enforced() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db.expect_get_user().never();
+        mock_db.expect_authenticate_user().never();
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let headers = basic_auth_header("test_user", "correct_password");
+
+        let result = Token::from_header(&headers, &db, &cache, &sso_enforced_settings()).await;
+
+        assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+    }
+
+    /// The lowercase spelling of the scheme must not slip past the check.
+    #[tokio::test]
+    async fn test_lowercase_basic_auth_rejected_when_sso_enforced() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db.expect_get_user().never();
+        mock_db.expect_authenticate_user().never();
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let encoded = STANDARD.encode("test_user:correct_password");
+        let mut headers = HeaderMap::new();
+        headers.insert("Authorization", format!("basic {encoded}").parse().unwrap());
+
+        let result = Token::from_header(&headers, &db, &cache, &sso_enforced_settings()).await;
+
+        assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+    }
+
+    /// Enforcement only targets passwords. Cargo tokens are independent of the
+    /// login method and must keep working so publishing does not break.
+    #[tokio::test]
+    async fn test_bearer_token_still_works_when_sso_enforced() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_user_from_token()
+            .with(eq("valid_token"))
+            .times(1)
+            .returning(|_| Ok(test_user()));
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let mut headers = HeaderMap::new();
+        headers.insert("Authorization", "Bearer valid_token".parse().unwrap());
+
+        let token = Token::from_header(&headers, &db, &cache, &sso_enforced_settings())
+            .await
+            .expect("bearer tokens must remain valid under SSO enforcement");
+
+        assert_eq!(token.user, "test_user");
+    }
+
+    /// Without enforcement, basic auth keeps authenticating against the DB.
+    #[tokio::test]
+    async fn test_basic_auth_allowed_when_sso_not_enforced() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_user()
+            .with(eq("test_user"))
+            .times(1)
+            .returning(|_| Ok(test_user()));
+        mock_db
+            .expect_authenticate_user()
+            .times(1)
+            .returning(|_, _| Ok(test_user()));
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let headers = basic_auth_header("test_user", "correct_password");
+
+        let token = Token::from_header(&headers, &db, &cache, &test_settings())
+            .await
+            .expect("basic auth should work when SSO is not enforced");
+
+        assert_eq!(token.user, "test_user");
     }
 
     #[tokio::test]

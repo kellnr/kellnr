@@ -231,6 +231,30 @@ test.describe("CLI Tests", () => {
       expect(result.stdout).toContain("Failed to initialize OAuth2/OIDC handler");
       expect(result.stdout).toContain("login is impossible");
     });
+
+    // An unparseable issuer_url fails before discovery is even attempted, so the
+    // enforcement guard must key off `enforced` rather than the error variant.
+    test("kellnr start with SSO enforcement and an invalid issuer URL fails", async () => {
+      const result = await exec(kellnrBinary, [
+        "start",
+        "-d",
+        tempDir,
+        "--oauth2-enabled",
+        "true",
+        "--oauth2-issuer-url",
+        "not a url",
+        "--oauth2-client-id",
+        "kellnr",
+        "--oauth2-client-secret",
+        "secret",
+        "--oauth2-enforced",
+        "true",
+      ]);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toContain("Failed to initialize OAuth2/OIDC handler");
+      expect(result.stdout).toContain("login is impossible");
+    });
   });
 
   test.describe("Config File Loading", () => {
