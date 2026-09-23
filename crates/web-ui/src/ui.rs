@@ -261,6 +261,8 @@ pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> J
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct SearchParams {
     name: NameOrDescription,
+    page: Option<u64>,
+    page_size: Option<u64>,
     cache: Option<bool>,
 }
 
@@ -271,23 +273,27 @@ pub struct SearchParams {
     tag = "ui",
     params(SearchParams),
     responses(
-        (status = 200, description = "Search results", body = Pagination)
+        (status = 200, description = "Paginated search results", body = Pagination)
     )
 )]
 pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
+    let page_size = params.page_size.unwrap_or(10);
+    let page = params.page.unwrap_or(0);
+    let cache = params.cache.unwrap_or(false);
     let crates = db
         .search_in_crate_name_and_description(
             params.name.as_str(),
-            100,
-            0,
-            params.cache.unwrap_or(false),
+            page_size,
+            page_size * page,
+            cache,
         )
         .await
         .unwrap_or_default();
+
     Json(Pagination {
-        page_size: crates.len() as u64,
-        page: 0, // Return everything as one page
         crates,
+        page_size,
+        page,
     })
 }
 
@@ -1796,7 +1802,7 @@ mod tests {
 
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("doesnotexist"), eq(100), eq(0), eq(false))
+            .with(eq("doesnotexist"), eq(10), eq(0), eq(false))
             .returning(move |_name, _, _, _| Ok(vec![]));
 
         let r = app(
@@ -1819,7 +1825,7 @@ mod tests {
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!(0, result_crates.crates.len());
         assert_eq!(0, result_crates.page);
-        assert_eq!(0, result_crates.page_size);
+        assert_eq!(10, result_crates.page_size);
     }
 
     // The length bound lives on `NameOrDescription`. It has to hold here too,
@@ -1852,7 +1858,7 @@ mod tests {
 
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("vcard parser"), eq(100), eq(0), eq(false))
+            .with(eq("vcard parser"), eq(10), eq(0), eq(false))
             .returning(|_, _, _, _| Ok(vec![]));
 
         let r = app(
@@ -1887,7 +1893,7 @@ mod tests {
         let tc = test_crate_summary.clone();
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("hello"), eq(100), eq(0), eq(false))
+            .with(eq("hello"), eq(10), eq(0), eq(false))
             .returning(move |_, _, _, _| Ok(vec![tc.clone()]));
 
         let r = app(
@@ -1910,8 +1916,83 @@ mod tests {
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!(1, result_crates.crates.len());
         assert_eq!(0, result_crates.page);
-        assert_eq!(1, result_crates.page_size);
+        assert_eq!(10, result_crates.page_size);
         assert_eq!(test_crate_summary, result_crates.crates[0]);
+    }
+
+    // Search has to page through the database the same way the crate overview
+    // does, instead of asking for a single fixed-size window. A page beyond the
+    // first is only reachable if `page` is translated into an offset.
+    #[tokio::test]
+    async fn search_paginates_like_crate_overview() {
+        let mut mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+
+        mock_db
+            .expect_search_in_crate_name_and_description()
+            .with(eq("hello"), eq(20), eq(60), eq(false))
+            .returning(|_, _, _, _| Ok(vec![]));
+
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/search?name=hello&page=3&page_size=20")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let result_status = r.status();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
+
+        assert_eq!(StatusCode::OK, result_status);
+        assert_eq!(3, result_crates.page);
+        assert_eq!(20, result_crates.page_size);
+    }
+
+    // The page size is whatever the caller asked for, so a full page cannot be
+    // mistaken for the end of the results.
+    #[tokio::test]
+    async fn search_reports_requested_page_size_on_a_full_page() {
+        let mut mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+
+        let hits = (0..2)
+            .map(|i| CrateOverview {
+                name: format!("hello{i}"),
+                version: "1.0.0".to_string(),
+                ..Default::default()
+            })
+            .collect::<Vec<_>>();
+
+        mock_db
+            .expect_search_in_crate_name_and_description()
+            .with(eq("hello"), eq(2), eq(0), eq(false))
+            .returning(move |_, _, _, _| Ok(hits.clone()));
+
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/search?name=hello&page_size=2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
+
+        assert_eq!(2, result_crates.crates.len());
+        assert_eq!(2, result_crates.page_size);
     }
 
     #[tokio::test]

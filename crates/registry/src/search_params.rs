@@ -27,12 +27,6 @@ impl TryFrom<usize> for Page {
     }
 }
 
-impl From<Page> for usize {
-    fn from(pp: Page) -> Self {
-        pp.0
-    }
-}
-
 pub struct PerPage(pub usize);
 
 impl TryFrom<usize> for PerPage {
@@ -44,12 +38,6 @@ impl TryFrom<usize> for PerPage {
         } else {
             Ok(Self(limit))
         }
-    }
-}
-
-impl From<PerPage> for usize {
-    fn from(pp: PerPage) -> Self {
-        pp.0
     }
 }
 
@@ -112,14 +100,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn try_from_too_large() {
+    fn per_page_try_from_too_large() {
         let result = PerPage::try_from(101);
         assert!(result.is_err());
     }
 
     #[test]
-    fn try_from_valid() {
+    fn per_page_try_from_valid() {
         let result = PerPage::try_from(20);
+        assert!(result.is_ok());
+    }
+
+    // Pages are 1-based, mirroring crates.io, so 0 is not a valid page.
+    #[test]
+    fn page_try_from_zero() {
+        let result = Page::try_from(0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn page_try_from_first_page() {
+        let result = Page::try_from(1);
+        assert!(result.is_ok());
+    }
+
+    // The upper bound keeps `(page - 1) * per_page` from overflowing `usize`.
+    #[test]
+    fn page_try_from_too_large() {
+        let result = Page::try_from(1_000_001);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn page_try_from_upper_bound() {
+        let result = Page::try_from(1_000_000);
         assert!(result.is_ok());
     }
 }

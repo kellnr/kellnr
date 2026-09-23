@@ -550,7 +550,7 @@ pub async fn list_crate_versions(
     tag = "crates",
     params(
         ("q" = String, Query, description = "Search query"),
-        ("page" = Option<u32>, Query, description = "Page to return"),
+        ("page" = Option<u32>, Query, description = "Page to return, starting at 1"),
         ("per_page" = Option<u32>, Query, description = "Results per page")
     ),
     responses(
@@ -1931,8 +1931,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_err());
+        assert_eq!(StatusCode::BAD_REQUEST, r.status());
     }
 
     #[tokio::test]
@@ -1950,8 +1949,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        assert!(serde_json::from_slice::<SearchResult>(&result_msg).is_err());
+        assert_eq!(StatusCode::BAD_REQUEST, r.status());
     }
 
     #[tokio::test]

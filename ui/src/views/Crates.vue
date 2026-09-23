@@ -85,6 +85,9 @@ const currentPage = ref(0)
 const isLoading = ref(false)
 const allLoaded = ref(false)
 const searchText = ref("")
+// The query the currently displayed list belongs to. Empty means "browse all".
+// Kept apart from `searchText` so typing does not change what the next page is.
+const activeQuery = ref("")
 const scrollContainer = ref<HTMLElement | null>(null)
 const router = useRouter()
 const store = useStore()
@@ -93,14 +96,12 @@ const store = useStore()
 onBeforeMount(() => {
   if (router.currentRoute.value.query.search) {
     searchText.value = router.currentRoute.value.query.search as string
-    handleSearch(searchText.value)
+    activeQuery.value = searchText.value.trim()
   }
 })
 
 onMounted(() => {
-  if (searchText.value === "") {
-    loadMoreCrates()
-  }
+  loadMoreCrates()
 
   // Add resize event listener to handle window size changes
   window.addEventListener('resize', updateContainerHeight)
@@ -125,17 +126,25 @@ function updateContainerHeight() {
   })
 }
 
-// Load more crates for infinite scrolling
+// Load more crates for infinite scrolling. Search and the full crate list are
+// paginated the same way, so both are loaded through here.
 async function loadMoreCrates() {
   if (isLoading.value || allLoaded.value) return
 
   isLoading.value = true
 
-  const result = await crateService.getCrates(
-    currentPage.value,
-    ITEMS_PER_PAGE,
-    store.searchCache
-  )
+  const result = activeQuery.value
+    ? await crateService.searchCrates(
+      activeQuery.value,
+      currentPage.value,
+      ITEMS_PER_PAGE,
+      store.searchCache
+    )
+    : await crateService.getCrates(
+      currentPage.value,
+      ITEMS_PER_PAGE,
+      store.searchCache
+    )
 
   isLoading.value = false
 
@@ -152,15 +161,15 @@ async function loadMoreCrates() {
     if (newCrates.length < ITEMS_PER_PAGE) {
       allLoaded.value = true
     }
+  } else {
+    // Stop here, otherwise scrolling retries the failed request indefinitely.
+    allLoaded.value = true
   }
 }
 
 // Handle scroll event for infinite scrolling
 function handleScroll(event: Event) {
   const target = event.target as HTMLElement
-
-  // If we're in search mode, don't use infinite scroll
-  if (searchText.value !== "") return
 
   // Calculate if we're near the bottom (within 200px)
   const scrollTop = target.scrollTop
@@ -189,34 +198,10 @@ function refreshCrates() {
   loadMoreCrates()
 }
 
-// Search crates by name
-async function handleSearch(query: string) {
-  const searchQuery = query.trim()
-
-  if (!searchQuery) {
-    refreshCrates()
-    return
-  }
-
-  isLoading.value = true
-  allLoaded.value = false
-
-  // Reset scroll position
-  if (scrollContainer.value) {
-    scrollContainer.value.scrollTop = 0
-  }
-
-  const result = await crateService.searchCrates(searchQuery, store.searchCache)
-
-  isLoading.value = false
-
-  if (isSuccess(result)) {
-    crates.value = result.data.crates
-    allLoaded.value = true // Search results are all loaded at once
-  } else {
-    crates.value = []
-    allLoaded.value = true
-  }
+// Search crates by name. An empty query goes back to the full crate list.
+function handleSearch(query: string) {
+  activeQuery.value = query.trim()
+  refreshCrates()
 }
 </script>
 
