@@ -35,6 +35,7 @@ export interface CratesResponse {
  */
 export interface SearchResponse {
   crates: import('./crate_overview').CrateOverview[]
+  page: number
 }
 
 /**

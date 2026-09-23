@@ -45,13 +45,15 @@ export async function getCrates(
 }
 
 /**
- * Search for crates by name
+ * Get paginated search results for crates by name
  */
 export async function searchCrates(
   name: string,
+  page: number,
+  pageSize: number,
   cache: boolean
 ): Promise<ApiResult<SearchResponse>> {
-  return apiGet<SearchResponse>(SEARCH, { name, cache })
+  return apiGet<SearchResponse>(SEARCH, { name, page, page_size: pageSize, cache })
 }
 
 /**

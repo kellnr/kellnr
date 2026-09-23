@@ -1544,6 +1544,51 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
     assert_eq!(expected, search_results);
 }
 
+// Every match has to stay reachable by paging further, no matter how many there
+// are. The web UI search used to ask for a single fixed window of 100 rows, so
+// anything past that was silently dropped and could not be requested again.
+#[db_test]
+async fn search_in_crate_name_and_description_reaches_results_past_the_first_pages(
+    test_db: &kellnr_db::Database,
+) {
+    const TOTAL: usize = 150;
+    const PAGE_SIZE: u64 = 20;
+
+    let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
+    for i in 0..TOTAL {
+        test_add_crate(
+            test_db,
+            &format!("crate{i:03}"),
+            "admin",
+            &Version::try_from("1.0.0").unwrap(),
+            &created,
+        )
+        .await
+        .unwrap();
+    }
+
+    let mut paged = Vec::new();
+    let mut page = 0;
+    loop {
+        let hits = test_db
+            .search_in_crate_name_and_description("crate", PAGE_SIZE, PAGE_SIZE * page, false)
+            .await
+            .unwrap();
+        let hit_count = hits.len() as u64;
+        paged.extend(hits.into_iter().map(|c| c.name));
+        if hit_count < PAGE_SIZE {
+            break;
+        }
+        page += 1;
+    }
+
+    let expected = (0..TOTAL)
+        .map(|i| format!("crate{i:03}"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(expected, paged);
+}
+
 #[db_test]
 async fn count_by_crate_name_and_description_found_match(test_db: &kellnr_db::Database) {
     let expected = search_and_count_test_fixtures(test_db).await;
@@ -1598,7 +1643,7 @@ async fn count_by_crate_name_and_description_with_cache(test_db: &kellnr_db::Dat
     assert_eq!(expected.len() + 1, results as usize);
 
     let results = test_db
-        .count_by_crate_name_and_description("something not found", false)
+        .count_by_crate_name_and_description("something not found", true)
         .await
         .unwrap();
 
