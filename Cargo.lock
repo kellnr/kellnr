@@ -3765,7 +3765,6 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
- "webpki-roots",
 ]
 
 [[package]]
@@ -4261,7 +4260,7 @@ dependencies = [
  "kellnr-settings",
  "kellnr-storage",
  "provcfg",
- "reqwest 0.13.5",
+ "reqwest",
 ]
 
 [[package]]
@@ -4280,7 +4279,7 @@ dependencies = [
  "mockall",
  "openidconnect",
  "rand 0.10.2",
- "reqwest 0.13.5",
+ "reqwest",
  "sea-orm",
  "serde",
  "serde_json",
@@ -4301,7 +4300,7 @@ dependencies = [
  "moka",
  "rand 0.10.2",
  "regex",
- "reqwest 0.13.5",
+ "reqwest",
  "sea-orm",
  "semver",
  "serde",
@@ -4431,7 +4430,7 @@ dependencies = [
  "kellnr-storage",
  "mockall",
  "moka",
- "reqwest 0.13.5",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",
@@ -4477,7 +4476,7 @@ dependencies = [
  "kellnr-webhooks",
  "mockall",
  "rand 0.10.2",
- "reqwest 0.13.5",
+ "reqwest",
  "rm_rf",
  "serde",
  "serde_json",
@@ -4554,7 +4553,7 @@ dependencies = [
  "kellnr-settings",
  "kellnr-storage",
  "mockall",
- "reqwest 0.13.5",
+ "reqwest",
  "serde",
  "serde_json",
  "tempfile",
@@ -4579,7 +4578,7 @@ dependencies = [
  "kellnr-db",
  "kellnr-error",
  "kellnr-settings",
- "reqwest 0.13.5",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
@@ -5182,7 +5181,6 @@ dependencies = [
  "getrandom 0.2.17",
  "http",
  "rand 0.8.5",
- "reqwest 0.12.28",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -5386,7 +5384,7 @@ dependencies = [
  "percent-encoding",
  "quick-xml",
  "rand 0.10.2",
- "reqwest 0.13.5",
+ "reqwest",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -6328,44 +6326,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71fe3824f5629716b1589be05dacd749f6aa084c87e00e016714a8cdfccc997c"
 dependencies = [
  "bytecheck",
-]
-
-[[package]]
-name = "reqwest"
-version = "0.12.28"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
-dependencies = [
- "base64 0.22.1",
- "bytes",
- "futures-core",
- "http",
- "http-body",
- "http-body-util",
- "hyper",
- "hyper-rustls",
- "hyper-util",
- "js-sys",
- "log",
- "percent-encoding",
- "pin-project-lite",
- "quinn",
- "rustls",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sync_wrapper",
- "tokio",
- "tokio-rustls",
- "tower",
- "tower-http 0.6.11",
- "tower-service",
- "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "webpki-roots",
 ]
 
 [[package]]
@@ -7761,7 +7721,7 @@ dependencies = [
  "memchr",
  "parse-display",
  "pin-project-lite",
- "reqwest 0.13.5",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_with",

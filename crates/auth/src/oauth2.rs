@@ -17,12 +17,14 @@ use openidconnect::{
     AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret, CsrfToken,
     EmptyAdditionalClaims, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, Nonce,
     PkceCodeChallenge, PkceCodeVerifier, ProviderMetadataWithLogout, RedirectUrl, Scope,
-    TokenResponse, reqwest,
+    TokenResponse,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{info, trace, warn};
 use url::Url;
+
+use crate::oidc_http::{OidcHttpClient, error_chain};
 
 /// Type alias for the configured OIDC client after provider discovery
 type ConfiguredCoreClient = openidconnect::Client<
@@ -124,7 +126,7 @@ pub struct OAuth2Handler {
     redirect_url: RedirectUrl,
     settings: Arc<OAuth2Settings>,
     issuer_url: IssuerUrl,
-    http_client: reqwest::Client,
+    http_client: OidcHttpClient,
     end_session_endpoint: Mutex<Arc<Option<String>>>,
 }
 
@@ -156,11 +158,8 @@ impl OAuth2Handler {
 
         info!("Discovering OIDC provider at: {}", issuer_url_str);
 
-        // Create HTTP client
-        let http_client = reqwest::ClientBuilder::new()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|e| OAuth2Error::HttpError(e.to_string()))?;
+        let http_client =
+            OidcHttpClient::new().map_err(|e| OAuth2Error::HttpError(e.to_string()))?;
 
         let client_id = ClientId::new(
             settings
@@ -206,12 +205,12 @@ impl OAuth2Handler {
         client_id: &ClientId,
         client_secret: Option<&ClientSecret>,
         redirect_url: &RedirectUrl,
-        http_client: &reqwest::Client,
+        http_client: &OidcHttpClient,
     ) -> Result<(ConfiguredCoreClient, Option<String>), OAuth2Error> {
         let provider_metadata =
             ProviderMetadataWithLogout::discover_async(issuer_url.clone(), http_client)
                 .await
-                .map_err(|e| OAuth2Error::DiscoveryError(e.to_string()))?;
+                .map_err(|e| OAuth2Error::DiscoveryError(error_chain(&e)))?;
 
         let end_session_endpoint = provider_metadata
             .additional_metadata()
@@ -351,7 +350,7 @@ impl OAuth2Handler {
             .set_pkce_verifier(pkce_verifier)
             .request_async(&self.http_client)
             .await
-            .map_err(|e| OAuth2Error::TokenExchangeError(e.to_string()))?;
+            .map_err(|e| OAuth2Error::TokenExchangeError(error_chain(&e)))?;
 
         // Get and validate the ID token
         let id_token = token_response
@@ -946,6 +945,8 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         include_client_audience: AtomicBool,
         /// Whether the mock token includes the additional audience in `aud`.
         include_other_audience: AtomicBool,
+        /// When `true`, the token endpoint answers without an `access_token`.
+        malformed_token_response: AtomicBool,
     }
 
     impl MockProvider {
@@ -1023,6 +1024,9 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
     }
 
     async fn token(State(state): State<Arc<MockProvider>>) -> Json<Value> {
+        if state.malformed_token_response.load(Ordering::SeqCst) {
+            return Json(json!({}));
+        }
         Json(json!({
             "access_token": "access-token",
             "token_type": "Bearer",
@@ -1068,6 +1072,7 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             jwks_fetches: AtomicUsize::new(0),
             include_client_audience: AtomicBool::new(true),
             include_other_audience: AtomicBool::new(false),
+            malformed_token_response: AtomicBool::new(false),
         });
 
         let app = Router::new()
@@ -1203,6 +1208,56 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
         assert_eq!(
             params.get("post_logout_redirect_uri").map(String::as_str),
             Some("http://kellnr/")
+        );
+
+        server.abort();
+    }
+
+    /// A failed discovery reports the underlying cause, not only the bare
+    /// "Request failed" from `openidconnect`, so TLS trust problems can be
+    /// told apart from DNS or connection errors.
+    #[tokio::test]
+    async fn discovery_error_includes_underlying_cause() {
+        // Bind and drop a listener to get a port nothing is listening on.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let issuer = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+
+        let Err(OAuth2Error::DiscoveryError(message)) =
+            OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), REDIRECT_URI).await
+        else {
+            panic!("discovery against a closed port should fail");
+        };
+
+        assert!(
+            message.starts_with("Request failed: "),
+            "unexpected message: {message}"
+        );
+    }
+
+    /// A failed token exchange reports the underlying cause, not only the
+    /// top-level message from `openidconnect`.
+    #[tokio::test]
+    async fn token_exchange_error_includes_underlying_cause() {
+        let (provider, issuer, server) = start_mock_provider().await;
+
+        let handler = OAuth2Handler::from_discovery(&test_settings(&issuer, vec![]), REDIRECT_URI)
+            .await
+            .expect("discovery should succeed");
+        provider
+            .malformed_token_response
+            .store(true, Ordering::SeqCst);
+
+        let Err(OAuth2Error::TokenExchangeError(message)) = handler
+            .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+            .await
+        else {
+            panic!("exchange with a malformed token response should fail");
+        };
+
+        assert!(
+            message.starts_with("Failed to parse server response: "),
+            "unexpected message: {message}"
         );
 
         server.abort();
