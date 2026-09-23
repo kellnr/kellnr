@@ -4323,6 +4323,7 @@ dependencies = [
  "kellnr-migration",
  "kellnr-settings",
  "mockall",
+ "percent-encoding",
  "rm_rf",
  "sea-orm",
  "serde",
@@ -4332,6 +4333,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "url",
  "utoipa",
 ]
 

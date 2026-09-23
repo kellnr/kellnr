@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use kellnr_settings::Settings;
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 
 use crate::password::generate_salt;
 
@@ -117,12 +118,24 @@ impl From<&Settings> for PgConString {
     }
 }
 
+/// Characters that must be percent-encoded in the user, password and database
+/// parts of the connection URL. Everything except the RFC 3986 unreserved characters.
+const URL_COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~');
+
 impl Display for PgConString {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
         write!(
             f,
             "postgres://{}:{}@{}:{}/{}",
-            self.user, self.pwd, self.addr, self.port, self.db
+            utf8_percent_encode(&self.user, URL_COMPONENT),
+            utf8_percent_encode(&self.pwd, URL_COMPONENT),
+            self.addr,
+            self.port,
+            utf8_percent_encode(&self.db, URL_COMPONENT)
         )
     }
 }
@@ -173,5 +186,69 @@ impl Display for SqliteConString {
         } else {
             write!(f, "sqlite://{}?mode=rwc", self.path.display())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use percent_encoding::percent_decode_str;
+    use sea_orm::sqlx::postgres::PgConnectOptions;
+    use url::Url;
+
+    use super::*;
+
+    fn pg_con_string(user: &str, pwd: &str, db: &str) -> PgConString {
+        PgConString::new(
+            "localhost",
+            5432,
+            db,
+            user,
+            pwd,
+            AdminUser::new("admin".to_string(), None, "salt".to_string()),
+            Duration::from_mins(1),
+        )
+    }
+
+    #[test]
+    fn pg_con_string_plain_credentials_are_unchanged() {
+        let con = pg_con_string("kellnr", "secret", "kellnr-db");
+
+        assert_eq!(
+            con.to_string(),
+            "postgres://kellnr:secret@localhost:5432/kellnr-db"
+        );
+    }
+
+    #[test]
+    fn pg_con_string_encodes_special_characters() {
+        let con = pg_con_string("us@er", "a/b@c:d%e#f?g", "my db");
+
+        assert_eq!(
+            con.to_string(),
+            "postgres://us%40er:a%2Fb%40c%3Ad%25e%23f%3Fg@localhost:5432/my%20db"
+        );
+    }
+
+    #[test]
+    fn pg_con_string_round_trips_through_sqlx() {
+        let user = "us@er:name";
+        let pwd = "cDlJH15F/Xj@:%2F#?&=+ äö";
+        let db = "kellnr/db";
+        let con = pg_con_string(user, pwd, db);
+
+        let opts = PgConnectOptions::from_str(&con.to_string()).unwrap();
+        // sqlx has no getter for the password, so decode it the same way sqlx does.
+        let url = Url::parse(&con.to_string()).unwrap();
+        let decoded_pwd = percent_decode_str(url.password().unwrap())
+            .decode_utf8()
+            .unwrap();
+
+        assert_eq!(opts.get_username(), user);
+        assert_eq!(decoded_pwd, pwd);
+        assert_eq!(opts.get_host(), "localhost");
+        assert_eq!(opts.get_port(), 5432);
+        assert_eq!(opts.get_database(), Some(db));
     }
 }
