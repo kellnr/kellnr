@@ -541,7 +541,7 @@ mod tests {
 
     use axum::Router;
     use axum::body::Body;
-    use axum::routing::post;
+    use axum::routing::{post, put};
     use axum_extra::extract::cookie::Key;
     use hyper::{Request, header};
     use kellnr_appstate::AppStateData;
@@ -606,12 +606,13 @@ mod tests {
         state
     }
 
-    fn admin_session_db() -> MockDb {
+    /// A `MockDb` whose sessions resolve to a user with the given role.
+    fn session_db(is_admin: bool) -> MockDb {
         let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().returning(|_| {
+        mock_db.expect_validate_session().returning(move |_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
-                is_admin: true,
+                name: if is_admin { "admin" } else { "user" }.to_string(),
+                is_admin,
                 is_read_only: false,
             })
         });
@@ -655,18 +656,18 @@ mod tests {
     #[tokio::test]
     async fn test_change_pwd_forbidden_when_sso_enforced() {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        let mut mock_db = admin_session_db();
+        let mut mock_db = session_db(false);
         mock_db.expect_authenticate_user().never();
         mock_db.expect_change_pwd().never();
 
         let state = sso_enforced_state(mock_db, cache);
         let app = Router::new()
-            .route("/me/password", post(change_pwd))
+            .route("/me/password", put(change_pwd))
             .with_state(state);
 
         let response = app
             .oneshot(
-                Request::post("/me/password")
+                Request::put("/me/password")
                     .header(header::COOKIE, session_cookie_header())
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(
@@ -685,17 +686,17 @@ mod tests {
     #[tokio::test]
     async fn test_reset_pwd_forbidden_when_sso_enforced() {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        let mut mock_db = admin_session_db();
+        let mut mock_db = session_db(true);
         mock_db.expect_change_pwd().never();
 
         let state = sso_enforced_state(mock_db, cache);
         let app = Router::new()
-            .route("/{name}/password", post(reset_pwd))
+            .route("/{name}/password", put(reset_pwd))
             .with_state(state);
 
         let response = app
             .oneshot(
-                Request::post("/someuser/password")
+                Request::put("/someuser/password")
                     .header(header::COOKIE, session_cookie_header())
                     .body(Body::empty())
                     .unwrap(),
@@ -711,7 +712,7 @@ mod tests {
     #[tokio::test]
     async fn test_add_user_forbidden_when_sso_enforced() {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        let mut mock_db = admin_session_db();
+        let mut mock_db = session_db(true);
         mock_db.expect_add_user().never();
 
         let state = sso_enforced_state(mock_db, cache);

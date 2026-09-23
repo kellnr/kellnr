@@ -92,9 +92,9 @@ test.describe("User Management UI Tests", () => {
     await expect(adminBadge).toBeVisible();
   });
 
-  /// Regression guard: the OAuth2 config lookup on this page used to force the
-  /// Tokens tab unconditionally, which broke the default tab and every deep
-  /// link even on instances with OAuth2 switched off.
+  // Regression guard: the OAuth2 config lookup on this page used to force the
+  // Tokens tab unconditionally, which broke the default tab and every deep
+  // link even on instances with OAuth2 switched off.
   test("settings opens the password tab by default when SSO is not enforced", async ({ page }) => {
     await page.goto(`${baseUrl}/login`);
     const loginPage = new LoginPage(page);

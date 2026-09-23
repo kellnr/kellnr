@@ -3183,3 +3183,28 @@ async fn cratesio_index_heals_missing_rust_version(test_db: &kellnr_db::Database
 
     assert_eq!(Some("1.85".to_string()), served.rust_version);
 }
+
+#[db_test]
+async fn has_oauth2_admin_requires_an_admin_with_a_linked_identity(test_db: &kellnr_db::Database) {
+    // A local-only admin does not count. It cannot log in once SSO is enforced,
+    // which is exactly the lockout this check exists to detect.
+    test_db
+        .add_user("local_admin", "pwd", "salt", true, false)
+        .await
+        .unwrap();
+    assert!(!test_db.has_oauth2_admin().await.unwrap());
+
+    // An SSO user without admin rights does not count either.
+    test_db
+        .create_oauth2_user("sso_user", "https://idp", "sub-1", None, false, false)
+        .await
+        .unwrap();
+    assert!(!test_db.has_oauth2_admin().await.unwrap());
+
+    // An admin with a linked identity is what makes the deployment usable.
+    test_db
+        .create_oauth2_user("sso_admin", "https://idp", "sub-2", None, true, false)
+        .await
+        .unwrap();
+    assert!(test_db.has_oauth2_admin().await.unwrap());
+}

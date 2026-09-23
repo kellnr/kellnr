@@ -219,18 +219,21 @@ async fn run_server(resolved: ResolvedSettings) {
         None
     });
 
-    // A fresh instance with enforcement on and no admin group mapping has no
-    // path to an administrator: the local admin cannot log in and provisioned
-    // users are never promoted. Existing instances may already have SSO admins
-    // in the database, so this is a warning and not a hard failure.
+    // With enforcement on, the local admin can no longer log in, so an
+    // administrator has to come from the IdP. That needs either an admin group
+    // mapping, which promotes SSO users, or an admin who already linked an
+    // OAuth2 identity. Warn when neither holds, rather than fail: the registry
+    // itself still works, only admin access is unreachable.
     if settings.oauth2.enforced
         && (settings.oauth2.admin_group_claim.is_none()
             || settings.oauth2.admin_group_value.is_none())
+        && !db.has_oauth2_admin().await.unwrap_or(false)
     {
         warn!(
             "OAuth2 enforcement is enabled without oauth2.admin_group_claim and \
-             oauth2.admin_group_value. Users provisioned via SSO will never gain admin \
-             rights, and the local admin account can no longer log in."
+             oauth2.admin_group_value, and no admin has an OAuth2 identity linked. \
+             Users provisioned via SSO will never gain admin rights, and the local \
+             admin account can no longer log in."
         );
     }
 

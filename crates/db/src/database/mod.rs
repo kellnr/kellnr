@@ -2067,6 +2067,16 @@ impl DbProvider for Database {
         }
     }
 
+    async fn has_oauth2_admin(&self) -> DbResult<bool> {
+        let found = user::Entity::find()
+            .filter(user::Column::IsAdmin.eq(true))
+            .inner_join(oauth2_identity::Entity)
+            .one(&self.db_con)
+            .await?;
+
+        Ok(found.is_some())
+    }
+
     async fn create_oauth2_user(
         &self,
         username: &str,

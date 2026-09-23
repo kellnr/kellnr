@@ -261,15 +261,10 @@ mod tests {
 
     /// Settings with SSO-only login enforced.
     fn sso_enforced_settings() -> Arc<Settings> {
-        let base = test_settings();
-        Arc::new(Settings {
-            oauth2: kellnr_settings::OAuth2 {
-                enabled: true,
-                enforced: true,
-                ..kellnr_settings::OAuth2::default()
-            },
-            ..(*base).clone()
-        })
+        let mut settings = Settings::clone(&test_settings());
+        settings.oauth2.enabled = true;
+        settings.oauth2.enforced = true;
+        Arc::new(settings)
     }
 
     fn basic_auth_header(user: &str, pwd: &str) -> HeaderMap {
