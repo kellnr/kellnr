@@ -20,6 +20,7 @@ kellnr-settings.workspace = true
 # External dependencies from crates.io
 chrono.workspace = true
 mockall.workspace = true
+percent-encoding.workspace = true
 utoipa.workspace = true
 sea-orm.workspace = true
 serde.workspace = true
@@ -32,6 +33,7 @@ tracing.workspace = true
 rm_rf.workspace = true
 testcontainers.workspace = true
 tokio.workspace = true
+url.workspace = true
 
 [lints]
 workspace = true
