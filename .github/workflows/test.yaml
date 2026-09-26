@@ -70,7 +70,7 @@ jobs:
     steps:
       - &free-disk-space
         name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@v2.0.0
         with:
           tool-cache: false
           android: true
