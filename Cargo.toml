@@ -88,7 +88,7 @@ tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.23", features = ["json", "fmt"] }
 url = { version = "2.5.8", features = ["serde"] }
 utoipa = { version = "5", features = ["axum_extras", "chrono"] }
-utoipa-axum = "0.2"
+utoipa-axum = "0.3"
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.23.2", features = ["v4"] }
 xz2 = { version = "0.1", features = ["static"] } # "static" feature is needed for macos builds on Github. If not set, xz from Homebrew is dynamically linked and will cause a runtime error when running the binary on a machine without xz installed.
