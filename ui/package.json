@@ -16,7 +16,7 @@
     "axios": "^1.20.0",
     "axios-cache-interceptor": "^1.12.3",
     "dayjs": "^1.11.23",
-    "dompurify": "^3.4.15",
+    "dompurify": "^3.4.16",
     "marked": "^18.0.14",
     "marked-gfm-heading-id": "^4.1.4",
     "marked-highlight": "^2.2.4",
