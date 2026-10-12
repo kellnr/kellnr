@@ -160,11 +160,11 @@ impl Display for PgConString {
                 write!(
                     f,
                     "postgres://{}:{}@{}:{}/{}",
-                    utf8_percent_encode(&user, URL_COMPONENT),
-                    utf8_percent_encode(&pwd, URL_COMPONENT),
+                    utf8_percent_encode(user, URL_COMPONENT),
+                    utf8_percent_encode(pwd, URL_COMPONENT),
                     addr,
                     port,
-                    utf8_percent_encode(&db, URL_COMPONENT)
+                    utf8_percent_encode(db, URL_COMPONENT)
                 )
             }
         }
