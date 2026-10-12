@@ -281,12 +281,15 @@ test.describe("OAuth2 UI Tests - Enabled", () => {
     expect(isLoggedInBefore).toBe(true);
     await expect(header.logoutButton).toBeVisible();
 
+    // Wait for a redirect to the end session endpoint of the mock OIDC server,
+    // which should itself redirect back to Kellnr. Register the listener before
+    // clicking, otherwise a fast redirect can complete before we start waiting.
+    const endSessionPromise = page.waitForResponse(/.*\/endsession.*/, { timeout: 10000 });
+
     // Log out
     await header.logoutButton.click();
 
-    // Wait for a redirect to the end session endpoint of the mock OIDC server,
-    // which should itself redirect back to Kellnr
-    const endSessionResponse = await page.waitForResponse(/.*\/endsession.*/, { timeout: 10000 });
+    const endSessionResponse = await endSessionPromise;
     expect(endSessionResponse.status()).toBe(302);
     expect(await endSessionResponse.headerValue("location")).toBe(`${baseUrl}/`);
     await page.waitForURL(`${baseUrl}/**`, { timeout: 15000 });
