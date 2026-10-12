@@ -68,12 +68,22 @@ impl AdminUser {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PgConStringInner {
+    /// A connection string constructed from individual fields.
+    Structured {
+        addr: String,
+        port: u16,
+        db: String,
+        user: String,
+        pwd: String,
+    },
+    /// A raw URL that gets passed directly to sqlx.
+    Raw(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PgConString {
-    addr: String,
-    port: u16,
-    db: String,
-    user: String,
-    pwd: String,
+    inner: PgConStringInner,
     admin: AdminUser,
     pub session_age: Duration,
 }
@@ -89,11 +99,13 @@ impl PgConString {
         session_age: Duration,
     ) -> Self {
         Self {
-            addr: addr.to_owned(),
-            port,
-            db: db.to_owned(),
-            user: user.to_owned(),
-            pwd: pwd.to_owned(),
+            inner: PgConStringInner::Structured {
+                addr: addr.to_owned(),
+                port,
+                db: db.to_owned(),
+                user: user.to_owned(),
+                pwd: pwd.to_owned(),
+            },
             admin,
             session_age,
         }
@@ -102,12 +114,20 @@ impl PgConString {
 
 impl From<&Settings> for PgConString {
     fn from(s: &Settings) -> Self {
+        let inner = if let Some(string) = s.postgresql.connection_string.clone() {
+            PgConStringInner::Raw(string)
+        } else {
+            PgConStringInner::Structured {
+                addr: s.postgresql.address.clone(),
+                port: s.postgresql.port,
+                db: s.postgresql.db.clone(),
+                user: s.postgresql.user.clone(),
+                pwd: s.postgresql.pwd.clone(),
+            }
+        };
+
         Self {
-            addr: s.postgresql.address.clone(),
-            port: s.postgresql.port,
-            db: s.postgresql.db.clone(),
-            user: s.postgresql.user.clone(),
-            pwd: s.postgresql.pwd.clone(),
+            inner,
             admin: AdminUser {
                 pwd: s.setup.admin_pwd.clone(),
                 token: s.setup.admin_token.clone(),
@@ -128,15 +148,26 @@ const URL_COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
 
 impl Display for PgConString {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(
-            f,
-            "postgres://{}:{}@{}:{}/{}",
-            utf8_percent_encode(&self.user, URL_COMPONENT),
-            utf8_percent_encode(&self.pwd, URL_COMPONENT),
-            self.addr,
-            self.port,
-            utf8_percent_encode(&self.db, URL_COMPONENT)
-        )
+        match &self.inner {
+            PgConStringInner::Raw(s) => write!(f, "{s}"),
+            PgConStringInner::Structured {
+                user,
+                pwd,
+                addr,
+                port,
+                db,
+            } => {
+                write!(
+                    f,
+                    "postgres://{}:{}@{}:{}/{}",
+                    utf8_percent_encode(&user, URL_COMPONENT),
+                    utf8_percent_encode(&pwd, URL_COMPONENT),
+                    addr,
+                    port,
+                    utf8_percent_encode(&db, URL_COMPONENT)
+                )
+            }
+        }
     }
 }
 

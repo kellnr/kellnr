@@ -32,6 +32,11 @@ pub struct Postgresql {
     #[serde(skip_serializing, default)]
     #[configurable(secret)]
     pub pwd: String,
+
+    /// Raw connection string ("postgres://..."); if present, used instead of the other fields.
+    #[serde(skip_serializing, default)]
+    #[configurable(secret)]
+    pub connection_string: Option<String>,
 }
 
 impl Default for Postgresql {
@@ -43,6 +48,7 @@ impl Default for Postgresql {
             db: default_pg_db(),
             user: String::new(),
             pwd: String::new(),
+            connection_string: None,
         }
     }
 }
