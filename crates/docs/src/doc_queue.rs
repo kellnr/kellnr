@@ -97,7 +97,17 @@ async fn extract_docs(
         .path
         .join(format!("{}-{}", doc.normalized_name, doc.version));
     strip_rust_toolchain_files(generated_docs_path).await?;
-    generate_docs(generated_docs_path, cratesio_index)?;
+
+    // `generate_docs` compiles the crate synchronously and can take minutes, so
+    // offload it to the blocking thread pool to avoid starving the Tokio worker
+    // (mirrors `docs.extract(..)` in `api::publish_docs`).
+    let path_for_blocking = generated_docs_path.clone();
+    let cratesio_index_owned = cratesio_index.map(str::to_string);
+    tokio::task::spawn_blocking(move || {
+        generate_docs(&path_for_blocking, cratesio_index_owned.as_deref())
+    })
+    .await
+    .map_err(|e| DocsError::CargoError(format!("doc generation task panicked: {e}")))??;
 
     // Upload the docs directory, pruning any stale pages from a previous build.
     // The `doc` key prefix mirrors the manual-upload path (api.rs), where the
