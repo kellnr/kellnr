@@ -4442,6 +4442,7 @@ dependencies = [
 name = "kellnr-registry"
 version = "6.9.0"
 dependencies = [
+ "async-trait",
  "axum",
  "bytes",
  "chrono",

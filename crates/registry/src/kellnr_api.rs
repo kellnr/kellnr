@@ -753,23 +753,38 @@ pub async fn publish(
         }
     }
 
-    // Set SHA256 from crate file
     let version = Version::try_from(&pub_data.metadata.vers)?;
-    let cksum = cs
-        .put(&orig_name, &version, pub_data.cratedata.clone())
-        .await?;
+    let has_docs_link = pub_data.metadata.documentation.is_some();
 
-    let created = Utc::now();
+    // Store the crate file and add it to the DB in a detached task. If the client
+    // disconnects, the handler future gets dropped. Without the task, that could happen
+    // between the storage write and the DB commit, leaving an orphaned crate file that
+    // blocks every later publish of this version.
+    let created = tokio::spawn({
+        let db = db.clone();
+        let cs = cs.clone();
+        let orig_name = orig_name.clone();
+        let version = version.clone();
+        async move {
+            // Set SHA256 from crate file
+            let cksum = cs.put(&orig_name, &version, pub_data.cratedata).await?;
 
-    // Add crate to DB
-    if let Err(e) = db
-        .add_crate(&pub_data.metadata, &cksum, &created, &token_user)
-        .await
-    {
-        // On DB error rollback storage insert and bail.
-        let _ = cs.delete(&orig_name, &version).await;
-        return Err(e.into());
-    }
+            let created = Utc::now();
+
+            // Add crate to DB
+            if let Err(e) = db
+                .add_crate(&pub_data.metadata, &cksum, &created, &token_user)
+                .await
+            {
+                // On DB error rollback storage insert and bail.
+                let _ = cs.delete(&orig_name, &version).await;
+                return Err(ApiError::from(e));
+            }
+            Ok(created)
+        }
+    })
+    .await
+    .map_err(|e| ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR))??;
 
     kellnr_webhooks::notify_crate(
         if id.is_none() {
@@ -785,7 +800,7 @@ pub async fn publish(
     .await;
 
     // Add crate to queue for doc extraction if there is no documentation value set already
-    if settings.docs.enabled && pub_data.metadata.documentation.is_none() {
+    if settings.docs.enabled && !has_docs_link {
         db.add_doc_queue(
             &normalized_name,
             &version,
@@ -891,7 +906,9 @@ pub async fn unyank(
 mod reg_api_tests {
     use std::iter;
     use std::path::PathBuf;
+    use std::time::Duration;
 
+    use async_trait::async_trait;
     use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
@@ -906,10 +923,13 @@ mod reg_api_tests {
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+    use kellnr_storage::storage::{ObjectWithMeta, Storage};
+    use kellnr_storage::storage_error::StorageError;
     use mockall::predicate::*;
     use rand::distr::Alphanumeric;
     use rand::{RngExt, rng};
     use tokio::fs::read;
+    use tokio::sync::Notify;
     use tower::ServiceExt;
 
     use super::*;
@@ -2625,6 +2645,93 @@ mod reg_api_tests {
         );
     }
 
+    /// Storage that signals `stored` once a crate file is written and then holds
+    /// `put` until `release` is notified, to simulate a slow publish.
+    struct GatedStorage {
+        inner: FSStorage,
+        stored: Arc<Notify>,
+        release: Arc<Notify>,
+    }
+
+    #[async_trait]
+    impl Storage for GatedStorage {
+        async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
+            self.inner.get(key).await
+        }
+
+        async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
+            self.inner.get_with_meta(key).await
+        }
+
+        async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+            self.inner.put(key, object).await?;
+            self.stored.notify_one();
+            self.release.notified().await;
+            Ok(())
+        }
+
+        async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+            self.inner.put_overwrite(key, object).await
+        }
+
+        async fn delete(&self, key: &str) -> Result<(), StorageError> {
+            self.inner.delete(key).await
+        }
+
+        async fn exists(&self, key: &str) -> Result<bool, StorageError> {
+            self.inner.exists(key).await
+        }
+
+        async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+            self.inner.list(prefix).await
+        }
+    }
+
+    #[tokio::test]
+    async fn publish_completes_after_client_disconnect() {
+        let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
+            .await
+            .expect("Cannot open valid package file.");
+        let settings = get_settings();
+        let stored = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let storage = Box::new(GatedStorage {
+            inner: FSStorage::new(&settings.crates_path()).unwrap(),
+            stored: stored.clone(),
+            release: release.clone(),
+        }) as DynStorage;
+        let kellnr = TestKellnr::with_storage(settings, storage).await;
+
+        let request = tokio::spawn(
+            kellnr.client.clone().oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(valid_pub_package))
+                    .unwrap(),
+            ),
+        );
+
+        // Drop the handler future after the crate file is stored but before the DB
+        // commit, like hyper does when the client disconnects.
+        stored.notified().await;
+        request.abort();
+        assert!(request.await.unwrap_err().is_cancelled());
+        release.notify_one();
+
+        // The publish must still finish, otherwise the stored crate file is orphaned.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while test_utils::get_crate_meta_list(&kellnr.db, 1)
+                .await
+                .map_or(true, |m| m.is_empty())
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Publish was not committed after the client disconnected");
+    }
+
     struct TestKellnr {
         path: PathBuf,
         client: Router,
@@ -2663,6 +2770,17 @@ mod reg_api_tests {
             }
         }
 
+        async fn with_storage(settings: Settings, storage: DynStorage) -> Self {
+            std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
+            let con_string = ConString::Sqlite(SqliteConString::from(&settings));
+            let db = Database::new(&con_string, 10).await.unwrap();
+            TestKellnr {
+                path: PathBuf::from(&settings.registry.data_dir),
+                db,
+                client: Box::pin(app_with_storage(settings, storage)).await,
+            }
+        }
+
         async fn fake(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
@@ -2683,9 +2801,13 @@ mod reg_api_tests {
     }
 
     async fn app(settings: Settings) -> Router {
+        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+        Box::pin(app_with_storage(settings, storage)).await
+    }
+
+    async fn app_with_storage(settings: Settings, storage: DynStorage) -> Router {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
         let db = Database::new(&con_string, 10).await.unwrap();
-        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         let cs = KellnrCrateStorage::new(&settings, storage);
         db.add_auth_token("test", TOKEN, "admin").await.unwrap();
         db.add_user("ro_dummy", "ro", "", false, true)
