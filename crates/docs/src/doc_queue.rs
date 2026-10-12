@@ -186,6 +186,42 @@ fn build_doc_context(cratesio_index: Option<&str>) -> Result<GlobalContext, Docs
     Ok(ctx)
 }
 
+/// Select the features to document the crate with.
+///
+/// Honors the feature keys of the docs.rs metadata table
+/// (`[package.metadata.docs.rs]`): `all-features`, `features` and
+/// `no-default-features`. Unlike docs.rs, `all-features` defaults to `true`,
+/// which keeps the behavior Kellnr always had for crates without the table.
+/// Crates whose features are mutually exclusive set `all-features = false`
+/// to opt out. See issue #1407.
+fn doc_features(workspace: &Workspace) -> Result<CliFeatures, DocsError> {
+    let package = workspace
+        .current()
+        .map_err(|e| DocsError::CargoError(e.to_string()))?;
+    // `[package.metadata.docs.rs]` is a dotted key, so `rs` is nested in `docs`.
+    let docs_rs = package
+        .manifest()
+        .custom_metadata()
+        .and_then(|m| m.get("docs"))
+        .and_then(|m| m.get("rs"));
+
+    let flag = |key: &str| docs_rs.and_then(|m| m.get(key)?.as_bool());
+    let all_features = flag("all-features").unwrap_or(true);
+    let no_default_features = flag("no-default-features").unwrap_or(false);
+    let features: Vec<String> = docs_rs
+        .and_then(|m| m.get("features"))
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|f| f.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    CliFeatures::from_command_line(&features, all_features, !no_default_features)
+        .map_err(|e| DocsError::CargoError(e.to_string()))
+}
+
 fn generate_docs(
     crate_path: impl AsRef<Path>,
     cratesio_index: Option<&str>,
@@ -195,7 +231,7 @@ fn generate_docs(
     let workspace =
         Workspace::new(&manifest_path, &ctx).map_err(|e| DocsError::CargoError(e.to_string()))?;
     let compile_opts = CompileOptions {
-        cli_features: CliFeatures::new_all(true),
+        cli_features: doc_features(&workspace)?,
         ..CompileOptions::new(
             &ctx,
             UserIntent::Doc {
@@ -262,6 +298,85 @@ mod tests {
             "expected replacement source to point at the proxy index, got {}",
             replaced.url()
         );
+    }
+
+    fn features_for(manifest: &str) -> CliFeatures {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), manifest).unwrap();
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src").join("lib.rs"), "").unwrap();
+        let ctx = build_doc_context(None).unwrap();
+        let manifest_path = dir.path().join("Cargo.toml").canonicalize().unwrap();
+        let workspace = Workspace::new(&manifest_path, &ctx).unwrap();
+        doc_features(&workspace).unwrap()
+    }
+
+    const PACKAGE: &str = "[package]\nname = \"x\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\na = []\nb = []\n";
+
+    fn feature_names(features: &CliFeatures) -> Vec<String> {
+        let mut names: Vec<String> = features.features.iter().map(ToString::to_string).collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn doc_features_default_to_all_features_without_metadata() {
+        let features = features_for(PACKAGE);
+
+        assert!(features.all_features);
+        assert!(features.uses_default_features);
+        assert!(features.features.is_empty());
+    }
+
+    #[test]
+    fn doc_features_honor_docs_rs_metadata() {
+        let features = features_for(&format!(
+            "{PACKAGE}\n[package.metadata.docs.rs]\nall-features = false\nno-default-features = true\nfeatures = [\"a\", \"b\"]\n"
+        ));
+
+        assert!(!features.all_features);
+        assert!(!features.uses_default_features);
+        assert_eq!(feature_names(&features), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn doc_features_keep_all_features_when_only_features_are_listed() {
+        let features = features_for(&format!(
+            "{PACKAGE}\n[package.metadata.docs.rs]\nfeatures = [\"a\"]\n"
+        ));
+
+        assert!(features.all_features);
+        assert!(features.uses_default_features);
+        assert_eq!(feature_names(&features), vec!["a"]);
+    }
+
+    #[test]
+    fn doc_features_ignore_unrelated_metadata() {
+        let features = features_for(&format!(
+            "{PACKAGE}\n[package.metadata.other]\nall-features = false\n"
+        ));
+
+        assert!(features.all_features);
+    }
+
+    #[test]
+    fn generate_docs_builds_crate_with_mutually_exclusive_features() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            format!("{PACKAGE}\n[package.metadata.docs.rs]\nall-features = false\n"),
+        )
+        .unwrap();
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        std::fs::write(
+            dir.path().join("src").join("lib.rs"),
+            "#[cfg(all(feature = \"a\", feature = \"b\"))]\ncompile_error!(\"a and b are exclusive\");\n",
+        )
+        .unwrap();
+
+        generate_docs(dir.path(), None).unwrap();
+
+        assert!(dir.path().join("target/doc/x/index.html").exists());
     }
 
     #[tokio::test]
