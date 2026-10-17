@@ -92,7 +92,7 @@ utoipa-axum = "0.3"
 utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
 uuid = { version = "1.23.2", features = ["v4"] }
 xz2 = { version = "0.1", features = ["static"] } # "static" feature is needed for macos builds on Github. If not set, xz from Homebrew is dynamically linked and will cause a runtime error when running the binary on a machine without xz installed.
-zip = "8.6.0"
+zip = "9.0.3"
 clap = { version = "4", features = ["derive"] }
 
 [profile.release]
