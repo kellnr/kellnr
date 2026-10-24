@@ -11,20 +11,26 @@ use tracing::warn;
 use zip::ZipArchive;
 use zip::result::ZipError;
 
-use crate::unpack::write_file;
+use crate::unpack::ExtractLimits;
 
 type Zip = ZipArchive<Cursor<Vec<u8>>>;
 
-pub struct DocArchive(Zip);
+pub struct DocArchive {
+    zip: Zip,
+    limits: ExtractLimits,
+}
 
 impl DocArchive {
     /// Extract all regular files and directories into `path`.
     ///
     /// Symlinks are skipped, so the extracted tree only contains data from the
-    /// archive itself. Entries that would escape `path` reject the archive.
+    /// archive itself. Entries that would escape `path` or exceed the
+    /// extraction limits reject the archive.
     pub fn extract(&mut self, path: &Path) -> ApiResult<()> {
-        for index in 0..self.0.len() {
-            let mut file = self.0.by_index(index)?;
+        let mut budget = self.limits.budget();
+        for index in 0..self.zip.len() {
+            budget.take_entry()?;
+            let mut file = self.zip.by_index(index)?;
             let relative = file
                 .enclosed_name()
                 .ok_or(ZipError::InvalidArchive("Invalid file path".into()))?;
@@ -34,7 +40,7 @@ impl DocArchive {
             } else if file.is_dir() {
                 std::fs::create_dir_all(&target)?;
             } else {
-                write_file(&mut file, &target)?;
+                budget.write_file(&mut file, &target)?;
             }
         }
         Ok(())
@@ -61,7 +67,10 @@ impl FromRequest<AppStateData, Body> for DocArchive {
         let reader = Cursor::new(data_bytes);
 
         match ZipArchive::new(reader) {
-            Ok(zip) => Ok(DocArchive(zip)),
+            Ok(zip) => Ok(DocArchive {
+                zip,
+                limits: ExtractLimits::from_max_docs_size(state.settings.docs.max_size),
+            }),
             Err(e) => Err(ApiError::from(e)),
         }
     }
@@ -76,11 +85,53 @@ mod tests {
 
     use super::*;
 
-    fn archive(build: impl FnOnce(&mut ZipWriter<Cursor<Vec<u8>>>)) -> DocArchive {
+    fn archive_with_limits(
+        limits: ExtractLimits,
+        build: impl FnOnce(&mut ZipWriter<Cursor<Vec<u8>>>),
+    ) -> DocArchive {
         let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
         build(&mut zip);
         let bytes = zip.finish().unwrap().into_inner();
-        DocArchive(ZipArchive::new(Cursor::new(bytes)).unwrap())
+        DocArchive {
+            zip: ZipArchive::new(Cursor::new(bytes)).unwrap(),
+            limits,
+        }
+    }
+
+    fn archive(build: impl FnOnce(&mut ZipWriter<Cursor<Vec<u8>>>)) -> DocArchive {
+        archive_with_limits(ExtractLimits::from_max_docs_size(1), build)
+    }
+
+    fn zip_of_zeros(files: usize, size: usize) -> impl FnOnce(&mut ZipWriter<Cursor<Vec<u8>>>) {
+        move |zip| {
+            for i in 0..files {
+                zip.start_file(format!("doc/{i}.html"), SimpleFileOptions::default())
+                    .unwrap();
+                zip.write_all(&vec![0; size]).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn extract_rejects_archive_exceeding_uncompressed_size() {
+        // Zeros compress well, so the archive itself stays tiny.
+        let mut docs = archive_with_limits(ExtractLimits::new(10_000, 10), zip_of_zeros(2, 6_000));
+        let dest = tempfile::tempdir().unwrap();
+
+        let err = docs.extract(dest.path()).err().unwrap();
+
+        assert_eq!(
+            axum::response::IntoResponse::into_response(err).status(),
+            axum::http::StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn extract_rejects_archive_with_too_many_entries() {
+        let mut docs = archive_with_limits(ExtractLimits::new(10_000, 10), zip_of_zeros(11, 0));
+        let dest = tempfile::tempdir().unwrap();
+
+        assert!(docs.extract(dest.path()).is_err());
     }
 
     #[test]

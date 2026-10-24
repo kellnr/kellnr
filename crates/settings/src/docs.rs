@@ -11,6 +11,10 @@ pub struct Docs {
     /// Max docs size in MB
     pub max_size: usize,
 
+    /// Max duration of a single rustdoc build in seconds (0 = unlimited).
+    /// Builds that take longer are killed and the crate is skipped.
+    pub build_timeout_seconds: u64,
+
     /// Command prefix (comma-separated) for the rustdoc build process.
     ///
     /// Building docs compiles the published crate, which runs its build
@@ -37,6 +41,7 @@ impl Default for Docs {
         Self {
             enabled: false,
             max_size: 100,
+            build_timeout_seconds: 1800,
             build_wrapper: Vec::new(),
         }
     }
