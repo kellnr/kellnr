@@ -5,7 +5,7 @@ use kellnr_common::webhook::WebhookQueue;
 use kellnr_db::DbProvider;
 use kellnr_settings::Webhooks;
 
-use crate::client::WebhookClient;
+use crate::client::{WebhookClient, truncated_body};
 use crate::types::WebhookError;
 
 pub fn run_webhook_service(db: Arc<dyn DbProvider>, settings: &Webhooks) {
@@ -42,7 +42,7 @@ async fn handle_queue(db: &Arc<dyn DbProvider>, client: &WebhookClient) -> Resul
                     "Webhook callback failed for: {}. Response status: {}. Msg: {:?}",
                     entry.callback_url,
                     resp.status(),
-                    resp.text().await
+                    truncated_body(resp).await
                 );
                 if let Err(err) = handle_failed_entry(db, &entry).await {
                     tracing::error!("Error while handling webhook failure: {err}");

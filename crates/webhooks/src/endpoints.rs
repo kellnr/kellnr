@@ -5,9 +5,9 @@ use kellnr_appstate::{DbState, SettingsState};
 use kellnr_auth::token;
 use kellnr_common::webhook::Webhook;
 use kellnr_error::api_error::{ApiError, ApiResult};
-use tracing::trace;
+use tracing::{trace, warn};
 
-use crate::client::WebhookClient;
+use crate::client::{DeliveryError, WebhookClient, truncated_body};
 use crate::target::{is_blocked_url, validate_callback_url};
 use crate::types;
 
@@ -152,8 +152,10 @@ pub async fn delete_webhook(
     ),
     responses(
         (status = 200, description = "Test payload sent successfully"),
+        (status = 400, description = "Invalid callback URL or target address not permitted"),
         (status = 401, description = "Admin access required"),
-        (status = 500, description = "Webhook callback failed")
+        (status = 500, description = "Webhook callback request failed"),
+        (status = 502, description = "Webhook callback returned an unexpected status. A 4xx or 5xx status of the callback is passed on as is.")
     ),
     security(("cargo_token" = []))
 )]
@@ -174,11 +176,45 @@ pub async fn test_webhook(
     let resp = client
         .post(&w.callback_url, "Test Payload")
         .await
-        .map_err(|e| ApiError::new(&e.to_string(), "", StatusCode::INTERNAL_SERVER_ERROR))?;
+        .map_err(|e| delivery_error_to_api_error(&id, &e))?;
 
-    match resp.status() {
-        a if a.as_u16() < 300 => Ok(()),
-        a => Err(ApiError::new(&resp.text().await.unwrap_or_default(), "", a)),
+    let status = resp.status();
+    if status.as_u16() < 300 {
+        return Ok(());
+    }
+
+    warn!(
+        webhook_id = %id,
+        "Webhook test callback returned status {status}. Body: {:?}",
+        truncated_body(resp).await
+    );
+    // Only the status code is passed on, the response body of the callback
+    // host is never returned to the caller.
+    let api_status = if status.is_client_error() || status.is_server_error() {
+        status
+    } else {
+        StatusCode::BAD_GATEWAY
+    };
+    Err(ApiError::new(
+        &format!("Webhook callback returned status {}", status.as_u16()),
+        "",
+        api_status,
+    ))
+}
+
+fn delivery_error_to_api_error(webhook_id: &str, err: &DeliveryError) -> ApiError {
+    match err {
+        DeliveryError::InvalidUrl(_) | DeliveryError::BlockedTarget => {
+            ApiError::new(&err.to_string(), "", StatusCode::BAD_REQUEST)
+        }
+        DeliveryError::Request(e) => {
+            warn!(webhook_id, "Webhook test callback failed: {e}");
+            ApiError::new(
+                "Webhook callback request failed",
+                "",
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        }
     }
 }
 
@@ -199,7 +235,7 @@ mod endpoint_tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::tests::get_test_listener;
+    use crate::tests::{get_test_listener, get_test_listener_with_response};
     use crate::types::{GetAllWebhooksResponse, GetWebhookResponse, RegisterWebhookResponse};
 
     const ADMIN_TOKEN: &str = "jkjkashd09128u3019283o1i3j";
@@ -448,6 +484,64 @@ mod endpoint_tests {
 
         let listener_resp = listener.rx.recv().await.unwrap();
         assert_eq!(0, listener_resp);
+    }
+
+    #[tokio::test]
+    async fn test_test_webhook_does_not_return_callback_body() {
+        let (router, db) = get_app().await;
+        let body = "internal-callback-details";
+        let _listener = get_test_listener_with_response(
+            9979,
+            format!("HTTP/1.1 503\r\nContent-Length: {}\r\n\r\n{body}", body.len()),
+        )
+        .await;
+
+        let mut webhook = sample_webhook();
+        webhook.callback_url = "http://127.0.0.1:9979".to_string();
+        let id = db.register_webhook(webhook).await.unwrap();
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::get(format!("/api/v1/webhook/{id}/test"))
+                    .header(header::AUTHORIZATION, ADMIN_TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(503, response.status().as_u16());
+        let response_body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let response_body = String::from_utf8_lossy(&response_body);
+        assert!(!response_body.contains(body));
+        assert!(response_body.contains("503"));
+    }
+
+    #[tokio::test]
+    async fn test_test_webhook_does_not_return_request_error() {
+        let (router, db) = get_app().await;
+
+        let mut webhook = sample_webhook();
+        webhook.callback_url = "http://127.0.0.1:9976".to_string();
+        let id = db.register_webhook(webhook).await.unwrap();
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::get(format!("/api/v1/webhook/{id}/test"))
+                    .header(header::AUTHORIZATION, ADMIN_TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(500, response.status().as_u16());
+        let response_body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let response_body = String::from_utf8_lossy(&response_body);
+        assert!(!response_body.contains("127.0.0.1"));
+        assert!(response_body.contains("Webhook callback request failed"));
     }
 
     #[tokio::test]
