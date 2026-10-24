@@ -125,16 +125,16 @@
         </v-col>
 
         <v-col cols="12" sm="6" md="4">
-          <statistics-card :num="statistics.num_proxy_crates" icon="mdi-package-variant" text="Cached Crates"
-            category="cached" :onClick="navigateToCachedCrates"></statistics-card>
+          <hero-stat-card :num="statistics.num_proxy_crates" icon="mdi-package-variant" text="Cached Crates"
+            category="cached" compact test-id-prefix="stat-card" :onClick="navigateToCachedCrates"></hero-stat-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <statistics-card :num="statistics.num_proxy_crate_versions" icon="mdi-tag-outline" text="Cached Versions"
-            category="cached"></statistics-card>
+          <hero-stat-card :num="statistics.num_proxy_crate_versions" icon="mdi-tag-outline" text="Cached Versions"
+            category="cached" compact test-id-prefix="stat-card"></hero-stat-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <statistics-card :num="statistics.num_proxy_crate_downloads" icon="mdi-cloud-download"
-            text="Cached Downloads" category="cached"></statistics-card>
+          <hero-stat-card :num="statistics.num_proxy_crate_downloads" icon="mdi-cloud-download"
+            text="Cached Downloads" category="cached" compact test-id-prefix="stat-card"></hero-stat-card>
         </v-col>
       </v-row>
     </template>
@@ -143,7 +143,6 @@
 
 <script setup lang="ts">
 import { onBeforeMount, ref, computed } from "vue"
-import StatisticsCard from '../components/StatisticsCard.vue'
 import HeroStatCard from '../components/HeroStatCard.vue'
 import RecentCrateCard from '../components/RecentCrateCard.vue'
 import type { Statistics } from '../types/statistics'
@@ -151,8 +150,8 @@ import { crateService } from '../services'
 import { isSuccess } from '../services/api'
 import router from '../router'
 import { useStore } from '../store/store'
-import { formatNumber } from '../common/format'
 import { useTheme } from 'vuetify'
+import { formatNumber } from '../common/format'
 
 const statistics = ref<Statistics>()
 const searchText = ref("")

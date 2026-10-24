@@ -1,24 +1,25 @@
 <template>
   <v-card
     class="hero-stat-card"
-    :class="{ 'clickable': props.onClick }"
+    :class="{ 'clickable': props.onClick, 'compact': props.compact }"
     :style="cardStyle"
     elevation="4"
     rounded="xl"
     :ripple="!!props.onClick"
-    :data-testid="`hero-stat-${textToTestId(text)}`"
+    :data-testid="`${props.testIdPrefix}-${textToTestId(text)}`"
     @click="handleClick">
     <v-card-text class="d-flex flex-column h-100 pa-5" :class="textColorClass">
       <div class="d-flex justify-space-between align-start mb-auto">
         <div class="stat-content">
-          <div class="text-display-large font-weight-bold stat-number" data-testid="stat-value">
+          <div class="font-weight-bold stat-number" :class="props.compact ? 'text-display-small' : 'text-display-large'"
+            data-testid="stat-value">
             {{ formattedNum }}
           </div>
           <div class="text-title-large font-weight-medium mt-1 stat-label" data-testid="stat-label">
             {{ text }}
           </div>
         </div>
-        <v-avatar :color="getIconBgColor" size="72" class="elevation-2 icon-avatar">
+        <v-avatar :color="getIconBgColor" :size="props.compact ? 56 : 72" class="elevation-2 icon-avatar">
           <v-icon :color="getIconColor" :icon="icon" size="x-large"></v-icon>
         </v-avatar>
       </div>
@@ -32,16 +33,22 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useTheme } from 'vuetify';
-
 import { formatNumber } from '../common/format';
-const props = defineProps<{
+
+const props = withDefaults(defineProps<{
   num: number | string;
   icon: string;
   text: string;
   subtitle?: string;
-  category?: 'primary' | 'secondary' | 'accent';
+  category?: 'primary' | 'secondary' | 'accent' | 'cached';
+  /** Smaller variant for secondary statistics */
+  compact?: boolean;
+  testIdPrefix?: string;
   onClick?: () => void;
-}>();
+}>(), {
+  compact: false,
+  testIdPrefix: 'hero-stat',
+});
 
 function handleClick() {
   if (props.onClick) {
@@ -68,6 +75,8 @@ const cardStyle = computed(() => {
         return { background: 'linear-gradient(145deg, #7b1fa2 0%, #6a1b9a 50%, #4a148c 100%)' };
       case 'accent':
         return { background: 'linear-gradient(145deg, #00897b 0%, #00796b 50%, #004d40 100%)' };
+      case 'cached':
+        return { background: 'linear-gradient(145deg, #3949ab 0%, #303f9f 50%, #283593 100%)' };
       default:
         return { background: 'linear-gradient(145deg, #1565c0 0%, #0d47a1 50%, #0a3d91 100%)' };
     }
@@ -81,6 +90,8 @@ const cardStyle = computed(() => {
       return { background: 'linear-gradient(145deg, #9575a8 0%, #7d5f8f 50%, #6b5080 100%)' };
     case 'accent':
       return { background: 'linear-gradient(145deg, #5a9e95 0%, #4a8a81 50%, #3d7a71 100%)' };
+    case 'cached':
+      return { background: 'linear-gradient(145deg, #7a86b8 0%, #6672a3 50%, #59648f 100%)' };
     default:
       return { background: 'linear-gradient(145deg, #5c8ec4 0%, #4a7ab0 50%, #3d6a9c 100%)' };
   }
@@ -106,6 +117,10 @@ function textToTestId(text: string): string {
   position: relative;
   cursor: default;
   min-height: 160px;
+}
+
+.hero-stat-card.compact {
+  min-height: 120px;
 }
 
 .hero-stat-card.clickable {
