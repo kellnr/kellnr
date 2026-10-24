@@ -65,7 +65,7 @@ body[color-theme="dark"] code {
 }
 
 a {
-  /*under line text*/
+  color: rgb(var(--v-theme-primary));
   text-decoration: underline;
 }
 </style>

@@ -88,7 +88,8 @@
             <v-icon size="small" class="me-1">mdi-open-in-new</v-icon>
             Open documentation
           </div>
-          <router-link v-else to="/publishdocs" class="d-flex align-center text-decoration-none">
+          <router-link v-else to="/publishdocs" class="d-flex align-center text-decoration-none text-primary"
+            data-testid="sidebar-add-docs">
             <v-icon size="small" class="me-1">mdi-plus</v-icon>
             Add documentation
           </router-link>
