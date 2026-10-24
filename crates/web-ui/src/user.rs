@@ -7,7 +7,7 @@ use kellnr_appstate::{AppState, DbState, LoginThrottleState, SettingsState, Toke
 use kellnr_auth::password::{PasswordAuthError, authenticate_password};
 use kellnr_auth::token;
 use kellnr_common::util::generate_rand_string;
-use kellnr_db::{self, AuthToken, User};
+use kellnr_db::{self, AuthToken, DbProvider, User};
 use kellnr_settings::Settings;
 use kellnr_settings::constants::{COOKIE_OIDC_ID_TOKEN, COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,21 @@ fn ensure_local_auth_enabled(settings: &Settings) -> Result<(), RouteError> {
     if settings.oauth2.enforced {
         return Err(RouteError::Status(StatusCode::FORBIDDEN));
     }
+    Ok(())
+}
+
+/// Logs `user_name` out everywhere after a password change, except for the
+/// session `keep_session_token` if given. API tokens are left untouched so CI
+/// pipelines keep working.
+async fn revoke_sessions(
+    db: &dyn DbProvider,
+    user_name: &str,
+    keep_session_token: Option<&str>,
+) -> Result<(), RouteError> {
+    match keep_session_token {
+        Some(token) => db.delete_other_user_sessions(user_name, token).await?,
+        None => db.delete_user_sessions(user_name).await?,
+    };
     Ok(())
 }
 
@@ -153,7 +168,8 @@ pub struct ResetPwd {
     security(("session_cookie" = []))
 )]
 pub async fn reset_pwd(
-    _user: AdminUser,
+    admin: AdminUser,
+    jar: PrivateCookieJar,
     Path(name): Path<String>,
     State(db): DbState,
     State(cache): TokenCacheState,
@@ -163,6 +179,10 @@ pub async fn reset_pwd(
 
     let new_pwd = generate_rand_string(12);
     db.change_pwd(&name, &new_pwd).await?;
+
+    // An admin resetting their own password stays logged in.
+    let keep_session = jar.get(COOKIE_SESSION_ID).filter(|_| admin.name() == name);
+    revoke_sessions(db.as_ref(), &name, keep_session.as_ref().map(Cookie::value)).await?;
 
     // Drop cached basic auth credentials carrying the old password.
     cache.invalidate_all();
@@ -466,6 +486,7 @@ impl PwdChange {
 )]
 pub async fn change_pwd(
     user: MaybeUser,
+    jar: PrivateCookieJar,
     State(db): DbState,
     State(cache): TokenCacheState,
     State(throttle): LoginThrottleState,
@@ -483,6 +504,13 @@ pub async fn change_pwd(
         })?;
 
     db.change_pwd(&user.name, &pwd_change.new_pwd1).await?;
+    let current_session = jar.get(COOKIE_SESSION_ID);
+    revoke_sessions(
+        db.as_ref(),
+        &user.name,
+        current_session.as_ref().map(Cookie::value),
+    )
+    .await?;
 
     // Drop cached basic auth credentials carrying the old password.
     cache.invalidate_all();
@@ -821,21 +849,61 @@ mod tests {
         let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
         insert_cached_credentials(&cache).await;
 
-        let mut mock_db = session_db(false);
+        let mut mock_db = change_pwd_db();
         mock_db
-            .expect_authenticate_user()
-            .returning(|_, _| Ok(User::default()));
+            .expect_delete_other_user_sessions()
+            .returning(|_, _| Ok(0));
+
+        let status = put_change_pwd(test_state_with_cache(mock_db, cache.clone())).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert!(cache.get("basic:credentials").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_reset_pwd_invalidates_cache() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        insert_cached_credentials(&cache).await;
+
+        let mut mock_db = reset_pwd_db();
+        mock_db.expect_delete_user_sessions().returning(|_| Ok(0));
+
+        let status = put_reset_pwd(test_state_with_cache(mock_db, cache.clone()), "user").await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert!(cache.get("basic:credentials").await.is_none());
+    }
+
+    /// A session of `user` whose old password just got replaced.
+    fn change_pwd_db() -> MockDb {
+        let mut mock_db = session_db(false);
+        mock_db.expect_authenticate_user().returning(|name, _| {
+            Ok(User {
+                name: name.to_string(),
+                ..User::default()
+            })
+        });
         mock_db
             .expect_change_pwd()
             .times(1)
             .returning(|_, _| Ok(()));
+        mock_db
+    }
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
+    /// An admin session resetting a password.
+    fn reset_pwd_db() -> MockDb {
+        let mut mock_db = session_db(true);
+        mock_db
+            .expect_change_pwd()
+            .times(1)
+            .returning(|_, _| Ok(()));
+        mock_db
+    }
+
+    async fn put_change_pwd(state: AppStateData) -> StatusCode {
+        Router::new()
             .route("/me/password", put(change_pwd))
-            .with_state(state);
-
-        let response = app
+            .with_state(state)
             .oneshot(
                 Request::put("/me/password")
                     .header(header::COOKIE, session_cookie_header())
@@ -846,40 +914,84 @@ mod tests {
                     .unwrap(),
             )
             .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        assert!(cache.get("basic:credentials").await.is_none());
+            .unwrap()
+            .status()
     }
 
-    #[tokio::test]
-    async fn test_reset_pwd_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
-        insert_cached_credentials(&cache).await;
-
-        let mut mock_db = session_db(true);
-        mock_db
-            .expect_change_pwd()
-            .times(1)
-            .returning(|_, _| Ok(()));
-
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
+    async fn put_reset_pwd(state: AppStateData, name: &str) -> StatusCode {
+        Router::new()
             .route("/{name}/password", put(reset_pwd))
-            .with_state(state);
-
-        let response = app
+            .with_state(state)
             .oneshot(
-                Request::put("/user/password")
+                Request::put(format!("/{name}/password"))
                     .header(header::COOKIE, session_cookie_header())
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
-            .unwrap();
+            .unwrap()
+            .status()
+    }
 
-        assert_eq!(response.status(), StatusCode::OK);
-        assert!(cache.get("basic:credentials").await.is_none());
+    /// Changing the password logs out every other session, for example one
+    /// an attacker obtained with the old password, but keeps the current one.
+    #[tokio::test]
+    async fn test_change_pwd_revokes_other_sessions() {
+        let mut mock_db = change_pwd_db();
+        mock_db
+            .expect_delete_other_user_sessions()
+            .with(eq("user"), eq("session"))
+            .times(1)
+            .returning(|_, _| Ok(2));
+        mock_db.expect_delete_user_sessions().never();
+
+        let status = put_change_pwd(test_state_with_cache(
+            mock_db,
+            Arc::new(TokenCacheManager::new(false, 60, 100)),
+        ))
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    /// An admin reset is typically a response to a compromised account, so
+    /// all sessions of that user end.
+    #[tokio::test]
+    async fn test_reset_pwd_revokes_all_sessions_of_user() {
+        let mut mock_db = reset_pwd_db();
+        mock_db
+            .expect_delete_user_sessions()
+            .with(eq("user"))
+            .times(1)
+            .returning(|_| Ok(1));
+        mock_db.expect_delete_other_user_sessions().never();
+
+        let status = put_reset_pwd(
+            test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100))),
+            "user",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_reset_own_pwd_keeps_current_session() {
+        let mut mock_db = reset_pwd_db();
+        mock_db
+            .expect_delete_other_user_sessions()
+            .with(eq("admin"), eq("session"))
+            .times(1)
+            .returning(|_, _| Ok(0));
+        mock_db.expect_delete_user_sessions().never();
+
+        let status = put_reset_pwd(
+            test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100))),
+            "admin",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
     }
 
     #[tokio::test]

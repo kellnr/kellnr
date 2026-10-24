@@ -167,6 +167,15 @@ pub trait DbProvider: Send + Sync {
     /// Returns the number of rows removed.
     async fn delete_expired_sessions(&self) -> DbResult<u64>;
     async fn add_session_token(&self, name: &str, session_token: &str) -> DbResult<()>;
+    /// Delete all sessions of a user. Returns the number of rows removed.
+    async fn delete_user_sessions(&self, user_name: &str) -> DbResult<u64>;
+    /// Delete all sessions of a user except `keep_session_token`. Returns the
+    /// number of rows removed.
+    async fn delete_other_user_sessions(
+        &self,
+        user_name: &str,
+        keep_session_token: &str,
+    ) -> DbResult<u64>;
     async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
     async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()>;
     async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool>;
@@ -516,6 +525,14 @@ pub mod mock {
             }
 
             async fn add_session_token(&self, _name: &str, _session_token: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn delete_user_sessions(&self, _user_name: &str) -> DbResult<u64> {
+                unimplemented!()
+            }
+
+            async fn delete_other_user_sessions(&self, _user_name: &str, _keep_session_token: &str) -> DbResult<u64> {
                 unimplemented!()
             }
 

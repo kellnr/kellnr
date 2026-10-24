@@ -998,6 +998,36 @@ async fn session_token_is_stored_hashed(test_db: &kellnr_db::Database) {
 }
 
 #[db_test]
+async fn delete_user_sessions_removes_all_sessions_of_user(test_db: &kellnr_db::Database) {
+    test_db.add_user("user", "pwd", false, false).await.unwrap();
+    test_db.add_session_token("admin", "admin_1").await.unwrap();
+    test_db.add_session_token("admin", "admin_2").await.unwrap();
+    test_db.add_session_token("user", "user_1").await.unwrap();
+
+    let removed = test_db.delete_user_sessions("admin").await.unwrap();
+
+    assert_eq!(removed, 2);
+    assert!(test_db.validate_session("admin_1").await.is_err());
+    assert!(test_db.validate_session("admin_2").await.is_err());
+    assert!(test_db.validate_session("user_1").await.is_ok());
+}
+
+#[db_test]
+async fn delete_user_sessions_keeps_given_session(test_db: &kellnr_db::Database) {
+    test_db.add_session_token("admin", "current").await.unwrap();
+    test_db.add_session_token("admin", "other").await.unwrap();
+
+    let removed = test_db
+        .delete_other_user_sessions("admin", "current")
+        .await
+        .unwrap();
+
+    assert_eq!(removed, 1);
+    assert!(test_db.validate_session("current").await.is_ok());
+    assert!(test_db.validate_session("other").await.is_err());
+}
+
+#[db_test]
 async fn delete_session_token_works(test_db: &kellnr_db::Database) {
     test_db
         .add_session_token("admin", "session_token")
