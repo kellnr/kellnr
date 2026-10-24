@@ -12,7 +12,7 @@ use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
 use kellnr_error::api_error::ApiResult;
-use kellnr_registry::kellnr_api::{check_ownership, has_restricted_crate_access};
+use kellnr_registry::kellnr_api::{check_can_modify, check_ownership, has_restricted_crate_access};
 use tracing::error;
 
 use crate::doc_archive::DocArchive;
@@ -151,6 +151,7 @@ pub async fn publish_docs(
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed to push the docs.
     let user = MaybeUser::from_token(token);
+    check_can_modify(&user)?;
     check_ownership(&normalized_name, &user, &db).await?;
 
     let tmp_dir = tempfile::tempdir().map_err(DocsError::IoError)?;
@@ -337,6 +338,50 @@ mod tests {
         let key = DocsStorage::file_key("test-crate", "1.0.0", "doc/test_crate/index.html");
         let stored = docs_storage.get(&key).await.unwrap();
         assert_eq!(stored, bytes::Bytes::from_static(b"<html>docs</html>"));
+    }
+
+    #[tokio::test]
+    async fn publish_docs_rejects_read_only_owner() {
+        let normalized = NormalizedName::from_unchecked("test-crate".to_string());
+        let mut db = MockDb::new();
+        db.expect_get_crate_id()
+            .with(eq(normalized.clone()))
+            .returning(|_| Ok(Some(1)));
+        db.expect_crate_version_exists()
+            .with(eq(1), eq("1.0.0"))
+            .returning(|_, _| Ok(true));
+        db.expect_get_user_from_token().returning(|_| {
+            Ok(User {
+                name: "reader".to_string(),
+                is_read_only: true,
+                ..User::default()
+            })
+        });
+        db.expect_is_owner().returning(|_, _| Ok(true));
+        db.expect_update_docs_link().never();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let docs_storage = Arc::new(DocsStorage::new(Box::new(
+            FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
+        ) as DynStorage));
+
+        let kellnr = publish_app(Arc::new(db), docs_storage.clone());
+        let zip_bytes = build_zip(&[("doc/test_crate/index.html", b"<html>docs</html>")]);
+
+        let r = kellnr
+            .oneshot(
+                Request::put("/test-crate/1.0.0")
+                    .header(header::AUTHORIZATION, "sometoken")
+                    .body(Body::from(zip_bytes))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Read-only users are rejected with 400, like on all other modifying endpoints.
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        let key = DocsStorage::file_key("test-crate", "1.0.0", "doc/test_crate/index.html");
+        assert!(!docs_storage.exists(&key).await.unwrap());
     }
 
     #[tokio::test]
