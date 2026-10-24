@@ -201,7 +201,6 @@ pub trait DbProvider: Send + Sync {
         &self,
         name: &str,
         pwd: &str,
-        salt: &str,
         is_admin: bool,
         is_read_only: bool,
     ) -> DbResult<()>;
@@ -628,7 +627,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_user(&self, _name: &str, _pwd: &str, _salt: &str, _is_admin: bool, _is_read_only: bool) -> DbResult<()> {
+            async fn add_user(&self, _name: &str, _pwd: &str, _is_admin: bool, _is_read_only: bool) -> DbResult<()> {
                 unimplemented!()
             }
 

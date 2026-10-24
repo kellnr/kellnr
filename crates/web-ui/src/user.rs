@@ -6,7 +6,6 @@ use axum_extra::extract::cookie::Cookie;
 use kellnr_appstate::{AppState, DbState, SettingsState, TokenCacheState};
 use kellnr_auth::token;
 use kellnr_common::util::generate_rand_string;
-use kellnr_db::password::generate_salt;
 use kellnr_db::{self, AuthToken, User};
 use kellnr_settings::Settings;
 use kellnr_settings::constants::{COOKIE_OIDC_ID_TOKEN, COOKIE_SESSION_ID, COOKIE_SESSION_USER};
@@ -156,12 +155,16 @@ pub async fn reset_pwd(
     _user: AdminUser,
     Path(name): Path<String>,
     State(db): DbState,
+    State(cache): TokenCacheState,
     State(settings): SettingsState,
 ) -> Result<Json<ResetPwd>, RouteError> {
     ensure_local_auth_enabled(&settings)?;
 
     let new_pwd = generate_rand_string(12);
     db.change_pwd(&name, &new_pwd).await?;
+
+    // Drop cached basic auth credentials carrying the old password.
+    cache.invalidate_all();
 
     // Report the user whose password was reset, not the admin performing it.
     Ok(ResetPwd {
@@ -457,6 +460,7 @@ impl PwdChange {
 pub async fn change_pwd(
     user: MaybeUser,
     State(db): DbState,
+    State(cache): TokenCacheState,
     State(settings): SettingsState,
     Json(pwd_change): Json<PwdChange>,
 ) -> Result<(), RouteError> {
@@ -468,6 +472,9 @@ pub async fn change_pwd(
     };
 
     db.change_pwd(&user.name, &pwd_change.new_pwd1).await?;
+
+    // Drop cached basic auth credentials carrying the old password.
+    cache.invalidate_all();
     Ok(())
 }
 
@@ -520,11 +527,9 @@ pub async fn add(
     ensure_local_auth_enabled(&settings)?;
     new_user.validate()?;
 
-    let salt = generate_salt();
     db.add_user(
         &new_user.name,
         &new_user.pwd1,
-        &salt,
         new_user.is_admin,
         new_user.is_read_only,
     )
@@ -731,6 +736,88 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    async fn insert_cached_credentials(cache: &TokenCacheManager) {
+        cache
+            .insert(
+                "basic:credentials".to_string(),
+                CachedTokenData {
+                    user: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                },
+                cache.generation(),
+            )
+            .await;
+    }
+
+    /// Cached basic auth credentials carry the old password and must not
+    /// survive a password change.
+    #[tokio::test]
+    async fn test_change_pwd_invalidates_cache() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        insert_cached_credentials(&cache).await;
+
+        let mut mock_db = session_db(false);
+        mock_db
+            .expect_authenticate_user()
+            .returning(|_, _| Ok(User::default()));
+        mock_db
+            .expect_change_pwd()
+            .times(1)
+            .returning(|_, _| Ok(()));
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/me/password", put(change_pwd))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::put("/me/password")
+                    .header(header::COOKIE, session_cookie_header())
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        r#"{"old_pwd":"old","new_pwd1":"newpassword","new_pwd2":"newpassword"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(cache.get("basic:credentials").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_reset_pwd_invalidates_cache() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        insert_cached_credentials(&cache).await;
+
+        let mut mock_db = session_db(true);
+        mock_db
+            .expect_change_pwd()
+            .times(1)
+            .returning(|_, _| Ok(()));
+
+        let state = test_state_with_cache(mock_db, cache.clone());
+        let app = Router::new()
+            .route("/{name}/password", put(reset_pwd))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::put("/user/password")
+                    .header(header::COOKIE, session_cookie_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(cache.get("basic:credentials").await.is_none());
     }
 
     #[tokio::test]
@@ -1139,7 +1226,7 @@ mod tests {
         mock_db
             .expect_add_user()
             .times(1)
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
         let app = Router::new().route("/add", post(add)).with_state(state);

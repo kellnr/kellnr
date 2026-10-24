@@ -11,6 +11,7 @@ use kellnr_appstate::AppStateData;
 use kellnr_common::token_cache::{CachedTokenData, TokenCacheManager};
 use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
+use kellnr_db::password::hash_token;
 use kellnr_settings::Settings;
 use rand::distr::Alphanumeric;
 use rand::{RngExt, rng};
@@ -66,7 +67,7 @@ impl Token {
             .to_str()
             .map_err(|_| StatusCode::BAD_REQUEST)?;
 
-        // Handle basic authentication (does NOT use token cache - queries DB directly)
+        // Handle basic authentication
         if token.starts_with("Basic ") || token.starts_with("basic ") {
             if settings.oauth2.enforced {
                 return Err(StatusCode::FORBIDDEN);
@@ -76,19 +77,9 @@ impl Token {
                 .decode(&token[6..])
                 .map_err(|_| StatusCode::BAD_REQUEST)?;
             let decoded_str = String::from_utf8(decoded).map_err(|_| StatusCode::BAD_REQUEST)?;
-            let (user, token) = decoded_str.split_once(':').ok_or(StatusCode::BAD_REQUEST)?;
+            let (user, pwd) = decoded_str.split_once(':').ok_or(StatusCode::BAD_REQUEST)?;
 
-            let user = db.get_user(user).await.map_err(|_| StatusCode::FORBIDDEN)?;
-            if db.authenticate_user(&user.name, token).await.is_err() {
-                return Err(StatusCode::FORBIDDEN);
-            }
-
-            return Ok(Token {
-                value: token.to_string(),
-                user: user.name,
-                is_admin: user.is_admin,
-                is_read_only: user.is_read_only,
-            });
+            return authenticate_basic(user, pwd, db, cache).await;
         }
 
         // Handle bearer authentication (uses token cache)
@@ -141,6 +132,58 @@ impl Token {
             is_read_only: user.is_read_only,
         })
     }
+}
+
+/// Cache key for verified basic auth credentials. Only a hash of the
+/// credentials is kept in memory, and the prefix keeps the key space apart
+/// from bearer tokens.
+fn basic_auth_cache_key(user: &str, pwd: &str) -> String {
+    format!("basic:{}", hash_token(&format!("{user}:{pwd}")))
+}
+
+/// Verifies basic auth credentials. Cargo sends them with every request and
+/// password hashing is deliberately slow, so successful verifications are
+/// cached like bearer tokens and dropped by the same invalidations.
+async fn authenticate_basic(
+    user: &str,
+    pwd: &str,
+    db: &Arc<dyn DbProvider>,
+    cache: &Arc<TokenCacheManager>,
+) -> Result<Token, StatusCode> {
+    let cache_key = basic_auth_cache_key(user, pwd);
+    if let Some(cached) = cache.get(&cache_key).await {
+        return Ok(Token {
+            value: pwd.to_string(),
+            user: cached.user,
+            is_admin: cached.is_admin,
+            is_read_only: cached.is_read_only,
+        });
+    }
+
+    let generation = cache.generation();
+    let user = db
+        .authenticate_user(user, pwd)
+        .await
+        .map_err(|_| StatusCode::FORBIDDEN)?;
+
+    cache
+        .insert(
+            cache_key,
+            CachedTokenData {
+                user: user.name.clone(),
+                is_admin: user.is_admin,
+                is_read_only: user.is_read_only,
+            },
+            generation,
+        )
+        .await;
+
+    Ok(Token {
+        value: pwd.to_string(),
+        user: user.name,
+        is_admin: user.is_admin,
+        is_read_only: user.is_read_only,
+    })
 }
 
 async fn get_user_with_retry(
@@ -591,12 +634,8 @@ mod tests {
 
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_user()
-            .with(eq("test_user"))
-            .times(1)
-            .returning(|_| Ok(test_user()));
-        mock_db
             .expect_authenticate_user()
+            .with(eq("test_user"), eq("correct_password"))
             .times(1)
             .returning(|_, _| Ok(test_user()));
 
@@ -608,6 +647,118 @@ mod tests {
             .expect("basic auth should work when SSO is not enforced");
 
         assert_eq!(token.user, "test_user");
+    }
+
+    // ==========================
+    // Basic Auth Cache Tests
+    // ==========================
+
+    /// Password hashing is slow by design, so cargo requests with the same
+    /// credentials must not verify the password again.
+    #[tokio::test]
+    async fn test_basic_auth_success_is_cached() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_authenticate_user()
+            .times(1)
+            .returning(|_, _| Ok(test_user()));
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let headers = basic_auth_header("test_user", "correct_password");
+
+        for _ in 0..3 {
+            let token = Token::from_header(&headers, &db, &cache, &test_settings())
+                .await
+                .unwrap();
+            assert_eq!(token.user, "test_user");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_basic_auth_failure_is_not_cached() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_authenticate_user()
+            .times(2)
+            .returning(|_, _| Err(DbError::PasswordMismatch));
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let headers = basic_auth_header("test_user", "wrong_password");
+
+        for _ in 0..2 {
+            let result = Token::from_header(&headers, &db, &cache, &test_settings()).await;
+            assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+        }
+    }
+
+    /// A different password for a cached user must still be verified.
+    #[tokio::test]
+    async fn test_basic_auth_cache_is_keyed_by_password() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_authenticate_user()
+            .with(eq("test_user"), eq("correct_password"))
+            .times(1)
+            .returning(|_, _| Ok(test_user()));
+        mock_db
+            .expect_authenticate_user()
+            .with(eq("test_user"), eq("wrong_password"))
+            .times(1)
+            .returning(|_, _| Err(DbError::PasswordMismatch));
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+
+        let ok = basic_auth_header("test_user", "correct_password");
+        Token::from_header(&ok, &db, &cache, &test_settings())
+            .await
+            .unwrap();
+
+        let wrong = basic_auth_header("test_user", "wrong_password");
+        let result = Token::from_header(&wrong, &db, &cache, &test_settings()).await;
+        assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+    }
+
+    /// Password changes invalidate the whole cache, after which the old
+    /// credentials must be verified against the DB again.
+    #[tokio::test]
+    async fn test_basic_auth_cache_respects_invalidation() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_authenticate_user()
+            .times(1)
+            .returning(|_, _| Ok(test_user()));
+        mock_db
+            .expect_authenticate_user()
+            .times(1)
+            .returning(|_, _| Err(DbError::PasswordMismatch));
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let headers = basic_auth_header("test_user", "old_password");
+
+        Token::from_header(&headers, &db, &cache, &test_settings())
+            .await
+            .unwrap();
+        cache.invalidate_all();
+
+        let result = Token::from_header(&headers, &db, &cache, &test_settings()).await;
+        assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn test_basic_auth_cache_key_does_not_contain_password() {
+        let key = basic_auth_cache_key("test_user", "secret");
+
+        assert!(key.starts_with("basic:"));
+        assert!(!key.contains("secret"));
+        assert_ne!(key, basic_auth_cache_key("test_user", "other"));
     }
 
     #[tokio::test]

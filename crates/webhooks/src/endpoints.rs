@@ -657,7 +657,6 @@ mod endpoint_tests {
     async fn get_app() -> (Router, Arc<Database>) {
         let con_string = ConString::Sqlite(SqliteConString::new(
             std::path::Path::new(":memory:"),
-            "salt",
             "admin",
             Some("token".to_string()),
             std::time::Duration::from_secs(10),
@@ -667,7 +666,7 @@ mod endpoint_tests {
         db.add_auth_token("wh_test_admin", ADMIN_TOKEN, "admin")
             .await
             .unwrap();
-        db.add_user("wh_non_admin", "na", "", false, false)
+        db.add_user("wh_non_admin", "na", false, false)
             .await
             .unwrap();
         db.add_auth_token("wh_non_admin", NON_ADMIN_TOKEN, "wh_non_admin")
