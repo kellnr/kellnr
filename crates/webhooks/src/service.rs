@@ -29,7 +29,10 @@ pub fn run_webhook_service(db: Arc<dyn DbProvider>, settings: &Webhooks) {
     });
 }
 
-async fn handle_queue(db: &Arc<dyn DbProvider>, client: &WebhookClient) -> Result<(), WebhookError> {
+async fn handle_queue(
+    db: &Arc<dyn DbProvider>,
+    client: &WebhookClient,
+) -> Result<(), WebhookError> {
     let now = Utc::now();
     let pending = db.get_pending_webhook_queue_entries(now).await?;
 
