@@ -198,8 +198,8 @@ function buildDocs() {
 
 .copy-text {
   white-space: normal;
-  word-break: break-all;
-  overflow-wrap: break-word;
+  /* Wrap at the spaces around "=" first, so the version stays in one piece */
+  overflow-wrap: anywhere;
   max-width: calc(100% - 36px);
   padding-right: 8px;
   font-family: 'Roboto Mono', monospace;
