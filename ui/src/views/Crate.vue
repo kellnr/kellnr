@@ -34,7 +34,7 @@
 
     <v-row>
       <!-- Main Content Area -->
-      <v-col cols="12" md="9" order="2" order-md="1">
+      <v-col cols="12" md="9">
         <!-- Readme Tab -->
         <v-card v-if="tab === 'readme'" class="mb-4 content-card" elevation="0">
           <Readme :readme="selected_version.readme"></Readme>
@@ -103,7 +103,7 @@
       </v-col>
 
       <!-- Sidebar Column - Now using the CrateSidebar component -->
-      <v-col cols="12" md="3" order="1" order-md="2">
+      <v-col cols="12" md="3">
         <CrateSidebar :crate-name="crate.name" :version="selected_version.version" :last-updated="crate.last_updated"
           :humanized-last-updated="humanizedLastUpdated" :version-downloads="selected_version.downloads"
           :total-downloads="crate.total_downloads" :documentation-link="docLink" :can-build-docs="showBuildRustdoc()"
