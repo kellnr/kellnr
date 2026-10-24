@@ -7,6 +7,7 @@ use axum::http::StatusCode;
 use bytes::Bytes;
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
+pub use kellnr_auth::crate_access::has_restricted_crate_access;
 use kellnr_auth::{maybe_user, token};
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
@@ -15,7 +16,6 @@ use kellnr_common::search_result::{Crate, SearchResult};
 use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
-use kellnr_db::provider::DbResult;
 use kellnr_error::api_error::{ApiError, ApiResult};
 
 use crate::pub_data::{EmptyCrateData, PubData};
@@ -64,20 +64,6 @@ pub async fn check_download_auth(
     } else {
         Err(RegistryError::NotCrateUser.into())
     }
-}
-
-/// Whether `user` may read the content of a download-restricted crate,
-/// i.e. the crate archive and its hosted rustdoc.
-pub async fn has_restricted_crate_access(
-    crate_name: &NormalizedName,
-    user: &str,
-    is_admin: bool,
-    db: &Arc<dyn DbProvider>,
-) -> DbResult<bool> {
-    Ok(is_admin
-        || db.is_crate_user(crate_name, user).await?
-        || db.is_crate_group_user(crate_name, user).await?
-        || db.is_owner(crate_name, user).await?)
 }
 
 /// Remove owners from a crate

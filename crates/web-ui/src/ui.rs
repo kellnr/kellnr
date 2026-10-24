@@ -5,6 +5,7 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use kellnr_appstate::{AppState, DbState, SettingsProvState, SettingsState};
+use kellnr_auth::crate_access::can_read_crate;
 use kellnr_common::crate_data::CrateData;
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::name_or_description::NameOrDescription;
@@ -360,14 +361,24 @@ pub struct CrateDataParams {
     params(CrateDataParams),
     responses(
         (status = 200, description = "Crate details", body = CrateData),
-        (status = 404, description = "Crate not found")
+        (status = 404, description = "Crate not found or download-restricted without access")
     )
 )]
 pub async fn crate_data(
     Query(params): Query<CrateDataParams>,
     State(db): DbState,
+    user: Result<kellnr_auth::maybe_user::MaybeUser, StatusCode>,
 ) -> Result<Json<CrateData>, StatusCode> {
     let index_name = NormalizedName::from(params.name);
+    // Same response as a missing crate to not reveal that a restricted crate exists.
+    match can_read_crate(&index_name, user.ok().as_ref(), &db).await {
+        Ok(true) => {}
+        Ok(false) => return Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            error!("Failed to check access to crate {index_name}: {e}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
     match db.get_crate_data(&index_name).await {
         Ok(cd) => Ok(Json(cd)),
         Err(e) => match e {
@@ -2185,6 +2196,9 @@ mod tests {
         mock_db
             .expect_get_crate_data()
             .returning(move |_| Ok(ecd.clone()));
+        mock_db
+            .expect_is_download_restricted()
+            .returning(|_| Ok(false));
 
         let r = app(
             mock_db,
@@ -2205,6 +2219,92 @@ mod tests {
 
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!(expected_crate_data, result_crate_data);
+    }
+
+    fn restricted_crate_mock(session_user: Option<(&'static str, bool)>) -> MockDb {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_download_restricted()
+            .with(eq(NormalizedName::from_unchecked("secret".to_string())))
+            .returning(|_| Ok(true));
+        mock_db.expect_get_crate_data().returning(|_| {
+            Ok(CrateData {
+                name: "secret".to_string(),
+                ..Default::default()
+            })
+        });
+        if let Some((name, is_admin)) = session_user {
+            mock_db.expect_validate_session().returning(move |_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: name.to_string(),
+                    is_admin,
+                    is_read_only: false,
+                })
+            });
+        }
+        mock_db
+    }
+
+    async fn get_secret_crate_data(mock_db: MockDb, with_cookie: bool) -> StatusCode {
+        let (settings, storage) = test_deps();
+        let mut request = Request::get("/crate_data?name=secret");
+        if with_cookie {
+            request = request.header(
+                header::COOKIE,
+                encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+            );
+        }
+        app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+        .status()
+    }
+
+    #[tokio::test]
+    async fn crate_data_restricted_crate_anonymous_returns_not_found() {
+        let mock_db = restricted_crate_mock(None);
+        assert_eq!(
+            StatusCode::NOT_FOUND,
+            get_secret_crate_data(mock_db, false).await
+        );
+    }
+
+    #[tokio::test]
+    async fn crate_data_restricted_crate_without_access_returns_not_found() {
+        let mut mock_db = restricted_crate_mock(Some(("user", false)));
+        mock_db.expect_is_crate_user().returning(|_, _| Ok(false));
+        mock_db
+            .expect_is_crate_group_user()
+            .returning(|_, _| Ok(false));
+        mock_db.expect_is_owner().returning(|_, _| Ok(false));
+        assert_eq!(
+            StatusCode::NOT_FOUND,
+            get_secret_crate_data(mock_db, true).await
+        );
+    }
+
+    #[tokio::test]
+    async fn crate_data_restricted_crate_crate_user_returns_ok() {
+        let mut mock_db = restricted_crate_mock(Some(("user", false)));
+        mock_db
+            .expect_is_crate_user()
+            .with(
+                eq(NormalizedName::from_unchecked("secret".to_string())),
+                eq("user"),
+            )
+            .returning(|_, _| Ok(true));
+        assert_eq!(StatusCode::OK, get_secret_crate_data(mock_db, true).await);
+    }
+
+    #[tokio::test]
+    async fn crate_data_restricted_crate_admin_returns_ok() {
+        let mock_db = restricted_crate_mock(Some(("admin", true)));
+        assert_eq!(StatusCode::OK, get_secret_crate_data(mock_db, true).await);
     }
 
     #[tokio::test]
