@@ -1068,6 +1068,66 @@ async fn get_name_valid_user_and_token(test_db: &kellnr_db::Database) {
 }
 
 #[db_test]
+async fn oauth2_state_can_be_consumed_once(test_db: &kellnr_db::Database) {
+    test_db
+        .store_oauth2_state("state", "verifier", "nonce")
+        .await
+        .unwrap();
+
+    let data = test_db
+        .get_and_delete_oauth2_state("state")
+        .await
+        .unwrap()
+        .expect("fresh state must be found");
+    assert_eq!(data.pkce_verifier, "verifier");
+    assert_eq!(data.nonce, "nonce");
+
+    assert!(
+        test_db
+            .get_and_delete_oauth2_state("state")
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[db_test]
+async fn oauth2_state_expired_is_rejected_and_removed(test_db: &kellnr_db::Database) {
+    add_aged_oauth2_state(test_db, "stale", std::time::Duration::from_mins(11))
+        .await
+        .unwrap();
+
+    assert!(
+        test_db
+            .get_and_delete_oauth2_state("stale")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    // The expired row is gone, so cleanup has nothing left to do.
+    assert_eq!(test_db.cleanup_expired_oauth2_states().await.unwrap(), 0);
+}
+
+#[db_test]
+async fn cleanup_expired_oauth2_states_removes_only_old(test_db: &kellnr_db::Database) {
+    add_aged_oauth2_state(test_db, "fresh", std::time::Duration::from_mins(1))
+        .await
+        .unwrap();
+    add_aged_oauth2_state(test_db, "stale", std::time::Duration::from_mins(11))
+        .await
+        .unwrap();
+
+    assert_eq!(test_db.cleanup_expired_oauth2_states().await.unwrap(), 1);
+    assert!(
+        test_db
+            .get_and_delete_oauth2_state("fresh")
+            .await
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[db_test]
 async fn get_session_no_session_in_db(test_db: &kellnr_db::Database) {
     assert!(test_db.validate_session("no_session_token").await.is_err());
 }

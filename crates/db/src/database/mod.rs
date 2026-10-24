@@ -53,6 +53,16 @@ use crate::{
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
+/// Time a user has to complete the `OAuth2` login at the identity provider.
+const OAUTH2_STATE_MAX_AGE: std::time::Duration = std::time::Duration::from_mins(10);
+
+/// Timestamp (in [`DB_DATE_FORMAT`]) before which an `OAuth2` state is expired.
+fn oauth2_state_expiry_cutoff() -> String {
+    let max_age =
+        chrono::Duration::from_std(OAUTH2_STATE_MAX_AGE).expect("constant fits chrono::Duration");
+    (Utc::now() - max_age).format(DB_DATE_FORMAT).to_string()
+}
+
 /// Escape the LIKE wildcards `%` and `_` (and the escape character itself) in a
 /// user-supplied search term so it is matched literally. Callers wrap the result
 /// in `%...%` and pair it with `ESCAPE '\'`. Without this, a search for `%`
@@ -2348,34 +2358,36 @@ impl DbProvider for Database {
     }
 
     async fn get_and_delete_oauth2_state(&self, state: &str) -> DbResult<Option<OAuth2StateData>> {
-        let s = oauth2_state::Entity::find()
+        let Some(s) = oauth2_state::Entity::find()
             .filter(oauth2_state::Column::State.eq(state))
             .one(&self.db_con)
-            .await?;
+            .await?
+        else {
+            return Ok(None);
+        };
 
-        if let Some(s) = s {
-            let data = OAuth2StateData {
-                state: s.state.clone(),
-                pkce_verifier: s.pkce_verifier.clone(),
-                nonce: s.nonce.clone(),
-            };
-
-            // Delete after retrieving (single use)
-            s.delete(&self.db_con).await?;
-
-            Ok(Some(data))
-        } else {
-            Ok(None)
+        // The state is single use. Only the request whose delete actually
+        // removed the row may continue, so two concurrent callbacks with the
+        // same state cannot both succeed.
+        let deleted = oauth2_state::Entity::delete_many()
+            .filter(oauth2_state::Column::Id.eq(s.id))
+            .exec(&self.db_con)
+            .await?
+            .rows_affected;
+        if deleted == 0 || s.created < oauth2_state_expiry_cutoff() {
+            return Ok(None);
         }
+
+        Ok(Some(OAuth2StateData {
+            state: s.state,
+            pkce_verifier: s.pkce_verifier,
+            nonce: s.nonce,
+        }))
     }
 
     async fn cleanup_expired_oauth2_states(&self) -> DbResult<u64> {
-        // States older than 10 minutes are expired
-        let expiry = Utc::now() - chrono::Duration::minutes(10);
-        let expiry_str = expiry.format(DB_DATE_FORMAT).to_string();
-
         let result = oauth2_state::Entity::delete_many()
-            .filter(oauth2_state::Column::Created.lt(expiry_str))
+            .filter(oauth2_state::Column::Created.lt(oauth2_state_expiry_cutoff()))
             .exec(&self.db_con)
             .await?;
 
