@@ -16,7 +16,6 @@ use axum_extra::extract::cookie::{Cookie, SameSite};
 use kellnr_appstate::{AppState, AppStateData, DbState, SettingsState};
 use kellnr_auth::oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
 use kellnr_db::User;
-use kellnr_settings::Protocol;
 use kellnr_settings::constants::{COOKIE_OAUTH2_STATE, COOKIE_OIDC_ID_TOKEN, OAUTH2_STATE_MAX_AGE};
 use serde::{Deserialize, Serialize};
 use tracing::{error, trace, warn};
@@ -119,7 +118,7 @@ pub async fn login(
 
     let jar = cookies.add(state_cookie(
         auth_request.state,
-        settings.origin.protocol == Protocol::Https,
+        settings.origin.secure_cookies(),
     ));
 
     // Redirect to provider
@@ -302,7 +301,7 @@ pub async fn callback(
         COOKIE_OIDC_ID_TOKEN,
         token_result.id_token.clone(),
         app_state.settings.registry.session_age_seconds as i64,
-        app_state.settings.origin.protocol == Protocol::Https,
+        app_state.settings.origin.secure_cookies(),
     ));
     trace!("Created session for OAuth2 user: {}", user.name);
 

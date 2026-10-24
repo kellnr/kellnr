@@ -9,7 +9,6 @@ use axum_extra::extract::cookie::Cookie;
 use cookie::{SameSite, time};
 use kellnr_appstate::AppStateData;
 use kellnr_common::util::generate_rand_string;
-use kellnr_settings::Protocol;
 use kellnr_settings::constants::COOKIE_SESSION_ID;
 use time::Duration;
 use tracing::error;
@@ -35,9 +34,9 @@ pub(crate) async fn create_session_jar(
             RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
     let session_age_seconds = app_state.settings.registry.session_age_seconds as i64;
-    // Only mark the cookie `Secure` when the registry is served over HTTPS,
-    // otherwise the browser would drop it on plain-HTTP deployments.
-    let secure = app_state.settings.origin.protocol == Protocol::Https;
+    // `Secure` follows `origin.protocol` unless `origin.cookie_secure` forces
+    // it, since browsers drop secure cookies on plain-HTTP deployments.
+    let secure = app_state.settings.origin.secure_cookies();
     Ok(cookies.add(session_cookie(
         COOKIE_SESSION_ID,
         session_token,
@@ -680,5 +679,51 @@ mod auth_middleware_tests {
         assert_eq!(r.status(), StatusCode::OK);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod session_cookie_tests {
+    use std::sync::Arc;
+
+    use axum::http::HeaderMap;
+    use axum_extra::extract::cookie::Key;
+    use kellnr_db::mock::MockDb;
+    use kellnr_settings::{Protocol, Settings};
+
+    use super::*;
+
+    async fn session_cookie_secure(protocol: Protocol, cookie_secure: Option<bool>) -> bool {
+        let mut db = MockDb::new();
+        db.expect_add_session_token().returning(|_, _| Ok(()));
+        let mut settings = Settings::clone(&kellnr_appstate::test_state().settings);
+        settings.origin.protocol = protocol;
+        settings.origin.cookie_secure = cookie_secure;
+        let state = AppStateData {
+            db: Arc::new(db),
+            settings: Arc::new(settings),
+            ..kellnr_appstate::test_state()
+        };
+        let jar = PrivateCookieJar::from_headers(&HeaderMap::new(), Key::generate());
+
+        let jar = create_session_jar(jar, &state, "user").await.unwrap();
+
+        jar.get(COOKIE_SESSION_ID)
+            .and_then(|c| c.secure())
+            .unwrap_or(false)
+    }
+
+    #[tokio::test]
+    async fn secure_follows_protocol_by_default() {
+        assert!(session_cookie_secure(Protocol::Https, None).await);
+        assert!(!session_cookie_secure(Protocol::Http, None).await);
+    }
+
+    /// Behind a TLS-terminating proxy the configured protocol is http, but
+    /// the operator can still force the `Secure` flag.
+    #[tokio::test]
+    async fn cookie_secure_setting_overrides_protocol() {
+        assert!(session_cookie_secure(Protocol::Http, Some(true)).await);
+        assert!(!session_cookie_secure(Protocol::Https, Some(false)).await);
     }
 }

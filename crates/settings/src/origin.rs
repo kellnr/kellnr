@@ -30,6 +30,12 @@ pub struct Origin {
 
     /// URL path prefix
     pub path: String,
+
+    /// Force the `Secure` flag on cookies (true) or never set it (false).
+    /// Unset, cookies are secure only when `protocol` is https. Set it to true
+    /// when Kellnr is reached over https through a TLS-terminating proxy but
+    /// `protocol` is http
+    pub cookie_secure: Option<bool>,
 }
 
 impl Default for Origin {
@@ -39,11 +45,18 @@ impl Default for Origin {
             port: default_origin_port(),
             protocol: Protocol::Http,
             path: String::new(),
+            cookie_secure: None,
         }
     }
 }
 
 impl Origin {
+    /// Whether cookies must carry the `Secure` flag.
+    pub fn secure_cookies(&self) -> bool {
+        self.cookie_secure
+            .unwrap_or(self.protocol == Protocol::Https)
+    }
+
     pub fn base_url(&self) -> String {
         let path_prefix = self.path.trim().trim_end_matches('/');
         if self.port == 443 || self.port == 80 {
@@ -67,7 +80,31 @@ mod tests {
             port,
             protocol: Protocol::Https,
             path: path.to_string(),
+            cookie_secure: None,
         }
+    }
+
+    #[test]
+    fn secure_cookies_follow_protocol_by_default() {
+        let mut o = origin(443, "");
+        assert!(o.secure_cookies());
+
+        o.protocol = Protocol::Http;
+        assert!(!o.secure_cookies());
+    }
+
+    /// Behind a TLS-terminating proxy the protocol may be http while
+    /// browsers use https; operators can then force secure cookies.
+    #[test]
+    fn secure_cookies_can_be_overridden() {
+        let mut o = origin(80, "");
+        o.protocol = Protocol::Http;
+        o.cookie_secure = Some(true);
+        assert!(o.secure_cookies());
+
+        let mut o = origin(443, "");
+        o.cookie_secure = Some(false);
+        assert!(!o.secure_cookies());
     }
 
     #[test]

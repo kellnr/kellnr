@@ -310,6 +310,28 @@ mod tests {
     }
 
     #[test]
+    fn cookie_secure_defaults_to_unset_and_reads_from_toml_and_cli() {
+        let file = write_toml("[registry]\ndata_dir = \"/tmp/x\"\n");
+        let CliResult::RunServer(resolved) = run_start(Some(file.path()), &[]) else {
+            panic!("expected RunServer");
+        };
+        assert_eq!(resolved.settings.origin.cookie_secure, None);
+
+        let file = write_toml("[origin]\ncookie_secure = true\n");
+        let CliResult::RunServer(resolved) = run_start(Some(file.path()), &[]) else {
+            panic!("expected RunServer");
+        };
+        assert_eq!(resolved.settings.origin.cookie_secure, Some(true));
+
+        let CliResult::RunServer(resolved) =
+            run_start(Some(file.path()), &["--origin-cookie-secure", "false"])
+        else {
+            panic!("expected RunServer");
+        };
+        assert_eq!(resolved.settings.origin.cookie_secure, Some(false));
+    }
+
+    #[test]
     fn config_show_returns_show_config_variant_with_options() {
         // `config show --sources` flows through `build_from_command` like
         // `start` does, so it must also produce a usable `SettingsProv`.

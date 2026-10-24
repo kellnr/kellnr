@@ -87,6 +87,7 @@ export type Origin = {
   port: number
   protocol: string
   path: string
+  cookie_secure: boolean | null
 }
 
 export type Postgresql = {
@@ -189,7 +190,8 @@ export const emptySettings: Settings = {
     hostname: "",
     port: 0,
     protocol: "0",
-    path: ""
+    path: "",
+    cookie_secure: null
   },
   postgresql: {
     enabled: false,
