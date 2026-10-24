@@ -414,7 +414,7 @@ pub async fn add_aged_session(
     let age = chrono::Duration::from_std(age).expect("session age out of range");
     let created = (Utc::now() - age).format(DB_DATE_FORMAT).to_string();
     let s = session::ActiveModel {
-        token: Set(token.to_owned()),
+        token: Set(crate::password::hash_token(token)),
         created: Set(created),
         user_fk: Set(user.id),
         ..Default::default()
@@ -454,4 +454,14 @@ pub async fn set_legacy_pwd(db: &Database, user_name: &str, pwd: &str, salt: &st
     u.salt = Set(salt.to_owned());
     u.update(&db.db_con).await?;
     Ok(())
+}
+
+/// Returns the session tokens exactly as stored in the database.
+pub async fn stored_session_tokens(db: &Database) -> DbResult<Vec<String>> {
+    Ok(session::Entity::find()
+        .all(&db.db_con)
+        .await?
+        .into_iter()
+        .map(|s| s.token)
+        .collect())
 }
