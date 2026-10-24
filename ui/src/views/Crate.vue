@@ -53,7 +53,7 @@
           <!-- Normal Dependencies -->
           <v-card v-if="sortedDependencies.normal.length > 0" class="mb-4 content-card" elevation="0"
             data-testid="crate-deps-normal">
-            <v-card-title>Dependencies</v-card-title>
+            <SectionHeader icon="mdi-package-variant" title="Dependencies" :count="sortedDependencies.normal.length" />
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.normal" :key="dep.name" :name="dep.name" :version="dep.version_req"
                 :registry="dep.registry" />
@@ -63,7 +63,7 @@
           <!-- Dev Dependencies -->
           <v-card v-if="sortedDependencies.dev.length > 0" class="mb-4 content-card" elevation="0"
             data-testid="crate-deps-dev">
-            <v-card-title>Development Dependencies</v-card-title>
+            <SectionHeader icon="mdi-flask-outline" title="Development Dependencies" :count="sortedDependencies.dev.length" />
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.dev" :key="dep.name" :name="dep.name" :version="dep.version_req"
                 :registry="dep.registry" />
@@ -73,7 +73,7 @@
           <!-- Build Dependencies -->
           <v-card v-if="sortedDependencies.build.length > 0" class="mb-4 content-card" elevation="0"
             data-testid="crate-deps-build">
-            <v-card-title>Build Dependencies</v-card-title>
+            <SectionHeader icon="mdi-hammer-wrench" title="Build Dependencies" :count="sortedDependencies.build.length" />
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.build" :key="dep.name" :name="dep.name" :version="dep.version_req"
                 :registry="dep.registry" :desc="dep.description" />
@@ -122,6 +122,7 @@ import CrateSidebar from "../components/CrateSidebar.vue";
 import About from "../components/About.vue";
 import CrateSettingsTab from "../components/crate/CrateSettingsTab.vue";
 import CrateAdminTab from "../components/crate/CrateAdminTab.vue";
+import { SectionHeader } from "../components/common";
 import { computed, onBeforeMount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import dayjs from "dayjs";
@@ -314,8 +315,8 @@ watch(route, () => {
 .title-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-}
   border-radius: 12px;
+}
 
 .crate-title {
   color: rgb(var(--v-theme-on-surface));
@@ -335,8 +336,8 @@ watch(route, () => {
 .tabs-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  overflow: hidden;
   border-radius: 12px;
+  overflow: hidden;
 }
 
 .crate-tabs {
