@@ -1,6 +1,6 @@
 <template>
   <div>
-    <SectionHeader icon="mdi-shield-key" title="Authentication Tokens" :count="tokens.length" />
+    <SectionHeader icon="mdi-shield-key" :title="SETTINGS_SECTION_TITLES.tokens" :count="tokens.length" />
 
     <div class="section-content">
       <p class="text-body-medium text-medium-emphasis mb-5">
@@ -130,6 +130,7 @@ import { onBeforeMount, ref, computed } from "vue"
 import { useStatusMessage, useConfirmCallback } from "../composables"
 import { tokenService } from "../services"
 import { isSuccess } from "../services/api"
+import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
 import type { Token } from "../types/token"
 import {
   SectionHeader,

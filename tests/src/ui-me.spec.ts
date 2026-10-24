@@ -88,8 +88,8 @@ test.describe("/me Route Tests (cargo login flow)", () => {
     // Should redirect to settings with tokens tab visible
     await expect(page).toHaveURL(/\/settings/, { timeout: 10000 });
 
-    // Tokens tab should be active (Authentication Tokens heading visible)
-    await expect(page.locator("span:text('Authentication Tokens')")).toBeVisible();
+    // Tokens tab should be active (Auth Tokens heading visible)
+    await expect(page.locator("span:text('Auth Tokens')")).toBeVisible();
   });
 
   test("login redirects back to /me (tokens) after authentication", async ({ page }) => {
@@ -109,7 +109,7 @@ test.describe("/me Route Tests (cargo login flow)", () => {
 
     // Should redirect back to settings with tokens tab in URL
     await expect(page).toHaveURL(/\/settings.*tab=tokens/, { timeout: 10000 });
-    await expect(page.locator("span:text('Authentication Tokens')")).toBeVisible();
+    await expect(page.locator("span:text('Auth Tokens')")).toBeVisible();
   });
 
   test("can create token from /me page", async ({ page }) => {

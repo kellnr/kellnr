@@ -23,8 +23,7 @@
                                         <v-icon :icon="item.icon" size="small"></v-icon>
                                     </div>
                                 </template>
-                                <v-list-item-title class="text-body-medium font-weight-medium text-wrap">{{ item.mobileLabel
-                                    }}</v-list-item-title>
+                                <v-list-item-title class="text-body-medium font-weight-medium text-wrap">{{ item.label }}</v-list-item-title>
                             </v-list-item>
                         </template>
 
@@ -40,8 +39,7 @@
                                             <v-icon :icon="item.icon" size="small"></v-icon>
                                         </div>
                                     </template>
-                                    <v-list-item-title class="text-body-medium font-weight-medium text-wrap">{{ item.mobileLabel
-                                        }}</v-list-item-title>
+                                    <v-list-item-title class="text-body-medium font-weight-medium text-wrap">{{ item.label }}</v-list-item-title>
                                 </v-list-item>
                             </template>
                         </template>
@@ -68,8 +66,7 @@
                                         <v-icon :icon="item.icon" size="small"></v-icon>
                                     </div>
                                 </template>
-                                <v-list-item-title class="text-body-medium font-weight-medium text-wrap">{{ item.desktopLabel
-                                    }}</v-list-item-title>
+                                <v-list-item-title class="text-body-medium font-weight-medium text-wrap">{{ item.label }}</v-list-item-title>
                                 <template v-slot:append>
                                     <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
                                 </template>
@@ -88,8 +85,7 @@
                                             <v-icon :icon="item.icon" size="small"></v-icon>
                                         </div>
                                     </template>
-                                    <v-list-item-title class="text-body-medium font-weight-medium text-wrap">{{ item.desktopLabel
-                                        }}</v-list-item-title>
+                                    <v-list-item-title class="text-body-medium font-weight-medium text-wrap">{{ item.label }}</v-list-item-title>
                                     <template v-slot:append>
                                         <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
                                     </template>
@@ -129,14 +125,12 @@ import { settingsService } from "../services";
 import { isSuccess } from "../services/api";
 import type { Settings } from "../types/settings";
 import { emptySettings } from "../types/settings";
-
-type SettingsTab = 'password' | 'tokens' | 'users' | 'groups' | 'config' | 'toolchains'
+import { SETTINGS_SECTION_TITLES, type SettingsTab } from "../common/settingsSections";
 
 interface NavItem {
     tab: SettingsTab
     icon: string
-    desktopLabel: string
-    mobileLabel: string
+    label: string
     adminOnly: boolean
     condition?: () => boolean
     desktopTestId?: string
@@ -147,38 +141,36 @@ const navItems: NavItem[] = [
     {
         tab: 'password',
         icon: 'mdi-key',
-        desktopLabel: 'Change Password',
-        mobileLabel: 'Change Password',
+        label: SETTINGS_SECTION_TITLES.password,
         adminOnly: false,
+        desktopTestId: 'nav-change-password',
         condition: () => !ssoEnforced.value
     },
     {
         tab: 'tokens',
         icon: 'mdi-shield-key',
-        desktopLabel: 'Auth. Tokens',
-        mobileLabel: 'Auth Tokens',
-        adminOnly: false
+        label: SETTINGS_SECTION_TITLES.tokens,
+        adminOnly: false,
+        desktopTestId: 'nav-auth-tokens'
     },
     {
         tab: 'users',
         icon: 'mdi-account-multiple',
-        desktopLabel: 'User Management',
-        mobileLabel: 'Users',
+        label: SETTINGS_SECTION_TITLES.users,
         adminOnly: true,
         desktopTestId: 'nav-user-management'
     },
     {
         tab: 'groups',
         icon: 'mdi-account-group',
-        desktopLabel: 'Group Management',
-        mobileLabel: 'Groups',
-        adminOnly: true
+        label: SETTINGS_SECTION_TITLES.groups,
+        adminOnly: true,
+        desktopTestId: 'nav-groups'
     },
     {
         tab: 'config',
         icon: 'mdi-tune',
-        desktopLabel: 'Startup Config',
-        mobileLabel: 'Config',
+        label: SETTINGS_SECTION_TITLES.config,
         adminOnly: true,
         desktopTestId: 'nav-startup-config',
         mobileTestId: 'nav-startup-config-mobile'
@@ -186,8 +178,7 @@ const navItems: NavItem[] = [
     {
         tab: 'toolchains',
         icon: 'mdi-hammer-wrench',
-        desktopLabel: 'Toolchains',
-        mobileLabel: 'Toolchains',
+        label: SETTINGS_SECTION_TITLES.toolchains,
         adminOnly: true,
         condition: () => settings.value.toolchain.enabled,
         desktopTestId: 'nav-toolchains',
@@ -229,15 +220,7 @@ function selectTab(tab: SettingsTab) {
 }
 
 function getTabLabel(tab: SettingsTab): string {
-    const labels: Record<SettingsTab, string> = {
-        'password': 'Password',
-        'tokens': 'Tokens',
-        'users': 'Users',
-        'groups': 'Groups',
-        'config': 'Config',
-        'toolchains': 'Toolchains'
-    }
-    return labels[tab]
+    return SETTINGS_SECTION_TITLES[tab]
 }
 
 onBeforeMount(async () => {

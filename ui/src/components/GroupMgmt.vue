@@ -2,7 +2,7 @@
   <div>
     <SectionHeader
       :icon="editingGroup ? 'mdi-account-group' : 'mdi-account-group'"
-      :title="editingGroup ? `Edit Group: ${editingGroup}` : 'Group Management'"
+      :title="editingGroup ? `Edit Group: ${editingGroup}` : SETTINGS_SECTION_TITLES.groups"
       :count="!editingGroup ? groups.length : undefined"
     >
       <template v-if="editingGroup" #actions>
@@ -203,6 +203,7 @@ import { onBeforeMount, ref, computed } from "vue"
 import { useStatusMessage, useConfirmCallback, useNotification } from "../composables"
 import { groupService, userService } from "../services"
 import { isSuccess } from "../services/api"
+import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
 import type { Group, GroupUser } from "../types/group"
 import type { User } from "../types/user"
 import {

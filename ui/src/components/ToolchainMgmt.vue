@@ -1,6 +1,6 @@
 <template>
   <div>
-    <SectionHeader icon="mdi-hammer-wrench" title="Toolchain Management" :count="toolchains.length" data-testid="toolchain-section-header" />
+    <SectionHeader icon="mdi-hammer-wrench" :title="SETTINGS_SECTION_TITLES.toolchains" :count="toolchains.length" data-testid="toolchain-section-header" />
 
     <div class="section-content">
       <p class="text-body-medium text-medium-emphasis mb-5">
@@ -46,6 +46,7 @@ import { onBeforeMount, ref, computed } from "vue"
 import { useConfirmCallback, useNotification } from "../composables"
 import { toolchainService } from "../services"
 import { isSuccess } from "../services/api"
+import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
 import type { Toolchain } from "../types/toolchain"
 import { SectionHeader, ConfirmDialog, NotificationSnackbar } from "./common"
 import { ToolchainList, ToolchainUploadForm } from "./toolchain"

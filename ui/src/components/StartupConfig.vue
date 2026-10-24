@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="section-header">
       <v-icon icon="mdi-tune" size="small" color="primary" class="me-3"></v-icon>
-      <span class="text-title-large font-weight-bold">Startup Configuration</span>
+      <span class="text-title-large font-weight-bold" data-testid="section-title">{{ SETTINGS_SECTION_TITLES.config }}</span>
       <span v-if="totalConfigured > 0" class="section-count configured">{{ totalConfigured }}/{{ totalSettings }} configured</span>
       <span class="section-count">{{ visibleSectionsCount }} sections</span>
     </div>
@@ -83,6 +83,7 @@ import { emptySettings } from "../types/settings";
 import type { Settings, LeafMeta } from "../types/settings";
 import { settingsService } from "../services";
 import { isSuccess } from "../services/api";
+import { SETTINGS_SECTION_TITLES } from "../common/settingsSections";
 import ConfigRow from "./ConfigRow.vue";
 import ConfigToolbar from "./ConfigToolbar.vue";
 
