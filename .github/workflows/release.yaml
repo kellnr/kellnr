@@ -12,26 +12,46 @@ permissions:
   contents: read
 
 jobs:
+  # The release commit was already tested on main. Wait for that run
+  # instead of running all tests again.
   test:
-    name: Run Tests
+    name: Check Tests
     runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        test-type: [unit, docker, ui]
+    timeout-minutes: 90
+    permissions:
+      actions: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - uses: cachix/install-nix-action@v31
-        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
-
-      - name: Run ${{ matrix.test-type }} tests
+      - name: Wait for the Test workflow of the release commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
         run: |
-          case "${{ matrix.test-type }}" in
-            unit) nix develop --command just test ;;
-            docker) nix develop --command just test-docker ;;
-            ui) nix develop --command just test-ui ;;
-          esac
+          set -euo pipefail
+          # Give a just merged commit some time to start its run.
+          for attempt in $(seq 1 170); do
+            run=$(gh api "repos/$REPO/actions/workflows/test.yaml/runs?head_sha=$SHA&per_page=1" \
+              --jq '.workflow_runs[0] | select(.) | "\(.status) \(.conclusion) \(.html_url)"')
+            if [ -z "$run" ]; then
+              if [ "$attempt" -ge 20 ]; then
+                echo "No Test run found for $SHA. Start the Test workflow for this commit and re-run this job."
+                exit 1
+              fi
+            else
+              # Split "status conclusion url" into $1 $2 $3.
+              # shellcheck disable=SC2086
+              set -- $run
+              echo "Test run $3: $1 $2"
+              if [ "$1" = "completed" ]; then
+                [ "$2" = "success" ] && exit 0
+                echo "The tests of $SHA did not pass. Fix them or re-run the Test workflow, then re-run this job."
+                exit 1
+              fi
+            fi
+            sleep 30
+          done
+          echo "Timed out waiting for the Test run of $SHA."
+          exit 1
 
   sbom:
     name: Generate SBOM
