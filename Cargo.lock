@@ -4393,7 +4393,9 @@ dependencies = [
  "kellnr-common",
  "kellnr-db",
  "kellnr-storage",
+ "sea-orm",
  "serde",
+ "tracing",
  "zip",
 ]
 

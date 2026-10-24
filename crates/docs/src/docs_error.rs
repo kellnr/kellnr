@@ -28,24 +28,16 @@ impl From<DocsError> for ApiError {
         match e {
             DocsError::ExtractFailed => ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR),
             DocsError::CrateDoesNotExist(_, _) => ApiError::from_err(&e, StatusCode::NOT_FOUND),
-            DocsError::DatabaseError(db_error) => {
-                ApiError::from_err(&db_error, StatusCode::INTERNAL_SERVER_ERROR)
-            }
-            DocsError::IoError(error) => {
-                ApiError::from_err(&error, StatusCode::INTERNAL_SERVER_ERROR)
-            }
-            DocsError::DirWalkError(error) => {
-                ApiError::from_err(&error, StatusCode::INTERNAL_SERVER_ERROR)
-            }
+            DocsError::DatabaseError(db_error) => ApiError::from(db_error),
+            DocsError::IoError(error) => ApiError::from(error),
+            DocsError::DirWalkError(error) => ApiError::internal(&error),
             DocsError::CargoError(error) => ApiError::new(
                 &error,
                 &String::default(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             ),
             DocsError::StorageError(error) => ApiError::from(error),
-            DocsError::PathPrefixMismatch { .. } => {
-                ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR)
-            }
+            DocsError::PathPrefixMismatch { .. } => ApiError::internal(&e),
         }
     }
 }
