@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, TimeDelta, Utc};
+use futures_util::{StreamExt, stream};
 use kellnr_common::webhook::WebhookQueue;
 use kellnr_db::DbProvider;
 use kellnr_settings::Webhooks;
 
 use crate::client::{Delivery, WebhookClient, truncated_body};
 use crate::types::WebhookError;
+
+const MAX_CONCURRENT_DELIVERIES: usize = 8;
 
 pub fn run_webhook_service(db: Arc<dyn DbProvider>, settings: &Webhooks) {
     let http_client = match WebhookClient::new(settings) {
@@ -30,41 +33,49 @@ async fn handle_queue(db: &Arc<dyn DbProvider>, client: &WebhookClient) -> Resul
     let now = Utc::now();
     let pending = db.get_pending_webhook_queue_entries(now).await?;
 
-    for entry in pending {
-        let delivery = Delivery {
-            id: &entry.id,
-            payload: &entry.payload,
-            secret: entry.secret.as_deref(),
-        };
-        match client.post(&entry.callback_url, &delivery).await {
-            Ok(resp) if resp.status().as_u16() < 300 => {
-                if let Err(err) = db.delete_webhook_queue(&entry.id).await {
-                    tracing::error!("Cannot delete webhook queue entry. Reason {err}");
-                }
+    // Deliver concurrently, so a few slow callback hosts cannot delay all
+    // other deliveries by up to the request timeout each.
+    stream::iter(pending)
+        .for_each_concurrent(MAX_CONCURRENT_DELIVERIES, |entry| {
+            deliver(db, client, entry)
+        })
+        .await;
+    Ok(())
+}
+
+async fn deliver(db: &Arc<dyn DbProvider>, client: &WebhookClient, entry: WebhookQueue) {
+    let delivery = Delivery {
+        id: &entry.id,
+        payload: &entry.payload,
+        secret: entry.secret.as_deref(),
+    };
+    match client.post(&entry.callback_url, &delivery).await {
+        Ok(resp) if resp.status().as_u16() < 300 => {
+            if let Err(err) = db.delete_webhook_queue(&entry.id).await {
+                tracing::error!("Cannot delete webhook queue entry. Reason {err}");
             }
-            Ok(resp) => {
-                tracing::error!(
-                    "Webhook callback failed for: {}. Response status: {}. Msg: {:?}",
-                    entry.callback_url,
-                    resp.status(),
-                    truncated_body(resp).await
-                );
-                if let Err(err) = handle_failed_entry(db, &entry).await {
-                    tracing::error!("Error while handling webhook failure: {err}");
-                }
+        }
+        Ok(resp) => {
+            tracing::error!(
+                "Webhook callback failed for: {}. Response status: {}. Msg: {:?}",
+                entry.callback_url,
+                resp.status(),
+                truncated_body(resp).await
+            );
+            if let Err(err) = handle_failed_entry(db, &entry).await {
+                tracing::error!("Error while handling webhook failure: {err}");
             }
-            Err(err) => {
-                tracing::error!(
-                    "Webhook callback failed for: {}. Reason: {err}",
-                    entry.callback_url
-                );
-                if let Err(err) = handle_failed_entry(db, &entry).await {
-                    tracing::error!("Error while handling webhook failure: {err}");
-                }
+        }
+        Err(err) => {
+            tracing::error!(
+                "Webhook callback failed for: {}. Reason: {err}",
+                entry.callback_url
+            );
+            if let Err(err) = handle_failed_entry(db, &entry).await {
+                tracing::error!("Error while handling webhook failure: {err}");
             }
         }
     }
-    Ok(())
 }
 
 async fn handle_failed_entry(
@@ -152,6 +163,104 @@ mod service_tests {
         let ts = Utc::now() + TimeDelta::minutes(5);
         let pending = db.get_pending_webhook_queue_entries(ts).await.unwrap();
         assert!(pending.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_handle_queue_delivers_concurrently() {
+        let db = get_db().await;
+        let deliveries = 8;
+        let delay = std::time::Duration::from_secs(1);
+
+        for _ in 0..deliveries {
+            db.register_webhook(sample_webhook(WebhookEvent::CrateAdd, 9989))
+                .await
+                .unwrap();
+        }
+        notify_crate(
+            WebhookEvent::CrateAdd,
+            &Utc::now(),
+            &NormalizedName::from_unchecked_str("Test-Crate"),
+            &Version::from_unchecked_str("0.1.0"),
+            &db,
+        )
+        .await;
+
+        let listener = spawn_slow_listener(9989, delay).await;
+        let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
+        let start = std::time::Instant::now();
+        handle_queue(&db, &http_client).await.unwrap();
+        let elapsed = start.elapsed();
+        listener.abort();
+
+        assert!(elapsed < delay * 4, "deliveries took {elapsed:?}");
+        let ts = Utc::now() + TimeDelta::minutes(5);
+        assert!(
+            db.get_pending_webhook_queue_entries(ts)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_queue_records_mixed_results() {
+        let db = get_db().await;
+
+        for port in [9990, 9990, 9990, 9991, 9991, 9991, 9992] {
+            db.register_webhook(sample_webhook(WebhookEvent::CrateAdd, port))
+                .await
+                .unwrap();
+        }
+        notify_crate(
+            WebhookEvent::CrateAdd,
+            &Utc::now(),
+            &NormalizedName::from_unchecked_str("Test-Crate"),
+            &Version::from_unchecked_str("0.1.0"),
+            &db,
+        )
+        .await;
+
+        let _ok = get_test_listener(9990, 200).await;
+        let _fail = get_test_listener(9991, 500).await;
+        // Nothing listens on port 9992.
+        let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
+        handle_queue(&db, &http_client).await.unwrap();
+
+        let ts = Utc::now() + TimeDelta::minutes(5);
+        let pending = db.get_pending_webhook_queue_entries(ts).await.unwrap();
+        assert_eq!(4, pending.len());
+        for entry in pending {
+            assert_eq!(
+                entry.next_attempt,
+                entry.last_attempt.unwrap() + TimeDelta::seconds(5)
+            );
+        }
+    }
+
+    /// Listener that answers every connection with 200 after `delay`,
+    /// handling connections in parallel.
+    async fn spawn_slow_listener(
+        port: u16,
+        delay: std::time::Duration,
+    ) -> tokio::task::JoinHandle<()> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            loop {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                tokio::spawn(async move {
+                    let mut buf = [0; 4096];
+                    let _ = stream.read(&mut buf).await;
+                    tokio::time::sleep(delay).await;
+                    let _ = stream
+                        .write_all(b"HTTP/1.1 200\r\nContent-Length: 0\r\n\r\n")
+                        .await;
+                });
+            }
+        })
     }
 
     #[tokio::test]
