@@ -141,23 +141,31 @@ async fn add_security_headers(mut response: axum::response::Response) -> axum::r
 }
 
 /// Content-Security-Policy for the user-uploaded documentation served under
-/// `/docs`. `connect-src 'none'` and `form-action 'none'` neutralize the
-/// cross-endpoint attack path (a malicious docs page calling the authenticated
-/// API), while `'unsafe-inline'` scripts/styles are still allowed so generated
-/// rustdoc keeps working. True isolation would need a separate origin.
+/// `/docs`. `'unsafe-inline'` scripts/styles are allowed so generated rustdoc
+/// keeps working, but scripts must not reach the authenticated UI or API:
+/// - `connect-src 'none'` and `form-action 'none'` block requests to the API.
+/// - `frame-src`, `child-src` and `worker-src 'none'` block same-origin frames
+///   and workers.
+/// - `sandbox` without `allow-popups` blocks `window.open` and `_blank` links,
+///   so a docs page cannot get a handle to a same-origin UI window.
+///
+/// `allow-same-origin` is required: an opaque origin would make browsers drop
+/// the `SameSite=Strict` session cookie on all docs subresources, which breaks
+/// docs with `auth_required` or a download restriction. True isolation would
+/// need a separate origin for docs.
+const DOCS_CSP: &str = "default-src 'self'; script-src 'self' 'unsafe-inline'; \
+     style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; \
+     connect-src 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; \
+     worker-src 'none'; frame-ancestors 'self'; base-uri 'none'; object-src 'none'; \
+     sandbox allow-scripts allow-same-origin";
+
 async fn add_docs_csp(mut response: axum::response::Response) -> axum::response::Response {
     use axum::http::HeaderValue;
     use axum::http::header::CONTENT_SECURITY_POLICY;
 
-    response.headers_mut().insert(
-        CONTENT_SECURITY_POLICY,
-        HeaderValue::from_static(
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; \
-             style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; \
-             connect-src 'none'; form-action 'none'; frame-ancestors 'self'; \
-             base-uri 'none'; object-src 'none'",
-        ),
-    );
+    response
+        .headers_mut()
+        .insert(CONTENT_SECURITY_POLICY, HeaderValue::from_static(DOCS_CSP));
     response
 }
 
@@ -492,9 +500,25 @@ mod tests {
 
         assert_eq!(r.status(), StatusCode::OK);
         assert_eq!(r.headers().get(header::CONTENT_TYPE).unwrap(), "text/html");
-        assert!(r.headers().contains_key(header::CONTENT_SECURITY_POLICY));
+        assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], DOCS_CSP);
         assert!(r.headers().contains_key(header::ETAG));
         assert!(r.headers().contains_key(header::LAST_MODIFIED));
+    }
+
+    #[test]
+    fn docs_csp_blocks_popups_frames_and_workers() {
+        let directives: Vec<&str> = DOCS_CSP.split(';').map(str::trim).collect();
+
+        assert!(directives.contains(&"sandbox allow-scripts allow-same-origin"));
+        assert!(!DOCS_CSP.contains("allow-popups"));
+        for directive in [
+            "frame-src 'none'",
+            "child-src 'none'",
+            "worker-src 'none'",
+            "connect-src 'none'",
+        ] {
+            assert!(directives.contains(&directive), "missing {directive}");
+        }
     }
 
     async fn cache_control_for(file: &str) -> String {

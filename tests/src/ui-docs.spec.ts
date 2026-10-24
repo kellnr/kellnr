@@ -155,7 +155,39 @@ test.describe("Documentation Generation UI Tests", () => {
     const docsContent = await newPage.content();
     expect(docsContent).toContain("full_toml");
 
+    // The docs page must not get a handle to the UI window
+    expect(await newPage.evaluate(() => window.opener)).toBeNull();
+
     // Close the new page
     await newPage.close();
+  });
+
+  test("docs scripts cannot reach the UI or API", async ({ page }) => {
+    await page.goto(`${baseUrl}/docs/full-toml/1.0.0/doc/full_toml/index.html`);
+
+    const result = await page.evaluate(async () => {
+      const popup = window.open("/", "_blank");
+      let fetchBlocked = false;
+      try {
+        await fetch("/api/v1/users");
+      } catch {
+        fetchBlocked = true;
+      }
+      let storageWorks = false;
+      try {
+        localStorage.setItem("rustdoc-test", "1");
+        storageWorks = true;
+      } catch {
+        storageWorks = false;
+      }
+      return { popupBlocked: popup === null, fetchBlocked, storageWorks };
+    });
+
+    expect(result).toEqual({
+      popupBlocked: true,
+      fetchBlocked: true,
+      // rustdoc keeps its theme and settings in localStorage
+      storageWorks: true,
+    });
   });
 });
