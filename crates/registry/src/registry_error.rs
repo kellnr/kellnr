@@ -1,4 +1,5 @@
 use hyper::StatusCode;
+use kellnr_common::publish_metadata::InvalidUrl;
 use kellnr_error::api_error::ApiError;
 use thiserror::Error;
 
@@ -38,6 +39,8 @@ pub enum RegistryError {
     NewCratesRestricted,
     #[error("A crate must have at least one owner")]
     LastOwner,
+    #[error("{0}")]
+    InvalidUrl(#[from] InvalidUrl),
 }
 
 impl From<RegistryError> for ApiError {

@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use url::Url;
 
 use crate::index_metadata::IndexDep;
 
@@ -69,6 +71,13 @@ pub struct PublishMetadata {
     pub rust_version: Option<String>,
 }
 
+#[derive(Debug, PartialEq, Eq, Error)]
+#[error("URL for field `{field}` must begin with http:// or https:// (url: {url})")]
+pub struct InvalidUrl {
+    pub field: &'static str,
+    pub url: String,
+}
+
 impl PublishMetadata {
     pub fn minimal(name: &str, vers: &str) -> Self {
         Self {
@@ -77,6 +86,29 @@ impl PublishMetadata {
             ..Default::default()
         }
     }
+
+    /// Ensure the link fields are absent, empty or valid http(s) URLs, so they
+    /// are safe to render as links.
+    pub fn validate_urls(&self) -> Result<(), InvalidUrl> {
+        [
+            ("documentation", &self.documentation),
+            ("homepage", &self.homepage),
+            ("repository", &self.repository),
+        ]
+        .into_iter()
+        .try_for_each(|(field, value)| match value.as_deref() {
+            None | Some("") => Ok(()),
+            Some(url) if is_http_url(url) => Ok(()),
+            Some(url) => Err(InvalidUrl {
+                field,
+                url: url.to_string(),
+            }),
+        })
+    }
+}
+
+fn is_http_url(url: &str) -> bool {
+    Url::parse(url).is_ok_and(|u| matches!(u.scheme(), "http" | "https"))
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -130,5 +162,66 @@ impl From<IndexDep> for RegistryDep {
                 None => None,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with_urls(url: &str) -> PublishMetadata {
+        PublishMetadata {
+            documentation: Some(url.to_string()),
+            homepage: Some(url.to_string()),
+            repository: Some(url.to_string()),
+            ..PublishMetadata::minimal("test", "0.1.0")
+        }
+    }
+
+    #[test]
+    fn validate_urls_accepts_missing_and_empty() {
+        assert!(
+            PublishMetadata::minimal("test", "0.1.0")
+                .validate_urls()
+                .is_ok()
+        );
+        assert!(with_urls("").validate_urls().is_ok());
+    }
+
+    #[test]
+    fn validate_urls_accepts_http_and_https() {
+        assert!(with_urls("https://example.com/docs").validate_urls().is_ok());
+        assert!(with_urls("http://example.com").validate_urls().is_ok());
+        assert!(with_urls("HTTPS://EXAMPLE.COM").validate_urls().is_ok());
+    }
+
+    #[test]
+    fn validate_urls_rejects_other_schemes_and_garbage() {
+        for url in [
+            "javascript:alert(1)",
+            "JavaScript:alert(1)",
+            "data:text/html,alert",
+            "ftp://example.com",
+            "example.com",
+            "//example.com",
+        ] {
+            assert!(with_urls(url).validate_urls().is_err(), "accepted {url}");
+        }
+    }
+
+    #[test]
+    fn validate_urls_reports_the_offending_field() {
+        let metadata = PublishMetadata {
+            repository: Some("javascript:alert(1)".to_string()),
+            ..PublishMetadata::minimal("test", "0.1.0")
+        };
+
+        let err = metadata.validate_urls().unwrap_err();
+
+        assert_eq!("repository", err.field);
+        assert_eq!(
+            "URL for field `repository` must begin with http:// or https:// (url: javascript:alert(1))",
+            err.to_string()
+        );
     }
 }

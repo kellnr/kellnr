@@ -726,6 +726,11 @@ pub async fn publish(
     // their read-only status.
     check_can_modify(&user)?;
 
+    pub_data
+        .metadata
+        .validate_urls()
+        .map_err(RegistryError::from)?;
+
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed push a new version.
     // Check if crate with same version already exists.
@@ -941,6 +946,7 @@ mod reg_api_tests {
     use hyper::header;
     use kellnr_appstate::AppStateData;
     use kellnr_db::mock::MockDb;
+    use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, test_utils};
     use kellnr_error::api_error::ErrorDetails;
     use kellnr_settings::Settings;
@@ -962,6 +968,91 @@ mod reg_api_tests {
     const NON_ADMIN_TOKEN: &str = "g8kfzxSrMswNOVio5kBoTEFBBVm3fRS7";
     const RO_TOKEN: &str = "lJh6orU1Ye376ApXJR8I7V9gI3V6UZWU";
     const RO_ADMIN_TOKEN: &str = "GUOMPlZwN1kliXRW5wJ0ixh54NqYlE6X";
+
+    /// Build a cargo publish body for `metadata` with a dummy crate file.
+    fn pub_body(metadata: &PublishMetadata) -> Vec<u8> {
+        let meta = serde_json::to_vec(metadata).unwrap();
+        let crate_bytes = [0x1f, 0x8b, 0x08, 0x00];
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&u32::try_from(meta.len()).unwrap().to_le_bytes());
+        buf.extend_from_slice(&meta);
+        buf.extend_from_slice(&u32::try_from(crate_bytes.len()).unwrap().to_le_bytes());
+        buf.extend_from_slice(&crate_bytes);
+        buf
+    }
+
+    async fn publish_metadata(
+        kellnr: &TestKellnr,
+        token: &str,
+        metadata: &PublishMetadata,
+    ) -> (StatusCode, String) {
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, token)
+                    .body(Body::from(pub_body(metadata)))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = r.status();
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        let detail = serde_json::from_slice::<ErrorDetails>(&body)
+            .map(|e| e.errors[0].detail.clone())
+            .unwrap_or_default();
+        (status, detail)
+    }
+
+    #[tokio::test]
+    async fn publish_rejects_non_http_urls() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+
+        for field in ["documentation", "homepage", "repository"] {
+            let mut metadata = PublishMetadata::minimal("url_test", "1.0.0");
+            let url = Some("javascript:alert(1)".to_string());
+            match field {
+                "documentation" => metadata.documentation = url,
+                "homepage" => metadata.homepage = url,
+                _ => metadata.repository = url,
+            }
+
+            let (status, detail) = publish_metadata(&kellnr, TOKEN, &metadata).await;
+
+            assert_eq!(StatusCode::BAD_REQUEST, status);
+            assert_eq!(
+                format!(
+                    "ERROR: URL for field `{field}` must begin with http:// or https:// (url: javascript:alert(1))"
+                ),
+                detail
+            );
+        }
+        assert!(
+            kellnr
+                .db
+                .get_crate_id(&NormalizedName::from_unchecked_str("url_test"))
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn publish_accepts_http_and_empty_urls() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let metadata = PublishMetadata {
+            documentation: Some(String::new()),
+            homepage: Some("http://example.com".to_string()),
+            repository: Some("https://example.com/repo".to_string()),
+            ..PublishMetadata::minimal("url_test", "1.0.0")
+        };
+
+        let (status, detail) = publish_metadata(&kellnr, TOKEN, &metadata).await;
+
+        assert_eq!(StatusCode::OK, status, "{detail}");
+    }
 
     // Test that removal of the last owner is prevented with default settings.
     #[tokio::test]
