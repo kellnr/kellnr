@@ -22,7 +22,7 @@ pub use doc_queue_entry::DocQueueEntry;
 pub use group::Group;
 pub use krate::Crate;
 pub use provider::{
-    ChannelInfo, DbProvider, OAuth2StateData, SessionInfo, ToolchainComponentInfo,
+    ChannelInfo, CrateVisibility, DbProvider, OAuth2StateData, SessionInfo, ToolchainComponentInfo,
     ToolchainTargetInfo, ToolchainWithTargets, mock,
 };
 pub use user::User;

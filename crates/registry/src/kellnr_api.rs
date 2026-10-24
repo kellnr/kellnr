@@ -8,6 +8,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
 pub use kellnr_auth::crate_access::has_restricted_crate_access;
+use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
 use kellnr_auth::{maybe_user, token};
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
@@ -42,6 +43,20 @@ pub fn check_can_modify(user: &maybe_user::MaybeUser) -> Result<(), ApiError> {
         Err(RegistryError::ReadOnlyModify.into())
     } else {
         Ok(())
+    }
+}
+
+/// Fail with "crate not found" unless `user` may see the crate, so that the
+/// existence of a download-restricted crate is not revealed.
+async fn check_crate_visible(
+    crate_name: &NormalizedName,
+    user: Option<&maybe_user::MaybeUser>,
+    db: &Arc<dyn DbProvider>,
+) -> ApiResult<()> {
+    if can_read_crate(crate_name, user, db).await? {
+        Ok(())
+    } else {
+        Err(RegistryError::CrateNotFound.into())
     }
 }
 
@@ -323,15 +338,18 @@ pub async fn add_owner_single(
         ("crate_name" = String, Path, description = "Crate name")
     ),
     responses(
-        (status = 200, description = "List of owners", body = crate_user::CrateUserList)
+        (status = 200, description = "List of owners", body = crate_user::CrateUserList),
+        (status = 404, description = "Crate not found or download-restricted without access")
     ),
     security(("cargo_token" = []))
 )]
 pub async fn list_owners(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
+    user: Result<maybe_user::MaybeUser, StatusCode>,
 ) -> ApiResult<Json<crate_user::CrateUserList>> {
     let crate_name = crate_name.to_normalized();
+    check_crate_visible(&crate_name, user.ok().as_ref(), &db).await?;
 
     let owners: Vec<crate_user::CrateUser> = db
         .get_crate_owners(&crate_name)
@@ -511,15 +529,18 @@ pub async fn list_crate_groups(
         ("crate_name" = String, Path, description = "Crate name")
     ),
     responses(
-        (status = 200, description = "List of versions", body = crate_version::CrateVersionList)
+        (status = 200, description = "List of versions", body = crate_version::CrateVersionList),
+        (status = 404, description = "Crate not found or download-restricted without access")
     ),
     security(("cargo_token" = []))
 )]
 pub async fn list_crate_versions(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
+    user: Result<maybe_user::MaybeUser, StatusCode>,
 ) -> ApiResult<Json<crate_version::CrateVersionList>> {
     let crate_name = crate_name.to_normalized();
+    check_crate_visible(&crate_name, user.ok().as_ref(), &db).await?;
 
     let versions: Vec<crate_version::CrateVersion> = db
         .get_crate_versions(&crate_name)
@@ -550,11 +571,22 @@ pub async fn list_crate_versions(
     ),
     security(("cargo_token" = []))
 )]
-pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<SearchResult>> {
+pub async fn search(
+    State(db): DbState,
+    params: SearchParams,
+    user: Result<maybe_user::MaybeUser, StatusCode>,
+) -> ApiResult<Json<SearchResult>> {
     let limit = params.per_page.0;
     let offset = (params.page.0 - 1) * limit;
+    let visibility = crate_visibility(user.ok().as_ref());
     let crates = db
-        .search_in_crate_name_and_description(params.q.as_str(), limit as u64, offset as u64, false)
+        .search_in_crate_name_and_description(
+            params.q.as_str(),
+            limit as u64,
+            offset as u64,
+            false,
+            &visibility,
+        )
         .await?
         .into_iter()
         .map(|c| Crate {
@@ -567,7 +599,7 @@ pub async fn search(State(db): DbState, params: SearchParams) -> ApiResult<Json<
         .collect::<Vec<Crate>>();
 
     let total = db
-        .count_by_crate_name_and_description(params.q.as_str(), false)
+        .count_by_crate_name_and_description(params.q.as_str(), false, &visibility)
         .await?;
 
     Ok(Json(SearchResult {
@@ -909,7 +941,7 @@ mod reg_api_tests {
     use hyper::header;
     use kellnr_appstate::AppStateData;
     use kellnr_db::mock::MockDb;
-    use kellnr_db::{ConString, Database, SqliteConString, test_utils};
+    use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, test_utils};
     use kellnr_error::api_error::ErrorDetails;
     use kellnr_settings::Settings;
     use kellnr_storage::cached_crate_storage::DynStorage;
@@ -1828,12 +1860,18 @@ mod reg_api_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("foo"), eq(10), eq(0), eq(false))
-            .returning(|_, _, _, _| Ok(vec![]));
+            .with(
+                eq("foo"),
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+            )
+            .returning(|_, _, _, _, _| Ok(vec![]));
         mock_db
             .expect_count_by_crate_name_and_description()
-            .with(eq("foo"), eq(false))
-            .returning(|_, _| Ok(0));
+            .with(eq("foo"), eq(false), eq(CrateVisibility::Unrestricted))
+            .returning(|_, _, _| Ok(0));
 
         let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
@@ -1850,16 +1888,143 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
+    async fn search_with_token_uses_user_visibility() {
+        let mut mock_db = restricted_crate_mock_db();
+        mock_db
+            .expect_search_in_crate_name_and_description()
+            .with(
+                eq("foo"),
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::User("crate_user".to_string())),
+            )
+            .returning(|_, _, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .with(
+                eq("foo"),
+                eq(false),
+                eq(CrateVisibility::User("crate_user".to_string())),
+            )
+            .returning(|_, _, _| Ok(0));
+
+        let r = app_search(Arc::new(mock_db))
+            .oneshot(
+                Request::get("/api/v1/crates?q=foo")
+                    .header(header::AUTHORIZATION, "crate-user-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::OK, r.status());
+    }
+
+    /// Mock with the download-restricted crate `secret` that only the token
+    /// `crate-user-token` of user `crate_user` may access.
+    fn restricted_crate_mock_db() -> MockDb {
+        let secret = NormalizedName::from_unchecked("secret".to_string());
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_download_restricted()
+            .with(eq(secret.clone()))
+            .returning(|_| Ok(true));
+        mock_db
+            .expect_get_user_from_token()
+            .with(eq("crate-user-token"))
+            .returning(|_| {
+                Ok(kellnr_db::User {
+                    name: "crate_user".to_string(),
+                    ..kellnr_db::User::default()
+                })
+            });
+        mock_db
+            .expect_is_crate_user()
+            .with(eq(secret), eq("crate_user"))
+            .returning(|_, _| Ok(true));
+        mock_db.expect_get_crate_owners().returning(|_| Ok(vec![]));
+        mock_db
+            .expect_get_crate_versions()
+            .returning(|_| Ok(vec![]));
+        mock_db
+    }
+
+    async fn get_restricted(uri: &str, token: Option<&str>) -> StatusCode {
+        let mut request = Request::get(uri);
+        if let Some(token) = token {
+            request = request.header(header::AUTHORIZATION, token);
+        }
+        Router::new()
+            .route("/api/v1/crates/{crate_name}/owners", get(list_owners))
+            .route(
+                "/api/v1/crates/{crate_name}/crate_versions",
+                get(list_crate_versions),
+            )
+            .with_state(AppStateData {
+                db: Arc::new(restricted_crate_mock_db()),
+                ..kellnr_appstate::test_state()
+            })
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
+    #[tokio::test]
+    async fn list_owners_restricted_crate_anonymous_is_not_found() {
+        assert_eq!(
+            StatusCode::NOT_FOUND,
+            get_restricted("/api/v1/crates/secret/owners", None).await
+        );
+    }
+
+    #[tokio::test]
+    async fn list_owners_restricted_crate_crate_user_is_ok() {
+        assert_eq!(
+            StatusCode::OK,
+            get_restricted("/api/v1/crates/secret/owners", Some("crate-user-token")).await
+        );
+    }
+
+    #[tokio::test]
+    async fn list_crate_versions_restricted_crate_anonymous_is_not_found() {
+        assert_eq!(
+            StatusCode::NOT_FOUND,
+            get_restricted("/api/v1/crates/secret/crate_versions", None).await
+        );
+    }
+
+    #[tokio::test]
+    async fn list_crate_versions_restricted_crate_crate_user_is_ok() {
+        assert_eq!(
+            StatusCode::OK,
+            get_restricted(
+                "/api/v1/crates/secret/crate_versions",
+                Some("crate-user-token")
+            )
+            .await
+        );
+    }
+
+    #[tokio::test]
     async fn search_verify_page() {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("foo"), eq(20), eq(40), eq(false))
-            .returning(|_, _, _, _| Ok(vec![]));
+            .with(
+                eq("foo"),
+                eq(20),
+                eq(40),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+            )
+            .returning(|_, _, _, _, _| Ok(vec![]));
         mock_db
             .expect_count_by_crate_name_and_description()
-            .with(eq("foo"), eq(false))
-            .returning(|_, _| Ok(0));
+            .with(eq("foo"), eq(false), eq(CrateVisibility::Unrestricted))
+            .returning(|_, _, _| Ok(0));
 
         let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
@@ -1880,12 +2045,18 @@ mod reg_api_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("foo"), eq(20), eq(0), eq(false))
-            .returning(|_, _, _, _| Ok(vec![]));
+            .with(
+                eq("foo"),
+                eq(20),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+            )
+            .returning(|_, _, _, _, _| Ok(vec![]));
         mock_db
             .expect_count_by_crate_name_and_description()
-            .with(eq("foo"), eq(false))
-            .returning(|_, _| Ok(0));
+            .with(eq("foo"), eq(false), eq(CrateVisibility::Unrestricted))
+            .returning(|_, _, _| Ok(0));
 
         let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr
@@ -1906,12 +2077,18 @@ mod reg_api_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("foo"), eq(20), eq(0), eq(false))
-            .returning(|_, _, _, _| Ok(vec![]));
+            .with(
+                eq("foo"),
+                eq(20),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+            )
+            .returning(|_, _, _, _, _| Ok(vec![]));
         mock_db
             .expect_count_by_crate_name_and_description()
-            .with(eq("foo"), eq(false))
-            .returning(|_, _| Ok(1234));
+            .with(eq("foo"), eq(false), eq(CrateVisibility::Unrestricted))
+            .returning(|_, _, _| Ok(1234));
 
         let kellnr = app_search(Arc::new(mock_db));
         let r = kellnr

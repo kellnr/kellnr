@@ -5,7 +5,8 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use kellnr_appstate::{AppState, DbState, SettingsProvState, SettingsState};
-use kellnr_auth::crate_access::can_read_crate;
+use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
+use kellnr_auth::maybe_user::MaybeUser as MaybeUserOrToken;
 use kellnr_common::crate_data::CrateData;
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::name_or_description::NameOrDescription;
@@ -293,12 +294,17 @@ pub struct Pagination {
         (status = 200, description = "Paginated crate list", body = Pagination)
     )
 )]
-pub async fn crates(Query(params): Query<CratesParams>, State(db): DbState) -> Json<Pagination> {
+pub async fn crates(
+    Query(params): Query<CratesParams>,
+    State(db): DbState,
+    user: Result<MaybeUserOrToken, StatusCode>,
+) -> Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
     let page = params.page.unwrap_or(0);
     let cache = params.cache.unwrap_or(false);
+    let visibility = crate_visibility(user.ok().as_ref());
     let crates = db
-        .get_crate_overview_list(page_size, page_size * page, cache)
+        .get_crate_overview_list(page_size, page_size * page, cache, &visibility)
         .await
         .unwrap_or_default();
 
@@ -327,16 +333,22 @@ pub struct SearchParams {
         (status = 200, description = "Paginated search results", body = Pagination)
     )
 )]
-pub async fn search(Query(params): Query<SearchParams>, State(db): DbState) -> Json<Pagination> {
+pub async fn search(
+    Query(params): Query<SearchParams>,
+    State(db): DbState,
+    user: Result<MaybeUserOrToken, StatusCode>,
+) -> Json<Pagination> {
     let page_size = params.page_size.unwrap_or(10);
     let page = params.page.unwrap_or(0);
     let cache = params.cache.unwrap_or(false);
+    let visibility = crate_visibility(user.ok().as_ref());
     let crates = db
         .search_in_crate_name_and_description(
             params.name.as_str(),
             page_size,
             page_size * page,
             cache,
+            &visibility,
         )
         .await
         .unwrap_or_default();
@@ -367,7 +379,7 @@ pub struct CrateDataParams {
 pub async fn crate_data(
     Query(params): Query<CrateDataParams>,
     State(db): DbState,
-    user: Result<kellnr_auth::maybe_user::MaybeUser, StatusCode>,
+    user: Result<MaybeUserOrToken, StatusCode>,
 ) -> Result<Json<CrateData>, StatusCode> {
     let index_name = NormalizedName::from(params.name);
     // Same response as a missing crate to not reveal that a restricted crate exists.
@@ -595,7 +607,11 @@ pub struct TopCrates {
         (status = 200, description = "Registry statistics", body = Statistic)
     )
 )]
-pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Json<Statistic> {
+pub async fn statistic(
+    State(db): DbState,
+    State(settings): SettingsState,
+    user: Result<MaybeUserOrToken, StatusCode>,
+) -> Json<Statistic> {
     fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
         if tops.len() > i {
             tops[i].clone()
@@ -607,7 +623,13 @@ pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Js
     let num_crates = db.get_total_unique_crates().await.unwrap_or_default();
     let num_crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
     let num_crate_downloads = db.get_total_downloads().await.unwrap_or_default();
-    let tops = db.get_top_crates_downloads(3).await.unwrap_or_default();
+    // Crate names are only listed if the caller may see them. The totals
+    // are aggregates and do not reveal individual crates.
+    let visibility = crate_visibility(user.ok().as_ref());
+    let tops = db
+        .get_top_crates_downloads(3, &visibility)
+        .await
+        .unwrap_or_default();
     let num_proxy_crates = db
         .get_total_unique_cached_crates()
         .await
@@ -617,7 +639,10 @@ pub async fn statistic(State(db): DbState, State(settings): SettingsState) -> Js
         .await
         .unwrap_or_default();
     let num_proxy_crate_downloads = db.get_total_cached_downloads().await.unwrap_or_default();
-    let last_updated_crate = db.get_last_updated_crate().await.unwrap_or_default();
+    let last_updated_crate = db
+        .get_last_updated_crate(&visibility)
+        .await
+        .unwrap_or_default();
 
     Json(Statistic {
         num_crates,
@@ -849,9 +874,9 @@ mod tests {
     use hyper::{Request, header};
     use kellnr_appstate::{AppStateData, encode_cookies};
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
-    use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
+    use kellnr_db::{CrateVisibility, User};
     use kellnr_settings::{Postgresql, Settings, Setup, constants};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
@@ -1750,11 +1775,11 @@ mod tests {
             .returning(move || Err(DbError::FailedToCountTotalDownloads));
         mock_db
             .expect_get_top_crates_downloads()
-            .with(eq(3))
-            .returning(move |_| Ok(vec![("top1".to_string(), 1000)]));
+            .with(eq(3), eq(CrateVisibility::Unrestricted))
+            .returning(move |_, _| Ok(vec![("top1".to_string(), 1000)]));
         mock_db
             .expect_get_last_updated_crate()
-            .returning(move || Ok(None));
+            .returning(move |_| Ok(None));
         mock_db
             .expect_get_total_unique_cached_crates()
             .returning(move || Err(DbError::FailedToCountCrates));
@@ -1811,11 +1836,11 @@ mod tests {
             .returning(move || Err(DbError::FailedToCountTotalDownloads));
         mock_db
             .expect_get_top_crates_downloads()
-            .with(eq(3))
-            .returning(move |_| Err(DbError::FailedToCountTotalDownloads));
+            .with(eq(3), eq(CrateVisibility::Unrestricted))
+            .returning(move |_, _| Err(DbError::FailedToCountTotalDownloads));
         mock_db
             .expect_get_last_updated_crate()
-            .returning(move || Ok(None));
+            .returning(move |_| Ok(None));
         mock_db
             .expect_get_total_unique_cached_crates()
             .returning(move || Err(DbError::FailedToCountCrates));
@@ -1872,8 +1897,8 @@ mod tests {
             .returning(move || Ok(100_000));
         mock_db
             .expect_get_top_crates_downloads()
-            .with(eq(3))
-            .returning(move |_| {
+            .with(eq(3), eq(CrateVisibility::Unrestricted))
+            .returning(move |_, _| {
                 Ok(vec![
                     ("top1".to_string(), 1000),
                     ("top2".to_string(), 500),
@@ -1889,7 +1914,7 @@ mod tests {
         mock_db
             .expect_get_total_cached_downloads()
             .returning(move || Ok(999_999));
-        mock_db.expect_get_last_updated_crate().returning(move || {
+        mock_db.expect_get_last_updated_crate().returning(move |_| {
             Ok(Some((
                 OriginalName::from_unchecked("foobar".to_string()),
                 Version::try_from("1.0.0").unwrap(),
@@ -1957,8 +1982,14 @@ mod tests {
 
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("doesnotexist"), eq(10), eq(0), eq(false))
-            .returning(move |_name, _, _, _| Ok(vec![]));
+            .with(
+                eq("doesnotexist"),
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+            )
+            .returning(move |_name, _, _, _, _| Ok(vec![]));
 
         let r = app(
             mock_db,
@@ -2013,8 +2044,14 @@ mod tests {
 
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("vcard parser"), eq(10), eq(0), eq(false))
-            .returning(|_, _, _, _| Ok(vec![]));
+            .with(
+                eq("vcard parser"),
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+            )
+            .returning(|_, _, _, _, _| Ok(vec![]));
 
         let r = app(
             mock_db,
@@ -2048,8 +2085,14 @@ mod tests {
         let tc = test_crate_summary.clone();
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("hello"), eq(10), eq(0), eq(false))
-            .returning(move |_, _, _, _| Ok(vec![tc.clone()]));
+            .with(
+                eq("hello"),
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+            )
+            .returning(move |_, _, _, _, _| Ok(vec![tc.clone()]));
 
         let r = app(
             mock_db,
@@ -2085,8 +2128,14 @@ mod tests {
 
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("hello"), eq(20), eq(60), eq(false))
-            .returning(|_, _, _, _| Ok(vec![]));
+            .with(
+                eq("hello"),
+                eq(20),
+                eq(60),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+            )
+            .returning(|_, _, _, _, _| Ok(vec![]));
 
         let r = app(
             mock_db,
@@ -2127,8 +2176,14 @@ mod tests {
 
         mock_db
             .expect_search_in_crate_name_and_description()
-            .with(eq("hello"), eq(2), eq(0), eq(false))
-            .returning(move |_, _, _, _| Ok(hits.clone()));
+            .with(
+                eq("hello"),
+                eq(2),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+            )
+            .returning(move |_, _, _, _, _| Ok(hits.clone()));
 
         let r = app(
             mock_db,
@@ -2307,6 +2362,108 @@ mod tests {
         assert_eq!(StatusCode::OK, get_secret_crate_data(mock_db, true).await);
     }
 
+    async fn get_with_session(
+        uri: &str,
+        mut mock_db: MockDb,
+        name: &'static str,
+        is_admin: bool,
+    ) -> StatusCode {
+        mock_db.expect_validate_session().returning(move |_| {
+            Ok(kellnr_db::SessionInfo {
+                name: name.to_string(),
+                is_admin,
+                is_read_only: false,
+            })
+        });
+        let (settings, storage) = test_deps();
+        app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get(uri)
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+        .status()
+    }
+
+    #[tokio::test]
+    async fn crates_user_session_lists_accessible_restricted_crates() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_crate_overview_list()
+            .with(
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::User("user".to_string())),
+            )
+            .returning(|_, _, _, _| Ok(vec![]));
+
+        let status = get_with_session("/crates", mock_db, "user", false).await;
+
+        assert_eq!(StatusCode::OK, status);
+    }
+
+    #[tokio::test]
+    async fn search_admin_session_lists_all_crates() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_search_in_crate_name_and_description()
+            .with(
+                eq("foo"),
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::All),
+            )
+            .returning(|_, _, _, _, _| Ok(vec![]));
+
+        let status = get_with_session("/search?name=foo", mock_db, "admin", true).await;
+
+        assert_eq!(StatusCode::OK, status);
+    }
+
+    #[tokio::test]
+    async fn statistic_user_session_hides_inaccessible_crate_names() {
+        let visibility = CrateVisibility::User("user".to_string());
+        let mut mock_db = MockDb::new();
+        mock_db.expect_get_total_unique_crates().returning(|| Ok(0));
+        mock_db
+            .expect_get_total_crate_versions()
+            .returning(|| Ok(0));
+        mock_db.expect_get_total_downloads().returning(|| Ok(0));
+        mock_db
+            .expect_get_top_crates_downloads()
+            .with(eq(3), eq(visibility.clone()))
+            .returning(|_, _| Ok(vec![]));
+        mock_db
+            .expect_get_last_updated_crate()
+            .with(eq(visibility))
+            .returning(|_| Ok(None));
+        mock_db
+            .expect_get_total_unique_cached_crates()
+            .returning(|| Ok(0));
+        mock_db
+            .expect_get_total_cached_crate_versions()
+            .returning(|| Ok(0));
+        mock_db
+            .expect_get_total_cached_downloads()
+            .returning(|| Ok(0));
+
+        let status = get_with_session("/statistic", mock_db, "user", false).await;
+
+        assert_eq!(StatusCode::OK, status);
+    }
+
     #[tokio::test]
     async fn crates_get_page() {
         let mut mock_db = MockDb::new();
@@ -2330,8 +2487,8 @@ mod tests {
 
         mock_db
             .expect_get_crate_overview_list()
-            .with(eq(10), eq(0), eq(false))
-            .returning(move |_, _, _| Ok(tc.clone()));
+            .with(eq(10), eq(0), eq(false), eq(CrateVisibility::Unrestricted))
+            .returning(move |_, _, _, _| Ok(tc.clone()));
 
         let r = app(
             mock_db,
@@ -2392,8 +2549,8 @@ mod tests {
         let crate_overview = expected_crate_overview.clone();
         mock_db
             .expect_get_crate_overview_list()
-            .with(eq(10), eq(0), eq(false))
-            .returning(move |_, _, _| Ok(crate_overview.clone()));
+            .with(eq(10), eq(0), eq(false), eq(CrateVisibility::Unrestricted))
+            .returning(move |_, _, _, _| Ok(crate_overview.clone()));
 
         let r = app(
             mock_db,

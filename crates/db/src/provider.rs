@@ -27,6 +27,18 @@ pub enum PrefetchState {
     NotFound,
 }
 
+/// Which download-restricted crates a caller may see in crate listings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CrateVisibility {
+    /// All crates, used for admins.
+    All,
+    /// Unrestricted crates and the restricted crates the user owns or may
+    /// access as crate user or crate group member.
+    User(String),
+    /// Unrestricted crates only, used for anonymous callers.
+    Unrestricted,
+}
+
 /// Authenticated user and privileges resolved from a valid session cookie.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionInfo {
@@ -118,7 +130,10 @@ pub struct ChannelInfo {
 
 #[async_trait]
 pub trait DbProvider: Send + Sync {
-    async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>>;
+    async fn get_last_updated_crate(
+        &self,
+        visibility: &CrateVisibility,
+    ) -> DbResult<Option<(OriginalName, Version)>>;
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User>;
     async fn increase_download_counter(
         &self,
@@ -202,7 +217,11 @@ pub trait DbProvider: Send + Sync {
     async fn get_total_unique_crates(&self) -> DbResult<u64>;
     async fn get_total_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_downloads(&self) -> DbResult<u64>;
-    async fn get_top_crates_downloads(&self, top: u64) -> DbResult<Vec<(String, u64)>>;
+    async fn get_top_crates_downloads(
+        &self,
+        top: u64,
+        visibility: &CrateVisibility,
+    ) -> DbResult<Vec<(String, u64)>>;
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64>;
     async fn get_total_cached_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_cached_downloads(&self) -> DbResult<u64>;
@@ -224,17 +243,20 @@ pub trait DbProvider: Send + Sync {
         limit: u64,
         offset: u64,
         cache: bool,
+        visibility: &CrateVisibility,
     ) -> DbResult<Vec<CrateOverview>>;
     async fn count_by_crate_name_and_description(
         &self,
         contains: &str,
         cache: bool,
+        visibility: &CrateVisibility,
     ) -> DbResult<u64>;
     async fn get_crate_overview_list(
         &self,
         limit: u64,
         offset: u64,
         cache: bool,
+        visibility: &CrateVisibility,
     ) -> DbResult<Vec<CrateOverview>>;
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData>;
     async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64>;
@@ -433,7 +455,7 @@ pub mod mock {
         #[async_trait]
         impl DbProvider for Db {
 
-            async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>> {
+            async fn get_last_updated_crate(&self, visibility: &CrateVisibility) -> DbResult<Option<(OriginalName, Version)>> {
                 unimplemented!()
             }
 
@@ -611,7 +633,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_top_crates_downloads(&self, _top: u64) -> DbResult<Vec<(String, u64)>> {
+            async fn get_top_crates_downloads(&self, _top: u64, visibility: &CrateVisibility) -> DbResult<Vec<(String, u64)>> {
                 unimplemented!()
             }
 
@@ -659,15 +681,15 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn search_in_crate_name_and_description(&self, contains: &str, limit: u64, offset: u64, cache: bool) -> DbResult<Vec<CrateOverview>> {
+            async fn search_in_crate_name_and_description(&self, contains: &str, limit: u64, offset: u64, cache: bool, visibility: &CrateVisibility) -> DbResult<Vec<CrateOverview>> {
                 unimplemented!()
             }
 
-            async fn count_by_crate_name_and_description(&self, contains: &str, cache: bool) -> DbResult<u64> {
+            async fn count_by_crate_name_and_description(&self, contains: &str, cache: bool, visibility: &CrateVisibility) -> DbResult<u64> {
                 unimplemented!()
             }
 
-            async fn get_crate_overview_list(&self, limit: u64, offset: u64, cache: bool) -> DbResult<Vec<CrateOverview >> {
+            async fn get_crate_overview_list(&self, limit: u64, offset: u64, cache: bool, visibility: &CrateVisibility) -> DbResult<Vec<CrateOverview >> {
                 unimplemented!()
             }
 

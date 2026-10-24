@@ -14,7 +14,7 @@ use kellnr_common::webhook::{Webhook, WebhookEvent};
 use kellnr_db::password::hash_pwd;
 use kellnr_db::provider::PrefetchState;
 use kellnr_db::test_utils::*;
-use kellnr_db::{DbProvider, DocQueueEntry};
+use kellnr_db::{CrateVisibility, DbProvider, DocQueueEntry};
 use kellnr_db_testcontainer::db_test;
 use serde_json::json;
 mod image;
@@ -313,7 +313,10 @@ async fn increase_download_counter_works(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    let tops = test_db.get_top_crates_downloads(2).await.unwrap();
+    let tops = test_db
+        .get_top_crates_downloads(2, &CrateVisibility::All)
+        .await
+        .unwrap();
     assert_eq!(2, tops.len());
     assert_eq!(("crate1".to_string(), 3), tops[0]);
     assert_eq!(("crate3".to_string(), 2), tops[1]);
@@ -1523,21 +1526,21 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
     let expected = search_and_count_test_fixtures(test_db).await;
 
     let results_1 = test_db
-        .search_in_crate_name_and_description("crate", 2, 0, false)
+        .search_in_crate_name_and_description("crate", 2, 0, false, &CrateVisibility::All)
         .await
         .unwrap();
 
     assert_eq!(expected[0..2].to_vec(), results_1);
 
     let results_2 = test_db
-        .search_in_crate_name_and_description("crate", 2, 2, false)
+        .search_in_crate_name_and_description("crate", 2, 2, false, &CrateVisibility::All)
         .await
         .unwrap();
 
     assert_eq!(expected[2..4].to_vec(), results_2);
 
     let search_results = test_db
-        .search_in_crate_name_and_description("crate", 100, 0, false)
+        .search_in_crate_name_and_description("crate", 100, 0, false, &CrateVisibility::All)
         .await
         .unwrap();
 
@@ -1571,7 +1574,13 @@ async fn search_in_crate_name_and_description_reaches_results_past_the_first_pag
     let mut page = 0;
     loop {
         let hits = test_db
-            .search_in_crate_name_and_description("crate", PAGE_SIZE, PAGE_SIZE * page, false)
+            .search_in_crate_name_and_description(
+                "crate",
+                PAGE_SIZE,
+                PAGE_SIZE * page,
+                false,
+                &CrateVisibility::All,
+            )
             .await
             .unwrap();
         let hit_count = hits.len() as u64;
@@ -1594,14 +1603,14 @@ async fn count_by_crate_name_and_description_found_match(test_db: &kellnr_db::Da
     let expected = search_and_count_test_fixtures(test_db).await;
 
     let results = test_db
-        .count_by_crate_name_and_description("crate", false)
+        .count_by_crate_name_and_description("crate", false, &CrateVisibility::All)
         .await
         .unwrap();
 
     assert_eq!(expected.len(), results as usize);
 
     let results = test_db
-        .count_by_crate_name_and_description("something not found", false)
+        .count_by_crate_name_and_description("something not found", false, &CrateVisibility::All)
         .await
         .unwrap();
 
@@ -1636,14 +1645,14 @@ async fn count_by_crate_name_and_description_with_cache(test_db: &kellnr_db::Dat
     let expected = search_and_count_test_fixtures(test_db).await;
 
     let results = test_db
-        .count_by_crate_name_and_description("crate", true)
+        .count_by_crate_name_and_description("crate", true, &CrateVisibility::All)
         .await
         .unwrap();
 
     assert_eq!(expected.len() + 1, results as usize);
 
     let results = test_db
-        .count_by_crate_name_and_description("something not found", true)
+        .count_by_crate_name_and_description("something not found", true, &CrateVisibility::All)
         .await
         .unwrap();
 
@@ -1744,7 +1753,10 @@ async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
         },
     ];
 
-    let overview_list = test_db.get_crate_overview_list(10, 0, false).await.unwrap();
+    let overview_list = test_db
+        .get_crate_overview_list(10, 0, false, &CrateVisibility::All)
+        .await
+        .unwrap();
 
     assert_eq!(expected, overview_list);
 }
@@ -2733,14 +2745,21 @@ async fn test_get_last_updated_crate_works(test_db: &kellnr_db::Database) {
     .await
     .unwrap();
 
-    let last_updated = test_db.get_last_updated_crate().await.unwrap().unwrap();
+    let last_updated = test_db
+        .get_last_updated_crate(&CrateVisibility::All)
+        .await
+        .unwrap()
+        .unwrap();
 
     assert_eq!("my_crate2", last_updated.0.to_string());
 }
 
 #[db_test]
 async fn test_get_last_updated_crate_empty(test_db: &kellnr_db::Database) {
-    let last_updated = test_db.get_last_updated_crate().await.unwrap();
+    let last_updated = test_db
+        .get_last_updated_crate(&CrateVisibility::All)
+        .await
+        .unwrap();
 
     assert_eq!(None, last_updated);
 }
@@ -3215,4 +3234,184 @@ async fn has_oauth2_admin_requires_an_admin_with_a_linked_identity(test_db: &kel
         .await
         .unwrap();
     assert!(test_db.has_oauth2_admin().await.unwrap());
+}
+
+/// Adds the crates `public`, `restricted_owned`, `restricted_user`,
+/// `restricted_group` and `restricted_other` where every restricted crate is
+/// accessible to `user` through a different path except `restricted_other`.
+async fn add_crates_with_restrictions(test_db: &kellnr_db::Database) {
+    test_db
+        .add_user("user", "pwd", "salt", false, false)
+        .await
+        .unwrap();
+    test_db
+        .add_user("other", "pwd", "salt", false, false)
+        .await
+        .unwrap();
+    test_db.add_group("group").await.unwrap();
+    test_db.add_group_user("group", "user").await.unwrap();
+
+    let crates = [
+        ("public", "admin", 1),
+        ("restricted_owned", "user", 2),
+        ("restricted_user", "admin", 3),
+        ("restricted_group", "admin", 4),
+        ("restricted_other", "other", 5),
+    ];
+    for (name, owner, day) in crates {
+        let created = Utc.with_ymd_and_hms(2021, 1, day, 0, 0, 0).unwrap();
+        test_add_crate(
+            test_db,
+            name,
+            owner,
+            &Version::try_from("1.0.0").unwrap(),
+            &created,
+        )
+        .await
+        .unwrap();
+        test_db
+            .increase_download_counter_by(
+                &NormalizedName::from_unchecked(name.to_string()),
+                &Version::try_from("1.0.0").unwrap(),
+                u64::from(day) * 10,
+            )
+            .await
+            .unwrap();
+        if name != "public" {
+            test_db
+                .change_download_restricted(&NormalizedName::from_unchecked(name.to_string()), true)
+                .await
+                .unwrap();
+        }
+    }
+    test_db
+        .add_crate_user(
+            &NormalizedName::from_unchecked("restricted_user".to_string()),
+            "user",
+        )
+        .await
+        .unwrap();
+    test_db
+        .add_crate_group(
+            &NormalizedName::from_unchecked("restricted_group".to_string()),
+            "group",
+        )
+        .await
+        .unwrap();
+}
+
+async fn overview_names(
+    test_db: &kellnr_db::Database,
+    visibility: &CrateVisibility,
+) -> Vec<String> {
+    test_db
+        .get_crate_overview_list(100, 0, false, visibility)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect()
+}
+
+#[db_test]
+async fn crate_overview_list_respects_visibility(test_db: &kellnr_db::Database) {
+    add_crates_with_restrictions(test_db).await;
+
+    assert_eq!(
+        vec!["public"],
+        overview_names(test_db, &CrateVisibility::Unrestricted).await
+    );
+    assert_eq!(
+        vec![
+            "public",
+            "restricted_group",
+            "restricted_owned",
+            "restricted_user"
+        ],
+        overview_names(test_db, &CrateVisibility::User("user".to_string())).await
+    );
+    assert_eq!(
+        vec!["public", "restricted_other"],
+        overview_names(test_db, &CrateVisibility::User("other".to_string())).await
+    );
+    assert_eq!(
+        vec!["public"],
+        overview_names(test_db, &CrateVisibility::User("unknown".to_string())).await
+    );
+    assert_eq!(
+        5,
+        overview_names(test_db, &CrateVisibility::All).await.len()
+    );
+}
+
+#[db_test]
+async fn search_and_count_respect_visibility(test_db: &kellnr_db::Database) {
+    add_crates_with_restrictions(test_db).await;
+    let user = CrateVisibility::User("user".to_string());
+
+    let found: Vec<String> = test_db
+        .search_in_crate_name_and_description("restricted", 100, 0, false, &user)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(
+        vec!["restricted_group", "restricted_owned", "restricted_user"],
+        found
+    );
+    assert_eq!(
+        3,
+        test_db
+            .count_by_crate_name_and_description("restricted", false, &user)
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        0,
+        test_db
+            .count_by_crate_name_and_description(
+                "restricted",
+                false,
+                &CrateVisibility::Unrestricted
+            )
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        4,
+        test_db
+            .count_by_crate_name_and_description("restricted", false, &CrateVisibility::All)
+            .await
+            .unwrap()
+    );
+}
+
+#[db_test]
+async fn statistics_respect_visibility(test_db: &kellnr_db::Database) {
+    add_crates_with_restrictions(test_db).await;
+
+    let top = test_db
+        .get_top_crates_downloads(3, &CrateVisibility::Unrestricted)
+        .await
+        .unwrap();
+    assert_eq!(vec![("public".to_string(), 10)], top);
+    let top = test_db
+        .get_top_crates_downloads(1, &CrateVisibility::User("user".to_string()))
+        .await
+        .unwrap();
+    assert_eq!(vec![("restricted_group".to_string(), 40)], top);
+
+    let last = test_db
+        .get_last_updated_crate(&CrateVisibility::Unrestricted)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!("public", last.0.to_string());
+    let last = test_db
+        .get_last_updated_crate(&CrateVisibility::All)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!("restricted_other", last.0.to_string());
 }
