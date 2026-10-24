@@ -13,7 +13,7 @@
           :loading="isLoading" :disabled="isLoading" data-testid="user-menu-button">
           <v-icon icon="mdi-account-circle" class="me-sm-2"></v-icon>
           <span class="d-none d-sm-inline">{{ store.loggedInUser }}</span>
-          <v-icon icon="mdi-menu-down" class="d-none d-sm-inline ms-1"></v-icon>
+          <v-icon icon="mdi-menu-down" class="d-none d-lg-inline ms-1"></v-icon>
         </v-btn>
       </template>
 

@@ -9,6 +9,7 @@
  * - Logout functionality
  * - Welcome message only after logging in
  * - User menu with settings and log out
+ * - User menu and settings menu at the smallest desktop width
  * - Remember me functionality
  *
  * Performance: All tests share a single local Kellnr instance.
@@ -193,6 +194,28 @@ test.describe("Login UI Tests", () => {
 
     await page.getByTestId("user-menu-settings").click();
     await page.waitForURL("**/settings**");
+  });
+
+  test("user menu and settings menu fit the smallest desktop width", async ({ page }) => {
+    const loginPage = new LoginPage(page);
+    const header = new HeaderComponent(page);
+
+    await page.setViewportSize({ width: 960, height: 800 });
+    await page.goto(`${baseUrl}/login`);
+    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await page.waitForURL(`${baseUrl}/`);
+
+    const buttonBox = await header.userMenuButton.boundingBox();
+    expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(960);
+
+    // Settings menu entries wrap instead of being cut off
+    await page.goto(`${baseUrl}/settings`);
+    const menuTitles = page.locator(".v-list-item-title:visible");
+    await expect(menuTitles.first()).toBeVisible();
+    const truncated = await menuTitles.evaluateAll((titles) =>
+      titles.filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent),
+    );
+    expect(truncated).toEqual([]);
   });
 
   test("redirect to login when accessing protected page while not authenticated", async ({ page }) => {
