@@ -3,7 +3,8 @@ use axum::http::StatusCode;
 use axum::{Extension, Json};
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
-use kellnr_appstate::{AppState, DbState, SettingsState, TokenCacheState};
+use kellnr_appstate::{AppState, DbState, LoginThrottleState, SettingsState, TokenCacheState};
+use kellnr_auth::password::{PasswordAuthError, authenticate_password};
 use kellnr_auth::token;
 use kellnr_common::util::generate_rand_string;
 use kellnr_db::{self, AuthToken, User};
@@ -332,11 +333,17 @@ pub async fn login(
     ensure_local_auth_enabled(&state.settings)?;
     credentials.validate()?;
 
-    let user = state
-        .db
-        .authenticate_user(&credentials.user, &credentials.pwd)
-        .await
-        .map_err(|_| RouteError::AuthenticationFailure)?;
+    let user = authenticate_password(
+        state.db.as_ref(),
+        &state.login_throttle,
+        &credentials.user,
+        &credentials.pwd,
+    )
+    .await
+    .map_err(|e| match e {
+        PasswordAuthError::Throttled => RouteError::Status(StatusCode::TOO_MANY_REQUESTS),
+        PasswordAuthError::Invalid => RouteError::AuthenticationFailure,
+    })?;
 
     let jar = create_session_jar(cookies, &state, &credentials.user).await?;
 
@@ -461,15 +468,19 @@ pub async fn change_pwd(
     user: MaybeUser,
     State(db): DbState,
     State(cache): TokenCacheState,
+    State(throttle): LoginThrottleState,
     State(settings): SettingsState,
     Json(pwd_change): Json<PwdChange>,
 ) -> Result<(), RouteError> {
     ensure_local_auth_enabled(&settings)?;
     pwd_change.validate()?;
 
-    let Ok(user) = db.authenticate_user(user.name(), &pwd_change.old_pwd).await else {
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-    };
+    let user = authenticate_password(db.as_ref(), &throttle, user.name(), &pwd_change.old_pwd)
+        .await
+        .map_err(|e| match e {
+            PasswordAuthError::Throttled => RouteError::Status(StatusCode::TOO_MANY_REQUESTS),
+            PasswordAuthError::Invalid => RouteError::Status(StatusCode::BAD_REQUEST),
+        })?;
 
     db.change_pwd(&user.name, &pwd_change.new_pwd1).await?;
 
@@ -550,53 +561,23 @@ mod tests {
     use axum_extra::extract::cookie::Key;
     use hyper::{Request, header};
     use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
+    use kellnr_common::login_throttle::LoginThrottle;
     use kellnr_common::token_cache::{CachedTokenData, TokenCacheManager};
     use kellnr_db::AuthToken;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::constants::COOKIE_SESSION_ID;
-    use kellnr_storage::cached_crate_storage::DynStorage;
-    use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
-    use kellnr_storage::docs_storage::DocsStorage;
-    use kellnr_storage::fs_storage::FSStorage;
-    use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use mockall::predicate::*;
     use tower::ServiceExt;
 
     use super::*;
 
     fn test_state_with_cache(mock_db: MockDb, cache: Arc<TokenCacheManager>) -> AppStateData {
-        let settings = Arc::new(kellnr_settings::test_settings());
-        let kellnr_storage =
-            Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
-        let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, kellnr_storage));
-        let cratesio_storage = Arc::new(CratesIoCrateStorage::new(
-            &settings,
-            Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage,
-        ));
-        let docs_storage = Arc::new(DocsStorage::new(Box::new(
-            FSStorage::new(&settings.docs_path()).unwrap(),
-        ) as DynStorage));
-        let (cratesio_prefetch_sender, _) = flume::unbounded();
-        let db: Arc<dyn kellnr_db::DbProvider> = Arc::new(mock_db);
-        let download_counter = Arc::new(kellnr_db::download_counter::DownloadCounter::new(
-            db.clone(),
-            30,
-        ));
-
         AppStateData {
-            db,
+            db: Arc::new(mock_db),
             signing_key: Key::from(TEST_KEY),
-            settings,
-            settings_prov: kellnr_appstate::default_settings_prov(),
-            crate_storage,
-            cratesio_storage,
-            docs_storage,
-            cratesio_prefetch_sender,
             token_cache: cache,
-            toolchain_storage: None,
-            download_counter,
-            proxy_client: kellnr_common::cratesio_downloader::CLIENT.clone(),
+            ..kellnr_appstate::test_state()
         }
     }
 
@@ -736,6 +717,87 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    async fn post_login(app: &Router, user: &str) -> StatusCode {
+        app.clone()
+            .oneshot(
+                Request::post("/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(format!(r#"{{"user":"{user}","pwd":"guess"}}"#)))
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .status()
+    }
+
+    /// Password guessing on the login form is throttled per username. Other
+    /// users stay unaffected so a single attacker cannot lock out everyone.
+    #[tokio::test]
+    async fn test_login_throttled_after_failed_attempts() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_authenticate_user()
+            .times(3)
+            .returning(|_, _| Err(DbError::PasswordMismatch));
+
+        let state = AppStateData {
+            login_throttle: Arc::new(LoginThrottle::new(2, std::time::Duration::from_mins(5))),
+            ..test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100)))
+        };
+        let app = Router::new().route("/login", post(login)).with_state(state);
+
+        assert_eq!(post_login(&app, "admin").await, StatusCode::UNAUTHORIZED);
+        assert_eq!(post_login(&app, "admin").await, StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            post_login(&app, "admin").await,
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        assert_eq!(post_login(&app, "other").await, StatusCode::UNAUTHORIZED);
+    }
+
+    /// The old password check on password change must not become a way
+    /// around the login throttle.
+    #[tokio::test]
+    async fn test_change_pwd_throttled_after_failed_attempts() {
+        let mut mock_db = session_db(false);
+        mock_db
+            .expect_authenticate_user()
+            .times(1)
+            .returning(|_, _| Err(DbError::PasswordMismatch));
+        mock_db.expect_change_pwd().never();
+
+        let state = AppStateData {
+            login_throttle: Arc::new(LoginThrottle::new(1, std::time::Duration::from_mins(5))),
+            ..test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100)))
+        };
+        let app = Router::new()
+            .route("/me/password", put(change_pwd))
+            .with_state(state);
+
+        let mut statuses = Vec::new();
+        for _ in 0..2 {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::put("/me/password")
+                        .header(header::COOKIE, session_cookie_header())
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(
+                            r#"{"old_pwd":"guess","new_pwd1":"newpassword","new_pwd2":"newpassword"}"#,
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            statuses.push(response.status());
+        }
+
+        assert_eq!(
+            statuses,
+            [StatusCode::BAD_REQUEST, StatusCode::TOO_MANY_REQUESTS]
+        );
     }
 
     async fn insert_cached_credentials(cache: &TokenCacheManager) {

@@ -14,6 +14,7 @@ const ERROR_MESSAGES: Record<number, string> = {
   403: 'Access denied. You do not have permission.',
   404: 'Resource not found.',
   409: 'Conflict. The resource already exists or cannot be modified.',
+  429: 'Too many failed attempts. Please try again later.',
   500: 'Server error. Please try again later.',
 }
 

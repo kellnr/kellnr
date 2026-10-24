@@ -77,6 +77,15 @@ pub struct Registry {
     /// Download counter flush interval in seconds (0 = flush every download)
     #[arg(long = "registry-download-counter-flush")]
     pub download_counter_flush_seconds: u64,
+
+    /// Password attempts allowed per username within the window before
+    /// further attempts are rejected with HTTP 429 (0 = disabled). Applies to
+    /// web UI login and cargo basic auth; a successful login resets the count
+    pub auth_max_failed_attempts: u32,
+
+    /// Window in seconds for counting password attempts per username
+    #[arg(long = "registry-auth-failed-attempts-window")]
+    pub auth_failed_attempts_window_seconds: u64,
 }
 
 impl Default for Registry {
@@ -100,6 +109,8 @@ impl Default for Registry {
             download_timeout_seconds: 60,
             download_max_concurrent: 20,
             download_counter_flush_seconds: 30,
+            auth_max_failed_attempts: 10,
+            auth_failed_attempts_window_seconds: 300,
         }
     }
 }

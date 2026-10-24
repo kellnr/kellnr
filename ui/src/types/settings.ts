@@ -127,6 +127,8 @@ export type Registry = {
   download_timeout_seconds: number
   download_max_concurrent: number
   download_counter_flush_seconds: number
+  auth_max_failed_attempts: number
+  auth_failed_attempts_window_seconds: number
 }
 
 export type S3 = {
@@ -224,7 +226,9 @@ export const emptySettings: Settings = {
     token_db_retry_delay_ms: 100,
     download_timeout_seconds: 60,
     download_max_concurrent: 20,
-    download_counter_flush_seconds: 30
+    download_counter_flush_seconds: 30,
+    auth_max_failed_attempts: 10,
+    auth_failed_attempts_window_seconds: 300
   },
   s3: {
     enabled: false,

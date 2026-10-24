@@ -10,6 +10,7 @@ use kellnr_appstate::AppStateData;
 use kellnr_auth::oauth2::{OAuth2Error, OAuth2Handler};
 use kellnr_common::cratesio_downloader::build_client;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
+use kellnr_common::login_throttle::LoginThrottle;
 use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_db::download_counter::DownloadCounter;
 use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
@@ -210,6 +211,10 @@ async fn run_server(resolved: ResolvedSettings) {
         settings.registry.token_cache_ttl_seconds,
         settings.registry.token_cache_max_capacity,
     ));
+    let login_throttle = Arc::new(LoginThrottle::new(
+        settings.registry.auth_max_failed_attempts,
+        Duration::from_secs(settings.registry.auth_failed_attempts_window_seconds),
+    ));
 
     // Initialize toolchain storage if enabled
     let toolchain_storage = init_toolchain_storage(&settings);
@@ -307,6 +312,7 @@ async fn run_server(resolved: ResolvedSettings) {
         docs_storage,
         cratesio_prefetch_sender,
         token_cache,
+        login_throttle,
         toolchain_storage,
         download_counter,
         proxy_client,

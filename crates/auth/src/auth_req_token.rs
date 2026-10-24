@@ -29,13 +29,7 @@ pub async fn cargo_auth_when_required(
         return next.run(request).await;
     }
 
-    let token = Token::from_header(
-        request.headers(),
-        &state.db,
-        &state.token_cache,
-        &state.settings,
-    )
-    .await;
+    let token = Token::from_header(request.headers(), &state).await;
 
     match token {
         Ok(_) => next.run(request).await,
@@ -70,15 +64,7 @@ pub async fn token_or_session_auth_when_required(
     }
 
     // 1) Try cargo token auth.
-    if Token::from_header(
-        request.headers(),
-        &state.db,
-        &state.token_cache,
-        &state.settings,
-    )
-    .await
-    .is_ok()
-    {
+    if Token::from_header(request.headers(), &state).await.is_ok() {
         return next.run(request).await;
     }
 

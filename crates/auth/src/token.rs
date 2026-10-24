@@ -8,17 +8,18 @@ use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use kellnr_appstate::AppStateData;
-use kellnr_common::token_cache::{CachedTokenData, TokenCacheManager};
+use kellnr_common::token_cache::CachedTokenData;
 use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
 use kellnr_db::password::hash_token;
-use kellnr_settings::Settings;
 use rand::distr::Alphanumeric;
 use rand::{RngExt, rng};
 use serde::Deserialize;
 use tokio::time::sleep;
 use tracing::warn;
 use utoipa::ToSchema;
+
+use crate::password::{PasswordAuthError, authenticate_password};
 
 #[derive(Debug)]
 pub struct Token {
@@ -47,19 +48,13 @@ pub fn generate_token() -> String {
 impl Token {
     pub async fn from_header(
         headers: &HeaderMap,
-        db: &Arc<dyn DbProvider>,
-        cache: &Arc<TokenCacheManager>,
-        settings: &Arc<Settings>,
+        state: &AppStateData,
     ) -> Result<Self, StatusCode> {
-        Self::extract_token(headers, db, cache, settings).await
+        Self::extract_token(headers, state).await
     }
 
-    async fn extract_token(
-        headers: &HeaderMap,
-        db: &Arc<dyn DbProvider>,
-        cache: &Arc<TokenCacheManager>,
-        settings: &Arc<Settings>,
-    ) -> Result<Token, StatusCode> {
+    async fn extract_token(headers: &HeaderMap, state: &AppStateData) -> Result<Token, StatusCode> {
+        let (db, cache) = (&state.db, &state.token_cache);
         // OptionToken code expects UNAUTHORIZED when no token is found
         let mut token = headers
             .get("Authorization")
@@ -69,7 +64,7 @@ impl Token {
 
         // Handle basic authentication
         if token.starts_with("Basic ") || token.starts_with("basic ") {
-            if settings.oauth2.enforced {
+            if state.settings.oauth2.enforced {
                 return Err(StatusCode::FORBIDDEN);
             }
 
@@ -79,7 +74,7 @@ impl Token {
             let decoded_str = String::from_utf8(decoded).map_err(|_| StatusCode::BAD_REQUEST)?;
             let (user, pwd) = decoded_str.split_once(':').ok_or(StatusCode::BAD_REQUEST)?;
 
-            return authenticate_basic(user, pwd, db, cache).await;
+            return authenticate_basic(user, pwd, state).await;
         }
 
         // Handle bearer authentication (uses token cache)
@@ -104,8 +99,8 @@ impl Token {
         let Ok(user) = get_user_with_retry(
             db,
             token,
-            settings.registry.token_db_retry_count,
-            settings.registry.token_db_retry_delay_ms,
+            state.settings.registry.token_db_retry_count,
+            state.settings.registry.token_db_retry_delay_ms,
         )
         .await
         else {
@@ -143,13 +138,15 @@ fn basic_auth_cache_key(user: &str, pwd: &str) -> String {
 
 /// Verifies basic auth credentials. Cargo sends them with every request and
 /// password hashing is deliberately slow, so successful verifications are
-/// cached like bearer tokens and dropped by the same invalidations.
+/// cached like bearer tokens and dropped by the same invalidations. A cache
+/// hit implies correct credentials, so it bypasses the attempt throttle and
+/// keeps CI working while an attacker locks out the username.
 async fn authenticate_basic(
     user: &str,
     pwd: &str,
-    db: &Arc<dyn DbProvider>,
-    cache: &Arc<TokenCacheManager>,
+    state: &AppStateData,
 ) -> Result<Token, StatusCode> {
+    let cache = &state.token_cache;
     let cache_key = basic_auth_cache_key(user, pwd);
     if let Some(cached) = cache.get(&cache_key).await {
         return Ok(Token {
@@ -161,10 +158,12 @@ async fn authenticate_basic(
     }
 
     let generation = cache.generation();
-    let user = db
-        .authenticate_user(user, pwd)
+    let user = authenticate_password(state.db.as_ref(), &state.login_throttle, user, pwd)
         .await
-        .map_err(|_| StatusCode::FORBIDDEN)?;
+        .map_err(|e| match e {
+            PasswordAuthError::Throttled => StatusCode::TOO_MANY_REQUESTS,
+            PasswordAuthError::Invalid => StatusCode::FORBIDDEN,
+        })?;
 
     cache
         .insert(
@@ -232,13 +231,7 @@ impl FromRequestParts<AppStateData> for Token {
         parts: &mut Parts,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        Self::extract_token(
-            &parts.headers,
-            &state.db,
-            &state.token_cache,
-            &state.settings,
-        )
-        .await
+        Self::extract_token(&parts.headers, state).await
     }
 }
 
@@ -249,14 +242,7 @@ impl FromRequestParts<AppStateData> for OptionToken {
         parts: &mut Parts,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        match Token::extract_token(
-            &parts.headers,
-            &state.db,
-            &state.token_cache,
-            &state.settings,
-        )
-        .await
-        {
+        match Token::extract_token(&parts.headers, state).await {
             Ok(token) => Ok(OptionToken::Some(token)),
             Err(StatusCode::UNAUTHORIZED) => Ok(OptionToken::None),
             Err(status_code) => Err(status_code),
@@ -273,9 +259,12 @@ pub struct NewTokenReqData {
 mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
+    use kellnr_common::login_throttle::LoginThrottle;
+    use kellnr_common::token_cache::TokenCacheManager;
     use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
+    use kellnr_settings::Settings;
     use mockall::predicate::*;
 
     use super::*;
@@ -304,6 +293,19 @@ mod tests {
             },
             ..Settings::default()
         })
+    }
+
+    fn app_state(
+        db: &Arc<dyn DbProvider>,
+        cache: &Arc<TokenCacheManager>,
+        settings: &Arc<Settings>,
+    ) -> AppStateData {
+        AppStateData {
+            db: db.clone(),
+            token_cache: cache.clone(),
+            settings: settings.clone(),
+            ..kellnr_appstate::test_state()
+        }
     }
 
     /// Settings with SSO-only login enforced.
@@ -457,7 +459,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", "Bearer cached_token".parse().unwrap());
 
-        let result = Token::from_header(&headers, &db, &cache, &settings).await;
+        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
 
         assert!(result.is_ok());
         let token = result.unwrap();
@@ -492,7 +494,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", "Bearer new_token".parse().unwrap());
 
-        let result = Token::from_header(&headers, &db, &cache, &settings).await;
+        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
 
         assert!(result.is_ok());
         let token = result.unwrap();
@@ -526,7 +528,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", "Bearer racy_token".parse().unwrap());
 
-        let token = Token::from_header(&headers, &db, &cache, &test_settings())
+        let token = Token::from_header(&headers, &app_state(&db, &cache, &test_settings()))
             .await
             .unwrap();
 
@@ -551,7 +553,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", "Bearer bad_token".parse().unwrap());
 
-        let result = Token::from_header(&headers, &db, &cache, &settings).await;
+        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
@@ -579,7 +581,8 @@ mod tests {
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
         let headers = basic_auth_header("test_user", "correct_password");
 
-        let result = Token::from_header(&headers, &db, &cache, &sso_enforced_settings()).await;
+        let result =
+            Token::from_header(&headers, &app_state(&db, &cache, &sso_enforced_settings())).await;
 
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
     }
@@ -598,7 +601,8 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", format!("basic {encoded}").parse().unwrap());
 
-        let result = Token::from_header(&headers, &db, &cache, &sso_enforced_settings()).await;
+        let result =
+            Token::from_header(&headers, &app_state(&db, &cache, &sso_enforced_settings())).await;
 
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
     }
@@ -620,7 +624,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", "Bearer valid_token".parse().unwrap());
 
-        let token = Token::from_header(&headers, &db, &cache, &sso_enforced_settings())
+        let token = Token::from_header(&headers, &app_state(&db, &cache, &sso_enforced_settings()))
             .await
             .expect("bearer tokens must remain valid under SSO enforcement");
 
@@ -642,7 +646,7 @@ mod tests {
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
         let headers = basic_auth_header("test_user", "correct_password");
 
-        let token = Token::from_header(&headers, &db, &cache, &test_settings())
+        let token = Token::from_header(&headers, &app_state(&db, &cache, &test_settings()))
             .await
             .expect("basic auth should work when SSO is not enforced");
 
@@ -669,7 +673,7 @@ mod tests {
         let headers = basic_auth_header("test_user", "correct_password");
 
         for _ in 0..3 {
-            let token = Token::from_header(&headers, &db, &cache, &test_settings())
+            let token = Token::from_header(&headers, &app_state(&db, &cache, &test_settings()))
                 .await
                 .unwrap();
             assert_eq!(token.user, "test_user");
@@ -690,7 +694,8 @@ mod tests {
         let headers = basic_auth_header("test_user", "wrong_password");
 
         for _ in 0..2 {
-            let result = Token::from_header(&headers, &db, &cache, &test_settings()).await;
+            let result =
+                Token::from_header(&headers, &app_state(&db, &cache, &test_settings())).await;
             assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
         }
     }
@@ -715,12 +720,12 @@ mod tests {
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
 
         let ok = basic_auth_header("test_user", "correct_password");
-        Token::from_header(&ok, &db, &cache, &test_settings())
+        Token::from_header(&ok, &app_state(&db, &cache, &test_settings()))
             .await
             .unwrap();
 
         let wrong = basic_auth_header("test_user", "wrong_password");
-        let result = Token::from_header(&wrong, &db, &cache, &test_settings()).await;
+        let result = Token::from_header(&wrong, &app_state(&db, &cache, &test_settings())).await;
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
     }
 
@@ -743,13 +748,80 @@ mod tests {
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
         let headers = basic_auth_header("test_user", "old_password");
 
-        Token::from_header(&headers, &db, &cache, &test_settings())
+        Token::from_header(&headers, &app_state(&db, &cache, &test_settings()))
             .await
             .unwrap();
         cache.invalidate_all();
 
-        let result = Token::from_header(&headers, &db, &cache, &test_settings()).await;
+        let result = Token::from_header(&headers, &app_state(&db, &cache, &test_settings())).await;
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+    }
+
+    /// Brute forcing a password through cargo basic auth is throttled per
+    /// username, and the password is no longer checked once locked.
+    #[tokio::test]
+    async fn test_basic_auth_failures_are_throttled() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_authenticate_user()
+            .times(2)
+            .returning(|_, _| Err(DbError::PasswordMismatch));
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let state = AppStateData {
+            login_throttle: Arc::new(LoginThrottle::new(2, Duration::from_mins(5))),
+            ..app_state(&db, &cache, &test_settings())
+        };
+        let headers = basic_auth_header("test_user", "guess");
+
+        for _ in 0..2 {
+            let result = Token::from_header(&headers, &state).await;
+            assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+        }
+        let result = Token::from_header(&headers, &state).await;
+        assert_eq!(result.unwrap_err(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    /// Credentials verified before the lockout keep working from the cache,
+    /// so an attacker cannot lock out CI that uses basic auth.
+    #[tokio::test]
+    async fn test_cached_basic_auth_bypasses_throttle() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_authenticate_user()
+            .with(eq("test_user"), eq("correct_password"))
+            .times(1)
+            .returning(|_, _| Ok(test_user()));
+        mock_db
+            .expect_authenticate_user()
+            .with(eq("test_user"), eq("guess"))
+            .times(1)
+            .returning(|_, _| Err(DbError::PasswordMismatch));
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let state = AppStateData {
+            login_throttle: Arc::new(LoginThrottle::new(1, Duration::from_mins(5))),
+            ..app_state(&db, &cache, &test_settings())
+        };
+        let valid = basic_auth_header("test_user", "correct_password");
+        Token::from_header(&valid, &state).await.unwrap();
+
+        let guess = basic_auth_header("test_user", "guess");
+        assert_eq!(
+            Token::from_header(&guess, &state).await.unwrap_err(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            Token::from_header(&guess, &state).await.unwrap_err(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+
+        let token = Token::from_header(&valid, &state).await.unwrap();
+        assert_eq!(token.user, "test_user");
     }
 
     #[test]
@@ -770,7 +842,7 @@ mod tests {
 
         let headers = HeaderMap::new(); // No Authorization header
 
-        let result = Token::from_header(&headers, &db, &cache, &settings).await;
+        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
@@ -801,9 +873,9 @@ mod tests {
         headers.insert("Authorization", "Bearer token".parse().unwrap());
 
         // First call
-        let _ = Token::from_header(&headers, &db, &cache, &settings).await;
+        let _ = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
         // Second call - should hit DB again since cache is disabled
-        let _ = Token::from_header(&headers, &db, &cache, &settings).await;
+        let _ = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
 
         assert_eq!(call_count.load(Ordering::SeqCst), 2);
     }
@@ -826,7 +898,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", "bearer lowercase_token".parse().unwrap());
 
-        let result = Token::from_header(&headers, &db, &cache, &settings).await;
+        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().user, "test_user");
