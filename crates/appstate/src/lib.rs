@@ -6,6 +6,7 @@ use axum_extra::extract::cookie::Key;
 use cookie::{Cookie, CookieJar};
 use flume::Sender;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
+use kellnr_common::login_throttle::LoginThrottle;
 use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
@@ -30,6 +31,7 @@ pub type DocsStorageState = axum::extract::State<Arc<DocsStorage>>;
 pub type SigningKeyState = axum::extract::State<Key>;
 pub type CratesIoPrefetchSenderState = axum::extract::State<Sender<CratesioPrefetchMsg>>;
 pub type TokenCacheState = axum::extract::State<Arc<TokenCacheManager>>;
+pub type LoginThrottleState = axum::extract::State<Arc<LoginThrottle>>;
 pub type ToolchainStorageState = axum::extract::State<Option<Arc<ToolchainStorage>>>;
 pub type DownloadCounterState = axum::extract::State<Arc<DownloadCounter>>;
 pub type ProxyClientState = axum::extract::State<Client>;
@@ -51,6 +53,8 @@ pub struct AppStateData {
     pub docs_storage: Arc<DocsStorage>,
     pub cratesio_prefetch_sender: Sender<CratesioPrefetchMsg>,
     pub token_cache: Arc<TokenCacheManager>,
+    /// Per-username throttle for password authentication attempts.
+    pub login_throttle: Arc<LoginThrottle>,
     pub toolchain_storage: Option<Arc<ToolchainStorage>>,
     pub download_counter: Arc<DownloadCounter>,
     pub proxy_client: Client,
@@ -84,6 +88,10 @@ pub fn test_state() -> AppStateData {
     ) as DynStorage));
     let (cratesio_prefetch_sender, _) = flume::unbounded();
     let token_cache = Arc::new(TokenCacheManager::new(false, 60, 1000));
+    let login_throttle = Arc::new(LoginThrottle::new(
+        settings.registry.auth_max_failed_attempts,
+        std::time::Duration::from_secs(settings.registry.auth_failed_attempts_window_seconds),
+    ));
     let download_counter = Arc::new(DownloadCounter::new(db.clone(), 30));
     AppStateData {
         db,
@@ -95,6 +103,7 @@ pub fn test_state() -> AppStateData {
         docs_storage,
         cratesio_prefetch_sender,
         token_cache,
+        login_throttle,
         toolchain_storage: None, // Toolchain storage disabled in tests by default
         download_counter,
         proxy_client: kellnr_common::cratesio_downloader::CLIENT.clone(),

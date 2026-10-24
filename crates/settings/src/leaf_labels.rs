@@ -22,6 +22,7 @@ pub fn leaf_label(dotted_path: &str) -> Option<&'static str> {
         "registry.token_db_retry_delay_ms" => "Token DB Retry Delay (ms)",
         "registry.download_timeout_seconds" => "Download Timeout (seconds)",
         "registry.download_counter_flush_seconds" => "Download Counter Flush (seconds)",
+        "registry.auth_failed_attempts_window_seconds" => "Auth Failed Attempts Window (seconds)",
         "proxy.connect_timeout_seconds"
         | "s3.connect_timeout_seconds"
         | "gcs.connect_timeout_seconds" => "Connect Timeout (seconds)",
