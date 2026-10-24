@@ -1,8 +1,8 @@
 <template>
   <div class="section-header">
     <v-icon :icon="icon" size="small" color="primary" class="me-3"></v-icon>
-    <span class="text-title-large font-weight-bold">{{ title }}</span>
-    <span v-if="count !== undefined && count > 0" class="section-count">{{ count }}</span>
+    <span class="text-title-large font-weight-bold" data-testid="section-title">{{ title }}</span>
+    <span v-if="count !== undefined" class="section-count">{{ count }}</span>
     <slot name="actions"></slot>
   </div>
 </template>
