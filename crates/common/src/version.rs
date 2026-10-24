@@ -37,6 +37,16 @@ impl Version {
     pub fn into_inner(self) -> String {
         self.0
     }
+
+    /// Whether both versions are equal when build metadata is ignored. Cargo
+    /// does not distinguish `1.0.0+a` from `1.0.0+b`, so a registry must not
+    /// host both.
+    pub fn eq_ignoring_build(&self, other: &Version) -> bool {
+        match (semver::Version::parse(self), semver::Version::parse(other)) {
+            (Ok(a), Ok(b)) => (a.major, a.minor, a.patch, a.pre) == (b.major, b.minor, b.patch, b.pre),
+            _ => self.0 == other.0,
+        }
+    }
 }
 
 impl From<Version> for Value {
@@ -145,6 +155,17 @@ mod tests {
             Version::try_from("0.1.1-45rdfsd-45").unwrap().to_string(),
             "0.1.1-45rdfsd-45"
         );
+    }
+
+    #[test]
+    fn eq_ignoring_build_ignores_only_build_metadata() {
+        let v = |s: &str| Version::try_from(s).unwrap();
+
+        assert!(v("1.0.0+a").eq_ignoring_build(&v("1.0.0+b")));
+        assert!(v("1.0.0").eq_ignoring_build(&v("1.0.0+b")));
+        assert!(v("1.0.0-rc.1+a").eq_ignoring_build(&v("1.0.0-rc.1")));
+        assert!(!v("1.0.0-rc.1").eq_ignoring_build(&v("1.0.0")));
+        assert!(!v("1.0.1+a").eq_ignoring_build(&v("1.0.0+a")));
     }
 
     #[test]

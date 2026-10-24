@@ -17,6 +17,7 @@ use kellnr_common::search_result::{Crate, SearchResult};
 use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
+use kellnr_db::provider::DbResult;
 use kellnr_error::api_error::{ApiError, ApiResult};
 
 use crate::pub_data::{EmptyCrateData, PubData};
@@ -36,6 +37,21 @@ pub async fn check_ownership(
     } else {
         Err(RegistryError::NotOwner.into())
     }
+}
+
+/// Find an existing version of the crate that equals `version` when build
+/// metadata is ignored.
+async fn find_same_version(
+    crate_name: &NormalizedName,
+    version: &Version,
+    db: &Arc<dyn DbProvider>,
+) -> DbResult<Option<String>> {
+    Ok(db
+        .get_crate_meta_list(crate_name)
+        .await?
+        .into_iter()
+        .map(|meta| meta.version)
+        .find(|existing| Version::from_unchecked_str(existing).eq_ignoring_build(version)))
 }
 
 pub fn check_can_modify(user: &maybe_user::MaybeUser) -> Result<(), ApiError> {
@@ -731,20 +747,20 @@ pub async fn publish(
         .validate_urls()
         .map_err(RegistryError::from)?;
 
+    let version = Version::try_from(&pub_data.metadata.vers)?;
+
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed push a new version.
     // Check if crate with same version already exists.
     let id = db.get_crate_id(&normalized_name).await?;
     match (id, settings.registry.new_crates_restricted) {
-        (Some(id), _) => {
+        (Some(_), _) => {
             check_ownership(&normalized_name, &user, &db).await?;
 
-            if db.crate_version_exists(id, &pub_data.metadata.vers).await? {
-                return Err(RegistryError::CrateExists(
-                    pub_data.metadata.name,
-                    pub_data.metadata.vers,
-                )
-                .into());
+            if let Some(existing) = find_same_version(&normalized_name, &version, &db).await? {
+                return Err(
+                    RegistryError::CrateExists(pub_data.metadata.name, existing).into(),
+                );
             }
         }
         (None, true) if !user.is_admin => {
@@ -782,7 +798,6 @@ pub async fn publish(
         }
     }
 
-    let version = Version::try_from(&pub_data.metadata.vers)?;
     let has_docs_link = pub_data.metadata.documentation.is_some();
 
     // Store the crate file and add it to the DB in a detached task. If the client
@@ -1123,6 +1138,47 @@ mod reg_api_tests {
             .unwrap();
 
         assert_eq!(StatusCode::BAD_REQUEST, r.status());
+    }
+
+    #[tokio::test]
+    async fn publish_rejects_version_differing_only_in_build_metadata() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("build_meta", "1.0.0+a"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("build_meta", "1.0.0+b"),
+        )
+        .await;
+
+        assert_eq!(StatusCode::BAD_REQUEST, status);
+        assert_eq!(
+            "ERROR: Crate with version already exists: build_meta-1.0.0+a",
+            detail
+        );
+        let name = NormalizedName::from_unchecked_str("build_meta");
+        assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
+    }
+
+    #[tokio::test]
+    async fn publish_accepts_new_version_with_build_metadata() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        for vers in ["1.0.0+a", "1.0.1+a"] {
+            let (status, detail) = publish_metadata(
+                &kellnr,
+                TOKEN,
+                &PublishMetadata::minimal("build_meta", vers),
+            )
+            .await;
+            assert_eq!(StatusCode::OK, status, "{detail}");
+        }
     }
 
     #[tokio::test]
