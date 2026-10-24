@@ -19,6 +19,7 @@ kellnr-storage.workspace = true
 # External dependencies
 axum-extra.workspace = true
 axum.workspace = true
+cookie.workspace = true
 flume.workspace = true
 provcfg.workspace = true
 reqwest.workspace = true

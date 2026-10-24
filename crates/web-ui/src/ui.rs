@@ -786,7 +786,7 @@ mod tests {
     use bytes::Bytes;
     use http_body_util::BodyExt;
     use hyper::{Request, header};
-    use kellnr_appstate::AppStateData;
+    use kellnr_appstate::{AppStateData, encode_cookies};
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
     use kellnr_db::User;
     use kellnr_db::error::DbError;
@@ -800,7 +800,6 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::test_helper::encode_cookies;
 
     #[tokio::test]
     async fn settings_no_admin_returns_unauthorized() {

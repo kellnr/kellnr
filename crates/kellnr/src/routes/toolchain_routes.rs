@@ -1096,7 +1096,6 @@ xz_hash = "{}"
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
     use std::io::Cursor;
     use std::sync::Arc;
 
@@ -1107,8 +1106,7 @@ mod tests {
     use axum::routing::{delete, get, put};
     use axum_extra::extract::cookie::Key;
     use bytes::Bytes;
-    use cookie::{Cookie, CookieJar};
-    use kellnr_appstate::AppStateData;
+    use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
     use kellnr_db::mock::MockDb;
     use kellnr_db::{
         DbProvider, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
@@ -1123,25 +1121,6 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-
-    // Fixed test key for encrypting session cookies - must match between cookie creation and app state
-    const TEST_KEY: &[u8] = &[1; 64];
-
-    /// Encode cookies with encryption using the test key
-    fn encode_cookies<const N: usize, K: Into<Cow<'static, str>>, V: Into<Cow<'static, str>>>(
-        cookies: [(K, V); N],
-    ) -> String {
-        let mut clear = CookieJar::new();
-        let mut jar = clear.private_mut(&TEST_KEY.try_into().unwrap());
-        for (k, v) in cookies {
-            jar.add(Cookie::new(k, v));
-        }
-        clear
-            .iter()
-            .map(|c| c.encoded().to_string())
-            .collect::<Vec<_>>()
-            .join("; ")
-    }
 
     /// Create an encrypted admin session cookie
     fn admin_cookie() -> String {

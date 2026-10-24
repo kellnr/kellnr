@@ -4201,7 +4201,6 @@ dependencies = [
  "axum",
  "axum-extra",
  "bytes",
- "cookie",
  "flume",
  "hyper",
  "kellnr-appstate",
@@ -4243,6 +4242,7 @@ version = "6.10.0"
 dependencies = [
  "axum",
  "axum-extra",
+ "cookie",
  "flume",
  "kellnr-common",
  "kellnr-db",

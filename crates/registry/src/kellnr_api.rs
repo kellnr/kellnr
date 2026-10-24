@@ -21,11 +21,6 @@ use crate::pub_data::{EmptyCrateData, PubData};
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
-
-#[cfg(test)]
-#[path = "test_cookie_helper.rs"]
-mod test_cookie_helper;
-
 use crate::yank_success::YankSuccess;
 use crate::{crate_group, crate_user, crate_version};
 
@@ -1474,7 +1469,7 @@ mod reg_api_tests {
         kellnr.db.add_session_token("user", "1234").await.unwrap();
 
         // create signed cookie header
-        let cookie_header = test_cookie_helper::cookies::encode_cookies([(
+        let cookie_header = kellnr_appstate::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
             "1234",
         )]);
@@ -1539,7 +1534,7 @@ mod reg_api_tests {
 
         // create a session for the read-only owner
         kellnr.db.add_session_token("rouser", "1234").await.unwrap();
-        let cookie_header = test_cookie_helper::cookies::encode_cookies([(
+        let cookie_header = kellnr_appstate::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
             "1234",
         )]);
@@ -1611,7 +1606,7 @@ mod reg_api_tests {
             .add_session_token("rwowner", "1234")
             .await
             .unwrap();
-        let cookie_header = test_cookie_helper::cookies::encode_cookies([(
+        let cookie_header = kellnr_appstate::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
             "1234",
         )]);
@@ -1663,7 +1658,7 @@ mod reg_api_tests {
         // create a session token and store it in DB
         kellnr.db.add_session_token("user", "1234").await.unwrap();
 
-        let cookie_header = test_cookie_helper::cookies::encode_cookies([(
+        let cookie_header = kellnr_appstate::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
             "1234",
         )]);
@@ -2835,7 +2830,7 @@ mod reg_api_tests {
             crate_storage: cs.into(),
             // Use a fixed signing key matching the test cookie helper so that
             // session cookies actually decrypt and session auth is exercised.
-            signing_key: cookie::Key::from(test_cookie_helper::cookies::TEST_KEY),
+            signing_key: cookie::Key::from(kellnr_appstate::TEST_KEY),
             ..kellnr_appstate::test_state()
         };
 

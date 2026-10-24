@@ -544,7 +544,7 @@ mod tests {
     use axum::routing::{post, put};
     use axum_extra::extract::cookie::Key;
     use hyper::{Request, header};
-    use kellnr_appstate::AppStateData;
+    use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
     use kellnr_common::token_cache::{CachedTokenData, TokenCacheManager};
     use kellnr_db::AuthToken;
     use kellnr_db::error::DbError;
@@ -559,7 +559,6 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::test_helper::{TEST_KEY, encode_cookies};
 
     fn test_state_with_cache(mock_db: MockDb, cache: Arc<TokenCacheManager>) -> AppStateData {
         let settings = Arc::new(kellnr_settings::test_settings());

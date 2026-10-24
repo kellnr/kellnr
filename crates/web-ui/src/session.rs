@@ -226,6 +226,7 @@ mod session_tests {
     use axum::http::header;
     use axum::routing::get;
     use cookie::Key;
+    use kellnr_appstate::encode_cookies;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -236,7 +237,6 @@ mod session_tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::test_helper::encode_cookies;
 
     type Result<T = (), E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
@@ -261,7 +261,7 @@ mod session_tests {
             .route("/any", get(any_endpoint))
             .with_state(AppStateData {
                 db,
-                signing_key: Key::from(crate::test_helper::TEST_KEY),
+                signing_key: Key::from(kellnr_appstate::TEST_KEY),
                 crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
                 settings: Arc::new(settings),
                 ..kellnr_appstate::test_state()
@@ -543,6 +543,7 @@ mod auth_middleware_tests {
     use axum::middleware::from_fn_with_state;
     use axum::routing::get;
     use cookie::Key;
+    use kellnr_appstate::encode_cookies;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -551,13 +552,12 @@ mod auth_middleware_tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::test_helper::encode_cookies;
 
     fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
         let state = AppStateData {
             db,
-            signing_key: Key::from(crate::test_helper::TEST_KEY),
+            signing_key: Key::from(kellnr_appstate::TEST_KEY),
             settings: Arc::new(Settings {
                 registry: kellnr_settings::Registry {
                     auth_required: true,
@@ -581,7 +581,7 @@ mod auth_middleware_tests {
         let settings = Settings::default();
         let state = AppStateData {
             db,
-            signing_key: Key::from(crate::test_helper::TEST_KEY),
+            signing_key: Key::from(kellnr_appstate::TEST_KEY),
             settings: Arc::new(settings),
             ..kellnr_appstate::test_state()
         };

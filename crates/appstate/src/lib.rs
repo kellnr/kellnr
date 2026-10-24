@@ -1,7 +1,9 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
+use cookie::{Cookie, CookieJar};
 use flume::Sender;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::token_cache::TokenCacheManager;
@@ -97,4 +99,25 @@ pub fn test_state() -> AppStateData {
         download_counter,
         proxy_client: kellnr_common::cratesio_downloader::CLIENT.clone(),
     }
+}
+
+/// Fixed cookie signing key for tests. Use it as `signing_key` in the app
+/// state when requests carry cookies created by [`encode_cookies`].
+pub const TEST_KEY: &[u8] = &[1; 64];
+
+/// Encodes cookies as a `Cookie` header value, encrypted with [`TEST_KEY`] the
+/// same way `PrivateCookieJar` does.
+pub fn encode_cookies<const N: usize, K: Into<Cow<'static, str>>, V: Into<Cow<'static, str>>>(
+    cookies: [(K, V); N],
+) -> String {
+    let mut clear = CookieJar::new();
+    let mut jar = clear.private_mut(&Key::from(TEST_KEY));
+    for (k, v) in cookies {
+        jar.add(Cookie::new(k, v));
+    }
+    clear
+        .iter()
+        .map(|c| c.encoded().to_string())
+        .collect::<Vec<_>>()
+        .join("; ")
 }
