@@ -259,6 +259,7 @@ mod tests {
                 hostname: "test.api.com".to_string(),
                 port: 1234,
                 path: String::new(),
+                cookie_secure: None,
             },
             ..Settings::default()
         };
