@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use moka::future::Cache;
@@ -11,6 +12,10 @@ pub struct CachedTokenData {
 
 pub struct TokenCacheManager {
     cache: Option<Cache<String, CachedTokenData>>,
+    /// Bumped by every [`TokenCacheManager::invalidate_all`]. A lookup that
+    /// started before an invalidation must not cache its (possibly stale)
+    /// result, so inserts are tied to the generation read before the lookup.
+    generation: AtomicU64,
 }
 
 impl TokenCacheManager {
@@ -33,7 +38,10 @@ impl TokenCacheManager {
             None
         };
 
-        Self { cache }
+        Self {
+            cache,
+            generation: AtomicU64::new(0),
+        }
     }
 
     pub async fn get(&self, token: &str) -> Option<CachedTokenData> {
@@ -43,13 +51,33 @@ impl TokenCacheManager {
         }
     }
 
-    pub async fn insert(&self, token: String, data: CachedTokenData) {
-        if let Some(cache) = &self.cache {
-            cache.insert(token, data).await;
+    /// Current invalidation generation. Read it before the database lookup
+    /// whose result is passed to [`TokenCacheManager::insert`].
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst)
+    }
+
+    /// Caches `data` unless the cache was invalidated since `generation` was
+    /// read. The generation is checked again after the insert: an
+    /// invalidation racing with the insert removes the fresh entry, so a
+    /// revoked token or outdated privileges never outlive an invalidation.
+    pub async fn insert(&self, token: String, data: CachedTokenData, generation: u64) {
+        let Some(cache) = &self.cache else {
+            return;
+        };
+        if self.generation() != generation {
+            return;
+        }
+        cache.insert(token.clone(), data).await;
+        if self.generation() != generation {
+            cache.invalidate(&token).await;
         }
     }
 
     pub fn invalidate_all(&self) {
+        // Bump first so in-flight lookups observe the invalidation before the
+        // entries are dropped.
+        self.generation.fetch_add(1, Ordering::SeqCst);
         if let Some(cache) = &self.cache {
             cache.invalidate_all();
         }
@@ -71,18 +99,26 @@ impl TokenCacheManager {
 mod tests {
     use super::*;
 
+    fn data(is_admin: bool, is_read_only: bool) -> CachedTokenData {
+        CachedTokenData {
+            user: "test_user".to_string(),
+            is_admin,
+            is_read_only,
+        }
+    }
+
     #[tokio::test]
     async fn test_cache_disabled() {
         let cache = TokenCacheManager::new(false, 60, 100);
         assert!(!cache.is_enabled());
 
-        let data = CachedTokenData {
-            user: "test_user".to_string(),
-            is_admin: false,
-            is_read_only: false,
-        };
-
-        cache.insert("token123".to_string(), data).await;
+        cache
+            .insert(
+                "token123".to_string(),
+                data(false, false),
+                cache.generation(),
+            )
+            .await;
         assert!(cache.get("token123").await.is_none());
     }
 
@@ -91,13 +127,13 @@ mod tests {
         let cache = TokenCacheManager::new(true, 60, 100);
         assert!(cache.is_enabled());
 
-        let data = CachedTokenData {
-            user: "test_user".to_string(),
-            is_admin: true,
-            is_read_only: false,
-        };
-
-        cache.insert("token123".to_string(), data.clone()).await;
+        cache
+            .insert(
+                "token123".to_string(),
+                data(true, false),
+                cache.generation(),
+            )
+            .await;
 
         let retrieved = cache.get("token123").await;
         assert!(retrieved.is_some());
@@ -117,21 +153,45 @@ mod tests {
     async fn test_invalidate_all() {
         let cache = TokenCacheManager::new(true, 60, 100);
 
-        let data = CachedTokenData {
-            user: "test_user".to_string(),
-            is_admin: false,
-            is_read_only: true,
-        };
-
-        cache.insert("token1".to_string(), data.clone()).await;
-        cache.insert("token2".to_string(), data).await;
+        let generation = cache.generation();
+        cache
+            .insert("token1".to_string(), data(false, true), generation)
+            .await;
+        cache
+            .insert("token2".to_string(), data(false, true), generation)
+            .await;
 
         assert!(cache.get("token1").await.is_some());
         assert!(cache.get("token2").await.is_some());
 
         cache.invalidate_all();
 
-        // Note: moka's invalidate_all is async internally and may not be immediately visible
-        // In production use, entries will be invalidated lazily
+        assert!(cache.get("token1").await.is_none());
+        assert!(cache.get("token2").await.is_none());
+    }
+
+    /// A lookup that read the generation before a revocation must not cache
+    /// its result afterwards.
+    #[tokio::test]
+    async fn insert_after_invalidation_is_dropped() {
+        let cache = TokenCacheManager::new(true, 60, 100);
+
+        let generation = cache.generation();
+        cache.invalidate_all();
+        cache
+            .insert("token".to_string(), data(true, false), generation)
+            .await;
+
+        assert!(cache.get("token").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn invalidate_all_bumps_generation() {
+        let cache = TokenCacheManager::new(false, 60, 100);
+        let before = cache.generation();
+
+        cache.invalidate_all();
+
+        assert_ne!(before, cache.generation());
     }
 }

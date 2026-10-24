@@ -106,7 +106,10 @@ impl Token {
             });
         }
 
-        // Cache miss - query DB with retry logic
+        // Cache miss - query DB with retry logic. The generation is read
+        // before the lookup so a concurrent invalidation prevents caching a
+        // result that may already be outdated.
+        let generation = cache.generation();
         let Ok(user) = get_user_with_retry(
             db,
             token,
@@ -127,6 +130,7 @@ impl Token {
                     is_admin: user.is_admin,
                     is_read_only: user.is_read_only,
                 },
+                generation,
             )
             .await;
 
@@ -399,6 +403,7 @@ mod tests {
                     is_admin: true,
                     is_read_only: false,
                 },
+                cache.generation(),
             )
             .await;
 
@@ -455,6 +460,35 @@ mod tests {
         let cached = cache.get("new_token").await;
         assert!(cached.is_some());
         assert_eq!(cached.unwrap().user, "db_user");
+    }
+
+    /// A token revoked while its DB lookup is in flight must not end up in
+    /// the cache, otherwise it would stay usable for the whole TTL.
+    #[tokio::test]
+    async fn test_invalidation_during_lookup_is_not_cached() {
+        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache_in_db = cache.clone();
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_user_from_token()
+            .with(eq("racy_token"))
+            .times(1)
+            .returning(move |_| {
+                cache_in_db.invalidate_all();
+                Ok(test_user())
+            });
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let mut headers = HeaderMap::new();
+        headers.insert("Authorization", "Bearer racy_token".parse().unwrap());
+
+        let token = Token::from_header(&headers, &db, &cache, &test_settings())
+            .await
+            .unwrap();
+
+        assert_eq!(token.user, "test_user");
+        assert!(cache.get("racy_token").await.is_none());
     }
 
     #[tokio::test]
