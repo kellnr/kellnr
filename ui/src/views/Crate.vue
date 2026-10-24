@@ -250,6 +250,7 @@ function copyTomlToClipboard() {
 
 function openDocsPage() {
   if (docLink.value) {
+    // Never give the docs page a handle to the UI window.
     window.open(docLink.value, "_blank", "noopener,noreferrer");
   } else {
     router.push({ name: "PublishDocs" })
