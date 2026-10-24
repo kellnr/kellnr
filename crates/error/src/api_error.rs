@@ -190,6 +190,9 @@ mod tests {
             "1.0.0".to_string(),
         ));
 
-        assert_eq!("ERROR: Crate with version already exists: foo-1.0.0", e.to_string());
+        assert_eq!(
+            "ERROR: Crate with version already exists: foo-1.0.0",
+            e.to_string()
+        );
     }
 }

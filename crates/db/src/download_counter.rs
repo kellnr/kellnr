@@ -184,7 +184,9 @@ mod tests {
         counter
             .increment_and_maybe_flush(name.clone(), version.clone())
             .await;
-        counter.increment_cached_and_maybe_flush(name, version).await;
+        counter
+            .increment_cached_and_maybe_flush(name, version)
+            .await;
 
         counter.flush().await;
 
