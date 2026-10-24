@@ -4,8 +4,6 @@ export interface State {
     loggedInUser: string | null
     loggedInUserIsAdmin: boolean
     theme: string
-    cargoSmallLogo: string
-    kellnrSmallLogo: string
     rememberMe: boolean
     rememberMeUser: string | null
     searchCache: boolean
@@ -19,8 +17,6 @@ export const useStore = defineStore('store', {
         loggedInUser: null,
         loggedInUserIsAdmin: false,
         theme: 'light',
-        cargoSmallLogo: 'img/cargo-logo-small-light.png',
-        kellnrSmallLogo: 'img/kellnr-logo-small-light.png',
         rememberMe: false,
         rememberMeUser: null,
         searchCache: false,
@@ -30,7 +26,11 @@ export const useStore = defineStore('store', {
     }),
     getters: {
         loggedIn: (state) => state.loggedInUser !== null,
-        isDark: (state) => state.theme === 'dark'
+        isDark: (state) => state.theme === 'dark',
+        cargoSmallLogo: () => 'img/cargo-logo-small-light.png',
+        kellnrSmallLogo: (state) => state.theme === 'dark'
+            ? 'img/kellnr-logo-small-dark.png'
+            : 'img/kellnr-logo-small-light.png',
     },
     actions: {
         login(payload: { "user": string, "is_admin": boolean }) {
@@ -45,15 +45,16 @@ export const useStore = defineStore('store', {
             // Toggle theme state - Vuetify and highlight.js themes are handled by ThemeToggle component
             if (this.theme === 'light') {
                 this.theme = 'dark'
-                this.kellnrSmallLogo = 'img/kellnr-logo-small-dark.png'
                 this.currentBackgroundImage = this.darkBackgroundImage
             } else {
                 this.theme = 'light'
-                this.cargoSmallLogo = 'img/cargo-logo-small-light.png'
-                this.kellnrSmallLogo = 'img/kellnr-logo-small-light.png'
                 this.currentBackgroundImage = this.lightBackgroundImage
             }
         }
     },
-    persist: true
+    // Only persist user preferences. Asset paths stay in code so a script on
+    // the same origin (e.g. hosted docs) cannot point them at other URLs.
+    persist: {
+        pick: ['loggedInUser', 'loggedInUserIsAdmin', 'theme', 'rememberMe', 'rememberMeUser', 'searchCache'],
+    },
 })
