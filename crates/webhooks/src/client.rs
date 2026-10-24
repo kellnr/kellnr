@@ -6,6 +6,8 @@ use thiserror::Error;
 
 use crate::target::{GuardedResolver, is_blocked_url, validate_callback_url};
 
+pub(crate) const MAX_LOGGED_BODY_BYTES: usize = 512;
+
 #[derive(Error, Debug)]
 pub enum DeliveryError {
     #[error("{0}")]
@@ -60,10 +62,41 @@ impl WebhookClient {
     }
 }
 
+/// Reads at most [`MAX_LOGGED_BODY_BYTES`] of a callback response body for
+/// logging, without buffering an arbitrarily large response.
+pub(crate) async fn truncated_body(mut response: reqwest::Response) -> String {
+    let mut body = Vec::new();
+    while body.len() < MAX_LOGGED_BODY_BYTES {
+        match response.chunk().await {
+            Ok(Some(chunk)) => body.extend_from_slice(&chunk),
+            Ok(None) | Err(_) => break,
+        }
+    }
+    body.truncate(MAX_LOGGED_BODY_BYTES);
+    String::from_utf8_lossy(&body).into_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{get_redirect_listener, get_test_listener};
+    use crate::tests::{get_redirect_listener, get_test_listener, get_test_listener_with_response};
+
+    #[tokio::test]
+    async fn truncates_response_body() {
+        let body = "x".repeat(10_000);
+        let _listener = get_test_listener_with_response(
+            9986,
+            format!("HTTP/1.1 500\r\nContent-Length: {}\r\n\r\n{body}", body.len()),
+        )
+        .await;
+
+        let response = client(false)
+            .post("http://127.0.0.1:9986", "payload")
+            .await
+            .unwrap();
+
+        assert_eq!(MAX_LOGGED_BODY_BYTES, truncated_body(response).await.len());
+    }
 
     fn client(block_private_targets: bool) -> WebhookClient {
         WebhookClient::new(&Webhooks {
