@@ -28,6 +28,9 @@ use crate::session::{AdminUser, MaybeUser};
 /// derived from the `SettingsProv`, and the compiled-in defaults the UI
 /// uses to show "default: X" next to overridden values.
 ///
+/// Secret leaves are redacted in `settings`, `defaults` and `leaves`: a set
+/// secret is replaced by [`REDACTED`], an unset one is `null`.
+///
 /// `leaves` is the new dynamic schema: one entry per `SettingsProv` leaf with
 /// the value, default, source, type, secret flag, optional CLI flag string
 /// (auto-derived from clap) and optional label override. The Vue UI iterates
@@ -35,11 +38,14 @@ use crate::session::{AdminUser, MaybeUser};
 #[derive(Serialize, Deserialize)]
 pub struct SettingsResponse {
     #[serde(flatten)]
-    pub settings: Settings,
+    pub settings: serde_json::Map<String, serde_json::Value>,
     pub sources: SourceMap,
-    pub defaults: Settings,
+    pub defaults: serde_json::Value,
     pub leaves: Vec<LeafMeta>,
 }
+
+/// Placeholder sent instead of the value of a configured secret.
+pub const REDACTED: &str = "********";
 
 /// Per-leaf metadata for the dynamic UI. All fields except `value`/`source`
 /// are stable per build (or, in the case of `default`, per binary), so the UI
@@ -89,7 +95,12 @@ fn build_leaves(prov: &SettingsProv) -> Vec<LeafMeta> {
         let Ok(value_json) = json_from_erased(value) else {
             return;
         };
-        let leaf_default = lookup_default(&defaults_json, path);
+        let mut leaf_default = lookup_default(&defaults_json, path);
+        let mut value_json = value_json;
+        if secret {
+            value_json = redact_secret(&value_json);
+            leaf_default = redact_secret(&leaf_default);
+        }
         let kind = LeafKind::from_json(&value_json);
         leaves.push(LeafMeta {
             key: path.to_string(),
@@ -107,6 +118,32 @@ fn build_leaves(prov: &SettingsProv) -> Vec<LeafMeta> {
     // response diff-friendly across runs.
     leaves.sort_by(|a, b| a.key.cmp(&b.key));
     leaves
+}
+
+/// Replace a secret value by [`REDACTED`], or by `null` if it is unset or empty,
+/// so the UI can still tell "configured" from "not configured".
+fn redact_secret(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Null => serde_json::Value::Null,
+        serde_json::Value::String(s) if s.is_empty() => serde_json::Value::Null,
+        _ => serde_json::Value::String(REDACTED.to_string()),
+    }
+}
+
+/// Serialize `settings` to JSON and redact every secret leaf of `leaves`.
+/// Secrets that are not serialized at all (`skip_serializing`) are skipped.
+fn redacted_settings_json(
+    settings: &Settings,
+    leaves: &[LeafMeta],
+) -> Result<serde_json::Value, serde_json::Error> {
+    let mut json = serde_json::to_value(settings)?;
+    for leaf in leaves.iter().filter(|leaf| leaf.secret) {
+        let pointer = format!("/{}", leaf.key.replace('.', "/"));
+        if let Some(value) = json.pointer_mut(&pointer) {
+            *value = redact_secret(value);
+        }
+    }
+    Ok(json)
 }
 
 /// Serialize an erased value into a `serde_json::Value` via the same shim
@@ -168,11 +205,24 @@ pub async fn settings(
     State(settings): SettingsState,
     State(prov): SettingsProvState,
 ) -> Result<Json<SettingsResponse>, RouteError> {
+    let leaves = build_leaves(&prov);
+    let serialization_error = |e: serde_json::Error| {
+        error!("Failed to serialize settings: {e}");
+        RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+    };
+    let serde_json::Value::Object(settings) =
+        redacted_settings_json(&settings, &leaves).map_err(serialization_error)?
+    else {
+        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+    };
+    let defaults =
+        redacted_settings_json(&Settings::default(), &leaves).map_err(serialization_error)?;
+
     Ok(Json(SettingsResponse {
         sources: sources_from_prov(&prov),
-        leaves: build_leaves(&prov),
-        settings: (*settings).clone(),
-        defaults: Settings::default(),
+        settings,
+        defaults,
+        leaves,
     }))
 }
 
@@ -791,7 +841,7 @@ mod tests {
     use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
-    use kellnr_settings::{Postgresql, Settings, constants};
+    use kellnr_settings::{Postgresql, Settings, Setup, constants};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
@@ -861,18 +911,26 @@ mod tests {
         let result_response = serde_json::from_slice::<SettingsResponse>(&result_msg).unwrap();
 
         // Set the password to empty string because it is not serialized
+        // and expect the configured admin password to be redacted.
         let tmp = kellnr_settings::test_settings();
         let psq = Postgresql {
             pwd: String::default(),
             ..tmp.postgresql
         };
+        let setup = Setup {
+            admin_pwd: REDACTED.to_string(),
+            ..tmp.setup
+        };
         let expected_state = Settings {
             postgresql: psq,
+            setup,
             ..tmp
         };
+        let result_settings: Settings =
+            serde_json::from_value(serde_json::Value::Object(result_response.settings)).unwrap();
 
         assert_eq!(result_status, StatusCode::OK);
-        assert_eq!(result_response.settings, expected_state);
+        assert_eq!(result_settings, expected_state);
         // `sources` is structurally part of `SettingsResponse`, successful
         // deserialization on line above is sufficient proof it round-trips.
         // The companion test below asserts that an override actually flows
@@ -985,6 +1043,93 @@ mod tests {
             .find(|l| l.key == "s3.secret_key")
             .expect("s3.secret_key leaf must be present");
         assert!(secret_leaf.secret, "s3.secret_key must be flagged secret");
+    }
+
+    #[tokio::test]
+    async fn settings_response_redacts_secrets() {
+        use kellnr_settings::{Config, SettingsProv};
+
+        const SECRETS: [&str; 3] = ["s3-secret-value", "admin-pwd-value", "admin-token-value"];
+        let toml = format!(
+            "[s3]\nsecret_key = \"{}\"\n[setup]\nadmin_pwd = \"{}\"\nadmin_token = \"{}\"\n",
+            SECRETS[0], SECRETS[1], SECRETS[2]
+        );
+        let prov: SettingsProv = Config::new()
+            .add_toml_str("secrets.toml", &toml)
+            .build::<SettingsProv>()
+            .unwrap();
+        let mut settings = kellnr_settings::test_settings();
+        settings.s3.secret_key = Some(SECRETS[0].to_string());
+        settings.setup.admin_pwd = SECRETS[1].to_string();
+        settings.setup.admin_token = Some(SECRETS[2].to_string());
+
+        let mut mock_db = MockDb::new();
+        mock_db.expect_validate_session().returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "admin".to_string(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        });
+        let (_, storage) = test_deps();
+        let app: Router = Router::new()
+            .route("/settings", get(crate::ui::settings))
+            .with_state(AppStateData {
+                db: Arc::new(mock_db),
+                signing_key: Key::from(TEST_KEY),
+                settings: Arc::new(settings.clone()),
+                settings_prov: Arc::new(prov),
+                crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
+                ..kellnr_appstate::test_state()
+            });
+
+        let r = app
+            .oneshot(
+                Request::get("/settings")
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        let raw = String::from_utf8(body.to_vec()).unwrap();
+        for secret in SECRETS {
+            assert!(!raw.contains(secret), "response leaks secret {secret}");
+        }
+        // The default admin password must not leak via `defaults` either.
+        assert!(!raw.contains("\"admin_pwd\":\"admin\""));
+
+        let response: SettingsResponse = serde_json::from_slice(&body).unwrap();
+        let redacted = serde_json::json!(REDACTED);
+        assert_eq!(response.settings["s3"]["secret_key"], redacted);
+        assert_eq!(response.settings["setup"]["admin_pwd"], redacted);
+        assert_eq!(response.settings["setup"]["admin_token"], redacted);
+        assert_eq!(response.defaults["setup"]["admin_pwd"], redacted);
+        assert_eq!(
+            response.defaults["setup"]["admin_token"],
+            serde_json::Value::Null
+        );
+
+        for leaf in response.leaves.iter().filter(|leaf| leaf.secret) {
+            assert_eq!(leaf.kind, LeafKind::String, "{}", leaf.key);
+            assert!(
+                leaf.value.is_null() || leaf.value == redacted,
+                "secret leaf {} is not redacted",
+                leaf.key
+            );
+        }
+        let unset_secret = response
+            .leaves
+            .iter()
+            .find(|l| l.key == "oauth2.client_secret")
+            .expect("oauth2.client_secret leaf must be present");
+        assert!(unset_secret.value.is_null(), "unset secret must be null");
     }
 
     #[tokio::test]
