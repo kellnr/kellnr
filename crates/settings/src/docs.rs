@@ -24,7 +24,10 @@ pub struct Docs {
     /// Building docs compiles the published crate, which runs its build
     /// scripts and proc macros. Kellnr runs every build in a child process
     /// with a cleared environment, so no `KELLNR_*` settings or secrets are
-    /// passed on. The build still runs as the Kellnr user: it can read every
+    /// passed on. Cargo's own `CARGO_*` variables are kept, so a registry
+    /// token in `CARGO_REGISTRIES_<NAME>_TOKEN` is visible to build scripts
+    /// and should belong to a dedicated read-only user.
+    /// The build still runs as the Kellnr user: it can read every
     /// file Kellnr can read (for example the config file or the `SQLite`
     /// database, e.g. via `include_str!`) and it has network access. Only
     /// enable docs for crates you trust, or set a wrapper that confines the
