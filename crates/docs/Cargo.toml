@@ -33,7 +33,7 @@ serde_json.workspace = true
 tar.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-util", "process", "time"] }
 tracing.workspace = true
 zip.workspace = true
 

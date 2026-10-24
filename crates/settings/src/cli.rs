@@ -36,7 +36,23 @@ pub enum Command {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Build the rustdoc of an unpacked crate. Used internally by the docs
+    /// queue to run untrusted builds in a separate process.
+    #[command(name = DOC_BUILD_SUBCOMMAND, hide = true)]
+    DocBuild {
+        /// Path to the unpacked crate
+        crate_path: PathBuf,
+
+        /// Sparse index URL that replaces the crates.io source
+        #[arg(long = DOC_BUILD_CRATESIO_INDEX_ARG)]
+        cratesio_index: Option<String>,
+    },
 }
+
+/// Name of the hidden subcommand that builds the docs of a single crate.
+pub const DOC_BUILD_SUBCOMMAND: &str = "doc-build";
+/// Long flag of [`DOC_BUILD_SUBCOMMAND`] for the crates.io index override.
+pub const DOC_BUILD_CRATESIO_INDEX_ARG: &str = "cratesio-index";
 
 #[derive(Subcommand)]
 pub enum ConfigAction {
@@ -90,6 +106,11 @@ pub enum CliResult {
         output: PathBuf,
     },
     ShowHelp,
+    /// Build the docs of a crate in the current process and exit.
+    BuildDocs {
+        crate_path: PathBuf,
+        cratesio_index: Option<String>,
+    },
 }
 
 pub fn parse_cli() -> Result<CliResult, SettingsError> {
@@ -113,6 +134,15 @@ pub fn parse_cli() -> Result<CliResult, SettingsError> {
             output: output.unwrap_or_else(|| PathBuf::from("kellnr.toml")),
         }),
 
+        // The docs build runs untrusted code and gets no settings on purpose.
+        Some(Command::DocBuild {
+            crate_path,
+            cratesio_index,
+        }) => Ok(CliResult::BuildDocs {
+            crate_path,
+            cratesio_index,
+        }),
+
         Some(ref command) => build_from_command(cli.config_file, command),
     }
 }
@@ -133,7 +163,7 @@ fn build_from_command(
     // source contributes provenance only for fields explicitly passed.
     let cli_partial: Option<SettingsPartial> = match command {
         Command::Start { server } => Some(SettingsPartial::from(server)),
-        Command::Config { .. } => None,
+        Command::Config { .. } | Command::DocBuild { .. } => None,
     };
 
     let prov = build_prov_with_cli(config_file.as_deref(), cli_partial)?;
@@ -160,6 +190,9 @@ fn build_from_command(
         Command::Config {
             action: ConfigAction::Init { .. },
         } => unreachable!("`Init` is handled by `parse_cli` before this point"),
+        Command::DocBuild { .. } => {
+            unreachable!("`DocBuild` is handled by `parse_cli` before this point")
+        }
     }
 }
 
@@ -351,6 +384,34 @@ mod tests {
         assert!(
             !map.contains_key("config"),
             "top-level `--config` is not a leaf"
+        );
+    }
+
+    #[test]
+    fn doc_build_subcommand_is_hidden_and_parses_arguments() {
+        let cli = Cli::try_parse_from([
+            "kellnr",
+            DOC_BUILD_SUBCOMMAND,
+            "/tmp/crate",
+            "--cratesio-index",
+            "https://proxy/index/",
+        ])
+        .expect("clap should accept argv");
+
+        let Some(Command::DocBuild {
+            crate_path,
+            cratesio_index,
+        }) = cli.command
+        else {
+            panic!("expected DocBuild");
+        };
+        assert_eq!(crate_path, PathBuf::from("/tmp/crate"));
+        assert_eq!(cratesio_index.as_deref(), Some("https://proxy/index/"));
+        assert!(
+            Cli::command()
+                .find_subcommand(DOC_BUILD_SUBCOMMAND)
+                .unwrap()
+                .is_hide_set()
         );
     }
 }

@@ -1,4 +1,5 @@
 pub mod api;
+pub mod build_process;
 mod doc_archive;
 pub mod doc_queue;
 pub mod doc_queue_response;

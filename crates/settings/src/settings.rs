@@ -89,6 +89,7 @@ pub(crate) fn env_list_keys() -> &'static [&'static str] {
         "registry.required_crate_fields",
         "oauth2.scopes",
         "oauth2.additional_audiences",
+        "docs.build_wrapper",
     ]
 }
 
