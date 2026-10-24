@@ -17,6 +17,10 @@ pub enum DocsError {
     CargoError(String),
     #[error("Docs storage error: {0}")]
     StorageError(#[from] StorageError),
+    #[error("Archive exceeds the maximum uncompressed size or number of entries")]
+    ArchiveTooLarge,
+    #[error("Docs build timed out after {0} seconds")]
+    BuildTimeout(u64),
     #[error("Path {path} is not inside {root}")]
     PathPrefixMismatch { path: String, root: String },
 }
@@ -34,7 +38,10 @@ impl From<DocsError> for ApiError {
                 StatusCode::INTERNAL_SERVER_ERROR,
             ),
             DocsError::StorageError(error) => ApiError::from(error),
-            DocsError::PathPrefixMismatch { .. } => ApiError::internal(&e),
+            DocsError::ArchiveTooLarge => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
+            DocsError::BuildTimeout(_) | DocsError::PathPrefixMismatch { .. } => {
+                ApiError::internal(&e)
+            }
         }
     }
 }

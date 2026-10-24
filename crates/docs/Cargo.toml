@@ -37,6 +37,9 @@ tokio = { workspace = true, features = ["io-util", "process", "time"] }
 tracing.workspace = true
 zip.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+rustix.workspace = true
+
 [dev-dependencies]
 hyper.workspace = true
 mockall.workspace = true

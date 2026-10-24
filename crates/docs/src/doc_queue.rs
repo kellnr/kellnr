@@ -1,5 +1,7 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use cargo::GlobalContext;
 use cargo::core::Workspace;
@@ -19,7 +21,7 @@ use tracing::error;
 use crate::build_process::DocBuilder;
 use crate::compute_doc_url;
 use crate::docs_error::DocsError;
-use crate::unpack::unpack_crate;
+use crate::unpack::{ExtractLimits, unpack_crate};
 use crate::upload::upload_dir_and_prune;
 
 pub fn doc_extraction_queue(
@@ -42,99 +44,122 @@ pub fn doc_extraction_queue(
             .proxy
             .cratesio_index_override()
             .map(ToString::to_string),
-    );
-    let path_prefix = settings.origin.path.clone();
+    )
+    .with_timeout(Duration::from_secs(settings.docs.build_timeout_seconds));
+    let worker = DocQueueWorker {
+        db,
+        cs,
+        docs_storage,
+        path_prefix: settings.origin.path.clone(),
+        builder,
+        limits: ExtractLimits::from_max_docs_size(settings.docs.max_size),
+    };
 
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-            if let Err(e) = inner_loop(db.clone(), &cs, &docs_storage, &path_prefix, &builder).await
-            {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            if let Err(e) = worker.process_queue().await {
                 error!("Rustdoc generation loop failed: {e}");
             }
         }
     });
 }
 
-async fn inner_loop(
+/// Turns queued crates into hosted rustdoc, one crate at a time.
+struct DocQueueWorker {
     db: Arc<dyn DbProvider>,
-    cs: &KellnrCrateStorage,
-    docs_storage: &DocsStorage,
-    path_prefix: &str,
-    builder: &DocBuilder,
-) -> Result<(), DocsError> {
-    let entries = db.get_doc_queue().await?;
+    cs: Arc<KellnrCrateStorage>,
+    docs_storage: Arc<DocsStorage>,
+    path_prefix: String,
+    builder: DocBuilder,
+    limits: ExtractLimits,
+}
 
-    for entry in entries {
-        if let Err(e) = extract_docs(&entry, cs, docs_storage, builder).await {
-            error!("Failed to extract docs from crate: {e}");
-        } else {
+impl DocQueueWorker {
+    async fn process_queue(&self) -> Result<(), DocsError> {
+        let entries = self.db.get_doc_queue().await?;
+        let mut built = HashSet::new();
+
+        for entry in entries {
+            // A crate version queued several times is only built once.
+            let is_first = built.insert((entry.normalized_name.to_string(), entry.version.clone()));
+            let result = if is_first {
+                Some(self.extract_docs(&entry).await)
+            } else {
+                None
+            };
+
+            // Always remove the working directory, also after failed builds.
             if let Err(e) = clean_up(&entry.path).await {
                 error!("Failed to delete temporary rustdoc queue folder: {e}");
             }
 
-            let version = Version::from_unchecked_str(&entry.version);
-            let docs_link = compute_doc_url(&entry.normalized_name, &version, path_prefix);
-            db.update_docs_link(&entry.normalized_name, &version, &docs_link)
-                .await?;
+            match result {
+                Some(Ok(())) => {
+                    let version = Version::from_unchecked_str(&entry.version);
+                    let docs_link =
+                        compute_doc_url(&entry.normalized_name, &version, &self.path_prefix);
+                    self.db
+                        .update_docs_link(&entry.normalized_name, &version, &docs_link)
+                        .await?;
+                }
+                Some(Err(e)) => error!("Failed to extract docs from crate: {e}"),
+                None => {}
+            }
+            self.db.delete_doc_queue(entry.id).await?;
         }
-        db.delete_doc_queue(entry.id).await?;
+
+        Ok(())
     }
 
-    Ok(())
-}
+    async fn extract_docs(&self, doc: &DocQueueEntry) -> Result<(), DocsError> {
+        // TODO: Only works if normalized name = original name -> Need to get original name from db
+        let orig_name = OriginalName::from_unchecked(doc.normalized_name.to_string());
+        let version = Version::from_unchecked_str(&doc.version);
+        let contents = self.cs.get(&orig_name, &version).await.ok_or_else(|| {
+            error!("Failed to get crate from storage");
+            DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.clone())
+        })?;
+        let crate_root = format!("{}-{}", doc.normalized_name, doc.version);
+        let tar = GzDecoder::new(std::io::Cursor::new(contents));
+        let dest = doc.path.clone();
+        let root = crate_root.clone();
+        let limits = self.limits;
+        tokio::task::spawn_blocking(move || unpack_crate(tar, &dest, &root, limits))
+            .await
+            .map_err(|_| DocsError::ExtractFailed)??;
 
-async fn extract_docs(
-    doc: &DocQueueEntry,
-    cs: &KellnrCrateStorage,
-    docs_storage: &DocsStorage,
-    builder: &DocBuilder,
-) -> Result<(), DocsError> {
-    // Unpack crate
+        // Generate the docs
+        let generated_docs_path = &doc.path.join(crate_root);
+        strip_rust_toolchain_files(generated_docs_path).await?;
 
-    // TODO: Only works if normalized name = original name -> Need to get original name from db
-    let orig_name = OriginalName::from_unchecked(doc.normalized_name.to_string());
-    let version = Version::from_unchecked_str(&doc.version);
-    let contents = cs.get(&orig_name, &version).await.ok_or_else(|| {
-        error!("Failed to get crate from storage");
-        DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.clone())
-    })?;
-    let crate_root = format!("{}-{}", doc.normalized_name, doc.version);
-    let tar = GzDecoder::new(std::io::Cursor::new(contents));
-    let dest = doc.path.clone();
-    let root = crate_root.clone();
-    tokio::task::spawn_blocking(move || unpack_crate(tar, &dest, &root))
-        .await
-        .map_err(|_| DocsError::ExtractFailed)??;
+        // The build runs untrusted code (build scripts, proc macros), so it runs
+        // in a separate process without the Kellnr environment. See `DocBuilder`.
+        self.builder.build(generated_docs_path).await?;
 
-    // Generate the docs
-    let generated_docs_path = &doc.path.join(crate_root);
-    strip_rust_toolchain_files(generated_docs_path).await?;
+        // Upload the docs directory, pruning any stale pages from a previous build.
+        // The `doc` key prefix mirrors the manual-upload path (api.rs), where the
+        // uploaded zip already contains a top-level `doc/` folder: both must land
+        // under `{crate}/{version}/doc/...` to match `compute_doc_url`.
+        let from = generated_docs_path.join("target").join("doc");
+        upload_dir_and_prune(
+            &from,
+            "doc",
+            &doc.normalized_name.to_string(),
+            &doc.version,
+            &self.docs_storage,
+        )
+        .await?;
 
-    // The build runs untrusted code (build scripts, proc macros), so it runs
-    // in a separate process without the Kellnr environment. See `DocBuilder`.
-    builder.build(generated_docs_path).await?;
-
-    // Upload the docs directory, pruning any stale pages from a previous build.
-    // The `doc` key prefix mirrors the manual-upload path (api.rs), where the
-    // uploaded zip already contains a top-level `doc/` folder: both must land
-    // under `{crate}/{version}/doc/...` to match `compute_doc_url`.
-    let from = generated_docs_path.join("target").join("doc");
-    upload_dir_and_prune(
-        &from,
-        "doc",
-        &doc.normalized_name.to_string(),
-        &doc.version,
-        docs_storage,
-    )
-    .await?;
-
-    Ok(())
+        Ok(())
+    }
 }
 
 async fn clean_up(path: &Path) -> Result<(), DocsError> {
-    remove_dir_all(path).await?;
-    Ok(())
+    match remove_dir_all(path).await {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
+        _ => Ok(()),
+    }
 }
 
 /// Remove any `rust-toolchain.toml` (or legacy `rust-toolchain`) at the crate
@@ -263,12 +288,118 @@ pub fn generate_docs(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::path::PathBuf;
 
     use cargo::core::SourceId;
     use cargo::sources::SourceConfigMap;
+    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_db::mock::MockDb;
+    use kellnr_storage::fs_storage::FSStorage;
 
     use super::*;
+
+    fn crate_tarball(name: &str, version: &str) -> Vec<u8> {
+        let mut builder = tar::Builder::new(flate2::write::GzEncoder::new(
+            Vec::new(),
+            flate2::Compression::default(),
+        ));
+        let manifest = format!("[package]\nname = \"{name}\"\nversion = \"{version}\"\n");
+        let mut header = tar::Header::new_gnu();
+        header.set_size(manifest.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder
+            .append_data(
+                &mut header,
+                format!("{name}-{version}/Cargo.toml"),
+                manifest.as_bytes(),
+            )
+            .unwrap();
+        builder.into_inner().unwrap().finish().unwrap()
+    }
+
+    fn queue_entry(id: i64, name: &str, path: PathBuf) -> DocQueueEntry {
+        DocQueueEntry {
+            id,
+            normalized_name: NormalizedName::from_unchecked(name.to_string()),
+            version: "1.0.0".to_string(),
+            path,
+        }
+    }
+
+    /// Worker whose builds fail after appending a line to `build_log`.
+    async fn failing_worker(db: MockDb, data_dir: &Path, build_log: &Path) -> DocQueueWorker {
+        let mut settings = kellnr_settings::test_settings();
+        settings.registry.data_dir = data_dir.display().to_string();
+        let storage = FSStorage::new(data_dir.join("crates").to_str().unwrap()).unwrap();
+        let cs = KellnrCrateStorage::new(&settings, Box::new(storage));
+        for name in ["a", "b"] {
+            cs.put(
+                &OriginalName::from_unchecked(name.to_string()),
+                &Version::from_unchecked_str("1.0.0"),
+                crate_tarball(name, "1.0.0").into(),
+            )
+            .await
+            .unwrap();
+        }
+        let docs_storage = FSStorage::new(data_dir.join("docs").to_str().unwrap()).unwrap();
+        DocQueueWorker {
+            db: Arc::new(db),
+            cs: Arc::new(cs),
+            docs_storage: Arc::new(DocsStorage::new(Box::new(docs_storage))),
+            path_prefix: String::new(),
+            builder: DocBuilder::new(
+                PathBuf::from("unused"),
+                vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    "echo \"$3\" >> \"$0\"; exit 1".to_string(),
+                    build_log.display().to_string(),
+                ],
+                None,
+            ),
+            limits: ExtractLimits::from_max_docs_size(1),
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_builds_duplicates_once_and_always_cleans_up() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let build_log = data_dir.path().join("builds.log");
+        let paths: Vec<PathBuf> = (0..3)
+            .map(|i| {
+                let path = data_dir.path().join(format!("queue{i}"));
+                std::fs::create_dir(&path).unwrap();
+                path
+            })
+            .collect();
+        let queued = paths.clone();
+        let mut db = MockDb::new();
+        db.expect_get_doc_queue().returning(move || {
+            Ok(vec![
+                queue_entry(0, "a", queued[0].clone()),
+                queue_entry(1, "a", queued[1].clone()),
+                queue_entry(2, "b", queued[2].clone()),
+            ])
+        });
+        db.expect_delete_doc_queue().times(3).returning(|_| Ok(()));
+        db.expect_update_docs_link().never();
+        let worker = failing_worker(db, data_dir.path(), &build_log).await;
+
+        worker.process_queue().await.unwrap();
+
+        let builds = std::fs::read_to_string(&build_log).unwrap();
+        assert_eq!(builds.lines().count(), 2, "builds: {builds}");
+        assert!(paths.iter().all(|p| !p.exists()));
+    }
+
+    #[tokio::test]
+    async fn clean_up_ignores_missing_directory() {
+        let dir = tempfile::tempdir().unwrap();
+
+        clean_up(&dir.path().join("missing")).await.unwrap();
+    }
 
     #[test]
     fn no_index_override_does_not_inject_proxy_source() {

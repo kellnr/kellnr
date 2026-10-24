@@ -29,6 +29,7 @@ pub fn leaf_label(dotted_path: &str) -> Option<&'static str> {
         | "s3.request_timeout_seconds"
         | "gcs.request_timeout_seconds" => "Request Timeout (seconds)",
         "toolchain.max_size" => "Max Size (MB)",
+        "docs.build_timeout_seconds" => "Build Timeout (seconds)",
 
         // Acronyms, humanizer would emit "Db", "Url", "Api", "Ip", "Http".
         "registry.max_db_connections" => "Max DB Connections",

@@ -1,10 +1,12 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::time::Duration;
 
 use kellnr_settings::cli::{DOC_BUILD_CRATESIO_INDEX_ARG, DOC_BUILD_SUBCOMMAND};
 use tokio::io::{AsyncRead, AsyncReadExt};
-use tokio::process::Command;
+use tokio::process::{Child, Command};
+use tracing::warn;
 
 use crate::docs_error::DocsError;
 
@@ -44,6 +46,9 @@ const ALLOWED_ENV_VARS: &[&str] = &[
 
 /// Keep at most this many bytes of the build output for error messages.
 const OUTPUT_TAIL_BYTES: usize = 16 * 1024;
+/// How long to wait for the build output after the build process exited.
+/// Processes spawned by the build may keep the output pipe open.
+const OUTPUT_GRACE_PERIOD: Duration = Duration::from_secs(5);
 
 /// Runs docs builds in a separate process with a minimal environment.
 ///
@@ -56,6 +61,7 @@ pub struct DocBuilder {
     program: PathBuf,
     wrapper: Vec<String>,
     cratesio_index: Option<String>,
+    timeout: Option<Duration>,
 }
 
 impl DocBuilder {
@@ -64,7 +70,16 @@ impl DocBuilder {
             program,
             wrapper,
             cratesio_index,
+            timeout: None,
         }
+    }
+
+    /// Kill builds that run longer than `timeout`, including all processes
+    /// they started. `Duration::ZERO` disables the timeout.
+    #[must_use]
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = (!timeout.is_zero()).then_some(timeout);
+        self
     }
 
     /// Build the docs of the crate at `crate_path` into `crate_path/target/doc`.
@@ -77,8 +92,21 @@ impl DocBuilder {
             OUTPUT_TAIL_BYTES,
         ));
 
-        let status = child.wait().await?;
-        let output = output.await.unwrap_or_default();
+        let status = match self.timeout {
+            None => child.wait().await?,
+            Some(timeout) => {
+                let Ok(status) = tokio::time::timeout(timeout, child.wait()).await else {
+                    kill_build(&mut child).await;
+                    output.abort();
+                    return Err(DocsError::BuildTimeout(timeout.as_secs()));
+                };
+                status?
+            }
+        };
+        let output = match tokio::time::timeout(OUTPUT_GRACE_PERIOD, output).await {
+            Ok(output) => output.unwrap_or_default(),
+            Err(_) => String::from("<build output not available>"),
+        };
         if status.success() {
             Ok(())
         } else {
@@ -107,7 +135,27 @@ impl DocBuilder {
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        // Run the build in its own process group, so a timeout kills the
+        // compiler and build scripts started by cargo as well.
+        #[cfg(unix)]
+        command.process_group(0);
         command
+    }
+}
+
+/// Kill the build process and, on Unix, its whole process group.
+async fn kill_build(child: &mut Child) {
+    #[cfg(unix)]
+    if let Some(pid) = child
+        .id()
+        .and_then(|id| i32::try_from(id).ok())
+        .and_then(rustix::process::Pid::from_raw)
+        && let Err(e) = rustix::process::kill_process_group(pid, rustix::process::Signal::KILL)
+    {
+        warn!("Failed to kill docs build process group: {e}");
+    }
+    if let Err(e) = child.kill().await {
+        warn!("Failed to kill docs build process: {e}");
     }
 }
 
@@ -231,12 +279,63 @@ mod tests {
         assert!(err.to_string().contains("error: could not compile"));
     }
 
+    #[cfg(unix)]
+    fn process_is_alive(pid: &str) -> bool {
+        std::process::Command::new("kill")
+            .args(["-0", pid])
+            .status()
+            .unwrap()
+            .success()
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn build_timeout_kills_build_and_its_child_processes() {
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("pid");
+        let builder = DocBuilder::new(
+            PathBuf::from("unused"),
+            vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "sleep 30 & echo $! > \"$0\"; wait".to_string(),
+                pid_file.display().to_string(),
+            ],
+            None,
+        )
+        .with_timeout(Duration::from_millis(500));
+
+        let started = std::time::Instant::now();
+        let err = builder.build(Path::new("/tmp/my-crate")).await.unwrap_err();
+
+        assert!(matches!(err, DocsError::BuildTimeout(_)));
+        assert!(started.elapsed() < Duration::from_secs(10));
+        let pid = std::fs::read_to_string(&pid_file).unwrap();
+        // The killed process may need a moment to be reaped.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while process_is_alive(pid.trim()) && std::time::Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(!process_is_alive(pid.trim()));
+    }
+
+    #[test]
+    fn zero_timeout_disables_the_timeout() {
+        let builder =
+            DocBuilder::new(PathBuf::from("unused"), vec![], None).with_timeout(Duration::ZERO);
+
+        assert_eq!(builder.timeout, None);
+    }
+
     #[tokio::test]
     async fn build_fails_when_program_does_not_exist() {
         let builder = DocBuilder::new(PathBuf::from("/does/not/exist/kellnr"), vec![], None);
 
         let err = builder.build(Path::new("/tmp/my-crate")).await.unwrap_err();
 
-        assert!(err.to_string().contains("failed to start docs build process"));
+        assert!(
+            err.to_string()
+                .contains("failed to start docs build process")
+        );
     }
 }

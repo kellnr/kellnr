@@ -7,16 +7,100 @@ use tracing::warn;
 
 use crate::docs_error::DocsError;
 
+/// Uncompressed bytes an archive may extract to, per MB of `docs.max_size`.
+const MAX_BYTES_PER_DOCS_MB: u64 = 20 * 1_000_000;
+/// Entries an archive may contain, per MB of `docs.max_size`.
+const MAX_ENTRIES_PER_DOCS_MB: usize = 1_000;
+
+/// Upper bounds for extracting an archive, protecting against archive bombs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExtractLimits {
+    max_bytes: u64,
+    max_entries: usize,
+}
+
+impl ExtractLimits {
+    pub fn new(max_bytes: u64, max_entries: usize) -> Self {
+        Self {
+            max_bytes,
+            max_entries,
+        }
+    }
+
+    /// Limits derived from the `docs.max_size` setting (in MB), which caps the
+    /// compressed size of uploaded docs archives.
+    pub fn from_max_docs_size(max_size_mb: usize) -> Self {
+        let max_size_mb = max_size_mb.max(1);
+        Self::new(
+            MAX_BYTES_PER_DOCS_MB.saturating_mul(max_size_mb as u64),
+            MAX_ENTRIES_PER_DOCS_MB.saturating_mul(max_size_mb),
+        )
+    }
+
+    pub(crate) fn budget(self) -> ExtractBudget {
+        ExtractBudget {
+            remaining_bytes: self.max_bytes,
+            remaining_entries: self.max_entries,
+        }
+    }
+}
+
+/// Remaining bytes and entries while extracting a single archive.
+pub(crate) struct ExtractBudget {
+    remaining_bytes: u64,
+    remaining_entries: usize,
+}
+
+impl ExtractBudget {
+    /// Account for the next archive entry.
+    pub(crate) fn take_entry(&mut self) -> Result<(), DocsError> {
+        self.remaining_entries = self
+            .remaining_entries
+            .checked_sub(1)
+            .ok_or(DocsError::ArchiveTooLarge)?;
+        Ok(())
+    }
+
+    /// Write `content` to a new regular file at `target`, creating parent
+    /// directories. Fails once the archive exceeds its byte budget.
+    pub(crate) fn write_file(
+        &mut self,
+        content: &mut impl Read,
+        target: &Path,
+    ) -> Result<(), DocsError> {
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut file = fs::File::create(target)?;
+        let written = io::copy(
+            &mut content.take(self.remaining_bytes.saturating_add(1)),
+            &mut file,
+        )?;
+        self.remaining_bytes = self
+            .remaining_bytes
+            .checked_sub(written)
+            .ok_or(DocsError::ArchiveTooLarge)?;
+        Ok(())
+    }
+}
+
 /// Unpack a `.crate` archive into `dest`.
 ///
 /// Only regular files and directories below `root` (the `{name}-{version}`
 /// folder every crate archive contains) are written. Symlinks, hard links and
 /// device files are skipped, so a crafted archive cannot point later steps,
 /// like the docs upload, at files outside of `dest`.
-pub fn unpack_crate(reader: impl Read, dest: &Path, root: &str) -> Result<(), DocsError> {
+pub fn unpack_crate(
+    reader: impl Read,
+    dest: &Path,
+    root: &str,
+    limits: ExtractLimits,
+) -> Result<(), DocsError> {
+    let mut budget = limits.budget();
     let mut archive = Archive::new(reader);
     for entry in archive.entries()? {
         let mut entry = entry?;
+        budget.take_entry()?;
         let path = entry.path()?.into_owned();
         let Some(relative) = path_below_root(&path, root) else {
             warn!(
@@ -28,7 +112,9 @@ pub fn unpack_crate(reader: impl Read, dest: &Path, root: &str) -> Result<(), Do
         let target = dest.join(relative);
         match entry.header().entry_type() {
             EntryType::Directory => fs::create_dir_all(&target)?,
-            EntryType::Regular | EntryType::Continuous => write_file(&mut entry, &target)?,
+            EntryType::Regular | EntryType::Continuous => {
+                budget.write_file(&mut entry, &target)?;
+            }
             other => warn!(
                 "Skipping crate archive entry {} of type {other:?}",
                 path.display()
@@ -47,16 +133,6 @@ fn path_below_root(path: &Path, root: &str) -> Option<PathBuf> {
     components
         .all(|c| matches!(c, Component::Normal(_)))
         .then(|| path.to_path_buf())
-}
-
-/// Write `content` to a new regular file at `target`, creating parent directories.
-pub(crate) fn write_file(content: &mut impl Read, target: &Path) -> io::Result<()> {
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut file = fs::File::create(target)?;
-    io::copy(content, &mut file)?;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -88,13 +164,70 @@ mod tests {
         builder.append(&header, io::empty()).unwrap();
     }
 
-    fn unpack(build: impl FnOnce(&mut Builder<Vec<u8>>)) -> tempfile::TempDir {
+    const LIMITS: ExtractLimits = ExtractLimits {
+        max_bytes: 1_000,
+        max_entries: 10,
+    };
+
+    fn try_unpack(
+        limits: ExtractLimits,
+        build: impl FnOnce(&mut Builder<Vec<u8>>),
+    ) -> (tempfile::TempDir, Result<(), DocsError>) {
         let mut builder = Builder::new(Vec::new());
         build(&mut builder);
         let tar = builder.into_inner().unwrap();
         let dest = tempfile::tempdir().unwrap();
-        unpack_crate(tar.as_slice(), dest.path(), "x-1.0.0").unwrap();
+        let result = unpack_crate(tar.as_slice(), dest.path(), "x-1.0.0", limits);
+        (dest, result)
+    }
+
+    fn unpack(build: impl FnOnce(&mut Builder<Vec<u8>>)) -> tempfile::TempDir {
+        let (dest, result) = try_unpack(LIMITS, build);
+        result.unwrap();
         dest
+    }
+
+    #[test]
+    fn unpack_crate_fails_when_uncompressed_size_exceeds_budget() {
+        let (_dest, result) = try_unpack(LIMITS, |b| {
+            append_file(b, "x-1.0.0/a", &[0; 600]);
+            append_file(b, "x-1.0.0/b", &[0; 600]);
+        });
+
+        assert!(matches!(result, Err(DocsError::ArchiveTooLarge)));
+    }
+
+    #[test]
+    fn unpack_crate_accepts_archive_of_exactly_the_budget() {
+        let (_dest, result) = try_unpack(LIMITS, |b| {
+            append_file(b, "x-1.0.0/a", &[0; 500]);
+            append_file(b, "x-1.0.0/b", &[0; 500]);
+        });
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn unpack_crate_fails_when_entry_count_exceeds_budget() {
+        let (_dest, result) = try_unpack(LIMITS, |b| {
+            for i in 0..11 {
+                append_file(b, &format!("x-1.0.0/{i}"), b"");
+            }
+        });
+
+        assert!(matches!(result, Err(DocsError::ArchiveTooLarge)));
+    }
+
+    #[test]
+    fn extract_limits_scale_with_max_docs_size() {
+        assert_eq!(
+            ExtractLimits::from_max_docs_size(100),
+            ExtractLimits::new(2_000_000_000, 100_000)
+        );
+        assert_eq!(
+            ExtractLimits::from_max_docs_size(0),
+            ExtractLimits::from_max_docs_size(1)
+        );
     }
 
     #[test]
