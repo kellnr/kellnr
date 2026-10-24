@@ -25,7 +25,7 @@
             </v-btn>
           </div>
         </div>
-        <p v-else class="text-body-2 text-disabled mb-0">No owners assigned yet.</p>
+        <p v-else class="text-body-medium text-disabled mb-0">No owners assigned yet.</p>
 
         <v-alert v-if="deleteOwnerStatus.hasStatus" :type="deleteOwnerStatus.isSuccess ? 'success' : 'error'"
           closable @click:close="deleteOwnerStatus.clear()" class="mt-4">
@@ -110,7 +110,7 @@
               </v-btn>
             </div>
           </div>
-          <p v-else class="text-body-2 text-disabled mb-4">No users assigned yet.</p>
+          <p v-else class="text-body-medium text-disabled mb-4">No users assigned yet.</p>
 
           <v-alert v-if="deleteUserStatus.hasStatus"
             :type="deleteUserStatus.isSuccess ? 'success' : 'error'" closable
@@ -151,7 +151,7 @@
               </v-btn>
             </div>
           </div>
-          <p v-else class="text-body-2 text-disabled mb-4">No groups assigned yet.</p>
+          <p v-else class="text-body-medium text-disabled mb-4">No groups assigned yet.</p>
 
           <v-alert v-if="deleteGroupStatus.hasStatus"
             :type="deleteGroupStatus.isSuccess ? 'success' : 'error'" closable

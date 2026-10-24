@@ -32,7 +32,7 @@
               <div class="channel-row">
                 <div class="channel-label">
                   <v-icon icon="mdi-source-branch" size="x-small" class="me-2 text-medium-emphasis"></v-icon>
-                  <span class="text-body-2">Release Channel</span>
+                  <span class="text-body-medium">Release Channel</span>
                 </div>
                 <div class="channel-controls" data-testid="toolchain-channel-select">
                   <v-select
@@ -48,7 +48,7 @@
                   ></v-select>
                 </div>
               </div>
-              <p class="text-caption text-medium-emphasis mt-1 mb-0">
+              <p class="text-body-small text-medium-emphasis mt-1 mb-0">
                 Assign this toolchain to a channel so users can install it via <code>rustup install {{ toolchain.channel || 'channel-name' }}</code>
               </p>
             </div>
@@ -56,7 +56,7 @@
             <!-- Targets List -->
             <div class="targets-section">
               <div class="targets-header">
-                <span class="text-body-2 font-weight-medium">Targets</span>
+                <span class="text-body-medium font-weight-medium">Targets</span>
                 <v-btn
                   color="error"
                   variant="text"

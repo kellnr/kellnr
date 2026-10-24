@@ -11,11 +11,11 @@
       <div class="sidebar-section" data-testid="install-section">
         <div class="d-flex align-center mb-2">
           <v-icon color="primary" size="small" class="me-2">mdi-code-braces</v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Install</span>
+          <span class="text-body-large font-weight-medium">Install</span>
         </div>
 
         <div class="d-flex align-center copy-container mt-1">
-          <div class="copy-text text-body-2" data-testid="install-snippet">{{ crateName }} = "{{ version }}"</div>
+          <div class="copy-text text-body-medium" data-testid="install-snippet">{{ crateName }} = "{{ version }}"</div>
           <v-tooltip text="Copy to clipboard">
             <template v-slot:activator="{ props }">
               <v-btn v-bind="props" icon variant="text" density="comfortable" color="primary"
@@ -33,7 +33,7 @@
       <div class="sidebar-section">
         <div class="d-flex align-center mb-2">
           <v-icon color="info" size="small" class="me-2">mdi-tag-outline</v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Version</span>
+          <span class="text-body-large font-weight-medium">Version</span>
         </div>
 
         <div class="sidebar-content">
@@ -45,7 +45,7 @@
       <div class="sidebar-section">
         <div class="d-flex align-center mb-2">
           <v-icon color="info" size="small" class="me-2">mdi-calendar</v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Published</span>
+          <span class="text-body-large font-weight-medium">Published</span>
         </div>
 
         <div class="sidebar-content">
@@ -61,7 +61,7 @@
       <div class="sidebar-section">
         <div class="d-flex align-center mb-2">
           <v-icon color="success" size="small" class="me-2">mdi-download</v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Downloads</span>
+          <span class="text-body-large font-weight-medium">Downloads</span>
         </div>
 
         <div class="sidebar-content download-grid">
@@ -79,7 +79,7 @@
       <div class="sidebar-section">
         <div class="d-flex align-center mb-2">
           <v-icon color="warning" size="small" class="me-2">mdi-book-open-variant</v-icon>
-          <span class="text-subtitle-1 font-weight-medium">Documentation</span>
+          <span class="text-body-large font-weight-medium">Documentation</span>
         </div>
 
         <div class="sidebar-content docs-actions">
@@ -247,7 +247,7 @@ function buildDocs() {
 }
 
 /* Section titles */
-.text-subtitle-1 {
+.text-body-large {
   color: rgb(var(--v-theme-on-surface));
 }
 </style>

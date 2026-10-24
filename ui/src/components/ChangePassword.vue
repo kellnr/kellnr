@@ -3,18 +3,18 @@
     <!-- Header -->
     <div class="section-header">
       <v-icon icon="mdi-key" size="small" color="primary" class="me-3"></v-icon>
-      <span class="text-h6 font-weight-bold">Change Password</span>
+      <span class="text-title-large font-weight-bold">Change Password</span>
     </div>
 
     <!-- Form -->
     <div class="form-container">
-      <p class="text-body-2 text-medium-emphasis mb-6">
+      <p class="text-body-medium text-medium-emphasis mb-6">
         Update your password to keep your account secure. Choose a strong password that you don't use elsewhere.
       </p>
 
       <v-form ref="form" @submit.prevent="handleChangePassword">
         <div class="mb-4">
-          <label class="text-body-2 font-weight-medium d-block mb-2">Current Password</label>
+          <label class="text-body-medium font-weight-medium d-block mb-2">Current Password</label>
           <v-text-field
             v-model="oldPassword"
             type="password"
@@ -28,10 +28,10 @@
         </div>
 
         <v-divider class="my-5"></v-divider>
-        <p class="text-overline text-medium-emphasis mb-4">New Password</p>
+        <p class="text-label-medium text-uppercase text-medium-emphasis mb-4">New Password</p>
 
         <div class="mb-4">
-          <label class="text-body-2 font-weight-medium d-block mb-2">New Password</label>
+          <label class="text-body-medium font-weight-medium d-block mb-2">New Password</label>
           <v-text-field
             v-model="newPassword1"
             type="password"
@@ -45,7 +45,7 @@
         </div>
 
         <div class="mb-5">
-          <label class="text-body-2 font-weight-medium d-block mb-2">Confirm New Password</label>
+          <label class="text-body-medium font-weight-medium d-block mb-2">Confirm New Password</label>
           <v-text-field
             v-model="newPassword2"
             type="password"

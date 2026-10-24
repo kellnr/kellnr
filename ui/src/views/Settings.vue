@@ -5,7 +5,7 @@
             <v-card class="sidebar-card" elevation="0">
                 <div class="sidebar-header" @click="mobileNavOpen = !mobileNavOpen" style="cursor: pointer;">
                     <v-icon icon="mdi-cog" size="small" color="primary" class="me-3"></v-icon>
-                    <span class="text-h6 font-weight-bold">Settings</span>
+                    <span class="text-title-large font-weight-bold">Settings</span>
                     <v-spacer></v-spacer>
                     <v-chip size="small" variant="tonal" color="primary" class="me-2">
                         {{ getTabLabel(activeTab) }}
@@ -23,13 +23,13 @@
                                         <v-icon :icon="item.icon" size="small"></v-icon>
                                     </div>
                                 </template>
-                                <v-list-item-title class="text-body-1 font-weight-medium">{{ item.mobileLabel
+                                <v-list-item-title class="text-body-large font-weight-medium">{{ item.mobileLabel
                                     }}</v-list-item-title>
                             </v-list-item>
                         </template>
 
                         <template v-if="store.loggedInUserIsAdmin">
-                            <v-list-subheader class="text-overline mt-2">Administration</v-list-subheader>
+                            <v-list-subheader class="text-label-medium text-uppercase mt-2">Administration</v-list-subheader>
 
                             <template v-for="item in visibleAdminNavItems" :key="item.tab">
                                 <v-list-item @click="selectTab(item.tab)" :active="activeTab === item.tab"
@@ -40,7 +40,7 @@
                                             <v-icon :icon="item.icon" size="small"></v-icon>
                                         </div>
                                     </template>
-                                    <v-list-item-title class="text-body-1 font-weight-medium">{{ item.mobileLabel
+                                    <v-list-item-title class="text-body-large font-weight-medium">{{ item.mobileLabel
                                         }}</v-list-item-title>
                                 </v-list-item>
                             </template>
@@ -56,7 +56,7 @@
                 <v-card class="sidebar-card" elevation="0">
                     <div class="sidebar-header">
                         <v-icon icon="mdi-cog" size="small" color="primary" class="me-3"></v-icon>
-                        <span class="text-h6 font-weight-bold">Settings</span>
+                        <span class="text-title-large font-weight-bold">Settings</span>
                     </div>
 
                     <v-list nav class="pa-2">
@@ -68,7 +68,7 @@
                                         <v-icon :icon="item.icon" size="small"></v-icon>
                                     </div>
                                 </template>
-                                <v-list-item-title class="text-body-1 font-weight-medium">{{ item.desktopLabel
+                                <v-list-item-title class="text-body-large font-weight-medium">{{ item.desktopLabel
                                     }}</v-list-item-title>
                                 <template v-slot:append>
                                     <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>
@@ -77,7 +77,7 @@
                         </template>
 
                         <template v-if="store.loggedInUserIsAdmin">
-                            <v-list-subheader class="text-overline mt-2">Administration</v-list-subheader>
+                            <v-list-subheader class="text-label-medium text-uppercase mt-2">Administration</v-list-subheader>
 
                             <template v-for="item in visibleAdminNavItems" :key="item.tab">
                                 <v-list-item @click="activeTab = item.tab" :active="activeTab === item.tab"
@@ -88,7 +88,7 @@
                                             <v-icon :icon="item.icon" size="small"></v-icon>
                                         </div>
                                     </template>
-                                    <v-list-item-title class="text-body-1 font-weight-medium">{{ item.desktopLabel
+                                    <v-list-item-title class="text-body-large font-weight-medium">{{ item.desktopLabel
                                         }}</v-list-item-title>
                                     <template v-slot:append>
                                         <v-icon icon="mdi-chevron-right" size="small" class="nav-chevron"></v-icon>

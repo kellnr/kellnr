@@ -16,7 +16,7 @@
     <div class="section-content">
       <!-- Groups List View -->
       <template v-if="!editingGroup">
-        <p class="text-body-2 text-medium-emphasis mb-5">
+        <p class="text-body-medium text-medium-emphasis mb-5">
           Organize users into groups for easier access control. Groups can be assigned to crates to grant download permissions.
         </p>
 
@@ -169,7 +169,7 @@
               </v-btn>
             </div>
 
-            <p v-if="availableUsers.length === 0" class="text-body-2 text-medium-emphasis mt-3 mb-0">
+            <p v-if="availableUsers.length === 0" class="text-body-medium text-medium-emphasis mt-3 mb-0">
               <v-icon icon="mdi-information-outline" size="small" class="me-1"></v-icon>
               All users are already members of this group.
             </p>

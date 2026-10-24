@@ -77,10 +77,10 @@
             :color="uploadForm.file ? 'success' : 'primary'"
             class="mb-2"
           ></v-icon>
-          <p v-if="uploadForm.file" class="text-body-2 mb-0">
+          <p v-if="uploadForm.file" class="text-body-medium mb-0">
             {{ uploadForm.file.name }} ({{ formatSize(uploadForm.file.size) }})
           </p>
-          <p v-else class="text-body-2 text-medium-emphasis mb-0">
+          <p v-else class="text-body-medium text-medium-emphasis mb-0">
             Drop .tar.xz file here or click to browse
           </p>
         </div>

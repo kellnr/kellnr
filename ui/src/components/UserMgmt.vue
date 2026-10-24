@@ -3,7 +3,7 @@
     <SectionHeader icon="mdi-account-multiple" title="User Management" :count="users.length" />
 
     <div class="section-content">
-      <p class="text-body-2 text-medium-emphasis mb-5">
+      <p class="text-body-medium text-medium-emphasis mb-5">
         Manage user accounts, permissions, and access levels. Admins have full access, while read-only users can only view crates.
       </p>
 

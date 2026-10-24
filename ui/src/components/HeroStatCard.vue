@@ -11,10 +11,10 @@
     <v-card-text class="d-flex flex-column h-100 pa-5" :class="textColorClass">
       <div class="d-flex justify-space-between align-start mb-auto">
         <div class="stat-content">
-          <div class="text-h2 font-weight-bold stat-number" data-testid="stat-value">
+          <div class="text-display-large font-weight-bold stat-number" data-testid="stat-value">
             {{ formattedNum }}
           </div>
-          <div class="text-h6 font-weight-medium mt-1 stat-label" data-testid="stat-label">
+          <div class="text-title-large font-weight-medium mt-1 stat-label" data-testid="stat-label">
             {{ text }}
           </div>
         </div>
@@ -22,7 +22,7 @@
           <v-icon :color="getIconColor" :icon="icon" size="x-large"></v-icon>
         </v-avatar>
       </div>
-      <div v-if="subtitle" class="text-body-2 mt-3 stat-subtitle">
+      <div v-if="subtitle" class="text-body-medium mt-3 stat-subtitle">
         {{ subtitle }}
       </div>
     </v-card-text>

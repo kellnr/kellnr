@@ -3,8 +3,8 @@
     <!-- Title Section -->
     <v-card class="mb-4 title-card" elevation="0">
       <v-card-title class="d-flex flex-wrap align-baseline pa-5">
-        <h1 class="text-h3 font-weight-bold me-3 text-break crate-title" data-testid="crate-title">{{ crate.name }}</h1>
-        <span class="text-h5 version-text" data-testid="crate-version">{{ selected_version.version }}</span>
+        <h1 class="text-display-medium font-weight-bold me-3 text-break crate-title" data-testid="crate-title">{{ crate.name }}</h1>
+        <span class="text-headline-small version-text" data-testid="crate-version">{{ selected_version.version }}</span>
       </v-card-title>
 
       <v-card-text v-if="crate.description != null" class="pt-0 px-5 pb-5">
