@@ -88,9 +88,10 @@ test: npm-build
 test: npm-build
     {{ setup-msvc }} cargo nextest run --workspace --no-default-features -E 'not test(~postgres_) and not binary(s3_tests) and not binary(gcs_tests)'
 
+# Extra arguments are passed to Playwright, e.g. `just test-ui --shard=1/2`
 [unix]
-test-ui:
-    {{ test_ui_chromium }}
+test-ui *ARGS:
+    {{ test_ui_chromium }} {{ ARGS }}
 
 [unix]
 test-ui-all-browser:
@@ -113,7 +114,7 @@ test-ui-headed:
     {{ test_ui_headed }}
 
 [windows]
-test-ui:
+test-ui *ARGS:
     @echo "UI tests with Docker are not supported on Windows yet"
 
 [windows]

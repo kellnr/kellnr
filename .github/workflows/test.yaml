@@ -8,13 +8,19 @@ on:
     branches:
       - main
       - v6.0.0
+  workflow_dispatch:
 
+# New pushes to a PR cancel its running checks. Runs on main are never
+# cancelled: the release workflow needs the result for the release commit.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  # Line tables keep backtraces readable, but compile and link faster and
+  # keep the build cache small.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 permissions:
   contents: read
@@ -61,6 +67,30 @@ jobs:
 
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: read
+    outputs:
+      nix: ${{ steps.filter.outputs.nix }}
+
+    steps:
+      - name: Check for packaging changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            nix:
+              - "flake.nix"
+              - "flake.lock"
+              - "Cargo.lock"
+              - "**/Cargo.toml"
+              - "ui/package.json"
+              - "ui/package-lock.json"
+              - ".github/workflows/test.yaml"
+
   lint:
     name: Format & Clippy
     needs: [update-npm-hash]
@@ -68,8 +98,23 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      - &checkout
+        name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
+
+      - &check-disk-space
+        name: Check free disk space
+        id: disk
+        run: |
+          avail_gb=$(df --output=avail -BG / | tail -n 1 | tr -dc '0-9')
+          echo "Free disk space: ${avail_gb} GB"
+          if [ "$avail_gb" -lt 30 ]; then echo "low=true" >> "$GITHUB_OUTPUT"; fi
+
       - &free-disk-space
         name: Free disk space
+        if: steps.disk.outputs.low == 'true'
         uses: jlumbroso/free-disk-space@v2.0.0
         with:
           tool-cache: false
@@ -80,13 +125,18 @@ jobs:
           docker-images: false
           swap-storage: false
 
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
-
-      - uses: cachix/install-nix-action@v31
+      - &install-nix
+        uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+
+      # Only main writes the cache, PRs restore it. The toolchain comes from
+      # the flake, so flake.lock is part of the key.
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: lint
+          key: ${{ hashFiles('flake.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Check formatting
         run: nix develop --command just fmt-check
@@ -97,82 +147,90 @@ jobs:
       - name: Clippy
         run: nix develop --command just clippy-deny
 
-  test-kellnr:
-    name: Unit Tests
+  # Unit and Docker tests share one build of the test binaries.
+  test:
+    name: Tests (Unit, PostgreSQL, S3, GCS)
     needs: [update-npm-hash]
     if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
 
     steps:
+      - *checkout
+      - *check-disk-space
       - *free-disk-space
+      - *install-nix
 
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
         with:
-          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
+          shared-key: test
+          key: ${{ hashFiles('flake.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - uses: cachix/install-nix-action@v31
-        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
-
-      - name: Tests
+      - name: Unit tests
         run: nix develop --command just test
 
-  test-kellnr-docker:
-    name: Docker Tests (PostgreSQL, S3, GCS)
-    needs: [update-npm-hash]
-    if: ${{ always() && !failure() && !cancelled() }}
-    runs-on: ubuntu-24.04
-
-    steps:
-      - *free-disk-space
-
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
-
-      - uses: cachix/install-nix-action@v31
-        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
-
-      - name: Tests
+      - name: Docker tests
+        if: ${{ !cancelled() }}
         run: nix develop --command just test-docker
 
-  test-kellnr-ui:
-    name: UI Tests (Playwright)
+  test-ui:
+    name: UI Tests (Playwright, ${{ matrix.shard }}/2)
     needs: [update-npm-hash]
     if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     steps:
+      - *checkout
+      - *check-disk-space
       - *free-disk-space
+      - *install-nix
 
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
         with:
-          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
-
-      - uses: cachix/install-nix-action@v31
-        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+          shared-key: ui
+          key: ${{ hashFiles('flake.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 1 }}
 
       - name: Tests
-        run: nix develop --command just test-ui
+        run: nix develop --command just test-ui --shard=${{ matrix.shard }}/2
 
+  # Single required status check, so jobs can be split or renamed without
+  # changing the branch protection.
+  tests-passed:
+    name: Tests Passed
+    needs: [test, test-ui]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check test results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then exit 1; fi
+          done
+
+  # The Nix build only breaks on packaging changes (lock files, hashes,
+  # flake). PRs run it only then, main runs it on every push.
   nix-build:
     name: Nix Build
-    needs: [update-npm-hash]
-    if: ${{ always() && !failure() && !cancelled() }}
+    needs: [update-npm-hash, changes]
+    if: ${{ always() && !failure() && !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.nix == 'true') }}
     runs-on: ubuntu-24.04
 
     steps:
+      - *checkout
+      - *check-disk-space
       - *free-disk-space
-
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.update-npm-hash.outputs.sha || github.sha }}
-
-      - uses: cachix/install-nix-action@v31
-        with: { nix_path: "nixpkgs=channel:nixos-unstable" }
+      - *install-nix
 
       - name: Build with Nix
         run: nix build
