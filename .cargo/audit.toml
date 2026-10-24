@@ -1,0 +1,17 @@
+# cargo-audit configuration
+#
+# Every ignored advisory needs a reason and must be revisited when the
+# dependency that pulls it in gets a new release.
+
+[advisories]
+ignore = [
+    # rsa 0.9 "Marvin Attack" timing side channel. Only affects operations
+    # with an RSA private key (decryption, signing). Kellnr only verifies
+    # OIDC ID token signatures with the provider's public keys. No fixed rsa
+    # release exists, and openidconnect 4.0.1 (latest) requires rsa ^0.9.
+    "RUSTSEC-2023-0071",
+    # crypto-bigint 0.5 non constant-time operations. Pulled in through
+    # p256/p384 0.13 by openidconnect 4.0.1 (latest), which only uses them to
+    # verify ECDSA signatures over public data, so there is no secret to leak.
+    "RUSTSEC-2026-0387",
+]
