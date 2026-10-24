@@ -6,7 +6,7 @@ use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use hyper::StatusCode;
 use kellnr_appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
-use kellnr_common::cratesio_downloader::download_crate;
+use kellnr_common::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::normalized_name::NormalizedName;
@@ -358,6 +358,12 @@ async fn predownload_crate(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) {
             )
             .await
             {
+                Ok(crate_data) if !has_checksum(&crate_data, &idx.cksum) => {
+                    error!(
+                        "Checksum mismatch for crate {} version {} from crates.io, not caching it",
+                        idx.name, idx.vers
+                    );
+                }
                 Ok(crate_data) => {
                     if let Err(e) = args
                         .storage

@@ -41,6 +41,7 @@ cookie.workspace = true
 mockall.workspace = true
 rand.workspace = true
 rm_rf.workspace = true
+sha256.workspace = true
 tower.workspace = true
 
 

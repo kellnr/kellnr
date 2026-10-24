@@ -2021,6 +2021,20 @@ impl DbProvider for Database {
         Ok(msgs)
     }
 
+    async fn get_cratesio_cksum(
+        &self,
+        crate_name: &NormalizedName,
+        version: &Version,
+    ) -> DbResult<Option<String>> {
+        let index = cratesio_index::Entity::find()
+            .inner_join(cratesio_crate::Entity)
+            .filter(cratesio_crate::Column::Name.eq(crate_name))
+            .filter(cratesio_index::Column::Vers.eq(version))
+            .one(&self.db_con)
+            .await?;
+        Ok(index.map(|i| i.cksum))
+    }
+
     async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
         let mut ci: crate_index::ActiveModel = self
             .get_crate_index_model(crate_name, version)
