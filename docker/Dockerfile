@@ -38,13 +38,15 @@ RUN mkdir -p /etc/kellnr && \
 # older images, then drops privileges.
 # The base image makes the toolchain world-writable. Docs builds run crate
 # code as the kellnr user, so the toolchain must stay read-only for it, and
-# cargo gets its own writable CARGO_HOME.
+# cargo gets its own writable CARGO_HOME. The data directory is group
+# writable, so it works for the kellnr user, for --user 1000:1000 and for
+# root without capabilities (the entrypoint then keeps running as root).
 RUN groupadd --gid 1000 kellnr && \
     useradd --uid 1000 --gid kellnr --create-home --home-dir /home/kellnr \
         --shell /usr/sbin/nologin kellnr && \
+    install -d -o kellnr -g kellnr /home/kellnr/.cargo && \
     chmod -R go-w "$RUSTUP_HOME" "$CARGO_HOME" && \
-    mkdir -p /var/lib/kellnr && \
-    chown -R kellnr:kellnr /var/lib/kellnr
+    install -d -o root -g kellnr -m 0775 /var/lib/kellnr
 ENV CARGO_HOME=/home/kellnr/.cargo
 
 COPY docker/entrypoint.sh /usr/local/bin/kellnr-entrypoint.sh
