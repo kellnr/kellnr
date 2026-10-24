@@ -104,9 +104,10 @@
                 <v-icon icon="mdi-account" size="small" class="me-3"></v-icon>
                 <span class="settings-list-item-name" data-testid="settings-user-name">{{ user.login }}</span>
               </div>
-              <v-btn color="error" variant="text" size="small" @click="handleDeleteUser(user.login)"
+              <v-btn color="error" variant="tonal" size="small" @click="handleDeleteUser(user.login)"
                 data-testid="settings-user-remove">
-                <v-icon icon="mdi-close" size="small"></v-icon>
+                <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                Remove
               </v-btn>
             </div>
           </div>
@@ -118,11 +119,12 @@
             {{ deleteUserStatus.message }}
           </v-alert>
 
-          <v-form @submit.prevent="handleAddUser" class="settings-form inline" data-testid="settings-add-user">
+          <v-form @submit.prevent="handleAddUser" class="settings-form" data-testid="settings-add-user">
             <v-text-field v-model="newUserName" placeholder="Enter username" prepend-inner-icon="mdi-account"
-              variant="outlined" density="compact" hide-details class="settings-input"></v-text-field>
-            <v-btn color="primary" type="submit" variant="tonal" size="small">
-              <v-icon icon="mdi-plus" size="small"></v-icon>
+              variant="outlined" density="comfortable" hide-details class="settings-input"></v-text-field>
+            <v-btn color="primary" type="submit" variant="flat">
+              <v-icon icon="mdi-plus" size="small" class="me-1"></v-icon>
+              Add
             </v-btn>
           </v-form>
           <v-alert v-if="addUserStatus.hasStatus" :type="addUserStatus.isSuccess ? 'success' : 'error'"
@@ -145,9 +147,10 @@
                 <v-icon icon="mdi-account-group" size="small" class="me-3"></v-icon>
                 <span class="settings-list-item-name" data-testid="settings-group-name">{{ group.name }}</span>
               </div>
-              <v-btn color="error" variant="text" size="small" @click="handleDeleteGroup(group.name)"
+              <v-btn color="error" variant="tonal" size="small" @click="handleDeleteGroup(group.name)"
                 data-testid="settings-group-remove">
-                <v-icon icon="mdi-close" size="small"></v-icon>
+                <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                Remove
               </v-btn>
             </div>
           </div>
@@ -159,11 +162,12 @@
             {{ deleteGroupStatus.message }}
           </v-alert>
 
-          <v-form @submit.prevent="handleAddGroup" class="settings-form inline" data-testid="settings-add-group">
-            <v-combobox v-model="newGroupName" :items="availableGroups" label="Select or enter group"
-              prepend-inner-icon="mdi-account-group" variant="outlined" density="compact" hide-details class="settings-input" />
-            <v-btn color="primary" type="submit" variant="tonal" size="small">
-              <v-icon icon="mdi-plus" size="small"></v-icon>
+          <v-form @submit.prevent="handleAddGroup" class="settings-form" data-testid="settings-add-group">
+            <v-combobox v-model="newGroupName" :items="availableGroups" placeholder="Select or enter group"
+              prepend-inner-icon="mdi-account-group" variant="outlined" density="comfortable" hide-details class="settings-input" />
+            <v-btn color="primary" type="submit" variant="flat">
+              <v-icon icon="mdi-plus" size="small" class="me-1"></v-icon>
+              Add
             </v-btn>
           </v-form>
           <v-alert v-if="addGroupStatus.hasStatus" :type="addGroupStatus.isSuccess ? 'success' : 'error'"
@@ -213,7 +217,8 @@ const crateUsers = ref<{ login: string }[]>([])
 const newUserName = ref('')
 const crateGroups = ref<CrateGroup[]>([])
 const allGroups = ref<CrateGroup[]>([])
-const newGroupName = ref('')
+// null instead of '' so the combobox shows its placeholder
+const newGroupName = ref<string | null>(null)
 const isDownloadRestricted = ref(false)
 
 // Computed
@@ -341,10 +346,10 @@ async function loadAllGroups() {
 }
 
 async function handleAddGroup() {
-  const result = await crateService.addCrateGroup(props.crateName, newGroupName.value)
+  const result = await crateService.addCrateGroup(props.crateName, newGroupName.value ?? '')
   addGroupStatus.setFromResult(result, 'Crate group successfully added.')
   if (isSuccess(result)) {
-    newGroupName.value = ''
+    newGroupName.value = null
     await loadGroups()
   }
 }
@@ -490,11 +495,18 @@ async function handleSaveAccessData() {
 .settings-form {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
-.settings-form.inline {
-  align-items: center;
+/* Match the button height to the input next to it */
+.settings-form > .v-btn {
+  height: auto;
+}
+
+/* The crate page adds a bottom margin to text fields; inside a form row it
+   would make the row, and with it the button, taller than the input */
+.settings-form .settings-input {
+  margin-bottom: 0;
 }
 
 .settings-input {

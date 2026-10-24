@@ -70,7 +70,8 @@
                 :disabled="user.name === currentUserName"
                 @click="handleDeleteUser(user.name)"
               >
-                <v-icon icon="mdi-delete-outline" size="small"></v-icon>
+                <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                Delete
               </v-btn>
             </template>
           </ListItem>

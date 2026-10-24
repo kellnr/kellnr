@@ -48,7 +48,8 @@
                   size="small"
                   @click="handleDeleteGroup(group.name)"
                 >
-                  <v-icon icon="mdi-delete-outline" size="small"></v-icon>
+                  <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                  Delete
                 </v-btn>
               </template>
             </ListItem>
@@ -112,11 +113,12 @@
               <template #actions>
                 <v-btn
                   color="error"
-                  variant="text"
+                  variant="tonal"
                   size="small"
                   @click="handleRemoveMember(member.name)"
                 >
-                  <v-icon icon="mdi-close" size="small"></v-icon>
+                  <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                  Remove
                 </v-btn>
               </template>
             </ListItem>
