@@ -300,6 +300,12 @@ pub trait DbProvider: Send + Sync {
         indices: &[IndexMetadata],
     ) -> DbResult<Prefetch>;
     async fn get_cratesio_index_update_list(&self) -> DbResult<Vec<CratesioPrefetchMsg>>;
+    /// Checksum of a crates.io crate version from the cached index, if known.
+    async fn get_cratesio_cksum(
+        &self,
+        crate_name: &NormalizedName,
+        version: &Version,
+    ) -> DbResult<Option<String>>;
     async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()>;
     async fn yank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()>;
     async fn register_webhook(&self, webhook: Webhook) -> DbResult<String>;
@@ -738,6 +744,10 @@ pub mod mock {
             }
 
             async fn get_cratesio_index_update_list(&self) -> DbResult<Vec<CratesioPrefetchMsg>> {
+                unimplemented!()
+            }
+
+            async fn get_cratesio_cksum(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<Option<String>> {
                 unimplemented!()
             }
 

@@ -71,6 +71,11 @@ impl From<DownloadCrateError> for StatusCode {
     }
 }
 
+/// Whether `crate_data` matches the sha256 checksum `cksum` from the index.
+pub fn has_checksum(crate_data: &[u8], cksum: &str) -> bool {
+    sha256::digest(crate_data).eq_ignore_ascii_case(cksum)
+}
+
 pub async fn download_crate(
     client: &Client,
     name: &str,
@@ -99,4 +104,18 @@ pub async fn download_crate(
     let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
 
     Ok(crate_data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn has_checksum_compares_sha256() {
+        let cksum = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+
+        assert!(has_checksum(b"hello", cksum));
+        assert!(has_checksum(b"hello", &cksum.to_uppercase()));
+        assert!(!has_checksum(b"hello!", cksum));
+    }
 }

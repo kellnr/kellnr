@@ -3423,6 +3423,45 @@ async fn statistics_respect_visibility(test_db: &kellnr_db::Database) {
 }
 
 #[db_test]
+async fn get_cratesio_cksum_returns_index_checksum(test_db: &kellnr_db::Database) {
+    test_db
+        .add_cratesio_prefetch_data(
+            &OriginalName::try_from("Upstream").unwrap(),
+            "etag",
+            "last_modified",
+            None,
+            &[IndexMetadata {
+                name: "Upstream".to_string(),
+                vers: "1.0.0".to_string(),
+                deps: vec![],
+                cksum: "abc123".to_string(),
+                features: BTreeMap::default(),
+                yanked: false,
+                links: None,
+                pubtime: None,
+                v: Some(1),
+                features2: None,
+                rust_version: None,
+            }],
+        )
+        .await
+        .unwrap();
+    let name = NormalizedName::from_unchecked_str("upstream");
+
+    let known = test_db
+        .get_cratesio_cksum(&name, &Version::try_from("1.0.0").unwrap())
+        .await
+        .unwrap();
+    let unknown = test_db
+        .get_cratesio_cksum(&name, &Version::try_from("2.0.0").unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(Some("abc123".to_string()), known);
+    assert_eq!(None, unknown);
+}
+
+#[db_test]
 async fn add_crate_adds_version_to_mixed_case_crate(test_db: &kellnr_db::Database) {
     let created = Utc::now();
     for vers in ["1.0.0", "1.1.0"] {

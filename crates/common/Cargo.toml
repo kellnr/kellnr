@@ -21,6 +21,7 @@ sea-orm.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha256.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
