@@ -7,6 +7,7 @@ use serde_json::json;
 
 pub mod endpoints;
 mod service;
+mod target;
 #[cfg(test)]
 mod tests;
 pub mod types;

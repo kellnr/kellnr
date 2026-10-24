@@ -7,9 +7,8 @@ use kellnr_common::webhook::Webhook;
 use kellnr_error::api_error::{ApiError, ApiResult};
 use tracing::trace;
 
+use crate::target::validate_callback_url;
 use crate::types;
-
-// Re-export types for utoipa
 
 /// Register a new webhook (admin only)
 #[utoipa::path(
@@ -19,6 +18,7 @@ use crate::types;
     request_body = types::RegisterWebhookRequest,
     responses(
         (status = 200, description = "Webhook registered successfully", body = types::RegisterWebhookResponse),
+        (status = 400, description = "Invalid callback URL"),
         (status = 401, description = "Admin access required")
     ),
     security(("cargo_token" = []))
@@ -32,6 +32,9 @@ pub async fn register_webhook(
     if !token.is_admin {
         return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }
+
+    validate_callback_url(&input.callback_url)
+        .map_err(|e| ApiError::new(&e, "", StatusCode::BAD_REQUEST))?;
 
     let id = db
         .register_webhook(Webhook {
@@ -218,6 +221,31 @@ mod endpoint_tests {
         let webhook = db.get_webhook(&response.id).await.unwrap();
         assert_eq!(webhook.event, WebhookEvent::CrateAdd);
         assert_eq!(webhook.callback_url, "http://my-service:8000".to_string());
+    }
+
+    #[tokio::test]
+    async fn test_register_webhook_invalid_callback_url() {
+        let (router, db) = get_app().await;
+
+        for url in ["not a url", "file:///etc/passwd", "ftp://my-service"] {
+            let payload = format!("{{\"type\": \"crate_add\", \"callback_url\": \"{url}\"}}");
+
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::post("/api/v1/webhook")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, ADMIN_TOKEN)
+                        .body(Body::from(payload))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(400, response.status().as_u16(), "{url}");
+        }
+
+        assert!(db.get_all_webhooks().await.unwrap().is_empty());
     }
 
     #[tokio::test]
