@@ -7,6 +7,7 @@ mod m20260129_000001_database_improvements;
 mod m20260130_000001_toolchain;
 mod m20260406_000001_toolchain_component;
 mod m20260903_000001_index_rust_version;
+mod m20261024_000001_webhook_secret;
 
 pub struct Migrator;
 
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260130_000001_toolchain::Migration),
             Box::new(m20260406_000001_toolchain_component::Migration),
             Box::new(m20260903_000001_index_rust_version::Migration),
+            Box::new(m20261024_000001_webhook_secret::Migration),
         ]
     }
 }

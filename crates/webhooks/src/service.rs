@@ -5,7 +5,7 @@ use kellnr_common::webhook::WebhookQueue;
 use kellnr_db::DbProvider;
 use kellnr_settings::Webhooks;
 
-use crate::client::{WebhookClient, truncated_body};
+use crate::client::{Delivery, WebhookClient, truncated_body};
 use crate::types::WebhookError;
 
 pub fn run_webhook_service(db: Arc<dyn DbProvider>, settings: &Webhooks) {
@@ -31,7 +31,12 @@ async fn handle_queue(db: &Arc<dyn DbProvider>, client: &WebhookClient) -> Resul
     let pending = db.get_pending_webhook_queue_entries(now).await?;
 
     for entry in pending {
-        match client.post(&entry.callback_url, &entry.payload).await {
+        let delivery = Delivery {
+            id: &entry.id,
+            payload: &entry.payload,
+            secret: entry.secret.as_deref(),
+        };
+        match client.post(&entry.callback_url, &delivery).await {
             Ok(resp) if resp.status().as_u16() < 300 => {
                 if let Err(err) = db.delete_webhook_queue(&entry.id).await {
                     tracing::error!("Cannot delete webhook queue entry. Reason {err}");
@@ -240,6 +245,7 @@ mod service_tests {
             event,
             callback_url: format!("http://0.0.0.0:{callback_port}"),
             name: None,
+            secret: None,
         }
     }
 }

@@ -521,6 +521,7 @@ fn webhook_model_to_obj(w: webhook::Model) -> DbResult<Webhook> {
         name: w.name,
         event,
         callback_url: w.callback_url,
+        secret: w.secret,
     })
 }
 
@@ -1941,6 +1942,7 @@ impl DbProvider for Database {
             event: Set(Into::<&str>::into(webhook.event).to_string()),
             callback_url: Set(webhook.callback_url),
             name: Set(webhook.name),
+            secret: Set(webhook.secret),
             ..Default::default()
         };
 
@@ -2010,12 +2012,14 @@ impl DbProvider for Database {
 
         Ok(w.into_iter()
             .filter_map(|w| {
+                let webhook = w.1.first()?;
                 Some(WebhookQueue {
                     id: w.0.id.to_string(),
-                    callback_url: w.1.first()?.callback_url.clone(),
+                    callback_url: webhook.callback_url.clone(),
                     payload: w.0.payload,
                     last_attempt: w.0.last_attempt.map(Into::into),
                     next_attempt: w.0.next_attempt.into(),
+                    secret: webhook.secret.clone(),
                 })
             })
             .collect())
