@@ -187,7 +187,7 @@ async fn run_server(resolved: ResolvedSettings) {
     );
 
     // Webhook support
-    init_webhook_service(db.clone());
+    init_webhook_service(&settings, db.clone());
 
     let signing_key = init_cookie_signing_key(&settings);
     let max_docs_size = settings.docs.max_size;
@@ -456,8 +456,8 @@ fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
     }
 }
 
-fn init_webhook_service(db: Arc<dyn DbProvider + 'static>) {
-    kellnr_webhooks::run_webhook_service(db);
+fn init_webhook_service(settings: &Settings, db: Arc<dyn DbProvider + 'static>) {
+    kellnr_webhooks::run_webhook_service(db, &settings.webhooks);
 }
 
 fn init_toolchain_storage(settings: &Arc<Settings>) -> Option<Arc<ToolchainStorage>> {

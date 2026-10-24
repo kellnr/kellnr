@@ -17,6 +17,7 @@ pub mod s3;
 pub mod settings;
 pub mod setup;
 pub mod toolchain;
+pub mod webhooks;
 
 pub use cli::{CliResult, ResolvedSettings, ShowConfigOptions, cli_flag_map, parse_cli};
 pub use config_source::{ConfigSource, SourceMap};
@@ -42,3 +43,4 @@ pub use settings::{
 };
 pub use setup::Setup;
 pub use toolchain::Toolchain;
+pub use webhooks::Webhooks;

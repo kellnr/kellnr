@@ -5,6 +5,7 @@ use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use serde_json::json;
 
+mod client;
 pub mod endpoints;
 mod service;
 mod target;

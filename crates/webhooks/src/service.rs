@@ -3,18 +3,20 @@ use std::sync::Arc;
 use chrono::{DateTime, TimeDelta, Utc};
 use kellnr_common::webhook::WebhookQueue;
 use kellnr_db::DbProvider;
+use kellnr_settings::Webhooks;
 
+use crate::client::WebhookClient;
 use crate::types::WebhookError;
 
-pub fn run_webhook_service(db: Arc<dyn DbProvider>) {
+pub fn run_webhook_service(db: Arc<dyn DbProvider>, settings: &Webhooks) {
+    let http_client = match WebhookClient::new(settings) {
+        Ok(client) => client,
+        Err(err) => {
+            tracing::error!("Cannot create webhook HTTP client, webhooks are disabled: {err}");
+            return;
+        }
+    };
     tokio::spawn(async move {
-        let http_client = match crate::types::build_client() {
-            Ok(client) => client,
-            Err(err) => {
-                tracing::error!("Cannot create webhook HTTP client, webhooks are disabled: {err}");
-                return;
-            }
-        };
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             if let Err(err) = handle_queue(&db, &http_client).await {
@@ -24,17 +26,12 @@ pub fn run_webhook_service(db: Arc<dyn DbProvider>) {
     });
 }
 
-async fn handle_queue(
-    db: &Arc<dyn DbProvider>,
-    client: &reqwest::Client,
-) -> Result<(), WebhookError> {
+async fn handle_queue(db: &Arc<dyn DbProvider>, client: &WebhookClient) -> Result<(), WebhookError> {
     let now = Utc::now();
     let pending = db.get_pending_webhook_queue_entries(now).await?;
 
     for entry in pending {
-        let request = client.post(&entry.callback_url).json(&entry.payload);
-
-        match request.send().await {
+        match client.post(&entry.callback_url, &entry.payload).await {
             Ok(resp) if resp.status().as_u16() < 300 => {
                 if let Err(err) = db.delete_webhook_queue(&entry.id).await {
                     tracing::error!("Cannot delete webhook queue entry. Reason {err}");
@@ -139,7 +136,7 @@ mod service_tests {
         .await;
 
         let mut listener = get_test_listener(9980, 200).await;
-        let http_client = reqwest::Client::new();
+        let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
         handle_queue(&db, &http_client).await.unwrap();
 
         for _ in 0..5 {
@@ -171,7 +168,7 @@ mod service_tests {
         .await;
 
         let mut listener = get_test_listener(9981, 400).await;
-        let http_client = reqwest::Client::new();
+        let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
         handle_queue(&db, &http_client).await.unwrap();
 
         let listener_resp = listener.rx.recv().await.unwrap();
@@ -217,7 +214,7 @@ mod service_tests {
         )
         .await;
 
-        let http_client = reqwest::Client::new();
+        let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
         handle_queue(&db, &http_client).await.unwrap();
 
         let ts = Utc::now() + TimeDelta::minutes(5);
