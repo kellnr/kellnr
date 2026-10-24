@@ -1,13 +1,14 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use kellnr_appstate::DbState;
+use kellnr_appstate::{DbState, SettingsState};
 use kellnr_auth::token;
 use kellnr_common::webhook::Webhook;
 use kellnr_error::api_error::{ApiError, ApiResult};
 use tracing::trace;
 
-use crate::target::validate_callback_url;
+use crate::client::WebhookClient;
+use crate::target::{is_blocked_url, validate_callback_url};
 use crate::types;
 
 /// Register a new webhook (admin only)
@@ -18,7 +19,7 @@ use crate::types;
     request_body = types::RegisterWebhookRequest,
     responses(
         (status = 200, description = "Webhook registered successfully", body = types::RegisterWebhookResponse),
-        (status = 400, description = "Invalid callback URL"),
+        (status = 400, description = "Invalid callback URL or target address not permitted"),
         (status = 401, description = "Admin access required")
     ),
     security(("cargo_token" = []))
@@ -26,6 +27,7 @@ use crate::types;
 pub async fn register_webhook(
     token: token::Token,
     State(db): DbState,
+    State(settings): SettingsState,
     Json(input): Json<types::RegisterWebhookRequest>,
 ) -> ApiResult<Json<types::RegisterWebhookResponse>> {
     trace!(user = %token.user, event = ?input.event, "Registering webhook");
@@ -33,8 +35,15 @@ pub async fn register_webhook(
         return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }
 
-    validate_callback_url(&input.callback_url)
+    let url = validate_callback_url(&input.callback_url)
         .map_err(|e| ApiError::new(&e, "", StatusCode::BAD_REQUEST))?;
+    if is_blocked_url(&url, settings.webhooks.block_private_targets) {
+        return Err(ApiError::new(
+            "Callback URL target address is not permitted",
+            "",
+            StatusCode::BAD_REQUEST,
+        ));
+    }
 
     let id = db
         .register_webhook(Webhook {
@@ -152,6 +161,7 @@ pub async fn test_webhook(
     token: token::Token,
     Path(id): Path<String>,
     State(db): DbState,
+    State(settings): SettingsState,
 ) -> ApiResult<()> {
     trace!(user = %token.user, webhook_id = %id, "Testing webhook");
     if !token.is_admin {
@@ -159,12 +169,10 @@ pub async fn test_webhook(
     }
 
     let w = db.get_webhook(&id).await?;
-    let client = types::build_client()
+    let client = WebhookClient::new(&settings.webhooks)
         .map_err(|e| ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR))?;
     let resp = client
-        .post(&w.callback_url)
-        .json("Test Payload")
-        .send()
+        .post(&w.callback_url, "Test Payload")
         .await
         .map_err(|e| ApiError::new(&e.to_string(), "", StatusCode::INTERNAL_SERVER_ERROR))?;
 
@@ -228,7 +236,12 @@ mod endpoint_tests {
     async fn test_register_webhook_invalid_callback_url() {
         let (router, db) = get_app().await;
 
-        for url in ["not a url", "file:///etc/passwd", "ftp://my-service"] {
+        for url in [
+            "not a url",
+            "file:///etc/passwd",
+            "ftp://my-service",
+            "http://169.254.169.254/latest/meta-data",
+        ] {
             let payload = format!("{{\"type\": \"crate_add\", \"callback_url\": \"{url}\"}}");
 
             let response = router

@@ -107,6 +107,7 @@ const sectionDescriptors: SectionDescriptor[] = [
   { key: 's3', title: 'S3 Storage', icon: 'mdi-cloud-outline' },
   { key: 'gcs', title: 'GCS Storage', icon: 'mdi-cloud-outline' },
   { key: 'toolchain', title: 'Toolchain', icon: 'mdi-wrench' },
+  { key: 'webhooks', title: 'Webhooks', icon: 'mdi-webhook' },
 ];
 
 // Leaves whose boolean `true` value should render with a warning style

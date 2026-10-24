@@ -22,6 +22,7 @@ export type SettingsDefaults = {
   registry: Registry
   s3: S3
   toolchain: Toolchain
+  webhooks: Webhooks
 }
 
 export type LeafKind = 'boolean' | 'number' | 'string' | 'array';
@@ -50,6 +51,7 @@ export type Settings = {
   registry: Registry
   s3: S3
   toolchain: Toolchain
+  webhooks: Webhooks
   sources: SourceMap
   defaults?: SettingsDefaults
   leaves?: LeafMeta[]
@@ -58,6 +60,10 @@ export type Settings = {
 export type Toolchain = {
   enabled: boolean
   max_size: number
+}
+
+export type Webhooks = {
+  block_private_targets: boolean
 }
 
 export type Docs = {
@@ -237,6 +243,9 @@ export const emptySettings: Settings = {
   toolchain: {
     enabled: false,
     max_size: 500
+  },
+  webhooks: {
+    block_private_targets: false
   },
   sources: {},
   defaults: undefined,

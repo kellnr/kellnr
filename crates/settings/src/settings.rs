@@ -21,6 +21,7 @@ use crate::registry::{Registry, RegistryArgs, RegistryPartial, RegistryProv};
 use crate::s3::{S3, S3Args, S3Partial, S3Prov};
 use crate::setup::{Setup, SetupArgs, SetupPartial, SetupProv};
 use crate::toolchain::{Toolchain, ToolchainArgs, ToolchainPartial, ToolchainProv};
+use crate::webhooks::{Webhooks, WebhooksArgs, WebhooksPartial, WebhooksProv};
 
 /// Pure configuration values, every leaf carries the active value, no
 /// provenance attached. Provenance lives on the companion `SettingsProv`,
@@ -53,6 +54,8 @@ pub struct Settings {
     pub oauth2: OAuth2,
     #[configurable(nested)]
     pub toolchain: Toolchain,
+    #[configurable(nested)]
+    pub webhooks: Webhooks,
 }
 
 /// Build a `SettingsProv` from the configured sources: optional TOML file,

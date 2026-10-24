@@ -16,6 +16,7 @@ kellnr-auth.workspace = true
 kellnr-common.workspace = true
 kellnr-db.workspace = true
 kellnr-error.workspace = true
+kellnr-settings.workspace = true
 
 # External dependencies
 axum.workspace = true
@@ -31,7 +32,6 @@ url.workspace = true
 
 [dev-dependencies]
 hyper.workspace = true
-kellnr-settings.workspace = true
 tower.workspace = true
 
 [lints]
