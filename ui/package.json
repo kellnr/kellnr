@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit --composite false",
-    "lint": "eslint --fix"
+    "lint": "eslint --fix",
+    "test": "node --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",

@@ -43,8 +43,8 @@
               </v-tooltip>
 
               <div class="doc-link-wrapper">
-                <a v-if="docLink && docLink.length > 0" :href="docLink" class="doc-button" target="_blank"
-                  data-testid="crate-card-docs-link" @click.stop>
+                <a v-if="isSafeUrl(docLink)" :href="docLink" class="doc-button" target="_blank"
+                  rel="noopener noreferrer" data-testid="crate-card-docs-link" @click.stop>
                   <v-icon icon="mdi-file-document-outline" size="small" />
                   <span>Documentation</span>
                 </a>
@@ -73,6 +73,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import { useStore } from "../store/store";
 import { useRouter } from "vue-router";
+import { isSafeUrl } from "../common/url";
 
 dayjs.extend(relativeTime);
 dayjs.extend(utc);
@@ -101,7 +102,7 @@ function formatNumber(num: number): string {
 // Navigate to crate details or crates.io
 function navigateToCrate() {
   if (props.isCache) {
-    window.open(`https://crates.io/crates/${props.crate}`, '_blank');
+    window.open(`https://crates.io/crates/${props.crate}`, '_blank', 'noopener,noreferrer');
   } else {
     router.push({
       name: 'Crate',

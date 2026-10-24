@@ -35,7 +35,7 @@
         <v-card-title class="text-h6 font-weight-medium">No crates found</v-card-title>
         <v-card-text>
           <p>To learn how to publish crates to <strong>Kellnr</strong>, read the
-            <a href="https://kellnr.io/documentation" target="_blank" class="text-decoration-none font-weight-medium">
+            <a href="https://kellnr.io/documentation" target="_blank" rel="noopener noreferrer" class="text-decoration-none font-weight-medium">
               documentation
             </a>
           </p>

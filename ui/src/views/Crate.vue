@@ -128,6 +128,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
+import { safeUrl } from "../common/url";
 import type { CrateData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
 import { crateService, settingsService } from "../services";
 import { isSuccess } from "../services/api";
@@ -152,8 +153,9 @@ const snackbarText = ref('');
 // Expose crate as computed for template compatibility
 const crate = computed(() => crateData.value);
 
+// Crate metadata is user-provided, only link to http(s) or relative URLs
 const docLink = computed(() => {
-  return selected_version.value.documentation;
+  return safeUrl(selected_version.value.documentation);
 })
 
 const humanizedLastUpdated = computed(() => {
@@ -247,9 +249,8 @@ function copyTomlToClipboard() {
 }
 
 function openDocsPage() {
-  if (selected_version.value.documentation) {
-    let url = selected_version.value.documentation;
-    window.open(url, "_blank");
+  if (docLink.value) {
+    window.open(docLink.value, "_blank", "noopener,noreferrer");
   } else {
     router.push({ name: "PublishDocs" })
   }

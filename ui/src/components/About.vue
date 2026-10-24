@@ -8,7 +8,8 @@
           <v-icon icon="mdi-github" size="small"></v-icon>
         </div>
         <span class="info-label">Repository</span>
-        <a :href="crate.repository" target="_blank" class="external-link" data-testid="about-repository">
+        <a :href="safeUrl(crate.repository)" target="_blank" rel="noopener noreferrer" class="external-link"
+          data-testid="about-repository">
           {{ crate.repository }}
           <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
         </a>
@@ -20,7 +21,8 @@
           <v-icon icon="mdi-link-variant" size="small"></v-icon>
         </div>
         <span class="info-label">Homepage</span>
-        <a :href="crate.homepage" target="_blank" class="external-link" data-testid="about-homepage">
+        <a :href="safeUrl(crate.homepage)" target="_blank" rel="noopener noreferrer" class="external-link"
+          data-testid="about-homepage">
           {{ crate.homepage }}
           <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
         </a>
@@ -125,6 +127,7 @@
 <script setup lang="ts">
 import { defineProps } from 'vue';
 import type { CrateData, CrateVersionData } from '../types/crate_data';
+import { safeUrl } from '../common/url';
 
 defineProps({
   crate: {

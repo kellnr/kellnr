@@ -93,7 +93,7 @@ function setDesc(crate: string, registry: string | undefined) {
 }
 
 function openCratesIoPage() {
-  window.open(getCratesIoUrl(props.name));
+  window.open(getCratesIoUrl(props.name), '_blank', 'noopener,noreferrer');
 }
 
 function openKellnrPage() {
