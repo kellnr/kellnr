@@ -745,6 +745,7 @@ mod tests {
                     is_admin: false,
                     is_read_only: false,
                 },
+                cache.generation(),
             )
             .await;
 
@@ -804,6 +805,7 @@ mod tests {
                     is_admin: false,
                     is_read_only: false,
                 },
+                cache.generation(),
             )
             .await;
 
@@ -869,6 +871,7 @@ mod tests {
                     is_admin: false,
                     is_read_only: false,
                 },
+                cache.generation(),
             )
             .await;
 
@@ -927,6 +930,7 @@ mod tests {
                     is_admin: false,
                     is_read_only: false, // Currently NOT read-only
                 },
+                cache.generation(),
             )
             .await;
 
@@ -1118,6 +1122,7 @@ mod tests {
                     is_admin: false,
                     is_read_only: false,
                 },
+                cache.generation(),
             )
             .await;
 
@@ -1172,6 +1177,7 @@ mod tests {
                     is_admin: false,
                     is_read_only: false,
                 },
+                cache.generation(),
             )
             .await;
 
@@ -1231,6 +1237,7 @@ mod tests {
                     is_admin: false, // Currently NOT admin
                     is_read_only: false,
                 },
+                cache.generation(),
             )
             .await;
 
