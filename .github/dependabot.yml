@@ -10,6 +10,13 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "main"
+    # One PR per week instead of one per crate. Each Dependabot PR runs the
+    # full CI, and merging one makes Dependabot rebase all others.
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: "npm"
     directory: "ui/"
     schedule:
@@ -30,3 +37,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
