@@ -94,6 +94,7 @@
               <v-text-field
                 v-model="newUserName"
                 placeholder="Enter username"
+                autocomplete="off"
                 prepend-inner-icon="mdi-account-outline"
                 variant="outlined"
                 density="comfortable"
@@ -108,6 +109,7 @@
                 placeholder="Enter password"
                 prepend-inner-icon="mdi-lock-outline"
                 type="password"
+                autocomplete="new-password"
                 variant="outlined"
                 density="comfortable"
                 hide-details
@@ -121,6 +123,7 @@
                 placeholder="Confirm password"
                 prepend-inner-icon="mdi-lock-check-outline"
                 type="password"
+                autocomplete="new-password"
                 variant="outlined"
                 density="comfortable"
                 hide-details

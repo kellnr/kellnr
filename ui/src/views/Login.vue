@@ -22,6 +22,8 @@
                 <v-text-field
                   v-model="username"
                   data-testid="login-username"
+                  autocomplete="username"
+                  hide-details="auto"
                   placeholder="Enter your username"
                   prepend-inner-icon="mdi-account-outline"
                   variant="outlined"
@@ -38,6 +40,8 @@
                 <v-text-field
                   v-model="password"
                   data-testid="login-password"
+                  autocomplete="current-password"
+                  hide-details="auto"
                   placeholder="Enter your password"
                   prepend-inner-icon="mdi-lock-outline"
                   type="password"
