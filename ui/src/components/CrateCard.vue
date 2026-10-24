@@ -37,7 +37,7 @@
                 <template v-slot:activator="{ props: tooltipProps }">
                   <div class="stat-item" v-bind="tooltipProps">
                     <v-icon icon="mdi-calendar-outline" size="x-small" class="stat-icon" />
-                    <span class="stat-value">{{ humanizedLastUpdated }}</span>
+                    <span class="stat-value" data-testid="crate-card-updated">{{ humanizedLastUpdated }}</span>
                   </div>
                 </template>
               </v-tooltip>
@@ -188,6 +188,7 @@ function goToPublishDocs() {
 }
 
 .stat-value {
+  white-space: nowrap;
   font-size: 0.9rem;
   color: rgb(var(--v-theme-on-surface));
   font-weight: 500;
@@ -224,6 +225,12 @@ function goToPublishDocs() {
     width: 100%;
     margin-top: 8px;
     justify-content: flex-start;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .doc-link-wrapper {
+    margin-left: 0;
   }
 
   .crate-header {
