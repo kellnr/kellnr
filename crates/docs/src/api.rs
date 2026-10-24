@@ -5,6 +5,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Redirect;
 use kellnr_appstate::{AppState, DbState, DocsStorageState, SettingsState};
+use kellnr_auth::crate_access::can_read_crate;
 use kellnr_auth::maybe_user::MaybeUser;
 use kellnr_auth::token::Token;
 use kellnr_common::normalized_name::NormalizedName;
@@ -12,7 +13,7 @@ use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
 use kellnr_error::api_error::ApiResult;
-use kellnr_registry::kellnr_api::{check_can_modify, check_ownership, has_restricted_crate_access};
+use kellnr_registry::kellnr_api::{check_can_modify, check_ownership};
 use tracing::error;
 
 use crate::doc_archive::DocArchive;
@@ -97,18 +98,7 @@ async fn can_read_docs(
     user: Option<&MaybeUser>,
     db: &Arc<dyn DbProvider>,
 ) -> bool {
-    match db.is_download_restricted(crate_name).await {
-        Ok(false) => return true,
-        Ok(true) => {}
-        Err(e) => {
-            error!("Failed to check download restriction for {crate_name}: {e}");
-            return false;
-        }
-    }
-    let Some(user) = user else {
-        return false;
-    };
-    has_restricted_crate_access(crate_name, &user.name, user.is_admin, db)
+    can_read_crate(crate_name, user, db)
         .await
         .unwrap_or_else(|e| {
             error!("Failed to check docs access for {crate_name}: {e}");
