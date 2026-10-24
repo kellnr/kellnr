@@ -1,5 +1,5 @@
 <template>
-  <v-container v-if="crate != null" class="pa-0 crate-container">
+  <v-container v-if="crate != null" class="py-0 px-4 px-md-0 crate-container">
     <!-- Title Section -->
     <v-card class="mb-4 title-card" elevation="0">
       <v-card-title class="d-flex flex-wrap align-baseline pa-5">

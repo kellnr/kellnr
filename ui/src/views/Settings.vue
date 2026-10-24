@@ -259,11 +259,6 @@ onBeforeMount(async () => {
 </script>
 
 <style scoped>
-.settings-container {
-    padding-bottom: 60px;
-    /* Space for footer */
-}
-
 /* Mobile Navigation Header */
 .mobile-nav-header .sidebar-header {
     display: flex;

@@ -66,17 +66,8 @@ onMounted(() => {
   /* Optional: set a maximum width */
 }
 
-/* Remove padding on small screens for full width content */
-@media (max-width: 959px) {
-  .v-container {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-}
-
-/* Ensure main content has space for footer and stacks above bg */
+/* Stack main content above the background image */
 .v-main {
-  padding-bottom: 64px !important;
   position: relative;
   z-index: 1;
 }

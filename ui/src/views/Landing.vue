@@ -193,7 +193,6 @@ function navigateToCrate(crateName: string) {
 .landing-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding-bottom: 80px; /* Space for footer */
 }
 
 .welcome-title {

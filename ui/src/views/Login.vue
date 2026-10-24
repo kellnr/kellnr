@@ -224,10 +224,6 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-.login-container {
-  min-height: calc(100vh - 64px);
-}
-
 .login-col {
   margin-top: 32px;
 }

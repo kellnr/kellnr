@@ -209,8 +209,8 @@ function handleSearch(query: string) {
 .main-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 64px);
-  /* Adjust for app bar height */
+  /* Fill the space between app bar and footer, minus the page container padding */
+  height: calc(100vh - var(--v-layout-top, 64px) - var(--v-layout-bottom, 48px) - 32px);
   overflow: hidden;
   position: relative;
 }
@@ -279,11 +279,6 @@ function handleSearch(query: string) {
 
 /* Mobile adjustments */
 @media (max-width: 600px) {
-  .main-container {
-    height: calc(100vh - 56px);
-    /* Adjust for smaller mobile app bar */
-  }
-
   .content-container {
     margin: 0 8px 8px 8px;
   }
