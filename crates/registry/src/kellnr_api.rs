@@ -761,9 +761,7 @@ pub async fn publish(
             check_ownership(&normalized_name, &user, &db).await?;
 
             if let Some(existing) = find_same_version(&normalized_name, &version, &db).await? {
-                return Err(
-                    RegistryError::CrateExists(pub_data.metadata.name, existing).into(),
-                );
+                return Err(RegistryError::CrateExists(pub_data.metadata.name, existing).into());
             }
         }
         (None, true) if !user.is_admin => {
@@ -963,9 +961,9 @@ mod reg_api_tests {
     use http_body_util::BodyExt;
     use hyper::header;
     use kellnr_appstate::AppStateData;
+    use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_db::download_counter::DownloadCounter;
     use kellnr_db::mock::MockDb;
-    use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, test_utils};
     use kellnr_error::api_error::ErrorDetails;
     use kellnr_settings::Settings;
@@ -1082,7 +1080,12 @@ mod reg_api_tests {
         assert_eq!(2, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
         assert_eq!(
             "1.1.0",
-            kellnr.db.get_max_version_from_name(&name).await.unwrap().to_string()
+            kellnr
+                .db
+                .get_max_version_from_name(&name)
+                .await
+                .unwrap()
+                .to_string()
         );
     }
 

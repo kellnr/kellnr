@@ -43,7 +43,9 @@ impl Version {
     /// host both.
     pub fn eq_ignoring_build(&self, other: &Version) -> bool {
         match (semver::Version::parse(self), semver::Version::parse(other)) {
-            (Ok(a), Ok(b)) => (a.major, a.minor, a.patch, a.pre) == (b.major, b.minor, b.patch, b.pre),
+            (Ok(a), Ok(b)) => {
+                (a.major, a.minor, a.patch, a.pre) == (b.major, b.minor, b.patch, b.pre)
+            }
             _ => self.0 == other.0,
         }
     }

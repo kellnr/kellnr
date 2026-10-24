@@ -3573,8 +3573,12 @@ async fn add_empty_crate_rejects_similar_name(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn add_crate_keeps_existing_similar_names_publishable(test_db: &kellnr_db::Database) {
     // Registries created before the check may already hold both spellings.
-    test_insert_crate_unchecked(test_db, "foo-bar").await.unwrap();
-    test_insert_crate_unchecked(test_db, "foo_bar").await.unwrap();
+    test_insert_crate_unchecked(test_db, "foo-bar")
+        .await
+        .unwrap();
+    test_insert_crate_unchecked(test_db, "foo_bar")
+        .await
+        .unwrap();
     let created = Utc::now();
 
     for name in ["foo-bar", "foo_bar"] {
@@ -3590,7 +3594,11 @@ async fn add_crate_keeps_existing_similar_names_publishable(test_db: &kellnr_db:
         let normalized = NormalizedName::from_unchecked_str(name);
         assert_eq!(
             1,
-            test_db.get_crate_meta_list(&normalized).await.unwrap().len()
+            test_db
+                .get_crate_meta_list(&normalized)
+                .await
+                .unwrap()
+                .len()
         );
     }
 }

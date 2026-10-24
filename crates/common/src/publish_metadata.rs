@@ -190,7 +190,11 @@ mod tests {
 
     #[test]
     fn validate_urls_accepts_http_and_https() {
-        assert!(with_urls("https://example.com/docs").validate_urls().is_ok());
+        assert!(
+            with_urls("https://example.com/docs")
+                .validate_urls()
+                .is_ok()
+        );
         assert!(with_urls("http://example.com").validate_urls().is_ok());
         assert!(with_urls("HTTPS://EXAMPLE.COM").validate_urls().is_ok());
     }

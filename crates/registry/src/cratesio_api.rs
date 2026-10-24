@@ -438,7 +438,8 @@ mod tests {
 
         fn with_db(settings: Settings, db: MockDb) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
-            let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
+            let storage =
+                Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
             let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
             TestKellnr {
                 path: PathBuf::from(&settings.registry.data_dir),
