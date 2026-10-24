@@ -6,12 +6,24 @@
       Log in
     </v-btn>
 
-    <!-- Logout button for logged in users -->
-    <v-btn v-else variant="outlined" color="primary" density="comfortable" prepend-icon="mdi-logout" @click="logOut()"
-      :loading="isLoading" :disabled="isLoading" data-testid="logout-button">
-      <span class="d-none d-sm-inline">{{ store.loggedInUser }}</span>
-      <span class="d-sm-none">Logout</span>
-    </v-btn>
+    <!-- User menu for logged in users -->
+    <v-menu v-else location="bottom end">
+      <template v-slot:activator="{ props }">
+        <v-btn v-bind="props" variant="outlined" color="primary" density="comfortable"
+          :loading="isLoading" :disabled="isLoading" data-testid="user-menu-button">
+          <v-icon icon="mdi-account-circle" class="me-sm-2"></v-icon>
+          <span class="d-none d-sm-inline">{{ store.loggedInUser }}</span>
+          <v-icon icon="mdi-menu-down" class="d-none d-sm-inline ms-1"></v-icon>
+        </v-btn>
+      </template>
+
+      <v-list density="compact" min-width="180" data-testid="user-menu">
+        <v-list-item class="d-sm-none" :title="store.loggedInUser ?? ''" subtitle="Logged in"></v-list-item>
+        <v-divider class="d-sm-none"></v-divider>
+        <v-list-item to="/settings" prepend-icon="mdi-cog" title="Settings" data-testid="user-menu-settings"></v-list-item>
+        <v-list-item prepend-icon="mdi-logout" title="Log out" @click="logOut()" data-testid="logout-button"></v-list-item>
+      </v-list>
+    </v-menu>
 
     <!-- Snackbar for notifications -->
     <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000" location="bottom" class="mb-4" data-testid="snackbar">
@@ -24,17 +36,22 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, ref } from 'vue'
+import { onBeforeMount, ref, watch } from 'vue'
 import { useRouter } from "vue-router";
 import { useStore } from "../store/store"
 import { userService } from "../services";
 import { isSuccess } from "../services/api";
+import { takeSsoLoginPending } from "../common/ssoLogin";
 
 const router = useRouter()
 const store = useStore()
 
 // Loading state
 const isLoading = ref(false)
+
+// True while the session state is restored on page load. A user set during
+// that check was already logged in, so no welcome message is shown.
+const checkingLoginStatus = ref(false)
 
 // Snackbar state
 const showSnackbar = ref(false)
@@ -51,6 +68,13 @@ function showNotification(message: string, isError: boolean = false) {
 onBeforeMount(() => {
   getLoginStatus()
 })
+
+// Greet the user once, right after logging in on the login page.
+watch(() => store.loggedInUser, (user, previousUser) => {
+  if (user && !previousUser && !checkingLoginStatus.value) {
+    showNotification(`Welcome back, ${user}!`)
+  }
+}, { flush: 'sync' })
 
 async function logOut() {
   isLoading.value = true
@@ -75,18 +99,24 @@ async function logOut() {
 
 async function getLoginStatus() {
   isLoading.value = true
+  checkingLoginStatus.value = true
+  // An SSO login returns with a page load, so greet the user here
+  const ssoLoginPending = takeSsoLoginPending()
 
   try {
     const result = await userService.getLoginState()
     if (isSuccess(result) && result.data) {
       if (result.data.is_logged_in) {
         store.login(result.data)
-        showNotification(`Welcome back, ${store.loggedInUser}!`)
+        if (ssoLoginPending) {
+          showNotification(`Welcome back, ${store.loggedInUser}!`)
+        }
       } else {
         store.logout()
       }
     }
   } finally {
+    checkingLoginStatus.value = false
     isLoading.value = false
   }
 }

@@ -20,6 +20,7 @@ export class HeaderComponent extends BasePage {
   readonly helpNavLink: Locator;
   readonly themeToggle: Locator;
   readonly loginButton: Locator;
+  readonly userMenuButton: Locator;
   readonly logoutButton: Locator;
   readonly mobileMenuButton: Locator;
   readonly navigationDrawer: Locator;
@@ -44,11 +45,11 @@ export class HeaderComponent extends BasePage {
     // Theme toggle button
     this.themeToggle = page.getByTestId("theme-toggle");
 
-    // Login/Logout buttons - scoped to app bar
+    // Login button and user menu - scoped to app bar. The logout entry lives
+    // in the user menu, which renders in an overlay outside the app bar.
     this.loginButton = this.appBar.getByRole("link", { name: "Log in" });
-    this.logoutButton = this.appBar.locator("button").filter({
-      has: page.locator('[class*="mdi-logout"]'),
-    });
+    this.userMenuButton = this.appBar.getByTestId("user-menu-button");
+    this.logoutButton = page.getByTestId("logout-button");
 
     // Mobile navigation
     this.mobileMenuButton = page.getByTestId("header-nav-toggle");
@@ -130,21 +131,18 @@ export class HeaderComponent extends BasePage {
   }
 
   /**
-   * Click the logout button.
+   * Open the user menu and click "Log out".
    */
   async clickLogout(): Promise<void> {
+    await this.userMenuButton.click();
     await this.logoutButton.click();
   }
 
   /**
-   * Check if the user is logged in (logout button visible).
+   * Check if the user is logged in (user menu visible).
    */
   async isLoggedIn(): Promise<boolean> {
-    // Check if any button with logout icon is visible
-    const logoutBtn = this.page.locator("button").filter({
-      has: this.page.locator('[class*="mdi-logout"]'),
-    });
-    return await logoutBtn.isVisible();
+    return await this.userMenuButton.isVisible();
   }
 
   /**
@@ -161,11 +159,8 @@ export class HeaderComponent extends BasePage {
     if (!(await this.isLoggedIn())) {
       return null;
     }
-    // The username is displayed in the logout button on larger screens
-    const logoutBtn = this.page.locator("button").filter({
-      has: this.page.locator('[class*="mdi-logout"]'),
-    });
-    const text = await logoutBtn.textContent();
+    // The username is displayed in the user menu button on larger screens
+    const text = await this.userMenuButton.textContent();
     return text?.trim() ?? null;
   }
 

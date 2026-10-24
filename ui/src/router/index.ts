@@ -3,7 +3,7 @@ import { auth_required } from "../common/auth";
 import { useStore } from "../store/store";
 import { settingsService } from "../services";
 import { isSuccess } from "../services/api";
-import { OAUTH2_LOGIN } from "../remote-routes";
+import { startSsoLogin } from "../common/ssoLogin";
 
 const Crates = () => import("../views/Crates.vue")
 const Login = () => import("../views/Login.vue")
@@ -108,7 +108,7 @@ router.beforeEach(async (to) => {
   if (to.name === 'Login' && to.query['from'] !== 'logout') {
     const cfg = await settingsService.getOAuth2Config()
     if (isSuccess(cfg) && cfg.data.enabled && cfg.data.auto_redirect) {
-      window.location.href = OAUTH2_LOGIN
+      startSsoLogin()
       return false
     }
   }

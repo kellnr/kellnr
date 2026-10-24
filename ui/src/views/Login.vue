@@ -123,7 +123,7 @@ import { useStatusMessage } from "../composables"
 import { userService, settingsService } from "../services"
 import { isSuccess } from "../services/api"
 import router from "../router"
-import { OAUTH2_LOGIN } from "../remote-routes"
+import { startSsoLogin } from "../common/ssoLogin"
 
 // State
 const form = ref(null)
@@ -176,8 +176,7 @@ onMounted(async () => {
 
 // Handle OAuth2 login
 function handleOAuth2Login() {
-  // Redirect to OAuth2 login endpoint
-  window.location.href = OAUTH2_LOGIN
+  startSsoLogin()
 }
 
 // Handle login
