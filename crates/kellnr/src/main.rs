@@ -396,11 +396,33 @@ fn init_cookie_signing_key(settings: &Settings) -> Key {
     // Either take the provided signing key or generate a random one.
     // A provided key can be shared between multiple instances of kellnr to
     // allow UI authentication in multi-instance scenarios.
+    //
+    // The key bytes are used as is. Deriving the key differently would
+    // invalidate all existing sessions without adding entropy, so a weak key
+    // is only reported.
     if let Some(key) = &settings.registry.cookie_signing_key {
-        Key::try_from(key.as_bytes()).expect("Failed to create cookie signing key from provided settings. The key has to be at least 64 bytes long.")
+        if is_low_variety_key(key) {
+            warn!(
+                "registry.cookie_signing_key consists of very few distinct characters and is \
+                 easy to guess. Generate a random key, e.g. with `openssl rand -hex 64`."
+            );
+        }
+        Key::try_from(key.as_bytes()).expect(
+            "Failed to create cookie signing key from provided settings. The key has to be at \
+             least 64 bytes long. Generate one, e.g. with `openssl rand -hex 64`.",
+        )
     } else {
         Key::generate()
     }
+}
+
+/// Minimum number of distinct characters in a configured cookie signing key.
+/// A hex encoded random key has 16; keys like `aaaa...` or `abcabc...` have
+/// far fewer.
+const MIN_DISTINCT_KEY_CHARS: usize = 8;
+
+fn is_low_variety_key(key: &str) -> bool {
+    key.bytes().collect::<std::collections::HashSet<_>>().len() < MIN_DISTINCT_KEY_CHARS
 }
 
 fn init_tracing(settings: &Settings) {
@@ -518,6 +540,28 @@ mod tests {
     use kellnr_settings::test_settings;
 
     use super::*;
+
+    #[test]
+    fn low_variety_cookie_keys_are_detected() {
+        assert!(is_low_variety_key(&"a".repeat(64)));
+        assert!(is_low_variety_key(&"abc".repeat(30)));
+        assert!(!is_low_variety_key(
+            "3f9a1c0e7b52d8e4a6f0c13b9d7e25a8c4f1b06e9d3a7c52e8b0f4a1d6c39e72"
+        ));
+    }
+
+    #[test]
+    fn init_cookie_signing_key_uses_configured_bytes() {
+        let raw = "3f9a1c0e7b52d8e4a6f0c13b9d7e25a8c4f1b06e9d3a7c52e8b0f4a1d6c39e72";
+        let mut settings = test_settings();
+        settings.registry.cookie_signing_key = Some(raw.to_string());
+
+        let key = init_cookie_signing_key(&settings);
+
+        // Existing deployments rely on the raw key bytes, changing the
+        // derivation would log everyone out.
+        assert_eq!(key.master(), raw.as_bytes());
+    }
 
     #[tokio::test]
     async fn init_docs_storage_falls_back_to_local_disk_when_bucket_unset() {

@@ -441,7 +441,7 @@ pub async fn logout(
             handler.end_session_url(id_token.value(), &post_logout)
         });
 
-    jar = jar.remove(COOKIE_SESSION_ID);
+    jar = jar.remove(Cookie::build((COOKIE_SESSION_ID, "")).path("/"));
     jar = jar.remove(Cookie::build((COOKIE_SESSION_USER, "")).path("/"));
     jar = jar.remove(Cookie::build((COOKIE_OIDC_ID_TOKEN, "")).path("/"));
 
@@ -826,6 +826,46 @@ mod tests {
             statuses,
             [StatusCode::BAD_REQUEST, StatusCode::TOO_MANY_REQUESTS]
         );
+    }
+
+    /// The removal cookie must carry the same path as the session cookie,
+    /// otherwise the browser keeps the original cookie after logout.
+    #[tokio::test]
+    async fn test_logout_removes_session_cookie_with_root_path() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_delete_session_token()
+            .with(eq("session"))
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let state =
+            test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100)));
+        let app = Router::new()
+            .route("/logout", post(logout))
+            .layer(Extension::<Option<Arc<kellnr_auth::oauth2::OAuth2Handler>>>(None))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/logout")
+                    .header(header::COOKIE, session_cookie_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let removal = response
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|v| v.to_str().unwrap().to_string())
+            .find(|c| c.starts_with(COOKIE_SESSION_ID))
+            .expect("session cookie must be removed");
+        assert!(removal.contains("Path=/"), "{removal}");
+        assert!(removal.contains("Max-Age=0"), "{removal}");
     }
 
     async fn insert_cached_credentials(cache: &TokenCacheManager) {
