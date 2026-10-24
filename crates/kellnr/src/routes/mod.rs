@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
@@ -9,7 +10,7 @@ use axum::{Extension, Router, middleware};
 use kellnr_appstate::AppStateData;
 use kellnr_auth::oauth2::OAuth2Handler;
 use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};
-use kellnr_settings::Registry;
+use kellnr_settings::{Protocol, Registry};
 use kellnr_web_ui::session;
 use tokio::sync::Semaphore;
 use tower_http::timeout::TimeoutLayer;
@@ -113,6 +114,7 @@ pub fn create_router(
         // Serve Swagger UI at /api/docs with OpenAPI spec at /api/openapi.json
         .merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", api));
 
+    let use_hsts = state.settings.origin.protocol == Protocol::Https;
     router
         // Always serve the UI from the embedded directory (single-binary deploy).
         .fallback(get(embedded_static_handler))
@@ -120,23 +122,56 @@ pub fn create_router(
         // Add OAuth2 handler as an extension (accessible via Extension<Option<Arc<OAuth2Handler>>>)
         .layer(Extension(oauth2_handler))
         // Baseline security headers on every response.
-        .layer(middleware::map_response(add_security_headers))
+        .layer(middleware::map_response_with_state(
+            use_hsts,
+            add_security_headers,
+        ))
         .layer(tower_http::trace::TraceLayer::new_for_http())
 }
+
+/// Content-Security-Policy for the UI, the Swagger UI and the API. Vuetify and
+/// Swagger UI set inline styles, crate READMEs may embed images from any host,
+/// and everything else is served from the same origin.
+const UI_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+     img-src 'self' data: http: https:; font-src 'self' data:; connect-src 'self'; \
+     frame-ancestors 'self'; form-action 'self'; object-src 'none'; base-uri 'self'";
 
 /// Add baseline security response headers to every response.
 ///
 /// `nosniff` stops MIME sniffing, `SAMEORIGIN` blocks cross-origin framing
 /// (clickjacking) while still allowing the UI to embed same-origin content,
 /// and `no-referrer` avoids leaking internal URLs to third parties.
-async fn add_security_headers(mut response: axum::response::Response) -> axum::response::Response {
+/// Responses without their own Content-Security-Policy (all but `/docs`) get
+/// [`UI_CSP`] and `Cross-Origin-Opener-Policy`, which keeps windows opened by
+/// or opening a docs page from getting a handle to the UI (secure contexts
+/// only). HSTS is only sent if Kellnr is configured to be reached via HTTPS.
+async fn add_security_headers(
+    State(use_hsts): State<bool>,
+    mut response: axum::response::Response,
+) -> axum::response::Response {
     use axum::http::HeaderValue;
-    use axum::http::header::{REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS};
+    use axum::http::header::{
+        CONTENT_SECURITY_POLICY, REFERRER_POLICY, STRICT_TRANSPORT_SECURITY,
+        X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
+    };
 
     let headers = response.headers_mut();
     headers.insert(X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     headers.insert(X_FRAME_OPTIONS, HeaderValue::from_static("SAMEORIGIN"));
     headers.insert(REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    if !headers.contains_key(CONTENT_SECURITY_POLICY) {
+        headers.insert(CONTENT_SECURITY_POLICY, HeaderValue::from_static(UI_CSP));
+        headers.insert(
+            "cross-origin-opener-policy",
+            HeaderValue::from_static("same-origin"),
+        );
+    }
+    if use_hsts {
+        headers.insert(
+            STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000"),
+        );
+    }
     response
 }
 
@@ -519,6 +554,78 @@ mod tests {
         ] {
             assert!(directives.contains(&directive), "missing {directive}");
         }
+    }
+
+    async fn get_response(state: AppStateData, uri: &str) -> axum::response::Response {
+        create_router(state, 100, 100, 100, None)
+            .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn ui_responses_have_security_headers() {
+        let r = get_response(kellnr_appstate::test_state(), "/").await;
+
+        assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], UI_CSP);
+        assert_eq!(r.headers()["cross-origin-opener-policy"], "same-origin");
+        assert_eq!(r.headers()[header::X_FRAME_OPTIONS], "SAMEORIGIN");
+        assert_eq!(r.headers()[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
+        assert!(!r.headers().contains_key(header::STRICT_TRANSPORT_SECURITY));
+    }
+
+    #[tokio::test]
+    async fn api_responses_have_ui_csp() {
+        let r = get_response(kellnr_appstate::test_state(), "/api/v1/health").await;
+
+        assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], UI_CSP);
+    }
+
+    #[tokio::test]
+    async fn swagger_ui_has_ui_csp() {
+        let r = get_response(kellnr_appstate::test_state(), "/api/docs/").await;
+
+        assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], UI_CSP);
+    }
+
+    #[test]
+    fn ui_csp_restricts_scripts_objects_and_framing() {
+        let directives: Vec<&str> = UI_CSP.split(';').map(str::trim).collect();
+
+        for directive in [
+            "script-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "frame-ancestors 'self'",
+        ] {
+            assert!(directives.contains(&directive), "missing {directive}");
+        }
+    }
+
+    #[tokio::test]
+    async fn hsts_is_sent_when_origin_uses_https() {
+        let mut state = kellnr_appstate::test_state();
+        let mut settings = (*state.settings).clone();
+        settings.origin.protocol = Protocol::Https;
+        state.settings = Arc::new(settings);
+
+        let r = get_response(state, "/").await;
+
+        assert_eq!(
+            r.headers()[header::STRICT_TRANSPORT_SECURITY],
+            "max-age=31536000"
+        );
+    }
+
+    #[tokio::test]
+    async fn docs_keep_their_own_csp() {
+        let state = docs_test_state(unrestricted_db());
+        let uri = put_secret_docs(&state).await;
+
+        let r = get_response(state, &uri).await;
+
+        assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], DOCS_CSP);
+        assert!(!r.headers().contains_key("cross-origin-opener-policy"));
     }
 
     async fn cache_control_for(file: &str) -> String {
