@@ -142,7 +142,7 @@ export function getOAuth2EnvVars(config: MockOidcConfig): Record<string, string>
     KELLNR_OAUTH2__CLIENT_ID: config.clientId,
     KELLNR_OAUTH2__CLIENT_SECRET: config.clientSecret,
     KELLNR_OAUTH2__AUTO_PROVISION_USERS: "true",
-    KELLNR_OAUTH2__BUTTON_TEXT: "Login with SSO",
+    KELLNR_OAUTH2__BUTTON_TEXT: "Log in with SSO",
   };
 }
 

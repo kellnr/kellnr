@@ -167,7 +167,7 @@ test.describe("OAuth2 UI Tests - Enabled", () => {
     await loginPage.waitForOAuth2Button();
 
     const buttonText = await loginPage.getOAuth2ButtonText();
-    expect(buttonText).toContain("Login with SSO");
+    expect(buttonText).toContain("Log in with SSO");
   });
 
   test("both login methods are available", async ({ page }) => {
