@@ -5,6 +5,8 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use kellnr_common::original_name::NameError;
 use kellnr_common::version::VersionError;
+use kellnr_db::error::DbError;
+use kellnr_storage::storage_error::StorageError;
 use serde::{Deserialize, Serialize};
 use zip::result::ZipError;
 
@@ -61,6 +63,13 @@ impl ApiError {
             details: ErrorDetails::from(e),
         }
     }
+
+    /// Log `e` server-side and return a generic 500 error that does not leak
+    /// internal details like SQL statements or storage paths to the client.
+    pub fn internal(e: &dyn std::error::Error) -> Self {
+        tracing::error!("Internal server error: {e}");
+        Self::from_str("Internal server error", StatusCode::INTERNAL_SERVER_ERROR)
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -83,14 +92,14 @@ impl From<VersionError> for ApiError {
 
 impl From<std::io::Error> for ApiError {
     fn from(e: std::io::Error) -> Self {
-        ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR)
+        ApiError::internal(&e)
     }
 }
 
 impl From<ZipError> for ApiError {
     fn from(e: ZipError) -> Self {
         match e {
-            ZipError::Io(e) => ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR),
+            ZipError::Io(e) => ApiError::internal(&e),
             ZipError::InvalidArchive(s) => ApiError::from_str(&s, StatusCode::BAD_REQUEST),
             ZipError::UnsupportedArchive(s) => ApiError::from_str(s, StatusCode::BAD_REQUEST),
             ZipError::FileNotFound => {
@@ -107,14 +116,78 @@ impl Display for ApiError {
     }
 }
 
-impl From<kellnr_db::error::DbError> for ApiError {
-    fn from(e: kellnr_db::error::DbError) -> Self {
-        ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR)
+impl From<DbError> for ApiError {
+    fn from(e: DbError) -> Self {
+        match e {
+            // These only carry user supplied names and are useful to the client.
+            DbError::PasswordMismatch
+            | DbError::UserNotFound(_)
+            | DbError::GroupNotFound(_)
+            | DbError::OwnerNotFound(_)
+            | DbError::CrateNotFound(_)
+            | DbError::CrateNotFoundWithId(_)
+            | DbError::CrateMetaNotFound(_, _)
+            | DbError::CrateIndexNotFound(_, _)
+            | DbError::InvalidCrateName(_)
+            | DbError::InvalidVersion(_)
+            | DbError::TokenNotFound
+            | DbError::SessionNotFound
+            | DbError::WebhookNotFound
+            | DbError::InvalidWebhookEvent(_)
+            | DbError::InvalidId(_) => ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR),
+            _ => ApiError::internal(&e),
+        }
     }
 }
 
-impl From<kellnr_storage::storage_error::StorageError> for ApiError {
-    fn from(e: kellnr_storage::storage_error::StorageError) -> Self {
-        ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR)
+impl From<StorageError> for ApiError {
+    fn from(e: StorageError) -> Self {
+        match e {
+            StorageError::CrateExists(_, _) | StorageError::ToolchainArchiveExists { .. } => {
+                ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            _ => ApiError::internal(&e),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn database_errors_are_not_leaked() {
+        let e = ApiError::from(DbError::PostgresError(sea_orm::DbErr::Custom(
+            "SELECT secret FROM users".to_string(),
+        )));
+
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, e.status);
+        assert_eq!("ERROR: Internal server error", e.to_string());
+    }
+
+    #[test]
+    fn user_facing_database_errors_stay_descriptive() {
+        let e = ApiError::from(DbError::UserNotFound("bob".to_string()));
+
+        assert_eq!("ERROR: User not found: bob", e.to_string());
+    }
+
+    #[test]
+    fn storage_and_io_errors_are_not_leaked() {
+        let storage = ApiError::from(StorageError::GenericError("/var/lib/kellnr".to_string()));
+        let io = ApiError::from(std::io::Error::other("/var/lib/kellnr"));
+
+        assert_eq!("ERROR: Internal server error", storage.to_string());
+        assert_eq!("ERROR: Internal server error", io.to_string());
+    }
+
+    #[test]
+    fn crate_exists_storage_error_stays_descriptive() {
+        let e = ApiError::from(StorageError::CrateExists(
+            "foo".to_string(),
+            "1.0.0".to_string(),
+        ));
+
+        assert_eq!("ERROR: Crate with version already exists: foo-1.0.0", e.to_string());
     }
 }

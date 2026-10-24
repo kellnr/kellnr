@@ -813,7 +813,7 @@ pub async fn publish(
         }
     })
     .await
-    .map_err(|e| ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR))??;
+    .map_err(|e| ApiError::internal(&e))??;
 
     kellnr_webhooks::notify_crate(
         if id.is_none() {

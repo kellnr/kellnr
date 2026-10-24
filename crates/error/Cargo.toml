@@ -18,7 +18,11 @@ kellnr-storage.workspace = true
 # External dependencies
 axum.workspace = true
 serde.workspace = true
+tracing.workspace = true
 zip.workspace = true
+
+[dev-dependencies]
+sea-orm.workspace = true
 
 [lints]
 workspace = true
