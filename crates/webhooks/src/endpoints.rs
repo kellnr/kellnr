@@ -335,7 +335,10 @@ mod endpoint_tests {
             db.get_webhook(&id).await.unwrap().secret
         );
 
-        for uri in [format!("/api/v1/webhook/{id}"), "/api/v1/webhook".to_string()] {
+        for uri in [
+            format!("/api/v1/webhook/{id}"),
+            "/api/v1/webhook".to_string(),
+        ] {
             let response = router
                 .clone()
                 .oneshot(
@@ -570,7 +573,10 @@ mod endpoint_tests {
         let body = "internal-callback-details";
         let _listener = get_test_listener_with_response(
             9979,
-            format!("HTTP/1.1 503\r\nContent-Length: {}\r\n\r\n{body}", body.len()),
+            format!(
+                "HTTP/1.1 503\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            ),
         )
         .await;
 

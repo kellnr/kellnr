@@ -119,7 +119,10 @@ mod tests {
         let body = "x".repeat(10_000);
         let _listener = get_test_listener_with_response(
             9986,
-            format!("HTTP/1.1 500\r\nContent-Length: {}\r\n\r\n{body}", body.len()),
+            format!(
+                "HTTP/1.1 500\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            ),
         )
         .await;
 
@@ -186,12 +189,15 @@ mod tests {
         );
 
         assert_eq!(Some("msg_42"), header(&request, "webhook-id"));
-        assert_eq!(Some(expected.as_str()), header(&request, "webhook-signature"));
         assert_eq!(
-            Some("application/json"),
-            header(&request, "content-type")
+            Some(expected.as_str()),
+            header(&request, "webhook-signature")
         );
-        assert_eq!(payload, serde_json::from_str::<serde_json::Value>(body).unwrap());
+        assert_eq!(Some("application/json"), header(&request, "content-type"));
+        assert_eq!(
+            payload,
+            serde_json::from_str::<serde_json::Value>(body).unwrap()
+        );
     }
 
     #[tokio::test]
@@ -236,10 +242,14 @@ mod tests {
     async fn refuses_private_targets_if_configured() {
         let mut target = get_test_listener(9985, 200).await;
 
-        let result = client(true).post("http://127.0.0.1:9985", &unsigned()).await;
+        let result = client(true)
+            .post("http://127.0.0.1:9985", &unsigned())
+            .await;
         assert!(matches!(result, Err(DeliveryError::BlockedTarget)));
 
-        let result = client(true).post("http://localhost:9985", &unsigned()).await;
+        let result = client(true)
+            .post("http://localhost:9985", &unsigned())
+            .await;
         assert!(matches!(result, Err(DeliveryError::Request(_))));
 
         assert!(target.rx.try_recv().is_err());
