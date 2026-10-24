@@ -14,8 +14,10 @@ use kellnr_entity::{
     crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, cratesio_crate, cratesio_index,
     krate, owner, user,
 };
+use sea_orm::sea_query::{Alias, Expr, Func};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait,
+    QueryFilter, Set,
 };
 
 use crate::ConString;
@@ -99,6 +101,31 @@ pub async fn no_user_exists<C: ConnectionTrait>(db_con: &C) -> DbResult<bool> {
         .map(|model| model.id);
 
     Ok(id.is_none())
+}
+
+/// Fail with [`DbError::CrateNameConflict`] if a crate exists whose name only
+/// differs from `name` in `-` versus `_`, like cargo and crates.io treat them as
+/// the same crate. Used before creating a new crate to prevent typosquatting.
+pub async fn ensure_no_similar_crate<C: ConnectionTrait>(
+    db_con: &C,
+    name: &NormalizedName,
+) -> DbResult<()> {
+    let canonical_name = Func::cust(Alias::new("REPLACE"))
+        .arg(Expr::col(krate::Column::Name))
+        .arg("-")
+        .arg("_");
+    let similar = krate::Entity::find()
+        .filter(canonical_name.eq(name.replace('-', "_")))
+        .one(db_con)
+        .await?;
+
+    match similar {
+        Some(krate) => Err(DbError::CrateNameConflict(
+            name.to_string(),
+            krate.original_name,
+        )),
+        None => Ok(()),
+    }
 }
 
 /// Fail with [`DbError::NotOwner`] unless `user_name` owns the crate or is an admin.

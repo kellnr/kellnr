@@ -20,6 +20,10 @@ pub enum DbError {
     OwnerNotFound(String),
     #[error("Not the owner of the crate {0}")]
     NotOwner(String),
+    #[error(
+        "Crate name {0} is too similar to the existing crate {1}, names must not only differ in '-' and '_'"
+    )]
+    CrateNameConflict(String, String),
     #[error("Crate not found: {0}")]
     CrateNotFound(String),
     #[error("Crate with not found with id: {0}")]
