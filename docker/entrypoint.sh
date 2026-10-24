@@ -4,6 +4,9 @@ set -e
 # Unprivileged user that runs kellnr. Created in the Dockerfiles.
 KELLNR_USER=kellnr
 DEFAULT_DATA_DIR=/var/lib/kellnr
+CUSTOM_CA_DIR=/usr/local/share/ca-certificates
+SYSTEM_CA_DIR=/usr/share/ca-certificates
+SYSTEM_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 # Pin rustup to the toolchain baked into this image so a published
 # rust-toolchain.toml in an uploaded crate or a transitive dependency
@@ -13,6 +16,10 @@ if [ -r /etc/kellnr/active-toolchain ]; then
     RUSTUP_TOOLCHAIN=$(cat /etc/kellnr/active-toolchain)
     export RUSTUP_TOOLCHAIN
 fi
+
+warn() {
+    echo "WARNING: $*" >&2
+}
 
 # Resolve the data directory the same way kellnr does (config file and
 # KELLNR_* environment variables).
@@ -33,6 +40,14 @@ take_ownership() {
     fi
 }
 
+as_kellnr() {
+    if command -v su-exec >/dev/null 2>&1; then
+        su-exec "$KELLNR_USER" "$@"
+    else
+        setpriv --reuid="$KELLNR_USER" --regid="$KELLNR_USER" --init-groups "$@"
+    fi
+}
+
 drop_privileges() {
     if command -v su-exec >/dev/null 2>&1; then
         exec su-exec "$KELLNR_USER" "$@"
@@ -40,13 +55,46 @@ drop_privileges() {
     exec setpriv --reuid="$KELLNR_USER" --regid="$KELLNR_USER" --init-groups "$@"
 }
 
+# Without root, update-ca-certificates can't write the system bundle. Build a
+# bundle of the system and the custom CAs in a writable location and point
+# kellnr and cargo at it instead.
+use_ca_bundle_without_root() {
+    if [ -z "$(find "$CUSTOM_CA_DIR" -name '*.crt' 2>/dev/null | head -n 1)" ] && [ -s "$SYSTEM_CA_BUNDLE" ]; then
+        return
+    fi
+    bundle="${TMPDIR:-/tmp}/kellnr-ca-certificates.crt"
+    find "$SYSTEM_CA_DIR" "$CUSTOM_CA_DIR" -name '*.crt' -exec cat {} + > "$bundle" 2>/dev/null || true
+    if [ -s "$bundle" ]; then
+        echo "Using CA bundle $bundle"
+        export SSL_CERT_FILE="$bundle"
+        export CARGO_HTTP_CAINFO="$bundle"
+    else
+        warn "Could not build a CA bundle, using the system CA certificates"
+    fi
+}
+
 if [ "$(id -u)" = "0" ]; then
     # Custom CAs mounted to /usr/local/share/ca-certificates need root.
-    update-ca-certificates
-    take_ownership "$(data_dir)"
+    if ! update-ca-certificates; then
+        warn "update-ca-certificates failed, custom CA certificates may not be trusted"
+    fi
+    # Kubernetes setups that drop all capabilities can't change owners or
+    # switch users. Keep them running as root instead of failing the
+    # upgrade, but make the problem visible.
+    if ! take_ownership "$(data_dir)"; then
+        warn "Could not change the owner of the data directory (missing CAP_CHOWN?), running kellnr as root." \
+            "Grant CHOWN, SETUID and SETGID or run the container as uid 1000."
+        exec kellnr start "$@"
+    fi
+    if ! as_kellnr true 2>/dev/null; then
+        warn "Could not switch to user $KELLNR_USER (missing CAP_SETUID/CAP_SETGID?), running kellnr as root." \
+            "Grant CHOWN, SETUID and SETGID or run the container as uid 1000."
+        exec kellnr start "$@"
+    fi
     export HOME="/home/$KELLNR_USER"
     drop_privileges kellnr start "$@"
 fi
 
 echo "Running as non-root user $(id -u), skipping update-ca-certificates and data directory ownership changes"
+use_ca_bundle_without_root
 exec kellnr start "$@"

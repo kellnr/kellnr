@@ -39,7 +39,9 @@ RUN mkdir -p /etc/kellnr
 COPY --from=builder /etc/kellnr/kellnr.toml /etc/kellnr/kellnr.toml
 
 # Create the data directory
-RUN mkdir -p ${DATADIR} && chown -R kellnr:kellnr ${DATADIR}
+# Group writable, so it works for the kellnr user, for --user 1000:1000 and
+# for root without capabilities (the entrypoint then keeps running as root).
+RUN install -d -o root -g kellnr -m 0775 ${DATADIR}
 
 COPY docker/entrypoint.sh /usr/local/bin/kellnr-entrypoint.sh
 RUN chmod +x /usr/local/bin/kellnr-entrypoint.sh
