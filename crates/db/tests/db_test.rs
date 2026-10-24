@@ -972,6 +972,31 @@ async fn clean_db_after_time(test_db: &kellnr_db::Database) {
     assert!(test_db.validate_session("session_token").await.is_err());
 }
 
+/// A leaked database must not hand out usable session cookies, so only a
+/// hash of the token is stored.
+#[db_test]
+async fn session_token_is_stored_hashed(test_db: &kellnr_db::Database) {
+    test_db
+        .add_session_token("admin", "plain_session_token")
+        .await
+        .unwrap();
+
+    let stored = stored_session_tokens(test_db).await.unwrap();
+    assert_eq!(
+        stored,
+        [kellnr_db::password::hash_token("plain_session_token")]
+    );
+
+    // The stored hash itself is not a valid session token.
+    assert!(test_db.validate_session(&stored[0]).await.is_err());
+    assert!(
+        test_db
+            .validate_session("plain_session_token")
+            .await
+            .is_ok()
+    );
+}
+
 #[db_test]
 async fn delete_session_token_works(test_db: &kellnr_db::Database) {
     test_db

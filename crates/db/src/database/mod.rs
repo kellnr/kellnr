@@ -916,7 +916,7 @@ impl DbProvider for Database {
         // With expiry disabled (no cutoff) the filter is omitted.
         let mut query = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::Session.def())
-            .filter(session::Column::Token.eq(session_token));
+            .filter(session::Column::Token.eq(hash_token(session_token)));
         if let Some(cutoff) = self.session_expiry_cutoff() {
             query = query.filter(session::Column::Created.gte(cutoff));
         }
@@ -950,7 +950,7 @@ impl DbProvider for Database {
         let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         let s = session::ActiveModel {
-            token: Set(session_token.to_owned()),
+            token: Set(hash_token(session_token)),
             created: Set(created),
             user_fk: Set(user.id as i64),
             ..Default::default()
@@ -1123,7 +1123,7 @@ impl DbProvider for Database {
 
     async fn delete_session_token(&self, session_token: &str) -> DbResult<()> {
         if let Some(s) = session::Entity::find()
-            .filter(session::Column::Token.eq(session_token))
+            .filter(session::Column::Token.eq(hash_token(session_token)))
             .one(&self.db_con)
             .await?
         {
