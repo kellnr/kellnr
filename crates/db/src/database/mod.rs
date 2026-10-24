@@ -960,6 +960,29 @@ impl DbProvider for Database {
         Ok(())
     }
 
+    async fn delete_user_sessions(&self, user_name: &str) -> DbResult<u64> {
+        let user = self.get_user_model(user_name).await?;
+        let res = session::Entity::delete_many()
+            .filter(session::Column::UserFk.eq(user.id))
+            .exec(&self.db_con)
+            .await?;
+        Ok(res.rows_affected)
+    }
+
+    async fn delete_other_user_sessions(
+        &self,
+        user_name: &str,
+        keep_session_token: &str,
+    ) -> DbResult<u64> {
+        let user = self.get_user_model(user_name).await?;
+        let res = session::Entity::delete_many()
+            .filter(session::Column::UserFk.eq(user.id))
+            .filter(session::Column::Token.ne(hash_token(keep_session_token)))
+            .exec(&self.db_con)
+            .await?;
+        Ok(res.rows_affected)
+    }
+
     async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
         let crate_fk = self.get_krate_model(crate_name).await?.id;
         let user_fk = self.get_user_model(user).await?.id;
