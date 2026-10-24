@@ -33,6 +33,20 @@ RUN rustup component add rust-src
 RUN mkdir -p /etc/kellnr && \
     rustup show active-toolchain | awk '{print $1}' > /etc/kellnr/active-toolchain
 
+# Kellnr runs as an unprivileged user. The entrypoint starts as root to
+# update the CA certificates and to take over root-owned data volumes of
+# older images, then drops privileges.
+# The base image makes the toolchain world-writable. Docs builds run crate
+# code as the kellnr user, so the toolchain must stay read-only for it, and
+# cargo gets its own writable CARGO_HOME.
+RUN groupadd --gid 1000 kellnr && \
+    useradd --uid 1000 --gid kellnr --create-home --home-dir /home/kellnr \
+        --shell /usr/sbin/nologin kellnr && \
+    chmod -R go-w "$RUSTUP_HOME" "$CARGO_HOME" && \
+    mkdir -p /var/lib/kellnr && \
+    chown -R kellnr:kellnr /var/lib/kellnr
+ENV CARGO_HOME=/home/kellnr/.cargo
+
 COPY docker/entrypoint.sh /usr/local/bin/kellnr-entrypoint.sh
 RUN chmod +x /usr/local/bin/kellnr-entrypoint.sh
 
