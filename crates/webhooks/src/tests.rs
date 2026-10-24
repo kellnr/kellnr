@@ -14,13 +14,29 @@ impl Drop for TestListener {
 }
 
 pub(crate) async fn get_test_listener(port: u16, status_code: u16) -> TestListener {
+    get_test_listener_with_response(
+        port,
+        format!("HTTP/1.1 {status_code}\r\nContent-Length: 0\r\n\r\n"),
+    )
+    .await
+}
+
+pub(crate) async fn get_redirect_listener(port: u16, location: &str) -> TestListener {
+    get_test_listener_with_response(
+        port,
+        format!("HTTP/1.1 302\r\nLocation: {location}\r\nContent-Length: 0\r\n\r\n"),
+    )
+    .await
+}
+
+pub(crate) async fn get_test_listener_with_response(port: u16, response: String) -> TestListener {
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await.unwrap();
     let (tx, rx) = channel(10);
-    let handle = tokio::spawn(listener_task(status_code, listener, tx));
+    let handle = tokio::spawn(listener_task(response, listener, tx));
     TestListener { handle, rx }
 }
 
-async fn listener_task(status_code: u16, listener: TcpListener, tx: Sender<u8>) {
+async fn listener_task(response: String, listener: TcpListener, tx: Sender<u8>) {
     let mut buf = [0; 4096];
 
     loop {
@@ -35,9 +51,6 @@ async fn listener_task(status_code: u16, listener: TcpListener, tx: Sender<u8>) 
         }
 
         stream.writable().await.unwrap();
-        stream
-            .write_all(format!("HTTP/1.1 {status_code}\r\nContent-Length: 0\r\n\r\n").as_bytes())
-            .await
-            .unwrap();
+        stream.write_all(response.as_bytes()).await.unwrap();
     }
 }

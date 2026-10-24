@@ -9,13 +9,14 @@ use utoipa::ToSchema;
 ///
 /// Explicit connect and request timeouts prevent a slow or unresponsive
 /// callback host from stalling the delivery worker (or a request handler)
-/// indefinitely. Falls back to a default client if the builder fails.
-pub fn build_client() -> reqwest::Client {
+/// indefinitely. Redirects are never followed, so a callback host cannot
+/// bounce deliveries to a different target.
+pub fn build_client() -> reqwest::Result<reqwest::Client> {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
-        .unwrap_or_default()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -47,4 +48,26 @@ pub struct GetAllWebhooksResponse(pub Vec<Webhook>);
 pub enum WebhookError {
     #[error("Database error: {0}")]
     DatabaseError(#[from] kellnr_db::error::DbError),
+}
+
+#[cfg(test)]
+mod types_tests {
+    use super::*;
+    use crate::tests::{get_redirect_listener, get_test_listener};
+
+    #[tokio::test]
+    async fn build_client_does_not_follow_redirects() {
+        let mut target = get_test_listener(9983, 200).await;
+        let _redirect = get_redirect_listener(9984, "http://127.0.0.1:9983/").await;
+
+        let response = build_client()
+            .unwrap()
+            .post("http://127.0.0.1:9984")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(302, response.status().as_u16());
+        assert!(target.rx.try_recv().is_err());
+    }
 }
