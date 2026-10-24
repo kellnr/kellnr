@@ -21,8 +21,6 @@ const ALLOWED_ENV_VARS: &[&str] = &[
     "TMPDIR",
     "TEMP",
     "TMP",
-    "CARGO_HOME",
-    "CARGO_HTTP_CAINFO",
     "RUSTUP_HOME",
     "RUSTUP_TOOLCHAIN",
     "HTTP_PROXY",
@@ -43,6 +41,13 @@ const ALLOWED_ENV_VARS: &[&str] = &[
     "PATHEXT",
     "COMSPEC",
 ];
+
+/// Prefix of cargo's own configuration variables, e.g. `CARGO_HOME`,
+/// `CARGO_HTTP_CAINFO` or `CARGO_REGISTRIES_<NAME>_TOKEN`, which deployments
+/// use to let the docs build authenticate against Kellnr's index. These are
+/// visible to the crate's build scripts, so such a token should belong to a
+/// dedicated read-only user.
+const CARGO_ENV_PREFIX: &str = "CARGO_";
 
 /// Keep at most this many bytes of the build output for error messages.
 const OUTPUT_TAIL_BYTES: usize = 16 * 1024;
@@ -162,7 +167,11 @@ async fn kill_build(child: &mut Child) {
 fn allowed_env(
     vars: impl Iterator<Item = (OsString, OsString)>,
 ) -> impl Iterator<Item = (OsString, OsString)> {
-    vars.filter(|(key, _)| key.to_str().is_some_and(|k| ALLOWED_ENV_VARS.contains(&k)))
+    vars.filter(|(key, _)| key.to_str().is_some_and(is_allowed_env_var))
+}
+
+fn is_allowed_env_var(key: &str) -> bool {
+    ALLOWED_ENV_VARS.contains(&key) || key.starts_with(CARGO_ENV_PREFIX)
 }
 
 /// Read `reader` to the end and return the last `max_bytes` bytes as text.
@@ -198,6 +207,7 @@ mod tests {
             ("PATH", "/usr/bin"),
             ("CARGO_HOME", "/cargo"),
             ("RUSTUP_TOOLCHAIN", "stable"),
+            ("CARGO_REGISTRIES_KELLNR_TOKEN", "doc-token"),
             ("KELLNR_POSTGRESQL__PWD", "secret"),
             ("KELLNR_SETUP__ADMIN_TOKEN", "token"),
             ("AWS_SECRET_ACCESS_KEY", "aws"),
@@ -211,6 +221,7 @@ mod tests {
                 ("PATH", "/usr/bin"),
                 ("CARGO_HOME", "/cargo"),
                 ("RUSTUP_TOOLCHAIN", "stable"),
+                ("CARGO_REGISTRIES_KELLNR_TOKEN", "doc-token"),
             ])
         );
     }
@@ -255,7 +266,7 @@ mod tests {
             let key = line.split('=').next().unwrap();
             // The shell itself sets a few variables like PWD or SHLVL.
             assert!(
-                ALLOWED_ENV_VARS.contains(&key) || ["PWD", "SHLVL", "_", "OLDPWD"].contains(&key),
+                is_allowed_env_var(key) || ["PWD", "SHLVL", "_", "OLDPWD"].contains(&key),
                 "unexpected variable {key} passed to the docs build"
             );
         }
