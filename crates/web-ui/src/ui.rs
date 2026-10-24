@@ -673,7 +673,7 @@ pub struct BuildParams {
 /// Trigger documentation build for a crate
 ///
 /// Add a crate version to the documentation build queue.
-/// Requires ownership of the crate or admin access.
+/// Requires ownership of the crate without read-only restriction or admin access.
 #[utoipa::path(
     post,
     path = "/builds",
@@ -682,7 +682,7 @@ pub struct BuildParams {
     responses(
         (status = 200, description = "Build queued successfully"),
         (status = 400, description = "Crate or version does not exist"),
-        (status = 401, description = "Not authorized or not an owner")
+        (status = 401, description = "Not authorized, not an owner or read-only")
     ),
     security(("session_cookie" = []))
 )]
@@ -716,13 +716,19 @@ pub async fn build_rustdoc(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // If the user is the owner of the crate or any admin user,
+    // If the user is a non-read-only owner of the crate or any admin user,
     // the build operation is allowed.
     let is_allowed = match user {
-        MaybeUser::Normal(user) => db
-            .is_owner(&normalized_name, &user)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        MaybeUser::Normal(user) => {
+            db.is_owner(&normalized_name, &user)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                && !db
+                    .get_user(&user)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                    .is_read_only
+        }
         MaybeUser::Admin(_) => true,
     };
 
@@ -1453,6 +1459,82 @@ mod tests {
         .unwrap();
 
         assert_eq!(r.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn build_rust_doc_read_only_owner_is_rejected() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_crate_id()
+            .with(eq(NormalizedName::from_unchecked("foobar".to_string())))
+            .returning(move |_| Ok(Some(1)));
+        mock_db
+            .expect_validate_session()
+            .with(eq("cookie"))
+            .returning(move |_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
+        mock_db
+            .expect_crate_version_exists()
+            .with(eq(1), eq("1.0.0"))
+            .returning(move |_, _| Ok(true));
+        mock_db
+            .expect_is_owner()
+            .with(
+                eq(NormalizedName::from_unchecked("foobar".to_string())),
+                eq("user"),
+            )
+            .returning(move |_, _| Ok(true));
+        mock_db
+            .expect_get_user()
+            .with(eq("user"))
+            .returning(move |_| {
+                Ok(User {
+                    id: 0,
+                    name: "user".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
+                    is_admin: false,
+                    is_read_only: true,
+                    created: String::new(),
+                })
+            });
+        mock_db
+            .expect_add_doc_queue()
+            .with(
+                eq(NormalizedName::from_unchecked("foobar".to_string())),
+                eq(Version::try_from("1.0.0").unwrap()),
+                always(),
+            )
+            .times(0)
+            .returning(move |_, _, _| Ok(()));
+
+        let (mut settings, storage) = test_deps();
+        settings.docs.enabled = true;
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
