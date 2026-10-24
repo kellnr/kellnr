@@ -25,6 +25,7 @@ use crate::{compute_doc_url, get_latest_version_with_doc};
 /// Get documentation build queue
 ///
 /// Returns the list of crates currently in the documentation build queue.
+/// Download-restricted crates are only listed for users who may read their docs.
 #[utoipa::path(
     get,
     path = "/builds",
@@ -34,9 +35,18 @@ use crate::{compute_doc_url, get_latest_version_with_doc};
     ),
     security(("session_cookie" = []))
 )]
-pub async fn docs_in_queue(State(db): DbState) -> ApiResult<Json<DocQueueResponse>> {
-    let doc = db.get_doc_queue().await?;
-    Ok(Json(DocQueueResponse::from(doc)))
+pub async fn docs_in_queue(
+    user: Result<MaybeUser, StatusCode>,
+    State(db): DbState,
+) -> ApiResult<Json<DocQueueResponse>> {
+    let user = user.ok();
+    let mut visible = Vec::new();
+    for entry in db.get_doc_queue().await? {
+        if can_read_docs(&entry.normalized_name, user.as_ref(), &db).await {
+            visible.push(entry);
+        }
+    }
+    Ok(Json(DocQueueResponse::from(visible)))
 }
 
 /// Redirect to latest documentation
@@ -213,6 +223,7 @@ mod tests {
     #[tokio::test]
     async fn doc_in_queue_returns_queue_entries() {
         let mut db = MockDb::new();
+        db.expect_is_download_restricted().returning(|_| Ok(false));
         db.expect_get_doc_queue().returning(|| {
             Ok(vec![
                 DocQueueEntry {
@@ -253,6 +264,75 @@ mod tests {
             },
             actual
         );
+    }
+
+    fn queue_entry(id: i64, name: &str) -> DocQueueEntry {
+        DocQueueEntry {
+            id,
+            normalized_name: NormalizedName::from_unchecked(name.to_string()),
+            version: "1.0.0".to_string(),
+            path: PathBuf::default(),
+        }
+    }
+
+    /// Queue with the unrestricted crate `public` and the restricted crate `secret`.
+    fn db_with_restricted_queue_entry() -> MockDb {
+        let mut db = MockDb::new();
+        db.expect_get_doc_queue()
+            .returning(|| Ok(vec![queue_entry(0, "public"), queue_entry(1, "secret")]));
+        db.expect_is_download_restricted()
+            .returning(|name| Ok(name.to_string() == "secret"));
+        db
+    }
+
+    async fn queued_names(db: MockDb, token: Option<&str>) -> Vec<String> {
+        let mut request = Request::get("/queue");
+        if let Some(token) = token {
+            request = request.header(header::AUTHORIZATION, token);
+        }
+        let r = app(Arc::new(db))
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        serde_json::from_slice::<DocQueueResponse>(&body)
+            .unwrap()
+            .queue
+            .into_iter()
+            .map(|e| e.name)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn doc_queue_hides_restricted_crate_from_anonymous_user() {
+        let names = queued_names(db_with_restricted_queue_entry(), None).await;
+
+        assert_eq!(names, vec!["public"]);
+    }
+
+    #[tokio::test]
+    async fn doc_queue_hides_restricted_crate_from_user_without_access() {
+        let mut db = db_with_restricted_queue_entry();
+        expect_token_user(&mut db, "bob");
+        db.expect_is_crate_user().returning(|_, _| Ok(false));
+        db.expect_is_crate_group_user().returning(|_, _| Ok(false));
+        db.expect_is_owner().returning(|_, _| Ok(false));
+
+        let names = queued_names(db, Some("token")).await;
+
+        assert_eq!(names, vec!["public"]);
+    }
+
+    #[tokio::test]
+    async fn doc_queue_lists_restricted_crate_for_crate_user() {
+        let mut db = db_with_restricted_queue_entry();
+        expect_token_user(&mut db, "alice");
+        db.expect_is_crate_user()
+            .returning(|_, user| Ok(user == "alice"));
+
+        let names = queued_names(db, Some("token")).await;
+
+        assert_eq!(names, vec!["public", "secret"]);
     }
 
     fn app(db: Arc<dyn DbProvider>) -> Router {
