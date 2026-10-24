@@ -294,6 +294,25 @@ async fn run_server(resolved: ResolvedSettings) {
         });
     }
 
+    // OAuth2 login attempts that were never completed leave their state rows
+    // behind. They expire after ten minutes; remove them periodically so the
+    // table cannot grow without bound.
+    // The task also runs with OAuth2 disabled to clear rows left behind while
+    // it was enabled.
+    let oauth2_cleanup_db = db.clone();
+    trace!("Starting OAuth2 state cleanup task");
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_mins(5));
+        loop {
+            interval.tick().await;
+            match oauth2_cleanup_db.cleanup_expired_oauth2_states().await {
+                Ok(n) if n > 0 => trace!("Removed {n} expired OAuth2 state(s)"),
+                Ok(_) => {}
+                Err(e) => warn!("Failed to delete expired OAuth2 states: {e}"),
+            }
+        }
+    });
+
     let download_counter_for_shutdown = download_counter.clone();
 
     let proxy_client = build_client(

@@ -25,7 +25,7 @@ use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
-use kellnr_entity::{crate_index, crate_meta, cratesio_crate, krate, session, user};
+use kellnr_entity::{crate_index, crate_meta, cratesio_crate, krate, oauth2_state, session, user};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, ExprTrait, QueryFilter, Set,
@@ -464,4 +464,22 @@ pub async fn stored_session_tokens(db: &Database) -> DbResult<Vec<String>> {
         .into_iter()
         .map(|s| s.token)
         .collect())
+}
+
+/// Stores an `OAuth2` state whose `created` timestamp lies `age` in the past.
+pub async fn add_aged_oauth2_state(
+    db: &Database,
+    state: &str,
+    age: std::time::Duration,
+) -> DbResult<()> {
+    let age = chrono::Duration::from_std(age).expect("state age out of range");
+    let s = oauth2_state::ActiveModel {
+        state: Set(state.to_owned()),
+        pkce_verifier: Set("verifier".to_owned()),
+        nonce: Set("nonce".to_owned()),
+        created: Set((Utc::now() - age).format(DB_DATE_FORMAT).to_string()),
+        ..Default::default()
+    };
+    s.insert(&db.db_con).await?;
+    Ok(())
 }
