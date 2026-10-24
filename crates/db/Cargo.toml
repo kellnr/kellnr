@@ -18,21 +18,24 @@ kellnr-migration.workspace = true
 kellnr-settings.workspace = true
 
 # External dependencies from crates.io
+argon2.workspace = true
 chrono.workspace = true
 mockall.workspace = true
+password-hash.workspace = true
 percent-encoding.workspace = true
 utoipa.workspace = true
 sea-orm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha256.workspace = true
+subtle.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"] }
 tracing.workspace = true
 
 [dev-dependencies]
 rm_rf.workspace = true
 testcontainers.workspace = true
-tokio.workspace = true
 url.workspace = true
 
 [lints]

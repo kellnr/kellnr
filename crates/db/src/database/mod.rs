@@ -38,9 +38,10 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
     FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set, Statement,
 };
+use tracing::warn;
 
 use crate::error::DbError;
-use crate::password::{generate_salt, hash_pwd, hash_token};
+use crate::password::{PwdVerification, hash_pwd, hash_token, verify_pwd};
 use crate::provider::{
     ChannelInfo, CrateVisibility, DbResult, OAuth2StateData, PrefetchState, SessionInfo,
     ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
@@ -116,6 +117,21 @@ impl Database {
     fn session_expiry_cutoff(&self) -> Option<String> {
         self.session_age
             .map(|age| (Utc::now() - age).format(DB_DATE_FORMAT).to_string())
+    }
+
+    /// Replaces the legacy SHA-256 hash of `user` with an argon2 hash of `pwd`.
+    /// The update only applies while the stored hash is still the legacy one,
+    /// so a password changed concurrently is never overwritten.
+    async fn upgrade_legacy_pwd_hash(&self, user: &User, pwd: &str) -> DbResult<()> {
+        let hashed = hash_pwd(pwd).await;
+        user::Entity::update_many()
+            .col_expr(user::Column::Pwd, Expr::value(hashed))
+            .col_expr(user::Column::Salt, Expr::value(String::new()))
+            .filter(user::Column::Id.eq(i64::from(user.id)))
+            .filter(user::Column::Pwd.eq(user.pwd.as_str()))
+            .exec(&self.db_con)
+            .await?;
+        Ok(())
     }
 
     /// Looks up a user by name; returns the entity model or [`DbError::UserNotFound`].
@@ -693,10 +709,18 @@ impl DbProvider for Database {
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User> {
         let user = self.get_user(name).await?;
 
-        if hash_pwd(pwd, &user.salt) == user.pwd {
-            Ok(user)
-        } else {
-            Err(DbError::PasswordMismatch)
+        match verify_pwd(pwd, &user.pwd, &user.salt).await {
+            PwdVerification::Valid => Ok(user),
+            PwdVerification::ValidLegacy => {
+                // Upgrade the legacy SHA-256 hash now that the plaintext is
+                // known. A failure must not block an otherwise valid login,
+                // the upgrade is retried on the next one.
+                if let Err(e) = self.upgrade_legacy_pwd_hash(&user, pwd).await {
+                    warn!("Failed to upgrade password hash of user {}: {e}", user.name);
+                }
+                Ok(user)
+            }
+            PwdVerification::Invalid => Err(DbError::PasswordMismatch),
         }
     }
 
@@ -1126,12 +1150,12 @@ impl DbProvider for Database {
     }
 
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()> {
-        let salt = generate_salt();
-        let hashed = hash_pwd(new_pwd, &salt);
+        let hashed = hash_pwd(new_pwd).await;
 
         let mut u: user::ActiveModel = self.get_user_model(user_name).await?.into();
         u.pwd = Set(hashed);
-        u.salt = Set(salt);
+        // The argon2 PHC string carries its own salt.
+        u.salt = Set(String::new());
 
         u.update(&self.db_con).await?;
         Ok(())
@@ -1278,17 +1302,16 @@ impl DbProvider for Database {
         &self,
         name: &str,
         pwd: &str,
-        salt: &str,
         is_admin: bool,
         is_read_only: bool,
     ) -> DbResult<()> {
-        let hashed_pwd = hash_pwd(pwd, salt);
+        let hashed_pwd = hash_pwd(pwd).await;
         let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         let u = user::ActiveModel {
             name: Set(name.to_owned()),
             pwd: Set(hashed_pwd),
-            salt: Set(salt.to_owned()),
+            salt: Set(String::new()),
             is_admin: Set(is_admin),
             is_read_only: Set(is_read_only),
             created: Set(created),
@@ -2208,21 +2231,20 @@ impl DbProvider for Database {
         is_admin: bool,
         is_read_only: bool,
     ) -> DbResult<User> {
+        // OAuth2 users do not use password auth, but the column needs a
+        // valid hash. Hash before opening the transaction to keep it short.
+        let random_pwd = Uuid::new_v4().to_string();
+        let hashed_pwd = hash_pwd(&random_pwd).await;
+        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
+
         // Use a transaction to ensure atomicity
         let txn = self.db_con.begin().await?;
-
-        // Generate a random password and salt for OAuth2 users
-        // They won't use password auth, but we need valid values
-        let salt = generate_salt();
-        let random_pwd = Uuid::new_v4().to_string();
-        let hashed_pwd = hash_pwd(&random_pwd, &salt);
-        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         // Create the user
         let new_user = user::ActiveModel {
             name: Set(username.to_string()),
             pwd: Set(hashed_pwd),
-            salt: Set(salt),
+            salt: Set(String::new()),
             is_admin: Set(is_admin),
             is_read_only: Set(is_read_only),
             created: Set(created.clone()),

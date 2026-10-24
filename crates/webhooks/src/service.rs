@@ -342,7 +342,6 @@ mod service_tests {
     async fn get_db() -> Arc<dyn DbProvider> {
         let con_string = ConString::Sqlite(SqliteConString::new(
             std::path::Path::new(":memory:"),
-            "salt",
             "admin",
             Some("token".to_string()),
             std::time::Duration::from_secs(10),

@@ -278,7 +278,7 @@ pub async fn test_add_crate(
         .one(&db.db_con)
         .await?;
     if user.is_none() {
-        db.add_user(name, "pwd", "salt", false, false).await?;
+        db.add_user(name, "pwd", false, false).await?;
     }
 
     db.add_crate(&pm, "cksum", created, owner).await
@@ -324,7 +324,7 @@ pub async fn test_add_crate_with_downloads(
         .one(&db.db_con)
         .await?;
     if user.is_none() {
-        db.add_user(name, "pwd", "salt", false, false).await?;
+        db.add_user(name, "pwd", false, false).await?;
     }
 
     db.add_crate(&pm, "cksum", created, owner).await?;
@@ -444,4 +444,14 @@ pub async fn get_crate_meta_list(db: &Database, crate_id: i64) -> DbResult<Vec<C
         .collect();
 
     Ok(crate_metas)
+}
+
+/// Stores a legacy `sha256(pwd + salt)` password hash for `user_name`, as
+/// written by Kellnr versions before the switch to argon2.
+pub async fn set_legacy_pwd(db: &Database, user_name: &str, pwd: &str, salt: &str) -> DbResult<()> {
+    let mut u: user::ActiveModel = db.get_user_model(user_name).await?.into();
+    u.pwd = Set(crate::password::legacy_hash(pwd, salt));
+    u.salt = Set(salt.to_owned());
+    u.update(&db.db_con).await?;
+    Ok(())
 }

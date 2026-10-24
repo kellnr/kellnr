@@ -65,12 +65,12 @@ pub async fn insert_admin_credentials<C: ConnectionTrait>(
     db_con: &C,
     con_string: &ConString,
 ) -> DbResult<()> {
-    let hashed_pwd = hash_pwd(&con_string.admin_pwd(), &con_string.salt());
+    let hashed_pwd = hash_pwd(&con_string.admin_pwd()).await;
 
     let admin = user::ActiveModel {
         name: Set("admin".to_string()),
         pwd: Set(hashed_pwd),
-        salt: Set(con_string.salt()),
+        salt: Set(String::new()),
         is_admin: Set(true),
         is_read_only: Set(false),
         ..Default::default()

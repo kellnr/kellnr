@@ -5,8 +5,6 @@ use std::time::Duration;
 use kellnr_settings::Settings;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 
-use crate::password::generate_salt;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ConString {
     Postgres(PgConString),
@@ -31,13 +29,6 @@ impl ConString {
         }
     }
 
-    pub fn salt(&self) -> String {
-        match self {
-            ConString::Postgres(p) => p.admin.salt.clone(),
-            ConString::Sqlite(s) => s.salt.clone(),
-        }
-    }
-
     pub fn admin_token(&self) -> Option<String> {
         match self {
             ConString::Postgres(p) => p.admin.token.clone(),
@@ -58,12 +49,11 @@ impl ConString {
 pub struct AdminUser {
     pub pwd: String,
     pub token: Option<String>,
-    pub salt: String,
 }
 
 impl AdminUser {
-    pub fn new(pwd: String, token: Option<String>, salt: String) -> Self {
-        Self { pwd, token, salt }
+    pub fn new(pwd: String, token: Option<String>) -> Self {
+        Self { pwd, token }
     }
 }
 
@@ -131,7 +121,6 @@ impl From<&Settings> for PgConString {
             admin: AdminUser {
                 pwd: s.setup.admin_pwd.clone(),
                 token: s.setup.admin_token.clone(),
-                salt: generate_salt(),
             },
             session_age: Duration::from_secs(s.registry.session_age_seconds),
         }
@@ -174,7 +163,6 @@ impl Display for PgConString {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SqliteConString {
     pub path: PathBuf,
-    pub salt: String,
     pub admin_pwd: String,
     pub admin_token: Option<String>,
     pub session_age: Duration,
@@ -183,14 +171,12 @@ pub struct SqliteConString {
 impl SqliteConString {
     pub fn new(
         path: &Path,
-        salt: &str,
         admin_pwd: &str,
         admin_token: Option<String>,
         session_age: Duration,
     ) -> Self {
         Self {
             path: path.to_owned(),
-            salt: salt.to_owned(),
             admin_pwd: admin_pwd.to_owned(),
             admin_token,
             session_age,
@@ -202,7 +188,6 @@ impl From<&Settings> for SqliteConString {
     fn from(settings: &Settings) -> Self {
         Self {
             path: settings.sqlite_path(),
-            salt: generate_salt(),
             admin_pwd: settings.setup.admin_pwd.clone(),
             admin_token: settings.setup.admin_token.clone(),
             session_age: Duration::from_secs(settings.registry.session_age_seconds),
@@ -237,7 +222,7 @@ mod tests {
             db,
             user,
             pwd,
-            AdminUser::new("admin".to_string(), None, "salt".to_string()),
+            AdminUser::new("admin".to_string(), None),
             Duration::from_mins(1),
         )
     }

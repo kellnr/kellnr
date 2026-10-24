@@ -37,6 +37,7 @@ kellnr-webhooks = { version = "6.10.1", path = "./crates/webhooks" }
 kellnr-embedded-resources = { version = "6.10.1", path = "./crates/embedded-resources" }
 
 # External dependencies from crates.io
+argon2 = "0.5.3"
 async-trait = "0.1.89"
 axum = { version = "0.8.9", features = ["macros", "http2"] }
 axum-extra = { version = "0.12.6", features = ["cookie", "cookie-private", "typed-header"] }
@@ -58,6 +59,7 @@ mockall = "0.15.0"
 moka = { version = "0.12.15", features = ["future"] }
 object_store = { version = "0.14.0", default-features = false, features = ["aws", "fs", "gcp"] }
 openidconnect = { version = "4", default-features = false }
+password-hash = { version = "0.5.0", features = ["getrandom"] }
 percent-encoding = "2.3.2"
 # `env` comes from provcfg's default features; kellnr opts into the rest.
 # `json` is intentionally left out, kellnr has no JSON config sources.
@@ -76,6 +78,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 sha2 = "0.11.0"
 sha256 = "1.6.0"
+subtle = "2.6.1"
 syn = { version = "3.0.3", features = ["full"] }
 tar = "0.4.46"
 tempfile = "3"
@@ -96,6 +99,14 @@ uuid = { version = "1.23.2", features = ["v4"] }
 xz2 = { version = "0.1", features = ["static"] } # "static" feature is needed for macos builds on Github. If not set, xz from Homebrew is dynamically linked and will cause a runtime error when running the binary on a machine without xz installed.
 zip = "9.0.3"
 clap = { version = "4", features = ["derive"] }
+
+# Password hashing is far too slow without optimizations, which would make
+# debug builds and tests crawl.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3
 
 [profile.release]
 lto = "thin"
