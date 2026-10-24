@@ -33,6 +33,7 @@
 import { computed } from 'vue';
 import { useTheme } from 'vuetify';
 
+import { formatNumber } from '../common/format';
 const props = defineProps<{
   num: number | string;
   icon: string;
@@ -51,13 +52,7 @@ function handleClick() {
 const theme = useTheme();
 const isDark = computed(() => theme.global.current.value.dark);
 
-// Format large numbers with commas
-const formattedNum = computed(() => {
-  if (typeof props.num === 'number') {
-    return props.num.toLocaleString();
-  }
-  return props.num;
-});
+const formattedNum = computed(() => formatNumber(props.num));
 
 const textColorClass = computed(() => {
   return isDark.value ? 'text-dark-theme' : 'text-light-theme';

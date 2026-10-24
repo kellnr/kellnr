@@ -66,10 +66,10 @@
 
         <div class="sidebar-content download-grid">
           <span class="download-label">Version:</span>
-          <span class="download-number" data-testid="sidebar-version-downloads">{{ versionDownloads.toLocaleString() }}</span>
+          <span class="download-number" data-testid="sidebar-version-downloads">{{ formatNumber(versionDownloads) }}</span>
 
           <span class="download-label">Total:</span>
-          <span class="download-number" data-testid="sidebar-total-downloads">{{ totalDownloads.toLocaleString() }}</span>
+          <span class="download-number" data-testid="sidebar-total-downloads">{{ formatNumber(totalDownloads) }}</span>
         </div>
       </div>
 
@@ -105,6 +105,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatNumber } from "../common/format";
+
 defineProps({
   crateName: {
     type: String,

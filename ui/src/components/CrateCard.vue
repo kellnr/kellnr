@@ -74,6 +74,7 @@ import utc from "dayjs/plugin/utc";
 import { useStore } from "../store/store";
 import { useRouter } from "vue-router";
 import { isSafeUrl } from "../common/url";
+import { formatNumber } from "../common/format";
 
 dayjs.extend(relativeTime);
 dayjs.extend(utc);
@@ -93,11 +94,6 @@ const props = defineProps<{
 const humanizedLastUpdated = computed(() => {
   return dayjs.utc(props.updated).fromNow();
 })
-
-// Format number with commas for readability
-function formatNumber(num: number): string {
-  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
 
 // Navigate to crate details or crates.io
 function navigateToCrate() {

@@ -92,7 +92,7 @@
                     1st
                   </v-chip>
                   <span class="crate-name-text">{{ statistics.top_crates.first[0] }}</span>
-                  <span class="download-count">({{ statistics.top_crates.first[1].toLocaleString() }})</span>
+                  <span class="download-count">({{ formatNumber(statistics.top_crates.first[1]) }})</span>
                 </div>
                 <div v-if="statistics.top_crates.second[1] > 0" class="top-crate-item">
                   <v-chip color="grey-lighten-1" variant="flat" size="small" class="mr-2">
@@ -100,7 +100,7 @@
                     2nd
                   </v-chip>
                   <span class="crate-name-text">{{ statistics.top_crates.second[0] }}</span>
-                  <span class="download-count">({{ statistics.top_crates.second[1].toLocaleString() }})</span>
+                  <span class="download-count">({{ formatNumber(statistics.top_crates.second[1]) }})</span>
                 </div>
                 <div v-if="statistics.top_crates.third[1] > 0" class="top-crate-item">
                   <v-chip color="orange-lighten-1" variant="flat" size="small" class="mr-2">
@@ -108,7 +108,7 @@
                     3rd
                   </v-chip>
                   <span class="crate-name-text">{{ statistics.top_crates.third[0] }}</span>
-                  <span class="download-count">({{ statistics.top_crates.third[1].toLocaleString() }})</span>
+                  <span class="download-count">({{ formatNumber(statistics.top_crates.third[1]) }})</span>
                 </div>
               </div>
             </v-card-text>
@@ -151,6 +151,7 @@ import { crateService } from '../services'
 import { isSuccess } from '../services/api'
 import router from '../router'
 import { useStore } from '../store/store'
+import { formatNumber } from '../common/format'
 import { useTheme } from 'vuetify'
 
 const statistics = ref<Statistics>()

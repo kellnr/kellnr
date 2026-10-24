@@ -33,6 +33,7 @@ import { computed } from "vue";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import { useRouter } from "vue-router";
+import { formatNumber } from "../common/format";
 
 dayjs.extend(relativeTime);
 dayjs.extend(utc);
@@ -50,15 +51,7 @@ const humanizedLastUpdated = computed(() => {
   return dayjs.utc(props.last_updated).fromNow();
 });
 
-const formattedDownloads = computed(() => {
-  const num = parseInt(props.downloads);
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M';
-  } else if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K';
-  }
-  return props.downloads;
-});
+const formattedDownloads = computed(() => formatNumber(props.downloads));
 
 function openCrateVersionPage() {
   router.push({ name: 'Crate', query: { name: props.name, version: props.version } });
