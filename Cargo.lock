@@ -4343,7 +4343,6 @@ dependencies = [
  "bytes",
  "cargo",
  "flate2",
- "fs_extra",
  "http-body-util",
  "hyper",
  "kellnr-appstate",

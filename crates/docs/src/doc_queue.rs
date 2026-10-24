@@ -12,12 +12,12 @@ use kellnr_common::version::Version;
 use kellnr_db::{DbProvider, DocQueueEntry};
 use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
-use tar::Archive;
 use tokio::fs::remove_dir_all;
 use tracing::error;
 
 use crate::compute_doc_url;
 use crate::docs_error::DocsError;
+use crate::unpack::unpack_crate;
 use crate::upload::upload_dir_and_prune;
 
 pub fn doc_extraction_queue(
@@ -88,14 +88,16 @@ async fn extract_docs(
         error!("Failed to get crate from storage");
         DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.clone())
     })?;
+    let crate_root = format!("{}-{}", doc.normalized_name, doc.version);
     let tar = GzDecoder::new(std::io::Cursor::new(contents));
-    let mut archive = Archive::new(tar);
-    archive.unpack(&doc.path)?;
+    let dest = doc.path.clone();
+    let root = crate_root.clone();
+    tokio::task::spawn_blocking(move || unpack_crate(tar, &dest, &root))
+        .await
+        .map_err(|_| DocsError::ExtractFailed)??;
 
     // Generate the docs
-    let generated_docs_path = &doc
-        .path
-        .join(format!("{}-{}", doc.normalized_name, doc.version));
+    let generated_docs_path = &doc.path.join(crate_root);
     strip_rust_toolchain_files(generated_docs_path).await?;
 
     // `generate_docs` compiles the crate synchronously and can take minutes, so

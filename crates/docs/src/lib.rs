@@ -3,6 +3,7 @@ mod doc_archive;
 pub mod doc_queue;
 pub mod doc_queue_response;
 pub mod docs_error;
+mod unpack;
 pub mod upload;
 pub mod upload_response;
 
