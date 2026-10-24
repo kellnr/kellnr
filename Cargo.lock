@@ -4415,6 +4415,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "kellnr-appstate",
+ "kellnr-auth",
  "kellnr-common",
  "kellnr-db",
  "kellnr-settings",

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use kellnr_common::normalized_name::NormalizedName;
-use kellnr_db::DbProvider;
 use kellnr_db::provider::DbResult;
+use kellnr_db::{CrateVisibility, DbProvider};
 
 use crate::maybe_user::MaybeUser;
 
@@ -36,6 +36,15 @@ pub async fn can_read_crate(
     }
 }
 
+/// Which download-restricted crates `user` may see in crate listings.
+pub fn crate_visibility(user: Option<&MaybeUser>) -> CrateVisibility {
+    match user {
+        None => CrateVisibility::Unrestricted,
+        Some(user) if user.is_admin => CrateVisibility::All,
+        Some(user) => CrateVisibility::User(user.name.clone()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use kellnr_db::mock::MockDb;
@@ -61,6 +70,16 @@ mod tests {
             .with(eq(name()))
             .returning(move |_| Ok(restricted));
         db
+    }
+
+    #[test]
+    fn crate_visibility_depends_on_caller() {
+        assert_eq!(CrateVisibility::Unrestricted, crate_visibility(None));
+        assert_eq!(CrateVisibility::All, crate_visibility(Some(&user(true))));
+        assert_eq!(
+            CrateVisibility::User("user".to_string()),
+            crate_visibility(Some(&user(false)))
+        );
     }
 
     #[tokio::test]

@@ -31,7 +31,8 @@ use sea_orm::entity::prelude::Uuid;
 use sea_orm::prelude::async_trait::async_trait;
 use sea_orm::query::{QueryOrder, QuerySelect, TransactionTrait};
 use sea_orm::sea_query::{
-    Alias, Cond, Expr, Func, Iden, JoinType, LikeExpr, Order, Query, SelectStatement, UnionType,
+    Alias, Cond, Condition, Expr, Func, Iden, JoinType, LikeExpr, Order, Query, SelectStatement,
+    UnionType,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
@@ -41,8 +42,8 @@ use sea_orm::{
 use crate::error::DbError;
 use crate::password::{generate_salt, hash_pwd, hash_token};
 use crate::provider::{
-    ChannelInfo, DbResult, OAuth2StateData, PrefetchState, SessionInfo, ToolchainComponentInfo,
-    ToolchainTargetInfo, ToolchainWithTargets,
+    ChannelInfo, CrateVisibility, DbResult, OAuth2StateData, PrefetchState, SessionInfo,
+    ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
 };
 use crate::tables::init_database;
 use crate::{
@@ -339,12 +340,79 @@ impl Database {
         )
     }
 
+    /// Condition on the crate table that hides the download-restricted crates
+    /// `visibility` does not grant access to. `None` if nothing is hidden.
+    fn crate_visibility_condition(visibility: &CrateVisibility) -> Option<Condition> {
+        let unrestricted = Expr::col((CrateIden::Table, CrateIden::RestrictedDownload)).eq(false);
+        match visibility {
+            CrateVisibility::All => None,
+            CrateVisibility::Unrestricted => Some(Cond::all().add(unrestricted)),
+            CrateVisibility::User(user) => {
+                let crate_id = || Expr::col((CrateIden::Table, CrateIden::Id));
+                Some(
+                    Cond::any()
+                        .add(unrestricted)
+                        .add(crate_id().in_subquery(Self::owned_crate_ids(user)))
+                        .add(crate_id().in_subquery(Self::crate_user_crate_ids(user)))
+                        .add(crate_id().in_subquery(Self::crate_group_crate_ids(user))),
+                )
+            }
+        }
+    }
+
+    fn user_id_by_name(user: &str) -> SelectStatement {
+        Query::select()
+            .column((user::Entity, user::Column::Id))
+            .from(user::Entity)
+            .and_where(Expr::col((user::Entity, user::Column::Name)).eq(user))
+            .to_owned()
+    }
+
+    fn owned_crate_ids(user: &str) -> SelectStatement {
+        Query::select()
+            .column((owner::Entity, owner::Column::CrateFk))
+            .from(owner::Entity)
+            .and_where(
+                Expr::col((owner::Entity, owner::Column::UserFk))
+                    .in_subquery(Self::user_id_by_name(user)),
+            )
+            .to_owned()
+    }
+
+    fn crate_user_crate_ids(user: &str) -> SelectStatement {
+        Query::select()
+            .column((crate_user::Entity, crate_user::Column::CrateFk))
+            .from(crate_user::Entity)
+            .and_where(
+                Expr::col((crate_user::Entity, crate_user::Column::UserFk))
+                    .in_subquery(Self::user_id_by_name(user)),
+            )
+            .to_owned()
+    }
+
+    fn crate_group_crate_ids(user: &str) -> SelectStatement {
+        Query::select()
+            .column((crate_group::Entity, crate_group::Column::CrateFk))
+            .from(crate_group::Entity)
+            .inner_join(
+                group_user::Entity,
+                Expr::col((group_user::Entity, group_user::Column::GroupFk))
+                    .equals((crate_group::Entity, crate_group::Column::GroupFk)),
+            )
+            .and_where(
+                Expr::col((group_user::Entity, group_user::Column::UserFk))
+                    .in_subquery(Self::user_id_by_name(user)),
+            )
+            .to_owned()
+    }
+
     /// Shared implementation for crate overview listing: optional name filter, optional limit/offset, cache union.
     async fn query_crates(
         &self,
         contains: Option<&str>,
         limit_offset: Option<(u64, u64)>,
         cache: bool,
+        visibility: &CrateVisibility,
     ) -> DbResult<Vec<CrateOverview>> {
         /// Creates a SELECT statement for a given set of fields.
         fn select_fields(fields: &[(Expr, &str)]) -> SelectStatement {
@@ -366,6 +434,9 @@ impl Database {
         ]);
         query.from(CrateMetaIden::Table);
         query = Self::select_from_crates(query, contains);
+        if let Some(condition) = Self::crate_visibility_condition(visibility) {
+            query.cond_where(condition);
+        }
 
         // UNION with cached crates
         if cache {
@@ -398,7 +469,12 @@ impl Database {
             .map_err(DbError::from)
     }
 
-    async fn count_crates(&self, contains: Option<&str>, cache: bool) -> DbResult<u64> {
+    async fn count_crates(
+        &self,
+        contains: Option<&str>,
+        cache: bool,
+        visibility: &CrateVisibility,
+    ) -> DbResult<u64> {
         let mut query = Query::select();
         query.expr_as(
             Expr::col((CrateIden::Table, CrateIden::Id)).count(),
@@ -406,6 +482,9 @@ impl Database {
         );
         query.from(CrateMetaIden::Table);
         query = Self::select_from_crates(query, contains);
+        if let Some(condition) = Self::crate_visibility_condition(visibility) {
+            query.cond_where(condition);
+        }
 
         let count = self
             .count_by_statement(
@@ -783,8 +862,15 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn get_last_updated_crate(&self) -> DbResult<Option<(OriginalName, Version)>> {
-        let krate = krate::Entity::find()
+    async fn get_last_updated_crate(
+        &self,
+        visibility: &CrateVisibility,
+    ) -> DbResult<Option<(OriginalName, Version)>> {
+        let mut query = krate::Entity::find();
+        if let Some(condition) = Self::crate_visibility_condition(visibility) {
+            query = query.filter(condition);
+        }
+        let krate = query
             .order_by_desc(krate::Column::LastUpdated)
             .one(&self.db_con)
             .await?;
@@ -1276,20 +1362,27 @@ impl DbProvider for Database {
             .sum())
     }
 
-    async fn get_top_crates_downloads(&self, top: u64) -> DbResult<Vec<(String, u64)>> {
+    async fn get_top_crates_downloads(
+        &self,
+        top: u64,
+        visibility: &CrateVisibility,
+    ) -> DbResult<Vec<(String, u64)>> {
         #[derive(Debug, PartialEq, FromQueryResult)]
         struct SelectResult {
             original_name: String,
             total_downloads: i64,
         }
 
-        let stmt = self.db_con.get_database_backend().build(
-            Query::select()
-                .columns(vec![CrateIden::OriginalName, CrateIden::TotalDownloads])
-                .from(CrateIden::Table)
-                .order_by(CrateIden::TotalDownloads, Order::Desc)
-                .limit(top),
-        );
+        let mut query = Query::select()
+            .columns(vec![CrateIden::OriginalName, CrateIden::TotalDownloads])
+            .from(CrateIden::Table)
+            .order_by(CrateIden::TotalDownloads, Order::Desc)
+            .limit(top)
+            .to_owned();
+        if let Some(condition) = Self::crate_visibility_condition(visibility) {
+            query.cond_where(condition);
+        }
+        let stmt = self.db_con.get_database_backend().build(&query);
 
         Ok(SelectResult::find_by_statement(stmt)
             .all(&self.db_con)
@@ -1445,8 +1538,9 @@ impl DbProvider for Database {
         limit: u64,
         offset: u64,
         cache: bool,
+        visibility: &CrateVisibility,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(Some(contains), Some((limit, offset)), cache)
+        self.query_crates(Some(contains), Some((limit, offset)), cache, visibility)
             .await
     }
 
@@ -1454,8 +1548,9 @@ impl DbProvider for Database {
         &self,
         contains: &str,
         cache: bool,
+        visibility: &CrateVisibility,
     ) -> DbResult<u64> {
-        self.count_crates(Some(contains), cache).await
+        self.count_crates(Some(contains), cache, visibility).await
     }
 
     async fn get_crate_overview_list(
@@ -1463,8 +1558,10 @@ impl DbProvider for Database {
         limit: u64,
         offset: u64,
         cache: bool,
+        visibility: &CrateVisibility,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(None, Some((limit, offset)), cache).await
+        self.query_crates(None, Some((limit, offset)), cache, visibility)
+            .await
     }
 
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {

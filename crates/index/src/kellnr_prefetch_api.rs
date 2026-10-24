@@ -4,10 +4,13 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use kellnr_appstate::{DbState, SettingsState};
+use kellnr_auth::crate_access::can_read_crate;
+use kellnr_auth::maybe_user::MaybeUser;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_db::DbProvider;
+use tracing::error;
 
 use super::config_json::ConfigJson;
 
@@ -43,7 +46,7 @@ pub async fn config_kellnr(State(settings): SettingsState) -> Json<ConfigJson> {
     responses(
         (status = 200, description = "Crate index data"),
         (status = 304, description = "Not modified"),
-        (status = 404, description = "Crate not found")
+        (status = 404, description = "Crate not found or download-restricted without access")
     ),
     security(("cargo_token" = []))
 )]
@@ -51,9 +54,10 @@ pub async fn prefetch_kellnr(
     Path((_a, _b, package)): Path<(String, String, OriginalName)>,
     headers: HeaderMap,
     State(db): DbState,
+    user: Result<MaybeUser, StatusCode>,
 ) -> Result<Prefetch, StatusCode> {
     let index_name = NormalizedName::from(package);
-    internal_kellnr_prefetch(&index_name, &headers, &db).await
+    internal_kellnr_prefetch(&index_name, &headers, &db, user.ok().as_ref()).await
 }
 
 /// Prefetch crate index data for short names
@@ -70,7 +74,7 @@ pub async fn prefetch_kellnr(
     responses(
         (status = 200, description = "Crate index data"),
         (status = 304, description = "Not modified"),
-        (status = 404, description = "Crate not found")
+        (status = 404, description = "Crate not found or download-restricted without access")
     ),
     security(("cargo_token" = []))
 )]
@@ -78,16 +82,30 @@ pub async fn prefetch_len2_kellnr(
     Path((_a, package)): Path<(String, OriginalName)>,
     headers: HeaderMap,
     State(db): DbState,
+    user: Result<MaybeUser, StatusCode>,
 ) -> Result<Prefetch, StatusCode> {
     let index_name = NormalizedName::from(package);
-    internal_kellnr_prefetch(&index_name, &headers, &db).await
+    internal_kellnr_prefetch(&index_name, &headers, &db, user.ok().as_ref()).await
 }
 
+/// Index entries of download-restricted crates are only served to callers with
+/// access. Cargo sends credentials on index requests only if `config.json`
+/// reports `auth-required`, which is also required to download such crates.
 async fn internal_kellnr_prefetch(
     name: &NormalizedName,
     headers: &HeaderMap,
     db: &Arc<dyn DbProvider>,
+    user: Option<&MaybeUser>,
 ) -> Result<Prefetch, StatusCode> {
+    // Same response as a missing crate to not reveal that a restricted crate exists.
+    match can_read_crate(name, user, db).await {
+        Ok(true) => {}
+        Ok(false) => return Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            error!("Failed to check access to crate {name}: {e}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
     match db.get_prefetch_data(name).await {
         Ok(prefetch) if needs_update(headers, &prefetch) => Ok(prefetch),
         Ok(_prefetch) => Err(StatusCode::NOT_MODIFIED),
@@ -190,6 +208,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn prefetch_restricted_crate_anonymous_returns_not_found() {
+        let r = app()
+            .oneshot(
+                Request::get("/api/v1/index/se/cr/secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::NOT_FOUND, r.status());
+    }
+
+    #[tokio::test]
+    async fn prefetch_restricted_crate_with_access_returns_prefetch_data() {
+        let r = app()
+            .oneshot(
+                Request::get("/api/v1/index/se/cr/secret")
+                    .header(header::AUTHORIZATION, "crate-user-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::OK, r.status());
+    }
+
+    #[tokio::test]
     async fn prefetch_returns_not_found() {
         let r = app()
             .oneshot(
@@ -216,7 +263,35 @@ mod tests {
             ..Settings::default()
         };
 
+        let secret = NormalizedName::from_unchecked("secret".to_string());
         let mut mock_db = MockDb::new();
+        let restricted = secret.clone();
+        mock_db
+            .expect_is_download_restricted()
+            .returning(move |name| Ok(*name == restricted));
+        mock_db
+            .expect_get_user_from_token()
+            .with(eq("crate-user-token"))
+            .returning(|_| {
+                Ok(kellnr_db::User {
+                    name: "crate_user".to_string(),
+                    ..kellnr_db::User::default()
+                })
+            });
+        mock_db
+            .expect_is_crate_user()
+            .with(eq(secret), eq("crate_user"))
+            .returning(|_, _| Ok(true));
+        mock_db
+            .expect_get_prefetch_data()
+            .with(eq("secret"))
+            .returning(move |_| {
+                Ok(Prefetch {
+                    data: vec![0x4],
+                    etag: "etag".to_string(),
+                    last_modified: "date".to_string(),
+                })
+            });
         mock_db
             .expect_get_prefetch_data()
             .with(eq("metadata"))

@@ -12,6 +12,7 @@ documentation.workspace = true
 [dependencies]
 # Internal dependencies from Kellnr
 kellnr-appstate.workspace = true
+kellnr-auth.workspace = true
 kellnr-common.workspace = true
 kellnr-db.workspace = true
 kellnr-settings.workspace = true
