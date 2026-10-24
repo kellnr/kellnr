@@ -1,6 +1,7 @@
 [package]
 name = "kellnr-fakegcs-testcontainer"
 autotests = false
+publish = false
 authors.workspace = true
 edition.workspace = true
 license.workspace = true

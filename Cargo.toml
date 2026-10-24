@@ -25,7 +25,6 @@ kellnr-db-testcontainer = { version = "6.10.1", path = "./crates/db/db-testconta
 kellnr-docs = { version = "6.10.1", path = "./crates/docs" }
 kellnr-entity = { version = "6.10.1", path = "./crates/db/entity" }
 kellnr-error = { version = "6.10.1", path = "./crates/error" }
-kellnr-fakegcs-testcontainer = { version = "6.10.1", path = "./crates/storage/fakegcs-testcontainer" }
 kellnr-index = { version = "6.10.1", path = "./crates/index" }
 kellnr-migration = { version = "6.10.1", path = "./crates/db/migration" }
 kellnr-rustfs-testcontainer = { version = "6.10.1", path = "./crates/storage/rustfs-testcontainer" }
