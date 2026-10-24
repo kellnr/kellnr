@@ -28,7 +28,6 @@
         </div>
 
         <v-divider class="my-5"></v-divider>
-        <p class="text-label-medium text-uppercase text-medium-emphasis mb-4">New Password</p>
 
         <div class="mb-4">
           <label class="text-body-medium font-weight-medium d-block mb-2">New Password</label>

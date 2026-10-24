@@ -7,7 +7,6 @@
     <v-card-text class="admin-content">
       <v-alert type="warning" variant="tonal" class="mb-5 admin-alert">
         <div class="admin-alert-content">
-          <v-icon icon="mdi-lightbulb-outline" size="small" class="me-2"></v-icon>
           <span>
             Consider <a href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" target="_blank" rel="noopener noreferrer" class="admin-link">yanking</a>
             the crate instead of deleting it. Yanking prevents new dependencies but doesn't break existing ones.

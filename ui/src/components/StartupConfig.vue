@@ -188,7 +188,7 @@ function badgeText(sectionKey: string): string {
   if (!section) return '';
   const configured = configuredCounts.value[sectionKey];
   const total = section.items.length;
-  return configured > 0 ? `${configured}/${total} configured` : `${total} settings`;
+  return configured > 0 ? `${configured}/${total} configured` : `${total} ${total === 1 ? 'setting' : 'settings'}`;
 }
 
 const visibleSectionIndices = computed(() =>
