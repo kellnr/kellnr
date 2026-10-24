@@ -23,7 +23,13 @@ ENV KELLNR_CONFIG_FILE=/etc/kellnr/kellnr.toml
 ENV KELLNR_SETUP__ADMIN_PWD=admin
 
 # Install only runtime dependencies
-RUN apk add --no-cache ca-certificates curl
+RUN apk add --no-cache ca-certificates curl su-exec
+
+# Kellnr runs as an unprivileged user. The entrypoint starts as root to
+# update the CA certificates and to take over root-owned data volumes of
+# older images, then drops privileges.
+RUN addgroup -g 1000 kellnr && \
+    adduser -D -u 1000 -G kellnr -h /home/kellnr -s /sbin/nologin kellnr
 
 # Copy the kellnr binary from the builder stage
 COPY --from=builder /usr/local/bin/kellnr /usr/local/bin/kellnr
@@ -33,10 +39,13 @@ RUN mkdir -p /etc/kellnr
 COPY --from=builder /etc/kellnr/kellnr.toml /etc/kellnr/kellnr.toml
 
 # Create the data directory
-RUN mkdir -p ${DATADIR}
+RUN mkdir -p ${DATADIR} && chown -R kellnr:kellnr ${DATADIR}
+
+COPY docker/entrypoint.sh /usr/local/bin/kellnr-entrypoint.sh
+RUN chmod +x /usr/local/bin/kellnr-entrypoint.sh
 
 HEALTHCHECK --interval=5m --timeout=3s CMD curl -sf http://localhost:8000/api/v1/health || exit 1
 
 EXPOSE 8000
 
-ENTRYPOINT ["/bin/sh", "-c" , "update-ca-certificates && kellnr start"]
+ENTRYPOINT ["/usr/local/bin/kellnr-entrypoint.sh"]
