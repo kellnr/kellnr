@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 #[configurable(clap_prefix = "docs")]
 pub struct Docs {
     /// Enable documentation hosting
+    ///
+    /// Building docs runs the build scripts and proc macros of every
+    /// published crate on the Kellnr host. See `build_wrapper` before
+    /// enabling this for publishers you do not fully trust.
     pub enabled: bool,
 
     /// Max docs size in MB
