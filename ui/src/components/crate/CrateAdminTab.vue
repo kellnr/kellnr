@@ -100,7 +100,7 @@ async function handleDeleteCrate() {
 .content-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 /* Admin Card Styles */

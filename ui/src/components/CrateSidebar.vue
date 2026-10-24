@@ -1,5 +1,5 @@
 <template>
-  <v-card elevation="1" class="sidebar-card" data-testid="crate-sidebar">
+  <v-card elevation="0" class="sidebar-card" data-testid="crate-sidebar">
     <!-- Header -->
     <v-card-title class="sidebar-header">
       <v-icon class="me-2">mdi-package-variant</v-icon>

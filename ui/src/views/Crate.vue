@@ -315,6 +315,7 @@ watch(route, () => {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
 }
+  border-radius: 12px;
 
 .crate-title {
   color: rgb(var(--v-theme-on-surface));
@@ -335,6 +336,7 @@ watch(route, () => {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
   overflow: hidden;
+  border-radius: 12px;
 }
 
 .crate-tabs {
@@ -351,7 +353,8 @@ watch(route, () => {
 .content-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 :deep(.v-card-title) {
