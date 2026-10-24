@@ -182,14 +182,26 @@ async fn internal_prefetch_cratesio(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
+    // The client's conditional headers are only used to answer locally. The
+    // upstream refresh must use the validators stored in the database, else a
+    // client could send the current upstream ETag, get a 304 from crates.io and
+    // keep stale index data (e.g. missing yanks) cached.
     match prefetch_state {
         PrefetchState::NeedsUpdate(p) => {
-            background_update(name.clone(), sender, if_modified_since, if_none_match);
+            background_update(
+                name.clone(),
+                sender,
+                p.etag.clone(),
+                p.last_modified.clone(),
+            );
             trace!("Prefetching {name} from crates.io cache: Needs Update");
             Ok(p)
         }
-        PrefetchState::UpToDate => {
-            background_update(name.clone(), sender, if_modified_since, if_none_match);
+        PrefetchState::UpToDate {
+            etag,
+            last_modified,
+        } => {
+            background_update(name.clone(), sender, etag, last_modified);
             trace!("Prefetching {name} from crates.io cache: Up to Date");
             Err(StatusCode::NOT_MODIFIED)
         }
@@ -202,13 +214,13 @@ async fn internal_prefetch_cratesio(
 fn background_update(
     name: OriginalName,
     sender: &flume::Sender<CratesioPrefetchMsg>,
-    if_modified_since: Option<String>,
-    if_none_match: Option<String>,
+    stored_etag: String,
+    stored_last_modified: String,
 ) {
     if let Err(e) = sender.send(CratesioPrefetchMsg::Update(UpdateData {
         name,
-        etag: if_none_match,
-        last_modified: if_modified_since,
+        etag: Some(stored_etag),
+        last_modified: Some(stored_last_modified),
     })) {
         error!("Could not send update message: {e}");
     }
@@ -527,16 +539,14 @@ async fn fetch_index_data(
     let max_retries = 3;
     let mut i = 0;
     let r = loop {
-        match get_client(proxy_settings)
-            .get(url.clone())
-            .header("If-None-Match", etag.clone().unwrap_or_default())
-            .header(
-                "If-Modified-Since",
-                last_modified.clone().unwrap_or_default(),
-            )
-            .send()
-            .await
-        {
+        let mut request = get_client(proxy_settings).get(url.clone());
+        if let Some(etag) = etag.as_deref().filter(|e| !e.is_empty()) {
+            request = request.header("If-None-Match", etag);
+        }
+        if let Some(last_modified) = last_modified.as_deref().filter(|lm| !lm.is_empty()) {
+            request = request.header("If-Modified-Since", last_modified);
+        }
+        match request.send().await {
             Ok(response) => break Some(response),
             Err(e) => {
                 i += 1;
@@ -779,6 +789,70 @@ mod tests {
             ),
             actual
         );
+    }
+
+    fn conditional_headers() -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::IF_NONE_MATCH, "client-etag".parse().unwrap());
+        headers.insert(header::IF_MODIFIED_SINCE, "client-date".parse().unwrap());
+        headers
+    }
+
+    async fn sent_update(state: PrefetchState) -> (Result<Prefetch, StatusCode>, UpdateData) {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_cratesio_cache_up_to_date()
+            .withf(|_, etag, lm| {
+                etag.as_deref() == Some("client-etag") && lm.as_deref() == Some("client-date")
+            })
+            .return_once(move |_, _, _| Ok(state));
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let (sender, receiver) = flume::unbounded::<CratesioPrefetchMsg>();
+        let proxy = kellnr_settings::Proxy::default();
+
+        let result = internal_prefetch_cratesio(
+            OriginalName::try_from("rocket").unwrap(),
+            conditional_headers(),
+            &db,
+            &proxy.index,
+            &sender,
+            &proxy,
+        )
+        .await;
+
+        let Ok(CratesioPrefetchMsg::Update(update)) = receiver.try_recv() else {
+            panic!("Expected an update message");
+        };
+        (result, update)
+    }
+
+    #[tokio::test]
+    async fn background_update_uses_stored_validators_when_stale() {
+        let stored = Prefetch {
+            data: vec![0x1],
+            etag: "stored-etag".to_string(),
+            last_modified: "stored-date".to_string(),
+        };
+
+        let (result, update) = sent_update(PrefetchState::NeedsUpdate(stored)).await;
+
+        assert!(result.is_ok());
+        assert_eq!(Some("stored-etag".to_string()), update.etag);
+        assert_eq!(Some("stored-date".to_string()), update.last_modified);
+    }
+
+    #[tokio::test]
+    async fn background_update_uses_stored_validators_when_up_to_date() {
+        let state = PrefetchState::UpToDate {
+            etag: "stored-etag".to_string(),
+            last_modified: "stored-date".to_string(),
+        };
+
+        let (result, update) = sent_update(state).await;
+
+        assert_eq!(Err(StatusCode::NOT_MODIFIED), result.map(|_| ()));
+        assert_eq!(Some("stored-etag".to_string()), update.etag);
+        assert_eq!(Some("stored-date".to_string()), update.last_modified);
     }
 
     #[tokio::test(start_paused = true)]

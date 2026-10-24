@@ -22,7 +22,12 @@ pub type DbResult<T> = Result<T, DbError>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PrefetchState {
-    UpToDate,
+    /// The client's cached index is current. Carries the validators stored in
+    /// the database, which are the only ones that may be sent upstream.
+    UpToDate {
+        etag: String,
+        last_modified: String,
+    },
     NeedsUpdate(Prefetch),
     NotFound,
 }

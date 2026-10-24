@@ -2527,7 +2527,13 @@ async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &kellnr_db::Database) 
         .await
         .unwrap();
 
-    assert_eq!(PrefetchState::UpToDate, prefetch_state);
+    assert_eq!(
+        PrefetchState::UpToDate {
+            etag: "etag".to_string(),
+            last_modified: "last_modified".to_string()
+        },
+        prefetch_state
+    );
 }
 
 #[db_test]
