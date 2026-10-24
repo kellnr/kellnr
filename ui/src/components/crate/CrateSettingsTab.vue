@@ -66,8 +66,11 @@
             <v-icon icon="mdi-shield-lock" size="x-small" class="me-2"></v-icon>
             <span>Download Restrictions</span>
           </div>
+          <v-alert v-if="!store.loggedInUserIsAdmin" type="info" variant="tonal" class="mb-4">
+            Only admins can change download restrictions.
+          </v-alert>
           <v-form @submit.prevent="handleSaveAccessData">
-            <v-checkbox v-model="isDownloadRestricted" hide-details
+            <v-checkbox v-model="isDownloadRestricted" :disabled="!store.loggedInUserIsAdmin" hide-details
               label="Restrict downloads to crate users only" class="settings-checkbox"
               data-testid="settings-download-restricted"></v-checkbox>
             <p class="settings-help-text">
@@ -79,7 +82,8 @@
               @click:close="accessStatus.clear()" class="mb-3">
               {{ accessStatus.message }}
             </v-alert>
-            <v-btn color="primary" type="submit" variant="flat" size="small" data-testid="settings-save-access">
+            <v-btn :disabled="!store.loggedInUserIsAdmin" color="primary" type="submit" variant="flat" size="small"
+              data-testid="settings-save-access">
               <v-icon icon="mdi-content-save" size="small" class="me-1"></v-icon>
               Save Changes
             </v-btn>
@@ -156,7 +160,7 @@
           </v-alert>
 
           <v-form @submit.prevent="handleAddGroup" class="settings-form inline" data-testid="settings-add-group">
-            <v-select v-model="newGroupName" :items="availableGroups" label="Select group"
+            <v-combobox v-model="newGroupName" :items="availableGroups" label="Select or enter group"
               prepend-inner-icon="mdi-account-group" variant="outlined" density="compact" hide-details class="settings-input" />
             <v-btn color="primary" type="submit" variant="tonal" size="small">
               <v-icon icon="mdi-plus" size="small"></v-icon>
@@ -323,6 +327,11 @@ async function loadGroups() {
 }
 
 async function loadAllGroups() {
+  // Listing all groups is admin only, owners enter the group name instead.
+  if (!store.loggedInUserIsAdmin) {
+    allGroups.value = []
+    return
+  }
   const result = await groupService.getGroups()
   if (isSuccess(result)) {
     allGroups.value = result.data ?? []

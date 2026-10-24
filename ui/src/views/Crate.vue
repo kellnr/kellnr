@@ -19,7 +19,7 @@
         <v-tab value="meta" data-testid="crate-tab-about">About</v-tab>
         <v-tab value="deps" data-testid="crate-tab-deps">Dependencies</v-tab>
         <v-tab value="versions" data-testid="crate-tab-versions">Versions</v-tab>
-        <v-tab v-if="store.loggedInUserIsAdmin" value="crateSettings" data-testid="crate-tab-settings">Settings</v-tab>
+        <v-tab v-if="canManageCrate" value="crateSettings" data-testid="crate-tab-settings">Settings</v-tab>
         <v-tab v-if="store.loggedInUserIsAdmin" value="administrate" data-testid="crate-tab-admin">Admin</v-tab>
       </v-tabs>
     </v-card>
@@ -196,16 +196,20 @@ function handleOwnersChanged(owners: string[]) {
   crateData.value.owners = owners;
 }
 
+// Admins and crate owners can manage owners, crate users and crate groups
+const canManageCrate = computed(() => {
+  if (store.loggedInUserIsAdmin) {
+    return true;
+  }
+  return store.loggedInUser !== null && crateData.value.owners.includes(store.loggedInUser);
+});
+
 function showBuildRustdoc(): boolean {
   if (!docsEnabled.value) {
     return false;
   }
-  // Show the option to build the docs, if the current logged-in user is admin
-  if (store.loggedInUserIsAdmin) {
-    return true
-  }
-  // Show the option to build the docs, if the current logged-in user owns the crate
-  return crateData.value.owners.includes(store.loggedInUser);
+  // Show the option to build the docs, if the current logged-in user is admin or owns the crate
+  return canManageCrate.value;
 }
 
 async function buildDoc(crateName: string, version: string) {
