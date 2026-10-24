@@ -1,6 +1,6 @@
+use argon2::password_hash::phc::PasswordHash;
+use argon2::password_hash::{PasswordHasher, PasswordVerifier};
 use argon2::{Algorithm, Argon2, Params, Version};
-use password_hash::rand_core::OsRng;
-use password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use subtle::ConstantTimeEq;
 
 /// Outcome of checking a password against its stored hash.
@@ -46,9 +46,9 @@ async fn run_blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static)
 }
 
 fn hash_pwd_sync(pwd: &str) -> String {
-    let salt = SaltString::generate(&mut OsRng);
+    // Generates a random salt with the OS random number generator.
     argon2()
-        .hash_password(pwd.as_bytes(), &salt)
+        .hash_password(pwd.as_bytes())
         .expect("argon2 hashing with default parameters cannot fail")
         .to_string()
 }
@@ -107,6 +107,16 @@ mod tests {
             verify_pwd_sync("wrong", &hash, ""),
             PwdVerification::Invalid
         );
+    }
+
+    #[test]
+    fn verify_pwd_accepts_stored_argon2_hash() {
+        // Created with the argon2 reference implementation and the parameters
+        // Kellnr uses, like the hashes stored by earlier Kellnr versions.
+        let hash = "$argon2id$v=19$m=19456,t=2,p=1$a2VsbG5yc2FsdHZhbHVlMTY$grIizR+2/xpDGDbimzgwYxM2uK8eVjV28lGYRXqU7cc";
+
+        assert_eq!(verify_pwd_sync("admin", hash, ""), PwdVerification::Valid);
+        assert_eq!(verify_pwd_sync("wrong", hash, ""), PwdVerification::Invalid);
     }
 
     #[test]

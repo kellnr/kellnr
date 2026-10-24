@@ -36,7 +36,7 @@ kellnr-webhooks = { version = "6.11.0", path = "./crates/webhooks" }
 kellnr-embedded-resources = { version = "6.11.0", path = "./crates/embedded-resources" }
 
 # External dependencies from crates.io
-argon2 = "0.5.3"
+argon2 = "0.6.0"
 async-trait = "0.1.89"
 axum = { version = "0.8.9", features = ["macros", "http2"] }
 axum-extra = { version = "0.12.6", features = ["cookie", "cookie-private", "typed-header"] }
@@ -58,7 +58,6 @@ mockall = "0.15.0"
 moka = { version = "0.12.15", features = ["future"] }
 object_store = { version = "0.14.0", default-features = false, features = ["aws", "fs", "gcp"] }
 openidconnect = { version = "4", default-features = false }
-password-hash = { version = "0.5.0", features = ["getrandom"] }
 percent-encoding = "2.3.2"
 # `env` comes from provcfg's default features; kellnr opts into the rest.
 # `json` is intentionally left out, kellnr has no JSON config sources.
