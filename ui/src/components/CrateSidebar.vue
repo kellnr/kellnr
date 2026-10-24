@@ -6,7 +6,7 @@
       Crate Information
     </v-card-title>
 
-    <v-card-text class="pt-0">
+    <v-card-text class="pt-4">
       <!-- Install Section -->
       <div class="sidebar-section" data-testid="install-section">
         <div class="d-flex align-center mb-2">
@@ -64,16 +64,12 @@
           <span class="text-subtitle-1 font-weight-medium">Downloads</span>
         </div>
 
-        <div class="sidebar-content">
-          <div class="download-item">
-            <span class="download-label">Version:</span>
-            <span class="download-number" data-testid="sidebar-version-downloads">{{ versionDownloads.toLocaleString() }}</span>
-          </div>
+        <div class="sidebar-content download-grid">
+          <span class="download-label">Version:</span>
+          <span class="download-number" data-testid="sidebar-version-downloads">{{ versionDownloads.toLocaleString() }}</span>
 
-          <div class="download-item mt-1">
-            <span class="download-label">Total:</span>
-            <span class="download-number" data-testid="sidebar-total-downloads">{{ totalDownloads.toLocaleString() }}</span>
-          </div>
+          <span class="download-label">Total:</span>
+          <span class="download-number" data-testid="sidebar-total-downloads">{{ totalDownloads.toLocaleString() }}</span>
         </div>
       </div>
 
@@ -86,19 +82,19 @@
           <span class="text-subtitle-1 font-weight-medium">Documentation</span>
         </div>
 
-        <div class="sidebar-content">
-          <div v-if="documentationLink" @click="openDocsPage" class="cursor-pointer text-primary"
+        <div class="sidebar-content docs-actions">
+          <div v-if="documentationLink" @click="openDocsPage" class="d-flex align-center cursor-pointer text-primary"
             data-testid="sidebar-open-docs">
             <v-icon size="small" class="me-1">mdi-open-in-new</v-icon>
             Open documentation
           </div>
-          <router-link v-else to="/publishdocs" class="text-decoration-none">
+          <router-link v-else to="/publishdocs" class="d-flex align-center text-decoration-none">
             <v-icon size="small" class="me-1">mdi-plus</v-icon>
             Add documentation
           </router-link>
 
           <v-btn v-if="canBuildDocs" color="primary" variant="outlined" size="small" density="comfortable"
-            prepend-icon="mdi-cog" @click="buildDocs" class="mt-2" data-testid="sidebar-build-docs">
+            prepend-icon="mdi-cog" @click="buildDocs" data-testid="sidebar-build-docs">
             {{ documentationLink ? 're-build docs' : 'build docs' }}
           </v-btn>
         </div>
@@ -220,13 +216,14 @@ function buildDocs() {
 }
 
 /* Download display */
-.download-item {
-  display: flex;
-  align-items: flex-start;
+.download-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  row-gap: 4px;
 }
 
 .download-label {
-  min-width: 60px;
   font-weight: 500;
   color: rgb(var(--v-theme-on-surface-variant));
 }
@@ -236,6 +233,13 @@ function buildDocs() {
   word-break: break-all;
   overflow-wrap: break-word;
   color: rgb(var(--v-theme-on-surface));
+}
+
+.docs-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .cursor-pointer {
