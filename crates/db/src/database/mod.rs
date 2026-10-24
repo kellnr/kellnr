@@ -27,6 +27,7 @@ use kellnr_entity::{
 use kellnr_migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
 };
+use kellnr_settings::constants::OAUTH2_STATE_MAX_AGE;
 use sea_orm::entity::prelude::Uuid;
 use sea_orm::prelude::async_trait::async_trait;
 use sea_orm::query::{QueryOrder, QuerySelect, TransactionTrait};
@@ -52,9 +53,6 @@ use crate::{
 };
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
-
-/// Time a user has to complete the `OAuth2` login at the identity provider.
-const OAUTH2_STATE_MAX_AGE: std::time::Duration = std::time::Duration::from_mins(10);
 
 /// Timestamp (in [`DB_DATE_FORMAT`]) before which an `OAuth2` state is expired.
 fn oauth2_state_expiry_cutoff() -> String {

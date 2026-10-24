@@ -12,11 +12,12 @@ use axum::http::StatusCode;
 use axum::response::Redirect;
 use axum::{Extension, Json};
 use axum_extra::extract::PrivateCookieJar;
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use kellnr_appstate::{AppState, AppStateData, DbState, SettingsState};
 use kellnr_auth::oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
 use kellnr_db::User;
 use kellnr_settings::Protocol;
-use kellnr_settings::constants::COOKIE_OIDC_ID_TOKEN;
+use kellnr_settings::constants::{COOKIE_OAUTH2_STATE, COOKIE_OIDC_ID_TOKEN, OAUTH2_STATE_MAX_AGE};
 use serde::{Deserialize, Serialize};
 use tracing::{error, trace, warn};
 use utoipa::ToSchema;
@@ -75,7 +76,8 @@ pub async fn get_config(State(settings): SettingsState) -> Json<OAuth2Config> {
 ///
 /// This endpoint:
 /// 1. Generates PKCE challenge and state for CSRF protection
-/// 2. Stores state/PKCE/nonce in the database
+/// 2. Stores state/PKCE/nonce in the database and binds the state to the
+///    browser with a short-lived encrypted cookie
 /// 3. Redirects the user to the `OAuth2` provider's authorization endpoint
 #[utoipa::path(
     get,
@@ -87,9 +89,11 @@ pub async fn get_config(State(settings): SettingsState) -> Json<OAuth2Config> {
     )
 )]
 pub async fn login(
+    cookies: PrivateCookieJar,
     State(db): DbState,
+    State(settings): SettingsState,
     Extension(oauth2_handler): OAuth2Ext,
-) -> Result<Redirect, RouteError> {
+) -> Result<(PrivateCookieJar, Redirect), RouteError> {
     trace!("OAuth2 login initiated");
 
     // Check if OAuth2 is enabled
@@ -113,14 +117,50 @@ pub async fn login(
         RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
     })?;
 
+    let jar = cookies.add(state_cookie(
+        auth_request.state,
+        settings.origin.protocol == Protocol::Https,
+    ));
+
     // Redirect to provider
-    Ok(Redirect::to(auth_request.auth_url.as_str()))
+    Ok((jar, Redirect::to(auth_request.auth_url.as_str())))
+}
+
+/// Cookie binding the `OAuth2` flow to the browser that started it. Without
+/// it, an attacker could make a victim's browser complete the attacker's own
+/// login (login CSRF). `SameSite=Lax` because a strict cookie would not be
+/// sent on the redirect back from the identity provider.
+fn state_cookie(state: String, secure: bool) -> Cookie<'static> {
+    let max_age = time::Duration::try_from(OAUTH2_STATE_MAX_AGE).unwrap_or(time::Duration::ZERO);
+    Cookie::build((COOKIE_OAUTH2_STATE, state))
+        .max_age(max_age)
+        .same_site(SameSite::Lax)
+        .http_only(true)
+        .secure(secure)
+        .path("/")
+        .into()
+}
+
+/// Checks that the callback belongs to the login flow started by this
+/// browser and removes the single-use state cookie.
+fn take_state_cookie(
+    jar: PrivateCookieJar,
+    query_state: &str,
+) -> Result<PrivateCookieJar, RouteError> {
+    let matches = jar
+        .get(COOKIE_OAUTH2_STATE)
+        .is_some_and(|c| c.value() == query_state);
+    if !matches {
+        warn!("OAuth2 callback state does not match the state cookie of this browser");
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+    }
+    Ok(jar.remove(Cookie::build((COOKIE_OAUTH2_STATE, "")).path("/")))
 }
 
 /// Handle `OAuth2` callback from the provider
 ///
 /// This endpoint:
-/// 1. Validates the CSRF state
+/// 1. Validates the CSRF state against the database and the browser cookie
 /// 2. Exchanges the authorization code for tokens
 /// 3. Validates the ID token
 /// 4. Creates or links the user account
@@ -152,6 +192,8 @@ pub async fn callback(
         warn!("OAuth2 callback received but OAuth2 is not enabled");
         RouteError::Status(StatusCode::NOT_FOUND)
     })?;
+
+    let cookies = take_state_cookie(cookies, &query.state)?;
 
     // Retrieve and validate state from database
     let state_data = app_state
@@ -486,5 +528,78 @@ mod sync_tests {
 
         assert!(result.is_admin);
         assert!(result.is_read_only);
+    }
+}
+
+#[cfg(test)]
+mod state_cookie_tests {
+    use axum::http::{HeaderMap, header};
+    use axum_extra::extract::cookie::Key;
+    use kellnr_appstate::{TEST_KEY, encode_cookies};
+
+    use super::*;
+
+    fn jar_with_state(state: &'static str) -> PrivateCookieJar {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            encode_cookies([(COOKIE_OAUTH2_STATE, state)])
+                .parse()
+                .unwrap(),
+        );
+        PrivateCookieJar::from_headers(&headers, Key::from(TEST_KEY))
+    }
+
+    fn empty_jar() -> PrivateCookieJar {
+        PrivateCookieJar::from_headers(&HeaderMap::new(), Key::from(TEST_KEY))
+    }
+
+    #[test]
+    fn state_cookie_attributes() {
+        let cookie = state_cookie("abc".to_string(), true);
+
+        assert_eq!(cookie.name(), COOKIE_OAUTH2_STATE);
+        assert_eq!(cookie.value(), "abc");
+        // Lax, not Strict: the cookie must survive the redirect back from
+        // the identity provider.
+        assert_eq!(cookie.same_site(), Some(SameSite::Lax));
+        assert_eq!(cookie.http_only(), Some(true));
+        assert_eq!(cookie.secure(), Some(true));
+        assert_eq!(cookie.path(), Some("/"));
+        assert_eq!(cookie.max_age(), Some(time::Duration::minutes(10)));
+    }
+
+    #[test]
+    fn state_cookie_not_secure_over_http() {
+        assert_eq!(state_cookie("abc".to_string(), false).secure(), Some(false));
+    }
+
+    #[test]
+    fn matching_state_is_accepted_and_cookie_removed() {
+        let jar = take_state_cookie(jar_with_state("abc"), "abc").unwrap();
+
+        assert!(jar.get(COOKIE_OAUTH2_STATE).is_none());
+    }
+
+    /// A callback carrying a state the browser never started, for example
+    /// one crafted by an attacker for their own account, must be rejected.
+    #[test]
+    fn mismatching_state_is_rejected() {
+        let result = take_state_cookie(jar_with_state("abc"), "attacker");
+
+        assert!(matches!(
+            result,
+            Err(RouteError::Status(StatusCode::BAD_REQUEST))
+        ));
+    }
+
+    #[test]
+    fn missing_state_cookie_is_rejected() {
+        let result = take_state_cookie(empty_jar(), "abc");
+
+        assert!(matches!(
+            result,
+            Err(RouteError::Status(StatusCode::BAD_REQUEST))
+        ));
     }
 }
