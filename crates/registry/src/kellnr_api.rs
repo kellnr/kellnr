@@ -655,15 +655,18 @@ pub async fn download(
     let download_counter = state.download_counter;
     check_download_auth(&package.to_normalized(), &token, &db).await?;
 
-    // Increment download counter (immediate DB call when flush_interval=0)
+    let file = cs
+        .get(&package, &version)
+        .await
+        .ok_or(RegistryError::CrateNotFound)?;
+
+    // Only count downloads of crates that exist, so requests for made-up names
+    // cannot fill the counter (immediate DB call when flush_interval=0).
     download_counter
-        .increment_and_maybe_flush(package.to_normalized(), version.clone())
+        .increment_and_maybe_flush(package.to_normalized(), version)
         .await;
 
-    match cs.get(&package, &version).await {
-        Some(file) => Ok(file),
-        None => Err(RegistryError::CrateNotFound.into()),
-    }
+    Ok(file)
 }
 
 /// Create an empty crate placeholder
@@ -960,6 +963,7 @@ mod reg_api_tests {
     use http_body_util::BodyExt;
     use hyper::header;
     use kellnr_appstate::AppStateData;
+    use kellnr_db::download_counter::DownloadCounter;
     use kellnr_db::mock::MockDb;
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, test_utils};
@@ -2031,6 +2035,35 @@ mod reg_api_tests {
             .unwrap();
 
         assert_eq!(r.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn download_counts_only_existing_versions() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("counted", "1.0.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        for (version, expected) in [("9.9.9", StatusCode::NOT_FOUND), ("1.0.0", StatusCode::OK)] {
+            let r = kellnr
+                .client
+                .clone()
+                .oneshot(
+                    Request::get(format!("/api/v1/crates/counted/{version}/download"))
+                        .header(header::AUTHORIZATION, TOKEN)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(expected, r.status());
+        }
+
+        assert_eq!(1, kellnr.db.get_total_downloads().await.unwrap());
     }
 
     #[tokio::test]
@@ -3231,8 +3264,10 @@ mod reg_api_tests {
             .await
             .unwrap();
 
+        let db: Arc<dyn DbProvider> = Arc::new(db);
         let state = AppStateData {
-            db: Arc::new(db),
+            download_counter: Arc::new(DownloadCounter::new(db.clone(), 0)),
+            db,
             settings: settings.into(),
             crate_storage: cs.into(),
             // Use a fixed signing key matching the test cookie helper so that
