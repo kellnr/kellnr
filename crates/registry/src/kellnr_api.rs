@@ -15,6 +15,7 @@ use kellnr_common::search_result::{Crate, SearchResult};
 use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
+use kellnr_db::provider::DbResult;
 use kellnr_error::api_error::{ApiError, ApiResult};
 
 use crate::pub_data::{EmptyCrateData, PubData};
@@ -58,15 +59,25 @@ pub async fn check_download_auth(
         token::OptionToken::None => return Err(RegistryError::DownloadUnauthorized.into()),
     };
 
-    if token.is_admin
-        || db.is_crate_user(crate_name, &token.user).await?
-        || db.is_crate_group_user(crate_name, &token.user).await?
-        || db.is_owner(crate_name, &token.user).await?
-    {
+    if has_restricted_crate_access(crate_name, &token.user, token.is_admin, db).await? {
         Ok(())
     } else {
         Err(RegistryError::NotCrateUser.into())
     }
+}
+
+/// Whether `user` may read the content of a download-restricted crate,
+/// i.e. the crate archive and its hosted rustdoc.
+pub async fn has_restricted_crate_access(
+    crate_name: &NormalizedName,
+    user: &str,
+    is_admin: bool,
+    db: &Arc<dyn DbProvider>,
+) -> DbResult<bool> {
+    Ok(is_admin
+        || db.is_crate_user(crate_name, user).await?
+        || db.is_crate_group_user(crate_name, user).await?
+        || db.is_owner(crate_name, user).await?)
 }
 
 /// Remove owners from a crate

@@ -1,11 +1,71 @@
 use std::time::SystemTime;
 
-use axum::extract::{Path, State};
+use axum::extract::{FromRequestParts, Path, Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum_extra::TypedHeader;
 use axum_extra::headers::{ETag, HeaderMapExt, IfModifiedSince, IfNoneMatch, LastModified};
-use kellnr_appstate::DocsStorageState;
+use kellnr_appstate::{AppStateData, DocsStorageState};
+use kellnr_auth::maybe_user::MaybeUser;
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
+use kellnr_registry::kellnr_api::has_restricted_crate_access;
+use tracing::error;
+
+/// Middleware that applies the per-crate download restriction to hosted docs.
+///
+/// The docs contain the crate's source pages, so they get the same protection
+/// as the crate archive. Denied requests get a 404 to not reveal that the
+/// crate exists.
+pub async fn restrict_docs_access(
+    State(state): State<AppStateData>,
+    Path(path): Path<String>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let Some(crate_name) = crate_name_from_doc_path(&path) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    match state.db.is_download_restricted(&crate_name).await {
+        Ok(false) => return next.run(request).await,
+        Ok(true) => {}
+        Err(e) => {
+            error!("Failed to check download restriction for {crate_name}: {e}");
+            return StatusCode::NOT_FOUND.into_response();
+        }
+    }
+
+    let (mut parts, body) = request.into_parts();
+    let Ok(user) = MaybeUser::from_request_parts(&mut parts, &state).await else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    match has_restricted_crate_access(&crate_name, &user.name, user.is_admin, &state.db).await {
+        Ok(true) => next.run(Request::from_parts(parts, body)).await,
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            error!("Failed to check docs access for {crate_name}: {e}");
+            StatusCode::NOT_FOUND.into_response()
+        }
+    }
+}
+
+/// Extracts the crate name from a docs path like `{crate}/{version}/doc/...`.
+///
+/// Rejects paths with empty segments (`//`, leading or trailing `/`). The
+/// storage layer drops them, so the checked segment could differ from the
+/// served key.
+fn crate_name_from_doc_path(path: &str) -> Option<NormalizedName> {
+    if path.split('/').any(str::is_empty) {
+        return None;
+    }
+    let first = path.split('/').next()?;
+    OriginalName::try_from(first)
+        .ok()
+        .map(|name| name.to_normalized())
+}
 
 pub async fn serve_doc_file(
     State(docs_storage): DocsStorageState,
@@ -43,9 +103,7 @@ pub async fn serve_doc_file(
             HeaderValue::from_str(mime.as_ref())
                 .unwrap_or(HeaderValue::from_static("application/octet-stream")),
         );
-        // Doc content can be overwritten by republishing, so always revalidate
-        // rather than letting clients cache without asking.
-        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+        headers.insert(header::CACHE_CONTROL, cache_control(&path));
         response
     };
 
@@ -55,4 +113,19 @@ pub async fn serve_doc_file(
     response.headers_mut().typed_insert(last_modified);
 
     response
+}
+
+/// Cache policy for a docs file. `private` keeps shared caches from serving
+/// restricted docs to other users.
+///
+/// Rustdoc's shared assets in `static.files/` have content hashes in their
+/// names, so browsers may keep them. This avoids re-requesting them on every
+/// page, each of which costs an access check. Everything else can be
+/// overwritten by republishing and is always revalidated.
+fn cache_control(path: &str) -> HeaderValue {
+    if path.split('/').any(|segment| segment == "static.files") {
+        HeaderValue::from_static("private, max-age=31536000, immutable")
+    } else {
+        HeaderValue::from_static("private, no-cache")
+    }
 }

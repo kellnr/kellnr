@@ -1,12 +1,19 @@
+use std::sync::Arc;
+
 use axum::Json;
 use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::response::Redirect;
 use kellnr_appstate::{AppState, DbState, DocsStorageState, SettingsState};
+use kellnr_auth::maybe_user::MaybeUser;
 use kellnr_auth::token::Token;
+use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
+use kellnr_db::DbProvider;
 use kellnr_error::api_error::ApiResult;
-use kellnr_registry::kellnr_api::check_ownership;
+use kellnr_registry::kellnr_api::{check_ownership, has_restricted_crate_access};
+use tracing::error;
 
 use crate::doc_archive::DocArchive;
 use crate::doc_queue_response::DocQueueResponse;
@@ -49,11 +56,18 @@ pub async fn docs_in_queue(State(db): DbState) -> ApiResult<Json<DocQueueRespons
 )]
 pub async fn latest_docs(
     Path(package): Path<OriginalName>,
+    user: Result<MaybeUser, StatusCode>,
     State(settings): SettingsState,
     State(docs_storage): DocsStorageState,
     State(db): DbState,
 ) -> Redirect {
     let name = package.to_normalized();
+
+    // Same response as "no docs" to not reveal that a restricted crate exists.
+    if !can_read_docs(&name, user.ok().as_ref(), &db).await {
+        return Redirect::temporary("/");
+    }
+
     let opt_doc_version = get_latest_version_with_doc(&name, &docs_storage).await;
     let res_db_version = db.get_max_version_from_name(&name).await;
 
@@ -65,6 +79,31 @@ pub async fn latest_docs(
     }
 
     Redirect::temporary("/")
+}
+
+/// Whether `user` may read the docs of a crate, honoring its download restriction.
+async fn can_read_docs(
+    crate_name: &NormalizedName,
+    user: Option<&MaybeUser>,
+    db: &Arc<dyn DbProvider>,
+) -> bool {
+    match db.is_download_restricted(crate_name).await {
+        Ok(false) => return true,
+        Ok(true) => {}
+        Err(e) => {
+            error!("Failed to check download restriction for {crate_name}: {e}");
+            return false;
+        }
+    }
+    let Some(user) = user else {
+        return false;
+    };
+    has_restricted_crate_access(crate_name, &user.name, user.is_admin, db)
+        .await
+        .unwrap_or_else(|e| {
+            error!("Failed to check docs access for {crate_name}: {e}");
+            false
+        })
 }
 
 /// Publish documentation for a crate version
@@ -111,7 +150,7 @@ pub async fn publish_docs(
 
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed to push the docs.
-    let user = kellnr_auth::maybe_user::MaybeUser::from_token(token);
+    let user = MaybeUser::from_token(token);
     check_ownership(&normalized_name, &user, &db).await?;
 
     let tmp_dir = tempfile::tempdir().map_err(DocsError::IoError)?;
@@ -158,9 +197,9 @@ mod tests {
     use http_body_util::BodyExt;
     use kellnr_appstate::AppStateData;
     use kellnr_common::normalized_name::NormalizedName;
-    use kellnr_db::User;
+    use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
-    use kellnr_db::{DbProvider, DocQueueEntry};
+    use kellnr_db::{DbProvider, DocQueueEntry, User};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
@@ -331,5 +370,181 @@ mod tests {
         // Previously this error was silently discarded (`let _ = ...`), returning 200
         // even though extraction failed. It must now surface as a client error.
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+    }
+
+    fn latest_app(db: Arc<dyn DbProvider>, docs_storage: Arc<DocsStorage>) -> Router {
+        Router::new()
+            .route("/{package}/latest", get(latest_docs))
+            .with_state(AppStateData {
+                db,
+                docs_storage,
+                ..kellnr_appstate::test_state()
+            })
+    }
+
+    async fn docs_storage_with_latest_docs() -> (tempfile::TempDir, Arc<DocsStorage>) {
+        let tmp = tempfile::tempdir().unwrap();
+        let docs_storage = Arc::new(DocsStorage::new(Box::new(
+            FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
+        ) as DynStorage));
+        let key = DocsStorage::file_key("secret", "1.0.0", "doc/secret/index.html");
+        docs_storage
+            .put(&key, bytes::Bytes::from_static(b"<html>docs</html>"))
+            .await
+            .unwrap();
+        (tmp, docs_storage)
+    }
+
+    fn expect_restricted_crate(db: &mut MockDb, restricted: bool) {
+        db.expect_is_download_restricted()
+            .returning(move |_| Ok(restricted));
+        db.expect_get_max_version_from_name()
+            .returning(|_| Ok(Version::try_from("1.0.0").unwrap()));
+    }
+
+    fn expect_token_user(db: &mut MockDb, name: &'static str) {
+        db.expect_get_user_from_token().returning(move |_| {
+            Ok(User {
+                name: name.to_string(),
+                ..User::default()
+            })
+        });
+    }
+
+    async fn latest_location(
+        db: MockDb,
+        docs_storage: Arc<DocsStorage>,
+        token: Option<&str>,
+    ) -> String {
+        let mut request = Request::get("/secret/latest");
+        if let Some(token) = token {
+            request = request.header(header::AUTHORIZATION, token);
+        }
+        let r = latest_app(Arc::new(db), docs_storage)
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(r.status(), StatusCode::TEMPORARY_REDIRECT);
+        r.headers()[header::LOCATION].to_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn latest_docs_redirects_to_docs_for_unrestricted_crate() {
+        let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
+        let mut db = MockDb::new();
+        expect_restricted_crate(&mut db, false);
+
+        let location = latest_location(db, docs_storage, None).await;
+
+        assert_eq!(location, "/docs/secret/1.0.0/doc/secret/index.html");
+    }
+
+    #[tokio::test]
+    async fn latest_docs_hides_restricted_crate_from_anonymous_user() {
+        let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
+        let mut db = MockDb::new();
+        expect_restricted_crate(&mut db, true);
+
+        let location = latest_location(db, docs_storage, None).await;
+
+        assert_eq!(location, "/");
+    }
+
+    #[tokio::test]
+    async fn latest_docs_hides_restricted_crate_from_user_without_access() {
+        let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
+        let mut db = MockDb::new();
+        expect_restricted_crate(&mut db, true);
+        expect_token_user(&mut db, "bob");
+        db.expect_is_crate_user().returning(|_, _| Ok(false));
+        db.expect_is_crate_group_user().returning(|_, _| Ok(false));
+        db.expect_is_owner().returning(|_, _| Ok(false));
+
+        let location = latest_location(db, docs_storage, Some("token")).await;
+
+        assert_eq!(location, "/");
+    }
+
+    #[tokio::test]
+    async fn latest_docs_redirects_crate_user_of_restricted_crate() {
+        let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
+        let mut db = MockDb::new();
+        expect_restricted_crate(&mut db, true);
+        expect_token_user(&mut db, "alice");
+        db.expect_is_crate_user()
+            .with(
+                eq(NormalizedName::from_unchecked("secret".to_string())),
+                eq("alice"),
+            )
+            .returning(|_, _| Ok(true));
+
+        let location = latest_location(db, docs_storage, Some("token")).await;
+
+        assert_eq!(location, "/docs/secret/1.0.0/doc/secret/index.html");
+    }
+
+    #[tokio::test]
+    async fn latest_docs_redirects_owner_of_restricted_crate() {
+        let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
+        let mut db = MockDb::new();
+        expect_restricted_crate(&mut db, true);
+        expect_token_user(&mut db, "olivia");
+        db.expect_is_crate_user().returning(|_, _| Ok(false));
+        db.expect_is_crate_group_user().returning(|_, _| Ok(false));
+        db.expect_is_owner()
+            .with(
+                eq(NormalizedName::from_unchecked("secret".to_string())),
+                eq("olivia"),
+            )
+            .returning(|_, _| Ok(true));
+
+        let location = latest_location(db, docs_storage, Some("token")).await;
+
+        assert_eq!(location, "/docs/secret/1.0.0/doc/secret/index.html");
+    }
+
+    #[tokio::test]
+    async fn latest_docs_redirects_group_member_of_restricted_crate() {
+        let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
+        let mut db = MockDb::new();
+        expect_restricted_crate(&mut db, true);
+        expect_token_user(&mut db, "greg");
+        db.expect_is_crate_user().returning(|_, _| Ok(false));
+        db.expect_is_crate_group_user()
+            .with(
+                eq(NormalizedName::from_unchecked("secret".to_string())),
+                eq("greg"),
+            )
+            .returning(|_, _| Ok(true));
+
+        let location = latest_location(db, docs_storage, Some("token")).await;
+
+        assert_eq!(location, "/docs/secret/1.0.0/doc/secret/index.html");
+    }
+
+    #[tokio::test]
+    async fn latest_docs_hides_crate_when_restriction_check_fails() {
+        let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
+        let mut db = MockDb::new();
+        db.expect_is_download_restricted()
+            .returning(|_| Err(DbError::CrateNotFound("secret".to_string())));
+
+        let location = latest_location(db, docs_storage, None).await;
+
+        assert_eq!(location, "/");
+    }
+
+    #[tokio::test]
+    async fn latest_docs_hides_restricted_crate_when_access_check_fails() {
+        let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
+        let mut db = MockDb::new();
+        expect_restricted_crate(&mut db, true);
+        expect_token_user(&mut db, "alice");
+        db.expect_is_crate_user()
+            .returning(|_, _| Err(DbError::CrateNotFound("secret".to_string())));
+
+        let location = latest_location(db, docs_storage, Some("token")).await;
+
+        assert_eq!(location, "/");
     }
 }
