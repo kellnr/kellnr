@@ -25,7 +25,9 @@ impl Modify for SecurityAddon {
 #[openapi(
     info(
         title = "Kellnr API",
-        description = "Self-hosted Rust crate registry with support for rustdocs and crates.io caching"
+        // Swagger UI renders the description below the title. The relative
+        // link leads from /api/docs/ back to the web UI, also with a path prefix.
+        description = "Self-hosted Rust crate registry with support for rustdocs and crates.io caching\n\n[Back to Kellnr](../../)"
     ),
     tags(
         (name = "auth", description = "Authentication endpoints"),
@@ -54,5 +56,11 @@ mod tests {
     #[test]
     fn api_version_matches_crate_version() {
         assert_eq!(ApiDoc::openapi().info.version, env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn api_description_links_back_to_the_web_ui() {
+        let description = ApiDoc::openapi().info.description.unwrap_or_default();
+        assert!(description.contains("[Back to Kellnr](../../)"));
     }
 }

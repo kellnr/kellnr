@@ -139,7 +139,7 @@ const navItems = computed(() => [
     title: "API Docs",
     slug: "api-docs",
     icon: "mdi-api",
-    href: "/api/docs"
+    href: "./api/docs/"
   }
 ]);
 
