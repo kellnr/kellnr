@@ -1686,6 +1686,7 @@ impl DbProvider for Database {
             OriginalName::try_from(name)
                 .map_err(|_| DbError::InvalidCrateName(name.to_string()))?,
         );
+        operations::ensure_no_similar_crate(&self.db_con, &normalized_name).await?;
         let krate = krate::ActiveModel {
             id: ActiveValue::default(),
             name: Set(normalized_name.to_string()),
@@ -1741,6 +1742,7 @@ impl DbProvider for Database {
             krate.update(&txn).await?;
             krate_id
         } else {
+            operations::ensure_no_similar_crate(&txn, &normalized_name).await?;
             let krate = krate::ActiveModel {
                 id: ActiveValue::default(),
                 name: Set(normalized_name.to_string()),

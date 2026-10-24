@@ -284,6 +284,25 @@ pub async fn test_add_crate(
     db.add_crate(&pm, "cksum", created, owner).await
 }
 
+/// Insert an empty crate without any name checks, to simulate data created
+/// before a check was introduced.
+pub async fn test_insert_crate_unchecked(db: &Database, name: &str) -> DbResult<i64> {
+    let krate = krate::ActiveModel {
+        id: ActiveValue::default(),
+        name: Set(name.to_lowercase()),
+        original_name: Set(name.to_string()),
+        max_version: Set("0.0.0".to_string()),
+        last_updated: Set(default_created().format(DB_DATE_FORMAT).to_string()),
+        total_downloads: Set(0),
+        homepage: Set(None),
+        description: Set(None),
+        repository: Set(None),
+        e_tag: Set(String::new()),
+        restricted_download: Set(false),
+    };
+    Ok(krate.insert(&db.db_con).await?.id)
+}
+
 /// Add a test crate with a specified download count.
 pub async fn test_add_crate_with_downloads(
     db: &Database,

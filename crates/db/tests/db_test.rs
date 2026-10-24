@@ -3475,6 +3475,82 @@ async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Data
 }
 
 #[db_test]
+async fn add_crate_rejects_name_differing_only_in_dash_and_underscore(
+    test_db: &kellnr_db::Database,
+) {
+    let created = Utc::now();
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("foo-bar", "1.0.0"),
+            "cksum",
+            &created,
+            "admin",
+        )
+        .await
+        .unwrap();
+
+    for name in ["foo_bar", "Foo_Bar"] {
+        let result = test_db
+            .add_crate(
+                &PublishMetadata::minimal(name, "1.0.0"),
+                "cksum",
+                &created,
+                "admin",
+            )
+            .await;
+        assert!(
+            matches!(result, Err(kellnr_db::error::DbError::CrateNameConflict(_, ref existing)) if existing == "foo-bar"),
+            "{name}: {result:?}"
+        );
+    }
+    assert!(
+        test_db
+            .get_crate_id(&NormalizedName::from_unchecked_str("foo_bar"))
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[db_test]
+async fn add_empty_crate_rejects_similar_name(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    test_db.add_empty_crate("foo_bar", &created).await.unwrap();
+
+    let result = test_db.add_empty_crate("foo-bar", &created).await;
+
+    assert!(matches!(
+        result,
+        Err(kellnr_db::error::DbError::CrateNameConflict(_, _))
+    ));
+}
+
+#[db_test]
+async fn add_crate_keeps_existing_similar_names_publishable(test_db: &kellnr_db::Database) {
+    // Registries created before the check may already hold both spellings.
+    test_insert_crate_unchecked(test_db, "foo-bar").await.unwrap();
+    test_insert_crate_unchecked(test_db, "foo_bar").await.unwrap();
+    let created = Utc::now();
+
+    for name in ["foo-bar", "foo_bar"] {
+        test_db
+            .add_crate(
+                &PublishMetadata::minimal(name, "1.0.0"),
+                "cksum",
+                &created,
+                "admin",
+            )
+            .await
+            .unwrap();
+        let normalized = NormalizedName::from_unchecked_str(name);
+        assert_eq!(
+            1,
+            test_db.get_crate_meta_list(&normalized).await.unwrap().len()
+        );
+    }
+}
+
+#[db_test]
 async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database) {
     let created = Utc::now();
     test_db

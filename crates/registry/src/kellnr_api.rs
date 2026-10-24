@@ -1068,6 +1068,64 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
+    async fn publish_rejects_name_differing_only_in_dash_and_underscore() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("foo-bar", "1.0.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            NON_ADMIN_TOKEN,
+            &PublishMetadata::minimal("foo_bar", "1.0.0"),
+        )
+        .await;
+
+        assert_eq!(StatusCode::BAD_REQUEST, status);
+        assert_eq!(
+            "ERROR: Crate name foo_bar is too similar to the existing crate foo-bar, names must not only differ in '-' and '_'",
+            detail
+        );
+        assert!(
+            kellnr
+                .db
+                .get_crate_id(&NormalizedName::from_unchecked_str("foo_bar"))
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn add_empty_crate_rejects_similar_name() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        kellnr
+            .db
+            .add_empty_crate("foo-bar", &Utc::now())
+            .await
+            .unwrap();
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::put("/api/v1/crates/new_empty")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(r#"{"name":"foo_bar"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::BAD_REQUEST, r.status());
+    }
+
+    #[tokio::test]
     async fn publish_accepts_http_and_empty_urls() {
         let kellnr = TestKellnr::new(get_settings()).await;
         let metadata = PublishMetadata {

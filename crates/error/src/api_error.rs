@@ -120,6 +120,7 @@ impl From<DbError> for ApiError {
     fn from(e: DbError) -> Self {
         match e {
             DbError::NotOwner(_) => ApiError::from_err(&e, StatusCode::FORBIDDEN),
+            DbError::CrateNameConflict(_, _) => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
             // These only carry user supplied names and are useful to the client.
             DbError::PasswordMismatch
             | DbError::UserNotFound(_)
