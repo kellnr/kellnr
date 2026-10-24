@@ -59,8 +59,6 @@ export interface ApiRequestOptions {
   customErrors?: Record<number, string>
   /** Whether to redirect to login on 401/403 (default: true) */
   redirectOnAuthError?: boolean
-  /** Whether to disable caching */
-  noCache?: boolean
 }
 
 /**
@@ -75,11 +73,6 @@ export async function apiGet<T>(
     const config: AxiosRequestConfig = {
       ...apiConfig,
       params,
-    }
-
-    if (options.noCache) {
-      // @ts-expect-error axios-cache-interceptor adds cache option
-      config.cache = false
     }
 
     const response = await axios.get<T>(url, config)

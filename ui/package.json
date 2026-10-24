@@ -13,9 +13,7 @@
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
-    "@mdi/js": "^7.4.47",
     "axios": "^1.20.0",
-    "axios-cache-interceptor": "^1.13.0",
     "dayjs": "^1.11.23",
     "dompurify": "^3.4.17",
     "marked": "^18.1.1",
