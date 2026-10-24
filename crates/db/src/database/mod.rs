@@ -1852,7 +1852,10 @@ impl DbProvider for Database {
         };
 
         if !needs_update {
-            Ok(PrefetchState::UpToDate)
+            Ok(PrefetchState::UpToDate {
+                etag: krate.e_tag,
+                last_modified: krate.last_modified,
+            })
         } else {
             let crate_indices = krate
                 .find_related(cratesio_index::Entity)
