@@ -159,7 +159,8 @@ pub async fn test_webhook(
     }
 
     let w = db.get_webhook(&id).await?;
-    let client = types::build_client();
+    let client = types::build_client()
+        .map_err(|e| ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR))?;
     let resp = client
         .post(&w.callback_url)
         .json("Test Payload")
