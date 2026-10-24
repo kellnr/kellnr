@@ -10,6 +10,7 @@ import { mangle } from 'marked-mangle';
 import { gfmHeadingId } from "marked-gfm-heading-id";
 import { markedHighlight } from "marked-highlight";
 import DOMPurify from 'dompurify';
+import { README_SANITIZE_CONFIG } from '../common/sanitize';
 import { computed, watchEffect } from "vue";
 import hljs from 'highlight.js';
 import githubLight from '@/assets/hljs-github.css?inline';
@@ -35,7 +36,7 @@ const props = defineProps<{
 }>();
 
 const markedReadme = computed(() => {
-  return DOMPurify.sanitize(marked.parse(props.readme || ''));
+  return DOMPurify.sanitize(marked.parse(props.readme || ''), README_SANITIZE_CONFIG);
 });
 
 // Switch the highlight.js theme with the Vuetify theme, using locally bundled
