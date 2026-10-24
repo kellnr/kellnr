@@ -421,17 +421,14 @@ impl OAuth2Handler {
         // Extract groups from raw JWT payload
         let groups = self.extract_groups(&result.raw_payload);
 
-        // Determine admin status from group claims
-        let is_admin = self.check_group_membership(
-            &groups,
+        // Privileges are only derived from the configured claims, never from
+        // the fallback group claims above.
+        let is_admin = claim_contains(
             &result.raw_payload,
             self.settings.admin_group_claim.as_deref(),
             self.settings.admin_group_value.as_deref(),
         );
-
-        // Determine read-only status from group claims
-        let is_read_only = self.check_group_membership(
-            &groups,
+        let is_read_only = claim_contains(
             &result.raw_payload,
             self.settings.read_only_group_claim.as_deref(),
             self.settings.read_only_group_value.as_deref(),
@@ -472,40 +469,6 @@ impl OAuth2Handler {
         }
 
         Vec::new()
-    }
-
-    /// Check if the user belongs to a specific group based on claims
-    #[allow(clippy::unused_self)]
-    fn check_group_membership(
-        &self,
-        groups: &[String],
-        payload: &serde_json::Value,
-        claim_name: Option<&str>,
-        claim_value: Option<&str>,
-    ) -> bool {
-        let (Some(claim_name), Some(claim_value)) = (claim_name, claim_value) else {
-            return false;
-        };
-
-        // First check in the extracted groups
-        if groups.iter().any(|g| g == claim_value) {
-            return true;
-        }
-
-        // Also check directly in the claim (in case it's a different claim than groups)
-        if let Some(values) = get_string_array_from_json(payload, claim_name) {
-            return values.iter().any(|v| v == claim_value);
-        }
-
-        // Check if it's a boolean claim
-        if let Some(value) = payload.get(claim_name)
-            && let Some(b) = value.as_bool()
-        {
-            // If the claim is a boolean and we're checking for "true"
-            return b && claim_value.eq_ignore_ascii_case("true");
-        }
-
-        false
     }
 
     /// Generate a unique username for auto-provisioning
@@ -582,6 +545,29 @@ fn extract_jwt_payload(jwt: &str) -> Result<serde_json::Value, OAuth2Error> {
 }
 
 /// Get a string array from a JSON value
+/// Whether the claim `claim_name` grants `claim_value`. The claim may be a
+/// string, a string array or a boolean (matched against `"true"`). Only the
+/// named claim is consulted: falling back to other claims such as `groups`
+/// would let any group of that name grant the privilege.
+fn claim_contains(
+    payload: &serde_json::Value,
+    claim_name: Option<&str>,
+    claim_value: Option<&str>,
+) -> bool {
+    let (Some(claim_name), Some(claim_value)) = (claim_name, claim_value) else {
+        return false;
+    };
+
+    if let Some(values) = get_string_array_from_json(payload, claim_name) {
+        return values.iter().any(|v| v == claim_value);
+    }
+
+    payload
+        .get(claim_name)
+        .and_then(serde_json::Value::as_bool)
+        .is_some_and(|b| b && claim_value.eq_ignore_ascii_case("true"))
+}
+
 fn get_string_array_from_json(payload: &serde_json::Value, name: &str) -> Option<Vec<String>> {
     let value = payload.get(name)?;
 
@@ -684,7 +670,69 @@ where
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
+
+    #[test]
+    fn claim_contains_matches_configured_array_claim() {
+        let payload = json!({ "kellnr_roles": ["dev", "admin"] });
+
+        assert!(claim_contains(
+            &payload,
+            Some("kellnr_roles"),
+            Some("admin")
+        ));
+        assert!(!claim_contains(&payload, Some("kellnr_roles"), Some("ops")));
+    }
+
+    #[test]
+    fn claim_contains_matches_string_and_bool_claims() {
+        let payload = json!({ "role": "admin", "is_admin": true, "is_ro": false });
+
+        assert!(claim_contains(&payload, Some("role"), Some("admin")));
+        assert!(claim_contains(&payload, Some("is_admin"), Some("true")));
+        assert!(!claim_contains(&payload, Some("is_ro"), Some("true")));
+    }
+
+    /// The privilege must come from the configured claim only. A group of the
+    /// same name in `groups`, `roles` or `group` must not grant it.
+    #[test]
+    fn claim_contains_ignores_fallback_group_claims() {
+        let payload = json!({
+            "groups": ["kellnr-admins"],
+            "roles": ["kellnr-admins"],
+            "group": "kellnr-admins",
+        });
+
+        assert!(!claim_contains(
+            &payload,
+            Some("kellnr_roles"),
+            Some("kellnr-admins")
+        ));
+    }
+
+    /// With admin and read-only on different claims, the read-only claim
+    /// must not grant admin.
+    #[test]
+    fn claim_contains_does_not_mix_claims() {
+        let payload = json!({ "ro_groups": ["kellnr-admins"] });
+
+        assert!(!claim_contains(
+            &payload,
+            Some("admin_groups"),
+            Some("kellnr-admins")
+        ));
+    }
+
+    #[test]
+    fn claim_contains_requires_claim_and_value() {
+        let payload = json!({ "groups": ["admin"] });
+
+        assert!(!claim_contains(&payload, None, Some("admin")));
+        assert!(!claim_contains(&payload, Some("groups"), None));
+        assert!(claim_contains(&payload, Some("groups"), Some("admin")));
+    }
 
     #[test]
     fn test_sanitize_username() {
