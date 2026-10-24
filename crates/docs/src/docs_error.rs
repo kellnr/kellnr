@@ -13,8 +13,6 @@ pub enum DocsError {
     DatabaseError(#[from] kellnr_db::error::DbError),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Failed to walk docs directory: {0}")]
-    DirWalkError(#[from] fs_extra::error::Error),
     #[error("Cargo error: {0}")]
     CargoError(String),
     #[error("Docs storage error: {0}")]
@@ -30,7 +28,6 @@ impl From<DocsError> for ApiError {
             DocsError::CrateDoesNotExist(_, _) => ApiError::from_err(&e, StatusCode::NOT_FOUND),
             DocsError::DatabaseError(db_error) => ApiError::from(db_error),
             DocsError::IoError(error) => ApiError::from(error),
-            DocsError::DirWalkError(error) => ApiError::internal(&error),
             DocsError::CargoError(error) => ApiError::new(
                 &error,
                 &String::default(),

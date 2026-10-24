@@ -26,7 +26,6 @@ bytes.workspace = true
 cargo.workspace = true
 utoipa.workspace = true
 flate2.workspace = true
-fs_extra.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 serde.workspace = true
