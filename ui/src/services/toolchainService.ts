@@ -23,7 +23,7 @@ import {
  * Get list of all toolchains
  */
 export async function getToolchains(): Promise<ApiResult<Toolchain[]>> {
-  return apiGet<Toolchain[]>(TOOLCHAIN_LIST, undefined, { noCache: true })
+  return apiGet<Toolchain[]>(TOOLCHAIN_LIST)
 }
 
 /**
@@ -119,7 +119,7 @@ export async function deleteToolchainTarget(
  * Get list of all channels
  */
 export async function getChannels(): Promise<ApiResult<ChannelInfo[]>> {
-  return apiGet<ChannelInfo[]>(TOOLCHAIN_CHANNELS, undefined, { noCache: true })
+  return apiGet<ChannelInfo[]>(TOOLCHAIN_CHANNELS)
 }
 
 /**

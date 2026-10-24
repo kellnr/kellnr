@@ -64,10 +64,27 @@ export async function getCrateData(name: string): Promise<ApiResult<CrateData>> 
 }
 
 /**
+ * Successful crates.io responses, kept for the lifetime of the page so the
+ * dependency list does not query crates.io again on every tab switch.
+ */
+const cratesIoDataCache = new Map<string, Promise<ApiResult<CrateData>>>()
+
+/**
  * Get crates.io crate data (for cached crates)
  */
 export async function getCratesIoData(name: string): Promise<ApiResult<CrateData>> {
-  return apiGet<CrateData>(CRATESIO_DATA, { name })
+  const cached = cratesIoDataCache.get(name)
+  if (cached) {
+    return cached
+  }
+
+  const request = apiGet<CrateData>(CRATESIO_DATA, { name })
+  cratesIoDataCache.set(name, request)
+  const result = await request
+  if (result.error) {
+    cratesIoDataCache.delete(name)
+  }
+  return result
 }
 
 /**
@@ -103,7 +120,7 @@ export async function getStatistics(): Promise<ApiResult<Statistics>> {
  * Get users with access to a crate
  */
 export async function getCrateUsers(crateName: string): Promise<ApiResult<CrateUsersResponse>> {
-  return apiGet<CrateUsersResponse>(CRATE_ACL_USERS(crateName), undefined, { noCache: true })
+  return apiGet<CrateUsersResponse>(CRATE_ACL_USERS(crateName))
 }
 
 /**
@@ -139,7 +156,7 @@ export const deleteCrateUser = removeCrateUser
 export async function getCrateGroups(
   crateName: string
 ): Promise<ApiResult<CrateGroupsResponse>> {
-  return apiGet<CrateGroupsResponse>(CRATE_ACL_GROUPS(crateName), undefined, { noCache: true })
+  return apiGet<CrateGroupsResponse>(CRATE_ACL_GROUPS(crateName))
 }
 
 /**
@@ -177,7 +194,7 @@ export const deleteCrateGroup = removeCrateGroup
 export async function getCrateOwners(
   crateName: string
 ): Promise<ApiResult<CrateOwnersResponse>> {
-  return apiGet<CrateOwnersResponse>(CRATE_OWNERS(crateName), undefined, { noCache: true })
+  return apiGet<CrateOwnersResponse>(CRATE_OWNERS(crateName))
 }
 
 /**
@@ -221,7 +238,7 @@ export const deleteCrateOwner = removeCrateOwner
 export async function getCrateAccessData(
   crateName: string
 ): Promise<ApiResult<CrateAccessDataResponse>> {
-  return apiGet<CrateAccessDataResponse>(CRATE_ACL(crateName), undefined, { noCache: true })
+  return apiGet<CrateAccessDataResponse>(CRATE_ACL(crateName))
 }
 
 /**
@@ -252,7 +269,7 @@ export async function buildDocs(
  */
 export async function getDocsQueue(): Promise<ApiResult<DocQueueItem[]>> {
   // Backend returns { queue: [...] }, we need to extract the array
-  const result = await apiGet<{ queue: DocQueueItem[] }>(DOCS_BUILDS, undefined, { noCache: true })
+  const result = await apiGet<{ queue: DocQueueItem[] }>(DOCS_BUILDS)
   if (result.error) {
     return { data: null, error: result.error }
   }

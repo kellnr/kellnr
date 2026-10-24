@@ -22,7 +22,7 @@ const groupErrorMessages: Record<number, string> = {
  * Get list of all groups
  */
 export async function getGroups(): Promise<ApiResult<Group[]>> {
-  return apiGet<Group[]>(LIST_GROUPS, undefined, { noCache: true })
+  return apiGet<Group[]>(LIST_GROUPS)
 }
 
 /**
@@ -48,7 +48,7 @@ export async function deleteGroup(name: string): Promise<ApiResult<void>> {
  * Get users in a group
  */
 export async function getGroupUsers(groupName: string): Promise<ApiResult<GroupUsersResponse>> {
-  return apiGet<GroupUsersResponse>(GROUP_USERS(groupName), undefined, { noCache: true })
+  return apiGet<GroupUsersResponse>(GROUP_USERS(groupName))
 }
 
 /**

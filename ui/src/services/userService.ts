@@ -35,7 +35,7 @@ const userErrorMessages: Record<number, string> = {
  * Get list of all users
  */
 export async function getUsers(): Promise<ApiResult<User[]>> {
-  return apiGet<User[]>(LIST_USERS, undefined, { noCache: true })
+  return apiGet<User[]>(LIST_USERS)
 }
 
 /**
@@ -116,7 +116,6 @@ export async function logout(): Promise<ApiResult<LogoutResponse>> {
  */
 export async function getLoginState(): Promise<ApiResult<LoginResponse>> {
   return apiGet<LoginResponse>(LOGIN_STATE, undefined, {
-    noCache: true,
     redirectOnAuthError: false,
   })
 }

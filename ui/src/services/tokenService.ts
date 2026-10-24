@@ -10,7 +10,7 @@ import { ADD_TOKEN, DELETE_TOKEN, LIST_TOKENS } from '../remote-routes'
  * Get list of all tokens for the current user
  */
 export async function getTokens(): Promise<ApiResult<Token[]>> {
-  return apiGet<Token[]>(LIST_TOKENS, undefined, { noCache: true })
+  return apiGet<Token[]>(LIST_TOKENS)
 }
 
 /**
