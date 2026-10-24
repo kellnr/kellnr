@@ -10,6 +10,26 @@ pub struct Docs {
 
     /// Max docs size in MB
     pub max_size: usize,
+
+    /// Command prefix (comma-separated) for the rustdoc build process.
+    ///
+    /// Building docs compiles the published crate, which runs its build
+    /// scripts and proc macros. Kellnr runs every build in a child process
+    /// with a cleared environment, so no `KELLNR_*` settings or secrets are
+    /// passed on. The build still runs as the Kellnr user: it can read every
+    /// file Kellnr can read (for example the config file or the `SQLite`
+    /// database, e.g. via `include_str!`) and it has network access. Only
+    /// enable docs for crates you trust, or set a wrapper that confines the
+    /// build, e.g. with bubblewrap:
+    /// `["bwrap", "--ro-bind", "/", "/", "--tmpfs", "<data_dir>",
+    /// "--bind", "<data_dir>/doc_queue", "<data_dir>/doc_queue",
+    /// "--bind", "<cargo_home>", "<cargo_home>", "--tmpfs", "/etc/kellnr",
+    /// "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp",
+    /// "--unshare-pid", "--die-with-parent", "--"]`.
+    /// The wrapper is followed by the Kellnr binary and its arguments.
+    #[configurable(env_list)]
+    #[arg(value_delimiter = ',')]
+    pub build_wrapper: Vec<String>,
 }
 
 impl Default for Docs {
@@ -17,6 +37,7 @@ impl Default for Docs {
         Self {
             enabled: false,
             max_size: 100,
+            build_wrapper: Vec::new(),
         }
     }
 }

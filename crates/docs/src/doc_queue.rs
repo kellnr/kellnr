@@ -10,11 +10,13 @@ use flate2::read::GzDecoder;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::{DbProvider, DocQueueEntry};
+use kellnr_settings::Settings;
 use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use tokio::fs::remove_dir_all;
 use tracing::error;
 
+use crate::build_process::DocBuilder;
 use crate::compute_doc_url;
 use crate::docs_error::DocsError;
 use crate::unpack::unpack_crate;
@@ -24,20 +26,29 @@ pub fn doc_extraction_queue(
     db: Arc<dyn DbProvider>,
     cs: Arc<KellnrCrateStorage>,
     docs_storage: Arc<DocsStorage>,
-    path_prefix: String,
-    cratesio_index: Option<String>,
+    settings: &Settings,
 ) {
+    let program = match std::env::current_exe() {
+        Ok(program) => program,
+        Err(e) => {
+            error!("Rustdoc generation disabled, cannot locate the kellnr binary: {e}");
+            return;
+        }
+    };
+    let builder = DocBuilder::new(
+        program,
+        settings.docs.build_wrapper.clone(),
+        settings
+            .proxy
+            .cratesio_index_override()
+            .map(ToString::to_string),
+    );
+    let path_prefix = settings.origin.path.clone();
+
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-            if let Err(e) = inner_loop(
-                db.clone(),
-                &cs,
-                &docs_storage,
-                &path_prefix,
-                cratesio_index.as_deref(),
-            )
-            .await
+            if let Err(e) = inner_loop(db.clone(), &cs, &docs_storage, &path_prefix, &builder).await
             {
                 error!("Rustdoc generation loop failed: {e}");
             }
@@ -50,12 +61,12 @@ async fn inner_loop(
     cs: &KellnrCrateStorage,
     docs_storage: &DocsStorage,
     path_prefix: &str,
-    cratesio_index: Option<&str>,
+    builder: &DocBuilder,
 ) -> Result<(), DocsError> {
     let entries = db.get_doc_queue().await?;
 
     for entry in entries {
-        if let Err(e) = extract_docs(&entry, cs, docs_storage, cratesio_index).await {
+        if let Err(e) = extract_docs(&entry, cs, docs_storage, builder).await {
             error!("Failed to extract docs from crate: {e}");
         } else {
             if let Err(e) = clean_up(&entry.path).await {
@@ -77,7 +88,7 @@ async fn extract_docs(
     doc: &DocQueueEntry,
     cs: &KellnrCrateStorage,
     docs_storage: &DocsStorage,
-    cratesio_index: Option<&str>,
+    builder: &DocBuilder,
 ) -> Result<(), DocsError> {
     // Unpack crate
 
@@ -100,16 +111,9 @@ async fn extract_docs(
     let generated_docs_path = &doc.path.join(crate_root);
     strip_rust_toolchain_files(generated_docs_path).await?;
 
-    // `generate_docs` compiles the crate synchronously and can take minutes, so
-    // offload it to the blocking thread pool to avoid starving the Tokio worker
-    // (mirrors `docs.extract(..)` in `api::publish_docs`).
-    let path_for_blocking = generated_docs_path.clone();
-    let cratesio_index_owned = cratesio_index.map(str::to_string);
-    tokio::task::spawn_blocking(move || {
-        generate_docs(&path_for_blocking, cratesio_index_owned.as_deref())
-    })
-    .await
-    .map_err(|e| DocsError::CargoError(format!("doc generation task panicked: {e}")))??;
+    // The build runs untrusted code (build scripts, proc macros), so it runs
+    // in a separate process without the Kellnr environment. See `DocBuilder`.
+    builder.build(generated_docs_path).await?;
 
     // Upload the docs directory, pruning any stale pages from a previous build.
     // The `doc` key prefix mirrors the manual-upload path (api.rs), where the
@@ -224,7 +228,12 @@ fn doc_features(workspace: &Workspace) -> Result<CliFeatures, DocsError> {
         .map_err(|e| DocsError::CargoError(e.to_string()))
 }
 
-fn generate_docs(
+/// Document the crate at `crate_path` with cargo in the current process.
+///
+/// This runs the crate's build scripts and proc macros. It is only called by
+/// the hidden `doc-build` subcommand, which [`DocBuilder`] runs as a separate
+/// process with a cleared environment.
+pub fn generate_docs(
     crate_path: impl AsRef<Path>,
     cratesio_index: Option<&str>,
 ) -> Result<(), DocsError> {

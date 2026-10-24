@@ -54,6 +54,17 @@ async fn main() {
         CliResult::ShowHelp => {
             // Help was already printed by parse_cli()
         }
+        CliResult::BuildDocs {
+            crate_path,
+            cratesio_index,
+        } => {
+            if let Err(e) =
+                kellnr_docs::doc_queue::generate_docs(&crate_path, cratesio_index.as_deref())
+            {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
@@ -400,16 +411,7 @@ fn init_docs_hosting(
     db: Arc<dyn DbProvider + 'static>,
 ) {
     if settings.docs.enabled {
-        kellnr_docs::doc_queue::doc_extraction_queue(
-            db,
-            cs,
-            docs_storage,
-            settings.origin.path.clone(),
-            settings
-                .proxy
-                .cratesio_index_override()
-                .map(ToString::to_string),
-        );
+        kellnr_docs::doc_queue::doc_extraction_queue(db, cs, docs_storage, settings);
     }
 }
 
