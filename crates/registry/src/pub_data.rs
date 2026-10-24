@@ -41,6 +41,14 @@ fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
     }
 }
 
+/// Compute `start + len` as a slice bound, failing instead of overflowing.
+fn slice_end(start: usize, len: u32) -> Result<usize, RegistryError> {
+    usize::try_from(len)
+        .ok()
+        .and_then(|len| start.checked_add(len))
+        .ok_or(RegistryError::InvalidMetadataSize)
+}
+
 /// Parse the length-prefixed publish body (`metadata_len | metadata | crate_len | crate`).
 ///
 /// The two length fields are attacker-controlled, so every slice bound is
@@ -55,24 +63,25 @@ fn parse_pub_data(data_bytes: &[u8]) -> Result<PubData, RegistryError> {
     }
 
     let metadata_length = convert_length(&data_bytes[0..4])?;
-    let metadata_end = 4 + (metadata_length as usize);
+    let metadata_end = slice_end(4, metadata_length)?;
+    let crate_start = slice_end(metadata_end, 4)?;
 
     // The metadata must fit and leave room for the 4-byte crate-length prefix
     // that follows it.
-    if metadata_end + 4 > data_bytes.len() {
+    if crate_start > data_bytes.len() {
         return Err(RegistryError::InvalidMetadataSize);
     }
 
     let metadata: PublishMetadata = deserialize_metadata(&data_bytes[4..metadata_end])?;
-    let crate_length = convert_length(&data_bytes[metadata_end..(metadata_end + 4)])?;
-    let crate_end = metadata_end + 4 + (crate_length as usize);
+    let crate_length = convert_length(&data_bytes[metadata_end..crate_start])?;
+    let crate_end = slice_end(crate_start, crate_length)?;
 
     // The crate payload must be fully present in the body.
     if crate_end > data_bytes.len() {
         return Err(RegistryError::InvalidMetadataSize);
     }
 
-    let cratedata = Arc::from(data_bytes[metadata_end + 4..crate_end].to_vec());
+    let cratedata = Arc::from(data_bytes[crate_start..crate_end].to_vec());
 
     Ok(PubData {
         metadata_length,
@@ -102,7 +111,7 @@ impl FromRequest<AppStateData, Body> for PubData {
 mod parse_tests {
     use kellnr_common::publish_metadata::PublishMetadata;
 
-    use super::parse_pub_data;
+    use super::{parse_pub_data, slice_end};
 
     fn body(metadata: &PublishMetadata, crate_length: u32, crate_bytes: &[u8]) -> Vec<u8> {
         let meta = serde_json::to_vec(metadata).unwrap();
@@ -146,6 +155,12 @@ mod parse_tests {
         buf.extend_from_slice(&[0x00, 0x00]); // only 2 of the required 4 prefix bytes
 
         assert!(parse_pub_data(&buf).is_err());
+    }
+
+    #[test]
+    fn slice_end_overflow_is_rejected() {
+        assert!(slice_end(usize::MAX - 1, 4).is_err());
+        assert_eq!(slice_end(4, 10).unwrap(), 14);
     }
 
     #[test]

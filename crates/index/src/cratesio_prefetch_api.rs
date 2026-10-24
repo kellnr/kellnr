@@ -25,6 +25,7 @@ use super::config_json::ConfigJson;
 
 pub static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 pub static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
+static UPDATE_LIST_RETRY_SECS: u64 = 60; // retry delay if the update list cannot be loaded
 static CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
 
 fn get_client(settings: &kellnr_settings::Proxy) -> &'static Client {
@@ -218,21 +219,22 @@ async fn background_update_thread(
     sender: flume::Sender<CratesioPrefetchMsg>,
 ) {
     loop {
-        let crates = match db.get_cratesio_index_update_list().await {
-            Ok(crates) => crates,
+        let next_run_secs = match db.get_cratesio_index_update_list().await {
+            Ok(crates) => {
+                for c in crates {
+                    if let Err(e) = sender.send(c) {
+                        error!("Could not send update message: {e}");
+                    }
+                }
+                UPDATE_INTERVAL_SECS
+            }
             Err(e) => {
                 error!("Could not get crates.io index update list: {e}");
-                continue;
+                UPDATE_LIST_RETRY_SECS
             }
         };
 
-        for c in crates {
-            if let Err(e) = sender.send(c) {
-                error!("Could not send update message: {e}");
-            }
-        }
-
-        tokio::time::sleep(Duration::from_secs(UPDATE_INTERVAL_SECS)).await;
+        tokio::time::sleep(Duration::from_secs(next_run_secs)).await;
     }
 }
 
@@ -678,6 +680,7 @@ fn crate_sub_path(name: &NormalizedName) -> String {
 #[cfg(test)]
 mod tests {
     use std::mem;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use axum::Router;
     use axum::body::Body;
@@ -776,6 +779,27 @@ mod tests {
             ),
             actual
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn background_update_thread_backs_off_on_db_error() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut mock_db = MockDb::new();
+        mock_db.expect_get_cratesio_index_update_list().returning({
+            let calls = calls.clone();
+            move || {
+                calls.fetch_add(1, Ordering::SeqCst);
+                Err(kellnr_db::error::DbError::FailedToCountCrates)
+            }
+        });
+        let (sender, _receiver) = flume::unbounded::<CratesioPrefetchMsg>();
+
+        let run = background_update_thread(Arc::new(mock_db), sender);
+        let window = Duration::from_secs(UPDATE_LIST_RETRY_SECS * 2 + 1);
+        assert!(tokio::time::timeout(window, run).await.is_err());
+
+        // Calls at t=0, t=retry and t=2*retry. Without a delay the loop would spin.
+        assert_eq!(3, calls.load(Ordering::SeqCst));
     }
 
     fn app() -> Router {
