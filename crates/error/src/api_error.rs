@@ -119,6 +119,7 @@ impl Display for ApiError {
 impl From<DbError> for ApiError {
     fn from(e: DbError) -> Self {
         match e {
+            DbError::NotOwner(_) => ApiError::from_err(&e, StatusCode::FORBIDDEN),
             // These only carry user supplied names and are useful to the client.
             DbError::PasswordMismatch
             | DbError::UserNotFound(_)

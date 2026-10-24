@@ -1040,6 +1040,34 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
+    async fn publish_second_version_of_mixed_case_crate() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("MyCrate", "1.0.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("MyCrate", "1.1.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        let name = NormalizedName::from_unchecked_str("mycrate");
+        assert_eq!(2, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
+        assert_eq!(
+            "1.1.0",
+            kellnr.db.get_max_version_from_name(&name).await.unwrap().to_string()
+        );
+    }
+
+    #[tokio::test]
     async fn publish_accepts_http_and_empty_urls() {
         let kellnr = TestKellnr::new(get_settings()).await;
         let metadata = PublishMetadata {

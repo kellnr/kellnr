@@ -3415,3 +3415,96 @@ async fn statistics_respect_visibility(test_db: &kellnr_db::Database) {
         .unwrap();
     assert_eq!("restricted_other", last.0.to_string());
 }
+
+#[db_test]
+async fn add_crate_adds_version_to_mixed_case_crate(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    for vers in ["1.0.0", "1.1.0"] {
+        test_db
+            .add_crate(
+                &PublishMetadata::minimal("MyCrate", vers),
+                "cksum",
+                &created,
+                "admin",
+            )
+            .await
+            .unwrap();
+    }
+
+    let name = NormalizedName::from_unchecked_str("mycrate");
+    assert_eq!(2, test_db.get_crate_meta_list(&name).await.unwrap().len());
+    assert_eq!(
+        Version::try_from("1.1.0").unwrap(),
+        test_db.get_max_version_from_name(&name).await.unwrap()
+    );
+}
+
+#[db_test]
+async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    test_db
+        .add_user("mallory", "pwd", "salt", false, false)
+        .await
+        .unwrap();
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("taken", "1.0.0"),
+            "cksum",
+            &created,
+            "admin",
+        )
+        .await
+        .unwrap();
+
+    let result = test_db
+        .add_crate(
+            &PublishMetadata::minimal("Taken", "1.1.0"),
+            "cksum",
+            &created,
+            "mallory",
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(kellnr_db::error::DbError::NotOwner(_))
+    ));
+    let name = NormalizedName::from_unchecked_str("taken");
+    assert!(!test_db.is_owner(&name, "mallory").await.unwrap());
+    assert_eq!(1, test_db.get_crate_meta_list(&name).await.unwrap().len());
+}
+
+#[db_test]
+async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    test_db
+        .add_user("alice", "pwd", "salt", false, false)
+        .await
+        .unwrap();
+    test_db
+        .add_user("root", "pwd", "salt", true, false)
+        .await
+        .unwrap();
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("owned", "1.0.0"),
+            "cksum",
+            &created,
+            "alice",
+        )
+        .await
+        .unwrap();
+
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("owned", "1.1.0"),
+            "cksum",
+            &created,
+            "root",
+        )
+        .await
+        .unwrap();
+
+    let name = NormalizedName::from_unchecked_str("owned");
+    assert_eq!(2, test_db.get_crate_meta_list(&name).await.unwrap().len());
+}
