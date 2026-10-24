@@ -44,7 +44,9 @@ pub struct Registry {
     /// Restrict new crate uploads to admins
     pub new_crates_restricted: bool,
 
-    /// Cookie signing key (for multi-instance setups)
+    /// Cookie signing key (for multi-instance setups). At least 64 bytes of
+    /// random data; generate it with e.g. `openssl rand -hex 64`. Unset, a
+    /// random key is generated on every start
     pub cookie_signing_key: Option<String>,
 
     /// Allow crates without owners
