@@ -25,7 +25,6 @@ impl Modify for SecurityAddon {
 #[openapi(
     info(
         title = "Kellnr API",
-        version = "5.14.1",
         description = "Self-hosted Rust crate registry with support for rustdocs and crates.io caching"
     ),
     tags(
@@ -45,3 +44,15 @@ impl Modify for SecurityAddon {
     modifiers(&SecurityAddon)
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use utoipa::OpenApi;
+
+    use super::ApiDoc;
+
+    #[test]
+    fn api_version_matches_crate_version() {
+        assert_eq!(ApiDoc::openapi().info.version, env!("CARGO_PKG_VERSION"));
+    }
+}
