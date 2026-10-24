@@ -101,6 +101,37 @@ pub async fn no_user_exists<C: ConnectionTrait>(db_con: &C) -> DbResult<bool> {
     Ok(id.is_none())
 }
 
+/// Fail with [`DbError::NotOwner`] unless `user_name` owns the crate or is an admin.
+pub async fn ensure_owner_or_admin<C: ConnectionTrait>(
+    db_con: &C,
+    user_name: &str,
+    crate_name: &NormalizedName,
+    crate_id: i64,
+) -> DbResult<()> {
+    let user = user::Entity::find()
+        .filter(user::Column::Name.eq(user_name))
+        .one(db_con)
+        .await?
+        .ok_or_else(|| DbError::UserNotFound(user_name.to_string()))?;
+
+    if user.is_admin {
+        return Ok(());
+    }
+
+    let is_owner = owner::Entity::find()
+        .filter(owner::Column::CrateFk.eq(crate_id))
+        .filter(owner::Column::UserFk.eq(user.id))
+        .one(db_con)
+        .await?
+        .is_some();
+
+    if is_owner {
+        Ok(())
+    } else {
+        Err(DbError::NotOwner(crate_name.to_string()))
+    }
+}
+
 pub async fn add_owner_if_not_exists<C: ConnectionTrait>(
     db_con: &C,
     owner_name: &str,

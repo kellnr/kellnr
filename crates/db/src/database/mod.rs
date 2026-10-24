@@ -1715,15 +1715,17 @@ impl DbProvider for Database {
                 .map_err(|_| DbError::InvalidCrateName(pub_metadata.name.clone()))?,
         );
 
-        let existing = krate::Entity::find()
-            .filter(krate::Column::Name.eq(&pub_metadata.name))
-            .one(&self.db_con)
-            .await?;
-
+        // Look up the crate inside the transaction and by its normalized name, so
+        // a concurrent first publish of the same crate cannot slip in between.
         let txn = self.db_con.begin().await?;
+        let existing = krate::Entity::find()
+            .filter(krate::Column::Name.eq(&normalized_name))
+            .one(&txn)
+            .await?;
 
         let crate_id = if let Some(krate) = existing {
             let krate_id = krate.id;
+            operations::ensure_owner_or_admin(&txn, owner, &normalized_name, krate_id).await?;
             let max_version = max(
                 parse_db_version(&krate.max_version)?,
                 parse_db_version(&pub_metadata.vers)?,
