@@ -299,3 +299,10 @@ pub enum ToolchainComponentIden {
     Hash,
     Size,
 }
+
+#[derive(Iden, Copy, Clone)]
+pub enum WebhookIden {
+    #[iden = "webhook"]
+    Table,
+    Secret,
+}

@@ -2,12 +2,16 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Webhook {
     pub id: Option<String>,
     pub event: WebhookEvent,
     pub callback_url: String,
     pub name: Option<String>,
+    /// Secret used to sign deliveries. Never serialized, so it cannot leak
+    /// through an API response.
+    #[serde(default, skip_serializing)]
+    pub secret: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,6 +21,8 @@ pub struct WebhookQueue {
     pub payload: serde_json::Value,
     pub last_attempt: Option<DateTime<Utc>>,
     pub next_attempt: DateTime<Utc>,
+    #[serde(default, skip_serializing)]
+    pub secret: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

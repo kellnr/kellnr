@@ -8,6 +8,7 @@ use serde_json::json;
 mod client;
 pub mod endpoints;
 mod service;
+mod signature;
 mod target;
 #[cfg(test)]
 mod tests;

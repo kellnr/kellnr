@@ -6,8 +6,10 @@ use kellnr_auth::token;
 use kellnr_common::webhook::Webhook;
 use kellnr_error::api_error::{ApiError, ApiResult};
 use tracing::{trace, warn};
+use uuid::Uuid;
 
-use crate::client::{DeliveryError, WebhookClient, truncated_body};
+use crate::client::{Delivery, DeliveryError, WebhookClient, truncated_body};
+use crate::signature::decode_secret;
 use crate::target::{is_blocked_url, validate_callback_url};
 use crate::types;
 
@@ -19,7 +21,7 @@ use crate::types;
     request_body = types::RegisterWebhookRequest,
     responses(
         (status = 200, description = "Webhook registered successfully", body = types::RegisterWebhookResponse),
-        (status = 400, description = "Invalid callback URL or target address not permitted"),
+        (status = 400, description = "Invalid callback URL, target address not permitted or invalid secret"),
         (status = 401, description = "Admin access required")
     ),
     security(("cargo_token" = []))
@@ -44,6 +46,9 @@ pub async fn register_webhook(
             StatusCode::BAD_REQUEST,
         ));
     }
+    if let Some(secret) = &input.secret {
+        decode_secret(secret).map_err(|e| ApiError::new(&e, "", StatusCode::BAD_REQUEST))?;
+    }
 
     let id = db
         .register_webhook(Webhook {
@@ -51,6 +56,7 @@ pub async fn register_webhook(
             event: input.event,
             callback_url: input.callback_url,
             name: input.name,
+            secret: input.secret,
         })
         .await?;
 
@@ -81,13 +87,7 @@ pub async fn get_webhook(
         return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
     }
 
-    let w = db.get_webhook(&id).await?;
-    Ok(Json(types::GetWebhookResponse {
-        id: w.id.unwrap_or_default(),
-        event: w.event,
-        callback_url: w.callback_url,
-        name: w.name,
-    }))
+    Ok(Json(db.get_webhook(&id).await?.into()))
 }
 
 /// List all webhooks (admin only)
@@ -111,7 +111,9 @@ pub async fn get_all_webhooks(
     }
 
     let w = db.get_all_webhooks().await?;
-    Ok(Json(types::GetAllWebhooksResponse(w)))
+    Ok(Json(types::GetAllWebhooksResponse(
+        w.into_iter().map(Into::into).collect(),
+    )))
 }
 
 /// Delete a webhook (admin only)
@@ -173,8 +175,14 @@ pub async fn test_webhook(
     let w = db.get_webhook(&id).await?;
     let client = WebhookClient::new(&settings.webhooks)
         .map_err(|e| ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    let msg_id = format!("msg_test_{}", Uuid::new_v4().simple());
+    let delivery = Delivery {
+        id: &msg_id,
+        payload: "Test Payload",
+        secret: w.secret.as_deref(),
+    };
     let resp = client
-        .post(&w.callback_url, "Test Payload")
+        .post(&w.callback_url, &delivery)
         .await
         .map_err(|e| delivery_error_to_api_error(&id, &e))?;
 
@@ -204,11 +212,13 @@ pub async fn test_webhook(
 
 fn delivery_error_to_api_error(webhook_id: &str, err: &DeliveryError) -> ApiError {
     match err {
-        DeliveryError::InvalidUrl(_) | DeliveryError::BlockedTarget => {
+        DeliveryError::InvalidUrl(_)
+        | DeliveryError::BlockedTarget
+        | DeliveryError::InvalidSecret(_) => {
             ApiError::new(&err.to_string(), "", StatusCode::BAD_REQUEST)
         }
-        DeliveryError::Request(e) => {
-            warn!(webhook_id, "Webhook test callback failed: {e}");
+        DeliveryError::Request(_) | DeliveryError::Payload(_) => {
+            warn!(webhook_id, "Webhook test callback failed: {err}");
             ApiError::new(
                 "Webhook callback request failed",
                 "",
@@ -295,6 +305,74 @@ mod endpoint_tests {
             assert_eq!(400, response.status().as_u16(), "{url}");
         }
 
+        assert!(db.get_all_webhooks().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_register_webhook_with_secret_is_never_returned() {
+        let (router, db) = get_app().await;
+        let secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+
+        let payload = format!(
+            "{{\"type\": \"crate_add\", \"callback_url\": \"http://my-service:8000\", \"secret\": \"{secret}\"}}"
+        );
+        let response = router
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/webhook")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, ADMIN_TOKEN)
+                    .body(Body::from(payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(200, response.status().as_u16());
+        let response: RegisterWebhookResponse = parse_response(response).await;
+        let id = response.id;
+        assert_eq!(
+            Some(secret.to_string()),
+            db.get_webhook(&id).await.unwrap().secret
+        );
+
+        for uri in [format!("/api/v1/webhook/{id}"), "/api/v1/webhook".to_string()] {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::get(uri)
+                        .header(header::AUTHORIZATION, ADMIN_TOKEN)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(200, response.status().as_u16());
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let body = String::from_utf8_lossy(&body);
+            assert!(!body.contains("MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"));
+            assert!(!body.contains("\"secret\""));
+            assert!(body.contains("\"has_secret\":true"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_register_webhook_invalid_secret() {
+        let (router, db) = get_app().await;
+
+        let payload = "{\"type\": \"crate_add\", \"callback_url\": \"http://my-service:8000\", \"secret\": \"too-short\"}";
+        let response = router
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/webhook")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, ADMIN_TOKEN)
+                    .body(Body::from(payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(400, response.status().as_u16());
         assert!(db.get_all_webhooks().await.unwrap().is_empty());
     }
 
@@ -620,6 +698,7 @@ mod endpoint_tests {
             event: WebhookEvent::CrateUpdate,
             callback_url: "https://some-callback:8000".to_string(),
             name: Some("My callback".to_string()),
+            secret: None,
         }
     }
 }

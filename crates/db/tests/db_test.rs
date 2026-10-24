@@ -2860,6 +2860,7 @@ async fn test_register_webhook(test_db: &kellnr_db::Database) {
         event: WebhookEvent::CrateYank,
         callback_url: "https://my-other-service:8005".to_string(),
         name: Some("myWebhook".to_string()),
+        secret: Some("whsec_c2VjcmV0".to_string()),
     };
     let id = test_db.register_webhook(webhook).await.unwrap();
     let entry = test_db.get_webhook(&id).await.unwrap();
@@ -2870,6 +2871,7 @@ async fn test_register_webhook(test_db: &kellnr_db::Database) {
         entry.callback_url
     );
     assert_eq!(Some("myWebhook".to_string()), entry.name);
+    assert_eq!(Some("whsec_c2VjcmV0".to_string()), entry.secret);
 }
 
 #[db_test]
@@ -2879,6 +2881,7 @@ async fn test_delete_webhook(test_db: &kellnr_db::Database) {
         event: WebhookEvent::CrateYank,
         callback_url: "https://my-other-service:8005".to_string(),
         name: None,
+        secret: None,
     };
     let id = test_db.register_webhook(webhook).await.unwrap();
 
@@ -2904,6 +2907,7 @@ async fn test_get_all_webhooks(test_db: &kellnr_db::Database) {
                     },
                     callback_url: String::new(),
                     name: None,
+                    secret: None,
                 })
                 .await
                 .unwrap(),
@@ -2925,6 +2929,7 @@ async fn test_add_webhook_queue(test_db: &kellnr_db::Database) {
         event: WebhookEvent::CrateUpdate,
         callback_url: "https://update-service.io".to_string(),
         name: None,
+        secret: Some("whsec_c2VjcmV0".to_string()),
     };
     let webhook_id = test_db.register_webhook(webhook).await.unwrap();
 
@@ -2946,6 +2951,7 @@ async fn test_add_webhook_queue(test_db: &kellnr_db::Database) {
         "https://update-service.io".to_string()
     );
     assert_eq!(entries[0].last_attempt, None);
+    assert_eq!(entries[0].secret, Some("whsec_c2VjcmV0".to_string()));
 }
 
 #[db_test]
@@ -2955,6 +2961,7 @@ async fn test_get_pending_webhook_queue_entries(test_db: &kellnr_db::Database) {
         event: WebhookEvent::CrateUpdate,
         callback_url: String::new(),
         name: None,
+        secret: None,
     };
     let webhook_id = test_db.register_webhook(webhook).await.unwrap();
 
@@ -3000,6 +3007,7 @@ async fn test_delete_webhook_queue(test_db: &kellnr_db::Database) {
         event: WebhookEvent::CrateUpdate,
         callback_url: String::new(),
         name: None,
+        secret: None,
     };
     let webhook_id = test_db.register_webhook(webhook).await.unwrap();
 

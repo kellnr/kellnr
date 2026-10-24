@@ -12,6 +12,8 @@ pub struct Model {
     pub event: String,
     pub callback_url: String,
     pub name: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub secret: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
