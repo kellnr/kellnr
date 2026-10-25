@@ -73,14 +73,14 @@ test.describe("User Management UI Tests", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    // Click on User Management in the sidebar navigation
-    const userMgmtNavItem = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    // Click on Users in the sidebar navigation
+    const userMgmtNavItem = page.getByTestId("nav-user-management");
     await expect(userMgmtNavItem).toBeVisible();
     await userMgmtNavItem.click();
     await page.waitForTimeout(500);
 
-    // Verify User Management section header is visible in the content area
-    const userMgmtHeader = page.locator(".section-header").filter({ hasText: "User Management" });
+    // Verify Users section header is visible in the content area
+    const userMgmtHeader = page.locator(".section-header").filter({ hasText: "Users" });
     await expect(userMgmtHeader).toBeVisible();
 
     // Verify admin user is listed
@@ -117,7 +117,7 @@ test.describe("User Management UI Tests", () => {
 
     await page.goto(`${baseUrl}/settings?tab=users`);
 
-    const userMgmtHeader = page.locator(".section-header").filter({ hasText: "User Management" });
+    const userMgmtHeader = page.locator(".section-header").filter({ hasText: "Users" });
     await expect(userMgmtHeader).toBeVisible();
   });
 
@@ -135,8 +135,8 @@ test.describe("User Management UI Tests", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    // Click on User Management in the sidebar navigation
-    const userMgmtNavItem = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    // Click on Users in the sidebar navigation
+    const userMgmtNavItem = page.getByTestId("nav-user-management");
     await userMgmtNavItem.click();
     await page.waitForTimeout(500);
 
@@ -166,8 +166,8 @@ test.describe("User Management UI Tests", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    // Click on User Management in the sidebar navigation
-    const userMgmtNavItem = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    // Click on Users in the sidebar navigation
+    const userMgmtNavItem = page.getByTestId("nav-user-management");
     await userMgmtNavItem.click();
     await page.waitForTimeout(500);
 
@@ -212,8 +212,8 @@ test.describe("User Management UI Tests", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    // Click on User Management in the sidebar navigation
-    const userMgmtNavItem = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    // Click on Users in the sidebar navigation
+    const userMgmtNavItem = page.getByTestId("nav-user-management");
     await userMgmtNavItem.click();
     await page.waitForTimeout(500);
 
@@ -286,8 +286,8 @@ test.describe("User Management UI Tests", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    // Click on User Management in the sidebar navigation
-    const userMgmtNavItem = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    // Click on Users in the sidebar navigation
+    const userMgmtNavItem = page.getByTestId("nav-user-management");
     await userMgmtNavItem.click();
     await page.waitForTimeout(500);
 
@@ -317,8 +317,8 @@ test.describe("User Management UI Tests", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    // Click on User Management in the sidebar navigation
-    const userMgmtNavItem = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    // Click on Users in the sidebar navigation
+    const userMgmtNavItem = page.getByTestId("nav-user-management");
     await userMgmtNavItem.click();
     await page.waitForTimeout(500);
 
@@ -368,8 +368,8 @@ test.describe("User Management UI Tests", () => {
     await page.goto(`${baseUrl}/settings`);
     await page.waitForTimeout(500);
 
-    // User Management nav item should not be visible for non-admin users
-    const userMgmtNavItemNonAdmin = page.locator(".v-list-item-title").filter({ hasText: "User Management" });
+    // Users nav item should not be visible for non-admin users
+    const userMgmtNavItemNonAdmin = page.getByTestId("nav-user-management");
     await expect(userMgmtNavItemNonAdmin).not.toBeVisible();
   });
 });

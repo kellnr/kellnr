@@ -59,7 +59,7 @@
                 <span class="text-body-medium font-weight-medium">Targets</span>
                 <v-btn
                   color="error"
-                  variant="text"
+                  variant="tonal"
                   size="small"
                   data-testid="toolchain-delete"
                   @click.stop="$emit('delete-toolchain', toolchain.name, toolchain.version)"
@@ -91,12 +91,13 @@
                   <template #actions>
                     <v-btn
                       color="error"
-                      variant="text"
+                      variant="tonal"
                       size="small"
                       data-testid="toolchain-target-delete"
                       @click.stop="$emit('delete-target', toolchain.name, toolchain.version, target.target)"
                     >
-                      <v-icon icon="mdi-delete-outline" size="small"></v-icon>
+                      <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                      Delete
                     </v-btn>
                   </template>
                 </ListItem>

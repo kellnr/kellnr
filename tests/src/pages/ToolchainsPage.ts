@@ -44,7 +44,7 @@ export class ToolchainsPage extends BasePage {
     this.toolchainsNavItem = page.getByTestId("nav-toolchains");
     this.sectionHeader = page
       .getByTestId("toolchain-section-header")
-      .filter({ hasText: "Toolchain Management" });
+      .filter({ hasText: "Toolchains" });
     this.toolchainCount = this.sectionHeader.locator(".section-count");
 
     // Toolchains list

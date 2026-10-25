@@ -10,7 +10,7 @@ fn default_scopes() -> Vec<String> {
 }
 
 fn default_button_text() -> String {
-    "Login with SSO".to_string()
+    "Log in with SSO".to_string()
 }
 
 /// `OAuth2`/`OpenID` Connect authentication configuration
@@ -151,7 +151,7 @@ mod tests {
         assert!(oauth2.additional_audiences.is_empty());
         assert_eq!(oauth2.scopes, vec!["openid", "profile", "email"]);
         assert!(oauth2.auto_provision_users);
-        assert_eq!(oauth2.button_text, "Login with SSO");
+        assert_eq!(oauth2.button_text, "Log in with SSO");
         assert!(!oauth2.enforced);
         assert!(!oauth2.auto_redirect);
     }

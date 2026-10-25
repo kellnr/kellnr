@@ -6,7 +6,7 @@
           <!-- Header -->
           <div class="login-header">
             <h1 class="login-title" data-testid="login-title">Welcome Back</h1>
-            <p class="login-subtitle">Sign in to your Kellnr account</p>
+            <p class="login-subtitle">Log in to your Kellnr account</p>
           </div>
 
           <!-- Form -->
@@ -85,7 +85,7 @@
                 rounded="lg"
               >
                 <v-icon icon="mdi-login" class="mr-2" />
-                Sign In
+                Log in
               </v-btn>
             </v-form>
 
@@ -135,7 +135,7 @@ const store = useStore()
 
 // OAuth2 state
 const oauth2Enabled = ref(false)
-const oauth2ButtonText = ref("Login with SSO")
+const oauth2ButtonText = ref("Log in with SSO")
 const ssoEnforced = ref(false)
 
 // Composables

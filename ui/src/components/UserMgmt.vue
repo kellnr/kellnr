@@ -1,6 +1,6 @@
 <template>
   <div>
-    <SectionHeader icon="mdi-account-multiple" title="User Management" :count="users.length" />
+    <SectionHeader icon="mdi-account-multiple" :title="SETTINGS_SECTION_TITLES.users" :count="users.length" />
 
     <div class="section-content">
       <p class="text-body-medium text-medium-emphasis mb-5">
@@ -70,7 +70,8 @@
                 :disabled="user.name === currentUserName"
                 @click="handleDeleteUser(user.name)"
               >
-                <v-icon icon="mdi-delete-outline" size="small"></v-icon>
+                <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                Delete
               </v-btn>
             </template>
           </ListItem>
@@ -203,6 +204,7 @@ import { onBeforeMount, ref, computed } from 'vue'
 import { useStatusMessage, useConfirmCallback, useNotification } from "../composables"
 import { userService } from "../services"
 import { isSuccess } from "../services/api"
+import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
 import type { User } from "../types/user"
 import { useStore } from "../store/store"
 import {

@@ -167,7 +167,7 @@ test.describe("OAuth2 UI Tests - Enabled", () => {
     await loginPage.waitForOAuth2Button();
 
     const buttonText = await loginPage.getOAuth2ButtonText();
-    expect(buttonText).toContain("Login with SSO");
+    expect(buttonText).toContain("Log in with SSO");
   });
 
   test("both login methods are available", async ({ page }) => {
@@ -404,7 +404,7 @@ test.describe("OAuth2 UI Tests - SSO enforcement", () => {
 
     // The Change Password tab is hidden, so the page must fall back to Tokens.
     await expect(
-      page.locator(".section-header").filter({ hasText: "Authentication Tokens" }),
+      page.locator(".section-header").filter({ hasText: "Auth Tokens" }),
     ).toBeVisible();
     await expect(
       page.locator(".v-list-item-title").filter({ hasText: "Change Password" }),
@@ -425,7 +425,7 @@ test.describe("OAuth2 UI Tests - SSO enforcement", () => {
 
     await page.goto(`${baseUrl}/settings?tab=users`);
     await expect(
-      page.locator(".section-header").filter({ hasText: "User Management" }),
+      page.locator(".section-header").filter({ hasText: "Users" }),
     ).toBeVisible();
 
     // No password reset affordance, since the backend refuses it anyway.

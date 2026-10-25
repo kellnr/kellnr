@@ -2,7 +2,7 @@
   <div>
     <SectionHeader
       :icon="editingGroup ? 'mdi-account-group' : 'mdi-account-group'"
-      :title="editingGroup ? `Edit Group: ${editingGroup}` : 'Group Management'"
+      :title="editingGroup ? `Edit Group: ${editingGroup}` : SETTINGS_SECTION_TITLES.groups"
       :count="!editingGroup ? groups.length : undefined"
     >
       <template v-if="editingGroup" #actions>
@@ -48,7 +48,8 @@
                   size="small"
                   @click="handleDeleteGroup(group.name)"
                 >
-                  <v-icon icon="mdi-delete-outline" size="small"></v-icon>
+                  <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                  Delete
                 </v-btn>
               </template>
             </ListItem>
@@ -112,11 +113,12 @@
               <template #actions>
                 <v-btn
                   color="error"
-                  variant="text"
+                  variant="tonal"
                   size="small"
                   @click="handleRemoveMember(member.name)"
                 >
-                  <v-icon icon="mdi-close" size="small"></v-icon>
+                  <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                  Remove
                 </v-btn>
               </template>
             </ListItem>
@@ -203,6 +205,7 @@ import { onBeforeMount, ref, computed } from "vue"
 import { useStatusMessage, useConfirmCallback, useNotification } from "../composables"
 import { groupService, userService } from "../services"
 import { isSuccess } from "../services/api"
+import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
 import type { Group, GroupUser } from "../types/group"
 import type { User } from "../types/user"
 import {

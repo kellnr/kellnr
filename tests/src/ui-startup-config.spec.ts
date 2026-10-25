@@ -67,7 +67,7 @@ test.describe("Startup Config UI Tests", () => {
 
     // Startup Configuration header and buttons should be visible
     await expect(
-      page.locator(".section-header").filter({ hasText: "Startup Configuration" })
+      page.locator(".section-header").filter({ hasText: "Startup Config" })
     ).toBeVisible();
 
     const expandBtn = page.getByRole("button", { name: "Expand all" });

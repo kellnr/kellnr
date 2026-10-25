@@ -92,7 +92,7 @@
                     1st
                   </v-chip>
                   <span class="crate-name-text">{{ statistics.top_crates.first[0] }}</span>
-                  <span class="download-count">({{ statistics.top_crates.first[1].toLocaleString() }})</span>
+                  <span class="download-count">({{ formatNumber(statistics.top_crates.first[1]) }})</span>
                 </div>
                 <div v-if="statistics.top_crates.second[1] > 0" class="top-crate-item">
                   <v-chip color="grey-lighten-1" variant="flat" size="small" class="mr-2">
@@ -100,7 +100,7 @@
                     2nd
                   </v-chip>
                   <span class="crate-name-text">{{ statistics.top_crates.second[0] }}</span>
-                  <span class="download-count">({{ statistics.top_crates.second[1].toLocaleString() }})</span>
+                  <span class="download-count">({{ formatNumber(statistics.top_crates.second[1]) }})</span>
                 </div>
                 <div v-if="statistics.top_crates.third[1] > 0" class="top-crate-item">
                   <v-chip color="orange-lighten-1" variant="flat" size="small" class="mr-2">
@@ -108,7 +108,7 @@
                     3rd
                   </v-chip>
                   <span class="crate-name-text">{{ statistics.top_crates.third[0] }}</span>
-                  <span class="download-count">({{ statistics.top_crates.third[1].toLocaleString() }})</span>
+                  <span class="download-count">({{ formatNumber(statistics.top_crates.third[1]) }})</span>
                 </div>
               </div>
             </v-card-text>
@@ -125,16 +125,16 @@
         </v-col>
 
         <v-col cols="12" sm="6" md="4">
-          <statistics-card :num="statistics.num_proxy_crates" icon="mdi-package-variant" text="Cached Crates"
-            category="cached" :onClick="navigateToCachedCrates"></statistics-card>
+          <hero-stat-card :num="statistics.num_proxy_crates" icon="mdi-package-variant" text="Cached Crates"
+            category="cached" compact test-id-prefix="stat-card" :onClick="navigateToCachedCrates"></hero-stat-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <statistics-card :num="statistics.num_proxy_crate_versions" icon="mdi-tag-outline" text="Cached Versions"
-            category="cached"></statistics-card>
+          <hero-stat-card :num="statistics.num_proxy_crate_versions" icon="mdi-tag-outline" text="Cached Versions"
+            category="cached" compact test-id-prefix="stat-card"></hero-stat-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <statistics-card :num="statistics.num_proxy_crate_downloads" icon="mdi-cloud-download"
-            text="Cached Downloads" category="cached"></statistics-card>
+          <hero-stat-card :num="statistics.num_proxy_crate_downloads" icon="mdi-cloud-download"
+            text="Cached Downloads" category="cached" compact test-id-prefix="stat-card"></hero-stat-card>
         </v-col>
       </v-row>
     </template>
@@ -143,7 +143,6 @@
 
 <script setup lang="ts">
 import { onBeforeMount, ref, computed } from "vue"
-import StatisticsCard from '../components/StatisticsCard.vue'
 import HeroStatCard from '../components/HeroStatCard.vue'
 import RecentCrateCard from '../components/RecentCrateCard.vue'
 import type { Statistics } from '../types/statistics'
@@ -152,6 +151,7 @@ import { isSuccess } from '../services/api'
 import router from '../router'
 import { useStore } from '../store/store'
 import { useTheme } from 'vuetify'
+import { formatNumber } from '../common/format'
 
 const statistics = ref<Statistics>()
 const searchText = ref("")

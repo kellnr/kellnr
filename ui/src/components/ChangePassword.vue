@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="section-header">
       <v-icon icon="mdi-key" size="small" color="primary" class="me-3"></v-icon>
-      <span class="text-title-large font-weight-bold">Change Password</span>
+      <span class="text-title-large font-weight-bold" data-testid="section-title">{{ SETTINGS_SECTION_TITLES.password }}</span>
     </div>
 
     <!-- Form -->
@@ -28,7 +28,6 @@
         </div>
 
         <v-divider class="my-5"></v-divider>
-        <p class="text-label-medium text-uppercase text-medium-emphasis mb-4">New Password</p>
 
         <div class="mb-4">
           <label class="text-body-medium font-weight-medium d-block mb-2">New Password</label>
@@ -90,6 +89,7 @@ import { ref } from "vue"
 import { useStatusMessage } from "../composables"
 import { userService } from "../services"
 import { isSuccess } from "../services/api"
+import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
 
 // State
 const loading = ref(false)

@@ -1,5 +1,5 @@
 <template>
-  <v-card elevation="1" class="sidebar-card" data-testid="crate-sidebar">
+  <v-card elevation="0" class="sidebar-card" data-testid="crate-sidebar">
     <!-- Header -->
     <v-card-title class="sidebar-header">
       <v-icon class="me-2">mdi-package-variant</v-icon>
@@ -66,10 +66,10 @@
 
         <div class="sidebar-content download-grid">
           <span class="download-label">Version:</span>
-          <span class="download-number" data-testid="sidebar-version-downloads">{{ versionDownloads.toLocaleString() }}</span>
+          <span class="download-number" data-testid="sidebar-version-downloads">{{ formatNumber(versionDownloads) }}</span>
 
           <span class="download-label">Total:</span>
-          <span class="download-number" data-testid="sidebar-total-downloads">{{ totalDownloads.toLocaleString() }}</span>
+          <span class="download-number" data-testid="sidebar-total-downloads">{{ formatNumber(totalDownloads) }}</span>
         </div>
       </div>
 
@@ -105,6 +105,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatNumber } from "../common/format";
+
 defineProps({
   crateName: {
     type: String,
