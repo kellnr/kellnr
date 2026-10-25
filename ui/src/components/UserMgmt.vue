@@ -9,7 +9,7 @@
 
       <!-- User List -->
       <div v-if="users.length > 0" class="users-section" :class="{ 'mb-6': !ssoEnforced }">
-        <SubsectionHeader icon="mdi-account-group" title="Registered Users" />
+        <SubsectionHeader icon="mdi-account-group" title="Registered users" />
 
         <div class="list-container">
           <ListItem
@@ -27,14 +27,18 @@
                 <span v-if="user.is_read_only" class="role-badge readonly">
                   Read-only
                 </span>
+                <span v-if="user.name === currentUserName" class="role-badge self" data-testid="user-self-badge">
+                  You
+                </span>
               </div>
             </template>
+            <!-- Admins cannot demote, lock or delete themselves, so these actions are not offered -->
             <template #actions>
               <v-btn
+                v-if="user.name !== currentUserName"
                 :color="user.is_admin ? 'warning' : 'primary'"
                 variant="tonal"
                 size="small"
-                :disabled="user.name === currentUserName"
                 @click="handleToggleAdmin(user)"
               >
                 <v-icon :icon="user.is_admin ? 'mdi-shield-off-outline' : 'mdi-shield-crown-outline'" size="small" class="me-1"></v-icon>
@@ -42,10 +46,10 @@
               </v-btn>
 
               <v-btn
+                v-if="user.name !== currentUserName || user.is_read_only"
                 :color="user.is_read_only ? 'info' : 'default'"
                 variant="tonal"
                 size="small"
-                :disabled="user.name === currentUserName && !user.is_read_only"
                 @click="handleToggleReadOnly(user)"
               >
                 <v-icon :icon="user.is_read_only ? 'mdi-lock-open-outline' : 'mdi-lock-outline'" size="small" class="me-1"></v-icon>
@@ -64,10 +68,10 @@
               </v-btn>
 
               <v-btn
+                v-if="user.name !== currentUserName"
                 color="error"
                 variant="tonal"
                 size="small"
-                :disabled="user.name === currentUserName"
                 @click="handleDeleteUser(user.name)"
               >
                 <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
@@ -86,7 +90,7 @@
       />
 
       <!-- Add User Form -->
-      <FormSection v-if="!ssoEnforced" icon="mdi-account-plus" title="Add New User">
+      <FormSection v-if="!ssoEnforced" icon="mdi-account-plus" title="Add new user">
         <v-form @submit.prevent="handleAddUser" class="add-user-form">
           <div class="form-grid">
             <div class="form-field">
@@ -117,7 +121,7 @@
             </div>
 
             <div class="form-field">
-              <label class="field-label">Confirm Password</label>
+              <label class="field-label">Confirm password</label>
               <v-text-field
                 v-model="newUserPwd2"
                 placeholder="Confirm password"
@@ -175,7 +179,7 @@
           <div class="form-actions">
             <v-btn type="submit" color="primary" size="large">
               <v-icon icon="mdi-account-plus" size="small" class="me-2"></v-icon>
-              Create User
+              Create user
             </v-btn>
           </div>
         </v-form>
@@ -287,7 +291,7 @@ async function handleAddUser() {
 // Delete a user with confirmation
 function handleDeleteUser(name: string) {
   showConfirm({
-    title: "Delete User",
+    title: "Delete user",
     message: `Are you sure you want to delete user "${name}"? This action cannot be undone.`,
     confirmColor: "error",
     onConfirm: async () => {
@@ -305,7 +309,7 @@ function handleDeleteUser(name: string) {
 // Reset a user's password with confirmation
 function handleResetPassword(name: string) {
   showConfirm({
-    title: "Reset Password",
+    title: "Reset password",
     message: `Are you sure you want to reset the password for "${name}"?`,
     confirmColor: "warning",
     onConfirm: async () => {
@@ -350,7 +354,7 @@ function handleToggleAdmin(user: User) {
   const actionText = newState ? "an admin" : "a regular user"
 
   showConfirm({
-    title: "Change Admin Status",
+    title: "Change admin status",
     message: newState
       ? `Promote "${user.name}" to admin? They will have full access to all features.`
       : `Demote "${user.name}" from admin? They will lose administrative privileges.`,
@@ -387,7 +391,7 @@ function handleToggleAdmin(user: User) {
 .role-badge {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -407,6 +411,11 @@ function handleToggleAdmin(user: User) {
 .role-badge.readonly {
   background: rgba(var(--v-theme-warning), 0.15);
   color: rgb(var(--v-theme-warning));
+}
+
+.role-badge.self {
+  background: rgb(var(--v-theme-surface-variant));
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
 .add-user-form {
@@ -433,7 +442,7 @@ function handleToggleAdmin(user: User) {
 }
 
 .form-field :deep(.v-field) {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   background: rgb(var(--v-theme-surface));
 }
 
@@ -443,7 +452,7 @@ function handleToggleAdmin(user: User) {
   padding: 16px;
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   margin-bottom: 16px;
 }
 
