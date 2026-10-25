@@ -715,12 +715,12 @@ async fn test_add_crate_different_user(test_db: &kellnr_db::Database) {
     let created = Utc::now();
 
     test_db
-        .add_crate(&pm, "cksum", 1024, &created, "admin")
+        .add_crate(&pm, "cksum", 1024, &created, "admin", None)
         .await
         .unwrap();
     assert!(
         test_db
-            .add_crate(&pm, "cksum", 1024, &created, "user")
+            .add_crate(&pm, "cksum", 1024, &created, "user", None)
             .await
             .is_err()
     );
@@ -2098,7 +2098,7 @@ async fn get_crate_overview_list_filters_by_keyword_and_category(test_db: &kelln
             ..PublishMetadata::minimal(name, "1.0.0")
         };
         test_db
-            .add_crate(&pm, "cksum", 1024, &created, "admin")
+            .add_crate(&pm, "cksum", 1024, &created, "admin", None)
             .await
             .unwrap();
     }
@@ -2156,7 +2156,7 @@ async fn get_crate_data_returns_size_and_rust_version(test_db: &kellnr_db::Datab
         ..PublishMetadata::minimal("sized", "1.0.0")
     };
     test_db
-        .add_crate(&pm, "cksum", 4711, &created, "admin")
+        .add_crate(&pm, "cksum", 4711, &created, "admin", None)
         .await
         .unwrap();
 
@@ -2167,6 +2167,61 @@ async fn get_crate_data_returns_size_and_rust_version(test_db: &kellnr_db::Datab
 
     assert_eq!(4711, data.versions[0].size);
     assert_eq!(Some("1.85".to_string()), data.versions[0].rust_version);
+}
+
+#[db_test]
+async fn get_crate_data_returns_publisher(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("published", "1.0.0"),
+            "cksum",
+            1024,
+            &created,
+            "admin",
+            Some("ci".to_string()),
+        )
+        .await
+        .unwrap();
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("published", "1.1.0"),
+            "cksum",
+            1024,
+            &created,
+            "admin",
+            None,
+        )
+        .await
+        .unwrap();
+
+    let data = test_db
+        .get_crate_data(&NormalizedName::from_unchecked_str("published"))
+        .await
+        .unwrap();
+
+    let version = |v: &str| data.versions.iter().find(|cv| cv.version == v).unwrap();
+    assert_eq!(Some("admin".to_string()), version("1.0.0").publisher);
+    assert_eq!(Some("ci".to_string()), version("1.0.0").publisher_token);
+    assert_eq!(Some("admin".to_string()), version("1.1.0").publisher);
+    assert_eq!(None, version("1.1.0").publisher_token);
+}
+
+#[db_test]
+async fn get_auth_token_name_finds_the_token(test_db: &kellnr_db::Database) {
+    test_db
+        .add_auth_token("deploy", "secret-token", "admin")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        Some("deploy".to_string()),
+        test_db.get_auth_token_name("secret-token").await.unwrap()
+    );
+    assert_eq!(
+        None,
+        test_db.get_auth_token_name("other-token").await.unwrap()
+    );
 }
 
 #[db_test]
@@ -2342,7 +2397,7 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
 
     // Test, if adding a new crate with multiple versions works as expected
     test_db
-        .add_crate(&pm1_v1, "cksum1_1", 1024, &created, "owner1")
+        .add_crate(&pm1_v1, "cksum1_1", 1024, &created, "owner1", None)
         .await
         .unwrap();
     test_db
@@ -2393,13 +2448,15 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                 v: 1,
                 size: 1024,
                 rust_version: pm1_v1.rust_version.clone(),
+                publisher: Some("owner1".to_string()),
+                publisher_token: None,
             }],
         },
         crate_data1_v1
     );
 
     test_db
-        .add_crate(&pm1_v2, "cksum1_2", 1024, &created, "owner1")
+        .add_crate(&pm1_v2, "cksum1_2", 1024, &created, "owner1", None)
         .await
         .unwrap();
 
@@ -2443,6 +2500,8 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                     v: 1,
                     size: 1024,
                     rust_version: pm1_v2.rust_version.clone(),
+                    publisher: Some("owner1".to_string()),
+                    publisher_token: None,
                 },
                 CrateVersionData {
                     version: pm1_v1.vers.clone(),
@@ -2464,6 +2523,8 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                     v: 1,
                     size: 1024,
                     rust_version: pm1_v1.rust_version.clone(),
+                    publisher: Some("owner1".to_string()),
+                    publisher_token: None,
                 }
             ],
         },
@@ -2474,7 +2535,7 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
     assert_ne!(etag1_v1, etag1_v2);
 
     test_db
-        .add_crate(&pm2_v1, "cksum2_1", 1024, &created, "owner2")
+        .add_crate(&pm2_v1, "cksum2_1", 1024, &created, "owner2", None)
         .await
         .unwrap();
 
@@ -2517,13 +2578,15 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                 v: 1,
                 size: 1024,
                 rust_version: pm2_v1.rust_version.clone(),
+                publisher: Some("owner2".to_string()),
+                publisher_token: None,
             }],
         },
         crate_data2_v1
     );
 
     test_db
-        .add_crate(&pm2_v2, "cksum2_2", 1024, &created, "owner2")
+        .add_crate(&pm2_v2, "cksum2_2", 1024, &created, "owner2", None)
         .await
         .unwrap();
 
@@ -2566,6 +2629,8 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                     v: 1,
                     size: 1024,
                     rust_version: pm2_v2.rust_version.clone(),
+                    publisher: Some("owner2".to_string()),
+                    publisher_token: None,
                 },
                 CrateVersionData {
                     version: pm2_v1.vers.clone(),
@@ -2586,6 +2651,8 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                     v: 1,
                     size: 1024,
                     rust_version: pm2_v1.rust_version.clone(),
+                    publisher: Some("owner2".to_string()),
+                    publisher_token: None,
                     readme: pm2_v1.readme.clone(),
                 }
             ],
@@ -2603,7 +2670,7 @@ async fn update_docs_link(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
     test_db
-        .add_crate(&pm, "cksum1_1", 1024, &created, "owner1")
+        .add_crate(&pm, "cksum1_1", 1024, &created, "owner1", None)
         .await
         .unwrap();
 
@@ -2775,15 +2842,15 @@ async fn get_prefetch_data_with_full_data(test_db: &kellnr_db::Database) {
     };
 
     test_db
-        .add_crate(&pm1, "cksum1_1", 1024, &created1, "admin")
+        .add_crate(&pm1, "cksum1_1", 1024, &created1, "admin", None)
         .await
         .unwrap();
     test_db
-        .add_crate(&pm2, "cksum2_1", 1024, &created2, "admin")
+        .add_crate(&pm2, "cksum2_1", 1024, &created2, "admin", None)
         .await
         .unwrap();
     test_db
-        .add_crate(&pm3, "cksum3_1", 1024, &created3, "admin")
+        .add_crate(&pm3, "cksum3_1", 1024, &created3, "admin", None)
         .await
         .unwrap();
 
@@ -2876,11 +2943,11 @@ async fn delete_updates_etag(test_db: &kellnr_db::Database) {
         rust_version: None,
     };
     test_db
-        .add_crate(&pm1, "cksum1_1", 1024, &created1, "admin")
+        .add_crate(&pm1, "cksum1_1", 1024, &created1, "admin", None)
         .await
         .unwrap();
     test_db
-        .add_crate(&pm2, "cksum2_1", 1024, &created2, "admin")
+        .add_crate(&pm2, "cksum2_1", 1024, &created2, "admin", None)
         .await
         .unwrap();
     let prefetch_data = test_db.get_prefetch_data("crate").await.unwrap();
@@ -3577,7 +3644,7 @@ async fn crate_index_keeps_rust_version(test_db: &kellnr_db::Database) {
     let mut pm = PublishMetadata::minimal("crate", "1.0.0");
     pm.rust_version = Some("1.85".to_string());
     test_db
-        .add_crate(&pm, "cksum", 1024, &created, "admin")
+        .add_crate(&pm, "cksum", 1024, &created, "admin", None)
         .await
         .unwrap();
 
@@ -3896,6 +3963,7 @@ async fn add_crate_adds_version_to_mixed_case_crate(test_db: &kellnr_db::Databas
                 1024,
                 &created,
                 "admin",
+                None,
             )
             .await
             .unwrap();
@@ -3923,6 +3991,7 @@ async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Data
             1024,
             &created,
             "admin",
+            None,
         )
         .await
         .unwrap();
@@ -3934,6 +4003,7 @@ async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Data
             1024,
             &created,
             "mallory",
+            None,
         )
         .await;
 
@@ -3958,6 +4028,7 @@ async fn add_crate_rejects_name_differing_only_in_dash_and_underscore(
             1024,
             &created,
             "admin",
+            None,
         )
         .await
         .unwrap();
@@ -3970,6 +4041,7 @@ async fn add_crate_rejects_name_differing_only_in_dash_and_underscore(
                 1024,
                 &created,
                 "admin",
+                None,
             )
             .await;
         assert!(
@@ -4018,6 +4090,7 @@ async fn add_crate_keeps_existing_similar_names_publishable(test_db: &kellnr_db:
                 1024,
                 &created,
                 "admin",
+                None,
             )
             .await
             .unwrap();
@@ -4048,6 +4121,7 @@ async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database)
             1024,
             &created,
             "alice",
+            None,
         )
         .await
         .unwrap();
@@ -4059,6 +4133,7 @@ async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database)
             1024,
             &created,
             "root",
+            None,
         )
         .await
         .unwrap();

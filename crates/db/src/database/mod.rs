@@ -1428,6 +1428,14 @@ impl DbProvider for Database {
         Ok(Group::from(self.get_group_model(name).await?))
     }
 
+    async fn get_auth_token_name(&self, token: &str) -> DbResult<Option<String>> {
+        Ok(auth_token::Entity::find()
+            .filter(auth_token::Column::Token.eq(hash_token(token)))
+            .one(&self.db_con)
+            .await?
+            .map(|at| at.name))
+    }
+
     async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>> {
         let at: Vec<auth_token::Model> = auth_token::Entity::find()
             .join(JoinType::InnerJoin, auth_token::Relation::User.def())
@@ -1882,6 +1890,8 @@ impl DbProvider for Database {
                 v: ci.v,
                 size: cm.size,
                 rust_version: ci.rust_version.clone(),
+                publisher: cm.publisher.clone(),
+                publisher_token: cm.publisher_token.clone(),
             });
         }
         versions.sort_by(|a, b| {
@@ -1936,6 +1946,7 @@ impl DbProvider for Database {
         size: i64,
         created: &DateTime<Utc>,
         owner: &str,
+        token_name: Option<String>,
     ) -> DbResult<i64> {
         let created = created.format(DB_DATE_FORMAT).to_string();
         let normalized_name = NormalizedName::from(
@@ -1988,7 +1999,16 @@ impl DbProvider for Database {
         };
 
         operations::add_owner_if_not_exists(&txn, owner, crate_id).await?;
-        operations::add_crate_metadata(&txn, pub_metadata, size, &created, crate_id).await?;
+        operations::add_crate_metadata(
+            &txn,
+            pub_metadata,
+            size,
+            &created,
+            crate_id,
+            Some(owner),
+            token_name.as_deref(),
+        )
+        .await?;
         operations::add_crate_index(&txn, pub_metadata, cksum, crate_id).await?;
         operations::update_etag(&txn, &pub_metadata.name, crate_id).await?;
         operations::update_crate_categories(&txn, pub_metadata, crate_id).await?;
@@ -2029,7 +2049,16 @@ impl DbProvider for Database {
         created: &str,
         crate_id: i64,
     ) -> DbResult<()> {
-        operations::add_crate_metadata(&self.db_con, pub_metadata, size, created, crate_id).await
+        operations::add_crate_metadata(
+            &self.db_con,
+            pub_metadata,
+            size,
+            created,
+            crate_id,
+            None,
+            None,
+        )
+        .await
     }
 
     async fn get_prefetch_data(&self, crate_name: &str) -> DbResult<Prefetch> {

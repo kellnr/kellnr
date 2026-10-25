@@ -127,7 +127,8 @@
 
       <!-- Sidebar Column -->
       <v-col cols="12" md="4">
-        <CrateSidebar :crate-name="crate.name" :version="selected_version.version" :last-updated="crate.last_updated"
+        <CrateSidebar :crate-name="crate.name" :version="selected_version.version" :published="selected_version.created"
+          :publisher="selected_version.publisher ?? ''" :publisher-token="selected_version.publisher_token ?? ''"
           :version-downloads="selected_version.downloads" :total-downloads="crate.total_downloads"
           :documentation-link="docLink" :can-build-docs="showBuildRustdoc()" :repository="crate.repository ?? ''"
           :homepage="crate.homepage ?? ''" :license="selected_version.license ?? ''"

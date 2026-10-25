@@ -229,6 +229,8 @@ pub trait DbProvider: Send + Sync {
     async fn update_max_version(&self, crate_id: i64, version: &Version) -> DbResult<()>;
     async fn add_auth_token(&self, name: &str, token: &str, user: &str) -> DbResult<()>;
     async fn get_user_from_token(&self, token: &str) -> DbResult<User>;
+    /// Name of the auth token, `None` if there is no such token.
+    async fn get_auth_token_name(&self, token: &str) -> DbResult<Option<String>>;
     async fn get_user(&self, name: &str) -> DbResult<User>;
     async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>>;
     async fn delete_auth_token(&self, id: i32) -> DbResult<()>;
@@ -309,6 +311,9 @@ pub trait DbProvider: Send + Sync {
     ) -> DbResult<u64>;
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData>;
     async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64>;
+    /// Adds a published crate version. `owner` is the publishing user, who
+    /// becomes the owner of a new crate. `token_name` is the name of the auth
+    /// token used to publish, `None` if unknown.
     async fn add_crate(
         &self,
         pub_metadata: &PublishMetadata,
@@ -316,6 +321,7 @@ pub trait DbProvider: Send + Sync {
         size: i64,
         created: &DateTime<Utc>,
         owner: &str,
+        token_name: Option<String>,
     ) -> DbResult<i64>;
     async fn update_docs_link(
         &self,
@@ -658,6 +664,10 @@ pub mod mock {
                 unimplemented!()
             }
 
+            async fn get_auth_token_name(&self, token: &str) -> DbResult<Option<String>> {
+                unimplemented!()
+            }
+
             async fn get_user_from_token(&self, _token: &str) -> DbResult<User> {
                 unimplemented!()
             }
@@ -770,7 +780,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_crate(&self, pub_metadata: &PublishMetadata, sha256: &str, size: i64, created: &DateTime<Utc>, owner: &str) -> DbResult<i64> {
+            async fn add_crate(&self, pub_metadata: &PublishMetadata, sha256: &str, size: i64, created: &DateTime<Utc>, owner: &str, token_name: Option<String>) -> DbResult<i64> {
                 unimplemented!()
             }
 

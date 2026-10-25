@@ -22,6 +22,10 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     pub documentation: Option<String>,
     pub size: i64,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub publisher: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub publisher_token: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -283,7 +283,7 @@ pub async fn test_add_crate(
         db.add_user(name, "pwd", false, false).await?;
     }
 
-    db.add_crate(&pm, "cksum", 1024, created, owner).await
+    db.add_crate(&pm, "cksum", 1024, created, owner, None).await
 }
 
 /// Insert an empty crate without any name checks, to simulate data created
@@ -329,7 +329,8 @@ pub async fn test_add_crate_with_downloads(
         db.add_user(name, "pwd", false, false).await?;
     }
 
-    db.add_crate(&pm, "cksum", 1024, created, owner).await?;
+    db.add_crate(&pm, "cksum", 1024, created, owner, None)
+        .await?;
     let (cm, krate) = crate_meta::Entity::find()
         .find_also_related(krate::Entity)
         .filter(krate::Column::Name.eq(name))

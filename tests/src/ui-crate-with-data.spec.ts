@@ -244,6 +244,18 @@ test.describe("Crate Views with Data", () => {
     await expect(row.getByTestId("version-yanked")).toHaveCount(0);
   });
 
+  test("versions tab and sidebar show who published the version", async ({ page }) => {
+    await page.goto(`${baseUrl}/crate?name=foo-bar&tab=versions`);
+    const cratePage = new CratePage(page);
+    await cratePage.waitForCrateData();
+
+    // The test crates are published with the setup token "admin" of the user "admin"
+    const publisher = page.getByTestId("version-row").first().getByTestId("version-publisher");
+    await expect(publisher).toHaveText(/^\s*by admin$/);
+    await expect(publisher).toHaveAttribute("title", "Published with the token admin");
+    await expect(page.getByTestId("sidebar-publisher")).toHaveText(/^\s*by admin$/);
+  });
+
   test("crate cards link to the repository", async ({ page }) => {
     await page.goto(`${baseUrl}/crates`);
     const cratesPage = new CratesPage(page);

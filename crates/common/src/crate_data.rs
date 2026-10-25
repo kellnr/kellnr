@@ -48,6 +48,10 @@ pub struct CrateVersionData {
     pub size: i64,
     // Minimal supported Rust version
     pub rust_version: Option<String>,
+    // User who published the version, None if unknown
+    pub publisher: Option<String>,
+    // Name of the auth token used to publish, None if unknown
+    pub publisher_token: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

@@ -23,7 +23,8 @@ use crate::password::{PasswordAuthError, authenticate_password};
 
 #[derive(Debug)]
 pub struct Token {
-    pub value: String,
+    /// The auth token, `None` for basic auth with a password
+    pub value: Option<String>,
     pub user: String,
     pub is_admin: bool,
     pub is_read_only: bool,
@@ -85,7 +86,7 @@ impl Token {
         // Check cache first
         if let Some(cached) = cache.get(token).await {
             return Ok(Token {
-                value: token.to_string(),
+                value: Some(token.to_string()),
                 user: cached.user,
                 is_admin: cached.is_admin,
                 is_read_only: cached.is_read_only,
@@ -121,7 +122,7 @@ impl Token {
             .await;
 
         Ok(Token {
-            value: token.to_string(),
+            value: Some(token.to_string()),
             user: user.name,
             is_admin: user.is_admin,
             is_read_only: user.is_read_only,
@@ -150,7 +151,7 @@ async fn authenticate_basic(
     let cache_key = basic_auth_cache_key(user, pwd);
     if let Some(cached) = cache.get(&cache_key).await {
         return Ok(Token {
-            value: pwd.to_string(),
+            value: None,
             user: cached.user,
             is_admin: cached.is_admin,
             is_read_only: cached.is_read_only,
@@ -178,7 +179,7 @@ async fn authenticate_basic(
         .await;
 
     Ok(Token {
-        value: pwd.to_string(),
+        value: None,
         user: user.name,
         is_admin: user.is_admin,
         is_read_only: user.is_read_only,

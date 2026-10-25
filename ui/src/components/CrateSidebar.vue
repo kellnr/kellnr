@@ -40,11 +40,13 @@
         </div>
 
         <div class="sidebar-content">
-          <v-tooltip :text="exactDate(lastUpdated)">
+          <v-tooltip :text="exactDate(published)">
             <template v-slot:activator="{ props }">
-              <span v-bind="props" data-testid="sidebar-published">{{ fromNow(lastUpdated) }}</span>
+              <span v-bind="props" data-testid="sidebar-published">{{ fromNow(published) }}</span>
             </template>
           </v-tooltip>
+          <span v-if="publisher" :title="publisherToken ? `Published with the token ${publisherToken}` : undefined"
+            data-testid="sidebar-publisher"> by {{ publisher }}</span>
         </div>
       </div>
 
@@ -146,9 +148,18 @@ const props = defineProps({
     type: String,
     required: true
   },
-  lastUpdated: {
+  // When the selected version was published, and by whom
+  published: {
     type: String,
     required: true
+  },
+  publisher: {
+    type: String,
+    default: ''
+  },
+  publisherToken: {
+    type: String,
+    default: ''
   },
   versionDownloads: {
     type: Number,
