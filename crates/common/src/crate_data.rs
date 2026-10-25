@@ -41,6 +41,10 @@ pub struct CrateVersionData {
     pub yanked: bool,
     pub links: Option<String>,
     pub v: i32,
+    // Size of the .crate file in bytes, 0 if unknown
+    pub size: i64,
+    // Minimal supported Rust version
+    pub rust_version: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

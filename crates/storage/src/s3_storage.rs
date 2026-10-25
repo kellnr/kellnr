@@ -76,6 +76,11 @@ impl Storage for S3Storage {
             })
     }
 
+    async fn size(&self, key: &str) -> Result<u64, StorageError> {
+        let path = Self::try_path_from(key)?;
+        Ok(self.storage().head(&path).await?.size)
+    }
+
     async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
         let prefix = if prefix.is_empty() {
             None

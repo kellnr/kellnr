@@ -16,7 +16,11 @@
             <div class="search-wrapper">
               <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined"
                 density="comfortable" prepend-inner-icon="mdi-magnify" hide-details data-testid="landing-search"
-                @keyup.enter="searchCrates()" class="search-field" bg-color="surface"></v-text-field>
+                data-search-shortcut @keyup.enter="searchCrates()" class="search-field" bg-color="surface">
+                <template v-slot:append-inner>
+                  <kbd class="shortcut-hint" title="Press / or S to search">/</kbd>
+                </template>
+              </v-text-field>
             </div>
           </v-col>
         </v-row>

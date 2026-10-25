@@ -43,6 +43,10 @@ export type CrateVersionData = {
     yanked: boolean,
     links?: string,
     v: number,
+    /** Size of the .crate file in bytes, 0 if unknown */
+    size: number,
+    /** Minimal supported Rust version */
+    rust_version?: string,
 }
 
 export const defaultCrateVersionData : CrateVersionData = {
@@ -60,6 +64,8 @@ export const defaultCrateVersionData : CrateVersionData = {
     yanked: false,
     links: "",
     v: 0,
+    size: 0,
+    rust_version: undefined,
 }
 
 export type CrateRegistryDep = {

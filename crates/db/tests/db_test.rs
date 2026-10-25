@@ -13,7 +13,7 @@ use kellnr_common::version::Version;
 use kellnr_common::webhook::{Webhook, WebhookEvent};
 use kellnr_db::provider::PrefetchState;
 use kellnr_db::test_utils::*;
-use kellnr_db::{CrateSort, CrateVisibility, DbProvider, DocQueueEntry};
+use kellnr_db::{CrateSort, CrateTagFilter, CrateVisibility, DbProvider, DocQueueEntry};
 use kellnr_db_testcontainer::db_test;
 use serde_json::json;
 mod image;
@@ -715,12 +715,12 @@ async fn test_add_crate_different_user(test_db: &kellnr_db::Database) {
     let created = Utc::now();
 
     test_db
-        .add_crate(&pm, "cksum", &created, "admin")
+        .add_crate(&pm, "cksum", 1024, &created, "admin")
         .await
         .unwrap();
     assert!(
         test_db
-            .add_crate(&pm, "cksum", &created, "user")
+            .add_crate(&pm, "cksum", 1024, &created, "user")
             .await
             .is_err()
     );
@@ -1772,7 +1772,14 @@ async fn search_in_crate_name_and_description_ranks_name_matches_first(
 
     // The crate overview without a query stays alphabetical
     let results = test_db
-        .get_crate_overview_list(100, 0, true, &CrateVisibility::All, CrateSort::Name)
+        .get_crate_overview_list(
+            100,
+            0,
+            true,
+            &CrateVisibility::All,
+            CrateSort::Name,
+            &CrateTagFilter::default(),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -1988,14 +1995,21 @@ async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
     ];
 
     let overview_list = test_db
-        .get_crate_overview_list(10, 0, false, &CrateVisibility::All, CrateSort::Name)
+        .get_crate_overview_list(
+            10,
+            0,
+            false,
+            &CrateVisibility::All,
+            CrateSort::Name,
+            &CrateTagFilter::default(),
+        )
         .await
         .unwrap();
 
     assert_eq!(expected, overview_list);
 
     let total = test_db
-        .count_crate_overview_list(false, &CrateVisibility::All)
+        .count_crate_overview_list(false, &CrateVisibility::All, &CrateTagFilter::default())
         .await
         .unwrap();
     assert_eq!(3, total);
@@ -2024,24 +2038,135 @@ async fn get_crate_overview_list_sorted_by_date_and_downloads(test_db: &kellnr_d
     let names = |list: Vec<CrateOverview>| list.into_iter().map(|c| c.name).collect::<Vec<_>>();
 
     let by_date = test_db
-        .get_crate_overview_list(10, 0, false, &CrateVisibility::All, CrateSort::Updated)
+        .get_crate_overview_list(
+            10,
+            0,
+            false,
+            &CrateVisibility::All,
+            CrateSort::Updated,
+            &CrateTagFilter::default(),
+        )
         .await
         .unwrap();
     assert_eq!(vec!["beta", "gamma", "alpha"], names(by_date));
 
     // Equal download counts are ordered by name
     let by_downloads = test_db
-        .get_crate_overview_list(10, 0, false, &CrateVisibility::All, CrateSort::Downloads)
+        .get_crate_overview_list(
+            10,
+            0,
+            false,
+            &CrateVisibility::All,
+            CrateSort::Downloads,
+            &CrateTagFilter::default(),
+        )
         .await
         .unwrap();
     assert_eq!(vec!["alpha", "gamma", "beta"], names(by_downloads));
 
     // Paging keeps the order
     let second_page = test_db
-        .get_crate_overview_list(2, 2, false, &CrateVisibility::All, CrateSort::Downloads)
+        .get_crate_overview_list(
+            2,
+            2,
+            false,
+            &CrateVisibility::All,
+            CrateSort::Downloads,
+            &CrateTagFilter::default(),
+        )
         .await
         .unwrap();
     assert_eq!(vec!["beta"], names(second_page));
+}
+
+#[db_test]
+async fn get_crate_overview_list_filters_by_keyword_and_category(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    for (name, keywords, categories) in [
+        (
+            "alpha",
+            vec!["cli", "Parser"],
+            vec!["command-line-utilities"],
+        ),
+        ("beta", vec!["cli"], vec![]),
+        ("gamma", vec![], vec!["command-line-utilities"]),
+    ] {
+        let pm = PublishMetadata {
+            keywords: keywords.into_iter().map(String::from).collect(),
+            categories: categories.into_iter().map(String::from).collect(),
+            repository: Some(format!("https://example.com/{name}")),
+            ..PublishMetadata::minimal(name, "1.0.0")
+        };
+        test_db
+            .add_crate(&pm, "cksum", 1024, &created, "admin")
+            .await
+            .unwrap();
+    }
+    let list = |keyword: Option<&str>, category: Option<&str>| {
+        let tags = CrateTagFilter {
+            keyword: keyword.map(String::from),
+            category: category.map(String::from),
+        };
+        async move {
+            let crates = test_db
+                .get_crate_overview_list(10, 0, true, &CrateVisibility::All, CrateSort::Name, &tags)
+                .await
+                .unwrap();
+            let total = test_db
+                .count_crate_overview_list(true, &CrateVisibility::All, &tags)
+                .await
+                .unwrap();
+            (crates, total)
+        }
+    };
+    let names = |list: &[CrateOverview]| list.iter().map(|c| c.name.clone()).collect::<Vec<_>>();
+
+    let (crates, total) = list(Some("cli"), None).await;
+    assert_eq!(vec!["alpha", "beta"], names(&crates));
+    assert_eq!(2, total);
+    assert_eq!(
+        Some("https://example.com/alpha".to_string()),
+        crates[0].repository
+    );
+
+    // Keywords match regardless of case
+    let (crates, total) = list(Some("parser"), None).await;
+    assert_eq!(vec!["alpha"], names(&crates));
+    assert_eq!(1, total);
+
+    let (crates, total) = list(None, Some("command-line-utilities")).await;
+    assert_eq!(vec!["alpha", "gamma"], names(&crates));
+    assert_eq!(2, total);
+
+    // Both filters have to match
+    let (crates, total) = list(Some("cli"), Some("command-line-utilities")).await;
+    assert_eq!(vec!["alpha"], names(&crates));
+    assert_eq!(1, total);
+
+    let (crates, total) = list(Some("unknown"), None).await;
+    assert!(crates.is_empty());
+    assert_eq!(0, total);
+}
+
+#[db_test]
+async fn get_crate_data_returns_size_and_rust_version(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    let pm = PublishMetadata {
+        rust_version: Some("1.85".to_string()),
+        ..PublishMetadata::minimal("sized", "1.0.0")
+    };
+    test_db
+        .add_crate(&pm, "cksum", 4711, &created, "admin")
+        .await
+        .unwrap();
+
+    let data = test_db
+        .get_crate_data(&NormalizedName::from_unchecked_str("sized"))
+        .await
+        .unwrap();
+
+    assert_eq!(4711, data.versions[0].size);
+    assert_eq!(Some("1.85".to_string()), data.versions[0].rust_version);
 }
 
 #[db_test]
@@ -2217,7 +2342,7 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
 
     // Test, if adding a new crate with multiple versions works as expected
     test_db
-        .add_crate(&pm1_v1, "cksum1_1", &created, "owner1")
+        .add_crate(&pm1_v1, "cksum1_1", 1024, &created, "owner1")
         .await
         .unwrap();
     test_db
@@ -2266,13 +2391,15 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                 yanked: false,
                 links: pm1_v1.links.clone(),
                 v: 1,
+                size: 1024,
+                rust_version: pm1_v1.rust_version.clone(),
             }],
         },
         crate_data1_v1
     );
 
     test_db
-        .add_crate(&pm1_v2, "cksum1_2", &created, "owner1")
+        .add_crate(&pm1_v2, "cksum1_2", 1024, &created, "owner1")
         .await
         .unwrap();
 
@@ -2314,6 +2441,8 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                     yanked: false,
                     links: pm1_v2.links.clone(),
                     v: 1,
+                    size: 1024,
+                    rust_version: pm1_v2.rust_version.clone(),
                 },
                 CrateVersionData {
                     version: pm1_v1.vers.clone(),
@@ -2333,6 +2462,8 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                     yanked: false,
                     links: pm1_v1.links.clone(),
                     v: 1,
+                    size: 1024,
+                    rust_version: pm1_v1.rust_version.clone(),
                 }
             ],
         },
@@ -2343,7 +2474,7 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
     assert_ne!(etag1_v1, etag1_v2);
 
     test_db
-        .add_crate(&pm2_v1, "cksum2_1", &created, "owner2")
+        .add_crate(&pm2_v1, "cksum2_1", 1024, &created, "owner2")
         .await
         .unwrap();
 
@@ -2384,13 +2515,15 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                 yanked: false,
                 links: pm2_v1.links.clone(),
                 v: 1,
+                size: 1024,
+                rust_version: pm2_v1.rust_version.clone(),
             }],
         },
         crate_data2_v1
     );
 
     test_db
-        .add_crate(&pm2_v2, "cksum2_2", &created, "owner2")
+        .add_crate(&pm2_v2, "cksum2_2", 1024, &created, "owner2")
         .await
         .unwrap();
 
@@ -2431,6 +2564,8 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                     yanked: false,
                     links: pm2_v2.links.clone(),
                     v: 1,
+                    size: 1024,
+                    rust_version: pm2_v2.rust_version.clone(),
                 },
                 CrateVersionData {
                     version: pm2_v1.vers.clone(),
@@ -2449,6 +2584,8 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
                     yanked: false,
                     links: pm2_v1.links.clone(),
                     v: 1,
+                    size: 1024,
+                    rust_version: pm2_v1.rust_version.clone(),
                     readme: pm2_v1.readme.clone(),
                 }
             ],
@@ -2466,7 +2603,7 @@ async fn update_docs_link(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
     test_db
-        .add_crate(&pm, "cksum1_1", &created, "owner1")
+        .add_crate(&pm, "cksum1_1", 1024, &created, "owner1")
         .await
         .unwrap();
 
@@ -2638,15 +2775,15 @@ async fn get_prefetch_data_with_full_data(test_db: &kellnr_db::Database) {
     };
 
     test_db
-        .add_crate(&pm1, "cksum1_1", &created1, "admin")
+        .add_crate(&pm1, "cksum1_1", 1024, &created1, "admin")
         .await
         .unwrap();
     test_db
-        .add_crate(&pm2, "cksum2_1", &created2, "admin")
+        .add_crate(&pm2, "cksum2_1", 1024, &created2, "admin")
         .await
         .unwrap();
     test_db
-        .add_crate(&pm3, "cksum3_1", &created3, "admin")
+        .add_crate(&pm3, "cksum3_1", 1024, &created3, "admin")
         .await
         .unwrap();
 
@@ -2739,11 +2876,11 @@ async fn delete_updates_etag(test_db: &kellnr_db::Database) {
         rust_version: None,
     };
     test_db
-        .add_crate(&pm1, "cksum1_1", &created1, "admin")
+        .add_crate(&pm1, "cksum1_1", 1024, &created1, "admin")
         .await
         .unwrap();
     test_db
-        .add_crate(&pm2, "cksum2_1", &created2, "admin")
+        .add_crate(&pm2, "cksum2_1", 1024, &created2, "admin")
         .await
         .unwrap();
     let prefetch_data = test_db.get_prefetch_data("crate").await.unwrap();
@@ -3440,7 +3577,7 @@ async fn crate_index_keeps_rust_version(test_db: &kellnr_db::Database) {
     let mut pm = PublishMetadata::minimal("crate", "1.0.0");
     pm.rust_version = Some("1.85".to_string());
     test_db
-        .add_crate(&pm, "cksum", &created, "admin")
+        .add_crate(&pm, "cksum", 1024, &created, "admin")
         .await
         .unwrap();
 
@@ -3591,7 +3728,14 @@ async fn overview_names(
     visibility: &CrateVisibility,
 ) -> Vec<String> {
     test_db
-        .get_crate_overview_list(100, 0, false, visibility, CrateSort::Name)
+        .get_crate_overview_list(
+            100,
+            0,
+            false,
+            visibility,
+            CrateSort::Name,
+            &CrateTagFilter::default(),
+        )
         .await
         .unwrap()
         .into_iter()
@@ -3749,6 +3893,7 @@ async fn add_crate_adds_version_to_mixed_case_crate(test_db: &kellnr_db::Databas
             .add_crate(
                 &PublishMetadata::minimal("MyCrate", vers),
                 "cksum",
+                1024,
                 &created,
                 "admin",
             )
@@ -3775,6 +3920,7 @@ async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Data
         .add_crate(
             &PublishMetadata::minimal("taken", "1.0.0"),
             "cksum",
+            1024,
             &created,
             "admin",
         )
@@ -3785,6 +3931,7 @@ async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Data
         .add_crate(
             &PublishMetadata::minimal("Taken", "1.1.0"),
             "cksum",
+            1024,
             &created,
             "mallory",
         )
@@ -3808,6 +3955,7 @@ async fn add_crate_rejects_name_differing_only_in_dash_and_underscore(
         .add_crate(
             &PublishMetadata::minimal("foo-bar", "1.0.0"),
             "cksum",
+            1024,
             &created,
             "admin",
         )
@@ -3819,6 +3967,7 @@ async fn add_crate_rejects_name_differing_only_in_dash_and_underscore(
             .add_crate(
                 &PublishMetadata::minimal(name, "1.0.0"),
                 "cksum",
+                1024,
                 &created,
                 "admin",
             )
@@ -3866,6 +4015,7 @@ async fn add_crate_keeps_existing_similar_names_publishable(test_db: &kellnr_db:
             .add_crate(
                 &PublishMetadata::minimal(name, "1.0.0"),
                 "cksum",
+                1024,
                 &created,
                 "admin",
             )
@@ -3895,6 +4045,7 @@ async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database)
         .add_crate(
             &PublishMetadata::minimal("owned", "1.0.0"),
             "cksum",
+            1024,
             &created,
             "alice",
         )
@@ -3905,6 +4056,7 @@ async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database)
         .add_crate(
             &PublishMetadata::minimal("owned", "1.1.0"),
             "cksum",
+            1024,
             &created,
             "root",
         )

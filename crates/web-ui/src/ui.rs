@@ -13,8 +13,8 @@ use kellnr_common::name_or_description::NameOrDescription;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
-use kellnr_db::CrateSort;
 use kellnr_db::error::DbError;
+use kellnr_db::{CrateSort, CrateTagFilter};
 use kellnr_docs::upload::upload_dir_and_prune;
 use kellnr_settings::{
     ConfigSource, Provenance, Settings, SettingsProv, SourceMap, cli_flag_map, compile_time_config,
@@ -277,6 +277,10 @@ pub struct CratesParams {
     page_size: Option<u64>,
     cache: Option<bool>,
     sort: Option<CrateSort>,
+    /// Only crates with this keyword
+    keyword: Option<String>,
+    /// Only crates in this category
+    category: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
@@ -308,12 +312,16 @@ pub async fn crates(
     let cache = params.cache.unwrap_or(false);
     let visibility = crate_visibility(user.ok().as_ref());
     let sort = params.sort.unwrap_or_default();
+    let tags = CrateTagFilter {
+        keyword: params.keyword.filter(|k| !k.is_empty()),
+        category: params.category.filter(|c| !c.is_empty()),
+    };
     let crates = db
-        .get_crate_overview_list(page_size, page_size * page, cache, &visibility, sort)
+        .get_crate_overview_list(page_size, page_size * page, cache, &visibility, sort, &tags)
         .await
         .unwrap_or_default();
     let total = db
-        .count_crate_overview_list(cache, &visibility)
+        .count_crate_overview_list(cache, &visibility, &tags)
         .await
         .unwrap_or_default();
 
@@ -2356,6 +2364,8 @@ mod tests {
                 yanked: false,
                 links: Some("links".to_string()),
                 v: 1,
+                size: 1024,
+                rust_version: Some("1.85".to_string()),
             }],
         };
 
@@ -2518,11 +2528,12 @@ mod tests {
                 eq(false),
                 eq(CrateVisibility::User("user".to_string())),
                 eq(CrateSort::Name),
+                eq(CrateTagFilter::default()),
             )
-            .returning(|_, _, _, _, _| Ok(vec![]));
+            .returning(|_, _, _, _, _, _| Ok(vec![]));
         mock_db
             .expect_count_crate_overview_list()
-            .returning(|_, _| Ok(42));
+            .returning(|_, _, _| Ok(42));
 
         let status = get_with_session("/crates", mock_db, "user", false).await;
 
@@ -2595,6 +2606,7 @@ mod tests {
             total_downloads: 2,
             date: "12-10-2021 05:41:00".to_string(),
             documentation: None,
+            repository: None,
             is_cache: false,
         };
 
@@ -2612,11 +2624,12 @@ mod tests {
                 eq(false),
                 eq(CrateVisibility::Unrestricted),
                 eq(CrateSort::Name),
+                eq(CrateTagFilter::default()),
             )
-            .returning(move |_, _, _, _, _| Ok(tc.clone()));
+            .returning(move |_, _, _, _, _, _| Ok(tc.clone()));
         mock_db
             .expect_count_crate_overview_list()
-            .returning(|_, _| Ok(42));
+            .returning(|_, _, _| Ok(42));
 
         let r = app(
             mock_db,
@@ -2652,6 +2665,7 @@ mod tests {
                 total_downloads: 1,
                 description: Some("Desc".to_string()),
                 documentation: Some("Docs".to_string()),
+                repository: None,
                 is_cache: true,
             },
             CrateOverview {
@@ -2661,6 +2675,7 @@ mod tests {
                 total_downloads: 2,
                 description: Some("Desc".to_string()),
                 documentation: Some("Docs".to_string()),
+                repository: None,
                 is_cache: true,
             },
             CrateOverview {
@@ -2670,6 +2685,7 @@ mod tests {
                 total_downloads: 3,
                 description: None,
                 documentation: None,
+                repository: None,
                 is_cache: true,
             },
         ];
@@ -2683,11 +2699,12 @@ mod tests {
                 eq(false),
                 eq(CrateVisibility::Unrestricted),
                 eq(CrateSort::Name),
+                eq(CrateTagFilter::default()),
             )
-            .returning(move |_, _, _, _, _| Ok(crate_overview.clone()));
+            .returning(move |_, _, _, _, _, _| Ok(crate_overview.clone()));
         mock_db
             .expect_count_crate_overview_list()
-            .returning(|_, _| Ok(42));
+            .returning(|_, _, _| Ok(42));
 
         let r = app(
             mock_db,
@@ -2723,11 +2740,12 @@ mod tests {
                 eq(false),
                 eq(CrateVisibility::Unrestricted),
                 eq(CrateSort::Downloads),
+                eq(CrateTagFilter::default()),
             )
-            .returning(|_, _, _, _, _| Ok(vec![]));
+            .returning(|_, _, _, _, _, _| Ok(vec![]));
         mock_db
             .expect_count_crate_overview_list()
-            .returning(|_, _| Ok(0));
+            .returning(|_, _, _| Ok(0));
 
         let r = app(
             mock_db,
@@ -2736,6 +2754,83 @@ mod tests {
         )
         .oneshot(
             Request::get("/crates?page_size=5&sort=downloads")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(StatusCode::OK, r.status());
+    }
+
+    #[tokio::test]
+    async fn crates_passes_keyword_and_category_to_db() {
+        let mut mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+        let tags = CrateTagFilter {
+            keyword: Some("cli".to_string()),
+            category: Some("development-tools".to_string()),
+        };
+
+        mock_db
+            .expect_get_crate_overview_list()
+            .with(
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+                eq(CrateSort::Name),
+                eq(tags.clone()),
+            )
+            .returning(|_, _, _, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_crate_overview_list()
+            .with(eq(false), eq(CrateVisibility::Unrestricted), eq(tags))
+            .returning(|_, _, _| Ok(0));
+
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/crates?keyword=cli&category=development-tools")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(StatusCode::OK, r.status());
+    }
+
+    #[tokio::test]
+    async fn crates_ignores_empty_keyword_and_category() {
+        let mut mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+
+        mock_db
+            .expect_get_crate_overview_list()
+            .with(
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+                eq(CrateSort::Name),
+                eq(CrateTagFilter::default()),
+            )
+            .returning(|_, _, _, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_crate_overview_list()
+            .returning(|_, _, _| Ok(0));
+
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/crates?keyword=&category=")
                 .body(Body::empty())
                 .unwrap(),
         )

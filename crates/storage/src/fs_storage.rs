@@ -65,6 +65,10 @@ impl Storage for FSStorage {
             })
     }
 
+    async fn size(&self, key: &str) -> Result<u64, StorageError> {
+        Ok(self.storage().head(&Path::from(key)).await?.size)
+    }
+
     async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
         let prefix = if prefix.is_empty() {
             None

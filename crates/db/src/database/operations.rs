@@ -233,6 +233,7 @@ pub async fn add_crate_index<C: ConnectionTrait>(
 pub async fn add_crate_metadata<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
+    size: i64,
     created: &str,
     crate_id: i64,
 ) -> DbResult<()> {
@@ -246,6 +247,7 @@ pub async fn add_crate_metadata<C: ConnectionTrait>(
         license: Set(pub_metadata.license.clone()),
         license_file: Set(pub_metadata.license_file.clone()),
         documentation: Set(pub_metadata.documentation.clone()),
+        size: Set(size),
     };
 
     cm.insert(db_con).await?;

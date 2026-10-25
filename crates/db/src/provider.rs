@@ -57,6 +57,21 @@ pub enum CrateSort {
     Downloads,
 }
 
+/// Restricts the crate overview list to crates with a keyword and/or a
+/// category. Both match case-insensitively and ignore crates.io proxy crates,
+/// which have neither.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CrateTagFilter {
+    pub keyword: Option<String>,
+    pub category: Option<String>,
+}
+
+impl CrateTagFilter {
+    pub fn is_empty(&self) -> bool {
+        self.keyword.is_none() && self.category.is_none()
+    }
+}
+
 /// Authenticated user and privileges resolved from a valid session cookie.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionInfo {
@@ -284,11 +299,13 @@ pub trait DbProvider: Send + Sync {
         cache: bool,
         visibility: &CrateVisibility,
         sort: CrateSort,
+        tags: &CrateTagFilter,
     ) -> DbResult<Vec<CrateOverview>>;
     async fn count_crate_overview_list(
         &self,
         cache: bool,
         visibility: &CrateVisibility,
+        tags: &CrateTagFilter,
     ) -> DbResult<u64>;
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData>;
     async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64>;
@@ -296,6 +313,7 @@ pub trait DbProvider: Send + Sync {
         &self,
         pub_metadata: &PublishMetadata,
         cksum: &str,
+        size: i64,
         created: &DateTime<Utc>,
         owner: &str,
     ) -> DbResult<i64>;
@@ -308,6 +326,7 @@ pub trait DbProvider: Send + Sync {
     async fn add_crate_metadata(
         &self,
         pub_metadata: &PublishMetadata,
+        size: i64,
         created: &str,
         crate_id: i64,
     ) -> DbResult<()>;
@@ -735,11 +754,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_crate_overview_list(&self, limit: u64, offset: u64, cache: bool, visibility: &CrateVisibility, sort: CrateSort) -> DbResult<Vec<CrateOverview >> {
+            async fn get_crate_overview_list(&self, limit: u64, offset: u64, cache: bool, visibility: &CrateVisibility, sort: CrateSort, tags: &CrateTagFilter) -> DbResult<Vec<CrateOverview >> {
                 unimplemented!()
             }
 
-            async fn count_crate_overview_list(&self, cache: bool, visibility: &CrateVisibility) -> DbResult<u64> {
+            async fn count_crate_overview_list(&self, cache: bool, visibility: &CrateVisibility, tags: &CrateTagFilter) -> DbResult<u64> {
                 unimplemented!()
             }
 
@@ -751,7 +770,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_crate(&self, pub_metadata: &PublishMetadata, sha256: &str, created: &DateTime<Utc>, owner: &str) -> DbResult<i64> {
+            async fn add_crate(&self, pub_metadata: &PublishMetadata, sha256: &str, size: i64, created: &DateTime<Utc>, owner: &str) -> DbResult<i64> {
                 unimplemented!()
             }
 
@@ -759,7 +778,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_crate_metadata(&self, pub_metadata: &PublishMetadata, created: &str, crate_id: i64,) -> DbResult<()> {
+            async fn add_crate_metadata(&self, pub_metadata: &PublishMetadata, size: i64, created: &str, crate_id: i64,) -> DbResult<()> {
                 unimplemented!()
             }
 

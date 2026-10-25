@@ -1,18 +1,39 @@
 <template>
-  <div class="version-item" data-testid="version-row" @click="openCrateVersionPage">
+  <div class="version-item" :class="{ yanked: version.yanked }" data-testid="version-row" @click="openCrateVersionPage">
     <div class="version-main">
-      <!-- Left: Version with tag icon -->
+      <!-- Left: Version, with a marker if it is yanked -->
       <div class="version-info">
         <div class="version-header">
-          <span class="version-number" data-testid="version-number">{{ version }}</span>
-          <v-icon icon="mdi-tag-outline" size="small" class="version-tag-icon"></v-icon>
+          <span class="version-number" data-testid="version-number">{{ version.version }}</span>
+          <span v-if="version.yanked" class="yanked-badge" data-testid="version-yanked">Yanked</span>
+        </div>
+
+        <!-- Size, MSRV, license and features -->
+        <div class="version-meta" data-testid="version-meta">
+          <span class="meta-item" title="Size of the crate file" data-testid="version-size">
+            <v-icon icon="mdi-package-variant-closed" size="x-small" />
+            <span class="tabular-nums">{{ formattedSize }}</span>
+          </span>
+          <span v-if="version.rust_version" class="meta-item" title="Minimal supported Rust version"
+            data-testid="version-msrv">
+            <v-icon icon="mdi-language-rust" size="x-small" />
+            <span class="tabular-nums">v{{ version.rust_version }}</span>
+          </span>
+          <span v-if="version.license" class="meta-item" title="License" data-testid="version-license">
+            <v-icon icon="mdi-scale-balance" size="x-small" />
+            <span>{{ version.license }}</span>
+          </span>
+          <span v-if="featureCount > 0" class="meta-item" title="Features" data-testid="version-features">
+            <v-icon icon="mdi-widgets-outline" size="x-small" />
+            <span>{{ featureCount }} {{ featureCount === 1 ? "feature" : "features" }}</span>
+          </span>
         </div>
       </div>
 
       <!-- Middle: Date -->
       <div class="version-date">
         <v-icon icon="mdi-calendar-outline" size="small" class="me-2"></v-icon>
-        <span :title="exactDate(props.last_updated)">{{ humanizedLastUpdated }}</span>
+        <span :title="exactDate(version.created)">{{ humanizedLastUpdated }}</span>
       </div>
 
       <!-- Right: Downloads -->
@@ -30,25 +51,30 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRouter } from "vue-router";
-import { formatNumber } from "../common/format";
+import { formatBytes, formatNumber } from "../common/format";
 import { useRelativeTime } from "../composables";
+import type { CrateVersionData } from "../types/crate_data";
 
 const props = defineProps<{
   name: string,
-  version: string,
-  last_updated: string,
-  downloads: string
+  version: CrateVersionData,
 }>();
 
 const router = useRouter();
 const { fromNow, exactDate } = useRelativeTime();
 
-const humanizedLastUpdated = computed(() => fromNow(props.last_updated));
+const humanizedLastUpdated = computed(() => fromNow(props.version.created));
 
-const formattedDownloads = computed(() => formatNumber(props.downloads));
+const formattedDownloads = computed(() => formatNumber(props.version.downloads));
+
+// Zero for versions whose crate file could not be read when Kellnr started
+// recording sizes
+const formattedSize = computed(() => props.version.size > 0 ? formatBytes(props.version.size) : "Size unknown");
+
+const featureCount = computed(() => Object.keys(props.version.features).length);
 
 function openCrateVersionPage() {
-  router.push({ name: 'Crate', query: { name: props.name, version: props.version } });
+  router.push({ name: 'Crate', query: { name: props.name, version: props.version.version } });
 }
 </script>
 
@@ -83,8 +109,8 @@ function openCrateVersionPage() {
 }
 
 .version-info {
-  flex-shrink: 0;
-  min-width: 100px;
+  flex: 1;
+  min-width: 0;
 }
 
 .version-header {
@@ -100,15 +126,42 @@ function openCrateVersionPage() {
   color: rgb(var(--v-theme-primary));
 }
 
-.version-tag-icon {
-  color: rgb(var(--v-theme-info));
-  opacity: 0.8;
+/* A yanked version is still listed, but struck through */
+.yanked .version-number {
+  text-decoration: line-through;
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.yanked-badge {
+  padding: 1px 8px;
+  border-radius: var(--kellnr-radius);
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(var(--v-theme-error), 0.12);
+  color: rgb(var(--v-theme-error));
+}
+
+.version-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .version-date {
-  flex: 1;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
+  min-width: 150px;
   font-size: 15px;
   color: rgb(var(--v-theme-on-surface-variant));
 }
@@ -156,7 +209,7 @@ function openCrateVersionPage() {
     gap: 8px;
   }
 
-  .version-info {
+  .version-date {
     min-width: auto;
   }
 

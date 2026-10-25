@@ -37,6 +37,9 @@ export interface CratesResponse {
  */
 export type CrateSort = 'name' | 'updated' | 'downloads'
 
+/** Restricts the crate list to crates with a keyword and/or category */
+export type CrateTagFilter = { keyword?: string, category?: string }
+
 /**
  * Search response from the API
  */

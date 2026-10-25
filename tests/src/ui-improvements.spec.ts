@@ -64,18 +64,21 @@ test.describe("UI Improvements", () => {
       const header = rect(".crate-header");
       const title = rect("[data-testid=crate-title]");
       const description = rect("[data-testid=crate-description]");
+      const tags = rect("[data-testid=crate-tags]");
       const tabs = rect(".crate-tabs");
       return {
         topGap: title.top - header.top,
         titleToDescription: description.top - title.bottom,
-        descriptionToTabs: tabs.top - description.bottom,
+        descriptionToTags: tags.top - description.bottom,
+        tagsToTabs: tabs.top - tags.bottom,
       };
     });
 
     // No extra heading margins between the parts of the header
     expect(layout.topGap).toBeLessThanOrEqual(8);
     expect(layout.titleToDescription).toBeLessThanOrEqual(16);
-    expect(layout.descriptionToTabs).toBeLessThanOrEqual(24);
+    expect(layout.descriptionToTags).toBeLessThanOrEqual(16);
+    expect(layout.tagsToTabs).toBeLessThanOrEqual(24);
   });
 
   test("long crate names wrap on a phone", async ({ page }) => {

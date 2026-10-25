@@ -46,6 +46,12 @@
                 <v-icon icon="mdi-file-document-outline" size="x-small" />
                 <span>Docs</span>
               </a>
+
+              <a v-if="isSafeUrl(repository)" :href="repository" class="stat-item doc-link" target="_blank"
+                rel="noopener noreferrer" data-testid="crate-card-repository-link" @click.stop>
+                <v-icon icon="mdi-source-repository" size="x-small" />
+                <span>Repository</span>
+              </a>
             </div>
           </div>
 
@@ -77,6 +83,7 @@ const props = defineProps<{
   version: string
   updated: string
   docLink?: string
+  repository?: string
   isCache: boolean
 }>()
 

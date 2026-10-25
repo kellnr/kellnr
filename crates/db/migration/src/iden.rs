@@ -55,6 +55,7 @@ pub enum CrateMetaIden {
     Documentation,
     #[iden = "crate_fk"]
     CrateFk,
+    Size,
 }
 
 #[derive(Iden, Copy, Clone)]
@@ -158,6 +159,7 @@ pub enum CrateIndexIden {
     #[iden = "crate_index"]
     Table,
     Id,
+    Name,
     Vers,
     Deps,
     Cksum,

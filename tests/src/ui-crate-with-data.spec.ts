@@ -198,6 +198,90 @@ test.describe("Crate Views with Data", () => {
     expect(name).toBe("foo-bar");
   });
 
+  test("crate header links keywords and categories to the crate list", async ({ page }) => {
+    await page.goto(`${baseUrl}/crate?name=foo-bar`);
+    const cratePage = new CratePage(page);
+    await cratePage.waitForCrateData();
+
+    expect(await cratePage.getKeywords()).toEqual(["hyphen", "test"]);
+    expect(await cratePage.getCategories()).toEqual(["development-tools"]);
+
+    // A keyword opens the crates with that keyword
+    await page.getByTestId("crate-keyword").filter({ hasText: "hyphen" }).click();
+    await page.waitForURL("**/crates?keyword=hyphen");
+    const cratesPage = new CratesPage(page);
+    await cratesPage.waitForSearchResults();
+    await expect(page.getByTestId("crates-keyword-filter")).toContainText("hyphen");
+    await expect(page.getByTestId("crates-result-count")).toHaveText("1 crate with");
+    expect(await cratesPage.getCrateNames()).toEqual(["foo-bar"]);
+
+    // Removing the filter lists all crates again
+    await page.getByTestId("crates-keyword-filter").getByRole("button", { name: "Remove keyword filter" }).click();
+    await expect(page.getByTestId("crates-result-count")).toHaveText("2 crates");
+    await expect(page).toHaveURL(`${baseUrl}/crates`);
+
+    // A category works the same way
+    await page.goto(`${baseUrl}/crate?name=foo-bar`);
+    await cratePage.waitForCrateData();
+    await page.getByTestId("crate-category").click();
+    await page.waitForURL("**/crates?category=development-tools");
+    await cratesPage.waitForSearchResults();
+    await expect(page.getByTestId("crates-category-filter")).toContainText("development-tools");
+    expect(await cratesPage.getCrateNames()).toEqual(["foo-bar"]);
+  });
+
+  test("versions tab shows size, MSRV, license and features", async ({ page }) => {
+    await page.goto(`${baseUrl}/crate?name=foo-bar&tab=versions`);
+    const cratePage = new CratePage(page);
+    await cratePage.waitForCrateData();
+
+    await expect(page.getByTestId("version-group-label")).toHaveText(["1.x 1"]);
+    const row = page.getByTestId("version-row").first();
+    await expect(row.getByTestId("version-size")).toHaveText(/^\d+(\.\d)? (B|kB)$/);
+    await expect(row.getByTestId("version-msrv")).toHaveText("v1.70");
+    await expect(row.getByTestId("version-license")).toHaveText("MIT");
+    await expect(row.getByTestId("version-features")).toHaveText("2 features");
+    await expect(row.getByTestId("version-yanked")).toHaveCount(0);
+  });
+
+  test("crate cards link to the repository", async ({ page }) => {
+    await page.goto(`${baseUrl}/crates`);
+    const cratesPage = new CratesPage(page);
+    await cratesPage.waitForSearchResults();
+
+    const fooBar = page.getByTestId("crate-card").filter({ hasText: "foo-bar" });
+    await expect(fooBar.getByTestId("crate-card-repository-link")).toHaveAttribute(
+      "href",
+      "https://github.com/kellnr/kellnr",
+    );
+    // test_lib has no repository, so it gets no link
+    const testLib = page.getByTestId("crate-card").filter({ hasText: "test_lib" });
+    await expect(testLib.getByTestId("crate-card-repository-link")).toHaveCount(0);
+  });
+
+  test("slash and S focus the search field", async ({ page }) => {
+    await page.goto(`${baseUrl}/crates`);
+    const cratesPage = new CratesPage(page);
+    await cratesPage.waitForSearchResults();
+    const search = page.getByTestId("crates-search").locator("input");
+
+    await page.keyboard.press("/");
+    await expect(search).toBeFocused();
+    // The key is not typed into the field
+    await expect(search).toHaveValue("");
+
+    // Typing in the field does not trigger the shortcut
+    await page.keyboard.type("s/");
+    await expect(search).toHaveValue("s/");
+
+    // Pages without a search field open the crate list
+    await page.goto(`${baseUrl}/crate?name=foo-bar`);
+    await new CratePage(page).waitForCrateData();
+    await page.keyboard.press("s");
+    await page.waitForURL("**/crates");
+    await expect(page.getByTestId("crates-search").locator("input")).toBeFocused();
+  });
+
   test("landing page shows statistics with crates", async ({ page }) => {
     await page.goto(`${baseUrl}/`);
     const landingPage = new LandingPage(page);
