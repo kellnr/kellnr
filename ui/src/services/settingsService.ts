@@ -3,9 +3,9 @@
  */
 import { apiGet, isSuccess } from './api'
 import type { ApiResult } from '../types/api'
-import type { DocsEnabled, Settings, Version } from '../types/settings'
+import type { DocsEnabled, RegistryConfig, Settings, Version } from '../types/settings'
 import type { OAuth2Config } from '../types/oauth2'
-import { SETTINGS, DOCS_ENABLED, VERSION, OAUTH2_CONFIG } from '../remote-routes'
+import { SETTINGS, DOCS_ENABLED, VERSION, OAUTH2_CONFIG, REGISTRY_CONFIG } from '../remote-routes'
 
 /**
  * Get startup configuration settings with source tracking
@@ -32,6 +32,13 @@ export async function getVersion(): Promise<ApiResult<Version>> {
   return apiGet<Version>(VERSION, undefined, {
     redirectOnAuthError: false,
   })
+}
+
+/**
+ * Get the registry config that cargo reads
+ */
+export async function getRegistryConfig(): Promise<ApiResult<RegistryConfig>> {
+  return apiGet<RegistryConfig>(REGISTRY_CONFIG)
 }
 
 /**

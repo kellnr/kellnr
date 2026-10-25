@@ -357,6 +357,36 @@ test.describe("Crate Views with Data", () => {
     await expect(warning).toBeVisible();
   });
 
+  test("access badge warns that cargo cannot download without auth_required", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+    const loggedIn = page.waitForResponse((r) => r.url().endsWith("/api/v1/auth/login") && r.ok());
+    await new LoginPage(page).login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await loggedIn;
+
+    const setRestricted = (restricted: boolean) => page.evaluate(async (download_restricted) => {
+      const response = await fetch("/api/v1/acl/foo-bar", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ download_restricted }),
+      });
+      return response.status;
+    }, restricted);
+
+    expect(await setRestricted(true)).toBe(200);
+    try {
+      const cratePage = new CratePage(page);
+      await page.goto(`${baseUrl}/crate?name=foo-bar`);
+      await cratePage.waitForCrateData();
+
+      // This instance runs with auth_required = false
+      await expect(cratePage.accessBadge).toHaveAttribute("data-auth-required", "false");
+      await expect(cratePage.accessBadge).toHaveClass(/access-badge--warning/);
+      await expect(cratePage.accessBadge).toHaveAttribute("title", /auth_required/);
+    } finally {
+      expect(await setRestricted(false)).toBe(200);
+    }
+  });
+
   test.describe("layout", () => {
     test("landing page statistics use large numbers", async ({ page }) => {
       await page.setViewportSize({ width: 1440, height: 900 });

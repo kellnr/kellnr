@@ -215,6 +215,9 @@ test.describe("Crate Settings UI Tests", () => {
     // Restricting the crate shows the badge, adding access updates it
     await cratePage.toggleDownloadRestriction();
     await expect(cratePage.accessBadge).toHaveText("Restricted: 0 users, 0 groups");
+    // This instance runs with auth_required = true, so no warning
+    await expect(cratePage.accessBadge).toHaveAttribute("data-auth-required", "true");
+    await expect(cratePage.accessBadge).not.toHaveClass(/access-badge--warning/);
 
     await cratePage.addCrateUser(reader.name);
     await expect(cratePage.accessBadge).toHaveText("Restricted: 1 user, 0 groups");

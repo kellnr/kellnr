@@ -1,14 +1,14 @@
 <template>
-  <button v-if="restricted" type="button" class="access-badge" data-testid="crate-access-badge"
-    title="Downloads are restricted. Open the access settings." @click="emit('open')">
-    <v-icon icon="mdi-lock-outline" size="x-small" />
+  <button v-if="restricted" type="button" class="access-badge" :class="{ 'access-badge--warning': !authRequired }"
+    data-testid="crate-access-badge" :data-auth-required="authRequired" :title="title" @click="emit('open')">
+    <v-icon :icon="authRequired ? 'mdi-lock-outline' : 'mdi-alert-outline'" size="x-small" />
     <span>Restricted: {{ summary }}</span>
   </button>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { crateService } from '../../services'
+import { crateService, settingsService } from '../../services'
 import { isSuccess } from '../../services/api'
 import { formatCount } from '../../common/format'
 
@@ -25,15 +25,23 @@ const emit = defineEmits<{
 const restricted = ref(false)
 const userCount = ref(0)
 const groupCount = ref(0)
+// Cargo sends credentials only if the registry requires them. Without them,
+// the crate users cannot download a restricted crate with cargo either.
+const authRequired = ref(true)
+
+const title = computed(() => authRequired.value
+  ? 'Downloads are restricted. Open the access settings.'
+  : 'Crate users cannot download this crate with cargo, because auth_required is off. Set auth_required = true in the Kellnr configuration.')
 
 const summary = computed(() => `${formatCount(userCount.value, 'user')}, ${formatCount(groupCount.value, 'group')}`)
 
 async function load() {
   const name = props.crateName
-  const [access, users, groups] = await Promise.all([
+  const [access, users, groups, config] = await Promise.all([
     crateService.getCrateAccessData(name),
     crateService.getCrateUsers(name),
     crateService.getCrateGroups(name),
+    settingsService.getRegistryConfig(),
   ])
   // Another crate was opened while loading
   if (name !== props.crateName) return
@@ -41,6 +49,8 @@ async function load() {
   restricted.value = isSuccess(access) && access.data.download_restricted
   userCount.value = isSuccess(users) ? users.data.users?.length ?? 0 : 0
   groupCount.value = isSuccess(groups) ? groups.data.groups?.length ?? 0 : 0
+  // Only warn if the registry says so, not if the config failed to load
+  authRequired.value = !isSuccess(config) || config.data['auth-required']
 }
 
 onMounted(load)
@@ -66,6 +76,12 @@ watch(() => [props.crateName, props.refreshKey], load)
 
 .access-badge .v-icon {
   color: rgb(var(--v-theme-warning));
+}
+
+.access-badge--warning,
+.access-badge--warning:hover,
+.access-badge--warning:focus-visible {
+  border-color: rgb(var(--v-theme-warning));
 }
 
 .access-badge:hover,
