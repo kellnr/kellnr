@@ -10,7 +10,7 @@
           </div>
 
           <!-- Form -->
-          <v-card-text class="pa-6 pt-2">
+          <v-card-text class="pa-6">
             <v-form
               v-if="!ssoEnforced"
               ref="form"
@@ -18,8 +18,9 @@
               v-model="isFormValid"
             >
               <div class="input-group">
-                <label class="input-label">Username</label>
+                <label class="input-label" for="login-username">Username</label>
                 <v-text-field
+                  id="login-username"
                   v-model="username"
                   data-testid="login-username"
                   autocomplete="username"
@@ -36,8 +37,9 @@
               </div>
 
               <div class="input-group">
-                <label class="input-label">Password</label>
+                <label class="input-label" for="login-password">Password</label>
                 <v-text-field
+                  id="login-password"
                   v-model="password"
                   data-testid="login-password"
                   autocomplete="current-password"
@@ -100,7 +102,7 @@
               </div>
 
               <v-btn
-                color="secondary"
+                color="primary"
                 size="large"
                 variant="outlined"
                 block

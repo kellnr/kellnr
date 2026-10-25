@@ -29,6 +29,7 @@ export type {
   ApiResult,
   PaginatedResponse,
   CratesResponse,
+  CrateSort,
   SearchResponse,
   CrateUsersResponse,
   CrateGroupsResponse,

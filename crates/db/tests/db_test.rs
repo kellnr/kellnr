@@ -13,7 +13,7 @@ use kellnr_common::version::Version;
 use kellnr_common::webhook::{Webhook, WebhookEvent};
 use kellnr_db::provider::PrefetchState;
 use kellnr_db::test_utils::*;
-use kellnr_db::{CrateVisibility, DbProvider, DocQueueEntry};
+use kellnr_db::{CrateSort, CrateVisibility, DbProvider, DocQueueEntry};
 use kellnr_db_testcontainer::db_test;
 use serde_json::json;
 mod image;
@@ -767,6 +767,39 @@ async fn get_user_from_token_works(test_db: &kellnr_db::Database) {
     let user = test_db.get_user_from_token("mytoken1").await.unwrap();
 
     assert_eq!("admin", user.name);
+}
+
+#[db_test]
+async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) {
+    test_db
+        .add_auth_token("dated", "dated-token", "admin")
+        .await
+        .unwrap();
+    let token =
+        |tokens: Vec<kellnr_db::AuthToken>| tokens.into_iter().find(|t| t.name == "dated").unwrap();
+
+    let created = token(test_db.get_auth_tokens("admin").await.unwrap());
+    assert!(created.created.is_some());
+    assert_eq!(None, created.last_used);
+
+    test_db.get_user_from_token("dated-token").await.unwrap();
+    let used = token(test_db.get_auth_tokens("admin").await.unwrap());
+    assert!(used.last_used.is_some());
+
+    // A recent use is not written again, an old one is
+    set_auth_token_last_used(test_db, "dated", "2999-01-01 00:00:00")
+        .await
+        .unwrap();
+    test_db.get_user_from_token("dated-token").await.unwrap();
+    let recent = token(test_db.get_auth_tokens("admin").await.unwrap());
+    assert_eq!(Some("2999-01-01 00:00:00".to_string()), recent.last_used);
+
+    set_auth_token_last_used(test_db, "dated", "2000-01-01 00:00:00")
+        .await
+        .unwrap();
+    test_db.get_user_from_token("dated-token").await.unwrap();
+    let old = token(test_db.get_auth_tokens("admin").await.unwrap());
+    assert_ne!(Some("2000-01-01 00:00:00".to_string()), old.last_used);
 }
 
 #[db_test]
@@ -1739,7 +1772,7 @@ async fn search_in_crate_name_and_description_ranks_name_matches_first(
 
     // The crate overview without a query stays alphabetical
     let results = test_db
-        .get_crate_overview_list(100, 0, true, &CrateVisibility::All)
+        .get_crate_overview_list(100, 0, true, &CrateVisibility::All, CrateSort::Name)
         .await
         .unwrap();
     assert_eq!(
@@ -1955,11 +1988,60 @@ async fn get_crate_overview_list(test_db: &kellnr_db::Database) {
     ];
 
     let overview_list = test_db
-        .get_crate_overview_list(10, 0, false, &CrateVisibility::All)
+        .get_crate_overview_list(10, 0, false, &CrateVisibility::All, CrateSort::Name)
         .await
         .unwrap();
 
     assert_eq!(expected, overview_list);
+
+    let total = test_db
+        .count_crate_overview_list(false, &CrateVisibility::All)
+        .await
+        .unwrap();
+    assert_eq!(3, total);
+}
+
+#[db_test]
+async fn get_crate_overview_list_sorted_by_date_and_downloads(test_db: &kellnr_db::Database) {
+    let day = |d| Utc.with_ymd_and_hms(2020, 10, d, 13, 18, 00).unwrap();
+    for (name, created, downloads) in [
+        ("alpha", day(3), 7),
+        ("beta", day(9), 1),
+        ("gamma", day(5), 7),
+    ] {
+        test_add_crate_with_downloads(
+            test_db,
+            name,
+            "admin",
+            &Version::try_from("1.0.0").unwrap(),
+            None,
+            &created,
+            Some(downloads),
+        )
+        .await
+        .unwrap();
+    }
+    let names = |list: Vec<CrateOverview>| list.into_iter().map(|c| c.name).collect::<Vec<_>>();
+
+    let by_date = test_db
+        .get_crate_overview_list(10, 0, false, &CrateVisibility::All, CrateSort::Updated)
+        .await
+        .unwrap();
+    assert_eq!(vec!["beta", "gamma", "alpha"], names(by_date));
+
+    // Equal download counts are ordered by name
+    let by_downloads = test_db
+        .get_crate_overview_list(10, 0, false, &CrateVisibility::All, CrateSort::Downloads)
+        .await
+        .unwrap();
+    assert_eq!(vec!["alpha", "gamma", "beta"], names(by_downloads));
+
+    // Paging keeps the order
+    let second_page = test_db
+        .get_crate_overview_list(2, 2, false, &CrateVisibility::All, CrateSort::Downloads)
+        .await
+        .unwrap();
+    assert_eq!(vec!["beta"], names(second_page));
 }
 
 #[db_test]
@@ -3509,7 +3591,7 @@ async fn overview_names(
     visibility: &CrateVisibility,
 ) -> Vec<String> {
     test_db
-        .get_crate_overview_list(100, 0, false, visibility)
+        .get_crate_overview_list(100, 0, false, visibility, CrateSort::Name)
         .await
         .unwrap()
         .into_iter()

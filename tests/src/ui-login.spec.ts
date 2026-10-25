@@ -153,11 +153,11 @@ test.describe("Login UI Tests", () => {
     // Click logout
     await header.clickLogout();
 
-    // Wait for logout to complete
-    await page.waitForTimeout(1000);
-
-    // Should show login button
-    await expect(header.loginButton).toBeVisible();
+    // With auth required, logging out leads to the login page, which needs
+    // no header login button
+    await expect(page.getByTestId("login-title")).toBeVisible();
+    await expect(page.getByTestId("user-menu-button")).toHaveCount(0);
+    await expect(header.loginButton).toHaveCount(0);
   });
 
   test("welcome message shows after login but not after a reload", async ({ page }) => {

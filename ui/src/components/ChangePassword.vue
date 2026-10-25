@@ -13,6 +13,9 @@
       </p>
 
       <v-form ref="form" @submit.prevent="handleChangePassword">
+        <!-- Tells password managers which account the new password belongs to -->
+        <input type="text" name="username" autocomplete="username" :value="store.loggedInUser ?? ''" readonly hidden />
+
         <div class="mb-4">
           <label class="text-body-medium font-weight-medium d-block mb-2">Current Password</label>
           <v-text-field
@@ -93,8 +96,10 @@ import { useStatusMessage } from "../composables"
 import { userService } from "../services"
 import { isSuccess } from "../services/api"
 import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
+import { useStore } from "../store/store"
 
 // State
+const store = useStore()
 const loading = ref(false)
 const oldPassword = ref("")
 const newPassword1 = ref("")

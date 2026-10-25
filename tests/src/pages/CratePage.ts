@@ -190,11 +190,10 @@ export class CratePage extends BasePage {
   // === About Tab Methods ===
 
   /**
-   * Get repository link from About tab.
+   * Get repository link from the sidebar.
    */
   async getRepositoryLink(): Promise<string | null> {
-    await this.clickTab("about");
-    const link = this.page.getByTestId("about-repository");
+    const link = this.page.getByTestId("sidebar-repository");
     if (await link.isVisible()) {
       return await link.getAttribute("href");
     }
@@ -202,11 +201,10 @@ export class CratePage extends BasePage {
   }
 
   /**
-   * Get homepage link from About tab.
+   * Get homepage link from the sidebar.
    */
   async getHomepageLink(): Promise<string | null> {
-    await this.clickTab("about");
-    const link = this.page.getByTestId("about-homepage");
+    const link = this.page.getByTestId("sidebar-homepage");
     if (await link.isVisible()) {
       return await link.getAttribute("href");
     }
@@ -214,11 +212,10 @@ export class CratePage extends BasePage {
   }
 
   /**
-   * Get license from About tab.
+   * Get license from the sidebar.
    */
   async getLicense(): Promise<string | null> {
-    await this.clickTab("about");
-    const license = this.page.getByTestId("about-license");
+    const license = this.page.getByTestId("sidebar-license");
     if (await license.isVisible()) {
       const text = ((await license.textContent()) ?? "").trim();
       return text.length > 0 ? text : null;

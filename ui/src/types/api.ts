@@ -28,7 +28,14 @@ export interface PaginatedResponse<T> {
 export interface CratesResponse {
   crates: import('./crate_overview').CrateOverview[]
   page: number
+  /** Number of crates on all pages */
+  total: number
 }
+
+/**
+ * Order of the crate list
+ */
+export type CrateSort = 'name' | 'updated' | 'downloads'
 
 /**
  * Search response from the API
@@ -36,6 +43,8 @@ export interface CratesResponse {
 export interface SearchResponse {
   crates: import('./crate_overview').CrateOverview[]
   page: number
+  /** Number of matching crates on all pages */
+  total: number
 }
 
 /**

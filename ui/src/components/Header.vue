@@ -3,7 +3,8 @@
     <!-- App Bar -->
     <v-app-bar :class="['app-header', { 'app-header-light': store.theme === 'light' }]" elevation="0" height="64" data-testid="header-app-bar">
       <!-- Mobile menu toggle -->
-      <v-app-bar-nav-icon class="d-md-none nav-toggle" data-testid="header-nav-toggle" @click="drawer = !drawer" />
+      <v-app-bar-nav-icon class="d-md-none nav-toggle" aria-label="Open navigation menu" data-testid="header-nav-toggle"
+        @click="drawer = !drawer" />
 
       <!-- Logo -->
       <v-app-bar-title class="logo-title">
@@ -27,7 +28,7 @@
         <v-btn
           v-for="(item, i) in navItems"
           :key="i"
-          :to="item.action ? undefined : item.route"
+          :to="item.route"
           :href="item.href || undefined"
           :target="item.href ? '_blank' : undefined"
           :ripple="false"
@@ -35,7 +36,6 @@
           :class="['nav-btn', { 'nav-btn-active': item.route && route.path.startsWith(item.route) }]"
           :prepend-icon="item.icon"
           :data-testid="`header-nav-${item.slug}`"
-          @click="item.action ? item.action() : undefined"
         >
           {{ item.title }}
         </v-btn>
@@ -72,13 +72,12 @@
         <v-list-item
           v-for="(item, i) in navItems"
           :key="i"
-          :to="item.action ? undefined : item.route"
+          :to="item.route"
           :href="item.href || undefined"
           :target="item.href ? '_blank' : undefined"
           :prepend-icon="item.icon"
           class="drawer-item"
           :data-testid="`header-drawer-${item.slug}`"
-          @click="item.action ? item.action() : undefined"
         >
           <v-list-item-title>{{ item.title }}</v-list-item-title>
         </v-list-item>
@@ -100,7 +99,6 @@ import { ref, onBeforeMount, computed } from "vue";
 import LoginButton from "./LoginButton.vue";
 import ThemeToggle from "./ThemeToggle.vue";
 import { useStore } from "../store/store";
-import router from "../router";
 import { useRoute } from "vue-router";
 import { useTheme } from "vuetify";
 
@@ -114,7 +112,8 @@ const showSnackbar = ref(false);
 const snackbarText = ref("");
 const snackbarColor = ref("success");
 
-// Navigation items
+// Navigation items. Settings only exist for logged-in users, who also find
+// them in the user menu.
 const navItems = computed(() => [
   {
     title: "Search",
@@ -122,21 +121,20 @@ const navItems = computed(() => [
     icon: "mdi-magnify",
     route: "/crates"
   },
-  {
+  ...(store.loggedIn ? [{
     title: "Settings",
     slug: "settings",
     icon: "mdi-cog",
-    route: "/settings",
-    action: goToSettings
-  },
+    route: "/settings"
+  }] : []),
   {
-    title: "Doc Queue",
+    title: "Doc queue",
     slug: "docqueue",
     icon: "mdi-layers",
     route: "/docqueue"
   },
   {
-    title: "API Docs",
+    title: "API docs",
     slug: "api-docs",
     icon: "mdi-api",
     href: "./api/docs/"
@@ -148,14 +146,6 @@ onBeforeMount(() => {
   vuetifyTheme.global.name.value = store.theme;
   setTheme(store.theme);
 });
-
-function goToSettings() {
-  if (store.loggedIn === false) {
-    router.push({ path: "/login", query: { redirect: "settings" } });
-  } else {
-    router.push("/settings");
-  }
-}
 
 function handleThemeChange() {
   // Show notification for theme change
@@ -232,9 +222,9 @@ function showNotification(message: string, isError: boolean = false) {
 
 .nav-btn {
   font-weight: 500;
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 0.9375rem;
+  text-transform: none;
+  letter-spacing: normal;
   color: rgb(var(--v-theme-on-surface));
   padding: 0 16px;
   height: 40px;

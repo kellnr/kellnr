@@ -1,5 +1,18 @@
 <template>
   <div class="config-toolbar">
+    <v-text-field
+      :model-value="query"
+      placeholder="Search settings"
+      prepend-inner-icon="mdi-magnify"
+      variant="outlined"
+      density="compact"
+      hide-details
+      clearable
+      class="config-search"
+      aria-label="Search settings"
+      data-testid="config-search"
+      @update:model-value="$emit('update:query', $event ?? '')"
+    ></v-text-field>
     <v-btn
       size="small"
       :variant="filterActive ? 'flat' : 'tonal'"
@@ -24,10 +37,12 @@
 <script setup lang="ts">
 defineProps<{
   filterActive: boolean;
+  query: string;
 }>();
 
 defineEmits<{
   'update:filterActive': [value: boolean];
+  'update:query': [value: string];
   'expandAll': [];
   'collapseAll': [];
 }>();
@@ -44,5 +59,10 @@ defineEmits<{
 
 .toolbar-spacer {
   flex: 1;
+}
+
+.config-search {
+  flex: 0 1 280px;
+  min-width: 180px;
 }
 </style>

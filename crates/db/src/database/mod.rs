@@ -44,7 +44,7 @@ use tracing::warn;
 use crate::error::DbError;
 use crate::password::{PwdVerification, hash_pwd, hash_token, verify_pwd};
 use crate::provider::{
-    ChannelInfo, CrateVisibility, DbResult, OAuth2StateData, PrefetchState, SessionInfo,
+    ChannelInfo, CrateSort, CrateVisibility, DbResult, OAuth2StateData, PrefetchState, SessionInfo,
     ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
 };
 use crate::tables::init_database;
@@ -53,6 +53,9 @@ use crate::{
 };
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+
+/// How often the last use of an auth token is written at most.
+const TOKEN_LAST_USED_INTERVAL: chrono::TimeDelta = chrono::TimeDelta::hours(1);
 
 /// Timestamp (in [`DB_DATE_FORMAT`]) before which an `OAuth2` state is expired.
 fn oauth2_state_expiry_cutoff() -> String {
@@ -460,6 +463,7 @@ impl Database {
         limit_offset: Option<(u64, u64)>,
         cache: bool,
         visibility: &CrateVisibility,
+        sort: CrateSort,
     ) -> DbResult<Vec<CrateOverview>> {
         /// Creates a SELECT statement for a given set of fields.
         fn select_fields(fields: &[(Expr, &str)]) -> SelectStatement {
@@ -517,8 +521,13 @@ impl Database {
         }
 
         // Ordering and optional limit/offset. The name breaks ties, so paging
-        // stays stable within one rank.
-        query.order_by(Alias::new("search_rank"), Order::Asc);
+        // stays stable within one rank, date or download count.
+        match sort {
+            CrateSort::Name => query.order_by(Alias::new("search_rank"), Order::Asc),
+            // Dates are stored as "YYYY-MM-DD HH:MM:SS", so they sort as text.
+            CrateSort::Updated => query.order_by(Alias::new("date"), Order::Desc),
+            CrateSort::Downloads => query.order_by(Alias::new("total_downloads"), Order::Desc),
+        };
         query.order_by(Alias::new("name"), Order::Asc);
         if let Some((limit, offset)) = limit_offset {
             query.limit(limit).offset(offset);
@@ -1292,6 +1301,7 @@ impl DbProvider for Database {
             name: Set(name.to_owned()),
             token: Set(hashed_token),
             user_fk: Set(user.id),
+            created: Set(Some(Utc::now().format(DB_DATE_FORMAT).to_string())),
             ..Default::default()
         };
 
@@ -1303,12 +1313,32 @@ impl DbProvider for Database {
     async fn get_user_from_token(&self, token: &str) -> DbResult<User> {
         let token = hash_token(token);
 
-        let u = user::Entity::find()
-            .join(JoinType::InnerJoin, user::Relation::AuthToken.def())
+        let (at, u) = auth_token::Entity::find()
             .filter(Expr::col((AuthTokenIden::Table, AuthTokenIden::Token)).eq(token))
+            .find_also_related(user::Entity)
             .one(&self.db_con)
             .await?
             .ok_or(DbError::TokenNotFound)?;
+        let u = u.ok_or(DbError::TokenNotFound)?;
+
+        // Cargo sends the token with every request, so the date is only
+        // written when it is older than the interval. A failed update must not
+        // fail the request, the date is informational.
+        let now = Utc::now();
+        let stale_before = (now - TOKEN_LAST_USED_INTERVAL)
+            .format(DB_DATE_FORMAT)
+            .to_string();
+        if at
+            .last_used
+            .as_ref()
+            .is_none_or(|used| *used < stale_before)
+        {
+            let mut at: auth_token::ActiveModel = at.into();
+            at.last_used = Set(Some(now.format(DB_DATE_FORMAT).to_string()));
+            if let Err(e) = at.update(&self.db_con).await {
+                warn!("Failed to update the last use of an auth token: {e}");
+            }
+        }
 
         Ok(User::from(u))
     }
@@ -1633,8 +1663,14 @@ impl DbProvider for Database {
         cache: bool,
         visibility: &CrateVisibility,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(Some(contains), Some((limit, offset)), cache, visibility)
-            .await
+        self.query_crates(
+            Some(contains),
+            Some((limit, offset)),
+            cache,
+            visibility,
+            CrateSort::Name,
+        )
+        .await
     }
 
     async fn count_by_crate_name_and_description(
@@ -1652,9 +1688,18 @@ impl DbProvider for Database {
         offset: u64,
         cache: bool,
         visibility: &CrateVisibility,
+        sort: CrateSort,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(None, Some((limit, offset)), cache, visibility)
+        self.query_crates(None, Some((limit, offset)), cache, visibility, sort)
             .await
+    }
+
+    async fn count_crate_overview_list(
+        &self,
+        cache: bool,
+        visibility: &CrateVisibility,
+    ) -> DbResult<u64> {
+        self.count_crates(None, cache, visibility).await
     }
 
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {

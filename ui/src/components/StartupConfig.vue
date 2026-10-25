@@ -17,6 +17,7 @@
 
       <ConfigToolbar
         v-model:filter-active="showOnlyConfigured"
+        v-model:query="searchQuery"
         @expand-all="expandAll"
         @collapse-all="collapseAll"
       />
@@ -56,7 +57,7 @@
           <v-expansion-panel-text>
             <div class="config-list">
               <ConfigRow
-                v-for="item in section.items"
+                v-for="item in matchingItems[section.key]"
                 :key="item.key"
                 :config-key="item.key"
                 :label="leafLabel(item)"
@@ -78,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, ref, computed } from "vue";
+import { onBeforeMount, ref, computed, watch } from "vue";
 import { emptySettings } from "../types/settings";
 import type { Settings, LeafMeta } from "../types/settings";
 import { settingsService } from "../services";
@@ -122,6 +123,7 @@ const HIDDEN_SECTIONS = new Set<string>(['setup', 'oauth2']);
 
 const settings = ref<Settings>(emptySettings);
 const showOnlyConfigured = ref(false);
+const searchQuery = ref('');
 const expandedPanels = ref<number[]>([]);
 
 // Group leaves by section (the part before the first dot) so the template can
@@ -151,10 +153,21 @@ const configuredCounts = computed(() => {
 
 const totalConfigured = computed(() => Object.values(configuredCounts.value).reduce((sum, n) => sum + n, 0));
 const totalSettings = computed(() => sections.value.reduce((sum, s) => sum + s.items.length, 0));
-const visibleSectionsCount = computed(() => {
-  if (!showOnlyConfigured.value) return sections.value.length;
-  return sections.value.filter(s => configuredCounts.value[s.key] > 0).length;
+// Settings matching the search, by label, key or environment variable
+const matchingItems = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  const matches: Record<string, LeafMeta[]> = {};
+  for (const section of sections.value) {
+    matches[section.key] = section.items.filter(item => {
+      if (query === '') return true;
+      const envVar = 'KELLNR_' + item.key.replace('.', '__');
+      return [leafLabel(item), item.key, envVar].some(text => text.toLowerCase().includes(query));
+    });
+  }
+  return matches;
 });
+
+const visibleSectionsCount = computed(() => sections.value.filter(s => isSectionVisible(s.key)).length);
 
 // `data_dir` → `Data Directory`. Used only when the backend doesn't supply
 // a `label` override.
@@ -179,8 +192,11 @@ function sectionEnabledLeaf(sectionKey: string): LeafMeta | undefined {
 }
 
 function isSectionVisible(sectionKey: string): boolean {
-  if (!showOnlyConfigured.value) return true;
-  return (configuredCounts.value[sectionKey] ?? 0) > 0;
+  const items = matchingItems.value[sectionKey] ?? [];
+  if (showOnlyConfigured.value) {
+    return items.some(item => item.source !== 'default');
+  }
+  return items.length > 0;
 }
 
 function badgeText(sectionKey: string): string {
@@ -205,6 +221,13 @@ function expandAll() {
 function collapseAll() {
   expandedPanels.value = [];
 }
+
+// Open the sections with matches, so the results are visible right away
+watch(searchQuery, (query) => {
+  if (query.trim() !== '') {
+    expandAll();
+  }
+});
 
 function isWarningWhenTrue(key: string): boolean {
   return WARNING_WHEN_TRUE.has(key);

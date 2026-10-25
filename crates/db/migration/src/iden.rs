@@ -88,6 +88,9 @@ pub enum AuthTokenIden {
     Token,
     #[iden = "user_fk"]
     UserFk,
+    Created,
+    #[iden = "last_used"]
+    LastUsed,
 }
 
 #[derive(Iden, Copy, Clone)]

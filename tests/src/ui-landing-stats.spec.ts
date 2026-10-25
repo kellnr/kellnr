@@ -4,7 +4,7 @@
  * Tests:
  * - Clicking "Total Crates" card navigates to crates page
  * - Clicking "Cached Crates" card navigates to crates page with proxy enabled
- * - Clicking "Last Updated" card navigates to the specific crate page
+ * - Clicking a crate in the "Recently updated" list navigates to the crate page
  * - Non-clickable cards don't have cursor pointer styling
  *
  * Performance: All tests share a single local Kellnr instance.
@@ -141,7 +141,7 @@ test.describe("Landing Page Statistics Cards UI Tests", () => {
     expect(isProxyEnabled).toBe(true);
   });
 
-  test("clicking Last Updated card navigates to that crate's page", async ({
+  test("clicking a recently updated crate navigates to that crate's page", async ({
     page,
   }) => {
     const landingPage = new LandingPage(page);
@@ -151,8 +151,8 @@ test.describe("Landing Page Statistics Cards UI Tests", () => {
     await page.goto(baseUrl);
     await landingPage.waitForStatistics();
 
-    // Get the Last Updated card - new UI uses RecentCrateCard component
-    const lastUpdatedCard = page.getByTestId("recent-crate-card");
+    // The first crate in the "Recently updated" list
+    const lastUpdatedCard = page.getByTestId("recent-crate").first();
     await expect(lastUpdatedCard).toBeVisible();
 
     // Verify it has pointer cursor

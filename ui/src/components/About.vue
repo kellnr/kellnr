@@ -1,42 +1,7 @@
 <template>
   <div class="about-content">
-    <!-- Basic Information Section -->
-    <div v-if="crate.repository || crate.homepage || selectedVersion.license || selectedVersion.yanked === true" class="basic-info-section">
-      <!-- Repository -->
-      <div v-if="crate.repository" class="info-row">
-        <div class="info-icon-wrapper">
-          <v-icon icon="mdi-github" size="small"></v-icon>
-        </div>
-        <span class="info-label">Repository</span>
-        <a :href="safeUrl(crate.repository)" target="_blank" rel="noopener noreferrer" class="external-link"
-          data-testid="about-repository">
-          {{ crate.repository }}
-          <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
-        </a>
-      </div>
-
-      <!-- Homepage -->
-      <div v-if="crate.homepage" class="info-row">
-        <div class="info-icon-wrapper">
-          <v-icon icon="mdi-link-variant" size="small"></v-icon>
-        </div>
-        <span class="info-label">Homepage</span>
-        <a :href="safeUrl(crate.homepage)" target="_blank" rel="noopener noreferrer" class="external-link"
-          data-testid="about-homepage">
-          {{ crate.homepage }}
-          <v-icon icon="mdi-open-in-new" size="x-small" class="ms-1"></v-icon>
-        </a>
-      </div>
-
-      <!-- License -->
-      <div v-if="selectedVersion.license" class="info-row">
-        <div class="info-icon-wrapper">
-          <v-icon icon="mdi-scale-balance" size="small"></v-icon>
-        </div>
-        <span class="info-label">License</span>
-        <span class="info-badge license-badge" data-testid="about-license">{{ selectedVersion.license }}</span>
-      </div>
-
+    <!-- Basic Information Section. Repository, homepage and license are in the sidebar. -->
+    <div v-if="selectedVersion.yanked === true" class="basic-info-section">
       <!-- Status (Yanked) -->
       <div v-if="selectedVersion.yanked === true" class="info-row">
         <div class="info-icon-wrapper error">
@@ -127,7 +92,6 @@
 <script setup lang="ts">
 import { defineProps } from 'vue';
 import type { CrateData, CrateVersionData } from '../types/crate_data';
-import { safeUrl } from '../common/url';
 
 defineProps({
   crate: {
@@ -195,31 +159,12 @@ defineProps({
   min-width: 80px;
 }
 
-.external-link {
-  display: inline-flex;
-  align-items: center;
-  color: rgb(var(--v-theme-primary));
-  text-decoration: none;
-  transition: opacity 0.2s;
-  word-break: break-all;
-}
-
-.external-link:hover {
-  opacity: 0.8;
-  text-decoration: underline;
-}
-
 .info-badge {
   display: inline-block;
   padding: 4px 10px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
-}
-
-.license-badge {
-  background: rgba(var(--v-theme-primary), 0.12);
-  color: rgb(var(--v-theme-primary));
 }
 
 .error-badge {

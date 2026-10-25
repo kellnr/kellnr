@@ -27,8 +27,16 @@
       </v-row>
     </v-card>
 
-    <!-- Scrollable Content Container -->
-    <div class="content-container" ref="scrollContainer" data-testid="crates-scroll-container" @scroll="handleScroll">
+    <!-- Result count and sort order -->
+    <div v-if="total !== null" class="list-toolbar mx-3 mb-3">
+      <span class="text-body-medium result-count" data-testid="crates-result-count">{{ resultCountText }}</span>
+      <v-select v-if="!activeQuery" v-model="sort" :items="SORT_OPTIONS" density="compact" variant="outlined"
+        hide-details class="sort-select" aria-label="Sort crates" data-testid="crates-sort"
+        @update:model-value="handleSortChange"></v-select>
+      <span v-else class="text-body-small result-count">Best matches first</span>
+    </div>
+
+    <div class="content-container" data-testid="crates-list">
       <!-- Empty State -->
       <v-card v-if="crates.length === 0 && !isLoading" class="pa-6 text-center mx-auto my-8" max-width="500"
         variant="outlined" data-testid="crates-empty-state">
@@ -43,14 +51,12 @@
         </v-card-text>
       </v-card>
 
-      <!-- Crates Grid -->
-      <v-row class="pa-3">
-        <v-col cols="12">
-          <crate-card v-for="crate in crates" :key="`${crate.name}-${crate.version}`" :crate="crate.name"
-            :version="crate.version" :updated="crate.date" :downloads="crate.total_downloads" :desc="crate.description"
-            :doc-link="crate.documentation" :is-cache="crate.is_cache"></crate-card>
-        </v-col>
-      </v-row>
+      <crate-card v-for="crate in crates" :key="`${crate.name}-${crate.version}`" :crate="crate.name"
+        :version="crate.version" :updated="crate.date" :downloads="crate.total_downloads" :desc="crate.description"
+        :doc-link="crate.documentation" :is-cache="crate.is_cache"></crate-card>
+
+      <!-- Loads the next page when it scrolls into view -->
+      <div ref="loadMoreSentinel" class="load-more-sentinel" aria-hidden="true"></div>
 
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="text-center my-4 pb-4" data-testid="crates-loading">
@@ -61,70 +67,85 @@
       <!-- End of Results -->
       <div v-if="allLoaded && crates.length > 0" class="text-center my-6 text-body-medium text-grey"
         data-testid="crates-end-of-results">
-        — End of crates —
+        End of crates
       </div>
     </div>
   </v-container>
 </template>
 
 <script setup lang="ts">
-import { onBeforeMount, onMounted, ref, nextTick } from "vue"
+import { computed, onBeforeMount, onBeforeUnmount, onMounted, ref } from "vue"
 import CrateCard from "../components/CrateCard.vue"
 import type { CrateOverview } from "../types/crate_overview"
+import type { CrateSort } from "../types/api"
 import { crateService } from "../services"
 import { isSuccess } from "../services/api"
 import { useRouter } from "vue-router"
 import { useStore } from "../store/store"
+import { formatNumber } from "../common/format"
 
 // Constants
 const ITEMS_PER_PAGE = 20
+const SORT_OPTIONS: { title: string, value: CrateSort }[] = [
+  { title: "Name", value: "name" },
+  { title: "Recently updated", value: "updated" },
+  { title: "Most downloaded", value: "downloads" },
+]
 
 // State
 const crates = ref<CrateOverview[]>([])
 const currentPage = ref(0)
 const isLoading = ref(false)
 const allLoaded = ref(false)
+const total = ref<number | null>(null)
 const searchText = ref("")
 // The query the currently displayed list belongs to. Empty means "browse all".
 // Kept apart from `searchText` so typing does not change what the next page is.
 const activeQuery = ref("")
-const scrollContainer = ref<HTMLElement | null>(null)
+const sort = ref<CrateSort>("name")
+const loadMoreSentinel = ref<HTMLElement | null>(null)
 const router = useRouter()
 const store = useStore()
+let observer: IntersectionObserver | undefined
+
+const resultCountText = computed(() => {
+  const count = total.value ?? 0
+  const noun = count === 1 ? "crate" : "crates"
+  return activeQuery.value
+    ? `${formatNumber(count)} ${noun} found for "${activeQuery.value}"`
+    : `${formatNumber(count)} ${noun}`
+})
 
 // Initial setup
 onBeforeMount(() => {
-  if (router.currentRoute.value.query.search) {
-    searchText.value = router.currentRoute.value.query.search as string
+  const query = router.currentRoute.value.query
+  if (query.search) {
+    searchText.value = query.search as string
     activeQuery.value = searchText.value.trim()
+  }
+  const requestedSort = SORT_OPTIONS.find(option => option.value === query.sort)
+  if (requestedSort) {
+    sort.value = requestedSort.value
   }
 })
 
 onMounted(() => {
   loadMoreCrates()
 
-  // Add resize event listener to handle window size changes
-  window.addEventListener('resize', updateContainerHeight)
-  // Initial height setup
-  updateContainerHeight()
+  // Load the next page shortly before the end of the list becomes visible
+  observer = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) {
+      loadMoreCrates()
+    }
+  }, { rootMargin: "200px" })
+  if (loadMoreSentinel.value) {
+    observer.observe(loadMoreSentinel.value)
+  }
 })
 
-// Update container height to fill available space
-function updateContainerHeight() {
-  nextTick(() => {
-    if (scrollContainer.value) {
-      const headerHeight = document.querySelector('.v-card.pa-3.ma-3')?.clientHeight || 0
-      const headerMargin = 24 // 3 * 8px (ma-3)
-
-      // Calculate and set the height of the scrollable container
-      const windowHeight = window.innerHeight
-      const footerHeight = 48 // Height of the footer if present
-      const availableHeight = windowHeight - headerHeight - headerMargin - footerHeight - 16
-
-      scrollContainer.value.style.height = `${Math.max(300, availableHeight)}px`
-    }
-  })
-}
+onBeforeUnmount(() => {
+  observer?.disconnect()
+})
 
 // Load more crates for infinite scrolling. Search and the full crate list are
 // paginated the same way, so both are loaded through here.
@@ -143,7 +164,8 @@ async function loadMoreCrates() {
     : await crateService.getCrates(
       currentPage.value,
       ITEMS_PER_PAGE,
-      store.searchCache
+      store.searchCache,
+      sort.value
     )
 
   isLoading.value = false
@@ -153,6 +175,7 @@ async function loadMoreCrates() {
 
     // Add crates to the list
     crates.value = [...crates.value, ...newCrates]
+    total.value = result.data.total
 
     // Increment page for next load
     currentPage.value = result.data.page + 1
@@ -160,6 +183,10 @@ async function loadMoreCrates() {
     // Check if we've loaded all available crates
     if (newCrates.length < ITEMS_PER_PAGE) {
       allLoaded.value = true
+    } else {
+      // The sentinel may still be in view after a short page, which does not
+      // fire the observer again, so check it directly.
+      loadMoreIfSentinelVisible()
     }
   } else {
     // Stop here, otherwise scrolling retries the failed request indefinitely.
@@ -167,21 +194,13 @@ async function loadMoreCrates() {
   }
 }
 
-// Handle scroll event for infinite scrolling
-function handleScroll(event: Event) {
-  const target = event.target as HTMLElement
-
-  // Calculate if we're near the bottom (within 200px)
-  const scrollTop = target.scrollTop
-  const scrollHeight = target.scrollHeight
-  const clientHeight = target.clientHeight
-
-  const scrollBottom = scrollHeight - scrollTop - clientHeight
-  const isNearBottom = scrollBottom < 200
-
-  if (isNearBottom && !isLoading.value && !allLoaded.value) {
-    loadMoreCrates()
-  }
+function loadMoreIfSentinelVisible() {
+  requestAnimationFrame(() => {
+    const rect = loadMoreSentinel.value?.getBoundingClientRect()
+    if (rect && rect.top < window.innerHeight + 200) {
+      loadMoreCrates()
+    }
+  })
 }
 
 // Refresh crates (used when changing filters)
@@ -189,32 +208,37 @@ function refreshCrates() {
   crates.value = []
   currentPage.value = 0
   allLoaded.value = false
-
-  // Reset scroll position
-  if (scrollContainer.value) {
-    scrollContainer.value.scrollTop = 0
-  }
+  total.value = null
+  window.scrollTo({ top: 0 })
 
   loadMoreCrates()
+}
+
+// Keep search and sort order in the URL, so the list can be linked and
+// survives a reload.
+function updateUrl() {
+  router.replace({
+    query: {
+      ...(activeQuery.value ? { search: activeQuery.value } : {}),
+      ...(sort.value !== "name" ? { sort: sort.value } : {}),
+    },
+  })
 }
 
 // Search crates by name. An empty query goes back to the full crate list.
 function handleSearch(query: string) {
   activeQuery.value = query.trim()
+  updateUrl()
+  refreshCrates()
+}
+
+function handleSortChange() {
+  updateUrl()
   refreshCrates()
 }
 </script>
 
 <style scoped>
-.main-container {
-  display: flex;
-  flex-direction: column;
-  /* Fill the space between app bar and footer, minus the page container padding */
-  height: calc(100vh - var(--v-layout-top, 64px) - var(--v-layout-bottom, 48px) - 32px);
-  overflow: hidden;
-  position: relative;
-}
-
 /* Search Card */
 .search-card {
   background: rgb(var(--v-theme-surface));
@@ -249,38 +273,33 @@ function handleSearch(query: string) {
   opacity: 0.7;
 }
 
+/* Result count and sort order */
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.result-count {
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.sort-select {
+  flex: 0 0 200px;
+}
+
+.sort-select :deep(.v-field) {
+  background: rgb(var(--v-theme-surface));
+}
+
+/* Same side margins as the search card, so both line up */
 .content-container {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  position: relative;
-  padding: 0;
   margin: 0 12px 12px 12px;
 }
 
-/* Improve scrollbar appearance */
-.content-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.content-container::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-}
-
-.content-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-/* Dark mode adjustments */
-:deep(.v-theme--dark) .content-container::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-/* Mobile adjustments */
-@media (max-width: 600px) {
-  .content-container {
-    margin: 0 8px 8px 8px;
-  }
+.load-more-sentinel {
+  height: 1px;
 }
 </style>

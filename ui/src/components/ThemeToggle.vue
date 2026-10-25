@@ -1,6 +1,6 @@
 <template>
   <v-btn icon variant="text" @click="toggleTheme" class="mr-2" data-testid="theme-toggle"
-    :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'">
+    :title="label" :aria-label="label">
     <v-icon>{{ isDark ? 'mdi-white-balance-sunny' : 'mdi-moon-waxing-crescent' }}</v-icon>
   </v-btn>
 </template>
@@ -13,6 +13,7 @@ import { useTheme } from 'vuetify';
 const store = useStore();
 const vuetifyTheme = useTheme();
 const isDark = computed(() => store.theme === 'dark');
+const label = computed(() => isDark.value ? 'Switch to light mode' : 'Switch to dark mode');
 
 function toggleTheme() {
   // Toggle theme in store

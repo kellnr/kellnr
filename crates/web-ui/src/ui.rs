@@ -13,6 +13,7 @@ use kellnr_common::name_or_description::NameOrDescription;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
+use kellnr_db::CrateSort;
 use kellnr_db::error::DbError;
 use kellnr_docs::upload::upload_dir_and_prune;
 use kellnr_settings::{
@@ -275,6 +276,7 @@ pub struct CratesParams {
     page: Option<u64>,
     page_size: Option<u64>,
     cache: Option<bool>,
+    sort: Option<CrateSort>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
@@ -282,6 +284,8 @@ pub struct Pagination {
     crates: Vec<CrateOverview>,
     page_size: u64,
     page: u64,
+    /// Number of crates on all pages
+    total: u64,
 }
 
 /// Get paginated list of crates
@@ -303,8 +307,13 @@ pub async fn crates(
     let page = params.page.unwrap_or(0);
     let cache = params.cache.unwrap_or(false);
     let visibility = crate_visibility(user.ok().as_ref());
+    let sort = params.sort.unwrap_or_default();
     let crates = db
-        .get_crate_overview_list(page_size, page_size * page, cache, &visibility)
+        .get_crate_overview_list(page_size, page_size * page, cache, &visibility, sort)
+        .await
+        .unwrap_or_default();
+    let total = db
+        .count_crate_overview_list(cache, &visibility)
         .await
         .unwrap_or_default();
 
@@ -312,6 +321,7 @@ pub async fn crates(
         crates,
         page_size,
         page,
+        total,
     })
 }
 
@@ -352,11 +362,16 @@ pub async fn search(
         )
         .await
         .unwrap_or_default();
+    let total = db
+        .count_by_crate_name_and_description(params.name.as_str(), cache, &visibility)
+        .await
+        .unwrap_or_default();
 
     Json(Pagination {
         crates,
         page_size,
         page,
+        total,
     })
 }
 
@@ -2072,6 +2087,9 @@ mod tests {
                 eq(CrateVisibility::Unrestricted),
             )
             .returning(move |_name, _, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .returning(|_, _, _| Ok(0));
 
         let r = app(
             mock_db,
@@ -2134,6 +2152,9 @@ mod tests {
                 eq(CrateVisibility::Unrestricted),
             )
             .returning(|_, _, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .returning(|_, _, _| Ok(0));
 
         let r = app(
             mock_db,
@@ -2175,6 +2196,9 @@ mod tests {
                 eq(CrateVisibility::Unrestricted),
             )
             .returning(move |_, _, _, _, _| Ok(vec![tc.clone()]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .returning(|_, _, _| Ok(0));
 
         let r = app(
             mock_db,
@@ -2218,6 +2242,9 @@ mod tests {
                 eq(CrateVisibility::Unrestricted),
             )
             .returning(|_, _, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .returning(|_, _, _| Ok(0));
 
         let r = app(
             mock_db,
@@ -2266,6 +2293,9 @@ mod tests {
                 eq(CrateVisibility::Unrestricted),
             )
             .returning(move |_, _, _, _, _| Ok(hits.clone()));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .returning(|_, _, _| Ok(0));
 
         let r = app(
             mock_db,
@@ -2487,8 +2517,12 @@ mod tests {
                 eq(0),
                 eq(false),
                 eq(CrateVisibility::User("user".to_string())),
+                eq(CrateSort::Name),
             )
-            .returning(|_, _, _, _| Ok(vec![]));
+            .returning(|_, _, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_crate_overview_list()
+            .returning(|_, _| Ok(42));
 
         let status = get_with_session("/crates", mock_db, "user", false).await;
 
@@ -2508,6 +2542,9 @@ mod tests {
                 eq(CrateVisibility::All),
             )
             .returning(|_, _, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_by_crate_name_and_description()
+            .returning(|_, _, _| Ok(0));
 
         let status = get_with_session("/search?name=foo", mock_db, "admin", true).await;
 
@@ -2569,8 +2606,17 @@ mod tests {
 
         mock_db
             .expect_get_crate_overview_list()
-            .with(eq(10), eq(0), eq(false), eq(CrateVisibility::Unrestricted))
-            .returning(move |_, _, _, _| Ok(tc.clone()));
+            .with(
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+                eq(CrateSort::Name),
+            )
+            .returning(move |_, _, _, _, _| Ok(tc.clone()));
+        mock_db
+            .expect_count_crate_overview_list()
+            .returning(|_, _| Ok(42));
 
         let r = app(
             mock_db,
@@ -2631,8 +2677,17 @@ mod tests {
         let crate_overview = expected_crate_overview.clone();
         mock_db
             .expect_get_crate_overview_list()
-            .with(eq(10), eq(0), eq(false), eq(CrateVisibility::Unrestricted))
-            .returning(move |_, _, _, _| Ok(crate_overview.clone()));
+            .with(
+                eq(10),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+                eq(CrateSort::Name),
+            )
+            .returning(move |_, _, _, _, _| Ok(crate_overview.clone()));
+        mock_db
+            .expect_count_crate_overview_list()
+            .returning(|_, _| Ok(42));
 
         let r = app(
             mock_db,
@@ -2651,7 +2706,62 @@ mod tests {
         assert_eq!(3, result_pagination.crates.len());
         assert_eq!(0, result_pagination.page);
         assert_eq!(10, result_pagination.page_size);
+        assert_eq!(42, result_pagination.total);
         assert_eq!(expected_crate_overview, result_pagination.crates);
+    }
+
+    #[tokio::test]
+    async fn crates_passes_sort_order_to_db() {
+        let mut mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+
+        mock_db
+            .expect_get_crate_overview_list()
+            .with(
+                eq(5),
+                eq(0),
+                eq(false),
+                eq(CrateVisibility::Unrestricted),
+                eq(CrateSort::Downloads),
+            )
+            .returning(|_, _, _, _, _| Ok(vec![]));
+        mock_db
+            .expect_count_crate_overview_list()
+            .returning(|_, _| Ok(0));
+
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/crates?page_size=5&sort=downloads")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(StatusCode::OK, r.status());
+    }
+
+    #[tokio::test]
+    async fn crates_rejects_unknown_sort_order() {
+        let (settings, storage) = test_deps();
+        let r = app(
+            MockDb::new(),
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/crates?sort=stars")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(StatusCode::BAD_REQUEST, r.status());
     }
 
     #[tokio::test]
