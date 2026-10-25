@@ -1,6 +1,6 @@
 <template>
   <div class="subsection-header">
-    <v-icon :icon="icon" size="x-small" class="me-2" color="primary"></v-icon>
+    <v-icon :icon="icon" size="x-small" class="me-2 subsection-icon"></v-icon>
     <span class="text-body-medium font-weight-medium">{{ title }}</span>
     <span v-if="count !== undefined" class="subsection-count">{{ count }}</span>
     <slot name="actions"></slot>
@@ -24,6 +24,10 @@ defineProps<{
   border-bottom: 1px solid rgb(var(--v-theme-outline));
 }
 
+.subsection-icon {
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
 .subsection-count {
   margin-left: auto;
   background: rgba(var(--v-theme-primary), 0.1);
@@ -31,6 +35,6 @@ defineProps<{
   font-size: 11px;
   font-weight: 500;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: 9999px;
 }
 </style>

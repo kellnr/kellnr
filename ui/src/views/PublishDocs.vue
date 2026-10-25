@@ -1,7 +1,7 @@
 <template>
-  <v-container fluid class="pa-4">
+  <v-container fluid class="pa-0">
     <v-card elevation="0" class="docs-card" data-testid="publish-docs">
-      <SectionHeader icon="mdi-book-open-page-variant" title="Publish Crate Documentation" />
+      <SectionHeader icon="mdi-book-open-page-variant" title="Publish crate documentation" />
 
       <v-card-text class="docs-content">
         <p>
@@ -10,7 +10,7 @@
           If for some reason, the documentation generation fails or a custom documentation should be used, see below for instruction for manual documentation uploads.
         </p>
 
-        <SubsectionHeader icon="mdi-upload" title="Manual Documentation Publishing" class="mt-6" />
+        <SubsectionHeader icon="mdi-upload" title="Manual documentation publishing" class="mt-6" />
         <p>
           <i>Kellnr</i> provides an easy option to host the corresponding
           <a href="https://doc.rust-lang.org/rustdoc/index.html">Rustdoc</a>
@@ -62,7 +62,7 @@ curl -H "Authorization: Xjd83hDh45FLJ58bdShd4uhVNdnded4f" \\
 .docs-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 12px;
+  border-radius: var(--kellnr-radius-card);
   overflow: hidden;
 }
 

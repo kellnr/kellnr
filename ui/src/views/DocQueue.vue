@@ -1,11 +1,11 @@
 <template>
-  <v-container fluid class="pa-4">
+  <v-container fluid class="pa-0">
     <!-- Header Card -->
-    <v-card elevation="0" rounded="lg" class="doc-queue-card mb-4">
+    <v-card elevation="0" class="doc-queue-card mb-4">
       <v-card-title class="section-header pa-4">
         <div class="d-flex align-center">
           <v-icon icon="mdi-file-document-multiple-outline" size="large" class="mr-3 header-icon" />
-          <span class="text-headline-small font-weight-bold">Rustdoc Queue</span>
+          <span class="text-headline-small font-weight-bold">Rustdoc queue</span>
         </div>
       </v-card-title>
       <v-card-text class="pa-4">
@@ -17,7 +17,7 @@
     </v-card>
 
     <!-- Empty State -->
-    <v-card v-if="emptyQueue" elevation="0" rounded="lg" class="empty-state-card pa-6 text-center">
+    <v-card v-if="emptyQueue" elevation="0" class="empty-state-card pa-6 text-center">
       <v-icon icon="mdi-check-circle-outline" size="64" class="empty-icon mb-4" />
       <h3 class="text-title-large font-weight-medium mb-2">Queue is empty</h3>
       <p class="text-body-medium empty-description mb-0">
@@ -26,10 +26,10 @@
     </v-card>
 
     <!-- Queue Items -->
-    <v-card v-if="!emptyQueue" elevation="0" rounded="lg" class="queue-list-card">
+    <v-card v-if="!emptyQueue" elevation="0" class="queue-list-card">
       <v-card-title class="queue-header pa-4">
         <div class="d-flex align-center justify-space-between">
-          <span class="text-body-large font-weight-medium">Pending Documentation</span>
+          <span class="text-body-large font-weight-medium">Pending documentation</span>
           <v-chip size="small" variant="tonal" color="primary">
             {{ queue.length }} item{{ queue.length !== 1 ? 's' : '' }}
           </v-chip>

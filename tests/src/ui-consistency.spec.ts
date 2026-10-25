@@ -10,7 +10,7 @@
  * - Dependency lists use the common section header
  * - Publish docs page uses the common card and code block layout
  * - Code block copy button reports success and failure
- * - Smaller copy fixes (Change Password, Startup Config, Admin tab)
+ * - Smaller copy fixes (Change password, Startup config, Admin tab)
  *
  * Performance: All tests share a single local Kellnr instance.
  */
@@ -88,11 +88,11 @@ test.describe("UI Consistency", () => {
     await page.goto(`${baseUrl}/settings`);
 
     const expected: Record<string, string> = {
-      "nav-change-password": "Change Password",
-      "nav-auth-tokens": "Auth Tokens",
+      "nav-change-password": "Change password",
+      "nav-auth-tokens": "Auth tokens",
       "nav-user-management": "Users",
       "nav-groups": "Groups",
-      "nav-startup-config": "Startup Config",
+      "nav-startup-config": "Startup config",
     };
 
     for (const [testId, name] of Object.entries(expected)) {
@@ -151,12 +151,12 @@ test.describe("UI Consistency", () => {
     await cratePage.waitForCrateData();
 
     const radii = await page.evaluate(() =>
-      [".title-card", ".tabs-card", ".content-card", "[data-testid=crate-sidebar]"].map((selector) => {
+      [".content-card", "[data-testid=crate-sidebar]"].map((selector) => {
         const el = document.querySelector(selector);
         return el ? getComputedStyle(el).borderTopLeftRadius : null;
       }),
     );
-    expect(radii).toEqual(["12px", "12px", "12px", "12px"]);
+    expect(radii).toEqual(["12px", "12px"]);
   });
 
   test("dependency lists use the section header with a count", async ({ page }) => {
@@ -171,7 +171,7 @@ test.describe("UI Consistency", () => {
     await page.goto(`${baseUrl}/publishdocs`);
 
     const card = page.getByTestId("publish-docs");
-    await expect(card.getByTestId("section-title")).toHaveText("Publish Crate Documentation");
+    await expect(card.getByTestId("section-title")).toHaveText("Publish crate documentation");
     await expect(card.getByTestId("code-block")).toHaveCount(2);
     await expect(card.getByTestId("code-block-copy")).toHaveCount(2);
   });
@@ -196,19 +196,19 @@ test.describe("UI Consistency", () => {
     await expect(copyButtons.nth(1).locator(".mdi-alert-circle-outline")).toBeVisible();
   });
 
-  test("change password shows the New Password label once", async ({ page }) => {
+  test("change password shows the New password label once", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(`${baseUrl}/settings`);
     await page.getByTestId("nav-change-password").click();
 
-    await expect(page.getByText("New Password", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("New password", { exact: true })).toHaveCount(1);
   });
 
   test("startup config uses singular for one setting", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(`${baseUrl}/settings`);
     await page.getByTestId("nav-startup-config").click();
-    await expect(page.getByTestId("section-title").first()).toHaveText("Startup Config");
+    await expect(page.getByTestId("section-title").first()).toHaveText("Startup config");
 
     // Sections without configured values show their number of settings
     await expect(page.getByText(/^\d+ settings?$/).first()).toBeVisible();

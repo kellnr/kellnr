@@ -1,17 +1,12 @@
 <template>
   <v-card elevation="0" class="sidebar-card" data-testid="crate-sidebar">
     <!-- Header -->
-    <v-card-title class="sidebar-header">
-      <v-icon class="me-2">mdi-package-variant</v-icon>
-      Crate Information
-    </v-card-title>
-
-    <v-card-text class="pt-4">
+    <v-card-text class="pa-5">
       <!-- Install Section -->
       <div class="sidebar-section" data-testid="install-section">
         <div class="d-flex align-center mb-2">
-          <v-icon color="primary" size="small" class="me-2">mdi-code-braces</v-icon>
-          <span class="text-body-large font-weight-medium">Install</span>
+          <v-icon size="small" class="me-2 section-icon">mdi-code-braces</v-icon>
+          <span class="section-title">Install</span>
         </div>
 
         <div v-for="snippet in installSnippets" :key="snippet.testId" class="snippet">
@@ -40,8 +35,8 @@
       <!-- Uploaded Section -->
       <div class="sidebar-section">
         <div class="d-flex align-center mb-2">
-          <v-icon color="info" size="small" class="me-2">mdi-calendar</v-icon>
-          <span class="text-body-large font-weight-medium">Published</span>
+          <v-icon size="small" class="me-2 section-icon">mdi-calendar</v-icon>
+          <span class="section-title">Published</span>
         </div>
 
         <div class="sidebar-content">
@@ -56,8 +51,8 @@
       <!-- Downloads Section -->
       <div class="sidebar-section">
         <div class="d-flex align-center mb-2">
-          <v-icon color="success" size="small" class="me-2">mdi-download</v-icon>
-          <span class="text-body-large font-weight-medium">Downloads</span>
+          <v-icon size="small" class="me-2 section-icon">mdi-download</v-icon>
+          <span class="section-title">Downloads</span>
         </div>
 
         <div class="sidebar-content download-grid">
@@ -75,8 +70,8 @@
 
         <div v-if="repository" class="sidebar-section">
           <div class="d-flex align-center mb-2">
-            <v-icon color="primary" size="small" class="me-2">mdi-source-repository</v-icon>
-            <span class="text-body-large font-weight-medium">Repository</span>
+            <v-icon size="small" class="me-2 section-icon">mdi-source-repository</v-icon>
+            <span class="section-title">Repository</span>
           </div>
           <div class="sidebar-content">
             <a :href="safeUrl(repository)" target="_blank" rel="noopener noreferrer" class="sidebar-link"
@@ -86,8 +81,8 @@
 
         <div v-if="homepage" class="sidebar-section">
           <div class="d-flex align-center mb-2">
-            <v-icon color="primary" size="small" class="me-2">mdi-home-outline</v-icon>
-            <span class="text-body-large font-weight-medium">Homepage</span>
+            <v-icon size="small" class="me-2 section-icon">mdi-home-outline</v-icon>
+            <span class="section-title">Homepage</span>
           </div>
           <div class="sidebar-content">
             <a :href="safeUrl(homepage)" target="_blank" rel="noopener noreferrer" class="sidebar-link"
@@ -97,8 +92,8 @@
 
         <div v-if="license" class="sidebar-section">
           <div class="d-flex align-center mb-2">
-            <v-icon color="primary" size="small" class="me-2">mdi-scale-balance</v-icon>
-            <span class="text-body-large font-weight-medium">License</span>
+            <v-icon size="small" class="me-2 section-icon">mdi-scale-balance</v-icon>
+            <span class="section-title">License</span>
           </div>
           <div class="sidebar-content" data-testid="sidebar-license">{{ license }}</div>
         </div>
@@ -109,8 +104,8 @@
       <!-- Documentation Section -->
       <div class="sidebar-section">
         <div class="d-flex align-center mb-2">
-          <v-icon color="warning" size="small" class="me-2">mdi-book-open-variant</v-icon>
-          <span class="text-body-large font-weight-medium">Documentation</span>
+          <v-icon size="small" class="me-2 section-icon">mdi-book-open-variant</v-icon>
+          <span class="section-title">Documentation</span>
         </div>
 
         <div class="sidebar-content docs-actions">
@@ -231,19 +226,10 @@ function buildDocs() {
 <style scoped>
 /* Enhanced Sidebar Styling */
 .sidebar-card {
-  border-radius: 12px;
+  border-radius: var(--kellnr-radius-card);
   overflow: hidden;
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-}
-
-.sidebar-header {
-  background: rgb(var(--v-theme-surface-variant));
-  color: rgb(var(--v-theme-on-surface));
-  padding-top: 16px;
-  padding-bottom: 16px;
-  font-weight: 500;
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
 }
 
 .sidebar-section {
@@ -264,7 +250,7 @@ function buildDocs() {
   position: relative;
   padding: 8px 12px;
   background: rgb(var(--v-theme-surface-variant));
-  border-radius: 6px;
+  border-radius: var(--kellnr-radius);
   min-height: 36px;
   border: 1px solid rgb(var(--v-theme-outline));
   width: 100%;
@@ -275,7 +261,7 @@ function buildDocs() {
   min-width: 0;
   flex: 1;
   padding-right: 8px;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
   color: rgb(var(--v-theme-on-surface));
 }
 
@@ -341,8 +327,14 @@ function buildDocs() {
   cursor: pointer;
 }
 
-/* Section titles */
-.text-body-large {
+/* Section titles, the icons stay muted so color is left for links and actions */
+.section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
   color: rgb(var(--v-theme-on-surface));
+}
+
+.section-icon {
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 </style>
