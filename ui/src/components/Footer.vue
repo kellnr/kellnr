@@ -1,6 +1,6 @@
 <template>
   <!-- Not an "app" footer: it ends the page instead of covering its bottom -->
-  <v-footer :class="['footer-container', { 'footer-container-light': store.theme === 'light' }]">
+  <v-footer class="footer-container">
     <div class="footer-content">
       <!-- Brand and Version -->
       <div class="brand-section">
@@ -33,9 +33,6 @@
 import { ref, onMounted } from "vue";
 import { settingsService } from "../services";
 import { isSuccess } from "../services/api";
-import { useStore } from "../store/store";
-
-const store = useStore();
 
 // Version state
 const version = ref("");
@@ -73,20 +70,13 @@ onMounted(async () => {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid rgba(var(--v-theme-outline), 0.5);
-  /* Above the fixed background image */
   position: relative;
-  z-index: 1;
   flex: 0 0 auto;
   min-height: 48px !important;
   max-height: 48px;
   padding: 0 16px;
 }
 
-/* Light theme: more transparent to show gradient background */
-.footer-container-light {
-  background: rgba(255, 255, 255, 0.7) !important;
-  border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
-}
 
 .footer-content {
   display: flex;

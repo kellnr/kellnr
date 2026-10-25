@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- App Bar -->
-    <v-app-bar :class="['app-header', { 'app-header-light': store.theme === 'light' }]" elevation="0" height="64" data-testid="header-app-bar">
+    <v-app-bar class="app-header" elevation="0" height="64" data-testid="header-app-bar">
       <!-- Mobile menu toggle -->
       <v-app-bar-nav-icon class="d-md-none nav-toggle" aria-label="Open navigation menu" data-testid="header-nav-toggle"
         @click="drawer = !drawer" />
@@ -173,11 +173,6 @@ function showNotification(message: string, isError: boolean = false) {
   border-bottom: 1px solid rgba(var(--v-theme-outline), 0.5);
 }
 
-/* Light theme: more transparent to show gradient background */
-.app-header-light {
-  background: rgba(255, 255, 255, 0.7) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-}
 
 .nav-toggle {
   color: rgb(var(--v-theme-on-surface));

@@ -32,23 +32,23 @@ const store = useStore()
 const kellnrLightTheme = {
   colors: {
     // Brand colors
-    primary: '#1976D2',           // Kellnr blue - main actions, links
-    'primary-darken-1': '#1565C0',
-    'primary-lighten-1': '#42A5F5',
+    primary: '#1565C0',           // Kellnr blue - main actions, links (5.4:1 on surface)
+    'primary-darken-1': '#0D47A1',
+    'primary-lighten-1': '#1976D2',
     secondary: '#7C4DFF',         // Purple accent
     'secondary-darken-1': '#651FFF',
     'secondary-lighten-1': '#B388FF',
 
-    // Backgrounds
-    background: '#F5F7FA',        // Page background - soft gray
-    surface: '#FFFFFF',           // Cards, elevated surfaces
-    'surface-variant': '#EEF2F6', // Subtle card backgrounds
+    // Backgrounds, muted so large areas do not glare
+    background: '#E8ECF1',        // Page background - soft slate
+    surface: '#F7F9FB',           // Cards, elevated surfaces - off-white
+    'surface-variant': '#EDF1F5', // Subtle card backgrounds
     'surface-bright': '#FFFFFF',
 
     // Text colors
-    'on-background': '#1A2027',   // Primary text on background
-    'on-surface': '#1A2027',      // Primary text on surfaces
-    'on-surface-variant': '#5A6A7A', // Secondary text
+    'on-background': '#1E293B',   // Primary text on background
+    'on-surface': '#1E293B',      // Primary text on surfaces
+    'on-surface-variant': '#526173', // Secondary text
     'on-primary': '#FFFFFF',
     'on-secondary': '#FFFFFF',
 
@@ -63,8 +63,8 @@ const kellnrLightTheme = {
     'on-info': '#FFFFFF',
 
     // UI elements
-    'outline': '#D0D7DE',         // Borders
-    'outline-variant': '#E4E9EE', // Subtle borders
+    'outline': '#CBD3DC',         // Borders
+    'outline-variant': '#DCE2E8', // Subtle borders
 
     // Custom Kellnr colors for cards
     'card-blue': '#4A7AB0',       // Muted blue for hero cards
