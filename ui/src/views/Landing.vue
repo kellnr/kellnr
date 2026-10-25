@@ -1,10 +1,10 @@
 <template>
   <v-container fluid class="landing-container pa-4">
     <!-- Hero Search Section -->
-    <v-row class="mb-6">
+    <v-row class="mb-2">
       <v-col cols="12">
         <div class="text-center mb-4">
-          <h1 class="text-headline-large text-md-display-medium font-weight-bold welcome-title mb-2" :class="{ 'dark-mode': isDark }">
+          <h1 class="text-headline-large text-md-display-small font-weight-bold welcome-title mb-2" :class="{ 'dark-mode': isDark }">
             Welcome to Kellnr
           </h1>
           <p class="text-body-large welcome-subtitle" :class="{ 'dark-mode': isDark }">
@@ -34,8 +34,8 @@
 
     <!-- Dashboard Content -->
     <template v-else>
-      <!-- Hero Stats Row - Large Cards -->
-      <v-row class="mb-6">
+      <!-- Registry statistics -->
+      <v-row class="mb-2">
         <v-col cols="12" md="4">
           <hero-stat-card
             :num="statistics.num_crates"
@@ -66,53 +66,30 @@
         </v-col>
       </v-row>
 
-      <!-- Secondary Info Row -->
-      <v-row class="mb-8">
-        <!-- Last Updated Crate -->
-        <v-col v-if="statistics.last_updated_crate" cols="12" md="6" lg="4">
-          <recent-crate-card
-            :crateName="statistics.last_updated_crate[0]"
-            :timeAgo="statistics.last_updated_crate[1]"
-            :onClick="() => navigateToCrate(statistics.last_updated_crate![0])">
-          </recent-crate-card>
-        </v-col>
-
-        <!-- Top Downloaded Crates - Compact -->
-        <v-col v-if="statistics.top_crates.first[1] > 0" cols="12" md="6" lg="8">
-          <v-card class="top-crates-card h-100" elevation="2" rounded="xl" data-testid="landing-top-crates">
-            <v-card-text class="pa-4">
-              <div class="d-flex align-center mb-3">
-                <v-icon icon="mdi-trophy" color="amber-darken-1" size="small" class="mr-2"></v-icon>
-                <span class="text-title-small font-weight-bold section-title">Top Downloaded</span>
-              </div>
-              <div class="d-flex flex-wrap gap-3">
-                <div v-if="statistics.top_crates.first[1] > 0" class="top-crate-item">
-                  <v-chip color="amber" variant="flat" size="small" class="mr-2">
-                    <v-icon icon="mdi-medal" start size="small"></v-icon>
-                    1st
-                  </v-chip>
-                  <span class="crate-name-text">{{ statistics.top_crates.first[0] }}</span>
-                  <span class="download-count">({{ formatNumber(statistics.top_crates.first[1]) }})</span>
-                </div>
-                <div v-if="statistics.top_crates.second[1] > 0" class="top-crate-item">
-                  <v-chip color="grey-lighten-1" variant="flat" size="small" class="mr-2">
-                    <v-icon icon="mdi-medal" start size="small"></v-icon>
-                    2nd
-                  </v-chip>
-                  <span class="crate-name-text">{{ statistics.top_crates.second[0] }}</span>
-                  <span class="download-count">({{ formatNumber(statistics.top_crates.second[1]) }})</span>
-                </div>
-                <div v-if="statistics.top_crates.third[1] > 0" class="top-crate-item">
-                  <v-chip color="orange-lighten-1" variant="flat" size="small" class="mr-2">
-                    <v-icon icon="mdi-medal" start size="small"></v-icon>
-                    3rd
-                  </v-chip>
-                  <span class="crate-name-text">{{ statistics.top_crates.third[0] }}</span>
-                  <span class="download-count">({{ formatNumber(statistics.top_crates.third[1]) }})</span>
-                </div>
-              </div>
-            </v-card-text>
+      <!-- An empty registry points to the setup guide -->
+      <v-row v-if="statistics.num_crates === 0" class="mb-6">
+        <v-col cols="12">
+          <v-card class="empty-registry-card pa-6 text-center" elevation="0" rounded="lg" data-testid="landing-empty">
+            <v-icon icon="mdi-package-variant" size="40" color="primary" class="mb-2"></v-icon>
+            <div class="text-title-large font-weight-medium mb-1">No crates yet</div>
+            <p class="text-body-medium mb-0">
+              To learn how to publish crates to Kellnr, read the
+              <a href="https://kellnr.io/documentation" target="_blank" rel="noopener noreferrer"
+                class="text-primary font-weight-medium text-decoration-none">documentation</a>.
+            </p>
           </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- Recently updated and most downloaded crates -->
+      <v-row v-else class="mb-6">
+        <v-col cols="12" :md="topCrates.length > 0 ? 6 : 12">
+          <crate-list-card title="Recently updated" icon="mdi-update" :crates="recentCrates" sort="updated"
+            test-id="landing-recent-crates" row-test-id="recent-crate"></crate-list-card>
+        </v-col>
+        <v-col v-if="topCrates.length > 0" cols="12" md="6">
+          <crate-list-card title="Most downloaded" icon="mdi-trending-up" :crates="topCrates" sort="downloads"
+            test-id="landing-top-crates" row-test-id="top-crate"></crate-list-card>
         </v-col>
       </v-row>
 
@@ -120,7 +97,7 @@
       <v-row v-if="statistics.proxy_enabled" class="mb-6">
         <v-col cols="12">
           <div class="section-divider mb-5">
-            <span class="section-divider-text" data-testid="landing-cached-section">Crates.io Proxy Cache</span>
+            <span class="section-divider-text" data-testid="landing-cached-section">Crates.io proxy cache</span>
           </div>
         </v-col>
 
@@ -144,16 +121,21 @@
 <script setup lang="ts">
 import { onBeforeMount, ref, computed } from "vue"
 import HeroStatCard from '../components/HeroStatCard.vue'
-import RecentCrateCard from '../components/RecentCrateCard.vue'
+import CrateListCard from '../components/CrateListCard.vue'
 import type { Statistics } from '../types/statistics'
+import type { CrateOverview } from '../types/crate_overview'
 import { crateService } from '../services'
 import { isSuccess } from '../services/api'
 import router from '../router'
 import { useStore } from '../store/store'
 import { useTheme } from 'vuetify'
-import { formatNumber } from '../common/format'
+
+// Crates shown in the "Recently updated" and "Most downloaded" lists
+const LIST_SIZE = 5
 
 const statistics = ref<Statistics>()
+const recentCrates = ref<CrateOverview[]>([])
+const topCrates = ref<CrateOverview[]>([])
 const searchText = ref("")
 const store = useStore()
 const theme = useTheme()
@@ -162,9 +144,20 @@ const theme = useTheme()
 const isDark = computed(() => theme.global.current.value.dark)
 
 onBeforeMount(async () => {
-  const result = await crateService.getStatistics()
-  if (isSuccess(result)) {
-    statistics.value = result.data
+  const [stats, recent, top] = await Promise.all([
+    crateService.getStatistics(),
+    crateService.getCrates(0, LIST_SIZE, false, 'updated'),
+    crateService.getCrates(0, LIST_SIZE, false, 'downloads'),
+  ])
+  if (isSuccess(recent)) {
+    recentCrates.value = recent.data.crates
+  }
+  if (isSuccess(top)) {
+    // A ranking of crates nobody downloaded yet says nothing
+    topCrates.value = top.data.crates.filter(crate => crate.total_downloads > 0)
+  }
+  if (isSuccess(stats)) {
+    statistics.value = stats.data
   }
 })
 
@@ -184,9 +177,6 @@ function navigateToCachedCrates() {
   router.push({ path: '/crates' })
 }
 
-function navigateToCrate(crateName: string) {
-  router.push({ name: 'Crate', query: { name: crateName } })
-}
 </script>
 
 <style scoped>
@@ -285,38 +275,8 @@ function navigateToCrate(crateName: string) {
   color: rgba(var(--v-theme-on-background), 0.5);
 }
 
-.section-title {
-  color: rgba(var(--v-theme-on-background), 0.7);
-}
-
-/* Top Crates Card */
-.top-crates-card {
+.empty-registry-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-}
-
-.top-crate-item {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgb(var(--v-theme-surface-variant));
-}
-
-.crate-name-text {
-  font-weight: 500;
-  color: rgb(var(--v-theme-on-surface));
-}
-
-.download-count {
-  margin-left: 8px;
-  font-size: 0.85rem;
-  color: rgb(var(--v-theme-on-surface-variant));
-}
-
-
-/* Gap utility for older browsers */
-.gap-3 {
-  gap: 12px;
 }
 </style>
