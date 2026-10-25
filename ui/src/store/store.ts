@@ -13,7 +13,8 @@ export const useStore = defineStore('store', {
     state: (): State => ({
         loggedInUser: null,
         loggedInUserIsAdmin: false,
-        theme: 'light',
+        // Applies until a user picks a theme, the choice is stored per browser
+        theme: 'dark',
         rememberMe: false,
         rememberMeUser: null,
         searchCache: false,

@@ -128,6 +128,13 @@ test.describe("Navigation UI Tests", () => {
     expect(page.url()).toContain("/docqueue");
   });
 
+  test("dark theme is the default", async ({ page }) => {
+    // Every test starts with an empty localStorage, so no theme was picked yet
+    await page.goto(baseUrl);
+    await expect(page.getByTestId("theme-toggle")).toHaveAttribute("aria-label", "Switch to light mode");
+    expect(await new HeaderComponent(page).isDarkMode()).toBe(true);
+  });
+
   test("theme toggle switches between light and dark mode", async ({ page }) => {
     const header = new HeaderComponent(page);
 
