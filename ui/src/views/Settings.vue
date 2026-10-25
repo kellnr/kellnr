@@ -119,8 +119,8 @@ import GroupMgmt from "../components/GroupMgmt.vue";
 import StartupConfig from "../components/StartupConfig.vue";
 import ToolchainMgmt from "../components/ToolchainMgmt.vue";
 import { useStore } from "../store/store";
-import { ref, computed, onBeforeMount } from "vue";
-import { useRoute } from "vue-router";
+import { ref, computed, onBeforeMount, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { settingsService } from "../services";
 import { isSuccess } from "../services/api";
 import type { Settings } from "../types/settings";
@@ -187,18 +187,33 @@ const navItems: NavItem[] = [
 ]
 
 const route = useRoute()
+const router = useRouter()
 
 const settings = ref<Settings>(emptySettings)
 const ssoEnforced = ref(false)
 const mobileNavOpen = ref(false)
 
-function getInitialTab(): SettingsTab {
+function getTabFromRoute(): SettingsTab {
     const tab = route.query.tab as string | undefined
     const validTabs: SettingsTab[] = ['password', 'tokens', 'users', 'groups', 'config', 'toolchains']
     return validTabs.includes(tab as SettingsTab) ? (tab as SettingsTab) : 'password'
 }
 
-const activeTab = ref<SettingsTab>(getInitialTab())
+const activeTab = ref<SettingsTab>(getTabFromRoute())
+
+// Keep the section in the URL, so it survives a reload and can be shared
+watch(activeTab, (tab) => {
+    if (route.query.tab !== tab) {
+        router.replace({ query: { ...route.query, tab } })
+    }
+})
+
+// Back and forward in the browser switch between sections
+watch(() => route.query.tab, () => {
+    if (route.query.tab !== undefined) {
+        activeTab.value = getTabFromRoute()
+    }
+})
 const store = useStore()
 
 const visibleUserNavItems = computed(() =>
