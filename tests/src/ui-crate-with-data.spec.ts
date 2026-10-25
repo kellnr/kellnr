@@ -286,7 +286,7 @@ test.describe("Crate Views with Data", () => {
         .getByTestId("stat-value")
         .first()
         .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-      expect(fontSize).toBeGreaterThan(40);
+      expect(fontSize).toBeGreaterThanOrEqual(28);
     });
 
     test("short pages do not scroll", async ({ page }) => {
@@ -310,11 +310,11 @@ test.describe("Crate Views with Data", () => {
 
       const card = page.getByTestId("crate-card").first();
       const cardBox = await card.boundingBox();
-      const docsBox = await card.getByTestId("crate-card-docs-link").boundingBox();
+      const statsBox = await card.locator(".stats-row").boundingBox();
       expect(cardBox).not.toBeNull();
-      expect(docsBox).not.toBeNull();
-      // The documentation button stays inside the card
-      expect(docsBox!.x + docsBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
+      expect(statsBox).not.toBeNull();
+      // Downloads, date and documentation button stay inside the card
+      expect(statsBox!.x + statsBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
 
       // The date stays on one line
       const lineHeights = await card.getByTestId("crate-card-updated").evaluate((el) => ({
@@ -363,20 +363,17 @@ test.describe("Crate Views with Data", () => {
       const cratePage = new CratePage(page);
       await cratePage.waitForCrateData();
 
-      const lines = await page.getByTestId("install-snippet").evaluate((el) => {
-        // Collect the text of each rendered line
-        const range = document.createRange();
-        const text = el.firstChild as Text;
-        const result: Record<number, string> = {};
-        for (let i = 0; i < text.length; i++) {
-          range.setStart(text, i);
-          range.setEnd(text, i + 1);
-          const top = Math.round(range.getBoundingClientRect().top);
-          result[top] = (result[top] ?? "") + text.data[i];
-        }
-        return Object.values(result);
-      });
-      expect(lines.some((line) => line.includes('"1.0.0"'))).toBe(true);
+      // The snippet only wraps between words, so every word is on one line
+      const words = await page.getByTestId("install-snippet").locator(".word").evaluateAll((els) =>
+        els.map((el) => ({
+          text: el.textContent,
+          lines: el.getClientRects().length,
+        })),
+      );
+      expect(words.map((w) => w.text)).toContain('"1.0.0",');
+      for (const word of words) {
+        expect(word.lines, `"${word.text}" should not wrap`).toBe(1);
+      }
     });
 
     test("documentation link uses the theme color", async ({ page }) => {

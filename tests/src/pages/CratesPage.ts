@@ -164,9 +164,8 @@ export class CratesPage extends BasePage {
    * Scroll to load more crates (infinite scroll).
    */
   async scrollToLoadMore(): Promise<void> {
-    const container = this.page.getByTestId("crates-scroll-container");
-    await container.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
+    await this.page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
     });
     // Wait for potential loading
     await this.page.waitForTimeout(500);
