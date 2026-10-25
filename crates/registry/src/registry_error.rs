@@ -25,10 +25,6 @@ pub enum RegistryError {
     ExtractBytesFailed(#[from] axum::extract::rejection::BytesRejection),
     #[error("Not the owner of the crate")]
     NotOwner,
-    #[error("No authorization for download provided")]
-    DownloadUnauthorized,
-    #[error("Not a crate user")]
-    NotCrateUser,
     #[error("Crate not found")]
     CrateNotFound,
     #[error("Required field(s) not defined for crate {0}, missing: {1:?}, requires: {2:?}")]
@@ -47,10 +43,7 @@ impl From<RegistryError> for ApiError {
     fn from(e: RegistryError) -> Self {
         match e {
             RegistryError::CrateNotFound => ApiError::from_err(&e, StatusCode::NOT_FOUND),
-            RegistryError::DownloadUnauthorized => ApiError::from_err(&e, StatusCode::UNAUTHORIZED),
-            RegistryError::NotOwner | RegistryError::NotCrateUser => {
-                ApiError::from_err(&e, StatusCode::FORBIDDEN)
-            }
+            RegistryError::NotOwner => ApiError::from_err(&e, StatusCode::FORBIDDEN),
             RegistryError::LastOwner => ApiError::from_err(&e, StatusCode::CONFLICT),
             _ => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
         }

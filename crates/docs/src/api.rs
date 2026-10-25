@@ -139,6 +139,14 @@ pub async fn publish_docs(
     let normalized_name = package.to_normalized();
     let crate_version = &version.to_string();
 
+    // Check if user from token is an owner of the crate.
+    // If not, he is not allowed to push the docs. This comes before the
+    // version check, so that others cannot tell which crates and versions
+    // exist: they get the same error for a missing crate.
+    let user = MaybeUser::from_token(token);
+    check_can_modify(&user)?;
+    check_ownership(&normalized_name, &user, &db).await?;
+
     // Check if crate with the version exists.
     if let Some(id) = db.get_crate_id(&normalized_name).await? {
         if !db.crate_version_exists(id, crate_version).await? {
@@ -147,12 +155,6 @@ pub async fn publish_docs(
     } else {
         return crate_does_not_exist(&normalized_name, crate_version);
     }
-
-    // Check if user from token is an owner of the crate.
-    // If not, he is not allowed to push the docs.
-    let user = MaybeUser::from_token(token);
-    check_can_modify(&user)?;
-    check_ownership(&normalized_name, &user, &db).await?;
 
     let tmp_dir = tempfile::tempdir().map_err(DocsError::IoError)?;
     let extract_path = tmp_dir.path().to_path_buf();
@@ -452,6 +454,45 @@ mod tests {
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
         let key = DocsStorage::file_key("test-crate", "1.0.0", "doc/test_crate/index.html");
         assert!(!docs_storage.exists(&key).await.unwrap());
+    }
+
+    // A non-owner gets the same response for a missing crate or version as for
+    // an existing crate, so that the existence of a crate is not revealed.
+    #[tokio::test]
+    async fn publish_docs_non_owner_cannot_tell_missing_from_existing_crate() {
+        let mut db = MockDb::new();
+        db.expect_get_crate_id()
+            .returning(|name| Ok((name.as_str() == "test-crate").then_some(1)));
+        db.expect_crate_version_exists()
+            .returning(|_, version| Ok(version == "1.0.0"));
+        db.expect_get_user_from_token().returning(|_| {
+            Ok(User {
+                name: "other".to_string(),
+                ..User::default()
+            })
+        });
+        db.expect_is_owner().returning(|_, _| Ok(false));
+        db.expect_update_docs_link().never();
+        let db: Arc<dyn DbProvider> = Arc::new(db);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let docs_storage = Arc::new(DocsStorage::new(Box::new(
+            FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
+        ) as DynStorage));
+
+        for uri in ["/test-crate/1.0.0", "/test-crate/9.9.9", "/missing/1.0.0"] {
+            let zip_bytes = build_zip(&[("doc/x/index.html", b"<html>docs</html>")]);
+            let r = publish_app(db.clone(), docs_storage.clone())
+                .oneshot(
+                    Request::put(uri)
+                        .header(header::AUTHORIZATION, "sometoken")
+                        .body(Body::from(zip_bytes))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(r.status(), StatusCode::FORBIDDEN, "{uri}");
+        }
     }
 
     #[tokio::test]
