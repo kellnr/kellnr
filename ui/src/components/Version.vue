@@ -12,7 +12,7 @@
       <!-- Middle: Date -->
       <div class="version-date">
         <v-icon icon="mdi-calendar-outline" size="small" class="me-2"></v-icon>
-        <span>{{ humanizedLastUpdated }}</span>
+        <span :title="exactDate(props.last_updated)">{{ humanizedLastUpdated }}</span>
       </div>
 
       <!-- Right: Downloads -->
@@ -28,15 +28,10 @@
 </template>
 
 <script setup lang="ts">
-import dayjs from 'dayjs'
 import { computed } from "vue";
-import relativeTime from "dayjs/plugin/relativeTime";
-import utc from "dayjs/plugin/utc";
 import { useRouter } from "vue-router";
 import { formatNumber } from "../common/format";
-
-dayjs.extend(relativeTime);
-dayjs.extend(utc);
+import { useRelativeTime } from "../composables";
 
 const props = defineProps<{
   name: string,
@@ -46,10 +41,9 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
+const { fromNow, exactDate } = useRelativeTime();
 
-const humanizedLastUpdated = computed(() => {
-  return dayjs.utc(props.last_updated).fromNow();
-});
+const humanizedLastUpdated = computed(() => fromNow(props.last_updated));
 
 const formattedDownloads = computed(() => formatNumber(props.downloads));
 

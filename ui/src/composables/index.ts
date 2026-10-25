@@ -24,3 +24,6 @@ export { useNotification, useGlobalNotification } from './useNotification'
 export type { SnackbarState, UseNotificationReturn } from './useNotification'
 
 export { useCrudManager } from './useCrudManager'
+
+export { useRelativeTime } from './useRelativeTime'
+export type { UseRelativeTimeReturn } from './useRelativeTime'
