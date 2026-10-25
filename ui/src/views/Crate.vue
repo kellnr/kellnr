@@ -15,13 +15,15 @@
 
     <!-- Tab Navigation -->
     <v-card class="mb-4 tabs-card" elevation="0">
-      <v-tabs v-model="tab" color="primary" grow slider-color="primary" class="crate-tabs">
+      <!-- Arrows show that more tabs are hidden on narrow screens -->
+      <v-tabs :model-value="tab" color="primary" slider-color="primary" show-arrows class="crate-tabs"
+        @update:model-value="selectTab">
         <v-tab v-if="selected_version.readme" value="readme" data-testid="crate-tab-readme">Readme</v-tab>
-        <v-tab value="meta" data-testid="crate-tab-about">About</v-tab>
-        <v-tab value="deps" data-testid="crate-tab-deps">Dependencies</v-tab>
+        <v-tab value="about" data-testid="crate-tab-about">About</v-tab>
+        <v-tab value="dependencies" data-testid="crate-tab-deps">Dependencies</v-tab>
         <v-tab value="versions" data-testid="crate-tab-versions">Versions</v-tab>
-        <v-tab v-if="canManageCrate" value="crateSettings" data-testid="crate-tab-settings">Settings</v-tab>
-        <v-tab v-if="store.loggedInUserIsAdmin" value="administrate" data-testid="crate-tab-admin">Admin</v-tab>
+        <v-tab v-if="canManageCrate" value="settings" data-testid="crate-tab-settings">Settings</v-tab>
+        <v-tab v-if="store.loggedInUserIsAdmin" value="admin" data-testid="crate-tab-admin">Admin</v-tab>
       </v-tabs>
     </v-card>
 
@@ -35,7 +37,7 @@
 
     <v-row>
       <!-- Main Content Area -->
-      <v-col cols="12" md="9">
+      <v-col cols="12" md="8">
         <!-- Readme Tab -->
         <v-card v-if="tab === 'readme'" class="mb-4 content-card" elevation="0">
           <Readme :readme="selected_version.readme"></Readme>
@@ -50,7 +52,7 @@
         </v-card>
 
         <!-- Dependencies Tab -->
-        <template v-if="tab === 'deps'">
+        <template v-if="tab === 'dependencies'">
           <!-- Normal Dependencies -->
           <v-card v-if="sortedDependencies.normal.length > 0" class="mb-4 content-card" elevation="0"
             data-testid="crate-deps-normal">
@@ -83,32 +85,33 @@
         </template>
 
         <!-- About (Meta) Tab -->
-        <v-card v-if="tab === 'meta'" class="mb-4 content-card" elevation="0">
+        <v-card v-if="tab === 'about'" class="mb-4 content-card" elevation="0">
           <About :crate="crate" :selected-version="selected_version" :flattened-features="flattenedFeatures"
             :sorted-owners="sortedOwners" />
         </v-card>
 
         <!-- Settings Tab -->
         <CrateSettingsTab
-          v-if="tab === 'crateSettings'"
+          v-if="tab === 'settings'"
           :crate-name="crate.name"
           @owners-changed="handleOwnersChanged"
         />
 
         <!-- Admin Tab -->
         <CrateAdminTab
-          v-if="tab === 'administrate'"
+          v-if="tab === 'admin'"
           :crate-name="crate.name"
           :version="selected_version.version"
         />
       </v-col>
 
-      <!-- Sidebar Column - Now using the CrateSidebar component -->
-      <v-col cols="12" md="3">
+      <!-- Sidebar Column -->
+      <v-col cols="12" md="4">
         <CrateSidebar :crate-name="crate.name" :version="selected_version.version" :last-updated="crate.last_updated"
-          :humanized-last-updated="humanizedLastUpdated" :version-downloads="selected_version.downloads"
-          :total-downloads="crate.total_downloads" :documentation-link="docLink" :can-build-docs="showBuildRustdoc()"
-          @copy-to-clipboard="copyTomlToClipboard" @open-docs="openDocsPage"
+          :version-downloads="selected_version.downloads" :total-downloads="crate.total_downloads"
+          :documentation-link="docLink" :can-build-docs="showBuildRustdoc()" :repository="crate.repository ?? ''"
+          :homepage="crate.homepage ?? ''" :license="selected_version.license ?? ''"
+          @copy-to-clipboard="copyToClipboard" @open-docs="openDocsPage"
           @build-docs="buildDoc(crate.name, selected_version.version)" />
       </v-col>
     </v-row>
@@ -126,9 +129,6 @@ import CrateAdminTab from "../components/crate/CrateAdminTab.vue";
 import { SectionHeader } from "../components/common";
 import { computed, onBeforeMount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-import utc from "dayjs/plugin/utc";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
 import { safeUrl } from "../common/url";
 import type { CrateData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
@@ -136,15 +136,11 @@ import { crateService, settingsService } from "../services";
 import { isSuccess } from "../services/api";
 import { useStore } from "../store/store";
 
-dayjs.extend(relativeTime);
-dayjs.extend(utc);
-
 const crateData = ref<CrateData>(defaultCrateData);
 const router = useRouter()
 const route = useRoute()
 const selected_version = ref<CrateVersionData>(defaultCrateVersionData)
-const defaultTab = ref<string>("meta")
-const tab = ref(defaultTab.value);
+const tab = ref<CrateTab>("about");
 const store = useStore();
 const docsEnabled = ref(false);
 
@@ -155,13 +151,30 @@ const snackbarText = ref('');
 // Expose crate as computed for template compatibility
 const crate = computed(() => crateData.value);
 
+type CrateTab = "readme" | "about" | "dependencies" | "versions" | "settings" | "admin"
+
+// The tab from the URL if the crate has it, else the readme if there is one
+function tabFromRoute(): CrateTab {
+  const requested = route.query.tab?.toString()
+  const available: CrateTab[] = ["about", "dependencies", "versions"]
+  if (selected_version.value.readme) available.push("readme")
+  if (canManageCrate.value) available.push("settings")
+  if (store.loggedInUserIsAdmin) available.push("admin")
+  if (available.includes(requested as CrateTab)) {
+    return requested as CrateTab
+  }
+  return selected_version.value.readme ? "readme" : "about"
+}
+
+// Keep the tab in the URL, so it survives a reload and can be shared
+function selectTab(value: unknown) {
+  tab.value = value as CrateTab
+  router.replace({ query: { ...route.query, tab: tab.value } })
+}
+
 // Crate metadata is user-provided, only link to http(s) or relative URLs
 const docLink = computed(() => {
   return safeUrl(selected_version.value.documentation);
-})
-
-const humanizedLastUpdated = computed(() => {
-  return dayjs.utc(crateData.value.last_updated).fromNow();
 })
 
 function getDependenciesByKind(kind: string): CrateRegistryDep[] {
@@ -237,8 +250,7 @@ function sortByName(deps: Array<CrateRegistryDep>) {
   });
 }
 
-function copyTomlToClipboard() {
-  const text = crateData.value.name + ' = "' + selected_version.value.version + '"';
+function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text)
     .then(() => {
       snackbarText.value = "Copied to clipboard!";
@@ -268,9 +280,7 @@ async function getCrateData(name: string, version?: string) {
       return cvd.version == version;
     }) ?? defaultCrateVersionData;
 
-    // Set the default tab to "readme" if a readme is available, else "meta"
-    defaultTab.value = selected_version.value.readme == null ? "meta" : "readme";
-    tab.value = defaultTab.value;
+    tab.value = tabFromRoute();
   } else {
     console.error('Failed to load crate data:', result.error)
   }
@@ -294,10 +304,17 @@ onBeforeMount(() => {
   getAllData()
 })
 
-// Watches route changes and reloads the data.
-// Needed, if the query parameter "name=crate" changes.
-watch(route, () => {
+// Reloads the data when another crate or version is opened. A tab change
+// only updates the "tab" query parameter and needs no reload.
+watch(() => [route.query.name, route.query.version], () => {
   getAllData()
+})
+
+// Back and forward in the browser switch between tabs of the same crate. The
+// login state is restored after a reload, which makes the owner and admin
+// tabs available, so a link to one of them is checked again then.
+watch(() => [route.query.tab, canManageCrate.value, store.loggedInUserIsAdmin], () => {
+  tab.value = tabFromRoute()
 })
 
 </script>
@@ -346,9 +363,9 @@ watch(route, () => {
 }
 
 .crate-tabs :deep(.v-tab) {
-  text-transform: uppercase;
+  text-transform: none;
   font-weight: 500;
-  letter-spacing: 0.5px;
+  letter-spacing: normal;
 }
 
 /* Content Cards */

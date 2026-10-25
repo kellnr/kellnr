@@ -14,32 +14,28 @@
           <span class="text-body-large font-weight-medium">Install</span>
         </div>
 
-        <div class="d-flex align-center copy-container mt-1">
-          <div class="copy-text text-body-medium" data-testid="install-snippet">{{ crateName }} = "{{ version }}"</div>
-          <v-tooltip text="Copy to clipboard">
-            <template v-slot:activator="{ props }">
-              <v-btn v-bind="props" icon variant="text" density="comfortable" color="primary"
-                @click="copyTomlToClipboard()" class="copy-btn ml-auto" data-testid="sidebar-copy-button">
-                <v-icon size="small">mdi-content-copy</v-icon>
-              </v-btn>
-            </template>
-          </v-tooltip>
+        <div v-for="snippet in installSnippets" :key="snippet.testId" class="snippet">
+          <div class="text-body-small snippet-label">{{ snippet.label }}</div>
+          <div class="d-flex align-center copy-container mt-1">
+            <!-- Lines break only between words, never inside a name or version -->
+            <div class="copy-text text-body-medium" :data-testid="snippet.testId">
+              <template v-for="(word, i) in snippet.text.split(' ')" :key="i">{{ i > 0 ? ' ' : '' }}<span
+                  class="word">{{ word }}</span></template>
+            </div>
+            <v-tooltip text="Copy to clipboard">
+              <template v-slot:activator="{ props }">
+                <v-btn v-bind="props" icon variant="text" density="comfortable" color="primary"
+                  :aria-label="`Copy ${snippet.label}`" @click="copyToClipboard(snippet.text)"
+                  class="copy-btn ml-auto" :data-testid="snippet.copyTestId">
+                  <v-icon size="small">mdi-content-copy</v-icon>
+                </v-btn>
+              </template>
+            </v-tooltip>
+          </div>
         </div>
       </div>
 
       <v-divider class="my-3"></v-divider>
-
-      <!-- Version Information -->
-      <div class="sidebar-section">
-        <div class="d-flex align-center mb-2">
-          <v-icon color="info" size="small" class="me-2">mdi-tag-outline</v-icon>
-          <span class="text-body-large font-weight-medium">Version</span>
-        </div>
-
-        <div class="sidebar-content">
-          {{ version }}
-        </div>
-      </div>
 
       <!-- Uploaded Section -->
       <div class="sidebar-section">
@@ -49,9 +45,9 @@
         </div>
 
         <div class="sidebar-content">
-          <v-tooltip :text="lastUpdated">
+          <v-tooltip :text="exactDate(lastUpdated)">
             <template v-slot:activator="{ props }">
-              <span v-bind="props">{{ humanizedLastUpdated }}</span>
+              <span v-bind="props" data-testid="sidebar-published">{{ fromNow(lastUpdated) }}</span>
             </template>
           </v-tooltip>
         </div>
@@ -72,6 +68,41 @@
           <span class="download-number" data-testid="sidebar-total-downloads">{{ formatNumber(totalDownloads) }}</span>
         </div>
       </div>
+
+      <!-- Links Section -->
+      <template v-if="repository || homepage || license">
+        <v-divider class="my-3"></v-divider>
+
+        <div v-if="repository" class="sidebar-section">
+          <div class="d-flex align-center mb-2">
+            <v-icon color="primary" size="small" class="me-2">mdi-source-repository</v-icon>
+            <span class="text-body-large font-weight-medium">Repository</span>
+          </div>
+          <div class="sidebar-content">
+            <a :href="safeUrl(repository)" target="_blank" rel="noopener noreferrer" class="sidebar-link"
+              data-testid="sidebar-repository">{{ displayUrl(repository) }}</a>
+          </div>
+        </div>
+
+        <div v-if="homepage" class="sidebar-section">
+          <div class="d-flex align-center mb-2">
+            <v-icon color="primary" size="small" class="me-2">mdi-home-outline</v-icon>
+            <span class="text-body-large font-weight-medium">Homepage</span>
+          </div>
+          <div class="sidebar-content">
+            <a :href="safeUrl(homepage)" target="_blank" rel="noopener noreferrer" class="sidebar-link"
+              data-testid="sidebar-homepage">{{ displayUrl(homepage) }}</a>
+          </div>
+        </div>
+
+        <div v-if="license" class="sidebar-section">
+          <div class="d-flex align-center mb-2">
+            <v-icon color="primary" size="small" class="me-2">mdi-scale-balance</v-icon>
+            <span class="text-body-large font-weight-medium">License</span>
+          </div>
+          <div class="sidebar-content" data-testid="sidebar-license">{{ license }}</div>
+        </div>
+      </template>
 
       <v-divider class="my-3"></v-divider>
 
@@ -96,7 +127,7 @@
 
           <v-btn v-if="canBuildDocs" color="primary" variant="outlined" size="small" density="comfortable"
             prepend-icon="mdi-cog" @click="buildDocs" data-testid="sidebar-build-docs">
-            {{ documentationLink ? 're-build docs' : 'build docs' }}
+            {{ documentationLink ? 'Rebuild docs' : 'Build docs' }}
           </v-btn>
         </div>
       </div>
@@ -105,9 +136,13 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { formatNumber } from "../common/format";
+import { cargoAddCommand, cargoTomlDependency } from "../common/registry";
+import { safeUrl } from "../common/url";
+import { useRelativeTime } from "../composables";
 
-defineProps({
+const props = defineProps({
   crateName: {
     type: String,
     required: true
@@ -117,10 +152,6 @@ defineProps({
     required: true
   },
   lastUpdated: {
-    type: String,
-    required: true
-  },
-  humanizedLastUpdated: {
     type: String,
     required: true
   },
@@ -139,13 +170,53 @@ defineProps({
   canBuildDocs: {
     type: Boolean,
     default: false
+  },
+  repository: {
+    type: String,
+    default: ''
+  },
+  homepage: {
+    type: String,
+    default: ''
+  },
+  license: {
+    type: String,
+    default: ''
   }
 });
 
-const emit = defineEmits(['copy-to-clipboard', 'open-docs', 'build-docs']);
+const emit = defineEmits<{
+  'copy-to-clipboard': [text: string]
+  'open-docs': []
+  'build-docs': []
+}>();
 
-function copyTomlToClipboard() {
-  emit('copy-to-clipboard');
+const { fromNow, exactDate } = useRelativeTime();
+
+// Crates on this page are hosted in Kellnr, so the snippets name the registry.
+// Without it, cargo looks the crate up on crates.io.
+const installSnippets = computed(() => [
+  {
+    label: "Cargo.toml",
+    text: cargoTomlDependency(props.crateName, props.version),
+    testId: "install-snippet",
+    copyTestId: "sidebar-copy-button",
+  },
+  {
+    label: "Command line",
+    text: cargoAddCommand(props.crateName),
+    testId: "install-command",
+    copyTestId: "sidebar-copy-command-button",
+  },
+]);
+
+// Links are shown without the scheme, which only takes up space
+function displayUrl(url: string): string {
+  return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
+function copyToClipboard(text: string) {
+  emit('copy-to-clipboard', text);
 }
 
 function openDocsPage() {
@@ -201,12 +272,33 @@ function buildDocs() {
 
 .copy-text {
   white-space: normal;
-  /* Wrap at the spaces around "=" first, so the version stays in one piece */
-  overflow-wrap: anywhere;
-  max-width: calc(100% - 36px);
+  min-width: 0;
+  flex: 1;
   padding-right: 8px;
   font-family: 'Roboto Mono', monospace;
   color: rgb(var(--v-theme-on-surface));
+}
+
+.word {
+  white-space: nowrap;
+}
+
+.snippet + .snippet {
+  margin-top: 12px;
+}
+
+.snippet-label {
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.sidebar-link {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-link:hover {
+  text-decoration: underline;
 }
 
 .copy-btn {
