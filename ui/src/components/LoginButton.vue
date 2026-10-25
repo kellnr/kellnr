@@ -50,7 +50,7 @@ const router = useRouter()
 const route = useRoute()
 const store = useStore()
 
-// Loading state
+// True while logging out
 const isLoading = ref(false)
 
 // True while the session state is restored on page load. A user set during
@@ -101,8 +101,9 @@ async function logOut() {
   }
 }
 
+// Runs on every page load. The button keeps showing the remembered state
+// meanwhile instead of flashing a disabled state.
 async function getLoginStatus() {
-  isLoading.value = true
   checkingLoginStatus.value = true
   // An SSO login returns with a page load, so greet the user here
   const ssoLoginPending = takeSsoLoginPending()
@@ -121,7 +122,6 @@ async function getLoginStatus() {
     }
   } finally {
     checkingLoginStatus.value = false
-    isLoading.value = false
   }
 }
 </script>
