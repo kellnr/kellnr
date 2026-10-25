@@ -302,6 +302,11 @@ test.describe("Migration UI Tests", () => {
         await expect(testLibDep).toBeVisible();
         console.log("[migration] ✓ Dependencies preserved");
 
+        // Test 6: The size of crates published before the upgrade is filled in
+        await cratePage.clickTab("versions");
+        await expect(page.getByTestId("version-size").first()).toHaveText(/^[1-9][\d.]* (B|kB)$/);
+        console.log("[migration] ✓ Crate size filled in");
+
         console.log("[migration] All UI verification tests passed");
       });
     } finally {

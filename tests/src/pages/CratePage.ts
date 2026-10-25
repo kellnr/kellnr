@@ -233,20 +233,18 @@ export class CratePage extends BasePage {
   }
 
   /**
-   * Get keywords from About tab.
+   * Get keywords from the crate header, without the leading "#".
    */
   async getKeywords(): Promise<string[]> {
-    await this.clickTab("about");
-    const texts = await this.page.getByTestId("about-keyword").allTextContents();
-    return texts.map((t) => t.trim()).filter((t) => t.length > 0);
+    const texts = await this.page.getByTestId("crate-keyword").allTextContents();
+    return texts.map((t) => t.trim().replace(/^#/, "")).filter((t) => t.length > 0);
   }
 
   /**
-   * Get categories from About tab.
+   * Get categories from the crate header.
    */
   async getCategories(): Promise<string[]> {
-    await this.clickTab("about");
-    const texts = await this.page.getByTestId("about-category").allTextContents();
+    const texts = await this.page.getByTestId("crate-category").allTextContents();
     return texts.map((t) => t.trim()).filter((t) => t.length > 0);
   }
 
