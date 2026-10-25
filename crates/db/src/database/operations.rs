@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 
+use kellnr_common::crate_data::CRATESIO_INDEX;
 use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::publish_metadata::PublishMetadata;
@@ -35,7 +36,7 @@ where
 
     for dep in deps {
         match dep.registry.as_ref() {
-            Some(r) if r == "https://github.com/rust-lang/crates.io-index" => {
+            Some(r) if r == CRATESIO_INDEX => {
                 cratesio_crates.push(dep);
             }
             _ => crates.push(dep),

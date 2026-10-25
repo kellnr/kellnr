@@ -6,6 +6,9 @@ use utoipa::ToSchema;
 use crate::index_metadata::IndexDep;
 use crate::publish_metadata::RegistryDep;
 
+/// Index URL that cargo sets as the registry of crates.io dependencies
+pub const CRATESIO_INDEX: &str = "https://github.com/rust-lang/crates.io-index";
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateData {
     pub name: String,

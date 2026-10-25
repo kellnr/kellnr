@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Json;
@@ -7,14 +9,14 @@ use axum::http::StatusCode;
 use kellnr_appstate::{AppState, DbState, SettingsProvState, SettingsState};
 use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
 use kellnr_auth::maybe_user::MaybeUser as MaybeUserOrToken;
-use kellnr_common::crate_data::CrateData;
+use kellnr_common::crate_data::{CRATESIO_INDEX, CrateData};
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::name_or_description::NameOrDescription;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
-use kellnr_db::{CrateSort, CrateTagFilter};
+use kellnr_db::{CrateSort, CrateTagFilter, DbProvider};
 use kellnr_docs::upload::upload_dir_and_prune;
 use kellnr_settings::{
     ConfigSource, Provenance, Settings, SettingsProv, SourceMap, cli_flag_map, compile_time_config,
@@ -405,8 +407,9 @@ pub async fn crate_data(
     user: Result<MaybeUserOrToken, StatusCode>,
 ) -> Result<Json<CrateData>, StatusCode> {
     let index_name = NormalizedName::from(params.name);
+    let user = user.ok();
     // Same response as a missing crate to not reveal that a restricted crate exists.
-    match can_read_crate(&index_name, user.ok().as_ref(), &db).await {
+    match can_read_crate(&index_name, user.as_ref(), &db).await {
         Ok(true) => {}
         Ok(false) => return Err(StatusCode::NOT_FOUND),
         Err(e) => {
@@ -414,13 +417,48 @@ pub async fn crate_data(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
-    match db.get_crate_data(&index_name).await {
-        Ok(cd) => Ok(Json(cd)),
-        Err(e) => match e {
-            DbError::CrateNotFound(_) => Err(StatusCode::NOT_FOUND),
-            _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
-        },
+    let mut cd = db.get_crate_data(&index_name).await.map_err(|e| match e {
+        DbError::CrateNotFound(_) => StatusCode::NOT_FOUND,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    })?;
+    hide_restricted_dep_info(&mut cd, user.as_ref(), &db)
+        .await
+        .map_err(|e| {
+            error!("Failed to check access to the dependencies of {index_name}: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(cd))
+}
+
+/// Removes the description of dependencies that are download-restricted
+/// crates `user` cannot access, so that a crate page does not reveal them.
+async fn hide_restricted_dep_info(
+    cd: &mut CrateData,
+    user: Option<&MaybeUserOrToken>,
+    db: &Arc<dyn DbProvider>,
+) -> Result<(), DbError> {
+    let mut readable: HashMap<String, bool> = HashMap::new();
+    for dep in cd
+        .versions
+        .iter_mut()
+        .flat_map(|v| v.dependencies.iter_mut())
+    {
+        if dep.registry.as_deref() == Some(CRATESIO_INDEX) {
+            continue;
+        }
+        let name = NormalizedName::from_unchecked(dep.name.to_lowercase());
+        let can_read = if let Some(can_read) = readable.get(name.as_str()) {
+            *can_read
+        } else {
+            let can_read = can_read_crate(&name, user, db).await?;
+            readable.insert(name.to_string(), can_read);
+            can_read
+        };
+        if !can_read {
+            dep.description = None;
+        }
     }
+    Ok(())
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
@@ -2465,6 +2503,41 @@ mod tests {
 
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!(expected_crate_data, result_crate_data);
+    }
+
+    #[tokio::test]
+    async fn crate_data_hides_dependency_info_of_restricted_crates() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_download_restricted()
+            .returning(|name| Ok(name.as_str() == "secret"));
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+
+        let dep = |name: &str, registry: Option<&str>| CrateRegistryDep {
+            name: name.to_string(),
+            description: Some("description".to_string()),
+            version_req: "^1".to_string(),
+            registry: registry.map(str::to_string),
+            ..CrateRegistryDep::default()
+        };
+        let mut cd = CrateData {
+            versions: vec![CrateVersionData {
+                dependencies: vec![
+                    dep("secret", None),
+                    dep("public", None),
+                    dep("serde", Some(CRATESIO_INDEX)),
+                ],
+                ..CrateVersionData::default()
+            }],
+            ..CrateData::default()
+        };
+
+        hide_restricted_dep_info(&mut cd, None, &db).await.unwrap();
+
+        let deps = &cd.versions[0].dependencies;
+        assert_eq!(None, deps[0].description);
+        assert_eq!(dep("public", None), deps[1]);
+        assert_eq!(dep("serde", Some(CRATESIO_INDEX)), deps[2]);
     }
 
     fn restricted_crate_mock(session_user: Option<(&'static str, bool)>) -> MockDb {
