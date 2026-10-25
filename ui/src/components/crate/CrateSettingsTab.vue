@@ -1,10 +1,10 @@
 <template>
   <div class="crate-settings-tab">
-    <!-- Crate Owners -->
+    <!-- Crate owners -->
     <v-card class="mb-4 content-card settings-card" elevation="0">
       <div class="settings-header">
         <v-icon icon="mdi-shield-account" size="small" class="settings-icon"></v-icon>
-        <span class="settings-title">Crate Owners</span>
+        <span class="settings-title">Crate owners</span>
         <span class="settings-count">{{ crateOwners.length }}</span>
       </div>
       <v-card-text class="settings-content">
@@ -53,18 +53,18 @@
       </v-card-text>
     </v-card>
 
-    <!-- Access Control -->
+    <!-- Access control -->
     <v-card class="mb-4 content-card settings-card" elevation="0">
       <div class="settings-header">
         <v-icon icon="mdi-lock-outline" size="small" class="settings-icon"></v-icon>
-        <span class="settings-title">Access Control</span>
+        <span class="settings-title">Access control</span>
       </div>
       <v-card-text class="settings-content">
         <!-- Crate Access Rules -->
         <div class="settings-subsection">
           <div class="settings-subsection-header">
             <v-icon icon="mdi-shield-lock" size="x-small" class="me-2"></v-icon>
-            <span>Download Restrictions</span>
+            <span>Download restrictions</span>
           </div>
           <v-alert v-if="!store.loggedInUserIsAdmin" type="info" variant="tonal" class="mb-4">
             Only admins can change download restrictions.
@@ -85,16 +85,16 @@
             <v-btn :disabled="!store.loggedInUserIsAdmin" color="primary" type="submit" variant="flat" size="small"
               data-testid="settings-save-access">
               <v-icon icon="mdi-content-save" size="small" class="me-1"></v-icon>
-              Save Changes
+              Save changes
             </v-btn>
           </v-form>
         </div>
 
-        <!-- Crate Users -->
+        <!-- Crate users -->
         <div class="settings-subsection">
           <div class="settings-subsection-header">
             <v-icon icon="mdi-account-multiple" size="x-small" class="me-2"></v-icon>
-            <span>Crate Users</span>
+            <span>Crate users</span>
             <span class="settings-count-small">{{ crateUsers.length }}</span>
           </div>
 
@@ -133,11 +133,11 @@
           </v-alert>
         </div>
 
-        <!-- Crate Groups -->
+        <!-- Crate groups -->
         <div class="settings-subsection last">
           <div class="settings-subsection-header">
             <v-icon icon="mdi-account-group" size="x-small" class="me-2"></v-icon>
-            <span>Crate Groups</span>
+            <span>Crate groups</span>
             <span class="settings-count-small">{{ crateGroups.length }}</span>
           </div>
 
@@ -391,7 +391,7 @@ async function handleSaveAccessData() {
 .content-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 12px;
+  border-radius: var(--kellnr-radius-card);
 }
 
 /* Settings Card Styles */
@@ -424,7 +424,7 @@ async function handleSaveAccessData() {
   font-size: 12px;
   font-weight: 500;
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: 9999px;
   margin-left: auto;
 }
 
@@ -450,7 +450,7 @@ async function handleSaveAccessData() {
   padding: 12px 16px;
   background: rgb(var(--v-theme-surface-variant));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   transition: all 0.2s ease;
 }
 
@@ -521,7 +521,7 @@ async function handleSaveAccessData() {
   padding: 20px;
   background: rgb(var(--v-theme-surface-variant));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   margin-bottom: 16px;
 }
 
@@ -550,7 +550,7 @@ async function handleSaveAccessData() {
   font-size: 11px;
   font-weight: 500;
   padding: 1px 8px;
-  border-radius: 10px;
+  border-radius: 9999px;
   margin-left: auto;
 }
 
@@ -573,9 +573,9 @@ async function handleSaveAccessData() {
 .settings-help-text code {
   background: rgb(var(--v-theme-surface));
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   font-size: 12px;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
 }
 
 /* Responsive */

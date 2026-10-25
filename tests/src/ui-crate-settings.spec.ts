@@ -109,7 +109,7 @@ test.describe("Crate Settings UI Tests", () => {
     await page.waitForTimeout(500);
 
     // Verify owners list is displayed - new UI uses settings-card with settings-header
-    const ownersCard = page.locator(".settings-card").filter({ hasText: "Crate Owners" });
+    const ownersCard = page.locator(".settings-card").filter({ hasText: "Crate owners" });
     await expect(ownersCard).toBeVisible();
 
     // There should be at least one owner (the publisher) - new UI uses settings-list
@@ -143,27 +143,27 @@ test.describe("Crate Settings UI Tests", () => {
     await page.waitForTimeout(500);
 
     // Verify access control section is displayed - new UI uses settings-card
-    const accessControlCard = page.locator(".settings-card").filter({ hasText: "Access Control" });
+    const accessControlCard = page.locator(".settings-card").filter({ hasText: "Access control" });
     await expect(accessControlCard).toBeVisible();
 
-    // Download Restrictions subsection - look for the subsection header
-    const downloadRestrictionsSection = page.locator(".settings-subsection-header").filter({ hasText: "Download Restrictions" });
+    // Download restrictions subsection - look for the subsection header
+    const downloadRestrictionsSection = page.locator(".settings-subsection-header").filter({ hasText: "Download restrictions" });
     await expect(downloadRestrictionsSection).toBeVisible();
 
     // Crate users subsection
-    const crateUsersSection = page.locator(".settings-subsection-header").filter({ hasText: "Crate Users" });
+    const crateUsersSection = page.locator(".settings-subsection-header").filter({ hasText: "Crate users" });
     await expect(crateUsersSection).toBeVisible();
 
     // Crate groups subsection
-    const crateGroupsSection = page.locator(".settings-subsection-header").filter({ hasText: "Crate Groups" });
+    const crateGroupsSection = page.locator(".settings-subsection-header").filter({ hasText: "Crate groups" });
     await expect(crateGroupsSection).toBeVisible();
 
     // Verify download restriction checkbox exists - new label text
     const checkbox = page.getByLabel("Restrict downloads to crate users only");
     await expect(checkbox).toBeVisible();
 
-    // Verify save changes button exists - new UI has "Save Changes" instead
-    const saveButton = page.getByRole("button", { name: "Save Changes" });
+    // Verify save changes button exists - new UI has "Save changes" instead
+    const saveButton = page.getByRole("button", { name: "Save changes" });
     await expect(saveButton).toBeVisible();
   });
 

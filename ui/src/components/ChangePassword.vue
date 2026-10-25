@@ -17,7 +17,7 @@
         <input type="text" name="username" autocomplete="username" :value="store.loggedInUser ?? ''" readonly hidden />
 
         <div class="mb-4">
-          <label class="text-body-medium font-weight-medium d-block mb-2">Current Password</label>
+          <label class="text-body-medium font-weight-medium d-block mb-2">Current password</label>
           <v-text-field
             v-model="oldPassword"
             type="password"
@@ -34,7 +34,7 @@
         <v-divider class="my-5"></v-divider>
 
         <div class="mb-4">
-          <label class="text-body-medium font-weight-medium d-block mb-2">New Password</label>
+          <label class="text-body-medium font-weight-medium d-block mb-2">New password</label>
           <v-text-field
             v-model="newPassword1"
             type="password"
@@ -49,7 +49,7 @@
         </div>
 
         <div class="mb-5">
-          <label class="text-body-medium font-weight-medium d-block mb-2">Confirm New Password</label>
+          <label class="text-body-medium font-weight-medium d-block mb-2">Confirm new password</label>
           <v-text-field
             v-model="newPassword2"
             type="password"
@@ -83,7 +83,7 @@
           size="large"
         >
           <v-icon icon="mdi-check" size="small" class="me-2"></v-icon>
-          Update Password
+          Update password
         </v-btn>
       </v-form>
     </div>
@@ -158,7 +158,7 @@ async function handleChangePassword() {
 }
 
 :deep(.v-field) {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   background: rgb(var(--v-theme-surface));
 }
 

@@ -54,13 +54,13 @@ export class ToolchainsPage extends BasePage {
       .filter({ hasText: "No toolchains uploaded yet" });
 
     // Upload form (text fields keep semantic label-based selectors)
-    this.nameInput = page.getByLabel("Component Name");
+    this.nameInput = page.getByLabel("Component name");
     this.versionInput = page.getByLabel("Version");
-    this.targetInput = page.getByLabel("Target Triple");
-    this.dateInput = page.getByLabel("Release Date");
+    this.targetInput = page.getByLabel("Target triple");
+    this.dateInput = page.getByLabel("Release date");
     this.channelSelect = page.getByRole("combobox", { name: "Channel (Optional)" });
     this.dropZone = page.getByTestId("toolchain-drop-zone");
-    this.uploadButton = page.getByRole("button", { name: "Upload Toolchain" });
+    this.uploadButton = page.getByRole("button", { name: "Upload toolchain" });
     this.uploadAlert = page.getByTestId("toolchain-upload-alert");
 
     // Dialogs (shared ConfirmDialog component testids)
@@ -255,7 +255,7 @@ export class ToolchainsPage extends BasePage {
     // First expand the toolchain
     await this.expandToolchain(name, version);
 
-    // Click the "Delete All" button in the targets header
+    // Click the "Delete all" button in the targets header
     const panel = this.toolchainPanel(name, version);
     const deleteAllButton = panel.getByTestId("toolchain-delete");
     await deleteAllButton.click();

@@ -154,7 +154,7 @@ test.describe("Browsing", () => {
     await expect(page).toHaveURL(/[?&]tab=tokens/);
 
     await page.reload();
-    await expect(page.getByTestId("section-title")).toHaveText("Auth Tokens");
+    await expect(page.getByTestId("section-title")).toHaveText("Auth tokens");
   });
 
   test("auth tokens show when they were created and last used", async ({ page }) => {
@@ -167,7 +167,7 @@ test.describe("Browsing", () => {
     await expect(adminToken.getByTestId("token-dates")).toContainText(/Last used .+ ago/);
 
     await page.getByPlaceholder("Enter a descriptive name for the token").fill("unused");
-    await page.getByRole("button", { name: "Create Token" }).click();
+    await page.getByRole("button", { name: "Create token" }).click();
     const newToken = page.getByTestId("token-item").filter({ hasText: "unused" });
     await expect(newToken.getByTestId("token-dates")).toContainText("Never used");
   });

@@ -2,7 +2,7 @@
   <v-card class="mb-4 content-card admin-card" elevation="0">
     <div class="admin-header">
       <v-icon icon="mdi-shield-alert" size="small" class="admin-icon"></v-icon>
-      <span class="admin-title">Danger Zone</span>
+      <span class="admin-title">Danger zone</span>
     </div>
     <v-card-text class="admin-content">
       <v-alert type="warning" variant="tonal" class="mb-5 admin-alert">
@@ -15,12 +15,12 @@
       </v-alert>
 
       <div class="admin-actions">
-        <!-- Delete Version -->
+        <!-- Delete version -->
         <div class="admin-action-card destructive">
           <div class="admin-action-info">
             <div class="admin-action-header">
               <v-icon icon="mdi-tag-remove" size="small" class="admin-action-icon"></v-icon>
-              <span class="admin-action-title">Delete Version</span>
+              <span class="admin-action-title">Delete version</span>
             </div>
             <p class="admin-action-desc">
               Permanently delete version <code>{{ version }}</code> of this crate.
@@ -29,16 +29,16 @@
           </div>
           <v-btn color="error" variant="flat" @click="handleDeleteVersion" data-testid="admin-delete-version">
             <v-icon icon="mdi-delete-outline" size="small" class="me-2"></v-icon>
-            Delete Version
+            Delete version
           </v-btn>
         </div>
 
-        <!-- Delete Entire Crate -->
+        <!-- Delete entire crate -->
         <div class="admin-action-card destructive">
           <div class="admin-action-info">
             <div class="admin-action-header">
               <v-icon icon="mdi-delete-forever" size="small" class="admin-action-icon"></v-icon>
-              <span class="admin-action-title">Delete Entire Crate</span>
+              <span class="admin-action-title">Delete entire crate</span>
             </div>
             <p class="admin-action-desc">
               Permanently delete <strong>all versions</strong> of <code>{{ crateName }}</code>.
@@ -47,7 +47,7 @@
           </div>
           <v-btn color="error" variant="flat" @click="handleDeleteCrate" data-testid="admin-delete-crate">
             <v-icon icon="mdi-delete-forever" size="small" class="me-2"></v-icon>
-            Delete Crate
+            Delete crate
           </v-btn>
         </div>
       </div>
@@ -99,7 +99,7 @@ async function handleDeleteCrate() {
 .content-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 12px;
+  border-radius: var(--kellnr-radius-card);
 }
 
 /* Admin Card Styles */
@@ -132,7 +132,7 @@ async function handleDeleteCrate() {
 }
 
 .admin-alert {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
 }
 
 .admin-alert-content {
@@ -169,7 +169,7 @@ async function handleDeleteCrate() {
   padding: 20px;
   background: rgb(var(--v-theme-surface-variant));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   transition: all 0.2s ease;
 }
 
@@ -218,9 +218,9 @@ async function handleDeleteCrate() {
 .admin-action-desc code {
   background: rgb(var(--v-theme-surface));
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   font-size: 13px;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
   color: rgb(var(--v-theme-primary));
 }
 

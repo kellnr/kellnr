@@ -253,11 +253,11 @@ test.describe("Crate Views with Data", () => {
     await page.waitForTimeout(500);
 
     // Should see crate owners section - new UI uses settings-card
-    const ownersCard = page.locator(".settings-card").filter({ hasText: "Crate Owners" });
+    const ownersCard = page.locator(".settings-card").filter({ hasText: "Crate owners" });
     await expect(ownersCard).toBeVisible();
 
     // Should see access control section - new UI uses settings-card
-    const accessCard = page.locator(".settings-card").filter({ hasText: "Access Control" });
+    const accessCard = page.locator(".settings-card").filter({ hasText: "Access control" });
     await expect(accessCard).toBeVisible();
 
     // Open Admin tab and verify content

@@ -10,7 +10,7 @@
 
       <!-- Existing Tokens -->
       <div v-if="tokens.length > 0" class="tokens-section mb-6">
-        <SubsectionHeader icon="mdi-key-chain" title="Active Tokens" />
+        <SubsectionHeader icon="mdi-key-chain" title="Active tokens" />
 
         <div class="list-container">
           <ListItem
@@ -54,7 +54,7 @@
       />
 
       <!-- Add New Token Form -->
-      <FormSection icon="mdi-key-plus" title="Create New Token">
+      <FormSection icon="mdi-key-plus" title="Create new token">
         <v-form @submit.prevent="handleCreateToken" class="token-form">
           <div class="form-row">
             <v-text-field
@@ -73,7 +73,7 @@
               size="large"
             >
               <v-icon icon="mdi-plus" size="small" class="me-2"></v-icon>
-              Create Token
+              Create token
             </v-btn>
           </div>
         </v-form>
@@ -127,7 +127,7 @@
       :title="dialog.title"
       :message="dialog.message"
       sub-message="Any applications using this token will no longer be able to authenticate."
-      confirm-text="Delete Token"
+      confirm-text="Delete token"
       confirm-color="error"
       confirm-icon="mdi-delete"
       @confirm="dialog.confirm()"
@@ -210,7 +210,7 @@ async function handleCreateToken() {
 // Handle delete token with confirmation
 function handleDeleteToken(token: Token) {
   showConfirm({
-    title: "Delete Token",
+    title: "Delete token",
     message: `Are you sure you want to delete the token "${token.name}"?`,
     confirmColor: "error",
     onConfirm: async () => {
@@ -252,9 +252,9 @@ function copyToken() {
   background: rgba(var(--v-theme-primary), 0.08);
   color: rgb(var(--v-theme-primary));
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   font-size: 13px;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
 }
 
 .list-container {
@@ -278,7 +278,7 @@ function copyToken() {
 }
 
 .token-input :deep(.v-field) {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   background: rgb(var(--v-theme-surface));
 }
 
@@ -294,14 +294,14 @@ function copyToken() {
   padding: 12px;
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   margin-top: 8px;
 }
 
 .token-value {
   flex: 1;
   word-break: break-all;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
   font-size: 13px;
   background: transparent !important;
   padding: 0 !important;

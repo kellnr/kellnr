@@ -1,6 +1,6 @@
 <template>
   <div v-if="toolchains.length > 0" class="toolchains-section mb-6">
-    <SubsectionHeader icon="mdi-package-variant" title="Available Toolchains" />
+    <SubsectionHeader icon="mdi-package-variant" title="Available toolchains" />
 
     <div class="toolchain-list">
       <v-expansion-panels variant="accordion" class="toolchain-panels" data-testid="toolchain-panels">
@@ -32,7 +32,7 @@
               <div class="channel-row">
                 <div class="channel-label">
                   <v-icon icon="mdi-source-branch" size="x-small" class="me-2 text-medium-emphasis"></v-icon>
-                  <span class="text-body-medium">Release Channel</span>
+                  <span class="text-body-medium">Release channel</span>
                 </div>
                 <div class="channel-controls" data-testid="toolchain-channel-select">
                   <v-select
@@ -65,7 +65,7 @@
                   @click.stop="$emit('delete-toolchain', toolchain.name, toolchain.version)"
                 >
                   <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
-                  Delete All
+                  Delete all
                 </v-btn>
               </div>
               <div class="targets-list">
@@ -172,7 +172,7 @@ function getStatusColor(status: string): string {
 .toolchain-panels :deep(.v-expansion-panel) {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px !important;
+  border-radius: var(--kellnr-radius) !important;
   margin-bottom: 0;
 }
 
@@ -200,7 +200,7 @@ function getStatusColor(status: string): string {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   background: rgba(var(--v-theme-primary), 0.15);
   color: rgb(var(--v-theme-primary));
   margin-right: 12px;
@@ -227,7 +227,7 @@ function getStatusColor(status: string): string {
   padding: 12px 16px;
   background: rgba(var(--v-theme-primary), 0.03);
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
 }
 
 .channel-row {
@@ -251,7 +251,7 @@ function getStatusColor(status: string): string {
 }
 
 .channel-select :deep(.v-field) {
-  border-radius: 6px;
+  border-radius: var(--kellnr-radius);
 }
 
 /* Targets Section */
@@ -273,7 +273,7 @@ function getStatusColor(status: string): string {
 }
 
 .target-name {
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
   font-size: 13px;
   color: rgb(var(--v-theme-on-surface));
 }
@@ -283,7 +283,7 @@ function getStatusColor(status: string): string {
   color: rgb(var(--v-theme-on-surface-variant));
   background: rgba(var(--v-theme-primary), 0.08);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   margin-left: 8px;
 }
 
