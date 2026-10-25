@@ -86,6 +86,9 @@ pub async fn insert_admin_credentials<C: ConnectionTrait>(
             name: Set("admin".to_string()),
             token: Set(auth_token_hash),
             user_fk: Set(res.last_insert_id),
+            created: Set(Some(
+                chrono::Utc::now().format(super::DB_DATE_FORMAT).to_string(),
+            )),
             ..Default::default()
         };
         auth_token::Entity::insert(auth_token).exec(db_con).await?;

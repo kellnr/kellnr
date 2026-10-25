@@ -25,7 +25,9 @@ use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
-use kellnr_entity::{crate_index, crate_meta, cratesio_crate, krate, oauth2_state, session, user};
+use kellnr_entity::{
+    auth_token, crate_index, crate_meta, cratesio_crate, krate, oauth2_state, session, user,
+};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, ExprTrait, QueryFilter, Set,
@@ -453,6 +455,16 @@ pub async fn set_legacy_pwd(db: &Database, user_name: &str, pwd: &str, salt: &st
     u.pwd = Set(crate::password::legacy_hash(pwd, salt));
     u.salt = Set(salt.to_owned());
     u.update(&db.db_con).await?;
+    Ok(())
+}
+
+/// Sets the last use of every auth token named `name`, e.g. to a date in the past.
+pub async fn set_auth_token_last_used(db: &Database, name: &str, last_used: &str) -> DbResult<()> {
+    auth_token::Entity::update_many()
+        .col_expr(auth_token::Column::LastUsed, Expr::value(last_used))
+        .filter(auth_token::Column::Name.eq(name))
+        .exec(&db.db_con)
+        .await?;
     Ok(())
 }
 

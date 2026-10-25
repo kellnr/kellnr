@@ -7,6 +7,7 @@
  * - Crate cards only show a documentation button for crates with docs
  * - The crate list shows its size and can be sorted
  * - The landing page lists recently updated crates
+ * - Auth tokens show when they were created and last used
  * - The startup config can be searched
  * - Header shows only the links that apply, with accessible names
  * - The footer ends the page and the layout does not shift for a scrollbar
@@ -154,6 +155,21 @@ test.describe("Browsing", () => {
 
     await page.reload();
     await expect(page.getByTestId("section-title")).toHaveText("Auth Tokens");
+  });
+
+  test("auth tokens show when they were created and last used", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(`${baseUrl}/settings?tab=tokens`);
+
+    // The admin token published the test crates
+    const adminToken = page.getByTestId("token-item").filter({ hasText: "admin" });
+    await expect(adminToken.getByTestId("token-dates")).toContainText(/Created .+ ago/);
+    await expect(adminToken.getByTestId("token-dates")).toContainText(/Last used .+ ago/);
+
+    await page.getByPlaceholder("Enter a descriptive name for the token").fill("unused");
+    await page.getByRole("button", { name: "Create Token" }).click();
+    const newToken = page.getByTestId("token-item").filter({ hasText: "unused" });
+    await expect(newToken.getByTestId("token-dates")).toContainText("Never used");
   });
 
   test("startup config can be searched", async ({ page }) => {

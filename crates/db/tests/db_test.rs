@@ -770,6 +770,39 @@ async fn get_user_from_token_works(test_db: &kellnr_db::Database) {
 }
 
 #[db_test]
+async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) {
+    test_db
+        .add_auth_token("dated", "dated-token", "admin")
+        .await
+        .unwrap();
+    let token =
+        |tokens: Vec<kellnr_db::AuthToken>| tokens.into_iter().find(|t| t.name == "dated").unwrap();
+
+    let created = token(test_db.get_auth_tokens("admin").await.unwrap());
+    assert!(created.created.is_some());
+    assert_eq!(None, created.last_used);
+
+    test_db.get_user_from_token("dated-token").await.unwrap();
+    let used = token(test_db.get_auth_tokens("admin").await.unwrap());
+    assert!(used.last_used.is_some());
+
+    // A recent use is not written again, an old one is
+    set_auth_token_last_used(test_db, "dated", "2999-01-01 00:00:00")
+        .await
+        .unwrap();
+    test_db.get_user_from_token("dated-token").await.unwrap();
+    let recent = token(test_db.get_auth_tokens("admin").await.unwrap());
+    assert_eq!(Some("2999-01-01 00:00:00".to_string()), recent.last_used);
+
+    set_auth_token_last_used(test_db, "dated", "2000-01-01 00:00:00")
+        .await
+        .unwrap();
+    test_db.get_user_from_token("dated-token").await.unwrap();
+    let old = token(test_db.get_auth_tokens("admin").await.unwrap());
+    assert_ne!(Some("2000-01-01 00:00:00".to_string()), old.last_used);
+}
+
+#[db_test]
 async fn get_auth_tokens_returns_all_tokens(test_db: &kellnr_db::Database) {
     test_db
         .add_auth_token("test1", "mytoken1", "admin")

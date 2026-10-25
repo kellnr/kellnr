@@ -54,6 +54,9 @@ use crate::{
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
+/// How often the last use of an auth token is written at most.
+const TOKEN_LAST_USED_INTERVAL: chrono::TimeDelta = chrono::TimeDelta::hours(1);
+
 /// Timestamp (in [`DB_DATE_FORMAT`]) before which an `OAuth2` state is expired.
 fn oauth2_state_expiry_cutoff() -> String {
     let max_age =
@@ -1298,6 +1301,7 @@ impl DbProvider for Database {
             name: Set(name.to_owned()),
             token: Set(hashed_token),
             user_fk: Set(user.id),
+            created: Set(Some(Utc::now().format(DB_DATE_FORMAT).to_string())),
             ..Default::default()
         };
 
@@ -1309,12 +1313,32 @@ impl DbProvider for Database {
     async fn get_user_from_token(&self, token: &str) -> DbResult<User> {
         let token = hash_token(token);
 
-        let u = user::Entity::find()
-            .join(JoinType::InnerJoin, user::Relation::AuthToken.def())
+        let (at, u) = auth_token::Entity::find()
             .filter(Expr::col((AuthTokenIden::Table, AuthTokenIden::Token)).eq(token))
+            .find_also_related(user::Entity)
             .one(&self.db_con)
             .await?
             .ok_or(DbError::TokenNotFound)?;
+        let u = u.ok_or(DbError::TokenNotFound)?;
+
+        // Cargo sends the token with every request, so the date is only
+        // written when it is older than the interval. A failed update must not
+        // fail the request, the date is informational.
+        let now = Utc::now();
+        let stale_before = (now - TOKEN_LAST_USED_INTERVAL)
+            .format(DB_DATE_FORMAT)
+            .to_string();
+        if at
+            .last_used
+            .as_ref()
+            .is_none_or(|used| *used < stale_before)
+        {
+            let mut at: auth_token::ActiveModel = at.into();
+            at.last_used = Set(Some(now.format(DB_DATE_FORMAT).to_string()));
+            if let Err(e) = at.update(&self.db_con).await {
+                warn!("Failed to update the last use of an auth token: {e}");
+            }
+        }
 
         Ok(User::from(u))
     }

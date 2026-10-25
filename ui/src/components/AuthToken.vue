@@ -18,7 +18,19 @@
             :key="token.id"
             icon="mdi-key"
             :title="token.name"
+            test-id="token-item"
           >
+            <template #subtitle>
+              <span class="text-body-small token-dates" data-testid="token-dates">
+                Created <span :title="token.created ? exactDate(token.created) : undefined">{{
+                  token.created ? fromNow(token.created) : "at an unknown time" }}</span>
+                &middot;
+                <template v-if="token.last_used">
+                  Last used <span :title="exactDate(token.last_used)">{{ fromNow(token.last_used) }}</span>
+                </template>
+                <template v-else>Never used</template>
+              </span>
+            </template>
             <template #actions>
               <v-btn
                 size="small"
@@ -77,7 +89,6 @@
         >
           <div class="token-created">
             <div class="d-flex align-center mb-2">
-              <v-icon icon="mdi-check-circle" size="small" class="me-2"></v-icon>
               <span class="font-weight-medium">{{ createStatus.message }}</span>
             </div>
 
@@ -127,7 +138,7 @@
 
 <script setup lang="ts">
 import { onBeforeMount, ref, computed } from "vue"
-import { useStatusMessage, useConfirmCallback } from "../composables"
+import { useStatusMessage, useConfirmCallback, useRelativeTime } from "../composables"
 import { tokenService } from "../services"
 import { isSuccess } from "../services/api"
 import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
@@ -149,6 +160,7 @@ const createLoading = ref(false)
 
 // Composables
 const createStatus = useStatusMessage()
+const { fromNow, exactDate } = useRelativeTime()
 const { dialog, showConfirm } = useConfirmCallback()
 
 // Computed wrapper for dialog.isOpen
@@ -227,6 +239,11 @@ function copyToken() {
 </script>
 
 <style scoped>
+.token-dates {
+  display: block;
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
 .section-content {
   padding: 24px;
 }
