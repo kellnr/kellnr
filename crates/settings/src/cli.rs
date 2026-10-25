@@ -147,10 +147,22 @@ pub fn parse_cli() -> Result<CliResult, SettingsError> {
     }
 }
 
-fn build_from_command(
+/// Settings of the running `kellnr start`, resolved from the same command
+/// line, environment and config file as at startup. For code that runs before
+/// the settings are passed around, like the database migrations. `None` if the
+/// process was not started with valid `kellnr` arguments, for example in tests.
+#[must_use]
+pub fn settings_from_process() -> Option<Settings> {
+    let cli = Cli::try_parse().ok()?;
+    let command = cli.command?;
+    let prov = build_prov(cli.config_file, &command).ok()?;
+    Some(Settings::from(&prov))
+}
+
+fn build_prov(
     cli_config_file: Option<PathBuf>,
     command: &Command,
-) -> Result<CliResult, SettingsError> {
+) -> Result<SettingsProv, SettingsError> {
     // Config file priority: CLI > env var > compile-time > None.
     let env_config_file = std::env::var("KELLNR_CONFIG_FILE").ok();
     let config_file: Option<PathBuf> = cli_config_file
@@ -166,7 +178,14 @@ fn build_from_command(
         Command::Config { .. } | Command::DocBuild { .. } => None,
     };
 
-    let prov = build_prov_with_cli(config_file.as_deref(), cli_partial)?;
+    build_prov_with_cli(config_file.as_deref(), cli_partial)
+}
+
+fn build_from_command(
+    cli_config_file: Option<PathBuf>,
+    command: &Command,
+) -> Result<CliResult, SettingsError> {
+    let prov = build_prov(cli_config_file, command)?;
     let resolved = ResolvedSettings {
         settings: Settings::from(&prov),
         prov: Arc::new(prov),

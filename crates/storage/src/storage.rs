@@ -26,6 +26,9 @@ pub trait Storage {
     async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError>;
     async fn delete(&self, key: &str) -> Result<(), StorageError>;
     async fn exists(&self, key: &str) -> Result<bool, StorageError>;
+    /// Size of the object in bytes, read from its metadata without
+    /// downloading it.
+    async fn size(&self, key: &str) -> Result<u64, StorageError>;
     /// Recursively list every key stored under `prefix`.
     async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError>;
 }

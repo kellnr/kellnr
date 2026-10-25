@@ -10,6 +10,7 @@ mod m20260903_000001_index_rust_version;
 mod m20261024_000001_webhook_secret;
 mod m20261024_000002_hash_session_tokens;
 mod m20261025_000001_auth_token_dates;
+mod m20261025_000002_crate_meta_size;
 
 pub struct Migrator;
 
@@ -27,6 +28,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261024_000001_webhook_secret::Migration),
             Box::new(m20261024_000002_hash_session_tokens::Migration),
             Box::new(m20261025_000001_auth_token_dates::Migration),
+            Box::new(m20261025_000002_crate_meta_size::Migration),
         ]
     }
 }

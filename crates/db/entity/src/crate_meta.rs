@@ -21,6 +21,7 @@ pub struct Model {
     pub license_file: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
     pub documentation: Option<String>,
+    pub size: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

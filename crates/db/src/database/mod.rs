@@ -44,8 +44,8 @@ use tracing::warn;
 use crate::error::DbError;
 use crate::password::{PwdVerification, hash_pwd, hash_token, verify_pwd};
 use crate::provider::{
-    ChannelInfo, CrateSort, CrateVisibility, DbResult, OAuth2StateData, PrefetchState, SessionInfo,
-    ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
+    ChannelInfo, CrateSort, CrateTagFilter, CrateVisibility, DbResult, OAuth2StateData,
+    PrefetchState, SessionInfo, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
 };
 use crate::tables::init_database;
 use crate::{
@@ -410,6 +410,71 @@ impl Database {
         }
     }
 
+    /// Condition on the crate table that keeps the crates with the keyword
+    /// and category of `tags`. `None` if `tags` filters nothing.
+    fn crate_tag_condition(tags: &CrateTagFilter) -> Option<Condition> {
+        if tags.is_empty() {
+            return None;
+        }
+        let crate_id = || Expr::col((CrateIden::Table, CrateIden::Id));
+        let mut condition = Cond::all();
+        if let Some(keyword) = &tags.keyword {
+            condition = condition.add(crate_id().in_subquery(Self::keyword_crate_ids(keyword)));
+        }
+        if let Some(category) = &tags.category {
+            condition = condition.add(crate_id().in_subquery(Self::category_crate_ids(category)));
+        }
+        Some(condition)
+    }
+
+    fn keyword_crate_ids(keyword: &str) -> SelectStatement {
+        Query::select()
+            .column((
+                crate_keyword_to_crate::Entity,
+                crate_keyword_to_crate::Column::CrateFk,
+            ))
+            .from(crate_keyword_to_crate::Entity)
+            .inner_join(
+                crate_keyword::Entity,
+                Expr::col((crate_keyword::Entity, crate_keyword::Column::Id)).equals((
+                    crate_keyword_to_crate::Entity,
+                    crate_keyword_to_crate::Column::KeywordFk,
+                )),
+            )
+            .and_where(
+                Func::lower(Expr::col((
+                    crate_keyword::Entity,
+                    crate_keyword::Column::Keyword,
+                )))
+                .eq(keyword.to_lowercase()),
+            )
+            .to_owned()
+    }
+
+    fn category_crate_ids(category: &str) -> SelectStatement {
+        Query::select()
+            .column((
+                crate_category_to_crate::Entity,
+                crate_category_to_crate::Column::CrateFk,
+            ))
+            .from(crate_category_to_crate::Entity)
+            .inner_join(
+                crate_category::Entity,
+                Expr::col((crate_category::Entity, crate_category::Column::Id)).equals((
+                    crate_category_to_crate::Entity,
+                    crate_category_to_crate::Column::CategoryFk,
+                )),
+            )
+            .and_where(
+                Func::lower(Expr::col((
+                    crate_category::Entity,
+                    crate_category::Column::Category,
+                )))
+                .eq(category.to_lowercase()),
+            )
+            .to_owned()
+    }
+
     fn user_id_by_name(user: &str) -> SelectStatement {
         Query::select()
             .column((user::Entity, user::Column::Id))
@@ -456,7 +521,8 @@ impl Database {
             .to_owned()
     }
 
-    /// Shared implementation for crate overview listing: optional name filter, optional limit/offset, cache union.
+    /// Shared implementation for crate overview listing: optional name filter,
+    /// optional keyword and category filter, optional limit/offset, cache union.
     async fn query_crates(
         &self,
         contains: Option<&str>,
@@ -464,6 +530,7 @@ impl Database {
         cache: bool,
         visibility: &CrateVisibility,
         sort: CrateSort,
+        tags: &CrateTagFilter,
     ) -> DbResult<Vec<CrateOverview>> {
         /// Creates a SELECT statement for a given set of fields.
         fn select_fields(fields: &[(Expr, &str)]) -> SelectStatement {
@@ -481,6 +548,7 @@ impl Database {
             (Expr::col(CrateIden::TotalDownloads), "total_downloads"),
             (Expr::col(CrateIden::Description), "description"),
             (Expr::col(CrateMetaIden::Documentation), "documentation"),
+            (Expr::col(CrateIden::Repository), "repository"),
             (Expr::cust("false"), "is_cache"),
             (
                 Self::search_rank(
@@ -495,9 +563,12 @@ impl Database {
         if let Some(condition) = Self::crate_visibility_condition(visibility) {
             query.cond_where(condition);
         }
+        if let Some(condition) = Self::crate_tag_condition(tags) {
+            query.cond_where(condition);
+        }
 
-        // UNION with cached crates
-        if cache {
+        // UNION with cached crates, which have no keywords or categories
+        if cache && tags.is_empty() {
             let mut query2 = select_fields(&[
                 (Expr::col(CratesIoIden::OriginalName), "name"),
                 (Expr::col(CratesIoIden::MaxVersion), "version"),
@@ -505,6 +576,8 @@ impl Database {
                 (Expr::col(CratesIoIden::TotalDownloads), "total_downloads"),
                 (Expr::col(CratesIoIden::Description), "description"),
                 (Expr::col(CratesIoMetaIden::Documentation), "documentation"),
+                // The proxy does not store the repository of crates.io crates
+                (Expr::cust("NULL"), "repository"),
                 (Expr::cust("true"), "is_cache"),
                 (
                     Self::search_rank(
@@ -546,6 +619,7 @@ impl Database {
         contains: Option<&str>,
         cache: bool,
         visibility: &CrateVisibility,
+        tags: &CrateTagFilter,
     ) -> DbResult<u64> {
         let mut query = Query::select();
         query.expr_as(
@@ -557,6 +631,9 @@ impl Database {
         if let Some(condition) = Self::crate_visibility_condition(visibility) {
             query.cond_where(condition);
         }
+        if let Some(condition) = Self::crate_tag_condition(tags) {
+            query.cond_where(condition);
+        }
 
         let count = self
             .count_by_statement(
@@ -565,7 +642,7 @@ impl Database {
             )
             .await?;
 
-        let cache_count = if cache {
+        let cache_count = if cache && tags.is_empty() {
             let mut query2 = Query::select();
             query2.expr_as(
                 Expr::col((CratesIoIden::Table, CratesIoIden::Id)).count(),
@@ -1669,6 +1746,7 @@ impl DbProvider for Database {
             cache,
             visibility,
             CrateSort::Name,
+            &CrateTagFilter::default(),
         )
         .await
     }
@@ -1679,7 +1757,13 @@ impl DbProvider for Database {
         cache: bool,
         visibility: &CrateVisibility,
     ) -> DbResult<u64> {
-        self.count_crates(Some(contains), cache, visibility).await
+        self.count_crates(
+            Some(contains),
+            cache,
+            visibility,
+            &CrateTagFilter::default(),
+        )
+        .await
     }
 
     async fn get_crate_overview_list(
@@ -1689,8 +1773,9 @@ impl DbProvider for Database {
         cache: bool,
         visibility: &CrateVisibility,
         sort: CrateSort,
+        tags: &CrateTagFilter,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(None, Some((limit, offset)), cache, visibility, sort)
+        self.query_crates(None, Some((limit, offset)), cache, visibility, sort, tags)
             .await
     }
 
@@ -1698,8 +1783,9 @@ impl DbProvider for Database {
         &self,
         cache: bool,
         visibility: &CrateVisibility,
+        tags: &CrateTagFilter,
     ) -> DbResult<u64> {
-        self.count_crates(None, cache, visibility).await
+        self.count_crates(None, cache, visibility, tags).await
     }
 
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {
@@ -1794,6 +1880,8 @@ impl DbProvider for Database {
                 yanked: ci.yanked,
                 links: ci.links.clone(),
                 v: ci.v,
+                size: cm.size,
+                rust_version: ci.rust_version.clone(),
             });
         }
         versions.sort_by(|a, b| {
@@ -1845,6 +1933,7 @@ impl DbProvider for Database {
         &self,
         pub_metadata: &PublishMetadata,
         cksum: &str,
+        size: i64,
         created: &DateTime<Utc>,
         owner: &str,
     ) -> DbResult<i64> {
@@ -1899,7 +1988,7 @@ impl DbProvider for Database {
         };
 
         operations::add_owner_if_not_exists(&txn, owner, crate_id).await?;
-        operations::add_crate_metadata(&txn, pub_metadata, &created, crate_id).await?;
+        operations::add_crate_metadata(&txn, pub_metadata, size, &created, crate_id).await?;
         operations::add_crate_index(&txn, pub_metadata, cksum, crate_id).await?;
         operations::update_etag(&txn, &pub_metadata.name, crate_id).await?;
         operations::update_crate_categories(&txn, pub_metadata, crate_id).await?;
@@ -1936,10 +2025,11 @@ impl DbProvider for Database {
     async fn add_crate_metadata(
         &self,
         pub_metadata: &PublishMetadata,
+        size: i64,
         created: &str,
         crate_id: i64,
     ) -> DbResult<()> {
-        operations::add_crate_metadata(&self.db_con, pub_metadata, created, crate_id).await
+        operations::add_crate_metadata(&self.db_con, pub_metadata, size, created, crate_id).await
     }
 
     async fn get_prefetch_data(&self, crate_name: &str) -> DbResult<Prefetch> {

@@ -101,6 +101,12 @@ impl CachedCrateStorage {
             .is_some_and(|cache| cache.contains_key(&file_name))
     }
 
+    /// Size of a crate file in bytes, read from the storage and not the cache.
+    pub async fn size(&self, name: &OriginalName, version: &Version) -> Result<u64, StorageError> {
+        let file_name = Self::file_name(name, version);
+        self.storage.size(&file_name).await
+    }
+
     // Check if a crate exists in the storage unrelated to the cache.
     pub async fn exists(
         &self,
@@ -184,6 +190,13 @@ mod tests {
             Ok(self.data.contains_key(key))
         }
 
+        async fn size(&self, key: &str) -> Result<u64, StorageError> {
+            self.data
+                .get(key)
+                .map(|v| v.len() as u64)
+                .ok_or_else(|| StorageError::GenericError(format!("not found: {key}")))
+        }
+
         async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
             Ok(self
                 .data
@@ -219,6 +232,10 @@ mod tests {
 
         async fn exists(&self, key: &str) -> Result<bool, StorageError> {
             (**self).exists(key).await
+        }
+
+        async fn size(&self, key: &str) -> Result<u64, StorageError> {
+            (**self).size(key).await
         }
 
         async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {

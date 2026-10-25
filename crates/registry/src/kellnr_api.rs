@@ -818,7 +818,13 @@ pub async fn publish(
 
             // Add crate to DB
             if let Err(e) = db
-                .add_crate(&pub_data.metadata, &cksum, &created, &token_user)
+                .add_crate(
+                    &pub_data.metadata,
+                    &cksum,
+                    i64::from(pub_data.crate_length),
+                    &created,
+                    &token_user,
+                )
                 .await
             {
                 // On DB error rollback storage insert and bail.
@@ -3118,6 +3124,10 @@ mod reg_api_tests {
 
         async fn exists(&self, key: &str) -> Result<bool, StorageError> {
             self.inner.exists(key).await
+        }
+
+        async fn size(&self, key: &str) -> Result<u64, StorageError> {
+            self.inner.size(key).await
         }
 
         async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
