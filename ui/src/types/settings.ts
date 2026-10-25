@@ -6,6 +6,10 @@ export type DocsEnabled = {
   enabled: boolean
 }
 
+export type RegistryConfig = {
+  "auth-required": boolean
+}
+
 export type ConfigSource = 'default' | 'toml' | 'env' | 'cli';
 
 export type SourceMap = Record<string, ConfigSource>;

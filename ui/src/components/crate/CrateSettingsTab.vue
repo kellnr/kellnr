@@ -54,7 +54,7 @@
     </v-card>
 
     <!-- Access control -->
-    <v-card class="mb-4 content-card settings-card" elevation="0">
+    <v-card id="crate-access" class="mb-4 content-card settings-card" elevation="0">
       <div class="settings-header">
         <v-icon icon="mdi-lock-outline" size="small" class="settings-icon"></v-icon>
         <span class="settings-title">Access control</span>
@@ -196,6 +196,7 @@ const props = defineProps<{
 // Emits
 const emit = defineEmits<{
   (e: 'owners-changed', owners: string[]): void
+  (e: 'access-changed'): void
 }>()
 
 // Store
@@ -308,6 +309,7 @@ async function handleAddUser() {
   if (isSuccess(result)) {
     newUserName.value = ''
     await loadUsers()
+    emit('access-changed')
   }
 }
 
@@ -318,6 +320,7 @@ async function handleDeleteUser(name: string) {
   deleteUserStatus.setFromResult(result, 'Crate user successfully deleted.')
   if (isSuccess(result)) {
     await loadUsers()
+    emit('access-changed')
   }
 }
 
@@ -351,6 +354,7 @@ async function handleAddGroup() {
   if (isSuccess(result)) {
     newGroupName.value = null
     await loadGroups()
+    emit('access-changed')
   }
 }
 
@@ -361,6 +365,7 @@ async function handleDeleteGroup(name: string) {
   deleteGroupStatus.setFromResult(result, 'Crate group successfully deleted.')
   if (isSuccess(result)) {
     await loadGroups()
+    emit('access-changed')
   }
 }
 
@@ -380,6 +385,7 @@ async function handleSaveAccessData() {
       : 'Crate access open to all.'
     accessStatus.setSuccess(message)
     await loadAccessData()
+    emit('access-changed')
   } else {
     accessStatus.setError(result.error.message)
   }
