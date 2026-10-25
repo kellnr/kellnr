@@ -387,6 +387,41 @@ test.describe("Crate Views with Data", () => {
     }
   });
 
+  test("crate data hides the description of restricted dependencies", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+    const loggedIn = page.waitForResponse((r) => r.url().endsWith("/api/v1/auth/login") && r.ok());
+    await new LoginPage(page).login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await loggedIn;
+
+    const setRestricted = (restricted: boolean) => page.evaluate(async (download_restricted) => {
+      const response = await fetch("/api/v1/acl/test_lib", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ download_restricted }),
+      });
+      return response.status;
+    }, restricted);
+    // Description of the test_lib dependency of foo-bar, as the admin or anonymously
+    const adminDescription = () => page.evaluate(async () => {
+      const data = await (await fetch("/api/v1/ui/crate_data?name=foo-bar")).json();
+      return data.versions[0].dependencies.find((d: { name: string }) => d.name === "test_lib").description;
+    });
+    const anonymousDescription = async () => {
+      const data = await (await fetch(`${baseUrl}/api/v1/ui/crate_data?name=foo-bar`)).json();
+      return data.versions[0].dependencies.find((d: { name: string }) => d.name === "test_lib").description;
+    };
+
+    expect(await anonymousDescription()).toBe("Test library with docs");
+
+    expect(await setRestricted(true)).toBe(200);
+    try {
+      expect(await anonymousDescription()).toBeNull();
+      expect(await adminDescription()).toBe("Test library with docs");
+    } finally {
+      expect(await setRestricted(false)).toBe(200);
+    }
+  });
+
   test.describe("layout", () => {
     test("landing page statistics use large numbers", async ({ page }) => {
       await page.setViewportSize({ width: 1440, height: 900 });
