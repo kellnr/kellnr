@@ -2,13 +2,14 @@
   <v-container v-if="crate != null" class="py-0 px-4 px-md-0 crate-container">
     <!-- Title Section -->
     <v-card class="mb-4 title-card" elevation="0">
-      <v-card-title class="d-flex flex-wrap align-baseline pa-5">
-        <h1 class="text-display-medium font-weight-bold me-3 text-break crate-title" data-testid="crate-title">{{ crate.name }}</h1>
+      <v-card-title class="d-flex flex-wrap align-baseline text-wrap pa-5"
+        :class="{ 'pb-2': crate.description != null }">
+        <h1 class="text-display-medium font-weight-bold my-0 me-3 text-break crate-title" data-testid="crate-title">{{ crate.name }}</h1>
         <span class="text-headline-small version-text" data-testid="crate-version">{{ selected_version.version }}</span>
       </v-card-title>
 
       <v-card-text v-if="crate.description != null" class="pt-0 px-5 pb-5">
-        <p class="description-text mb-0" data-testid="crate-description">{{ crate.description }}</p>
+        <p class="description-text my-0" data-testid="crate-description">{{ crate.description }}</p>
       </v-card-text>
     </v-card>
 

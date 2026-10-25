@@ -1668,6 +1668,86 @@ async fn search_in_crate_name_and_description_found_match(test_db: &kellnr_db::D
     assert_eq!(expected, search_results);
 }
 
+#[db_test]
+async fn search_in_crate_name_and_description_ranks_name_matches_first(
+    test_db: &kellnr_db::Database,
+) {
+    let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
+    let version = Version::try_from("1.0.0").unwrap();
+    for (name, description) in [
+        ("a_serde_helper", None),
+        ("serde_json", None),
+        ("zz_desc", Some("works with Serde")),
+    ] {
+        test_add_crate_with_downloads(
+            test_db,
+            name,
+            "admin",
+            &version,
+            description,
+            &created,
+            None,
+        )
+        .await
+        .unwrap();
+    }
+    // The exact match is a cached crates.io crate, so the ranking has to
+    // work across both parts of the union
+    test_db
+        .add_cratesio_prefetch_data(
+            &OriginalName::from_unchecked("serde".to_string()),
+            "etag",
+            "last_modified",
+            None,
+            &[IndexMetadata {
+                name: "serde".to_string(),
+                vers: "1.0.0".to_string(),
+                deps: vec![],
+                cksum: "cksum".to_string(),
+                features: BTreeMap::default(),
+                yanked: false,
+                links: None,
+                pubtime: None,
+                v: Some(1),
+                features2: None,
+                rust_version: None,
+            }],
+        )
+        .await
+        .unwrap();
+
+    let names =
+        |results: Vec<CrateOverview>| results.into_iter().map(|c| c.name).collect::<Vec<_>>();
+
+    // Exact match, then prefix, then substring, then description only;
+    // alphabetical order would put a_serde_helper first
+    let results = test_db
+        .search_in_crate_name_and_description("SerDe", 100, 0, true, &CrateVisibility::All)
+        .await
+        .unwrap();
+    assert_eq!(
+        names(results),
+        ["serde", "serde_json", "a_serde_helper", "zz_desc"]
+    );
+
+    // Paging follows the same order
+    let results = test_db
+        .search_in_crate_name_and_description("serde", 2, 2, true, &CrateVisibility::All)
+        .await
+        .unwrap();
+    assert_eq!(names(results), ["a_serde_helper", "zz_desc"]);
+
+    // The crate overview without a query stays alphabetical
+    let results = test_db
+        .get_crate_overview_list(100, 0, true, &CrateVisibility::All)
+        .await
+        .unwrap();
+    assert_eq!(
+        names(results),
+        ["a_serde_helper", "serde", "serde_json", "zz_desc"]
+    );
+}
+
 // Every match has to stay reachable by paging further, no matter how many there
 // are. The web UI search used to ask for a single fixed window of 100 rows, so
 // anything past that was silently dropped and could not be requested again.

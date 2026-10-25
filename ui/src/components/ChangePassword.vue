@@ -18,6 +18,7 @@
           <v-text-field
             v-model="oldPassword"
             type="password"
+            autocomplete="current-password"
             variant="outlined"
             density="comfortable"
             prepend-inner-icon="mdi-lock-outline"
@@ -34,6 +35,7 @@
           <v-text-field
             v-model="newPassword1"
             type="password"
+            autocomplete="new-password"
             variant="outlined"
             density="comfortable"
             prepend-inner-icon="mdi-lock-plus-outline"
@@ -48,6 +50,7 @@
           <v-text-field
             v-model="newPassword2"
             type="password"
+            autocomplete="new-password"
             variant="outlined"
             density="comfortable"
             prepend-inner-icon="mdi-lock-check-outline"

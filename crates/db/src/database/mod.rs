@@ -319,6 +319,29 @@ impl Database {
         query
     }
 
+    /// Sort key for search results: exact name matches first, then names that
+    /// start with the query, then names that contain it, then matches in the
+    /// description only. Without a query every row gets the same key.
+    fn search_rank(contains: Option<&str>, name: &Expr) -> Expr {
+        let Some(contains) = contains else {
+            return Expr::val(0);
+        };
+        let query = contains.to_lowercase();
+        let escaped = escape_like_pattern(contains).to_lowercase();
+        let lower_name = || Func::lower(name.clone());
+        Expr::case(lower_name().eq(query), 0)
+            .case(
+                lower_name().like(LikeExpr::new(format!("{escaped}%")).escape('\\')),
+                1,
+            )
+            .case(
+                lower_name().like(LikeExpr::new(format!("%{escaped}%")).escape('\\')),
+                2,
+            )
+            .finally(3)
+            .into()
+    }
+
     /// Joins the given SELECT statement against the crate table, restricts it to
     /// the latest version of every crate and applies the optional name filter.
     fn select_from_crates(mut query: SelectStatement, contains: Option<&str>) -> SelectStatement {
@@ -455,6 +478,13 @@ impl Database {
             (Expr::col(CrateIden::Description), "description"),
             (Expr::col(CrateMetaIden::Documentation), "documentation"),
             (Expr::cust("false"), "is_cache"),
+            (
+                Self::search_rank(
+                    contains,
+                    &Expr::col((CrateIden::Table, CrateIden::OriginalName)),
+                ),
+                "search_rank",
+            ),
         ]);
         query.from(CrateMetaIden::Table);
         query = Self::select_from_crates(query, contains);
@@ -472,6 +502,13 @@ impl Database {
                 (Expr::col(CratesIoIden::Description), "description"),
                 (Expr::col(CratesIoMetaIden::Documentation), "documentation"),
                 (Expr::cust("true"), "is_cache"),
+                (
+                    Self::search_rank(
+                        contains,
+                        &Expr::col((CratesIoIden::Table, CratesIoIden::OriginalName)),
+                    ),
+                    "search_rank",
+                ),
             ]);
             query2.from(CratesIoMetaIden::Table);
             query2 = Self::select_from_cache(query2, contains);
@@ -479,7 +516,9 @@ impl Database {
             query.union(UnionType::All, query2);
         }
 
-        // Ordering and optional limit/offset
+        // Ordering and optional limit/offset. The name breaks ties, so paging
+        // stays stable within one rank.
+        query.order_by(Alias::new("search_rank"), Order::Asc);
         query.order_by(Alias::new("name"), Order::Asc);
         if let Some((limit, offset)) = limit_offset {
             query.limit(limit).offset(offset);
