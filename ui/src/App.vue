@@ -59,6 +59,14 @@ onMounted(() => {
 </script>
 
 <style>
+/* Always reserve the scrollbar's space, so the layout does not shift
+   sideways when a page becomes long enough to scroll */
+html {
+  scrollbar-gutter: stable;
+  /* Paints the reserved space like the page behind the background image */
+  background: rgb(var(--v-theme-background));
+}
+
 /* Custom class for 80% width */
 .width-80 {
   width: 80% !important;
