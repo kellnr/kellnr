@@ -19,6 +19,7 @@ use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use kellnr_db::provider::DbResult;
 use kellnr_error::api_error::{ApiError, ApiResult};
+use tracing::warn;
 
 use crate::pub_data::{EmptyCrateData, PubData};
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
@@ -743,6 +744,15 @@ pub async fn publish(
     let normalized_name = orig_name.to_normalized();
 
     let token_user = token.user.clone();
+    // Shown in the version list. Publishing works without it, so a failed
+    // lookup only leaves it empty.
+    let token_name = match &token.value {
+        Some(value) => db.get_auth_token_name(value).await.unwrap_or_else(|e| {
+            warn!("Failed to look up the name of the publish token: {e}");
+            None
+        }),
+        None => None,
+    };
     let user = maybe_user::MaybeUser::from_token(token);
 
     // Check if user is read-only and can't publish (upload) crates.
@@ -829,6 +839,7 @@ pub async fn publish(
                     i64::from(pub_data.crate_length),
                     &created,
                     &token_user,
+                    token_name,
                 )
                 .await
             {
@@ -1098,6 +1109,26 @@ mod reg_api_tests {
                 .unwrap()
                 .to_string()
         );
+    }
+
+    #[tokio::test]
+    async fn publish_records_the_publisher_and_token() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("recorded", "1.0.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        let data = kellnr
+            .db
+            .get_crate_data(&NormalizedName::from_unchecked_str("recorded"))
+            .await
+            .unwrap();
+        assert_eq!(Some("admin".to_string()), data.versions[0].publisher);
+        assert_eq!(Some("test".to_string()), data.versions[0].publisher_token);
     }
 
     #[tokio::test]

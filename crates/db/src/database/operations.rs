@@ -236,6 +236,8 @@ pub async fn add_crate_metadata<C: ConnectionTrait>(
     size: i64,
     created: &str,
     crate_id: i64,
+    publisher: Option<&str>,
+    publisher_token: Option<&str>,
 ) -> DbResult<()> {
     let cm = crate_meta::ActiveModel {
         id: ActiveValue::default(),
@@ -248,6 +250,8 @@ pub async fn add_crate_metadata<C: ConnectionTrait>(
         license_file: Set(pub_metadata.license_file.clone()),
         documentation: Set(pub_metadata.documentation.clone()),
         size: Set(size),
+        publisher: Set(publisher.map(str::to_string)),
+        publisher_token: Set(publisher_token.map(str::to_string)),
     };
 
     cm.insert(db_con).await?;

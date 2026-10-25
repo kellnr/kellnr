@@ -56,6 +56,8 @@ pub enum CrateMetaIden {
     #[iden = "crate_fk"]
     CrateFk,
     Size,
+    Publisher,
+    PublisherToken,
 }
 
 #[derive(Iden, Copy, Clone)]

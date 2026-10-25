@@ -47,6 +47,10 @@ export type CrateVersionData = {
     size: number,
     /** Minimal supported Rust version */
     rust_version?: string,
+    /** User who published the version, unknown for older versions */
+    publisher?: string,
+    /** Name of the auth token used to publish, unknown for basic auth */
+    publisher_token?: string,
 }
 
 export const defaultCrateVersionData : CrateVersionData = {
@@ -66,6 +70,8 @@ export const defaultCrateVersionData : CrateVersionData = {
     v: 0,
     size: 0,
     rust_version: undefined,
+    publisher: undefined,
+    publisher_token: undefined,
 }
 
 export type CrateRegistryDep = {

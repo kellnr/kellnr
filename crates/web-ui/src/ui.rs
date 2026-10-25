@@ -2435,6 +2435,8 @@ mod tests {
                 v: 1,
                 size: 1024,
                 rust_version: Some("1.85".to_string()),
+                publisher: Some("admin".to_string()),
+                publisher_token: Some("ci".to_string()),
             }],
         };
 

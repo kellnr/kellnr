@@ -34,6 +34,8 @@
       <div class="version-date">
         <v-icon icon="mdi-calendar-outline" size="small" class="me-2"></v-icon>
         <span :title="exactDate(version.created)">{{ humanizedLastUpdated }}</span>
+        <span v-if="version.publisher" class="version-publisher" :title="publisherTitle"
+          data-testid="version-publisher">&nbsp;by {{ version.publisher }}</span>
       </div>
 
       <!-- Right: Downloads -->
@@ -70,6 +72,10 @@ const formattedDownloads = computed(() => formatNumber(props.version.downloads))
 // Zero for versions whose crate file could not be read when Kellnr started
 // recording sizes
 const formattedSize = computed(() => props.version.size > 0 ? formatBytes(props.version.size) : "Size unknown");
+
+const publisherTitle = computed(() => props.version.publisher_token
+  ? `Published with the token ${props.version.publisher_token}`
+  : undefined);
 
 const featureCount = computed(() => Object.keys(props.version.features).length);
 
