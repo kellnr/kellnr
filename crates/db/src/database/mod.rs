@@ -2,7 +2,7 @@ mod operations;
 pub mod test_utils;
 
 use std::cmp::max;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
@@ -1840,6 +1840,18 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?;
 
+        // The dependencies of all versions, looked up together
+        let mut index_deps: HashMap<&str, Vec<IndexDep>> = HashMap::new();
+        for ci in &crate_indices {
+            if let Some(deps) = ci.deps.clone() {
+                let deps = serde_json::from_value::<Vec<IndexDep>>(deps)
+                    .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
+                index_deps.insert(ci.vers.as_str(), deps);
+            }
+        }
+        let dep_info =
+            operations::get_dep_info(&self.db_con, index_deps.values().flatten()).await?;
+
         let mut versions = Vec::new();
         for cm in crate_metas {
             let ci = crate_indices
@@ -1848,26 +1860,18 @@ impl DbProvider for Database {
                 .ok_or_else(|| {
                     DbError::CrateIndexNotFound(krate.name.clone(), cm.version.clone())
                 })?;
-            let dependencies: Vec<CrateRegistryDep> = match ci.deps.clone() {
-                Some(deps) => {
-                    let ix = serde_json::from_value::<Vec<IndexDep>>(deps)
-                        .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
-
-                    let mut ft = Vec::new();
-
-                    let dep_descs = operations::get_desc_for_deps(&self.db_con, ix.iter()).await?;
-
-                    for dep in &ix {
-                        ft.push(CrateRegistryDep::from_index(
-                            dep_descs.get(&dep.name).cloned(),
-                            dep.clone(),
-                        ));
-                    }
-
-                    ft
-                }
-                None => Vec::default(),
-            };
+            let dependencies: Vec<CrateRegistryDep> = index_deps
+                .get(ci.vers.as_str())
+                .into_iter()
+                .flatten()
+                .map(|dep| {
+                    let info = dep_info
+                        .get(&operations::dep_lookup_name(dep))
+                        .cloned()
+                        .unwrap_or_default();
+                    CrateRegistryDep::from_index(info.description, info.latest_version, dep.clone())
+                })
+                .collect();
             let features: BTreeMap<String, Vec<String>> = match ci.features.clone() {
                 Some(features) => serde_json::from_value::<BTreeMap<String, Vec<String>>>(features)
                     .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?,

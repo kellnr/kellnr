@@ -78,7 +78,7 @@
             <SectionHeader icon="mdi-package-variant" title="Dependencies" :count="sortedDependencies.normal.length" />
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.normal" :key="dep.name" :name="dep.name" :version="dep.version_req"
-                :registry="dep.registry" />
+                :registry="dep.registry" :latest-version="dep.latest_version" :outdated="dep.outdated" />
             </v-card-text>
           </v-card>
 
@@ -88,7 +88,7 @@
             <SectionHeader icon="mdi-flask-outline" title="Development dependencies" :count="sortedDependencies.dev.length" />
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.dev" :key="dep.name" :name="dep.name" :version="dep.version_req"
-                :registry="dep.registry" />
+                :registry="dep.registry" :latest-version="dep.latest_version" :outdated="dep.outdated" />
             </v-card-text>
           </v-card>
 
@@ -98,7 +98,8 @@
             <SectionHeader icon="mdi-hammer-wrench" title="Build dependencies" :count="sortedDependencies.build.length" />
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.build" :key="dep.name" :name="dep.name" :version="dep.version_req"
-                :registry="dep.registry" :desc="dep.description" />
+                :registry="dep.registry" :desc="dep.description" :latest-version="dep.latest_version"
+                :outdated="dep.outdated" />
             </v-card-text>
           </v-card>
         </template>

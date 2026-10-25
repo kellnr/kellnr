@@ -85,6 +85,10 @@ export type CrateRegistryDep = {
     kind?: string,
     registry?: string,
     explicit_name_in_toml?: string,
+    /** Latest version that is not yanked, if Kellnr knows it */
+    latest_version?: string,
+    /** Whether the latest version is newer than version_req allows */
+    outdated: boolean,
 }
 
 export type CrateAccessData = {

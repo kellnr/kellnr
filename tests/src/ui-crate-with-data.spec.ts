@@ -256,6 +256,33 @@ test.describe("Crate Views with Data", () => {
     await expect(page.getByTestId("sidebar-publisher")).toHaveText(/^\s*by admin$/);
   });
 
+  test("dependencies tab marks outdated dependencies", async ({ page }) => {
+    const cratePage = new CratePage(page);
+    // foo-bar depends on test_lib ^2.0, which is the latest version
+    await page.goto(`${baseUrl}/crate?name=foo-bar&tab=dependencies`);
+    await cratePage.waitForCrateData();
+    await expect(page.locator(".dep-name").filter({ hasText: "test_lib" })).toBeVisible();
+    await expect(page.getByTestId("dependency-outdated")).toHaveCount(0);
+
+    // A new major version of test_lib makes the requirement outdated
+    const registryToken = extractRegistryTokenFromCargoConfig({
+      crateDir: path.resolve(process.cwd(), "crates", "test-auth-req", "foo-bar"),
+      registryName: "kellnr-test",
+    });
+    await publishCrate({
+      cratePath: "tests/crates/test-auth-req/test_lib-3",
+      registry: "kellnr-test",
+      registryToken,
+    });
+
+    await page.reload();
+    await cratePage.waitForCrateData();
+    const outdated = page.getByTestId("dependency-outdated");
+    await expect(outdated).toHaveCount(1);
+    await expect(outdated).toHaveText(/latest 3\.0\.0/);
+    await expect(outdated).toHaveAttribute("title", "The latest version 3.0.0 is newer than ^2.0 allows");
+  });
+
   test("crate cards link to the repository", async ({ page }) => {
     await page.goto(`${baseUrl}/crates`);
     const cratesPage = new CratesPage(page);
