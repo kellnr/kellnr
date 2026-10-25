@@ -10,6 +10,7 @@ use kellnr_common::crate_data::CRATESIO_INDEX;
 use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::publish_metadata::PublishMetadata;
+use kellnr_common::version::latest_version;
 use kellnr_entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, cratesio_crate, cratesio_index,
@@ -18,7 +19,7 @@ use kellnr_entity::{
 use sea_orm::sea_query::{Alias, Expr, Func};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait,
-    QueryFilter, Set,
+    QueryFilter, QuerySelect, Set,
 };
 
 use crate::ConString;
@@ -26,40 +27,93 @@ use crate::error::DbError;
 use crate::password::{hash_pwd, hash_token};
 use crate::provider::DbResult;
 
-pub async fn get_desc_for_deps<'a, C, D>(db_con: &C, deps: D) -> DbResult<HashMap<String, String>>
+/// What Kellnr knows about a dependency of a crate.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DepInfo {
+    pub description: Option<String>,
+    /// Latest version that is not yanked
+    pub latest_version: Option<String>,
+}
+
+/// Name a dependency is looked up by: the package name for renamed
+/// dependencies, normalized like the crate names in the database.
+pub fn dep_lookup_name(dep: &IndexDep) -> String {
+    dep.package.as_ref().unwrap_or(&dep.name).to_lowercase()
+}
+
+/// Description and latest version of the dependencies, by [`dep_lookup_name`].
+/// crates.io dependencies are only known if they are in the proxy cache.
+pub async fn get_dep_info<'a, C, D>(db_con: &C, deps: D) -> DbResult<HashMap<String, DepInfo>>
 where
     C: ConnectionTrait,
     D: Iterator<Item = &'a IndexDep>,
 {
-    let mut cratesio_crates = Vec::new();
-    let mut crates = Vec::new();
+    let mut cratesio_names = Vec::new();
+    let mut names = Vec::new();
 
     for dep in deps {
         match dep.registry.as_ref() {
             Some(r) if r == CRATESIO_INDEX => {
-                cratesio_crates.push(dep);
+                cratesio_names.push(dep_lookup_name(dep));
             }
-            _ => crates.push(dep),
+            _ => names.push(dep_lookup_name(dep)),
         }
     }
 
-    let cratesio_models = cratesio_crate::Entity::find()
-        .filter(cratesio_crate::Column::Name.is_in(cratesio_crates.iter().map(|d| &d.name)))
+    let mut info: HashMap<String, DepInfo> = HashMap::new();
+
+    let cratesio_crates: Vec<(String, Option<String>)> = cratesio_crate::Entity::find()
+        .select_only()
+        .columns([
+            cratesio_crate::Column::Name,
+            cratesio_crate::Column::Description,
+        ])
+        .filter(cratesio_crate::Column::Name.is_in(&cratesio_names))
+        .into_tuple()
         .all(db_con)
         .await?;
-    let models = krate::Entity::find()
-        .filter(krate::Column::Name.is_in(crates.iter().map(|d| &d.name)))
+    let cratesio_versions: Vec<(String, String)> = cratesio_index::Entity::find()
+        .select_only()
+        .column(cratesio_crate::Column::Name)
+        .column(cratesio_index::Column::Vers)
+        .inner_join(cratesio_crate::Entity)
+        .filter(cratesio_crate::Column::Name.is_in(&cratesio_names))
+        .filter(cratesio_index::Column::Yanked.eq(false))
+        .into_tuple()
         .all(db_con)
         .await?;
 
-    let cratesio_desc = cratesio_models
-        .into_iter()
-        .filter_map(|m| Some((m.name, m.description?)));
-    let local_desc = models
-        .into_iter()
-        .filter_map(|m| Some((m.name, m.description?)));
+    let crates: Vec<(String, Option<String>)> = krate::Entity::find()
+        .select_only()
+        .columns([krate::Column::Name, krate::Column::Description])
+        .filter(krate::Column::Name.is_in(&names))
+        .into_tuple()
+        .all(db_con)
+        .await?;
+    let versions: Vec<(String, String)> = crate_index::Entity::find()
+        .select_only()
+        .column(krate::Column::Name)
+        .column(crate_index::Column::Vers)
+        .inner_join(krate::Entity)
+        .filter(krate::Column::Name.is_in(&names))
+        .filter(crate_index::Column::Yanked.eq(false))
+        .into_tuple()
+        .all(db_con)
+        .await?;
 
-    Ok(cratesio_desc.chain(local_desc).collect())
+    for (name, description) in cratesio_crates.into_iter().chain(crates) {
+        info.entry(name).or_default().description = description;
+    }
+    let mut all_versions: HashMap<String, Vec<String>> = HashMap::new();
+    for (name, version) in cratesio_versions.into_iter().chain(versions) {
+        all_versions.entry(name).or_default().push(version);
+    }
+    for (name, versions) in all_versions {
+        info.entry(name).or_default().latest_version =
+            latest_version(versions.iter().map(String::as_str));
+    }
+
+    Ok(info)
 }
 
 pub async fn insert_admin_credentials<C: ConnectionTrait>(

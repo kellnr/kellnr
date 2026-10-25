@@ -430,8 +430,9 @@ pub async fn crate_data(
     Ok(Json(cd))
 }
 
-/// Removes the description of dependencies that are download-restricted
-/// crates `user` cannot access, so that a crate page does not reveal them.
+/// Removes the description and latest version of dependencies that are
+/// download-restricted crates `user` cannot access, so that a crate page does
+/// not reveal them.
 async fn hide_restricted_dep_info(
     cd: &mut CrateData,
     user: Option<&MaybeUserOrToken>,
@@ -456,6 +457,8 @@ async fn hide_restricted_dep_info(
         };
         if !can_read {
             dep.description = None;
+            dep.latest_version = None;
+            dep.outdated = false;
         }
     }
     Ok(())
@@ -2520,6 +2523,8 @@ mod tests {
             description: Some("description".to_string()),
             version_req: "^1".to_string(),
             registry: registry.map(str::to_string),
+            latest_version: Some("2.0.0".to_string()),
+            outdated: true,
             ..CrateRegistryDep::default()
         };
         let mut cd = CrateData {
@@ -2538,6 +2543,8 @@ mod tests {
 
         let deps = &cd.versions[0].dependencies;
         assert_eq!(None, deps[0].description);
+        assert_eq!(None, deps[0].latest_version);
+        assert!(!deps[0].outdated);
         assert_eq!(dep("public", None), deps[1]);
         assert_eq!(dep("serde", Some(CRATESIO_INDEX)), deps[2]);
     }

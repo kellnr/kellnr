@@ -85,6 +85,11 @@ pub struct CrateRegistryDep {
     // package name. If not specified or null, this dependency is not
     // renamed.
     pub explicit_name_in_toml: Option<String>,
+    // Latest version of the dependency that is not yanked, if Kellnr knows
+    // it. crates.io dependencies are only known if they are in the proxy cache.
+    pub latest_version: Option<String>,
+    // Whether the latest version is newer than the version requirement allows.
+    pub outdated: bool,
 }
 
 impl From<RegistryDep> for CrateRegistryDep {
@@ -100,12 +105,17 @@ impl From<RegistryDep> for CrateRegistryDep {
             kind: dep.kind,
             registry: dep.registry,
             explicit_name_in_toml: dep.explicit_name_in_toml,
+            latest_version: None,
+            outdated: false,
         }
     }
 }
 
 impl CrateRegistryDep {
-    pub fn from_index(desc: Option<String>, dep: IndexDep) -> Self {
+    pub fn from_index(desc: Option<String>, latest_version: Option<String>, dep: IndexDep) -> Self {
+        let outdated = latest_version
+            .as_deref()
+            .is_some_and(|latest| is_outdated(&dep.req, latest));
         CrateRegistryDep {
             name: match dep.package {
                 Some(ref package) => package.clone(),
@@ -123,6 +133,71 @@ impl CrateRegistryDep {
                 Some(_) => Some(dep.name),
                 None => None,
             },
+            latest_version,
+            outdated,
         }
+    }
+}
+
+/// Whether `latest` is newer than the version requirement `req` allows, e.g.
+/// `^2.0` with the latest version `3.1`. A requirement that is newer than the
+/// latest version, or that cannot be parsed, is not outdated.
+pub fn is_outdated(req: &str, latest: &str) -> bool {
+    let (Ok(req), Ok(latest)) = (
+        semver::VersionReq::parse(req),
+        semver::Version::parse(latest),
+    ) else {
+        return false;
+    };
+    if req.matches(&latest) {
+        return false;
+    }
+    // Not outdated if the latest version is below a lower bound of the
+    // requirement. Upper bounds like `<2` are what make a version outdated.
+    let below_lower_bound = req.comparators.iter().any(|c| {
+        let bound = semver::Version::new(c.major, c.minor.unwrap_or(0), c.patch.unwrap_or(0));
+        match c.op {
+            semver::Op::Less | semver::Op::LessEq => false,
+            semver::Op::Greater => latest <= bound,
+            _ => latest < bound,
+        }
+    });
+    !below_lower_bound
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn latest_version_outside_the_requirement_is_outdated() {
+        assert!(is_outdated("^2.0", "3.1.0"));
+        assert!(is_outdated("2.0", "3.1.0"));
+        assert!(is_outdated("~1.2", "1.3.0"));
+        assert!(is_outdated("=1.0.0", "1.0.1"));
+        assert!(is_outdated(">=1, <2", "2.0.0"));
+        assert!(is_outdated("^0.3", "0.4.0"));
+        assert!(is_outdated("<2", "3.0.0"));
+    }
+
+    #[test]
+    fn latest_version_inside_the_requirement_is_not_outdated() {
+        assert!(!is_outdated("^2.0", "2.4.0"));
+        assert!(!is_outdated("*", "9.0.0"));
+        assert!(!is_outdated(">=1", "3.0.0"));
+    }
+
+    #[test]
+    fn requirement_newer_than_the_latest_version_is_not_outdated() {
+        assert!(!is_outdated("^5", "4.0.0"));
+        assert!(!is_outdated(">=2.1", "2.0.0"));
+        assert!(!is_outdated(">2.0.0", "2.0.0"));
+        assert!(!is_outdated("=2.0.0", "1.0.0"));
+    }
+
+    #[test]
+    fn unparsable_versions_are_not_outdated() {
+        assert!(!is_outdated("not a req", "1.0.0"));
+        assert!(!is_outdated("^1", "latest"));
     }
 }

@@ -2225,6 +2225,83 @@ async fn get_auth_token_name_finds_the_token(test_db: &kellnr_db::Database) {
 }
 
 #[db_test]
+async fn get_crate_data_returns_latest_version_of_dependencies(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    for version in ["1.0.0", "2.0.0", "3.0.0", "4.0.0-beta.1"] {
+        let pm = PublishMetadata {
+            description: Some("A library".to_string()),
+            ..PublishMetadata::minimal("dep-lib", version)
+        };
+        test_db
+            .add_crate(&pm, "cksum", 1024, &created, "admin", None)
+            .await
+            .unwrap();
+    }
+    // Yanked versions and pre-releases do not count as the latest version
+    test_db
+        .yank_crate(
+            &NormalizedName::from_unchecked_str("dep-lib"),
+            &Version::from_unchecked_str("3.0.0"),
+        )
+        .await
+        .unwrap();
+
+    let dep = |req: &str, rename: Option<&str>| RegistryDep {
+        name: "dep-lib".to_string(),
+        version_req: req.to_string(),
+        features: None,
+        optional: false,
+        default_features: true,
+        target: None,
+        kind: Some("normal".to_string()),
+        registry: None,
+        explicit_name_in_toml: rename.map(str::to_string),
+    };
+    let pm = PublishMetadata {
+        deps: vec![
+            dep("^1.0", None),
+            dep("^2.0", Some("renamed")),
+            RegistryDep {
+                name: "unknown".to_string(),
+                ..dep("^1.0", None)
+            },
+        ],
+        ..PublishMetadata::minimal("app", "1.0.0")
+    };
+    test_db
+        .add_crate(&pm, "cksum", 1024, &created, "admin", None)
+        .await
+        .unwrap();
+
+    let data = test_db
+        .get_crate_data(&NormalizedName::from_unchecked_str("app"))
+        .await
+        .unwrap();
+    let deps = &data.versions[0].dependencies;
+    let find = |req: &str, name: &str| {
+        deps.iter()
+            .find(|d| d.version_req == req && d.name == name)
+            .unwrap()
+    };
+
+    let old = find("^1.0", "dep-lib");
+    assert_eq!(Some("2.0.0".to_string()), old.latest_version);
+    assert!(old.outdated);
+    assert_eq!(Some("A library".to_string()), old.description);
+
+    // Renamed dependencies are looked up by their package name
+    let current = find("^2.0", "dep-lib");
+    assert_eq!(Some("renamed".to_string()), current.explicit_name_in_toml);
+    assert_eq!(Some("2.0.0".to_string()), current.latest_version);
+    assert!(!current.outdated);
+    assert_eq!(Some("A library".to_string()), current.description);
+
+    let unknown = find("^1.0", "unknown");
+    assert_eq!(None, unknown.latest_version);
+    assert!(!unknown.outdated);
+}
+
+#[db_test]
 async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let created_string = created.format("%Y-%m-%d %H:%M:%S").to_string();

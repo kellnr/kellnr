@@ -137,9 +137,37 @@ impl fmt::Display for Version {
     }
 }
 
+/// The latest of `versions`. Stable versions win over pre-releases, like on
+/// crates.io, so a pre-release is only the latest if there is no stable one.
+/// Versions that cannot be parsed are ignored.
+pub fn latest_version<'a>(versions: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    versions
+        .into_iter()
+        .filter_map(|v| semver::Version::parse(v).ok())
+        .max_by(|a, b| (a.pre.is_empty(), a).cmp(&(b.pre.is_empty(), b)))
+        .map(|v| v.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn latest_version_prefers_stable_versions() {
+        assert_eq!(
+            Some("2.0.0".to_string()),
+            latest_version(["1.0.0", "2.0.0", "1.5.0", "3.0.0-beta.1"])
+        );
+        assert_eq!(
+            Some("3.0.0-beta.2".to_string()),
+            latest_version(["3.0.0-beta.1", "3.0.0-beta.2"])
+        );
+        assert_eq!(
+            Some("1.0.0".to_string()),
+            latest_version(["1.0.0", "invalid"])
+        );
+        assert_eq!(None, latest_version([]));
+    }
 
     #[test]
     fn valid_package_versions() {

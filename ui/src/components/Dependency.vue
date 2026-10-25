@@ -6,6 +6,11 @@
         <div class="dep-header">
           <span class="dep-name" data-testid="dependency-name">{{ name }}</span>
           <span class="dep-version" data-testid="dependency-version">{{ version }}</span>
+          <span v-if="outdated && latestVersion" class="dep-outdated" data-testid="dependency-outdated"
+            :title="`The latest version ${latestVersion} is newer than ${version} allows`">
+            <v-icon icon="mdi-arrow-up" size="x-small" />
+            latest {{ latestVersion }}
+          </span>
         </div>
         <div class="dep-source">
           <span class="source-badge" :class="isCratesIoDep(registry) ? 'crates-io' : 'kellnr'">
@@ -42,6 +47,8 @@ const props = defineProps<{
   version: string
   registry?: string
   desc?: string
+  latestVersion?: string
+  outdated?: boolean
 }>()
 
 const fetched_desc = ref("")
@@ -170,6 +177,24 @@ watch(route, () => {
   font-weight: 500;
   color: rgb(var(--v-theme-primary));
   font-family: var(--kellnr-font-mono);
+}
+
+/* The warning color is too light for text in the light theme */
+.dep-outdated {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: center;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  color: rgb(var(--v-theme-on-surface));
+  background: rgba(var(--v-theme-warning), 0.12);
+  border: 1px solid rgba(var(--v-theme-warning), 0.5);
+}
+
+.dep-outdated .v-icon {
+  color: rgb(var(--v-theme-warning));
 }
 
 .dep-source {
