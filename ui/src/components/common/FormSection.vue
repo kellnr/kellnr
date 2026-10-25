@@ -19,6 +19,6 @@ defineProps<{
   padding: 20px;
   background: rgba(var(--v-theme-primary), 0.03);
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
 }
 </style>

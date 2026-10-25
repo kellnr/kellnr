@@ -56,7 +56,7 @@ pre {
   margin: 0;
   padding: 16px 48px 16px 16px;
   overflow-x: auto;
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   background: rgb(var(--v-theme-surface-variant));
   border: 1px solid rgb(var(--v-theme-outline));
   font-size: 0.875rem;

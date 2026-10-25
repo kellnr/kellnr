@@ -111,12 +111,12 @@ const booleanClass = computed(() => {
 }
 
 .value-text {
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
   font-size: 13px;
   background: rgba(var(--v-theme-primary), 0.08);
   color: rgb(var(--v-theme-on-surface));
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   word-break: break-all;
 }
 
@@ -128,7 +128,7 @@ const booleanClass = computed(() => {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: 9999px;
   font-size: 12px;
   font-weight: 600;
 }
@@ -172,7 +172,7 @@ const booleanClass = computed(() => {
 }
 
 .default-value {
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
   font-style: italic;
 }
 

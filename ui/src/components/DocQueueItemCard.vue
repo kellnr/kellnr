@@ -61,7 +61,7 @@ defineProps<{
   justify-content: center;
   background: rgba(var(--v-theme-primary), 0.1);
   color: rgb(var(--v-theme-primary));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   font-weight: 600;
   font-size: 0.875rem;
 }

@@ -109,7 +109,7 @@ onMounted(async () => {
 .brand-name {
   font-size: 0.875rem;
   font-weight: 600;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  font-family: var(--kellnr-font-mono);
   display: inline-flex;
   align-items: center;
 }
@@ -136,7 +136,7 @@ onMounted(async () => {
   color: rgb(var(--v-theme-on-surface-variant));
   padding: 2px 6px;
   background: rgba(var(--v-theme-primary), 0.08);
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
 }
 
 .links-section {
@@ -154,7 +154,7 @@ onMounted(async () => {
   text-decoration: none;
   font-size: 0.8rem;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: var(--kellnr-radius);
   transition: all 0.2s ease;
 }
 

@@ -193,7 +193,7 @@ function showNotification(message: string, isError: boolean = false) {
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.5px;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  font-family: var(--kellnr-font-mono);
   display: inline-flex;
   align-items: center;
 }
@@ -228,7 +228,7 @@ function showNotification(message: string, isError: boolean = false) {
   color: rgb(var(--v-theme-on-surface));
   padding: 0 16px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   transition: all 0.2s ease;
 }
 
@@ -271,7 +271,7 @@ function showNotification(message: string, isError: boolean = false) {
 .drawer-logo {
   font-size: 1.25rem;
   font-weight: 700;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  font-family: var(--kellnr-font-mono);
   display: inline-flex;
   align-items: center;
 }
@@ -298,7 +298,7 @@ function showNotification(message: string, isError: boolean = false) {
 }
 
 .drawer-item {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   margin-bottom: 4px;
 }
 

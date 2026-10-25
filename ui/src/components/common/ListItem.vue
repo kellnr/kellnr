@@ -45,7 +45,7 @@ const avatarClass = computed(() => `avatar-${props.avatarColor}`);
   padding: 14px 16px;
   background: rgba(var(--v-theme-primary), 0.03);
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   transition: all 0.2s ease;
 }
 
@@ -57,7 +57,7 @@ const avatarClass = computed(() => `avatar-${props.avatarColor}`);
 .list-item--compact {
   padding: 10px 14px;
   background: rgb(var(--v-theme-surface));
-  border-radius: 6px;
+  border-radius: var(--kellnr-radius);
 }
 
 .list-item--compact:hover {
@@ -76,13 +76,13 @@ const avatarClass = computed(() => `avatar-${props.avatarColor}`);
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
 }
 
 .list-item--compact .list-item-avatar {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--kellnr-radius);
 }
 
 .avatar-primary {

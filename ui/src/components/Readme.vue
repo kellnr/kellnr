@@ -68,7 +68,7 @@ watchEffect(() => {
 }
 
 .markdown-body :deep(pre) {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   margin: 16px 0;
   padding: 16px;
   overflow-x: auto;
@@ -79,7 +79,7 @@ watchEffect(() => {
 .markdown-body :deep(code:not(pre code)) {
   color: inherit;
   padding: 0.2em 0.4em;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   font-size: 0.9em;
   background: rgb(var(--v-theme-surface-variant));
 }

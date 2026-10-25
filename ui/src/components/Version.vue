@@ -60,7 +60,7 @@ function openCrateVersionPage() {
   margin-bottom: 8px;
   background: rgb(var(--v-theme-surface-variant));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -96,7 +96,7 @@ function openCrateVersionPage() {
 .version-number {
   font-weight: 600;
   font-size: 16px;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
   color: rgb(var(--v-theme-primary));
 }
 

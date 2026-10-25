@@ -7,9 +7,6 @@ export interface State {
     rememberMe: boolean
     rememberMeUser: string | null
     searchCache: boolean
-    lightBackgroundImage: string
-    darkBackgroundImage: string
-    currentBackgroundImage: string
 }
 
 export const useStore = defineStore('store', {
@@ -20,9 +17,6 @@ export const useStore = defineStore('store', {
         rememberMe: false,
         rememberMeUser: null,
         searchCache: false,
-        lightBackgroundImage: 'img/bg-light-dev.svg',
-        darkBackgroundImage: 'img/bg-dark-dev.svg',
-        currentBackgroundImage: 'img/bg-light-dev.svg', // Default to light
     }),
     getters: {
         loggedIn: (state) => state.loggedInUser !== null,
@@ -41,13 +35,7 @@ export const useStore = defineStore('store', {
         },
         toggleTheme() {
             // Toggle theme state - Vuetify and highlight.js themes are handled by ThemeToggle component
-            if (this.theme === 'light') {
-                this.theme = 'dark'
-                this.currentBackgroundImage = this.darkBackgroundImage
-            } else {
-                this.theme = 'light'
-                this.currentBackgroundImage = this.lightBackgroundImage
-            }
+            this.theme = this.theme === 'light' ? 'dark' : 'light'
         }
     },
     // Only persist user preferences. Asset paths stay in code so a script on

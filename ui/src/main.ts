@@ -12,6 +12,9 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 // Material Design Icons
 import '@mdi/font/css/materialdesignicons.css'
+// Fonts are bundled, so the UI looks the same everywhere, also offline
+import '@fontsource-variable/inter'
+import '@fontsource-variable/jetbrains-mono'
 
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
@@ -128,7 +131,19 @@ const vuetify = createVuetify({
   },
   icons: {
     defaultSet: 'mdi' // Use Material Design Icons as default
-  }
+  },
+  // Cards use the card radius, controls the smaller one (see App.vue)
+  defaults: {
+    VCard: { rounded: 'card' },
+    VBtn: { rounded: 'lg' },
+    VTextField: { rounded: 'lg' },
+    VTextarea: { rounded: 'lg' },
+    VSelect: { rounded: 'lg' },
+    VAutocomplete: { rounded: 'lg' },
+    VCombobox: { rounded: 'lg' },
+    VFileInput: { rounded: 'lg' },
+    VAlert: { rounded: 'lg' },
+  },
 })
 
 // Complete the app initialization
