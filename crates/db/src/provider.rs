@@ -44,6 +44,19 @@ pub enum CrateVisibility {
     Unrestricted,
 }
 
+/// Order of the crate overview list.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum CrateSort {
+    /// Alphabetical by name.
+    #[default]
+    Name,
+    /// Most recently updated first.
+    Updated,
+    /// Most downloaded first.
+    Downloads,
+}
+
 /// Authenticated user and privileges resolved from a valid session cookie.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionInfo {
@@ -270,7 +283,13 @@ pub trait DbProvider: Send + Sync {
         offset: u64,
         cache: bool,
         visibility: &CrateVisibility,
+        sort: CrateSort,
     ) -> DbResult<Vec<CrateOverview>>;
+    async fn count_crate_overview_list(
+        &self,
+        cache: bool,
+        visibility: &CrateVisibility,
+    ) -> DbResult<u64>;
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData>;
     async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64>;
     async fn add_crate(
@@ -716,7 +735,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_crate_overview_list(&self, limit: u64, offset: u64, cache: bool, visibility: &CrateVisibility) -> DbResult<Vec<CrateOverview >> {
+            async fn get_crate_overview_list(&self, limit: u64, offset: u64, cache: bool, visibility: &CrateVisibility, sort: CrateSort) -> DbResult<Vec<CrateOverview >> {
+                unimplemented!()
+            }
+
+            async fn count_crate_overview_list(&self, cache: bool, visibility: &CrateVisibility) -> DbResult<u64> {
                 unimplemented!()
             }
 

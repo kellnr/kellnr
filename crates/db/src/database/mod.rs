@@ -44,7 +44,7 @@ use tracing::warn;
 use crate::error::DbError;
 use crate::password::{PwdVerification, hash_pwd, hash_token, verify_pwd};
 use crate::provider::{
-    ChannelInfo, CrateVisibility, DbResult, OAuth2StateData, PrefetchState, SessionInfo,
+    ChannelInfo, CrateSort, CrateVisibility, DbResult, OAuth2StateData, PrefetchState, SessionInfo,
     ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
 };
 use crate::tables::init_database;
@@ -460,6 +460,7 @@ impl Database {
         limit_offset: Option<(u64, u64)>,
         cache: bool,
         visibility: &CrateVisibility,
+        sort: CrateSort,
     ) -> DbResult<Vec<CrateOverview>> {
         /// Creates a SELECT statement for a given set of fields.
         fn select_fields(fields: &[(Expr, &str)]) -> SelectStatement {
@@ -517,8 +518,13 @@ impl Database {
         }
 
         // Ordering and optional limit/offset. The name breaks ties, so paging
-        // stays stable within one rank.
-        query.order_by(Alias::new("search_rank"), Order::Asc);
+        // stays stable within one rank, date or download count.
+        match sort {
+            CrateSort::Name => query.order_by(Alias::new("search_rank"), Order::Asc),
+            // Dates are stored as "YYYY-MM-DD HH:MM:SS", so they sort as text.
+            CrateSort::Updated => query.order_by(Alias::new("date"), Order::Desc),
+            CrateSort::Downloads => query.order_by(Alias::new("total_downloads"), Order::Desc),
+        };
         query.order_by(Alias::new("name"), Order::Asc);
         if let Some((limit, offset)) = limit_offset {
             query.limit(limit).offset(offset);
@@ -1633,8 +1639,14 @@ impl DbProvider for Database {
         cache: bool,
         visibility: &CrateVisibility,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(Some(contains), Some((limit, offset)), cache, visibility)
-            .await
+        self.query_crates(
+            Some(contains),
+            Some((limit, offset)),
+            cache,
+            visibility,
+            CrateSort::Name,
+        )
+        .await
     }
 
     async fn count_by_crate_name_and_description(
@@ -1652,9 +1664,18 @@ impl DbProvider for Database {
         offset: u64,
         cache: bool,
         visibility: &CrateVisibility,
+        sort: CrateSort,
     ) -> DbResult<Vec<CrateOverview>> {
-        self.query_crates(None, Some((limit, offset)), cache, visibility)
+        self.query_crates(None, Some((limit, offset)), cache, visibility, sort)
             .await
+    }
+
+    async fn count_crate_overview_list(
+        &self,
+        cache: bool,
+        visibility: &CrateVisibility,
+    ) -> DbResult<u64> {
+        self.count_crates(None, cache, visibility).await
     }
 
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {
