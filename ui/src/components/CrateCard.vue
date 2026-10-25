@@ -37,21 +37,18 @@
                 <template v-slot:activator="{ props: tooltipProps }">
                   <div class="stat-item" v-bind="tooltipProps">
                     <v-icon icon="mdi-calendar-outline" size="x-small" class="stat-icon" />
-                    <span class="stat-value" data-testid="crate-card-updated">{{ humanizedLastUpdated }}</span>
+                    <span class="stat-value" data-testid="crate-card-updated" :title="exactDate(updated)">{{ humanizedLastUpdated }}</span>
                   </div>
                 </template>
               </v-tooltip>
 
-              <div class="doc-link-wrapper">
-                <a v-if="isSafeUrl(docLink)" :href="docLink" class="doc-button" target="_blank"
+              <!-- Only crates with docs get a button, so it never leads nowhere -->
+              <div v-if="isSafeUrl(docLink)" class="doc-link-wrapper">
+                <a :href="docLink" class="doc-button" target="_blank"
                   rel="noopener noreferrer" data-testid="crate-card-docs-link" @click.stop>
                   <v-icon icon="mdi-file-document-outline" size="small" />
                   <span>Documentation</span>
                 </a>
-                <button v-else class="doc-button" data-testid="crate-card-docs-link" @click.stop="goToPublishDocs">
-                  <v-icon icon="mdi-file-document-outline" size="small" />
-                  <span>Documentation</span>
-                </button>
               </div>
             </div>
           </div>
@@ -68,16 +65,12 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-import utc from "dayjs/plugin/utc";
 import { useStore } from "../store/store";
 import { useRouter } from "vue-router";
 import { isSafeUrl } from "../common/url";
 import { formatNumber } from "../common/format";
+import { useRelativeTime } from "../composables";
 
-dayjs.extend(relativeTime);
-dayjs.extend(utc);
 const store = useStore();
 const router = useRouter();
 
@@ -91,9 +84,9 @@ const props = defineProps<{
   isCache: boolean
 }>()
 
-const humanizedLastUpdated = computed(() => {
-  return dayjs.utc(props.updated).fromNow();
-})
+const { fromNow, exactDate } = useRelativeTime();
+
+const humanizedLastUpdated = computed(() => fromNow(props.updated))
 
 // Navigate to crate details or crates.io
 function navigateToCrate() {
@@ -108,11 +101,6 @@ function navigateToCrate() {
       }
     });
   }
-}
-
-// Navigate to publish docs page
-function goToPublishDocs() {
-  router.push({ name: 'PublishDocs' });
 }
 </script>
 

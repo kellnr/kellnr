@@ -4,6 +4,7 @@
 import { apiGet, apiPost, apiPut, apiDelete } from './api'
 import type { ApiResult } from '../types/api'
 import type {
+  CrateSort,
   CratesResponse,
   SearchResponse,
   CrateUsersResponse,
@@ -39,9 +40,10 @@ import type { DocQueueItem } from '../types/doc_queue_item'
 export async function getCrates(
   page: number,
   pageSize: number,
-  cache: boolean
+  cache: boolean,
+  sort: CrateSort = 'name'
 ): Promise<ApiResult<CratesResponse>> {
-  return apiGet<CratesResponse>(CRATES, { page, page_size: pageSize, cache })
+  return apiGet<CratesResponse>(CRATES, { page, page_size: pageSize, cache, sort })
 }
 
 /**
