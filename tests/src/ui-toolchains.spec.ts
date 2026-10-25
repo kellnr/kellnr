@@ -14,7 +14,7 @@
  */
 
 import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
-import { LoginPage, ToolchainsPage } from "./pages";
+import { LoginPage, ToolchainsPage, HeaderComponent } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
   assertKellnrBinaryExists,
@@ -231,9 +231,9 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
     // Logout admin
     await page.goto(`${baseUrl}`);
     await page.waitForTimeout(500);
-    const logoutButton = page.getByRole("button", { name: "Logout" });
-    if (await logoutButton.isVisible()) {
-      await logoutButton.click();
+    const header = new HeaderComponent(page);
+    if (await header.isLoggedIn()) {
+      await header.clickLogout();
       await page.waitForTimeout(500);
     }
 

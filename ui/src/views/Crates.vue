@@ -32,10 +32,10 @@
       <!-- Empty State -->
       <v-card v-if="crates.length === 0 && !isLoading" class="pa-6 text-center mx-auto my-8" max-width="500"
         variant="outlined" data-testid="crates-empty-state">
-        <v-card-title class="text-h6 font-weight-medium">No crates found</v-card-title>
+        <v-card-title class="text-title-large font-weight-medium">No crates found</v-card-title>
         <v-card-text>
           <p>To learn how to publish crates to <strong>Kellnr</strong>, read the
-            <a href="https://kellnr.io/documentation" target="_blank" rel="noopener noreferrer" class="text-decoration-none font-weight-medium">
+            <a href="https://kellnr.io/documentation" target="_blank" rel="noopener noreferrer" class="text-decoration-none font-weight-medium text-primary">
               documentation
             </a>
           </p>
@@ -55,11 +55,11 @@
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="text-center my-4 pb-4" data-testid="crates-loading">
         <v-progress-circular indeterminate color="primary" :size="40"></v-progress-circular>
-        <div class="text-body-2 mt-2">Loading crates...</div>
+        <div class="text-body-medium mt-2">Loading crates...</div>
       </div>
 
       <!-- End of Results -->
-      <div v-if="allLoaded && crates.length > 0" class="text-center my-6 text-body-2 text-grey"
+      <div v-if="allLoaded && crates.length > 0" class="text-center my-6 text-body-medium text-grey"
         data-testid="crates-end-of-results">
         — End of crates —
       </div>
@@ -209,8 +209,8 @@ function handleSearch(query: string) {
 .main-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 64px);
-  /* Adjust for app bar height */
+  /* Fill the space between app bar and footer, minus the page container padding */
+  height: calc(100vh - var(--v-layout-top, 64px) - var(--v-layout-bottom, 48px) - 32px);
   overflow: hidden;
   position: relative;
 }
@@ -279,11 +279,6 @@ function handleSearch(query: string) {
 
 /* Mobile adjustments */
 @media (max-width: 600px) {
-  .main-container {
-    height: calc(100vh - 56px);
-    /* Adjust for smaller mobile app bar */
-  }
-
   .content-container {
     margin: 0 8px 8px 8px;
   }

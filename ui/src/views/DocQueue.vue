@@ -5,7 +5,7 @@
       <v-card-title class="section-header pa-4">
         <div class="d-flex align-center">
           <v-icon icon="mdi-file-document-multiple-outline" size="large" class="mr-3 header-icon" />
-          <span class="text-h5 font-weight-bold">Rustdoc Queue</span>
+          <span class="text-headline-small font-weight-bold">Rustdoc Queue</span>
         </div>
       </v-card-title>
       <v-card-text class="pa-4">
@@ -19,8 +19,8 @@
     <!-- Empty State -->
     <v-card v-if="emptyQueue" elevation="0" rounded="lg" class="empty-state-card pa-6 text-center">
       <v-icon icon="mdi-check-circle-outline" size="64" class="empty-icon mb-4" />
-      <h3 class="text-h6 font-weight-medium mb-2">Queue is empty</h3>
-      <p class="text-body-2 empty-description mb-0">
+      <h3 class="text-title-large font-weight-medium mb-2">Queue is empty</h3>
+      <p class="text-body-medium empty-description mb-0">
         All documentation has been generated. New crates will appear here when uploaded.
       </p>
     </v-card>
@@ -29,7 +29,7 @@
     <v-card v-if="!emptyQueue" elevation="0" rounded="lg" class="queue-list-card">
       <v-card-title class="queue-header pa-4">
         <div class="d-flex align-center justify-space-between">
-          <span class="text-subtitle-1 font-weight-medium">Pending Documentation</span>
+          <span class="text-body-large font-weight-medium">Pending Documentation</span>
           <v-chip size="small" variant="tonal" color="primary">
             {{ queue.length }} item{{ queue.length !== 1 ? 's' : '' }}
           </v-chip>

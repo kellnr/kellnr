@@ -9,6 +9,8 @@
  * - Versions tab
  * - Settings tab (admin only)
  * - Landing page statistics
+ * - Layout: text sizes, page height, phone gutters, sidebar order, install
+ *   snippet wrapping and link colors
  *
  * Performance: All tests share a single local Kellnr instance.
  */
@@ -269,5 +271,128 @@ test.describe("Crate Views with Data", () => {
     // Should see warning about deleting - new text mentions "yanking"
     const warning = page.locator(".v-alert").filter({ hasText: "yanking" });
     await expect(warning).toBeVisible();
+  });
+
+  test.describe("layout", () => {
+    test("landing page statistics use large numbers", async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`${baseUrl}/`);
+      const landingPage = new LandingPage(page);
+      await landingPage.waitForStatistics();
+
+      // The text size classes are Vuetify 4 names; with the old Vuetify 3
+      // names the numbers fell back to the 14px body size.
+      const fontSize = await page
+        .getByTestId("stat-value")
+        .first()
+        .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      expect(fontSize).toBeGreaterThan(40);
+    });
+
+    test("short pages do not scroll", async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      for (const route of ["/", "/login", "/docqueue", "/crates"]) {
+        await page.goto(`${baseUrl}${route}`);
+        await page.waitForLoadState("networkidle");
+        const { scrollHeight, innerHeight } = await page.evaluate(() => ({
+          scrollHeight: document.documentElement.scrollHeight,
+          innerHeight: window.innerHeight,
+        }));
+        expect(scrollHeight, `page ${route} should fit the window`).toBeLessThanOrEqual(innerHeight);
+      }
+    });
+
+    test("crate cards fit a phone screen", async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(`${baseUrl}/crates`);
+      const cratesPage = new CratesPage(page);
+      await cratesPage.waitForSearchResults();
+
+      const card = page.getByTestId("crate-card").first();
+      const cardBox = await card.boundingBox();
+      const docsBox = await card.getByTestId("crate-card-docs-link").boundingBox();
+      expect(cardBox).not.toBeNull();
+      expect(docsBox).not.toBeNull();
+      // The documentation button stays inside the card
+      expect(docsBox!.x + docsBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
+
+      // The date stays on one line
+      const lineHeights = await card.getByTestId("crate-card-updated").evaluate((el) => ({
+        height: el.getBoundingClientRect().height,
+        lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+      }));
+      expect(lineHeights.height).toBeLessThan(lineHeights.lineHeight * 1.5);
+
+      // Page content has a side gutter and no horizontal scrolling
+      expect(cardBox!.x).toBeGreaterThanOrEqual(12);
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(scrollWidth).toBeLessThanOrEqual(390);
+    });
+
+    test("landing page has a side gutter on a phone", async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(`${baseUrl}/`);
+      const landingPage = new LandingPage(page);
+      await landingPage.waitForStatistics();
+
+      const cardBox = await page.getByTestId("stat-value").first().locator("xpath=ancestor::*[contains(@class,'v-card')][1]").boundingBox();
+      expect(cardBox).not.toBeNull();
+      expect(cardBox!.x).toBeGreaterThanOrEqual(12);
+      expect(cardBox!.x + cardBox!.width).toBeLessThanOrEqual(390 - 12);
+    });
+
+    test("crate page shows content before the sidebar on a phone", async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(`${baseUrl}/crate?name=foo-bar`);
+      const cratePage = new CratePage(page);
+      await cratePage.waitForCrateData();
+
+      const contentBox = await page.locator(".content-card").first().boundingBox();
+      const sidebarBox = await cratePage.sidebar.boundingBox();
+      expect(contentBox).not.toBeNull();
+      expect(sidebarBox).not.toBeNull();
+      expect(contentBox!.y).toBeLessThan(sidebarBox!.y);
+      expect(sidebarBox!.x).toBeGreaterThanOrEqual(12);
+    });
+
+    test("install snippet does not break inside the version", async ({ page }) => {
+      // Smallest two-column width, where the sidebar is narrowest and the
+      // snippet has to wrap
+      await page.setViewportSize({ width: 960, height: 900 });
+      await page.goto(`${baseUrl}/crate?name=foo-bar`);
+      const cratePage = new CratePage(page);
+      await cratePage.waitForCrateData();
+
+      const lines = await page.getByTestId("install-snippet").evaluate((el) => {
+        // Collect the text of each rendered line
+        const range = document.createRange();
+        const text = el.firstChild as Text;
+        const result: Record<number, string> = {};
+        for (let i = 0; i < text.length; i++) {
+          range.setStart(text, i);
+          range.setEnd(text, i + 1);
+          const top = Math.round(range.getBoundingClientRect().top);
+          result[top] = (result[top] ?? "") + text.data[i];
+        }
+        return Object.values(result);
+      });
+      expect(lines.some((line) => line.includes('"1.0.0"'))).toBe(true);
+    });
+
+    test("documentation link uses the theme color", async ({ page }) => {
+      await page.goto(`${baseUrl}/crate?name=foo-bar`);
+      const cratePage = new CratePage(page);
+      await cratePage.waitForCrateData();
+
+      // Browsers report the unvisited style for :visited links, so check that
+      // the link sets the theme color itself instead of the browser default.
+      const { color, primary } = await page.getByTestId("sidebar-add-docs").evaluate((el) => ({
+        color: getComputedStyle(el).color,
+        primary: getComputedStyle(document.querySelector(".v-application")!)
+          .getPropertyValue("--v-theme-primary")
+          .trim(),
+      }));
+      expect(color).toBe(`rgb(${primary.split(",").map((c) => c.trim()).join(", ")})`);
+    });
   });
 });

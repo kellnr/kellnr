@@ -253,9 +253,15 @@ test.describe("OAuth2 UI Tests - Enabled", () => {
     // Should redirect back to Kellnr after successful auth
     await page.waitForURL(`${baseUrl}/**`, { timeout: 15000 });
 
-    // User should be logged in
-    const isLoggedIn = await header.isLoggedIn();
-    expect(isLoggedIn).toBe(true);
+    // User should be logged in and greeted, like after a password login
+    await expect(header.userMenuButton).toBeVisible();
+    await expect(page.getByTestId("snackbar")).toContainText("Welcome back, testuser!");
+
+    // A reload restores the session; that must not greet the user again
+    await page.reload();
+    await expect(header.userMenuButton).toBeVisible();
+    await page.waitForTimeout(1000);
+    await expect(page.getByTestId("snackbar")).not.toBeVisible();
   });
 
   test("logout redirects to OIDC provider", async ({ page }) => {
@@ -279,7 +285,7 @@ test.describe("OAuth2 UI Tests - Enabled", () => {
     // User should be logged in
     const isLoggedInBefore = await header.isLoggedIn();
     expect(isLoggedInBefore).toBe(true);
-    await expect(header.logoutButton).toBeVisible();
+    await expect(header.userMenuButton).toBeVisible();
 
     // Wait for a redirect to the end session endpoint of the mock OIDC server,
     // which should itself redirect back to Kellnr. Register the listener before
@@ -287,7 +293,7 @@ test.describe("OAuth2 UI Tests - Enabled", () => {
     const endSessionPromise = page.waitForResponse(/.*\/endsession.*/, { timeout: 10000 });
 
     // Log out
-    await header.logoutButton.click();
+    await header.clickLogout();
 
     const endSessionResponse = await endSessionPromise;
     expect(endSessionResponse.status()).toBe(302);

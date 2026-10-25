@@ -6,7 +6,7 @@
       :class="compact ? 'me-2' : 'mb-3'"
       class="text-medium-emphasis"
     ></v-icon>
-    <p class="text-body-2 text-medium-emphasis mb-0">{{ message }}</p>
+    <p class="text-body-medium text-medium-emphasis mb-0">{{ message }}</p>
   </div>
 </template>
 

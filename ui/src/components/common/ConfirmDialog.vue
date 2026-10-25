@@ -3,12 +3,12 @@
     <v-card class="confirm-dialog" data-testid="confirm-dialog">
       <div class="dialog-header" :class="headerColorClass">
         <v-icon :icon="icon" :color="iconColor" size="small" class="me-3"></v-icon>
-        <span class="text-h6 font-weight-bold" data-testid="confirm-dialog-title">{{ title }}</span>
+        <span class="text-title-large font-weight-bold" data-testid="confirm-dialog-title">{{ title }}</span>
       </div>
 
       <v-card-text class="pa-5">
-        <p class="text-body-1 mb-2">{{ message }}</p>
-        <p v-if="subMessage" class="text-body-2 text-medium-emphasis mb-0">
+        <p class="text-body-large mb-2">{{ message }}</p>
+        <p v-if="subMessage" class="text-body-medium text-medium-emphasis mb-0">
           {{ subMessage }}
         </p>
       </v-card-text>

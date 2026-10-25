@@ -12,11 +12,11 @@
         <v-icon color="white" icon="mdi-package-variant" size="large"></v-icon>
       </v-avatar>
       <div class="flex-grow-1 overflow-hidden">
-        <div class="text-overline mb-1 label-text">Last Updated</div>
-        <div class="text-h6 font-weight-bold crate-name text-truncate" :title="crateName">
+        <div class="text-label-medium text-uppercase mb-1 label-text">Last Updated</div>
+        <div class="text-title-large font-weight-bold crate-name text-truncate" :title="crateName">
           {{ crateName }}
         </div>
-        <div class="text-caption time-text">{{ timeAgo }}</div>
+        <div class="text-body-small time-text">{{ timeAgo }}</div>
       </div>
       <v-icon :color="chevronColor" icon="mdi-chevron-right" size="small" class="ml-2"></v-icon>
     </v-card-text>

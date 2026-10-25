@@ -3,7 +3,7 @@
     <SectionHeader icon="mdi-shield-key" title="Authentication Tokens" :count="tokens.length" />
 
     <div class="section-content">
-      <p class="text-body-2 text-medium-emphasis mb-5">
+      <p class="text-body-medium text-medium-emphasis mb-5">
         Authentication tokens allow you to publish crates via <code>cargo</code> without using your password.
         Tokens can be revoked at any time.
       </p>

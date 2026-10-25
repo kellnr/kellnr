@@ -1,7 +1,7 @@
 <template>
   <div class="subsection-header">
     <v-icon :icon="icon" size="x-small" class="me-2" color="primary"></v-icon>
-    <span class="text-body-2 font-weight-medium">{{ title }}</span>
+    <span class="text-body-medium font-weight-medium">{{ title }}</span>
     <span v-if="count !== undefined" class="subsection-count">{{ count }}</span>
     <slot name="actions"></slot>
   </div>

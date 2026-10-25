@@ -66,7 +66,7 @@ test.describe("/me Route Tests (cargo login flow)", () => {
     await page.waitForURL("**/");
 
     // Verify login is complete by checking logout button is visible
-    await expect(header.logoutButton).toBeVisible({ timeout: 10000 });
+    await expect(header.userMenuButton).toBeVisible({ timeout: 10000 });
 
     // Use client-side navigation to /me within the already-running Vue app
     // This avoids the race condition with Pinia persist plugin hydration
@@ -122,7 +122,7 @@ test.describe("/me Route Tests (cargo login flow)", () => {
     await page.waitForURL("**/");
 
     // Verify login is complete
-    await expect(header.logoutButton).toBeVisible({ timeout: 10000 });
+    await expect(header.userMenuButton).toBeVisible({ timeout: 10000 });
 
     // Use client-side navigation to /me
     await page.evaluate(() => {

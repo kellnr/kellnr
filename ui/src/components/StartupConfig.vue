@@ -3,14 +3,14 @@
     <!-- Header -->
     <div class="section-header">
       <v-icon icon="mdi-tune" size="small" color="primary" class="me-3"></v-icon>
-      <span class="text-h6 font-weight-bold">Startup Configuration</span>
+      <span class="text-title-large font-weight-bold">Startup Configuration</span>
       <span v-if="totalConfigured > 0" class="section-count configured">{{ totalConfigured }}/{{ totalSettings }} configured</span>
       <span class="section-count">{{ visibleSectionsCount }} sections</span>
     </div>
 
     <!-- Content -->
     <div class="section-content">
-      <p class="text-body-2 text-medium-emphasis mb-4">
+      <p class="text-body-medium text-medium-emphasis mb-4">
         Configuration values are set on application startup and cannot be changed at runtime.
         See the <a href="https://kellnr.io/documentation" class="text-primary font-weight-medium">Kellnr Documentation</a> for details.
       </p>
@@ -33,7 +33,7 @@
               <div class="panel-icon-wrapper">
                 <v-icon :icon="section.icon" size="small"></v-icon>
               </div>
-              <span class="text-body-1 font-weight-medium">{{ section.title }}</span>
+              <span class="text-body-large font-weight-medium">{{ section.title }}</span>
               <v-chip
                 v-if="sectionEnabledLeaf(section.key)"
                 size="x-small"

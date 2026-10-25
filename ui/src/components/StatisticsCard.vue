@@ -11,12 +11,12 @@
     @click="handleClick">
     <v-card-text class="d-flex flex-column justify-space-between h-100 pa-4" :class="textColorClass">
       <div class="d-flex justify-space-between align-center">
-        <span class="text-h3 font-weight-bold" data-testid="stat-value">{{ num }}</span>
+        <span class="text-display-medium font-weight-bold" data-testid="stat-value">{{ num }}</span>
         <v-avatar :color="getIconBgColor" size="56" class="elevation-1">
           <v-icon :color="getIconColor" :icon="icon" size="large"></v-icon>
         </v-avatar>
       </div>
-      <div class="text-subtitle-1 font-weight-medium mt-2" data-testid="stat-label">
+      <div class="text-body-large font-weight-medium mt-2" data-testid="stat-label">
         {{ text }}
       </div>
     </v-card-text>
@@ -232,7 +232,7 @@ function textToTestId(text: number | string): string {
   color: rgba(255, 255, 255, 0.9) !important;
 }
 
-.text-dark-theme .text-subtitle-1 {
+.text-dark-theme .text-body-large {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
@@ -249,7 +249,7 @@ function textToTestId(text: number | string): string {
   }
 }
 
-.text-h3 {
+.text-display-medium {
   animation: countUp 0.5s ease-out forwards;
 }
 

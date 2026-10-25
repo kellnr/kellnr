@@ -4,10 +4,10 @@
     <v-row class="mb-6">
       <v-col cols="12">
         <div class="text-center mb-4">
-          <h1 class="text-h4 text-md-h3 font-weight-bold welcome-title mb-2" :class="{ 'dark-mode': isDark }">
+          <h1 class="text-headline-large text-md-display-medium font-weight-bold welcome-title mb-2" :class="{ 'dark-mode': isDark }">
             Welcome to Kellnr
           </h1>
-          <p class="text-body-1 welcome-subtitle" :class="{ 'dark-mode': isDark }">
+          <p class="text-body-large welcome-subtitle" :class="{ 'dark-mode': isDark }">
             Your private Rust crate registry
           </p>
         </div>
@@ -28,7 +28,7 @@
       <v-col cols="12" class="text-center">
         <v-progress-circular indeterminate color="primary" size="60" width="6"
           data-testid="landing-loading"></v-progress-circular>
-        <div class="mt-4 text-body-1 loading-text">Loading registry statistics...</div>
+        <div class="mt-4 text-body-large loading-text">Loading registry statistics...</div>
       </v-col>
     </v-row>
 
@@ -83,7 +83,7 @@
             <v-card-text class="pa-4">
               <div class="d-flex align-center mb-3">
                 <v-icon icon="mdi-trophy" color="amber-darken-1" size="small" class="mr-2"></v-icon>
-                <span class="text-subtitle-2 font-weight-bold section-title">Top Downloaded</span>
+                <span class="text-title-small font-weight-bold section-title">Top Downloaded</span>
               </div>
               <div class="d-flex flex-wrap gap-3">
                 <div v-if="statistics.top_crates.first[1] > 0" class="top-crate-item">
@@ -193,7 +193,6 @@ function navigateToCrate(crateName: string) {
 .landing-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding-bottom: 80px; /* Space for footer */
 }
 
 .welcome-title {
