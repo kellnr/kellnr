@@ -42,36 +42,6 @@
         </div>
       </div>
 
-      <!-- Categories Section -->
-      <div v-if="crate.categories && crate.categories.length > 0" class="section-card" data-testid="about-categories">
-        <div class="section-header">
-          <v-icon icon="mdi-folder-multiple" size="small" class="section-icon"></v-icon>
-          <span class="section-title">Categories</span>
-          <span class="count-badge">{{ crate.categories.length }}</span>
-        </div>
-        <div class="section-content">
-          <span v-for="(category, i) in crate.categories" :key="`category-${i}`" class="item-chip"
-            data-testid="about-category">
-            {{ category }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Keywords Section -->
-      <div v-if="crate.keywords && crate.keywords.length > 0" class="section-card" data-testid="about-keywords">
-        <div class="section-header">
-          <v-icon icon="mdi-tag-multiple" size="small" class="section-icon"></v-icon>
-          <span class="section-title">Keywords</span>
-          <span class="count-badge">{{ crate.keywords.length }}</span>
-        </div>
-        <div class="section-content">
-          <span v-for="(keyword, i) in crate.keywords" :key="`keyword-${i}`" class="item-chip"
-            data-testid="about-keyword">
-            {{ keyword }}
-          </span>
-        </div>
-      </div>
-
       <!-- Features Section -->
       <div v-if="flattenedFeatures.length > 0" class="section-card features-section">
         <div class="section-header">

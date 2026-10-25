@@ -5,6 +5,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from './api'
 import type { ApiResult } from '../types/api'
 import type {
   CrateSort,
+  CrateTagFilter,
   CratesResponse,
   SearchResponse,
   CrateUsersResponse,
@@ -41,9 +42,10 @@ export async function getCrates(
   page: number,
   pageSize: number,
   cache: boolean,
-  sort: CrateSort = 'name'
+  sort: CrateSort = 'name',
+  tags: CrateTagFilter = {}
 ): Promise<ApiResult<CratesResponse>> {
-  return apiGet<CratesResponse>(CRATES, { page, page_size: pageSize, cache, sort })
+  return apiGet<CratesResponse>(CRATES, { page, page_size: pageSize, cache, sort, ...tags })
 }
 
 /**

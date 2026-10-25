@@ -10,6 +10,20 @@
         {{ crate.description }}
       </p>
 
+      <!-- Categories and keywords link to the crates that share them -->
+      <div v-if="crate.categories.length > 0 || crate.keywords.length > 0" class="crate-tags mt-3"
+        data-testid="crate-tags">
+        <router-link v-for="category in crate.categories" :key="`category-${category}`"
+          :to="{ name: 'Crates', query: { category } }" class="tag-chip" :title="`Crates in ${category}`"
+          data-testid="crate-category">
+          <v-icon icon="mdi-folder-outline" size="x-small" />
+          <span>{{ category }}</span>
+        </router-link>
+        <router-link v-for="keyword in crate.keywords" :key="`keyword-${keyword}`"
+          :to="{ name: 'Crates', query: { keyword } }" class="tag-chip" :title="`Crates with the keyword ${keyword}`"
+          data-testid="crate-keyword">#{{ keyword }}</router-link>
+      </div>
+
       <!-- Arrows show that more tabs are hidden on narrow screens -->
       <v-tabs :model-value="tab" color="primary" slider-color="primary" show-arrows density="compact"
         class="crate-tabs mt-4" @update:model-value="selectTab">
@@ -41,8 +55,15 @@
         <!-- Versions Tab -->
         <v-card v-if="tab === 'versions'" class="mb-4 content-card" elevation="0" data-testid="crate-versions">
           <v-card-text>
-            <Version v-for="version in crate.versions" :key="version.version" :name="crate.name"
-              :version="version.version" :last_updated="version.created" :downloads="version.downloads.toString()" />
+            <!-- Versions are grouped by semver compatibility, like 1.x or 0.3.x -->
+            <section v-for="group in versionGroups" :key="group.label" class="version-group"
+              data-testid="version-group">
+              <h3 class="version-group-label" data-testid="version-group-label">
+                {{ group.label }}
+                <span class="version-group-count">{{ group.versions.length }}</span>
+              </h3>
+              <Version v-for="version in group.versions" :key="version.version" :name="crate.name" :version="version" />
+            </section>
           </v-card-text>
         </v-card>
 
@@ -126,6 +147,7 @@ import { computed, onBeforeMount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
 import { safeUrl } from "../common/url";
+import { versionGroup } from "../common/format";
 import type { CrateData, CrateVersionData, CrateRegistryDep } from "../types/crate_data";
 import { crateService, settingsService } from "../services";
 import { isSuccess } from "../services/api";
@@ -171,6 +193,21 @@ function selectTab(value: unknown) {
 const docLink = computed(() => {
   return safeUrl(selected_version.value.documentation);
 })
+
+// The versions are sorted newest first, so are the groups
+const versionGroups = computed(() => {
+  const groups: { label: string, versions: CrateVersionData[] }[] = [];
+  for (const version of crateData.value.versions) {
+    const label = versionGroup(version.version);
+    const group = groups.find(g => g.label === label);
+    if (group) {
+      group.versions.push(version);
+    } else {
+      groups.push({ label, versions: [version] });
+    }
+  }
+  return groups;
+});
 
 function getDependenciesByKind(kind: string): CrateRegistryDep[] {
   return sortByName(
@@ -334,6 +371,59 @@ watch(() => [route.query.tab, canManageCrate.value, store.loggedInUserIsAdmin], 
   font-size: 1rem;
   line-height: 1.6;
   max-width: 70ch;
+}
+
+.crate-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 13px;
+  line-height: 1.6;
+  text-decoration: none;
+  color: rgb(var(--v-theme-on-surface-variant));
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgb(var(--v-theme-outline));
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.tag-chip:hover,
+.tag-chip:focus-visible {
+  color: rgb(var(--v-theme-primary));
+  border-color: rgb(var(--v-theme-primary));
+}
+
+/* Version groups */
+.version-group + .version-group {
+  margin-top: 20px;
+}
+
+.version-group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--kellnr-font-mono);
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.version-group-count {
+  font-family: var(--kellnr-font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: rgb(var(--v-theme-surface-variant));
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
 /* The tabs sit on a line that spans the page */

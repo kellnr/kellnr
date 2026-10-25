@@ -5,6 +5,7 @@ export type CrateOverview = {
     total_downloads: number
     description?: string
     documentation?: string
+    repository?: string
     is_kellnr: boolean
     /** Alias for !is_kellnr - indicates if this is from crates.io cache */
     is_cache?: boolean

@@ -4,7 +4,11 @@
     <div class="crates-toolbar mb-2">
       <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined" density="comfortable"
         hide-details prepend-inner-icon="mdi-magnify" color="primary" data-testid="crates-search"
-        @keyup.enter="handleSearch(searchText)" class="search-field" bg-color="surface"></v-text-field>
+        data-search-shortcut @keyup.enter="handleSearch(searchText)" class="search-field" bg-color="surface">
+        <template v-slot:append-inner>
+          <kbd class="shortcut-hint" title="Press / or S to search">/</kbd>
+        </template>
+      </v-text-field>
 
       <v-select v-if="!activeQuery" v-model="sort" :items="SORT_OPTIONS" density="comfortable" variant="outlined"
         hide-details class="sort-select" bg-color="surface" aria-label="Sort crates" data-testid="crates-sort"
@@ -25,12 +29,20 @@
       </v-switch>
     </div>
 
-    <!-- Result count -->
+    <!-- Result count and the active keyword or category filter -->
     <div class="result-line mb-3">
       <template v-if="total !== null">
         <span class="text-body-medium result-count" data-testid="crates-result-count">{{ resultCountText }}</span>
         <span v-if="activeQuery" class="text-body-medium result-count">, best matches first</span>
       </template>
+      <v-chip v-if="tags.category" size="small" closable prepend-icon="mdi-folder-outline" class="ms-2"
+        close-label="Remove category filter" data-testid="crates-category-filter" @click:close="clearTags">
+        {{ tags.category }}
+      </v-chip>
+      <v-chip v-if="tags.keyword" size="small" closable class="ms-2" close-label="Remove keyword filter"
+        data-testid="crates-keyword-filter" @click:close="clearTags">
+        #{{ tags.keyword }}
+      </v-chip>
     </div>
 
     <div class="content-container" data-testid="crates-list">
@@ -50,7 +62,7 @@
 
       <crate-card v-for="crate in crates" :key="`${crate.name}-${crate.version}`" :crate="crate.name"
         :version="crate.version" :updated="crate.date" :downloads="crate.total_downloads" :desc="crate.description"
-        :doc-link="crate.documentation" :is-cache="crate.is_cache"></crate-card>
+        :doc-link="crate.documentation" :repository="crate.repository" :is-cache="crate.is_cache"></crate-card>
 
       <!-- Loads the next page when it scrolls into view -->
       <div ref="loadMoreSentinel" class="load-more-sentinel" aria-hidden="true"></div>
@@ -71,13 +83,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeMount, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, onBeforeMount, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import CrateCard from "../components/CrateCard.vue"
 import type { CrateOverview } from "../types/crate_overview"
-import type { CrateSort } from "../types/api"
+import type { CrateSort, CrateTagFilter } from "../types/api"
 import { crateService } from "../services"
 import { isSuccess } from "../services/api"
-import { useRouter } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 import { useStore } from "../store/store"
 import { formatNumber } from "../common/format"
 
@@ -100,18 +112,34 @@ const searchText = ref("")
 // Kept apart from `searchText` so typing does not change what the next page is.
 const activeQuery = ref("")
 const sort = ref<CrateSort>("name")
+// Keyword and category filter, set by the links on a crate page
+const tags = ref<CrateTagFilter>({})
 const loadMoreSentinel = ref<HTMLElement | null>(null)
 const router = useRouter()
+const route = useRoute()
 const store = useStore()
 let observer: IntersectionObserver | undefined
 
 const resultCountText = computed(() => {
   const count = total.value ?? 0
   const noun = count === 1 ? "crate" : "crates"
-  return activeQuery.value
-    ? `${formatNumber(count)} ${noun} found for "${activeQuery.value}"`
-    : `${formatNumber(count)} ${noun}`
+  if (activeQuery.value) {
+    return `${formatNumber(count)} ${noun} found for "${activeQuery.value}"`
+  }
+  if (tags.value.keyword || tags.value.category) {
+    return `${formatNumber(count)} ${noun} with`
+  }
+  return `${formatNumber(count)} ${noun}`
 })
+
+function tagsFromRoute(): CrateTagFilter {
+  const keyword = route.query.keyword?.toString()
+  const category = route.query.category?.toString()
+  return {
+    ...(keyword ? { keyword } : {}),
+    ...(category ? { category } : {}),
+  }
+}
 
 // Initial setup
 onBeforeMount(() => {
@@ -124,6 +152,23 @@ onBeforeMount(() => {
   if (requestedSort) {
     sort.value = requestedSort.value
   }
+  // A search and a tag filter are not combined, the search wins
+  if (!activeQuery.value) {
+    tags.value = tagsFromRoute()
+  }
+})
+
+// A link to another keyword or category on this page, or going back to the
+// previous filter, reuses this view
+watch(() => [route.query.keyword, route.query.category], () => {
+  const next = tagsFromRoute()
+  if (next.keyword === tags.value.keyword && next.category === tags.value.category) return
+  tags.value = next
+  if (next.keyword || next.category) {
+    searchText.value = ""
+    activeQuery.value = ""
+  }
+  refreshCrates()
 })
 
 onMounted(() => {
@@ -162,7 +207,8 @@ async function loadMoreCrates() {
       currentPage.value,
       ITEMS_PER_PAGE,
       store.searchCache,
-      sort.value
+      sort.value,
+      tags.value
     )
 
   isLoading.value = false
@@ -218,6 +264,7 @@ function updateUrl() {
     query: {
       ...(activeQuery.value ? { search: activeQuery.value } : {}),
       ...(sort.value !== "name" ? { sort: sort.value } : {}),
+      ...tags.value,
     },
   })
 }
@@ -225,6 +272,13 @@ function updateUrl() {
 // Search crates by name. An empty query goes back to the full crate list.
 function handleSearch(query: string) {
   activeQuery.value = query.trim()
+  tags.value = {}
+  updateUrl()
+  refreshCrates()
+}
+
+function clearTags() {
+  tags.value = {}
   updateUrl()
   refreshCrates()
 }
@@ -279,7 +333,10 @@ function handleSortChange() {
 
 /* Keeps its height while the count loads, so the list does not jump */
 .result-line {
-  min-height: 20px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 24px;
 }
 
 .result-count {

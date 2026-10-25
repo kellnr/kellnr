@@ -21,9 +21,11 @@ import { onMounted } from 'vue';
 import Header from './components/Header.vue';
 import Footer from './components/Footer.vue';
 import { useTheme } from 'vuetify';
+import { useSearchShortcut } from './composables';
 
 const store = useStore();
 const vuetifyTheme = useTheme();
+useSearchShortcut();
 
 onMounted(() => {
   // Set Vuetify theme based on store
@@ -68,6 +70,27 @@ kbd,
 pre,
 samp {
   font-family: var(--kellnr-font-mono);
+}
+
+/* Keyboard shortcut hint in search fields. Hidden on touch screens, which
+   have no keyboard to use it with, and while the field has focus. */
+.shortcut-hint {
+  padding: 0 6px;
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.v-field--focused .shortcut-hint {
+  display: none;
+}
+
+@media (hover: none) {
+  .shortcut-hint {
+    display: none;
+  }
 }
 
 /* Counts, sizes and versions line up when their digits have the same width */

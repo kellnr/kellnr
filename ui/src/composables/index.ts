@@ -27,3 +27,5 @@ export { useCrudManager } from './useCrudManager'
 
 export { useRelativeTime } from './useRelativeTime'
 export type { UseRelativeTimeReturn } from './useRelativeTime'
+
+export { useSearchShortcut } from './useSearchShortcut'
