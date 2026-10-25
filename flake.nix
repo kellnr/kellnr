@@ -32,6 +32,9 @@
 
         inherit (pkgs) lib;
 
+        # Node.js for the UI build and the dev shell; change the version only here
+        nodejs = pkgs.nodejs_26;
+
         # Rust toolchain with llvm-tools for coverage
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [ "llvm-tools-preview" ];
@@ -59,7 +62,7 @@
             cp -r dist $out
           '';
 
-          nodejs = pkgs.nodejs_22;
+          inherit nodejs;
         };
 
         # Source filtering for Rust
@@ -164,10 +167,14 @@
               cargo-nextest
               cargo-machete
               cdxgen
-              cargo-llvm-cov
+              # The upstream test suite fails in the nixpkgs build on
+              # aarch64-darwin with cargo 1.99; the tool itself works.
+              (cargo-llvm-cov.overrideAttrs (_: {
+                doCheck = false;
+              }))
 
-              # Node.js for UI development
-              nodejs_24
+              # Node.js for UI development, same version as the UI build
+              nodejs
 
               # Database tools
               sea-orm-cli
@@ -235,9 +242,6 @@
             alias c=cargo
             alias j=just
             alias lg=lazygit
-          ''
-          + lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
-            export DYLD_LIBRARY_PATH="$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH"
           '';
         };
       }
