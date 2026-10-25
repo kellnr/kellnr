@@ -28,7 +28,7 @@ withDefaults(defineProps<{
   padding: 32px;
   background: rgba(var(--v-theme-primary), 0.03);
   border: 1px dashed rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
 }
 
 .empty-state--compact {
@@ -36,6 +36,6 @@ withDefaults(defineProps<{
   justify-content: center;
   padding: 20px;
   background: rgb(var(--v-theme-surface));
-  border-radius: 6px;
+  border-radius: var(--kellnr-radius);
 }
 </style>

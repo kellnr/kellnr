@@ -216,13 +216,13 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
     // Fill in the user creation form
     const usernameField = page.locator(".form-field").filter({ hasText: "Username" }).locator("input");
     const passwordField = page.locator(".form-field").filter({ hasText: /^Password$/ }).locator("input");
-    const confirmField = page.locator(".form-field").filter({ hasText: "Confirm Password" }).locator("input");
+    const confirmField = page.locator(".form-field").filter({ hasText: "Confirm password" }).locator("input");
 
     await usernameField.fill("toolchainuser");
     await passwordField.fill("testpassword");
     await confirmField.fill("testpassword");
 
-    const createButton = page.getByRole("button", { name: "Create User" });
+    const createButton = page.getByRole("button", { name: "Create user" });
     await createButton.click();
 
     // Wait for user to be created

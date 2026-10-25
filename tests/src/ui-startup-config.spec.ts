@@ -1,5 +1,5 @@
 /**
- * UI tests for Startup Configuration (Settings > Startup Config).
+ * UI tests for Startup Configuration (Settings > Startup config).
  *
  * Tests:
  * - Expand all opens all config sections
@@ -16,7 +16,7 @@ import {
 } from "./testUtils";
 import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 
-test.describe("Startup Config UI Tests", () => {
+test.describe("Startup config UI Tests", () => {
   restrictToSingleWorkerBecauseFixedPorts();
 
   let started: StartedLocalKellnr;
@@ -67,7 +67,7 @@ test.describe("Startup Config UI Tests", () => {
 
     // Startup Configuration header and buttons should be visible
     await expect(
-      page.locator(".section-header").filter({ hasText: "Startup Config" })
+      page.locator(".section-header").filter({ hasText: "Startup config" })
     ).toBeVisible();
 
     const expandBtn = page.getByRole("button", { name: "Expand all" });

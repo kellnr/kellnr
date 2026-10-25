@@ -1,12 +1,13 @@
 <template>
-  <v-card class="crate-card mb-3" elevation="0" rounded="lg" data-testid="crate-card" @click="navigateToCrate">
+  <v-card class="crate-card mb-3" elevation="0" data-testid="crate-card" @click="navigateToCrate">
     <v-card-text class="pa-4">
       <div class="d-flex align-start">
         <!-- Origin Logo -->
         <div class="logo-container mr-4">
+          <!-- A plain image shows at once, v-img fades in and leaves an empty circle meanwhile -->
           <v-avatar size="48" class="crate-logo">
-            <v-img v-if="props.isCache" :src="store.cargoSmallLogo" alt="Crates.io logo" />
-            <v-img v-else :src="store.kellnrSmallLogo" alt="Kellnr logo" />
+            <img v-if="props.isCache" :src="store.cargoSmallLogo" alt="Crates.io logo" width="32" height="32" />
+            <img v-else :src="store.kellnrSmallLogo" alt="Kellnr logo" width="32" height="32" />
           </v-avatar>
         </div>
 
@@ -16,10 +17,7 @@
           <div class="d-flex flex-wrap align-center justify-space-between mb-2">
             <div class="d-flex align-center flex-wrap crate-header">
               <span class="crate-name font-weight-bold me-3" data-testid="crate-card-name">{{ crate }}</span>
-              <v-chip size="small" variant="tonal" color="primary" class="version-chip"
-                data-testid="crate-card-version">
-                v{{ version }}
-              </v-chip>
+              <span class="version-label tabular-nums" data-testid="crate-card-version">v{{ version }}</span>
             </div>
 
             <!-- Stats Row -->
@@ -28,7 +26,7 @@
                 <template v-slot:activator="{ props: tooltipProps }">
                   <div class="stat-item" v-bind="tooltipProps">
                     <v-icon icon="mdi-download" size="x-small" class="stat-icon" />
-                    <span class="stat-value" data-testid="crate-card-downloads">{{ formatNumber(downloads) }}</span>
+                    <span class="stat-value tabular-nums" data-testid="crate-card-downloads">{{ formatNumber(downloads) }}</span>
                   </div>
                 </template>
               </v-tooltip>
@@ -42,14 +40,12 @@
                 </template>
               </v-tooltip>
 
-              <!-- Only crates with docs get a button, so it never leads nowhere -->
-              <div v-if="isSafeUrl(docLink)" class="doc-link-wrapper">
-                <a :href="docLink" class="doc-button" target="_blank"
-                  rel="noopener noreferrer" data-testid="crate-card-docs-link" @click.stop>
-                  <v-icon icon="mdi-file-document-outline" size="small" />
-                  <span>Documentation</span>
-                </a>
-              </div>
+              <!-- Only crates with docs get a link, so it never leads nowhere -->
+              <a v-if="isSafeUrl(docLink)" :href="docLink" class="stat-item doc-link" target="_blank"
+                rel="noopener noreferrer" data-testid="crate-card-docs-link" @click.stop>
+                <v-icon icon="mdi-file-document-outline" size="x-small" />
+                <span>Docs</span>
+              </a>
             </div>
           </div>
 
@@ -126,7 +122,7 @@ function navigateToCrate() {
 }
 
 .crate-logo {
-  background: rgba(var(--v-theme-primary), 0.1);
+  background: rgb(var(--v-theme-surface-variant));
 }
 
 .crate-header {
@@ -139,10 +135,10 @@ function navigateToCrate() {
   word-break: break-word;
 }
 
-.version-chip {
-  font-size: 0.75rem;
+.version-label {
+  font-size: 0.8125rem;
   font-weight: 500;
-  height: 22px;
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
 .crate-description {
@@ -167,8 +163,7 @@ function navigateToCrate() {
 }
 
 .stat-icon {
-  color: rgb(var(--v-theme-primary));
-  opacity: 0.7;
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
 .stat-value {
@@ -178,29 +173,15 @@ function navigateToCrate() {
   font-weight: 500;
 }
 
-/* Documentation Button */
-.doc-link-wrapper {
-  margin-left: 4px;
-}
-
-.doc-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: rgba(var(--v-theme-primary), 0.1);
-  color: rgb(var(--v-theme-primary));
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
+.doc-link {
+  font-size: 0.9rem;
   font-weight: 500;
+  color: rgb(var(--v-theme-primary));
   text-decoration: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.doc-button:hover {
-  background: rgba(var(--v-theme-primary), 0.2);
+.doc-link:hover {
+  text-decoration: underline;
 }
 
 /* Responsive adjustments */
@@ -213,17 +194,8 @@ function navigateToCrate() {
     row-gap: 8px;
   }
 
-  .doc-link-wrapper {
-    margin-left: 0;
-  }
-
   .crate-header {
     width: 100%;
-  }
-
-  .doc-button {
-    padding: 4px 10px;
-    font-size: 0.8rem;
   }
 }
 </style>

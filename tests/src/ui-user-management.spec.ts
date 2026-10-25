@@ -104,7 +104,7 @@ test.describe("User Management UI Tests", () => {
 
     await page.goto(`${baseUrl}/settings`);
 
-    const changePwdHeader = page.locator(".section-header").filter({ hasText: "Change Password" });
+    const changePwdHeader = page.locator(".section-header").filter({ hasText: "Change password" });
     await expect(changePwdHeader).toBeVisible();
   });
 
@@ -144,12 +144,9 @@ test.describe("User Management UI Tests", () => {
     const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
     await expect(adminUserItem).toBeVisible();
 
-    // Find the Demote button within the admin user's row
-    const demoteButton = adminUserItem.getByRole("button", { name: "Demote" });
-    await expect(demoteButton).toBeVisible();
-
-    // Verify the button is disabled (self-demotion prevention)
-    await expect(demoteButton).toBeDisabled();
+    // Admins cannot demote themselves, so their own row offers no Demote button
+    await expect(adminUserItem.getByTestId("user-self-badge")).toHaveText("You");
+    await expect(adminUserItem.getByRole("button", { name: "Demote" })).toHaveCount(0);
   });
 
   test("admin can create a new user", async ({ page }) => {
@@ -174,14 +171,14 @@ test.describe("User Management UI Tests", () => {
     // Fill in the user creation form using labels
     const usernameField = page.locator(".form-field").filter({ hasText: "Username" }).locator("input");
     const passwordField = page.locator(".form-field").filter({ hasText: /^Password$/ }).locator("input");
-    const confirmField = page.locator(".form-field").filter({ hasText: "Confirm Password" }).locator("input");
+    const confirmField = page.locator(".form-field").filter({ hasText: "Confirm password" }).locator("input");
 
     await usernameField.fill("testuser");
     await passwordField.fill("testpassword");
     await confirmField.fill("testpassword");
 
-    // Click Create User button
-    const createButton = page.getByRole("button", { name: "Create User" });
+    // Click Create user button
+    const createButton = page.getByRole("button", { name: "Create user" });
     await createButton.click();
 
     // Wait for the user to appear in the list
@@ -295,12 +292,9 @@ test.describe("User Management UI Tests", () => {
     const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
     await expect(adminUserItem).toBeVisible();
 
-    // Find the Lock button within the admin user's row (it has icon mdi-lock-outline)
+    // Admins cannot lock themselves, so their own row offers no Lock button
     const lockButton = adminUserItem.locator("button").filter({ has: page.locator(".mdi-lock-outline") });
-    await expect(lockButton).toBeVisible();
-
-    // Verify the lock button is disabled (self-locking prevention)
-    await expect(lockButton).toBeDisabled();
+    await expect(lockButton).toHaveCount(0);
   });
 
   test("admin cannot delete themselves", async ({ page }) => {
@@ -326,12 +320,9 @@ test.describe("User Management UI Tests", () => {
     const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
     await expect(adminUserItem).toBeVisible();
 
-    // Find the Delete button within the admin user's row (it has icon mdi-delete-outline)
+    // Admins cannot delete themselves, so their own row offers no Delete button
     const deleteButton = adminUserItem.locator("button").filter({ has: page.locator(".mdi-delete-outline") });
-    await expect(deleteButton).toBeVisible();
-
-    // Verify the delete button is disabled (self-deletion prevention)
-    await expect(deleteButton).toBeDisabled();
+    await expect(deleteButton).toHaveCount(0);
   });
 
   test("non-admin user cannot access user management", async ({ page }) => {

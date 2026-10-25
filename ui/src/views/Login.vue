@@ -1,11 +1,11 @@
 <template>
-  <v-container fluid class="login-container pa-4">
+  <v-container fluid class="login-container pa-0">
     <v-row justify="center">
       <v-col cols="12" sm="10" md="6" lg="4" xl="3" class="login-col">
-        <v-card class="login-card" elevation="0" rounded="xl">
+        <v-card class="login-card" elevation="0">
           <!-- Header -->
           <div class="login-header">
-            <h1 class="login-title" data-testid="login-title">Welcome Back</h1>
+            <h1 class="login-title" data-testid="login-title">Welcome back</h1>
             <p class="login-subtitle">Log in to your Kellnr account</p>
           </div>
 

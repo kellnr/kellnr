@@ -1,23 +1,18 @@
 <template>
-  <v-container v-if="crate != null" class="py-0 px-4 px-md-0 crate-container">
-    <!-- Title Section -->
-    <v-card class="mb-4 title-card" elevation="0">
-      <v-card-title class="d-flex flex-wrap align-baseline text-wrap pa-5"
-        :class="{ 'pb-2': crate.description != null }">
-        <h1 class="text-display-medium font-weight-bold my-0 me-3 text-break crate-title" data-testid="crate-title">{{ crate.name }}</h1>
-        <span class="text-headline-small version-text" data-testid="crate-version">{{ selected_version.version }}</span>
-      </v-card-title>
+  <v-container v-if="crate != null" fluid class="pa-0">
+    <!-- Crate header with the tabs below it, directly on the page -->
+    <header class="crate-header mb-6">
+      <div class="d-flex flex-wrap align-baseline">
+        <h1 class="text-headline-large font-weight-bold my-0 me-3 text-break crate-title" data-testid="crate-title">{{ crate.name }}</h1>
+        <span class="text-title-large tabular-nums version-text" data-testid="crate-version">{{ selected_version.version }}</span>
+      </div>
+      <p v-if="crate.description != null" class="description-text mt-2 mb-0" data-testid="crate-description">
+        {{ crate.description }}
+      </p>
 
-      <v-card-text v-if="crate.description != null" class="pt-0 px-5 pb-5">
-        <p class="description-text my-0" data-testid="crate-description">{{ crate.description }}</p>
-      </v-card-text>
-    </v-card>
-
-    <!-- Tab Navigation -->
-    <v-card class="mb-4 tabs-card" elevation="0">
       <!-- Arrows show that more tabs are hidden on narrow screens -->
-      <v-tabs :model-value="tab" color="primary" slider-color="primary" show-arrows class="crate-tabs"
-        @update:model-value="selectTab">
+      <v-tabs :model-value="tab" color="primary" slider-color="primary" show-arrows density="compact"
+        class="crate-tabs mt-4" @update:model-value="selectTab">
         <v-tab v-if="selected_version.readme" value="readme" data-testid="crate-tab-readme">Readme</v-tab>
         <v-tab value="about" data-testid="crate-tab-about">About</v-tab>
         <v-tab value="dependencies" data-testid="crate-tab-deps">Dependencies</v-tab>
@@ -25,7 +20,7 @@
         <v-tab v-if="canManageCrate" value="settings" data-testid="crate-tab-settings">Settings</v-tab>
         <v-tab v-if="store.loggedInUserIsAdmin" value="admin" data-testid="crate-tab-admin">Admin</v-tab>
       </v-tabs>
-    </v-card>
+    </header>
 
     <!-- Snackbar for copy notification -->
     <v-snackbar v-model="showSnackbar" :timeout="3000" color="success" location="bottom" data-testid="snackbar">
@@ -66,17 +61,17 @@
           <!-- Dev Dependencies -->
           <v-card v-if="sortedDependencies.dev.length > 0" class="mb-4 content-card" elevation="0"
             data-testid="crate-deps-dev">
-            <SectionHeader icon="mdi-flask-outline" title="Development Dependencies" :count="sortedDependencies.dev.length" />
+            <SectionHeader icon="mdi-flask-outline" title="Development dependencies" :count="sortedDependencies.dev.length" />
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.dev" :key="dep.name" :name="dep.name" :version="dep.version_req"
                 :registry="dep.registry" />
             </v-card-text>
           </v-card>
 
-          <!-- Build Dependencies -->
+          <!-- Build dependencies -->
           <v-card v-if="sortedDependencies.build.length > 0" class="mb-4 content-card" elevation="0"
             data-testid="crate-deps-build">
-            <SectionHeader icon="mdi-hammer-wrench" title="Build Dependencies" :count="sortedDependencies.build.length" />
+            <SectionHeader icon="mdi-hammer-wrench" title="Build dependencies" :count="sortedDependencies.build.length" />
             <v-card-text>
               <Dependency v-for="dep in sortedDependencies.build" :key="dep.name" :name="dep.name" :version="dep.version_req"
                 :registry="dep.registry" :desc="dep.description" />
@@ -320,24 +315,14 @@ watch(() => [route.query.tab, canManageCrate.value, store.loggedInUserIsAdmin], 
 </script>
 
 <style scoped>
-.crate-container {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
 .text-break {
   word-break: break-word;
 }
 
-/* Title Card */
-.title-card {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 12px;
-}
-
+/* Header */
 .crate-title {
-  color: rgb(var(--v-theme-on-surface));
+  color: rgb(var(--v-theme-on-background));
+  line-height: 1.2;
 }
 
 .version-text {
@@ -348,31 +333,27 @@ watch(() => [route.query.tab, canManageCrate.value, store.loggedInUserIsAdmin], 
   color: rgb(var(--v-theme-on-surface-variant));
   font-size: 1rem;
   line-height: 1.6;
+  max-width: 70ch;
 }
 
-/* Tabs Card */
-.tabs-card {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 12px;
-  overflow: hidden;
-}
-
+/* The tabs sit on a line that spans the page */
 .crate-tabs {
   background: transparent;
+  border-bottom: 1px solid rgb(var(--v-theme-outline));
 }
 
 .crate-tabs :deep(.v-tab) {
   text-transform: none;
   font-weight: 500;
   letter-spacing: normal;
+  min-width: 0;
 }
 
 /* Content Cards */
 .content-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 12px;
+  border-radius: var(--kellnr-radius-card);
   overflow: hidden;
 }
 
@@ -390,7 +371,7 @@ watch(() => [route.query.tab, canManageCrate.value, store.loggedInUserIsAdmin], 
 }
 
 :deep(.v-list-item) {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
 }
 
 :deep(.v-list-item:hover) {
@@ -399,7 +380,7 @@ watch(() => [route.query.tab, canManageCrate.value, store.loggedInUserIsAdmin], 
 
 /* Alerts */
 :deep(.v-alert) {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
 }
 
 /* Form fields */

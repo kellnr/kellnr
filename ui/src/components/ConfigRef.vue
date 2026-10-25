@@ -37,7 +37,7 @@ defineProps<{
   justify-content: center;
   min-width: 42px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -60,11 +60,11 @@ defineProps<{
 }
 
 .ref-value {
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
   font-size: 12px;
   background: rgba(var(--v-theme-on-surface), 0.06);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   color: rgb(var(--v-theme-on-surface-variant));
 }
 </style>

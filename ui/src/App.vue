@@ -1,16 +1,11 @@
 <template>
   <v-app :theme="store.theme">
-    <div class="bg-image" :style="{ backgroundImage: `url(${bgImage})` }"></div>
     <!-- Header with full width -->
     <Header />
 
-    <!-- Main content with responsive width -->
+    <!-- Main content, all pages share the same width -->
     <v-main>
-      <!-- Container with responsive width classes -->
-      <v-container :class="{
-        'width-80': $vuetify.display.mdAndUp,
-        'mx-auto': $vuetify.display.mdAndUp
-      }" class="px-0" fluid>
+      <v-container class="page-container">
         <router-view></router-view>
       </v-container>
     </v-main>
@@ -22,31 +17,13 @@
 
 <script setup lang="ts">
 import { useStore } from './store/store';
-import { onMounted, computed, watch, onBeforeMount } from 'vue';
+import { onMounted } from 'vue';
 import Header from './components/Header.vue';
 import Footer from './components/Footer.vue';
 import { useTheme } from 'vuetify';
 
 const store = useStore();
 const vuetifyTheme = useTheme();
-
-// Create a direct reference to the background image URL
-const bgImage = computed(() => {
-  return store.currentBackgroundImage;
-});
-
-// Update background when theme changes
-watch(() => store.theme, () => {
-}, { immediate: true });
-
-onBeforeMount(() => {
-  // Make sure store is properly initialized with the correct initial background
-  if (store.theme === 'dark') {
-    store.currentBackgroundImage = store.darkBackgroundImage;
-  } else {
-    store.currentBackgroundImage = store.lightBackgroundImage;
-  }
-});
 
 onMounted(() => {
   // Set Vuetify theme based on store
@@ -59,44 +36,60 @@ onMounted(() => {
 </script>
 
 <style>
+:root {
+  --kellnr-font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --kellnr-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Consolas, monospace;
+  /* Vuetify reads its fonts from these */
+  --v-font-body: var(--kellnr-font-sans);
+  --v-font-heading: var(--kellnr-font-sans);
+
+  /* Corner radii: one for cards and dialogs, one for everything inside them */
+  --kellnr-radius-card: 12px;
+  --kellnr-radius: 8px;
+
+  /* Width of the page content */
+  --kellnr-page-width: 1200px;
+}
+
 /* Always reserve the scrollbar's space, so the layout does not shift
    sideways when a page becomes long enough to scroll */
 html {
   scrollbar-gutter: stable;
-  /* Paints the reserved space like the page behind the background image */
   background: rgb(var(--v-theme-background));
 }
 
-/* Custom class for 80% width */
-.width-80 {
-  width: 80% !important;
-  max-width: 1440px !important;
-  /* Optional: set a maximum width */
+body {
+  font-family: var(--kellnr-font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Stack main content above the background image */
-.v-main {
-  position: relative;
-  z-index: 1;
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--kellnr-font-mono);
 }
 
-:root {
-  --bg-image: url('');
+/* Counts, sizes and versions line up when their digits have the same width */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
-.bg-image {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: var(--bg-image);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  z-index: 0;
-  /* Place it behind other content */
-  opacity: 1;
-  /* Adjust opacity as needed */
+/* Used by cards through the rounded="card" default */
+.rounded-card {
+  border-radius: var(--kellnr-radius-card);
+}
+
+.page-container {
+  max-width: var(--kellnr-page-width);
+  padding-top: 32px;
+  padding-bottom: 48px;
+}
+
+@media (max-width: 600px) {
+  .page-container {
+    padding-top: 16px;
+    padding-bottom: 32px;
+  }
 }
 </style>

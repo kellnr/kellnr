@@ -1,10 +1,10 @@
 <template>
-  <FormSection icon="mdi-upload" title="Upload Toolchain">
+  <FormSection icon="mdi-upload" title="Upload toolchain">
     <v-form @submit.prevent="handleUpload" class="upload-form">
       <div class="form-grid">
         <v-text-field
           v-model="uploadForm.name"
-          label="Component Name"
+          label="Component name"
           placeholder="rust"
           prepend-inner-icon="mdi-package-variant"
           variant="outlined"
@@ -24,7 +24,7 @@
 
         <v-text-field
           v-model="uploadForm.target"
-          label="Target Triple"
+          label="Target triple"
           placeholder="x86_64-unknown-linux-gnu"
           prepend-inner-icon="mdi-chip"
           variant="outlined"
@@ -34,7 +34,7 @@
 
         <v-text-field
           v-model="uploadForm.date"
-          label="Release Date"
+          label="Release date"
           placeholder="2024-01-15"
           prepend-inner-icon="mdi-calendar"
           variant="outlined"
@@ -95,7 +95,7 @@
           :disabled="!canUpload"
         >
           <v-icon icon="mdi-upload" size="small" class="me-2"></v-icon>
-          Upload Toolchain
+          Upload toolchain
         </v-btn>
       </div>
     </v-form>
@@ -228,7 +228,7 @@ function formatSize(bytes: number): string {
 }
 
 .form-grid :deep(.v-field) {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   background: rgb(var(--v-theme-surface));
 }
 
@@ -243,7 +243,7 @@ function formatSize(bytes: number): string {
   justify-content: center;
   padding: 32px;
   border: 2px dashed rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   background: rgb(var(--v-theme-surface));
   cursor: pointer;
   transition: all 0.2s ease;

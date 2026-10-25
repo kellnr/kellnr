@@ -1,7 +1,7 @@
 <template>
   <div class="section-header">
-    <v-icon :icon="icon" size="small" color="primary" class="me-3"></v-icon>
-    <span class="text-title-large font-weight-bold" data-testid="section-title">{{ title }}</span>
+    <v-icon :icon="icon" size="small" class="me-3 section-icon"></v-icon>
+    <span class="section-title" data-testid="section-title">{{ title }}</span>
     <span v-if="count !== undefined" class="section-count">{{ count }}</span>
     <slot name="actions"></slot>
   </div>
@@ -20,18 +20,26 @@ defineProps<{
   display: flex;
   align-items: center;
   padding: 16px 24px;
-  background: rgba(var(--v-theme-primary), 0.05);
   border-bottom: 1px solid rgb(var(--v-theme-outline));
+}
+
+.section-title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.section-icon {
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
 .section-count {
   margin-left: auto;
-  background: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
+  background: rgb(var(--v-theme-surface-variant));
+  color: rgb(var(--v-theme-on-surface-variant));
   font-size: 12px;
   font-weight: 600;
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: 9999px;
 }
 
 @media (max-width: 600px) {

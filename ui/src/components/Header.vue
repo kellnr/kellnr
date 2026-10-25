@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- App Bar -->
-    <v-app-bar :class="['app-header', { 'app-header-light': store.theme === 'light' }]" elevation="0" height="64" data-testid="header-app-bar">
+    <v-app-bar class="app-header" elevation="0" height="64" data-testid="header-app-bar">
       <!-- Mobile menu toggle -->
       <v-app-bar-nav-icon class="d-md-none nav-toggle" aria-label="Open navigation menu" data-testid="header-nav-toggle"
         @click="drawer = !drawer" />
@@ -173,11 +173,6 @@ function showNotification(message: string, isError: boolean = false) {
   border-bottom: 1px solid rgba(var(--v-theme-outline), 0.5);
 }
 
-/* Light theme: more transparent to show gradient background */
-.app-header-light {
-  background: rgba(255, 255, 255, 0.7) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-}
 
 .nav-toggle {
   color: rgb(var(--v-theme-on-surface));
@@ -193,7 +188,7 @@ function showNotification(message: string, isError: boolean = false) {
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.5px;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  font-family: var(--kellnr-font-mono);
   display: inline-flex;
   align-items: center;
 }
@@ -228,7 +223,7 @@ function showNotification(message: string, isError: boolean = false) {
   color: rgb(var(--v-theme-on-surface));
   padding: 0 16px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   transition: all 0.2s ease;
 }
 
@@ -271,7 +266,7 @@ function showNotification(message: string, isError: boolean = false) {
 .drawer-logo {
   font-size: 1.25rem;
   font-weight: 700;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  font-family: var(--kellnr-font-mono);
   display: inline-flex;
   align-items: center;
 }
@@ -298,7 +293,7 @@ function showNotification(message: string, isError: boolean = false) {
 }
 
 .drawer-item {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   margin-bottom: 4px;
 }
 

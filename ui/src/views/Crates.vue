@@ -1,39 +1,36 @@
 <template>
-  <v-container fluid class="pa-0 main-container">
-    <!-- Search Header -->
-    <v-card class="search-card pa-4 ma-3" elevation="0" rounded="lg">
-      <v-row no-gutters align="center">
-        <v-col cols="12" md="8" lg="6" class="pr-md-4">
-          <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined" density="comfortable"
-            hide-details prepend-inner-icon="mdi-magnify" color="primary" data-testid="crates-search"
-            @keyup.enter="handleSearch(searchText)" class="search-field" rounded="lg"></v-text-field>
-        </v-col>
+  <v-container fluid class="pa-0">
+    <!-- Search, sort order and the proxy switch in one row -->
+    <div class="crates-toolbar mb-2">
+      <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined" density="comfortable"
+        hide-details prepend-inner-icon="mdi-magnify" color="primary" data-testid="crates-search"
+        @keyup.enter="handleSearch(searchText)" class="search-field" bg-color="surface"></v-text-field>
 
-        <v-col cols="12" md="4" lg="6" class="mt-3 mt-md-0 d-flex align-center">
-          <v-switch v-model="store.searchCache" color="primary" hide-details data-testid="crates-proxy-toggle"
-            @update:model-value="refreshCrates()">
-            <template v-slot:label>
-              <div class="d-flex align-center" data-testid="crates-proxy-label">
-                <span class="mr-2 switch-label">Crates proxy</span>
-                <v-tooltip location="top" text="Display crates from the crates.io proxy">
-                  <template v-slot:activator="{ props }">
-                    <v-icon icon="mdi-information-outline" size="small" v-bind="props" class="info-icon" />
-                  </template>
-                </v-tooltip>
-              </div>
-            </template>
-          </v-switch>
-        </v-col>
-      </v-row>
-    </v-card>
-
-    <!-- Result count and sort order -->
-    <div v-if="total !== null" class="list-toolbar mx-3 mb-3">
-      <span class="text-body-medium result-count" data-testid="crates-result-count">{{ resultCountText }}</span>
-      <v-select v-if="!activeQuery" v-model="sort" :items="SORT_OPTIONS" density="compact" variant="outlined"
-        hide-details class="sort-select" aria-label="Sort crates" data-testid="crates-sort"
+      <v-select v-if="!activeQuery" v-model="sort" :items="SORT_OPTIONS" density="comfortable" variant="outlined"
+        hide-details class="sort-select" bg-color="surface" aria-label="Sort crates" data-testid="crates-sort"
         @update:model-value="handleSortChange"></v-select>
-      <span v-else class="text-body-small result-count">Best matches first</span>
+
+      <v-switch v-model="store.searchCache" color="primary" hide-details density="compact" class="flex-grow-0 proxy-switch"
+        data-testid="crates-proxy-toggle" @update:model-value="refreshCrates()">
+        <template v-slot:label>
+          <div class="d-flex align-center" data-testid="crates-proxy-label">
+            <span class="mr-2 switch-label">Crates proxy</span>
+            <v-tooltip location="top" text="Display crates from the crates.io proxy">
+              <template v-slot:activator="{ props }">
+                <v-icon icon="mdi-information-outline" size="small" v-bind="props" class="info-icon" />
+              </template>
+            </v-tooltip>
+          </div>
+        </template>
+      </v-switch>
+    </div>
+
+    <!-- Result count -->
+    <div class="result-line mb-3">
+      <template v-if="total !== null">
+        <span class="text-body-medium result-count" data-testid="crates-result-count">{{ resultCountText }}</span>
+        <span v-if="activeQuery" class="text-body-medium result-count">, best matches first</span>
+      </template>
     </div>
 
     <div class="content-container" data-testid="crates-list">
@@ -239,27 +236,35 @@ function handleSortChange() {
 </script>
 
 <style scoped>
-/* Search Card */
-.search-card {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgb(var(--v-theme-outline));
+.crates-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
 }
 
-/* Search Field */
-.search-field :deep(.v-field) {
-  background: rgb(var(--v-theme-surface));
-  border-radius: 8px;
-}
-
-.search-field :deep(.v-field__input) {
-  padding-top: 10px;
-  padding-bottom: 10px;
-  min-height: 44px;
+.search-field {
+  flex: 1 1 320px;
 }
 
 .search-field :deep(.v-field__prepend-inner .v-icon) {
-  color: rgb(var(--v-theme-primary));
-  opacity: 0.8;
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.sort-select {
+  flex: 0 0 200px;
+}
+
+/* The track sticks out of the switch, this keeps it inside the page margin */
+.proxy-switch {
+  padding-inline-start: 4px;
+}
+
+/* Sort order and proxy switch share a row on a phone */
+@media (max-width: 600px) {
+  .sort-select {
+    flex-basis: 160px;
+  }
 }
 
 /* Switch Label */
@@ -269,34 +274,16 @@ function handleSortChange() {
 }
 
 .info-icon {
-  color: rgb(var(--v-theme-primary));
-  opacity: 0.7;
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
-/* Result count and sort order */
-.list-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
+/* Keeps its height while the count loads, so the list does not jump */
+.result-line {
+  min-height: 20px;
 }
 
 .result-count {
   color: rgb(var(--v-theme-on-surface-variant));
-}
-
-.sort-select {
-  flex: 0 0 200px;
-}
-
-.sort-select :deep(.v-field) {
-  background: rgb(var(--v-theme-surface));
-}
-
-/* Same side margins as the search card, so both line up */
-.content-container {
-  margin: 0 12px 12px 12px;
 }
 
 .load-more-sentinel {

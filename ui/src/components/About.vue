@@ -127,7 +127,7 @@ defineProps({
   padding: 16px;
   margin-bottom: 24px;
   background: rgb(var(--v-theme-surface-variant));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   border: 1px solid rgb(var(--v-theme-outline));
 }
 
@@ -144,7 +144,7 @@ defineProps({
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--kellnr-radius);
   background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-primary));
 }
@@ -162,7 +162,7 @@ defineProps({
 .info-badge {
   display: inline-block;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--kellnr-radius);
   font-size: 13px;
   font-weight: 500;
 }
@@ -182,7 +182,7 @@ defineProps({
 .section-card {
   background: rgb(var(--v-theme-surface-variant));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   padding: 16px;
 }
 
@@ -195,7 +195,7 @@ defineProps({
 }
 
 .section-icon {
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-surface-variant));
   margin-right: 8px;
 }
 
@@ -211,7 +211,7 @@ defineProps({
   font-size: 11px;
   font-weight: 500;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: 9999px;
   margin-left: auto;
 }
 
@@ -224,7 +224,7 @@ defineProps({
 .item-chip {
   display: inline-block;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--kellnr-radius);
   font-size: 13px;
   line-height: 1.4;
   background: rgb(var(--v-theme-surface));
@@ -238,7 +238,7 @@ defineProps({
 }
 
 .feature-chip {
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
   font-size: 12px;
 }
 

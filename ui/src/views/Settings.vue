@@ -1,11 +1,11 @@
 <template>
-    <v-container fluid class="pa-4 pa-md-6 settings-container">
+    <v-container fluid class="pa-0 settings-container">
         <!-- Mobile Navigation Header -->
         <div class="mobile-nav-header d-md-none mb-4">
             <v-card class="sidebar-card" elevation="0">
                 <div class="sidebar-header" @click="mobileNavOpen = !mobileNavOpen" style="cursor: pointer;">
-                    <v-icon icon="mdi-cog" size="small" color="primary" class="me-3"></v-icon>
-                    <span class="text-title-large font-weight-bold">Settings</span>
+                    <v-icon icon="mdi-cog" size="small" class="me-3 sidebar-icon"></v-icon>
+                    <span class="sidebar-title">Settings</span>
                     <v-spacer></v-spacer>
                     <v-chip size="small" variant="tonal" color="primary" class="me-2">
                         {{ getTabLabel(activeTab) }}
@@ -53,8 +53,8 @@
             <v-col cols="12" md="4" xl="3" class="d-none d-md-block">
                 <v-card class="sidebar-card" elevation="0">
                     <div class="sidebar-header">
-                        <v-icon icon="mdi-cog" size="small" color="primary" class="me-3"></v-icon>
-                        <span class="text-title-large font-weight-bold">Settings</span>
+                        <v-icon icon="mdi-cog" size="small" class="me-3 sidebar-icon"></v-icon>
+                        <span class="sidebar-title">Settings</span>
                     </div>
 
                     <v-list nav class="pa-2">
@@ -262,7 +262,6 @@ onBeforeMount(async () => {
     display: flex;
     align-items: center;
     padding: 12px 16px;
-    background: rgba(var(--v-theme-primary), 0.05);
     border-bottom: 1px solid rgb(var(--v-theme-outline));
 }
 
@@ -270,7 +269,7 @@ onBeforeMount(async () => {
 .sidebar-card {
     background: rgb(var(--v-theme-surface));
     border: 1px solid rgb(var(--v-theme-outline));
-    border-radius: 12px;
+    border-radius: var(--kellnr-radius-card);
     overflow: hidden;
 }
 
@@ -278,8 +277,17 @@ onBeforeMount(async () => {
     display: flex;
     align-items: center;
     padding: 16px 20px;
-    background: rgba(var(--v-theme-primary), 0.05);
     border-bottom: 1px solid rgb(var(--v-theme-outline));
+}
+
+.sidebar-icon {
+    color: rgb(var(--v-theme-on-surface-variant));
+}
+
+/* Same size as the section headers next to it */
+.sidebar-title {
+    font-size: 1.0625rem;
+    font-weight: 600;
 }
 
 /* Nav Icon Wrapper */
@@ -289,7 +297,7 @@ onBeforeMount(async () => {
     justify-content: center;
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: var(--kellnr-radius);
     background: rgba(var(--v-theme-primary), 0.08);
     color: rgb(var(--v-theme-primary));
     margin-right: 4px;
@@ -319,7 +327,7 @@ onBeforeMount(async () => {
 .content-card {
     background: rgb(var(--v-theme-surface));
     border: 1px solid rgb(var(--v-theme-outline));
-    border-radius: 12px;
+    border-radius: var(--kellnr-radius-card);
     min-height: 400px;
     overflow: hidden;
 }

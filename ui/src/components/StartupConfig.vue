@@ -257,7 +257,7 @@ onBeforeMount(async () => {
   font-size: 12px;
   font-weight: 600;
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: 9999px;
 }
 
 .section-count:first-of-type {
@@ -282,7 +282,7 @@ onBeforeMount(async () => {
 .config-panels :deep(.v-expansion-panel) {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px !important;
+  border-radius: var(--kellnr-radius) !important;
   margin-bottom: 0;
 }
 
@@ -309,7 +309,7 @@ onBeforeMount(async () => {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   background: rgba(var(--v-theme-primary), 0.1);
   color: rgb(var(--v-theme-primary));
   margin-right: 12px;

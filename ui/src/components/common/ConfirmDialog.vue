@@ -78,7 +78,7 @@ function handleCancel() {
 
 <style scoped>
 .confirm-dialog {
-  border-radius: 12px;
+  border-radius: var(--kellnr-radius-card);
   overflow: hidden;
 }
 

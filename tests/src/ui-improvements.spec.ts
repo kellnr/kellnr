@@ -61,20 +61,21 @@ test.describe("UI Improvements", () => {
 
     const layout = await page.evaluate(() => {
       const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
-      const card = rect(".title-card");
+      const header = rect(".crate-header");
       const title = rect("[data-testid=crate-title]");
       const description = rect("[data-testid=crate-description]");
+      const tabs = rect(".crate-tabs");
       return {
-        topGap: title.top - card.top,
+        topGap: title.top - header.top,
         titleToDescription: description.top - title.bottom,
-        bottomGap: card.bottom - description.bottom,
+        descriptionToTabs: tabs.top - description.bottom,
       };
     });
 
-    // Only the card padding around the content, no extra heading margins
-    expect(layout.topGap).toBeLessThanOrEqual(24);
+    // No extra heading margins between the parts of the header
+    expect(layout.topGap).toBeLessThanOrEqual(8);
     expect(layout.titleToDescription).toBeLessThanOrEqual(16);
-    expect(layout.bottomGap).toBeLessThanOrEqual(24);
+    expect(layout.descriptionToTabs).toBeLessThanOrEqual(24);
   });
 
   test("long crate names wrap on a phone", async ({ page }) => {
@@ -83,11 +84,11 @@ test.describe("UI Improvements", () => {
     const cratePage = new CratePage(page);
     await cratePage.waitForCrateData();
 
-    // Simulate a long name; the title must stay inside its card
+    // Simulate a long name; the title must stay inside the header
     const fits = await page.getByTestId("crate-title").evaluate((el) => {
       el.textContent = "a-very-long-crate-name-that-does-not-fit-on-a-phone";
-      const card = el.closest(".title-card")!.getBoundingClientRect();
-      return el.getBoundingClientRect().right <= card.right;
+      const header = el.closest(".crate-header")!.getBoundingClientRect();
+      return el.getBoundingClientRect().right <= header.right;
     });
     expect(fits).toBe(true);
   });

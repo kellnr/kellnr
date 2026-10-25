@@ -3,11 +3,11 @@
  * section headings so both always show the same name.
  */
 export const SETTINGS_SECTION_TITLES = {
-  password: "Change Password",
-  tokens: "Auth Tokens",
+  password: "Change password",
+  tokens: "Auth tokens",
   users: "Users",
   groups: "Groups",
-  config: "Startup Config",
+  config: "Startup config",
   toolchains: "Toolchains",
 } as const;
 

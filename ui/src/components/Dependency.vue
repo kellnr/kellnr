@@ -123,7 +123,7 @@ watch(route, () => {
   margin-bottom: 8px;
   background: rgb(var(--v-theme-surface-variant));
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -169,7 +169,7 @@ watch(route, () => {
   font-size: 15px;
   font-weight: 500;
   color: rgb(var(--v-theme-primary));
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--kellnr-font-mono);
 }
 
 .dep-source {
@@ -180,7 +180,7 @@ watch(route, () => {
   display: inline-flex;
   align-items: center;
   padding: 3px 10px;
-  border-radius: 4px;
+  border-radius: var(--kellnr-radius);
   font-size: 12px;
   font-weight: 500;
   text-transform: uppercase;

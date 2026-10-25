@@ -25,6 +25,7 @@ import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 import {
   startMockOidcServer,
   getOAuth2EnvVars,
+  getOAuth2EnvVarsWithAdmin,
   type StartedMockOidc,
 } from "./lib/mock-oidc";
 
@@ -373,7 +374,9 @@ test.describe("OAuth2 UI Tests - SSO enforcement", () => {
     started = await startLocalKellnr({
       name: `kellnr-oauth2-enforced-${suffix}`,
       env: {
-        ...getOAuth2EnvVars(mockOidc.config),
+        // The mock user is in "kellnr-users", which makes it an admin here.
+        // The user management tests need an admin, other users get a 403.
+        ...getOAuth2EnvVarsWithAdmin(mockOidc.config, "kellnr-users"),
         KELLNR_OAUTH2__ENFORCED: "true",
       },
     });
@@ -402,12 +405,12 @@ test.describe("OAuth2 UI Tests - SSO enforcement", () => {
 
     await page.goto(`${baseUrl}/settings`);
 
-    // The Change Password tab is hidden, so the page must fall back to Tokens.
+    // The Change password tab is hidden, so the page must fall back to Tokens.
     await expect(
-      page.locator(".section-header").filter({ hasText: "Auth Tokens" }),
+      page.locator(".section-header").filter({ hasText: "Auth tokens" }),
     ).toBeVisible();
     await expect(
-      page.locator(".v-list-item-title").filter({ hasText: "Change Password" }),
+      page.locator(".v-list-item-title").filter({ hasText: "Change password" }),
     ).toHaveCount(0);
   });
 
@@ -428,10 +431,15 @@ test.describe("OAuth2 UI Tests - SSO enforcement", () => {
       page.locator(".section-header").filter({ hasText: "Users" }),
     ).toBeVisible();
 
+    // Wait for the user list, so the checks below see the loaded page
+    await expect(
+      page.getByTestId("user-item").filter({ has: page.getByText("admin", { exact: true }) }),
+    ).toBeVisible();
+
     // No password reset affordance, since the backend refuses it anyway.
     await expect(page.getByRole("button", { name: "Reset" })).toHaveCount(0);
     await expect(
-      page.locator(".section-header").filter({ hasText: "Add New User" }),
+      page.locator(".section-header").filter({ hasText: "Add new user" }),
     ).toHaveCount(0);
   });
 

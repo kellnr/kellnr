@@ -22,7 +22,7 @@
 
         <!-- Groups List -->
         <div v-if="groups.length > 0" class="groups-section mb-6">
-          <SubsectionHeader icon="mdi-folder-account" title="Existing Groups" />
+          <SubsectionHeader icon="mdi-folder-account" title="Existing groups" />
 
           <div class="list-container">
             <ListItem
@@ -64,7 +64,7 @@
         />
 
         <!-- Add Group Form -->
-        <FormSection icon="mdi-folder-plus" title="Create New Group">
+        <FormSection icon="mdi-folder-plus" title="Create new group">
           <v-form @submit.prevent="handleAddGroup" class="add-group-form">
             <div class="form-row">
               <v-text-field
@@ -78,7 +78,7 @@
               ></v-text-field>
               <v-btn color="primary" type="submit" size="large">
                 <v-icon icon="mdi-plus" size="small" class="me-2"></v-icon>
-                Create Group
+                Create group
               </v-btn>
             </div>
           </v-form>
@@ -98,9 +98,9 @@
 
       <!-- Edit Group View -->
       <template v-else>
-        <!-- Group Members Section -->
+        <!-- Group members Section -->
         <div class="members-section mb-6">
-          <SubsectionHeader icon="mdi-account-multiple" title="Group Members" :count="groupMembers.length" />
+          <SubsectionHeader icon="mdi-account-multiple" title="Group members" :count="groupMembers.length" />
 
           <div v-if="groupMembers.length > 0" class="list-container">
             <ListItem
@@ -143,8 +143,8 @@
           </v-alert>
         </div>
 
-        <!-- Add Member Section -->
-        <FormSection icon="mdi-account-plus" title="Add Member">
+        <!-- Add member Section -->
+        <FormSection icon="mdi-account-plus" title="Add member">
           <v-form @submit.prevent="handleAddMember" class="add-member-form">
             <div class="form-row">
               <v-select
@@ -297,7 +297,7 @@ async function handleAddGroup() {
 // Delete a group with confirmation
 function handleDeleteGroup(name: string) {
   showConfirm({
-    title: "Delete Group",
+    title: "Delete group",
     message: `Are you sure you want to delete group "${name}"? This action cannot be undone.`,
     confirmColor: "error",
     onConfirm: async () => {
@@ -348,7 +348,7 @@ async function handleAddMember() {
 // Remove a member from the group with confirmation
 function handleRemoveMember(userName: string) {
   showConfirm({
-    title: "Remove Member",
+    title: "Remove member",
     message: `Are you sure you want to remove "${userName}" from this group?`,
     confirmColor: "error",
     onConfirm: async () => {
@@ -379,7 +379,7 @@ function handleRemoveMember(userName: string) {
   padding: 20px;
   background: rgba(var(--v-theme-primary), 0.03);
   border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
 }
 
 .add-group-form,
@@ -400,7 +400,7 @@ function handleRemoveMember(userName: string) {
 
 .group-input :deep(.v-field),
 .member-select :deep(.v-field) {
-  border-radius: 8px;
+  border-radius: var(--kellnr-radius);
   background: rgb(var(--v-theme-surface));
 }
 

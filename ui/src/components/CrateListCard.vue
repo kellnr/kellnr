@@ -1,5 +1,5 @@
 <template>
-  <v-card class="crate-list-card h-100" elevation="0" rounded="lg" :data-testid="testId">
+  <v-card class="crate-list-card h-100" elevation="0" :data-testid="testId">
     <SectionHeader :icon="icon" :title="title" />
     <v-list class="py-1" density="compact" bg-color="transparent">
       <v-list-item v-for="crate in crates" :key="crate.name" class="crate-row px-6" :data-testid="rowTestId"

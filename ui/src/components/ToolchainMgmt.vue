@@ -93,7 +93,7 @@ async function handleChannelChange(toolchain: Toolchain) {
 
 function handleDeleteToolchain(name: string, version: string) {
   showConfirm({
-    title: "Delete Toolchain",
+    title: "Delete toolchain",
     message: `Are you sure you want to delete "${name} ${version}" and ALL its targets? This action cannot be undone.`,
     confirmColor: "error",
     onConfirm: async () => {
@@ -110,7 +110,7 @@ function handleDeleteToolchain(name: string, version: string) {
 
 function handleDeleteTarget(name: string, version: string, target: string) {
   showConfirm({
-    title: "Delete Target",
+    title: "Delete target",
     message: `Are you sure you want to delete target "${target}" from ${name} ${version}? This action cannot be undone.`,
     confirmColor: "error",
     onConfirm: async () => {

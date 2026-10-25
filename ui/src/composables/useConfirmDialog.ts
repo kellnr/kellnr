@@ -19,7 +19,7 @@
  *
  * // To show dialog:
  * const confirmed = await show({
- *   title: 'Delete User',
+ *   title: 'Delete user',
  *   message: 'Are you sure you want to delete this user?'
  * })
  *
@@ -121,7 +121,7 @@ export function useConfirmDialog(): UseConfirmDialogReturn {
  *
  * function handleDelete(name: string) {
  *   showConfirm({
- *     title: 'Delete User',
+ *     title: 'Delete user',
  *     message: `Delete "${name}"?`,
  *     onConfirm: () => deleteUser(name)
  *   })

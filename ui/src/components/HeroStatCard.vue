@@ -3,16 +3,15 @@
     class="hero-stat-card"
     :class="{ 'clickable': props.onClick, 'compact': props.compact }"
     elevation="0"
-    rounded="lg"
     :ripple="!!props.onClick"
     :data-testid="`${props.testIdPrefix}-${textToTestId(text)}`"
     @click="handleClick">
     <v-card-text class="d-flex align-center ga-4 pa-4">
-      <div class="icon-tile" :class="`icon-tile-${props.category}`">
+      <div class="icon-tile">
         <v-icon :icon="icon" :size="props.compact ? 22 : 26"></v-icon>
       </div>
       <div class="stat-content">
-        <div class="font-weight-bold stat-number" :class="props.compact ? 'text-headline-small' : 'text-headline-medium'"
+        <div class="font-weight-bold tabular-nums stat-number" :class="props.compact ? 'text-headline-small' : 'text-headline-medium'"
           data-testid="stat-value">
           {{ formattedNum }}
         </div>
@@ -37,13 +36,11 @@ const props = withDefaults(defineProps<{
   icon: string;
   text: string;
   subtitle?: string;
-  category?: 'primary' | 'secondary' | 'accent' | 'cached';
   /** Smaller variant for secondary statistics */
   compact?: boolean;
   testIdPrefix?: string;
   onClick?: () => void;
 }>(), {
-  category: 'primary',
   compact: false,
   testIdPrefix: 'hero-stat',
 });
@@ -86,7 +83,9 @@ function textToTestId(text: string): string {
   flex-shrink: 0;
   width: 52px;
   height: 52px;
-  border-radius: 12px;
+  border-radius: var(--kellnr-radius);
+  background: rgba(var(--v-theme-primary), 0.1);
+  color: rgb(var(--v-theme-primary));
 }
 
 .compact .icon-tile {
@@ -94,21 +93,6 @@ function textToTestId(text: string): string {
   height: 44px;
 }
 
-.icon-tile-primary,
-.icon-tile-cached {
-  background: rgba(var(--v-theme-primary), 0.12);
-  color: rgb(var(--v-theme-primary));
-}
-
-.icon-tile-secondary {
-  background: rgba(var(--v-theme-secondary), 0.12);
-  color: rgb(var(--v-theme-secondary));
-}
-
-.icon-tile-accent {
-  background: rgba(var(--v-theme-success), 0.12);
-  color: rgb(var(--v-theme-success));
-}
 
 .stat-content {
   min-width: 0;
