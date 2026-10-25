@@ -62,20 +62,24 @@ pub fn check_can_modify(user: &maybe_user::MaybeUser) -> Result<(), ApiError> {
     }
 }
 
-/// Fail with "crate not found" unless `user` may see the crate, so that the
-/// existence of a download-restricted crate is not revealed.
+/// Fail with "crate not found" unless the crate exists and `user` may see it.
+/// A download-restricted crate gets the same response as a missing one, so
+/// that its existence is not revealed.
 async fn check_crate_visible(
     crate_name: &NormalizedName,
     user: Option<&maybe_user::MaybeUser>,
     db: &Arc<dyn DbProvider>,
 ) -> ApiResult<()> {
-    if can_read_crate(crate_name, user, db).await? {
+    if db.get_crate_id(crate_name).await?.is_some() && can_read_crate(crate_name, user, db).await? {
         Ok(())
     } else {
         Err(RegistryError::CrateNotFound.into())
     }
 }
 
+/// Fail with "crate not found" unless the caller may download the crate. A
+/// download-restricted crate gets the same response as a missing one, so that
+/// its existence is not revealed.
 pub async fn check_download_auth(
     crate_name: &NormalizedName,
     token: &token::OptionToken,
@@ -85,15 +89,17 @@ pub async fn check_download_auth(
         return Ok(());
     }
 
-    let token = match token {
-        token::OptionToken::Some(token) => token,
-        token::OptionToken::None => return Err(RegistryError::DownloadUnauthorized.into()),
+    let has_access = match token {
+        token::OptionToken::Some(token) => {
+            has_restricted_crate_access(crate_name, &token.user, token.is_admin, db).await?
+        }
+        token::OptionToken::None => false,
     };
 
-    if has_restricted_crate_access(crate_name, &token.user, token.is_admin, db).await? {
+    if has_access {
         Ok(())
     } else {
-        Err(RegistryError::NotCrateUser.into())
+        Err(RegistryError::CrateNotFound.into())
     }
 }
 
@@ -640,8 +646,7 @@ pub async fn search(
     responses(
         (status = 200, description = "Crate archive", content_type = "application/octet-stream"),
         (status = 400, description = "Invalid package name or version"),
-        (status = 404, description = "Crate not found"),
-        (status = 401, description = "Unauthorized for restricted crate")
+        (status = 404, description = "Crate not found or download-restricted without access")
     ),
     security(("cargo_token" = []))
 )]
@@ -2198,27 +2203,41 @@ mod reg_api_tests {
     }
 
     /// Mock with the download-restricted crate `secret` that only the token
-    /// `crate-user-token` of user `crate_user` may access.
+    /// `crate-user-token` of user `crate_user` may access. The token
+    /// `other-token` of user `other` has no access. No other crate exists.
     fn restricted_crate_mock_db() -> MockDb {
         let secret = NormalizedName::from_unchecked("secret".to_string());
         let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_crate_id()
+            .returning(|name| Ok((name.as_str() == "secret").then_some(1)));
         mock_db
             .expect_is_download_restricted()
             .with(eq(secret.clone()))
             .returning(|_| Ok(true));
         mock_db
-            .expect_get_user_from_token()
-            .with(eq("crate-user-token"))
-            .returning(|_| {
-                Ok(kellnr_db::User {
-                    name: "crate_user".to_string(),
-                    ..kellnr_db::User::default()
-                })
-            });
+            .expect_is_download_restricted()
+            .returning(|_| Ok(false));
+        for (token, user) in [("crate-user-token", "crate_user"), ("other-token", "other")] {
+            mock_db
+                .expect_get_user_from_token()
+                .with(eq(token))
+                .returning(move |_| {
+                    Ok(kellnr_db::User {
+                        name: user.to_string(),
+                        ..kellnr_db::User::default()
+                    })
+                });
+        }
         mock_db
             .expect_is_crate_user()
             .with(eq(secret), eq("crate_user"))
             .returning(|_, _| Ok(true));
+        mock_db.expect_is_crate_user().returning(|_, _| Ok(false));
+        mock_db
+            .expect_is_crate_group_user()
+            .returning(|_, _| Ok(false));
+        mock_db.expect_is_owner().returning(|_, _| Ok(false));
         mock_db.expect_get_crate_owners().returning(|_| Ok(vec![]));
         mock_db
             .expect_get_crate_versions()
@@ -2236,6 +2255,10 @@ mod reg_api_tests {
             .route(
                 "/api/v1/crates/{crate_name}/crate_versions",
                 get(list_crate_versions),
+            )
+            .route(
+                "/api/v1/crates/dl/{package}/{version}/download",
+                get(download),
             )
             .with_state(AppStateData {
                 db: Arc::new(restricted_crate_mock_db()),
@@ -2268,6 +2291,42 @@ mod reg_api_tests {
         assert_eq!(
             StatusCode::NOT_FOUND,
             get_restricted("/api/v1/crates/secret/crate_versions", None).await
+        );
+    }
+
+    #[tokio::test]
+    async fn list_owners_missing_crate_is_not_found() {
+        assert_eq!(
+            StatusCode::NOT_FOUND,
+            get_restricted("/api/v1/crates/missing/owners", Some("other-token")).await
+        );
+    }
+
+    #[tokio::test]
+    async fn list_crate_versions_missing_crate_is_not_found() {
+        assert_eq!(
+            StatusCode::NOT_FOUND,
+            get_restricted("/api/v1/crates/missing/crate_versions", Some("other-token")).await
+        );
+    }
+
+    #[tokio::test]
+    async fn download_restricted_crate_anonymous_is_not_found() {
+        assert_eq!(
+            StatusCode::NOT_FOUND,
+            get_restricted("/api/v1/crates/dl/secret/1.0.0/download", None).await
+        );
+    }
+
+    #[tokio::test]
+    async fn download_restricted_crate_without_access_is_not_found() {
+        assert_eq!(
+            StatusCode::NOT_FOUND,
+            get_restricted(
+                "/api/v1/crates/dl/secret/1.0.0/download",
+                Some("other-token")
+            )
+            .await
         );
     }
 

@@ -722,25 +722,10 @@ pub async fn build_rustdoc(
     let db = state.db;
     let version = params.version;
 
-    // Check if crate with the version exists.
-    if let Some(id) = db
-        .get_crate_id(&normalized_name)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    {
-        if !db
-            .crate_version_exists(id, &version)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    } else {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-
     // If the user is a non-read-only owner of the crate or any admin user,
-    // the build operation is allowed.
+    // the build operation is allowed. This comes before the version check, so
+    // that others cannot tell which crates and versions exist: they get the
+    // same error for a missing crate.
     let is_allowed = match user {
         MaybeUser::Normal(user) => {
             db.is_owner(&normalized_name, &user)
@@ -757,6 +742,23 @@ pub async fn build_rustdoc(
 
     if !is_allowed {
         return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    // Check if crate with the version exists.
+    if let Some(id) = db
+        .get_crate_id(&normalized_name)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        if !db
+            .crate_version_exists(id, &version)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    } else {
+        return Err(StatusCode::BAD_REQUEST);
     }
 
     // Add to build queue
@@ -1269,7 +1271,7 @@ mod tests {
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
-                    is_admin: false,
+                    is_admin: true,
                     is_read_only: false,
                 })
             });
@@ -1297,6 +1299,52 @@ mod tests {
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
+    // A non-owner gets the same response for a missing crate as for a crate
+    // of someone else, so that the existence of a crate is not revealed.
+    #[tokio::test]
+    async fn build_rust_doc_crate_not_found_for_non_owner() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("cookie"))
+            .returning(move |_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "user".to_string(),
+                    is_admin: false,
+                    is_read_only: false,
+                })
+            });
+        mock_db
+            .expect_is_owner()
+            .with(
+                eq(NormalizedName::from_unchecked("foobar".to_string())),
+                eq("user"),
+            )
+            .returning(move |_, _| Ok(false));
+        let (mut settings, storage) = test_deps();
+        settings.docs.enabled = true;
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::post("/build?package=foobar&version=1.0.0")
+                .header(
+                    header::COOKIE,
+                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, "token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+    }
+
     #[tokio::test]
     async fn build_rust_doc_version_not_found() {
         let mut mock_db = MockDb::new();
@@ -1312,6 +1360,27 @@ mod tests {
                     name: "user".to_string(),
                     is_admin: false,
                     is_read_only: false,
+                })
+            });
+        mock_db
+            .expect_is_owner()
+            .with(
+                eq(NormalizedName::from_unchecked("foobar".to_string())),
+                eq("user"),
+            )
+            .returning(move |_, _| Ok(true));
+        mock_db
+            .expect_get_user()
+            .with(eq("user"))
+            .returning(move |_| {
+                Ok(User {
+                    id: 0,
+                    name: "user".to_string(),
+                    pwd: String::new(),
+                    salt: String::new(),
+                    is_admin: false,
+                    is_read_only: false,
+                    created: String::new(),
                 })
             });
         mock_db
