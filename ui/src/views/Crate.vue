@@ -5,6 +5,9 @@
       <div class="d-flex flex-wrap align-baseline">
         <h1 class="text-headline-large font-weight-bold my-0 me-3 text-break crate-title" data-testid="crate-title">{{ crate.name }}</h1>
         <span class="text-title-large tabular-nums version-text" data-testid="crate-version">{{ selected_version.version }}</span>
+        <!-- Owners and admins see who can download a restricted crate -->
+        <CrateAccessBadge v-if="canManageCrate" :crate-name="crate.name" :refresh-key="accessVersion"
+          class="ms-3 align-self-center" @open="openAccessSettings" />
       </div>
       <p v-if="crate.description != null" class="description-text mt-2 mb-0" data-testid="crate-description">
         {{ crate.description }}
@@ -111,6 +114,7 @@
           v-if="tab === 'settings'"
           :crate-name="crate.name"
           @owners-changed="handleOwnersChanged"
+          @access-changed="accessVersion++"
         />
 
         <!-- Admin Tab -->
@@ -142,8 +146,9 @@ import CrateSidebar from "../components/CrateSidebar.vue";
 import About from "../components/About.vue";
 import CrateSettingsTab from "../components/crate/CrateSettingsTab.vue";
 import CrateAdminTab from "../components/crate/CrateAdminTab.vue";
+import CrateAccessBadge from "../components/crate/CrateAccessBadge.vue";
 import { SectionHeader } from "../components/common";
-import { computed, onBeforeMount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeMount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
 import { safeUrl } from "../common/url";
@@ -160,6 +165,8 @@ const selected_version = ref<CrateVersionData>(defaultCrateVersionData)
 const tab = ref<CrateTab>("about");
 const store = useStore();
 const docsEnabled = ref(false);
+// Counts the changes in the settings tab, so the access badge reloads
+const accessVersion = ref(0);
 
 // Snackbar refs
 const showSnackbar = ref(false);
@@ -187,6 +194,13 @@ function tabFromRoute(): CrateTab {
 function selectTab(value: unknown) {
   tab.value = value as CrateTab
   router.replace({ query: { ...route.query, tab: tab.value } })
+}
+
+// The access badge opens the settings tab at the access lists
+async function openAccessSettings() {
+  selectTab("settings")
+  await nextTick()
+  document.getElementById("crate-access")?.scrollIntoView({ behavior: "smooth", block: "start" })
 }
 
 // Crate metadata is user-provided, only link to http(s) or relative URLs

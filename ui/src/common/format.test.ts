@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatBytes, formatNumber, versionGroup } from "./format.ts";
+import { formatBytes, formatCount, formatNumber, versionGroup } from "./format.ts";
 
 test("groups digits by locale", () => {
   assert.equal(formatNumber(10779, "en-US"), "10,779");
@@ -30,4 +30,10 @@ test("groups versions by semver compatibility", () => {
   assert.equal(versionGroup("0.3.7"), "0.3.x");
   assert.equal(versionGroup("0.0.4"), "0.0.4");
   assert.equal(versionGroup("0.0.4+build"), "0.0.4");
+});
+
+test("formats counts with singular and plural nouns", () => {
+  assert.equal(formatCount(0, "user"), "0 users");
+  assert.equal(formatCount(1, "user"), "1 user");
+  assert.equal(formatCount(3, "group"), "3 groups");
 });

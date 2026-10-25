@@ -29,6 +29,7 @@ export class CratePage extends BasePage {
   readonly dependenciesTab: Locator;
   readonly versionsTab: Locator;
   readonly settingsTab: Locator;
+  readonly accessBadge: Locator;
   readonly adminTab: Locator;
 
   // Content locators
@@ -78,6 +79,7 @@ export class CratePage extends BasePage {
     this.dependenciesTab = page.getByTestId("crate-tab-deps");
     this.versionsTab = page.getByTestId("crate-tab-versions");
     this.settingsTab = page.getByTestId("crate-tab-settings");
+    this.accessBadge = page.getByTestId("crate-access-badge");
     this.adminTab = page.getByTestId("crate-tab-admin");
 
     // Content areas

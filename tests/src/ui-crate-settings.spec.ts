@@ -11,6 +11,7 @@
  */
 
 import path from "node:path";
+import type { Page } from "@playwright/test";
 import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
 import { CratesPage, CratePage, LoginPage } from "./pages";
 import {
@@ -51,6 +52,34 @@ async function publishTestCrates(log: (msg: string) => void): Promise<void> {
     registry,
     registryToken,
   });
+}
+
+/**
+ * Logs in and waits until the server has accepted the login, so the session
+ * cookie is set when the next request goes out.
+ */
+async function loginAndWait(page: Page, baseUrl: string, user: string, password: string): Promise<void> {
+  await page.goto(`${baseUrl}/login`);
+  const loggedIn = page.waitForResponse(
+    (r) => r.url().endsWith("/api/v1/auth/login") && r.ok()
+  );
+  await new LoginPage(page).login(user, password);
+  await loggedIn;
+}
+
+/**
+ * Calls the API from the page, so the request carries the session cookie.
+ * Returns the HTTP status.
+ */
+async function apiCall(page: Page, method: string, url: string, body?: unknown): Promise<number> {
+  return page.evaluate(async ({ method, url, body }) => {
+    const response = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return response.status;
+  }, { method, url, body });
 }
 
 test.describe("Crate Settings UI Tests", () => {
@@ -165,6 +194,61 @@ test.describe("Crate Settings UI Tests", () => {
     // Verify save changes button exists - new UI has "Save changes" instead
     const saveButton = page.getByRole("button", { name: "Save changes" });
     await expect(saveButton).toBeVisible();
+  });
+
+  test("owners and admins see who can access a restricted crate", async ({ page, browser }) => {
+    // A user and a group that get access, created through the API with the admin session
+    await loginAndWait(page, baseUrl, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+
+    const reader = { name: "badge-reader", pwd1: "badge-reader-pwd", pwd2: "badge-reader-pwd" };
+    expect(await apiCall(page, "POST", "/api/v1/users", reader)).toBe(200);
+    expect(await apiCall(page, "POST", "/api/v1/groups", { name: "badge-group" })).toBe(200);
+
+    const cratePage = new CratePage(page);
+    await page.goto(`${baseUrl}/crate?name=foo-bar`);
+    await cratePage.waitForCrateData();
+
+    // No badge while downloads are not restricted
+    await expect(cratePage.crateTitle).toBeVisible();
+    await expect(cratePage.accessBadge).toHaveCount(0);
+
+    // Restricting the crate shows the badge, adding access updates it
+    await cratePage.toggleDownloadRestriction();
+    await expect(cratePage.accessBadge).toHaveText("Restricted: 0 users, 0 groups");
+
+    await cratePage.addCrateUser(reader.name);
+    await expect(cratePage.accessBadge).toHaveText("Restricted: 1 user, 0 groups");
+
+    expect(await apiCall(page, "PUT", "/api/v1/acl/foo-bar/groups/badge-group")).toBe(200);
+    await page.reload();
+    await cratePage.waitForCrateData();
+    await expect(cratePage.accessBadge).toHaveText("Restricted: 1 user, 1 group");
+
+    // The badge opens the settings tab at the access lists
+    await cratePage.clickTab("about");
+    await cratePage.accessBadge.click();
+    await expect(page).toHaveURL(/tab=settings/);
+    await expect(page.locator("#crate-access")).toBeInViewport();
+    await expect(page.getByTestId("settings-user-name")).toHaveText([reader.name]);
+
+    // A crate user who does not own the crate sees no badge
+    const readerContext = await browser.newContext();
+    try {
+      const readerPage = await readerContext.newPage();
+      await loginAndWait(readerPage, baseUrl, reader.name, reader.pwd1);
+      await readerPage.goto(`${baseUrl}/crate?name=foo-bar`);
+      const readerCratePage = new CratePage(readerPage);
+      await readerCratePage.waitForCrateData();
+      await expect(readerCratePage.crateTitle).toBeVisible();
+      await expect(readerCratePage.settingsTab).toHaveCount(0);
+      await expect(readerCratePage.accessBadge).toHaveCount(0);
+    } finally {
+      await readerContext.close();
+    }
+
+    // Lift the restriction again for the tests below
+    await cratePage.toggleDownloadRestriction();
+    await expect(cratePage.accessBadge).toHaveCount(0);
   });
 
   test("admin can delete a crate version", async ({ page }) => {

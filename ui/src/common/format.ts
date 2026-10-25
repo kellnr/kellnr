@@ -41,3 +41,10 @@ export function versionGroup(version: string): string {
   if (minor !== "0") return `0.${minor}.x`;
   return `0.0.${patch}`;
 }
+
+/**
+ * A count with its noun, like "1 user" or "3 users".
+ */
+export function formatCount(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
