@@ -28,9 +28,7 @@ export const useStore = defineStore('store', {
         loggedIn: (state) => state.loggedInUser !== null,
         isDark: (state) => state.theme === 'dark',
         cargoSmallLogo: () => 'img/cargo-logo-small-light.png',
-        kellnrSmallLogo: (state) => state.theme === 'dark'
-            ? 'img/kellnr-logo-small-dark.png'
-            : 'img/kellnr-logo-small-light.png',
+        kellnrSmallLogo: () => 'img/kellnr-crate.svg',
     },
     actions: {
         login(payload: { "user": string, "is_admin": boolean }) {
