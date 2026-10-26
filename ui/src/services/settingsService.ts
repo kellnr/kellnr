@@ -3,9 +3,16 @@
  */
 import { apiGet, isSuccess } from './api'
 import type { ApiResult } from '../types/api'
-import type { DocsEnabled, RegistryConfig, Settings, Version } from '../types/settings'
+import type { DocsEnabled, RegistryConfig, Settings, SponsorLinksEnabled, Version } from '../types/settings'
 import type { OAuth2Config } from '../types/oauth2'
-import { SETTINGS, DOCS_ENABLED, VERSION, OAUTH2_CONFIG, REGISTRY_CONFIG } from '../remote-routes'
+import {
+  SETTINGS,
+  DOCS_ENABLED,
+  SPONSOR_LINKS_ENABLED,
+  VERSION,
+  OAUTH2_CONFIG,
+  REGISTRY_CONFIG,
+} from '../remote-routes'
 
 /**
  * Get startup configuration settings with source tracking
@@ -23,6 +30,25 @@ export async function getDocsEnabled(): Promise<ApiResult<DocsEnabled>> {
   return apiGet<DocsEnabled>(DOCS_ENABLED, undefined, {
     redirectOnAuthError: false,
   })
+}
+
+/**
+ * Check if the UI shows links to sponsor Kellnr. The setting only changes
+ * with a restart, so the first successful answer is cached.
+ */
+let sponsorLinksEnabledCache: SponsorLinksEnabled | null = null
+
+export async function getSponsorLinksEnabled(): Promise<ApiResult<SponsorLinksEnabled>> {
+  if (sponsorLinksEnabledCache) {
+    return { data: sponsorLinksEnabledCache, error: null }
+  }
+  const result = await apiGet<SponsorLinksEnabled>(SPONSOR_LINKS_ENABLED, undefined, {
+    redirectOnAuthError: false,
+  })
+  if (isSuccess(result)) {
+    sponsorLinksEnabledCache = result.data
+  }
+  return result
 }
 
 /**

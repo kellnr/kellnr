@@ -24,6 +24,17 @@
           <v-icon :icon="link.icon" size="small" />
           <span class="link-text">{{ link.text }}</span>
         </a>
+        <a
+          v-if="sponsorLinksEnabled"
+          href="https://kellnr.io/sponsor"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link sponsor-link"
+          data-testid="footer-sponsor-link"
+        >
+          <v-icon icon="mdi-heart" size="small" />
+          <span class="link-text">Sponsor</span>
+        </a>
       </div>
     </div>
   </v-footer>
@@ -36,6 +47,9 @@ import { isSuccess } from "../services/api";
 
 // Version state
 const version = ref("");
+
+// Hidden until the server confirms, so a failed request never shows the link
+const sponsorLinksEnabled = ref(false);
 
 // Links configuration
 const links = [
@@ -57,9 +71,15 @@ const links = [
 ];
 
 onMounted(async () => {
-  const result = await settingsService.getVersion();
-  if (isSuccess(result)) {
-    version.value = result.data.version;
+  const [versionResult, sponsorResult] = await Promise.all([
+    settingsService.getVersion(),
+    settingsService.getSponsorLinksEnabled(),
+  ]);
+  if (isSuccess(versionResult)) {
+    version.value = versionResult.data.version;
+  }
+  if (isSuccess(sponsorResult)) {
+    sponsorLinksEnabled.value = sponsorResult.data.enabled;
   }
 });
 </script>
@@ -160,6 +180,15 @@ onMounted(async () => {
 
 .footer-link:hover .v-icon {
   opacity: 1;
+}
+
+.sponsor-link .v-icon {
+  color: rgb(var(--v-theme-error));
+}
+
+.sponsor-link:hover {
+  background: rgba(var(--v-theme-error), 0.08);
+  color: rgb(var(--v-theme-error));
 }
 
 .link-text {
