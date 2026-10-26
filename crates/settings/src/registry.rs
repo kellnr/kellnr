@@ -88,6 +88,9 @@ pub struct Registry {
     /// Window in seconds for counting password attempts per username
     #[arg(long = "registry-auth-failed-attempts-window")]
     pub auth_failed_attempts_window_seconds: u64,
+
+    /// Show links to sponsor Kellnr in the web UI and the startup log
+    pub sponsor_links_enabled: bool,
 }
 
 impl Default for Registry {
@@ -113,6 +116,7 @@ impl Default for Registry {
             download_counter_flush_seconds: 30,
             auth_max_failed_attempts: 10,
             auth_failed_attempts_window_seconds: 300,
+            sponsor_links_enabled: true,
         }
     }
 }

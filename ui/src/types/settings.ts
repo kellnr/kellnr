@@ -6,6 +6,10 @@ export type DocsEnabled = {
   enabled: boolean
 }
 
+export type SponsorLinksEnabled = {
+  enabled: boolean
+}
+
 export type RegistryConfig = {
   "auth-required": boolean
 }
@@ -134,6 +138,7 @@ export type Registry = {
   download_counter_flush_seconds: number
   auth_max_failed_attempts: number
   auth_failed_attempts_window_seconds: number
+  sponsor_links_enabled: boolean
 }
 
 export type S3 = {
@@ -234,7 +239,8 @@ export const emptySettings: Settings = {
     download_max_concurrent: 20,
     download_counter_flush_seconds: 30,
     auth_max_failed_attempts: 10,
-    auth_failed_attempts_window_seconds: 300
+    auth_failed_attempts_window_seconds: 300,
+    sponsor_links_enabled: true
   },
   s3: {
     enabled: false,

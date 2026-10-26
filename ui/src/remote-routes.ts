@@ -42,6 +42,7 @@ export const CRATE_DELETE_VERSION = (name: string, version: string) =>
 export const VERSION = "./api/v1/ui/version";
 export const SETTINGS = "./api/v1/ui/settings";
 export const DOCS_ENABLED = "./api/v1/ui/docs_enabled";
+export const SPONSOR_LINKS_ENABLED = "./api/v1/ui/sponsor_links_enabled";
 // The registry config cargo reads, it tells whether cargo sends credentials
 export const REGISTRY_CONFIG = "./api/v1/crates/config.json";
 export const STATISTICS = "./api/v1/ui/statistics";

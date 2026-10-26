@@ -94,6 +94,16 @@
                         </template>
                     </v-list>
                 </v-card>
+
+                <!-- Admins decide what their team spends on tools, so ask them -->
+                <div v-if="store.loggedInUserIsAdmin && sponsorLinksEnabled" class="sponsor-note"
+                    data-testid="settings-sponsor-note">
+                    <v-icon icon="mdi-heart" size="small" class="sponsor-icon"></v-icon>
+                    <span>
+                        Kellnr is maintained by one person in their spare time. If it saves your team time,
+                        consider <a href="https://kellnr.io/sponsor" target="_blank" rel="noopener noreferrer">sponsoring it</a>.
+                    </span>
+                </div>
             </v-col>
 
             <!-- Content area -->
@@ -191,6 +201,7 @@ const router = useRouter()
 
 const settings = ref<Settings>(emptySettings)
 const ssoEnforced = ref(false)
+const sponsorLinksEnabled = ref(false)
 const mobileNavOpen = ref(false)
 
 function getTabFromRoute(): SettingsTab {
@@ -252,6 +263,11 @@ onBeforeMount(async () => {
         if (ssoEnforced.value && activeTab.value === 'password') {
             activeTab.value = 'tokens'
         }
+    }
+
+    const sponsorResult = await settingsService.getSponsorLinksEnabled()
+    if (isSuccess(sponsorResult)) {
+        sponsorLinksEnabled.value = sponsorResult.data.enabled
     }
 })
 </script>
@@ -321,6 +337,29 @@ onBeforeMount(async () => {
 
 .v-list-item--active .nav-chevron {
     opacity: 1;
+}
+
+/* Sponsor Note */
+.sponsor-note {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: rgb(var(--v-theme-on-surface-variant));
+    border: 1px solid rgb(var(--v-theme-outline));
+    border-radius: var(--kellnr-radius-card);
+}
+
+.sponsor-icon {
+    margin-top: 2px;
+    color: rgb(var(--v-theme-error));
+}
+
+.sponsor-note a {
+    font-weight: 600;
+    color: rgb(var(--v-theme-primary));
 }
 
 /* Content Card */

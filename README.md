@@ -1,7 +1,7 @@
 ![GitHub](https://img.shields.io/github/license/kellnr/kellnr)
 ![GitHub release (with filter)](https://img.shields.io/github/v/release/kellnr/kellnr)
 ![Tests](https://img.shields.io/github/actions/workflow/status/kellnr/kellnr/test.yaml?label=tests)
-![GitHub Sponsors](https://img.shields.io/github/sponsors/secana)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/secana)](https://kellnr.io/sponsor)
 
 
 # Kellnr - The private crate registry
@@ -88,6 +88,10 @@ The latest Kubernetes Helm chart can be found here: [Kellnr Helm Chart](https://
 ## Why I created Kellnr
 
 As a security engineer and researcher I fight vulnerabilities in software for a living. With [Rust](https://www.rust-lang.org) becoming more and more popular, I see a lot of potential in the language to write secure software. However, to adapt Rust in a corporate environment, I need to be able to control the dependencies of the software I write. This is where **kellnr** comes into play. I hope that **kellnr** can accelerate the adoption of Rust in corporate environments, by providing a secure and private registry for Rust crates. In the end, I want to make the world a little bit more secure by promoting the use of Rust.
+
+## Sponsor
+
+**kellnr** is free and open source, and it is maintained by one person in their spare time. If it saves you or your team time, please consider [sponsoring its development](https://kellnr.io/sponsor). Monthly and one-time sponsorships are both welcome, and every public sponsor is thanked on the [sponsor page](https://kellnr.io/sponsor).
 
 ## Contribute
 

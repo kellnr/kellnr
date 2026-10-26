@@ -252,6 +252,29 @@ pub async fn docs_enabled(State(settings): SettingsState) -> Json<DocsEnabledRes
     })
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
+pub struct SponsorLinksEnabledResponse {
+    pub enabled: bool,
+}
+
+/// Check if the web UI shows links to sponsor Kellnr
+#[utoipa::path(
+    get,
+    path = "/sponsor_links_enabled",
+    tag = "ui",
+    responses(
+        (status = 200, description = "Sponsor links status", body = SponsorLinksEnabledResponse)
+    )
+)]
+#[allow(clippy::unused_async)] // part of the router
+pub async fn sponsor_links_enabled(
+    State(settings): SettingsState,
+) -> Json<SponsorLinksEnabledResponse> {
+    Json(SponsorLinksEnabledResponse {
+        enabled: settings.registry.sponsor_links_enabled,
+    })
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct KellnrVersion {
     pub version: String,
@@ -1297,6 +1320,57 @@ mod tests {
 
         assert_eq!(StatusCode::OK, result_status);
         assert!(result.enabled);
+    }
+
+    #[tokio::test]
+    async fn sponsor_links_enabled_returns_true_by_default() {
+        let mock_db = MockDb::new();
+        let (settings, storage) = test_deps();
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/sponsor_links_enabled")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let result_status = r.status();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let result = serde_json::from_slice::<SponsorLinksEnabledResponse>(&result_msg).unwrap();
+
+        assert_eq!(StatusCode::OK, result_status);
+        assert!(result.enabled);
+    }
+
+    #[tokio::test]
+    async fn sponsor_links_enabled_returns_false_when_disabled() {
+        let mock_db = MockDb::new();
+        let (mut settings, storage) = test_deps();
+        settings.registry.sponsor_links_enabled = false;
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/sponsor_links_enabled")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let result_status = r.status();
+        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
+        let result = serde_json::from_slice::<SponsorLinksEnabledResponse>(&result_msg).unwrap();
+
+        assert_eq!(StatusCode::OK, result_status);
+        assert!(!result.enabled);
     }
 
     #[tokio::test]
@@ -3073,6 +3147,7 @@ mod tests {
             .route("/cratesio_data", get(cratesio_data))
             .route("/settings", get(crate::ui::settings))
             .route("/docs_enabled", get(docs_enabled))
+            .route("/sponsor_links_enabled", get(sponsor_links_enabled))
             .with_state(AppStateData {
                 db: Arc::new(mock_db),
                 signing_key: Key::from(TEST_KEY),

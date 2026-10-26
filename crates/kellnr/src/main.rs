@@ -314,6 +314,7 @@ async fn run_server(resolved: ResolvedSettings) {
     });
 
     let download_counter_for_shutdown = download_counter.clone();
+    let sponsor_links_enabled = settings.registry.sponsor_links_enabled;
 
     let proxy_client = build_client(
         &settings.proxy.user_agent,
@@ -362,6 +363,11 @@ async fn run_server(resolved: ResolvedSettings) {
         .await
         .unwrap_or_else(|_| panic!("Failed to bind to {addr}"));
     info!("Kellnr has been started on http://{addr}/");
+    if sponsor_links_enabled {
+        info!(
+            "Kellnr is maintained by one person in their spare time. If it saves your team time, consider sponsoring it: https://kellnr.io/sponsor"
+        );
+    }
 
     #[cfg(unix)]
     let sigterm = async {
