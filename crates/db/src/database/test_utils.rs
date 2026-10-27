@@ -26,7 +26,8 @@ use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
 use kellnr_entity::{
-    auth_token, crate_index, crate_meta, cratesio_crate, krate, oauth2_state, session, user,
+    auth_token, crate_dependency, crate_index, crate_meta, cratesio_crate, krate, oauth2_state,
+    session, user,
 };
 use sea_orm::sea_query::Expr;
 use sea_orm::{
@@ -377,6 +378,31 @@ pub async fn test_add_crate_meta(
 pub async fn test_delete_crate_index(db: &Database, crate_id: i64) -> DbResult<()> {
     crate_index::Entity::delete_many()
         .filter(crate_index::Column::CrateFk.eq(crate_id))
+        .exec(&db.db_con)
+        .await?;
+    Ok(())
+}
+
+/// Removes the stored crate dependencies and fills them again from the index,
+/// like the migration that added them does for existing crates.
+pub async fn test_refill_crate_dependencies(db: &Database) -> DbResult<()> {
+    crate_dependency::Entity::delete_many()
+        .exec(&db.db_con)
+        .await?;
+    kellnr_migration::fill_crate_dependencies(&db.db_con).await?;
+    Ok(())
+}
+
+/// Overwrites the deps in the index of all versions of a crate, e.g. to
+/// store deps that cannot be parsed.
+pub async fn test_set_index_deps(
+    db: &Database,
+    crate_name: &str,
+    deps: serde_json::Value,
+) -> DbResult<()> {
+    crate_index::Entity::update_many()
+        .col_expr(crate_index::Column::Deps, Expr::value(deps))
+        .filter(crate_index::Column::Name.eq(crate_name))
         .exec(&db.db_con)
         .await?;
     Ok(())

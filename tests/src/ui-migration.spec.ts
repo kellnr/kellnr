@@ -307,6 +307,13 @@ test.describe("Migration UI Tests", () => {
         await expect(page.getByTestId("version-size").first()).toHaveText(/^[1-9][\d.]* (B|kB)$/);
         console.log("[migration] ✓ Crate size filled in");
 
+        // Test 7: Dependents of crates published before the upgrade are filled
+        // in. foo-bar was published to the old version, full-toml to the new one.
+        await page.goto(`${baseUrl}/crate?name=test_lib&tab=dependents`);
+        await cratePage.waitForCrateData();
+        await expect(cratePage.dependentRows.getByTestId("dependent-name")).toHaveText(["foo-bar", "full-toml"]);
+        console.log("[migration] ✓ Dependents filled in");
+
         console.log("[migration] All UI verification tests passed");
       });
     } finally {

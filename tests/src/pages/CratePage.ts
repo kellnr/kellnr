@@ -6,7 +6,7 @@ import { BasePage } from "./BasePage";
  *
  * Provides methods to interact with:
  * - Crate header (name, version, description)
- * - Tabs (Readme, About, Dependencies, Versions, Settings, Admin)
+ * - Tabs (Readme, About, Dependencies, Versions, Used by, Settings, Admin)
  * - Sidebar (install info, downloads, documentation)
  * - Owner management
  * - Access control settings
@@ -14,8 +14,8 @@ import { BasePage } from "./BasePage";
  *
  * All locators are based on `data-testid` attributes defined in the
  * crate-detail Vue components (Crate.vue, CrateSidebar.vue, About.vue,
- * Version.vue, Dependency.vue, Readme.vue, CrateSettingsTab.vue,
- * CrateAdminTab.vue).
+ * Version.vue, Dependency.vue, Readme.vue, CrateDependentsTab.vue,
+ * CrateSettingsTab.vue, CrateAdminTab.vue).
  */
 export class CratePage extends BasePage {
   // Header locators
@@ -28,6 +28,7 @@ export class CratePage extends BasePage {
   readonly aboutTab: Locator;
   readonly dependenciesTab: Locator;
   readonly versionsTab: Locator;
+  readonly dependentsTab: Locator;
   readonly settingsTab: Locator;
   readonly accessBadge: Locator;
   readonly adminTab: Locator;
@@ -38,6 +39,9 @@ export class CratePage extends BasePage {
   readonly dependencyList: Locator;
   readonly devDependencyList: Locator;
   readonly buildDependencyList: Locator;
+  readonly dependentsSummary: Locator;
+  readonly dependentRows: Locator;
+  readonly restrictedDependentRows: Locator;
 
   // Sidebar locators
   readonly sidebar: Locator;
@@ -78,6 +82,7 @@ export class CratePage extends BasePage {
     this.aboutTab = page.getByTestId("crate-tab-about");
     this.dependenciesTab = page.getByTestId("crate-tab-deps");
     this.versionsTab = page.getByTestId("crate-tab-versions");
+    this.dependentsTab = page.getByTestId("crate-tab-dependents");
     this.settingsTab = page.getByTestId("crate-tab-settings");
     this.accessBadge = page.getByTestId("crate-access-badge");
     this.adminTab = page.getByTestId("crate-tab-admin");
@@ -88,6 +93,9 @@ export class CratePage extends BasePage {
     this.dependencyList = page.getByTestId("crate-deps-normal");
     this.devDependencyList = page.getByTestId("crate-deps-dev");
     this.buildDependencyList = page.getByTestId("crate-deps-build");
+    this.dependentsSummary = page.getByTestId("dependents-summary");
+    this.dependentRows = page.getByTestId("dependent-row");
+    this.restrictedDependentRows = page.getByTestId("dependent-restricted");
 
     // Sidebar
     this.sidebar = page.getByTestId("crate-sidebar");
@@ -158,13 +166,14 @@ export class CratePage extends BasePage {
    * Click on a tab by name.
    */
   async clickTab(
-    tabName: "readme" | "about" | "dependencies" | "versions" | "settings" | "admin"
+    tabName: "readme" | "about" | "dependencies" | "versions" | "dependents" | "settings" | "admin"
   ): Promise<void> {
     const tabMap = {
       readme: this.readmeTab,
       about: this.aboutTab,
       dependencies: this.dependenciesTab,
       versions: this.versionsTab,
+      dependents: this.dependentsTab,
       settings: this.settingsTab,
       admin: this.adminTab,
     };
@@ -176,13 +185,14 @@ export class CratePage extends BasePage {
    * Check if a tab is visible.
    */
   async isTabVisible(
-    tabName: "readme" | "about" | "dependencies" | "versions" | "settings" | "admin"
+    tabName: "readme" | "about" | "dependencies" | "versions" | "dependents" | "settings" | "admin"
   ): Promise<boolean> {
     const tabMap = {
       readme: this.readmeTab,
       about: this.aboutTab,
       dependencies: this.dependenciesTab,
       versions: this.versionsTab,
+      dependents: this.dependentsTab,
       settings: this.settingsTab,
       admin: this.adminTab,
     };

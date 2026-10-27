@@ -3,6 +3,7 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 use crate_meta::CrateMeta;
 use kellnr_common::crate_data::CrateData;
+use kellnr_common::crate_dependents::CrateDependents;
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::index_metadata::IndexMetadata;
@@ -310,6 +311,10 @@ pub trait DbProvider: Send + Sync {
         tags: &CrateTagFilter,
     ) -> DbResult<u64>;
     async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData>;
+    /// Crates whose latest non-yanked version depends on the crate, with the
+    /// latest version of the crate. `restricted` is always 0, the caller
+    /// decides which dependents to hide.
+    async fn get_crate_dependents(&self, crate_name: &NormalizedName) -> DbResult<CrateDependents>;
     async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64>;
     /// Adds a published crate version. `owner` is the publishing user, who
     /// becomes the owner of a new crate. `token_name` is the name of the auth
@@ -773,6 +778,10 @@ pub mod mock {
             }
 
             async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {
+                unimplemented!()
+            }
+
+            async fn get_crate_dependents(&self, crate_name: &NormalizedName) -> DbResult<CrateDependents> {
                 unimplemented!()
             }
 

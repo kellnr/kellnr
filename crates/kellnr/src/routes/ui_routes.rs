@@ -14,6 +14,7 @@ pub fn create_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
         .routes(routes!(ui::search))
         .routes(routes!(ui::statistic))
         .routes(routes!(ui::crate_data))
+        .routes(routes!(ui::crate_dependents))
         .routes(routes!(ui::cratesio_data))
         .routes(routes!(ui::settings))
         .routes(routes!(ui::docs_enabled))

@@ -10,6 +10,7 @@ use kellnr_appstate::{AppState, DbState, SettingsProvState, SettingsState};
 use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
 use kellnr_auth::maybe_user::MaybeUser as MaybeUserOrToken;
 use kellnr_common::crate_data::{CRATESIO_INDEX, CrateData};
+use kellnr_common::crate_dependents::CrateDependents;
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::name_or_description::NameOrDescription;
 use kellnr_common::normalized_name::NormalizedName;
@@ -484,6 +485,75 @@ async fn hide_restricted_dep_info(
             dep.outdated = false;
         }
     }
+    Ok(())
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
+pub struct CrateDependentsParams {
+    name: OriginalName,
+}
+
+/// Get the crates whose latest version depends on a crate
+#[utoipa::path(
+    get,
+    path = "/crate_dependents",
+    tag = "ui",
+    params(CrateDependentsParams),
+    responses(
+        (status = 200, description = "Dependents of the crate", body = CrateDependents),
+        (status = 404, description = "Crate not found or download-restricted without access")
+    )
+)]
+pub async fn crate_dependents(
+    Query(params): Query<CrateDependentsParams>,
+    State(db): DbState,
+    user: Result<MaybeUserOrToken, StatusCode>,
+) -> Result<Json<CrateDependents>, StatusCode> {
+    let index_name = NormalizedName::from(params.name);
+    let user = user.ok();
+    // Same response as a missing crate to not reveal that a restricted crate exists.
+    match can_read_crate(&index_name, user.as_ref(), &db).await {
+        Ok(true) => {}
+        Ok(false) => return Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            error!("Failed to check access to crate {index_name}: {e}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+    let mut cd = db
+        .get_crate_dependents(&index_name)
+        .await
+        .map_err(|e| match e {
+            DbError::CrateNotFound(_) => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        })?;
+    hide_restricted_dependents(&mut cd, user.as_ref(), &db)
+        .await
+        .map_err(|e| {
+            error!("Failed to check access to the dependents of {index_name}: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(cd))
+}
+
+/// Removes the dependents that are download-restricted crates `user` cannot
+/// access and only counts them, so that the crate page shows that they exist
+/// but nothing about them.
+async fn hide_restricted_dependents(
+    cd: &mut CrateDependents,
+    user: Option<&MaybeUserOrToken>,
+    db: &Arc<dyn DbProvider>,
+) -> Result<(), DbError> {
+    let mut visible = Vec::with_capacity(cd.dependents.len());
+    for dependent in std::mem::take(&mut cd.dependents) {
+        let name = NormalizedName::from_unchecked(dependent.name.to_lowercase());
+        if can_read_crate(&name, user, db).await? {
+            visible.push(dependent);
+        } else {
+            cd.restricted += 1;
+        }
+    }
+    cd.dependents = visible;
     Ok(())
 }
 
@@ -969,6 +1039,7 @@ mod tests {
     use hyper::{Request, header};
     use kellnr_appstate::{AppStateData, encode_cookies};
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
+    use kellnr_common::crate_dependents::CrateDependent;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{CrateVisibility, User};
@@ -2623,6 +2694,155 @@ mod tests {
         assert_eq!(dep("serde", Some(CRATESIO_INDEX)), deps[2]);
     }
 
+    fn dependent(name: &str) -> CrateDependent {
+        CrateDependent {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            outdated: true,
+            ..CrateDependent::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn crate_dependents_counts_restricted_dependents_only() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_download_restricted()
+            .returning(|name| Ok(name.as_str() == "secret"));
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let mut cd = CrateDependents {
+            latest_version: Some("2.0.0".to_string()),
+            dependents: vec![dependent("Secret"), dependent("public")],
+            restricted: 0,
+        };
+
+        hide_restricted_dependents(&mut cd, None, &db)
+            .await
+            .unwrap();
+
+        assert_eq!(vec![dependent("public")], cd.dependents);
+        assert_eq!(1, cd.restricted);
+    }
+
+    #[tokio::test]
+    async fn crate_dependents_shows_restricted_dependents_with_access() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_download_restricted()
+            .returning(|name| Ok(name.as_str() == "secret"));
+        mock_db
+            .expect_is_crate_user()
+            .with(
+                eq(NormalizedName::from_unchecked("secret".to_string())),
+                eq("user"),
+            )
+            .returning(|_, _| Ok(true));
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let user = MaybeUserOrToken {
+            name: "user".to_string(),
+            is_admin: false,
+            is_read_only: false,
+        };
+        let mut cd = CrateDependents {
+            dependents: vec![dependent("secret")],
+            ..CrateDependents::default()
+        };
+
+        hide_restricted_dependents(&mut cd, Some(&user), &db)
+            .await
+            .unwrap();
+
+        assert_eq!(vec![dependent("secret")], cd.dependents);
+        assert_eq!(0, cd.restricted);
+    }
+
+    #[tokio::test]
+    async fn crate_dependents_returns_dependents() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_download_restricted()
+            .returning(|name| Ok(name.as_str() == "secret"));
+        mock_db
+            .expect_get_crate_dependents()
+            .with(eq(NormalizedName::from_unchecked("foo".to_string())))
+            .returning(|_| {
+                Ok(CrateDependents {
+                    latest_version: Some("2.0.0".to_string()),
+                    dependents: vec![dependent("public"), dependent("secret")],
+                    restricted: 0,
+                })
+            });
+        let (settings, storage) = test_deps();
+        let response = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/crate_dependents?name=Foo")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(StatusCode::OK, response.status());
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let cd: CrateDependents = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            CrateDependents {
+                latest_version: Some("2.0.0".to_string()),
+                dependents: vec![dependent("public")],
+                restricted: 1,
+            },
+            cd
+        );
+    }
+
+    #[tokio::test]
+    async fn crate_dependents_of_restricted_crate_anonymous_returns_not_found() {
+        let mock_db = restricted_crate_mock(None);
+        let (settings, storage) = test_deps();
+        let response = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/crate_dependents?name=secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(StatusCode::NOT_FOUND, response.status());
+    }
+
+    #[tokio::test]
+    async fn crate_dependents_of_unknown_crate_returns_not_found() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_download_restricted()
+            .returning(|_| Ok(false));
+        mock_db
+            .expect_get_crate_dependents()
+            .returning(|name| Err(DbError::CrateNotFound(name.to_string())));
+        let (settings, storage) = test_deps();
+        let response = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/crate_dependents?name=missing")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(StatusCode::NOT_FOUND, response.status());
+    }
+
     fn restricted_crate_mock(session_user: Option<(&'static str, bool)>) -> MockDb {
         let mut mock_db = MockDb::new();
         mock_db
@@ -3141,6 +3361,7 @@ mod tests {
             .route("/search", get(search))
             .route("/crates", get(crates))
             .route("/crate_data", get(crate_data))
+            .route("/crate_dependents", get(crate_dependents))
             .route("/version", get(kellnr_version))
             .route("/statistic", get(statistic))
             .route("/build", post(build_rustdoc))

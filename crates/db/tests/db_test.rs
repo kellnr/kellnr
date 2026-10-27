@@ -4218,3 +4218,243 @@ async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database)
     let name = NormalizedName::from_unchecked_str("owned");
     assert_eq!(2, test_db.get_crate_meta_list(&name).await.unwrap().len());
 }
+
+#[db_test]
+async fn get_crate_dependents_uses_latest_version_of_dependents(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    let publish = async |name: &str, version: &str, deps: Vec<RegistryDep>| {
+        let pm = PublishMetadata {
+            deps,
+            ..PublishMetadata::minimal(name, version)
+        };
+        test_db
+            .add_crate(&pm, "cksum", 1024, &created, "admin", None)
+            .await
+            .unwrap();
+    };
+    let dep = |req: &str, kind: &str| RegistryDep {
+        name: "foo".to_string(),
+        version_req: req.to_string(),
+        features: None,
+        optional: false,
+        default_features: true,
+        target: None,
+        kind: Some(kind.to_string()),
+        registry: None,
+        explicit_name_in_toml: None,
+    };
+
+    for version in ["1.0.0", "2.0.0", "3.0.0-beta.1"] {
+        publish("foo", version, vec![]).await;
+    }
+    // Only the latest version of a dependent counts
+    publish("App-Old", "1.0.0", vec![dep("^1", "normal")]).await;
+    publish("app-new", "1.0.0", vec![dep("^1", "normal")]).await;
+    publish(
+        "app-new",
+        "2.0.0",
+        vec![
+            dep("^2", "normal"),
+            RegistryDep {
+                explicit_name_in_toml: Some("foo_old".to_string()),
+                ..dep("^1", "dev")
+            },
+        ],
+    )
+    .await;
+    publish("app-moved-on", "1.0.0", vec![dep("^1", "normal")]).await;
+    publish("app-moved-on", "2.0.0", vec![]).await;
+    // Yanked versions do not count as the latest version
+    publish("app-yanked", "1.0.0", vec![dep("^2", "build")]).await;
+    publish("app-yanked", "2.0.0", vec![]).await;
+    test_db
+        .yank_crate(
+            &NormalizedName::from_unchecked_str("app-yanked"),
+            &Version::from_unchecked_str("2.0.0"),
+        )
+        .await
+        .unwrap();
+    // A crates.io crate with the same name is a different crate
+    publish(
+        "app-cratesio",
+        "1.0.0",
+        vec![RegistryDep {
+            registry: Some("https://github.com/rust-lang/crates.io-index".to_string()),
+            ..dep("^1", "normal")
+        }],
+    )
+    .await;
+
+    let cd = test_db
+        .get_crate_dependents(&NormalizedName::from_unchecked_str("foo"))
+        .await
+        .unwrap();
+
+    assert_eq!(Some("2.0.0".to_string()), cd.latest_version);
+    assert_eq!(0, cd.restricted);
+    // "name version: requirements", with "!" marking what is behind
+    let summary: Vec<String> = cd
+        .dependents
+        .iter()
+        .map(|d| {
+            let reqs: Vec<String> = d
+                .requirements
+                .iter()
+                .map(|r| {
+                    format!(
+                        "{} {}{}",
+                        r.version_req,
+                        r.kind,
+                        if r.outdated { "!" } else { "" }
+                    )
+                })
+                .collect();
+            let behind = if d.outdated { "!" } else { "" };
+            format!("{} {}{behind}: {}", d.name, d.version, reqs.join(", "))
+        })
+        .collect();
+    assert_eq!(
+        vec![
+            "App-Old 1.0.0!: ^1 normal!",
+            "app-new 2.0.0!: ^1 dev!, ^2 normal",
+            "app-yanked 1.0.0: ^2 build",
+        ],
+        summary
+    );
+}
+
+#[db_test]
+async fn get_crate_dependents_of_unknown_crate_fails(test_db: &kellnr_db::Database) {
+    let result = test_db
+        .get_crate_dependents(&NormalizedName::from_unchecked_str("missing"))
+        .await;
+    assert!(matches!(
+        result,
+        Err(kellnr_db::error::DbError::CrateNotFound(_))
+    ));
+}
+
+/// Publishes `name` in `version`, depending on "foo" with `req` if given
+async fn publish_with_foo_dep(
+    test_db: &kellnr_db::Database,
+    name: &str,
+    version: &str,
+    req: Option<&str>,
+) {
+    let deps = req
+        .map(|req| RegistryDep {
+            name: "foo".to_string(),
+            version_req: req.to_string(),
+            features: None,
+            optional: false,
+            default_features: true,
+            target: None,
+            kind: Some("normal".to_string()),
+            registry: None,
+            explicit_name_in_toml: None,
+        })
+        .into_iter()
+        .collect();
+    let pm = PublishMetadata {
+        deps,
+        ..PublishMetadata::minimal(name, version)
+    };
+    test_db
+        .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+        .await
+        .unwrap();
+}
+
+/// Name and version of the dependents of "foo"
+async fn dependents_of_foo(test_db: &kellnr_db::Database) -> Vec<(String, String)> {
+    test_db
+        .get_crate_dependents(&NormalizedName::from_unchecked_str("foo"))
+        .await
+        .unwrap()
+        .dependents
+        .into_iter()
+        .map(|d| (d.name, d.version))
+        .collect()
+}
+
+#[db_test]
+async fn get_crate_dependents_follows_deleted_and_yanked_versions(test_db: &kellnr_db::Database) {
+    publish_with_foo_dep(test_db, "foo", "1.0.0", None).await;
+    publish_with_foo_dep(test_db, "bar", "1.0.0", Some("^1")).await;
+    publish_with_foo_dep(test_db, "bar", "2.0.0", None).await;
+    assert!(dependents_of_foo(test_db).await.is_empty());
+
+    // With the latest version yanked, the one before counts again
+    let bar = NormalizedName::from_unchecked_str("bar");
+    let v2 = Version::from_unchecked_str("2.0.0");
+    test_db.yank_crate(&bar, &v2).await.unwrap();
+    assert_eq!(
+        vec![("bar".to_string(), "1.0.0".to_string())],
+        dependents_of_foo(test_db).await
+    );
+    test_db.unyank_crate(&bar, &v2).await.unwrap();
+
+    // The same after the latest version is deleted
+    test_db.delete_crate(&bar, &v2).await.unwrap();
+    assert_eq!(
+        vec![("bar".to_string(), "1.0.0".to_string())],
+        dependents_of_foo(test_db).await
+    );
+
+    // Deleting the version removes its dependencies
+    test_db
+        .delete_crate(&bar, &Version::from_unchecked_str("1.0.0"))
+        .await
+        .unwrap();
+    assert!(dependents_of_foo(test_db).await.is_empty());
+}
+
+#[db_test]
+async fn migration_fills_dependencies_of_existing_versions(test_db: &kellnr_db::Database) {
+    publish_with_foo_dep(test_db, "foo", "1.0.0", None).await;
+    publish_with_foo_dep(test_db, "bar", "1.0.0", Some("^1")).await;
+    publish_with_foo_dep(test_db, "baz", "0.1.0", Some("^0.9")).await;
+    let before = dependents_of_foo(test_db).await;
+    assert_eq!(2, before.len());
+
+    test_refill_crate_dependencies(test_db).await.unwrap();
+
+    assert_eq!(before, dependents_of_foo(test_db).await);
+}
+
+#[db_test]
+async fn migration_skips_dependencies_that_cannot_be_read(test_db: &kellnr_db::Database) {
+    publish_with_foo_dep(test_db, "foo", "1.0.0", None).await;
+    publish_with_foo_dep(test_db, "bar", "1.0.0", Some("^1")).await;
+    publish_with_foo_dep(test_db, "baz", "1.0.0", Some("^1")).await;
+    // An invalid dependency next to a valid one, and deps that are no list
+    test_set_index_deps(
+        test_db,
+        "bar",
+        json!([
+            {"name": "foo", "broken": true},
+            {
+                "name": "foo",
+                "req": "^1",
+                "features": [],
+                "optional": false,
+                "default_features": true,
+                "target": null,
+                "kind": "normal",
+                "registry": null
+            }
+        ]),
+    )
+    .await
+    .unwrap();
+    test_set_index_deps(test_db, "baz", json!({"name": "foo"}))
+        .await
+        .unwrap();
+
+    test_refill_crate_dependencies(test_db).await.unwrap();
+
+    assert_eq!(
+        vec![("bar".to_string(), "1.0.0".to_string())],
+        dependents_of_foo(test_db).await
+    );
+}

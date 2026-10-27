@@ -91,6 +91,32 @@ export type CrateRegistryDep = {
     outdated: boolean,
 }
 
+/** Crates whose latest version depends on a crate */
+export type CrateDependents = {
+    /** Latest version of the crate that is not yanked */
+    latest_version?: string,
+    /** Dependents the user may see, sorted by name */
+    dependents: Array<CrateDependent>,
+    /** Number of dependents the user cannot access */
+    restricted: number,
+}
+
+export type CrateDependent = {
+    name: string,
+    /** Latest version of the dependent that is not yanked */
+    version: string,
+    requirements: Array<DependentRequirement>,
+    /** Whether any requirement does not allow the latest version of the crate */
+    outdated: boolean,
+}
+
+export type DependentRequirement = {
+    version_req: string,
+    /** "normal", "build" or "dev" */
+    kind: string,
+    outdated: boolean,
+}
+
 export type CrateAccessData = {
     is_download_restricted: boolean,
 }
