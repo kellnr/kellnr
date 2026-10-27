@@ -14,12 +14,13 @@ import type {
   CrateAccessDataResponse,
   CrateAccessDataRequest,
 } from '../types/api'
-import type { CrateData } from '../types/crate_data'
+import type { CrateData, CrateDependents } from '../types/crate_data'
 import type { Statistics } from '../types/statistics'
 import {
   CRATES,
   SEARCH,
   CRATE_DATA,
+  CRATE_DEPENDENTS,
   CRATESIO_DATA,
   CRATE_DELETE,
   CRATE_DELETE_VERSION,
@@ -65,6 +66,13 @@ export async function searchCrates(
  */
 export async function getCrateData(name: string): Promise<ApiResult<CrateData>> {
   return apiGet<CrateData>(CRATE_DATA, { name })
+}
+
+/**
+ * Get the crates whose latest version depends on a crate
+ */
+export async function getCrateDependents(name: string): Promise<ApiResult<CrateDependents>> {
+  return apiGet<CrateDependents>(CRATE_DEPENDENTS, { name })
 }
 
 /**

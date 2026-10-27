@@ -7,6 +7,7 @@ use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
+use kellnr_common::crate_dependents::{CrateDependent, CrateDependents};
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
 use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
@@ -14,13 +15,13 @@ use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
-use kellnr_common::version::Version;
+use kellnr_common::version::{Version, latest_version};
 use kellnr_common::webhook::{Webhook, WebhookEvent, WebhookQueue};
 use kellnr_entity::prelude::*;
 use kellnr_entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
-    crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, crate_user,
-    cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate,
+    crate_dependency, crate_group, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta,
+    crate_user, cratesio_crate, cratesio_index, cratesio_meta, doc_queue, group, group_user, krate,
     oauth2_identity, oauth2_state, owner, session, toolchain, toolchain_component,
     toolchain_target, user, webhook, webhook_queue,
 };
@@ -1918,6 +1919,89 @@ impl DbProvider for Database {
         };
 
         Ok(crate_data)
+    }
+
+    async fn get_crate_dependents(&self, crate_name: &NormalizedName) -> DbResult<CrateDependents> {
+        let krate = self.get_krate_model(crate_name).await?;
+
+        // Requirements on the crate, by the non-yanked version that has them
+        let requirements: Vec<(i64, String, String, String)> = crate_dependency::Entity::find()
+            .select_only()
+            .column(crate_index::Column::CrateFk)
+            .column(crate_index::Column::Vers)
+            .column(crate_dependency::Column::VersionReq)
+            .column(crate_dependency::Column::Kind)
+            .inner_join(crate_index::Entity)
+            .filter(crate_dependency::Column::Name.eq(crate_name))
+            .filter(crate_index::Column::Yanked.eq(false))
+            .filter(crate_index::Column::CrateFk.ne(krate.id))
+            .into_tuple()
+            .all(&self.db_con)
+            .await?;
+        let mut requirements_by_version: HashMap<(i64, String), Vec<(String, String)>> =
+            HashMap::new();
+        for (crate_fk, vers, version_req, kind) in requirements {
+            requirements_by_version
+                .entry((crate_fk, vers))
+                .or_default()
+                .push((version_req, kind));
+        }
+
+        // Only the latest version of a dependent counts, so the versions of
+        // the crate and of every crate that ever depended on it are needed
+        let mut crate_ids: Vec<i64> = requirements_by_version
+            .keys()
+            .map(|(crate_fk, _)| *crate_fk)
+            .collect();
+        crate_ids.push(krate.id);
+        crate_ids.sort_unstable();
+        crate_ids.dedup();
+        let mut versions_by_crate: HashMap<i64, (String, Vec<String>)> = HashMap::new();
+        // Chunked to stay below the bind parameter limit of SQLite
+        for ids in crate_ids.chunks(1000) {
+            let versions: Vec<(i64, String, String)> = crate_index::Entity::find()
+                .select_only()
+                .column(crate_index::Column::CrateFk)
+                .column(krate::Column::OriginalName)
+                .column(crate_index::Column::Vers)
+                .inner_join(krate::Entity)
+                .filter(crate_index::Column::CrateFk.is_in(ids.iter().copied()))
+                .filter(crate_index::Column::Yanked.eq(false))
+                .into_tuple()
+                .all(&self.db_con)
+                .await?;
+            for (crate_fk, name, vers) in versions {
+                versions_by_crate
+                    .entry(crate_fk)
+                    .or_insert_with(|| (name, Vec::new()))
+                    .1
+                    .push(vers);
+            }
+        }
+
+        let latest = versions_by_crate
+            .remove(&krate.id)
+            .and_then(|(_, versions)| latest_version(versions.iter().map(String::as_str)));
+        let mut dependents: Vec<CrateDependent> = versions_by_crate
+            .into_iter()
+            .filter_map(|(crate_fk, (name, versions))| {
+                let version = latest_version(versions.iter().map(String::as_str))?;
+                let requirements = requirements_by_version.remove(&(crate_fk, version.clone()))?;
+                Some(CrateDependent::new(
+                    name,
+                    version,
+                    requirements,
+                    latest.as_deref(),
+                ))
+            })
+            .collect();
+        dependents.sort_by(|a, b| a.name.cmp(&b.name));
+
+        Ok(CrateDependents {
+            latest_version: latest,
+            dependents,
+            restricted: 0,
+        })
     }
 
     async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64> {

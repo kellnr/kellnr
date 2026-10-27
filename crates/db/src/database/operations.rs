@@ -7,14 +7,15 @@
 use std::collections::HashMap;
 
 use kellnr_common::crate_data::CRATESIO_INDEX;
+use kellnr_common::crate_dependents::LocalDependency;
 use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::latest_version;
 use kellnr_entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
-    crate_index, crate_keyword, crate_keyword_to_crate, crate_meta, cratesio_crate, cratesio_index,
-    krate, owner, user,
+    crate_dependency, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta,
+    cratesio_crate, cratesio_index, krate, owner, user,
 };
 use sea_orm::sea_query::{Alias, Expr, Func};
 use sea_orm::{
@@ -281,7 +282,25 @@ pub async fn add_crate_index<C: ConnectionTrait>(
         rust_version: Set(index_data.rust_version),
     };
 
-    ci.insert(db_con).await?;
+    let ci = ci.insert(db_con).await?;
+
+    let dependencies: Vec<crate_dependency::ActiveModel> = index_data
+        .deps
+        .iter()
+        .filter_map(LocalDependency::from_index_dep)
+        .map(|dep| crate_dependency::ActiveModel {
+            id: ActiveValue::default(),
+            crate_index_fk: Set(ci.id),
+            name: Set(dep.name),
+            version_req: Set(dep.version_req),
+            kind: Set(dep.kind),
+        })
+        .collect();
+    if !dependencies.is_empty() {
+        crate_dependency::Entity::insert_many(dependencies)
+            .exec(db_con)
+            .await?;
+    }
     Ok(())
 }
 

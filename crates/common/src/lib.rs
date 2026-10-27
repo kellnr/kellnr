@@ -1,4 +1,5 @@
 pub mod crate_data;
+pub mod crate_dependents;
 pub mod crate_overview;
 pub mod cratesio_downloader;
 pub mod cratesio_prefetch_msg;

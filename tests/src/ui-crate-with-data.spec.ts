@@ -7,6 +7,7 @@
  * - Crate metadata (About tab)
  * - Dependencies display
  * - Versions tab
+ * - Used by tab
  * - Settings tab (admin only)
  * - Landing page statistics
  * - Layout: text sizes, page height, phone gutters, sidebar order, install
@@ -281,6 +282,84 @@ test.describe("Crate Views with Data", () => {
     await expect(outdated).toHaveCount(1);
     await expect(outdated).toHaveText(/latest 3\.0\.0/);
     await expect(outdated).toHaveAttribute("title", "The latest version 3.0.0 is newer than ^2.0 allows");
+  });
+
+  test("used by tab shows dependents that are behind", async ({ page }) => {
+    // Runs after "dependencies tab marks outdated dependencies", which
+    // published test_lib 3.0.0. foo-bar still depends on test_lib ^2.0.
+    const cratePage = new CratePage(page);
+    await page.goto(`${baseUrl}/crate?name=test_lib`);
+    await cratePage.waitForCrateData();
+    await cratePage.clickTab("dependents");
+
+    await expect(cratePage.dependentsSummary).toHaveText(
+      "Used by 1 crate, 1 is behind the latest version 3.0.0.");
+    await expect(cratePage.dependentRows).toHaveCount(1);
+    const row = cratePage.dependentRows.first();
+    await expect(row.getByTestId("dependent-name")).toHaveText("foo-bar");
+    const requirement = row.getByTestId("dependent-requirement");
+    await expect(requirement).toHaveText(/\^2\.0/);
+    await expect(requirement).toHaveClass(/behind/);
+    await expect(requirement).toHaveAttribute("title", "The latest version 3.0.0 is newer than ^2.0 allows");
+    await expect(cratePage.restrictedDependentRows).toHaveCount(0);
+
+    // The tab is kept in the URL and a dependent links to its crate page
+    expect(page.url()).toContain("tab=dependents");
+    await row.click();
+    await expect(page).toHaveURL(/name=foo-bar/);
+    await expect(cratePage.crateTitle).toHaveText("foo-bar");
+
+    // foo-bar has no dependents
+    await cratePage.clickTab("dependents");
+    await expect(cratePage.dependentsSummary).toHaveText("No crate in this registry depends on this crate.");
+  });
+
+  test("used by tab only counts restricted dependents", async ({ page, browser }) => {
+    await page.goto(`${baseUrl}/login`);
+    const loggedIn = page.waitForResponse((r) => r.url().endsWith("/api/v1/auth/login") && r.ok());
+    await new LoginPage(page).login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await loggedIn;
+
+    const setRestricted = (restricted: boolean) => page.evaluate(async (download_restricted) => {
+      const response = await fetch("/api/v1/acl/foo-bar", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ download_restricted }),
+      });
+      return response.status;
+    }, restricted);
+
+    expect(await setRestricted(true)).toBe(200);
+    const anonymous = await browser.newContext();
+    try {
+      // Nothing about the restricted dependent is sent to anonymous users
+      const response = await fetch(`${baseUrl}/api/v1/ui/crate_dependents?name=test_lib`);
+      expect(await response.json()).toEqual({
+        latest_version: "3.0.0",
+        dependents: [],
+        restricted: 1,
+      });
+
+      const anonymousPage = await anonymous.newPage();
+      const anonymousCratePage = new CratePage(anonymousPage);
+      await anonymousPage.goto(`${baseUrl}/crate?name=test_lib&tab=dependents`);
+      await anonymousCratePage.waitForCrateData();
+      await expect(anonymousCratePage.dependentsSummary).toHaveText(
+        "Used by 1 crate, none is behind the latest version 3.0.0. Restricted crates are not checked.");
+      await expect(anonymousCratePage.restrictedDependentRows).toHaveCount(1);
+      await expect(anonymousCratePage.dependentRows).toHaveCount(0);
+      await expect(anonymousPage.getByTestId("crate-dependents")).not.toContainText("foo-bar");
+
+      // The admin has access and sees it
+      const cratePage = new CratePage(page);
+      await page.goto(`${baseUrl}/crate?name=test_lib&tab=dependents`);
+      await cratePage.waitForCrateData();
+      await expect(cratePage.dependentRows).toHaveCount(1);
+      await expect(cratePage.restrictedDependentRows).toHaveCount(0);
+    } finally {
+      await anonymous.close();
+      expect(await setRestricted(false)).toBe(200);
+    }
   });
 
   test("crate cards link to the repository", async ({ page }) => {

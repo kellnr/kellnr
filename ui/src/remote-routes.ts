@@ -34,6 +34,7 @@ export const CRATE_OWNERS = (crate_name: string) => `./api/v1/crates/${encodeURI
 export const CRATE_OWNER = (crate_name: string, name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/owners/${encodeURIComponent(name)}`;
 
 export const CRATE_DATA = "./api/v1/ui/crate_data";
+export const CRATE_DEPENDENTS = "./api/v1/ui/crate_dependents";
 export const CRATESIO_DATA = "./api/v1/ui/cratesio_data";
 export const CRATES = "./api/v1/ui/crates";
 export const CRATE_DELETE = (name: string) => `./api/v1/ui/crates/${encodeURIComponent(name)}`;

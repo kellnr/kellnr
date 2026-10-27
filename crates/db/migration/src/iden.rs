@@ -313,3 +313,15 @@ pub enum WebhookIden {
     Table,
     Secret,
 }
+
+#[derive(Iden, Copy, Clone)]
+pub enum CrateDependencyIden {
+    #[iden = "crate_dependency"]
+    Table,
+    Id,
+    #[iden = "crate_index_fk"]
+    CrateIndexFk,
+    Name,
+    VersionReq,
+    Kind,
+}

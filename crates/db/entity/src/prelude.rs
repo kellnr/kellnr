@@ -5,6 +5,7 @@ pub use super::crate_author::Entity as CrateAuthor;
 pub use super::crate_author_to_crate::Entity as CrateAuthorToCrate;
 pub use super::crate_category::Entity as CrateCategory;
 pub use super::crate_category_to_crate::Entity as CrateCategoryToCrate;
+pub use super::crate_dependency::Entity as CrateDependency;
 pub use super::crate_group::Entity as CrateGroup;
 pub use super::crate_index::Entity as CrateIndex;
 pub use super::crate_keyword::Entity as CrateKeyword;

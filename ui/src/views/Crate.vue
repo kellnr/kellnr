@@ -34,6 +34,7 @@
         <v-tab value="about" data-testid="crate-tab-about">About</v-tab>
         <v-tab value="dependencies" data-testid="crate-tab-deps">Dependencies</v-tab>
         <v-tab value="versions" data-testid="crate-tab-versions">Versions</v-tab>
+        <v-tab value="dependents" data-testid="crate-tab-dependents">Used by</v-tab>
         <v-tab v-if="canManageCrate" value="settings" data-testid="crate-tab-settings">Settings</v-tab>
         <v-tab v-if="store.loggedInUserIsAdmin" value="admin" data-testid="crate-tab-admin">Admin</v-tab>
       </v-tabs>
@@ -104,6 +105,9 @@
           </v-card>
         </template>
 
+        <!-- Used by Tab, loads the dependents when it is opened -->
+        <CrateDependentsTab v-if="tab === 'dependents'" :crate-name="crate.name" />
+
         <!-- About (Meta) Tab -->
         <v-card v-if="tab === 'about'" class="mb-4 content-card" elevation="0">
           <About :crate="crate" :selected-version="selected_version" :flattened-features="flattenedFeatures"
@@ -148,6 +152,7 @@ import CrateSidebar from "../components/CrateSidebar.vue";
 import About from "../components/About.vue";
 import CrateSettingsTab from "../components/crate/CrateSettingsTab.vue";
 import CrateAdminTab from "../components/crate/CrateAdminTab.vue";
+import CrateDependentsTab from "../components/crate/CrateDependentsTab.vue";
 import CrateAccessBadge from "../components/crate/CrateAccessBadge.vue";
 import { SectionHeader } from "../components/common";
 import { computed, nextTick, onBeforeMount, ref, watch } from "vue";
@@ -177,12 +182,12 @@ const snackbarText = ref('');
 // Expose crate as computed for template compatibility
 const crate = computed(() => crateData.value);
 
-type CrateTab = "readme" | "about" | "dependencies" | "versions" | "settings" | "admin"
+type CrateTab = "readme" | "about" | "dependencies" | "versions" | "dependents" | "settings" | "admin"
 
 // The tab from the URL if the crate has it, else the readme if there is one
 function tabFromRoute(): CrateTab {
   const requested = route.query.tab?.toString()
-  const available: CrateTab[] = ["about", "dependencies", "versions"]
+  const available: CrateTab[] = ["about", "dependencies", "versions", "dependents"]
   if (selected_version.value.readme) available.push("readme")
   if (canManageCrate.value) available.push("settings")
   if (store.loggedInUserIsAdmin) available.push("admin")

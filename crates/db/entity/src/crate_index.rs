@@ -29,6 +29,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::crate_dependency::Entity")]
+    CrateDependency,
     #[sea_orm(
         belongs_to = "super::krate::Entity",
         from = "Column::CrateFk",
@@ -37,6 +39,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Krate,
+}
+
+impl Related<super::crate_dependency::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CrateDependency.def()
+    }
 }
 
 impl Related<super::krate::Entity> for Entity {

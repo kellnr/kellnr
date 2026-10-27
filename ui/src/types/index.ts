@@ -43,6 +43,9 @@ export type {
   CrateData,
   CrateVersionData,
   CrateRegistryDep,
+  CrateDependents,
+  CrateDependent,
+  DependentRequirement,
   CrateAccessData,
   CrateGroup,
 } from './crate_data'

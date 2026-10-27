@@ -12,6 +12,11 @@ mod m20261024_000002_hash_session_tokens;
 mod m20261025_000001_auth_token_dates;
 mod m20261025_000002_crate_meta_size;
 mod m20261025_000003_crate_meta_publisher;
+mod m20261027_000001_crate_dependency;
+
+/// Fills the dependency table from the index, as the migration does. Public
+/// for the database tests.
+pub use m20261027_000001_crate_dependency::fill_dependencies as fill_crate_dependencies;
 
 pub struct Migrator;
 
@@ -31,6 +36,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261025_000001_auth_token_dates::Migration),
             Box::new(m20261025_000002_crate_meta_size::Migration),
             Box::new(m20261025_000003_crate_meta_publisher::Migration),
+            Box::new(m20261027_000001_crate_dependency::Migration),
         ]
     }
 }

@@ -7,6 +7,7 @@ pub mod crate_author;
 pub mod crate_author_to_crate;
 pub mod crate_category;
 pub mod crate_category_to_crate;
+pub mod crate_dependency;
 pub mod crate_group;
 pub mod crate_index;
 pub mod crate_keyword;
