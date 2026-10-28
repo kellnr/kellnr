@@ -1,0 +1,12 @@
+[package]
+name = "consumer-allowed"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Both licenses are allowed: MIT, and MIT OR Apache-2.0
+[dependencies]
+mit-lib = { version = "1.0", registry = "kellnr-test" }
+cfg-if = "=1.0.0"
+
+[workspace]

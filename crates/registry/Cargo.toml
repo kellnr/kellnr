@@ -14,8 +14,10 @@ documentation.workspace = true
 kellnr-appstate.workspace = true
 kellnr-auth.workspace = true
 kellnr-common.workspace = true
+kellnr-cratesio-sync.workspace = true
 kellnr-db.workspace = true
 kellnr-error.workspace = true
+kellnr-filter.workspace = true
 kellnr-settings.workspace = true
 kellnr-storage.workspace = true
 kellnr-webhooks.workspace = true
@@ -42,6 +44,7 @@ mockall.workspace = true
 rand.workspace = true
 rm_rf.workspace = true
 sha256.workspace = true
+tempfile.workspace = true
 tower.workspace = true
 
 

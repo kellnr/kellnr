@@ -184,6 +184,61 @@ test.describe("CLI Tests", () => {
     });
   });
 
+  test.describe("Filter Settings", () => {
+    test("kellnr config show splits comma-separated filter lists from env vars", async () => {
+      const result = await exec(kellnrBinary, ["config", "show"], {
+        env: {
+          ...cleanEnv(),
+          KELLNR_CRATESIO_FILTER__LICENSE_ALLOWED: "MIT,Apache-2.0",
+          KELLNR_REGISTRY_FILTER__LICENSE_EXEMPT_CRATES: "ring,openssl",
+        },
+      });
+
+      expect(result.exitCode).toBe(0);
+      const section = (name: string) =>
+        String(result.stdout).split(`[${name}]`)[1].split("\n[")[0];
+      expect(section("cratesio_filter")).toMatch(
+        /license_allowed = \[\s*"MIT",\s*"Apache-2.0",\s*\]/
+      );
+      expect(section("registry_filter")).toMatch(
+        /license_exempt_crates = \[\s*"ring",\s*"openssl",\s*\]/
+      );
+    });
+
+    test("kellnr start with an invalid license from env vars fails", async () => {
+      const result = await exec(kellnrBinary, ["start", "-d", tempDir], {
+        env: {
+          ...cleanEnv(),
+          KELLNR_CRATESIO_FILTER__LICENSE_ENABLED: "true",
+          KELLNR_CRATESIO_FILTER__LICENSE_ALLOWED: "MIT,MTI",
+        },
+      });
+
+      // The list is split, so only the invalid entry is reported
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        'Invalid license "MTI" in cratesio_filter.license_allowed'
+      );
+    });
+
+    test("kellnr start with an invalid license from CLI flags fails", async () => {
+      const result = await exec(kellnrBinary, [
+        "start",
+        "-d",
+        tempDir,
+        "--registry-filter-license-enabled",
+        "true",
+        "--registry-filter-license-allowed",
+        "Apache-2.0,MTI",
+      ]);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        'Invalid license "MTI" in registry_filter.license_allowed'
+      );
+    });
+  });
+
   test.describe("Start Command Validation", () => {
     test("kellnr start without data_dir shows helpful error", async () => {
       // Create an empty config file to override any compile-time or default configs

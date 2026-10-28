@@ -4,6 +4,7 @@ pub mod crate_overview;
 pub mod cratesio_downloader;
 pub mod cratesio_prefetch_msg;
 pub mod index_metadata;
+pub mod license;
 pub mod login_throttle;
 pub mod name_or_description;
 pub mod normalized_name;

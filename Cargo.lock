@@ -4174,9 +4174,11 @@ dependencies = [
  "kellnr-appstate",
  "kellnr-auth",
  "kellnr-common",
+ "kellnr-cratesio-sync",
  "kellnr-db",
  "kellnr-docs",
  "kellnr-embedded-resources",
+ "kellnr-filter",
  "kellnr-index",
  "kellnr-registry",
  "kellnr-settings",
@@ -4213,7 +4215,9 @@ dependencies = [
  "cookie",
  "flume",
  "kellnr-common",
+ "kellnr-cratesio-sync",
  "kellnr-db",
+ "kellnr-filter",
  "kellnr-settings",
  "kellnr-storage",
  "provcfg",
@@ -4268,6 +4272,22 @@ dependencies = [
  "tracing",
  "url",
  "utoipa",
+]
+
+[[package]]
+name = "kellnr-cratesio-sync"
+version = "6.12.0"
+dependencies = [
+ "axum",
+ "futures-util",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-settings",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4379,6 +4399,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kellnr-filter"
+version = "6.12.0"
+dependencies = [
+ "kellnr-common",
+ "kellnr-settings",
+ "moka",
+ "spdx",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "kellnr-index"
 version = "6.12.0"
 dependencies = [
@@ -4390,7 +4421,9 @@ dependencies = [
  "kellnr-appstate",
  "kellnr-auth",
  "kellnr-common",
+ "kellnr-cratesio-sync",
  "kellnr-db",
+ "kellnr-filter",
  "kellnr-settings",
  "kellnr-storage",
  "mockall",
@@ -4398,6 +4431,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha256",
+ "tempfile",
  "tokio",
  "tower",
  "tracing",
@@ -4436,8 +4471,10 @@ dependencies = [
  "kellnr-appstate",
  "kellnr-auth",
  "kellnr-common",
+ "kellnr-cratesio-sync",
  "kellnr-db",
  "kellnr-error",
+ "kellnr-filter",
  "kellnr-settings",
  "kellnr-storage",
  "kellnr-webhooks",
@@ -4448,6 +4485,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha256",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tower",
@@ -4517,6 +4555,7 @@ dependencies = [
  "kellnr-common",
  "kellnr-db",
  "kellnr-docs",
+ "kellnr-filter",
  "kellnr-registry",
  "kellnr-settings",
  "kellnr-storage",
@@ -7151,6 +7190,15 @@ checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "spdx"
+version = "0.13.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "646c5a367da914e3babcb9cd8e91c37ccaac42325b8f86f036513ad103f2a716"
+dependencies = [
+ "smallvec",
 ]
 
 [[package]]

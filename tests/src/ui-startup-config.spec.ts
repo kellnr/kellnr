@@ -4,6 +4,7 @@
  * Tests:
  * - Expand all opens all config sections
  * - Collapse all closes all config sections
+ * - The license filter sections show their settings
  *
  * Uses the same local Kellnr + Playwright pattern as other ui-*.spec.ts tests.
  */
@@ -34,6 +35,8 @@ test.describe("Startup config UI Tests", () => {
       name: `kellnr-startup-config-${suffix}`,
       env: {
         KELLNR_REGISTRY__AUTH_REQUIRED: "true",
+        KELLNR_CRATESIO_FILTER__LICENSE_ENABLED: "true",
+        KELLNR_CRATESIO_FILTER__LICENSE_ALLOWED: "MIT,Apache-2.0",
       },
     });
 
@@ -114,5 +117,53 @@ test.describe("Startup config UI Tests", () => {
 
     // After collapse all, panel content should be hidden (Vuetify collapses the panel body)
     await expect(dataDirRow).toBeHidden();
+  });
+
+  test("License filter sections show their settings", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+    const loginPage = new LoginPage(page);
+    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await loginPage.waitForNavigation("/");
+
+    await page.waitForTimeout(1000);
+
+    await page.goto(`${baseUrl}/settings`);
+    await page.waitForTimeout(500);
+
+    const configNavItem = page.getByTestId("nav-startup-config");
+    await expect(configNavItem).toBeVisible();
+    await configNavItem.click();
+    await page.waitForTimeout(500);
+
+    await page.getByRole("button", { name: "Expand all" }).click();
+    await page.waitForTimeout(300);
+
+    const cratesioPanel = page
+      .locator(".v-expansion-panel")
+      .filter({ hasText: "Crates.io Filter" });
+    const registryPanel = page
+      .locator(".v-expansion-panel")
+      .filter({ hasText: "Registry Filter" });
+    await expect(cratesioPanel).toBeVisible();
+    await expect(registryPanel).toBeVisible();
+
+    // Values set through environment variables, with the list split
+    const allowed = cratesioPanel
+      .locator(".config-row")
+      .filter({ hasText: "Allowed Licenses" });
+    await expect(allowed).toContainText("MIT");
+    await expect(allowed).toContainText("Apache-2.0");
+    await expect(allowed).toContainText("KELLNR_CRATESIO_FILTER__LICENSE_ALLOWED");
+    await expect(
+      cratesioPanel.locator(".config-row").filter({ hasText: "License Filter Enabled" })
+    ).toContainText("true");
+
+    // Defaults of the registry filter
+    await expect(
+      registryPanel.locator(".config-row").filter({ hasText: "Unknown License" })
+    ).toContainText("deny");
+    await expect(
+      registryPanel.locator(".config-row").filter({ hasText: "License-Exempt Crates" })
+    ).toContainText("--registry-filter-license-exempt-crates");
   });
 });

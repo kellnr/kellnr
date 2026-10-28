@@ -12,8 +12,10 @@ use kellnr_common::cratesio_downloader::build_client;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::login_throttle::LoginThrottle;
 use kellnr_common::token_cache::TokenCacheManager;
+use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::download_counter::DownloadCounter;
 use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
+use kellnr_filter::DownloadFilters;
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
@@ -142,6 +144,8 @@ async fn run_server(resolved: ResolvedSettings) {
         std::process::exit(1);
     }
 
+    let download_filters = Arc::new(init_download_filters(&settings));
+
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
     // Configure tracing subscriber
@@ -170,6 +174,13 @@ async fn run_server(resolved: ResolvedSettings) {
     let (cratesio_prefetch_sender, cratesio_prefetch_receiver) =
         flume::unbounded::<CratesioPrefetchMsg>();
 
+    let proxy_client = build_client(
+        &settings.proxy.user_agent,
+        Duration::from_secs(settings.proxy.connect_timeout_seconds),
+        Duration::from_secs(settings.proxy.request_timeout_seconds),
+    );
+    let cratesio_sync = CratesioSync::new(db.clone(), proxy_client.clone(), &settings.proxy);
+
     let prefetch_args = CratesIoPrefetchArgs {
         db: db.clone(),
         cache: Cache::builder()
@@ -179,8 +190,9 @@ async fn run_server(resolved: ResolvedSettings) {
         download_on_update: settings.proxy.download_on_update,
         storage: cratesio_storage.clone(),
         url: settings.proxy.url.clone(),
-        index: settings.proxy.index.clone(),
         proxy_settings: Arc::new(settings.proxy.clone()),
+        sync: cratesio_sync.clone(),
+        filters: download_filters.cratesio.clone(),
     };
 
     init_cratesio_prefetch_thread(
@@ -316,12 +328,6 @@ async fn run_server(resolved: ResolvedSettings) {
     let download_counter_for_shutdown = download_counter.clone();
     let sponsor_links_enabled = settings.registry.sponsor_links_enabled;
 
-    let proxy_client = build_client(
-        &settings.proxy.user_agent,
-        Duration::from_secs(settings.proxy.connect_timeout_seconds),
-        Duration::from_secs(settings.proxy.request_timeout_seconds),
-    );
-
     let state = AppStateData {
         db,
         signing_key,
@@ -336,6 +342,8 @@ async fn run_server(resolved: ResolvedSettings) {
         toolchain_storage,
         download_counter,
         proxy_client,
+        cratesio_sync,
+        download_filters,
     };
 
     // Create router using the route module
@@ -486,6 +494,13 @@ fn init_docs_storage(settings: &Settings) -> DocsStorage {
         Box::new(FSStorage::new(&settings.docs_path()).expect("Failed to create FS storage."))
     };
     DocsStorage::new(storage)
+}
+
+fn init_download_filters(settings: &Settings) -> DownloadFilters {
+    DownloadFilters::from_settings(settings).unwrap_or_else(|e| {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    })
 }
 
 fn init_cratesio_storage(settings: &Settings) -> CratesIoCrateStorage {

@@ -45,8 +45,9 @@ use tracing::warn;
 use crate::error::DbError;
 use crate::password::{PwdVerification, hash_pwd, hash_token, verify_pwd};
 use crate::provider::{
-    ChannelInfo, CrateSort, CrateTagFilter, CrateVisibility, DbResult, OAuth2StateData,
-    PrefetchState, SessionInfo, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
+    ChannelInfo, CrateSort, CrateTagFilter, CrateVisibility, CratesioVersionMeta, DbResult,
+    OAuth2StateData, PrefetchState, SessionInfo, ToolchainComponentInfo, ToolchainTargetInfo,
+    ToolchainWithTargets,
 };
 use crate::tables::init_database;
 use crate::{
@@ -2225,6 +2226,7 @@ impl DbProvider for Database {
         last_modified: &str,
         description: Option<String>,
         indices: &[IndexMetadata],
+        licenses: &HashMap<String, String>,
     ) -> DbResult<Prefetch> {
         let normalized_name = crate_name.to_normalized();
 
@@ -2336,9 +2338,25 @@ impl DbProvider for Database {
                         "https://docs.rs/{normalized_name}/{}",
                         index.vers,
                     ))),
+                    license: Set(licenses.get(&index.vers).cloned()),
                 };
 
                 meta.insert(&txn).await?;
+            }
+        }
+
+        // The license of a published version cannot change upstream, so only
+        // versions cached before it was fetched successfully get it here.
+        let unlicensed = cratesio_meta::Entity::find()
+            .filter(cratesio_meta::Column::CratesIoFk.eq(krate.id))
+            .filter(cratesio_meta::Column::License.is_null())
+            .all(&txn)
+            .await?;
+        for meta in unlicensed {
+            if let Some(license) = licenses.get(&meta.version) {
+                let mut meta: cratesio_meta::ActiveModel = meta.into();
+                meta.license = Set(Some(license.clone()));
+                meta.update(&txn).await?;
             }
         }
 
@@ -2366,18 +2384,58 @@ impl DbProvider for Database {
         Ok(msgs)
     }
 
-    async fn get_cratesio_cksum(
+    async fn get_cratesio_version_meta(
+        &self,
+        crate_name: &NormalizedName,
+        version: &Version,
+    ) -> DbResult<Option<CratesioVersionMeta>> {
+        #[derive(FromQueryResult)]
+        struct Meta {
+            cksum: String,
+            license: Option<String>,
+        }
+
+        // One query, as it runs for every download from the crates.io proxy
+        let version = version.to_string();
+        let meta_version = version.clone();
+        let meta_of_version =
+            cratesio_crate::Relation::CratesioMeta
+                .def()
+                .on_condition(move |_crate, meta| {
+                    Condition::all().add(
+                        Expr::col((meta, cratesio_meta::Column::Version)).eq(meta_version.clone()),
+                    )
+                });
+        let meta = cratesio_index::Entity::find()
+            .select_only()
+            .column(cratesio_index::Column::Cksum)
+            .column(cratesio_meta::Column::License)
+            .inner_join(cratesio_crate::Entity)
+            .join(JoinType::LeftJoin, meta_of_version)
+            .filter(cratesio_crate::Column::Name.eq(crate_name))
+            .filter(cratesio_index::Column::Vers.eq(version))
+            .into_model::<Meta>()
+            .one(&self.db_con)
+            .await?;
+
+        Ok(meta.map(|m| CratesioVersionMeta {
+            cksum: m.cksum,
+            license: m.license,
+        }))
+    }
+
+    async fn get_crate_license(
         &self,
         crate_name: &NormalizedName,
         version: &Version,
     ) -> DbResult<Option<String>> {
-        let index = cratesio_index::Entity::find()
-            .inner_join(cratesio_crate::Entity)
-            .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .filter(cratesio_index::Column::Vers.eq(version))
+        let meta = crate_meta::Entity::find()
+            .inner_join(krate::Entity)
+            .filter(krate::Column::Name.eq(crate_name))
+            .filter(crate_meta::Column::Version.eq(version))
             .one(&self.db_con)
             .await?;
-        Ok(index.map(|i| i.cksum))
+        Ok(meta.and_then(|m| m.license))
     }
 
     async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {

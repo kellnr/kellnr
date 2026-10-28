@@ -8,8 +8,10 @@ use flume::Sender;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::login_throttle::LoginThrottle;
 use kellnr_common::token_cache::TokenCacheManager;
+use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
+use kellnr_filter::DownloadFilters;
 use kellnr_settings::{Settings, SettingsProv};
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
@@ -58,6 +60,8 @@ pub struct AppStateData {
     pub toolchain_storage: Option<Arc<ToolchainStorage>>,
     pub download_counter: Arc<DownloadCounter>,
     pub proxy_client: Client,
+    pub cratesio_sync: CratesioSync,
+    pub download_filters: Arc<DownloadFilters>,
 }
 
 /// Build a defaults-only `SettingsProv`, every leaf reports
@@ -93,6 +97,8 @@ pub fn test_state() -> AppStateData {
         std::time::Duration::from_secs(settings.registry.auth_failed_attempts_window_seconds),
     ));
     let download_counter = Arc::new(DownloadCounter::new(db.clone(), 30));
+    let proxy_client = kellnr_common::cratesio_downloader::CLIENT.clone();
+    let cratesio_sync = CratesioSync::new(db.clone(), proxy_client.clone(), &settings.proxy);
     AppStateData {
         db,
         signing_key,
@@ -106,7 +112,9 @@ pub fn test_state() -> AppStateData {
         login_throttle,
         toolchain_storage: None, // Toolchain storage disabled in tests by default
         download_counter,
-        proxy_client: kellnr_common::cratesio_downloader::CLIENT.clone(),
+        proxy_client,
+        cratesio_sync,
+        download_filters: Arc::default(),
     }
 }
 

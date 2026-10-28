@@ -649,6 +649,12 @@ async fn delete_crate_versions_impl(
             error!("Failed to delete crate from database: {e:?}");
             return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
         }
+        // The version may be published again with another license
+        state
+            .download_filters
+            .registry
+            .licenses()
+            .forget(&name.to_normalized(), version);
 
         if let Err(e) = state.crate_storage.delete(name, version).await {
             error!("Failed to delete crate from storage: {e}");
@@ -1052,6 +1058,51 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
+
+    #[tokio::test]
+    async fn deleting_a_version_forgets_its_known_license() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let settings = Settings {
+            registry: kellnr_settings::Registry {
+                data_dir: data_dir.path().to_string_lossy().to_string(),
+                ..kellnr_settings::Registry::default()
+            },
+            ..Settings::default()
+        };
+        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+        let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, storage));
+        let docs_storage = Arc::new(DocsStorage::new(Box::new(
+            FSStorage::new(&settings.docs_path()).unwrap(),
+        ) as DynStorage));
+        let mut mock_db = MockDb::new();
+        mock_db.expect_delete_crate().returning(|_, _| Ok(()));
+        let state = AppStateData {
+            db: Arc::new(mock_db),
+            settings: Arc::new(settings),
+            crate_storage: crate_storage.clone(),
+            docs_storage,
+            ..kellnr_appstate::test_state()
+        };
+        let name = OriginalName::try_from("licensed").unwrap();
+        let version = Version::try_from("1.0.0").unwrap();
+        crate_storage
+            .put(&name, &version, Arc::from(b"crate".as_slice()))
+            .await
+            .unwrap();
+        let licenses = state.download_filters.registry.licenses();
+        licenses.insert(
+            &name.to_normalized(),
+            &version,
+            kellnr_filter::KnownLicense::Declared("MIT".to_string()),
+        );
+
+        delete_crate_versions_impl(&state, &name, Some(vec![version.clone()]))
+            .await
+            .unwrap();
+
+        // A version published again with another license is looked up anew
+        assert_eq!(None, licenses.get(&name.to_normalized(), &version));
+    }
 
     #[tokio::test]
     async fn settings_no_admin_returns_unauthorized() {

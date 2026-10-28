@@ -9,16 +9,16 @@ use kellnr_appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
 use kellnr_common::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use kellnr_common::index_metadata::IndexMetadata;
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::version::Version;
+use kellnr_cratesio_sync::{CratesioSync, SyncSource, Synced, crate_sub_path};
 use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
+use kellnr_filter::{CrateInfo, FilterChain, Verdict};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use moka::future::Cache;
 use reqwest::{Client, Url};
-use serde::Deserialize;
 use tracing::{error, trace, warn};
 
 use super::config_json::ConfigJson;
@@ -250,38 +250,6 @@ async fn background_update_thread(
     }
 }
 
-async fn fetch_cratesio_description(
-    name: &str,
-    proxy_settings: &kellnr_settings::Proxy,
-) -> Result<Option<String>, StatusCode> {
-    #[derive(Deserialize)]
-    struct Krate {
-        description: Option<String>,
-    }
-    #[derive(Deserialize)]
-    struct MinimalCrate {
-        #[serde(rename = "crate")]
-        krate: Krate,
-    }
-
-    let url = proxy_settings
-        .api
-        .join(name)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let response = get_client(proxy_settings)
-        .get(url)
-        .send()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let desc = response
-        .json::<MinimalCrate>()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(desc.krate.description)
-}
-
 #[derive(Clone)]
 pub struct CratesIoPrefetchArgs {
     pub db: Arc<dyn DbProvider>,
@@ -289,52 +257,63 @@ pub struct CratesIoPrefetchArgs {
     pub recv: flume::Receiver<CratesioPrefetchMsg>,
     pub download_on_update: bool,
     pub url: Url,
-    pub index: Url,
     pub storage: Arc<CratesIoCrateStorage>,
     pub proxy_settings: Arc<kellnr_settings::Proxy>,
+    pub sync: CratesioSync,
+    pub filters: FilterChain,
 }
 
 async fn cratesio_prefetch_thread(args: CratesIoPrefetchArgs) -> ! {
     loop {
-        match handle_cratesio_prefetch_msg(
-            &args.cache,
-            &args.recv,
-            &args.db,
-            &args.index,
-            &args.proxy_settings,
-        )
-        .await
+        let synced = handle_cratesio_prefetch_msg(&args).await;
+
+        // If the download_on_update flag is set, do not only update the prefetch data in
+        // the database, but also download the crates.
+        if let Some(metadata) = synced
+            && args.download_on_update
         {
-            UpdateNeeded::Update(data) => {
-                if let Err(e) = args
-                    .db
-                    .add_cratesio_prefetch_data(
-                        &data.name,
-                        &data.etag.unwrap_or_default(),
-                        &data.last_modified.unwrap_or_default(),
-                        data.description,
-                        &data.metadata,
-                    )
-                    .await
-                {
-                    error!(
-                        "Could not insert prefetch data from crates.io into database for {}: {e}",
-                        data.name
-                    );
-                }
-                // If the download_on_update flag is set, do not only update the prefetch data in
-                // the database, but also download the crates.
-                else if args.download_on_update {
-                    for idx in &data.metadata {
-                        predownload_crate(idx, &args).await;
-                    }
-                }
-            }
-            UpdateNeeded::NoUpdate => {
-                trace!("No update needed for crates.io prefetch data");
-            }
+            predownload_crates(&metadata, &args).await;
         }
     }
+}
+
+/// Download the versions into the cache, except for those the filters deny.
+async fn predownload_crates(metadata: &[IndexMetadata], args: &CratesIoPrefetchArgs) {
+    for idx in metadata {
+        if is_denied(idx, args).await {
+            trace!(
+                "Crate {} version {} is denied by the filters, skipping download",
+                idx.name, idx.vers
+            );
+        } else {
+            predownload_crate(idx, args).await;
+        }
+    }
+}
+
+/// Whether the crates.io filters deny the download of the version.
+async fn is_denied(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) -> bool {
+    if args.filters.is_empty() {
+        return false;
+    }
+    let name = OriginalName::from_unchecked(idx.name.clone()).to_normalized();
+    let version = Version::from_unchecked_str(&idx.vers);
+    let license = match args.db.get_cratesio_version_meta(&name, &version).await {
+        Ok(meta) => meta.and_then(|m| m.license),
+        Err(e) => {
+            error!(
+                "Could not get license of crate {} version {}: {e}",
+                idx.name, idx.vers
+            );
+            None
+        }
+    };
+    let verdict = args.filters.check(&CrateInfo {
+        name: &name,
+        version: &version,
+        license: license.as_deref(),
+    });
+    verdict != Verdict::Allow
 }
 
 async fn predownload_crate(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) {
@@ -397,115 +376,43 @@ async fn predownload_crate(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-struct MetadataDescription {
-    metadata: Vec<IndexMetadata>,
-    description: Option<String>,
-}
-
-async fn convert_index_data(
-    name: &str,
-    data: &str,
-    proxy_settings: &kellnr_settings::Proxy,
-) -> MetadataDescription {
-    let metadata: Result<Vec<IndexMetadata>, serde_json::Error> = data
-        .lines()
-        .map(serde_json::from_str::<IndexMetadata>)
-        .collect();
-
-    match metadata {
-        Ok(m) => {
-            let desc = fetch_cratesio_description(name, proxy_settings)
-                .await
-                .unwrap_or_else(|e| {
-                    error!("Could not fetch description for from crates.io {name}: {e:?}",);
-                    None
-                });
-
-            MetadataDescription {
-                metadata: m,
-                description: desc,
-            }
-        }
-        Err(e) => {
-            error!("Could not parse prefetch data from crates.io for {name}: {e}",);
-            MetadataDescription::default()
-        }
-    }
-}
-
-struct PrefetchData {
-    name: OriginalName,
-    metadata: Vec<IndexMetadata>,
-    description: Option<String>,
-    etag: Option<String>,
-    last_modified: Option<String>,
-}
-
-impl PrefetchData {
-    fn new(
-        name: OriginalName,
-        etag: Option<String>,
-        last_modified: Option<String>,
-        metadata_desc: MetadataDescription,
-    ) -> Self {
-        Self {
-            name,
-            metadata: metadata_desc.metadata,
-            description: metadata_desc.description,
-            etag,
-            last_modified,
-        }
-    }
-}
-
-enum UpdateNeeded {
-    Update(PrefetchData),
-    NoUpdate,
-}
-
-impl From<PrefetchData> for UpdateNeeded {
-    fn from(value: PrefetchData) -> Self {
-        Self::Update(value)
-    }
-}
-
-impl From<Option<PrefetchData>> for UpdateNeeded {
-    fn from(value: Option<PrefetchData>) -> Self {
-        match value {
-            Some(data) => Self::Update(data),
-            None => Self::NoUpdate,
-        }
-    }
-}
-
-async fn handle_cratesio_prefetch_msg(
-    cache: &Cache<OriginalName, String>,
-    channel: &flume::Receiver<CratesioPrefetchMsg>,
-    db: &Arc<dyn DbProvider>,
-    index_url: &Url,
-    proxy_settings: &kellnr_settings::Proxy,
-) -> UpdateNeeded {
-    match channel.recv_async().await {
+/// Handle the next message. Returns the index metadata if the crate was
+/// synced.
+async fn handle_cratesio_prefetch_msg(args: &CratesIoPrefetchArgs) -> Synced {
+    match args.recv.recv_async().await {
         Ok(CratesioPrefetchMsg::Insert(msg)) => {
             trace!("Inserting prefetch data from crates.io for {}", msg.name);
             let date = chrono::Utc::now().to_rfc3339();
-            cache.insert(msg.name.clone(), date).await;
-            let metadata_desc = convert_index_data(&msg.name, &msg.data, proxy_settings).await;
-            PrefetchData::new(msg.name, msg.etag, msg.last_modified, metadata_desc).into()
+            args.cache.insert(msg.name.clone(), date).await;
+            args.sync
+                .sync(
+                    &msg.name,
+                    SyncSource::Index {
+                        etag: msg.etag,
+                        last_modified: msg.last_modified,
+                        data: msg.data,
+                    },
+                )
+                .await
         }
         Ok(CratesioPrefetchMsg::Update(msg)) => {
             trace!("Updating prefetch data for {}", msg.name);
-            if let Some(date) = cache.get(&msg.name).await {
+            if let Some(date) = args.cache.get(&msg.name).await {
                 trace!("No update needed for {}. Last update: {date}", msg.name);
-                UpdateNeeded::NoUpdate
+                None
             } else {
-                cache
+                args.cache
                     .insert(msg.name.clone(), chrono::Utc::now().to_rfc3339())
                     .await;
-                fetch_index_data(msg, index_url, proxy_settings)
+                args.sync
+                    .sync(
+                        &msg.name,
+                        SyncSource::Refresh {
+                            etag: msg.etag,
+                            last_modified: msg.last_modified,
+                        },
+                    )
                     .await
-                    .into()
             }
         }
         Ok(CratesioPrefetchMsg::IncDownloadCnt(msg)) => {
@@ -513,98 +420,16 @@ async fn handle_cratesio_prefetch_msg(
                 "Incrementing download count for {} {}",
                 msg.name, msg.version
             );
-            db.increase_cached_download_counter(&msg.name, &msg.version)
+            args.db
+                .increase_cached_download_counter(&msg.name, &msg.version)
                 .await
                 .unwrap_or_else(|e| warn!("Failed to increase download counter: {e}"));
-            UpdateNeeded::NoUpdate
+            None
         }
         Err(e) => {
             error!("Could not receive prefetch message: {e}");
-            UpdateNeeded::NoUpdate
+            None
         }
-    }
-}
-
-async fn fetch_index_data(
-    msg: UpdateData,
-    index_url: &Url,
-    proxy_settings: &kellnr_settings::Proxy,
-) -> Option<PrefetchData> {
-    let name = &msg.name;
-    let etag = &msg.etag;
-    let last_modified = &msg.last_modified;
-
-    let url = match index_url.join(&crate_sub_path(&name.to_normalized())) {
-        Ok(url) => url,
-        Err(e) => {
-            error!("Could not parse crates.io url for {name}: {e}");
-            return None;
-        }
-    };
-
-    let max_retries = 3;
-    let mut i = 0;
-    let r = loop {
-        let mut request = get_client(proxy_settings).get(url.clone());
-        if let Some(etag) = etag.as_deref().filter(|e| !e.is_empty()) {
-            request = request.header("If-None-Match", etag);
-        }
-        if let Some(last_modified) = last_modified.as_deref().filter(|lm| !lm.is_empty()) {
-            request = request.header("If-Modified-Since", last_modified);
-        }
-        match request.send().await {
-            Ok(response) => break Some(response),
-            Err(e) => {
-                i += 1;
-                warn!(
-                    "Retry {i}/{max_retries} - Could not fetch index from crates.io for {name}: {e}"
-                );
-            }
-        }
-        if i >= max_retries {
-            error!("Could not fetch index from crates.io for {name} after 3 tries",);
-            break None;
-        }
-    };
-
-    if let Some(r) = r {
-        match r.status() {
-            StatusCode::NOT_MODIFIED => {
-                trace!("Index not-modified for {name}");
-                None
-            }
-            StatusCode::NOT_FOUND => {
-                trace!("Index not found for {name}");
-                None
-            }
-            StatusCode::OK => {
-                let headers = r.headers();
-                let etag = headers
-                    .get("ETag")
-                    .map(|h| h.to_str().unwrap_or_default().to_string());
-                let last_modified = headers
-                    .get("Last-Modified")
-                    .map(|h| h.to_str().unwrap_or_default().to_string());
-
-                let data = match r.text().await {
-                    Ok(data) => data,
-                    Err(e) => {
-                        error!("Could not read index from crates.io for {name}: {e}");
-                        return None;
-                    }
-                };
-
-                let metadata_desc = convert_index_data(&msg.name, &data, proxy_settings).await;
-                let prefetch_data = PrefetchData::new(msg.name, etag, last_modified, metadata_desc);
-                Some(prefetch_data)
-            }
-            s => {
-                error!("Unexpected status code from crates.io for {name}: {s}");
-                None
-            }
-        }
-    } else {
-        None
     }
 }
 
@@ -677,22 +502,6 @@ async fn fetch_cratesio_prefetch(
     }
 }
 
-fn crate_sub_path(name: &NormalizedName) -> String {
-    match name.len() {
-        1 => format!("1/{name}"),
-        2 => format!("2/{name}"),
-        3 => {
-            let first_char = &name[0..1];
-            format!("3/{first_char}/{name}")
-        }
-        _ => {
-            let first_two = &name[0..2];
-            let second_two = &name[2..4];
-            format!("{first_two}/{second_two}/{name}")
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::mem;
@@ -710,28 +519,6 @@ mod tests {
 
     use super::*;
     use crate::config_json::ConfigJson;
-
-    #[tokio::test]
-    async fn fetch_cratesio_description_works() {
-        let proxy_settings = kellnr_settings::Proxy::default();
-        let desc = fetch_cratesio_description("rocket", &proxy_settings)
-            .await
-            .unwrap();
-        assert_eq!(
-            Some(
-                "Web framework with a focus on usability, security, extensibility, and speed.\n"
-                    .to_string()
-            ),
-            desc
-        );
-    }
-
-    #[tokio::test]
-    async fn fetch_cratesio_description_not_existent_crate() {
-        let proxy_settings = kellnr_settings::Proxy::default();
-        let desc = fetch_cratesio_description("does_not_exists123", &proxy_settings).await;
-        assert_eq!(Err(StatusCode::INTERNAL_SERVER_ERROR), desc);
-    }
 
     #[tokio::test]
     async fn fetch_cratesio_prefetch_works() {
@@ -898,7 +685,7 @@ mod tests {
 
         mock_db
             .expect_add_cratesio_prefetch_data()
-            .returning(move |_, _, _, _, _| {
+            .returning(move |_, _, _, _, _, _| {
                 Ok(Prefetch {
                     data: vec![0x1, 0x2, 0x3],
                     etag: "etag".to_string(),
@@ -930,5 +717,271 @@ mod tests {
         Router::new()
             .nest("/api/v1/cratesio", cratesio_prefetch)
             .with_state(state)
+    }
+
+    mod worker {
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+
+        use axum::extract::Path as AxumPath;
+        use axum::response::IntoResponse;
+        use kellnr_common::license::UNKNOWN_LICENSE;
+        use kellnr_db::provider::CratesioVersionMeta;
+        use kellnr_settings::CratesioFilter;
+        use kellnr_storage::cached_crate_storage::DynStorage;
+        use kellnr_storage::fs_storage::FSStorage;
+
+        use super::*;
+
+        const CRATE: &[u8] = b"crate bytes";
+        /// Versions of the crate "upstream" with their license.
+        const VERSIONS: &[(&str, &str)] = &[("1.0.0", "MIT"), ("1.1.0", "GPL-3.0-only")];
+
+        #[derive(Default)]
+        struct Upstream {
+            index_calls: AtomicUsize,
+            api_calls: AtomicUsize,
+            downloads: Mutex<Vec<String>>,
+        }
+
+        fn index() -> String {
+            let cksum = sha256::digest(CRATE);
+            VERSIONS
+                .iter()
+                .map(|(vers, _)| {
+                    format!(
+                        r#"{{"name":"upstream","vers":"{vers}","deps":[],"cksum":"{cksum}","features":{{}},"yanked":false}}"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+
+        /// A fake crates.io with the index, the API and downloads of "upstream".
+        async fn fake_cratesio(upstream: Arc<Upstream>) -> kellnr_settings::Proxy {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let (index_up, api_up, dl_up) = (upstream.clone(), upstream.clone(), upstream);
+            let app = Router::new()
+                .route(
+                    "/index/{a}/{b}/{name}",
+                    get(move || {
+                        let upstream = index_up.clone();
+                        async move {
+                            upstream.index_calls.fetch_add(1, Ordering::SeqCst);
+                            ([(header::ETAG, "etag")], index())
+                        }
+                    }),
+                )
+                .route(
+                    "/api/{name}",
+                    get(move || {
+                        let upstream = api_up.clone();
+                        async move {
+                            upstream.api_calls.fetch_add(1, Ordering::SeqCst);
+                            let versions: Vec<_> = VERSIONS
+                                .iter()
+                                .map(|(num, license)| serde_json::json!({"num": num, "license": license}))
+                                .collect();
+                            serde_json::json!({"crate": {"description": null}, "versions": versions})
+                                .to_string()
+                        }
+                    }),
+                )
+                .route(
+                    "/dl/{name}/{version}/download",
+                    get(move |AxumPath((_, version)): AxumPath<(String, String)>| {
+                        let upstream = dl_up.clone();
+                        async move {
+                            upstream.downloads.lock().unwrap().push(version);
+                            CRATE.into_response()
+                        }
+                    }),
+                );
+            tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+            kellnr_settings::Proxy {
+                index: Url::parse(&format!("http://{addr}/index/")).unwrap(),
+                api: Url::parse(&format!("http://{addr}/api/")).unwrap(),
+                url: Url::parse(&format!("http://{addr}/dl/")).unwrap(),
+                ..kellnr_settings::Proxy::default()
+            }
+        }
+
+        type Stored = Arc<Mutex<Vec<HashMap<String, String>>>>;
+
+        /// A database without stored crates that records the licenses written.
+        fn recording_db() -> (MockDb, Stored) {
+            let stored: Stored = Arc::default();
+            let mut db = MockDb::new();
+            db.expect_is_cratesio_cache_up_to_date()
+                .returning(|_, _, _| Ok(PrefetchState::NotFound));
+            db.expect_add_cratesio_prefetch_data().returning({
+                let stored = stored.clone();
+                move |_, _, _, _, _, licenses| {
+                    stored.lock().unwrap().push(licenses.clone());
+                    Ok(Prefetch {
+                        data: vec![],
+                        etag: String::new(),
+                        last_modified: String::new(),
+                    })
+                }
+            });
+            (db, stored)
+        }
+
+        struct Worker {
+            args: CratesIoPrefetchArgs,
+            sender: flume::Sender<CratesioPrefetchMsg>,
+            _data_dir: tempfile::TempDir,
+        }
+
+        fn worker(db: MockDb, proxy: &kellnr_settings::Proxy, filters: FilterChain) -> Worker {
+            let data_dir = tempfile::tempdir().unwrap();
+            let settings = Settings {
+                registry: kellnr_settings::Registry {
+                    data_dir: data_dir.path().to_string_lossy().to_string(),
+                    ..kellnr_settings::Registry::default()
+                },
+                ..Settings::default()
+            };
+            let storage =
+                Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
+            let db: Arc<dyn DbProvider> = Arc::new(db);
+            let (sender, recv) = flume::unbounded();
+            let args = CratesIoPrefetchArgs {
+                db: db.clone(),
+                cache: Cache::builder().build(),
+                recv,
+                download_on_update: true,
+                url: proxy.url.clone(),
+                storage: Arc::new(CratesIoCrateStorage::new(&settings, storage)),
+                proxy_settings: Arc::new(proxy.clone()),
+                sync: CratesioSync::new(db, Client::new(), proxy),
+                filters,
+            };
+            Worker {
+                args,
+                sender,
+                _data_dir: data_dir,
+            }
+        }
+
+        fn upstream_name() -> OriginalName {
+            OriginalName::try_from("upstream").unwrap()
+        }
+
+        fn metadata() -> Vec<IndexMetadata> {
+            index()
+                .lines()
+                .map(|l| serde_json::from_str(l).unwrap())
+                .collect()
+        }
+
+        async fn is_cached(worker: &Worker, version: &str) -> bool {
+            worker
+                .args
+                .storage
+                .exists(&upstream_name(), &Version::from_unchecked_str(version))
+                .await
+                .unwrap()
+        }
+
+        #[tokio::test]
+        async fn predownload_skips_versions_denied_by_filters() {
+            let upstream = Arc::new(Upstream::default());
+            let proxy = fake_cratesio(upstream.clone()).await;
+            let mut db = MockDb::new();
+            db.expect_get_cratesio_version_meta()
+                .returning(|_, version| {
+                    let license = VERSIONS
+                        .iter()
+                        .find(|(v, _)| *v == version.to_string())
+                        .map(|(_, l)| (*l).to_string());
+                    Ok(Some(CratesioVersionMeta {
+                        cksum: sha256::digest(CRATE),
+                        license,
+                    }))
+                });
+            let filters = FilterChain::cratesio(&CratesioFilter {
+                license_enabled: true,
+                license_allowed: vec!["MIT".to_string()],
+                ..CratesioFilter::default()
+            })
+            .unwrap();
+            let worker = worker(db, &proxy, filters);
+
+            predownload_crates(&metadata(), &worker.args).await;
+
+            assert_eq!(vec!["1.0.0"], *upstream.downloads.lock().unwrap());
+            assert!(is_cached(&worker, "1.0.0").await);
+            assert!(!is_cached(&worker, "1.1.0").await);
+        }
+
+        #[tokio::test]
+        async fn predownload_without_filters_downloads_all_versions() {
+            let upstream = Arc::new(Upstream::default());
+            let proxy = fake_cratesio(upstream.clone()).await;
+            // No license lookup is expected, the mock panics on unexpected calls
+            let worker = worker(MockDb::new(), &proxy, FilterChain::default());
+
+            predownload_crates(&metadata(), &worker.args).await;
+
+            assert!(is_cached(&worker, "1.0.0").await);
+            assert!(is_cached(&worker, "1.1.0").await);
+        }
+
+        #[tokio::test]
+        async fn insert_message_syncs_the_index_it_carries() {
+            let upstream = Arc::new(Upstream::default());
+            let proxy = fake_cratesio(upstream.clone()).await;
+            let (db, stored) = recording_db();
+            let worker = worker(db, &proxy, FilterChain::default());
+
+            worker
+                .sender
+                .send(CratesioPrefetchMsg::Insert(InsertData {
+                    name: upstream_name(),
+                    etag: Some("etag".to_string()),
+                    last_modified: None,
+                    data: index(),
+                }))
+                .unwrap();
+            let synced = handle_cratesio_prefetch_msg(&worker.args).await;
+
+            assert_eq!(2, synced.unwrap().len());
+            // The index came with the message, only the API is called
+            assert_eq!(0, upstream.index_calls.load(Ordering::SeqCst));
+            assert_eq!(1, upstream.api_calls.load(Ordering::SeqCst));
+            let stored = stored.lock().unwrap();
+            assert_eq!(Some(&"MIT".to_string()), stored[0].get("1.0.0"));
+            assert_eq!(Some(&"GPL-3.0-only".to_string()), stored[0].get("1.1.0"));
+            assert!(!stored[0].values().any(|l| l == UNKNOWN_LICENSE));
+        }
+
+        #[tokio::test]
+        async fn update_message_refreshes_once_within_the_cache_timeout() {
+            let upstream = Arc::new(Upstream::default());
+            let proxy = fake_cratesio(upstream.clone()).await;
+            let (db, stored) = recording_db();
+            let worker = worker(db, &proxy, FilterChain::default());
+            let update = || {
+                CratesioPrefetchMsg::Update(UpdateData {
+                    name: upstream_name(),
+                    etag: Some("old-etag".to_string()),
+                    last_modified: None,
+                })
+            };
+
+            worker.sender.send(update()).unwrap();
+            let first = handle_cratesio_prefetch_msg(&worker.args).await;
+            worker.sender.send(update()).unwrap();
+            let second = handle_cratesio_prefetch_msg(&worker.args).await;
+
+            assert_eq!(2, first.unwrap().len());
+            assert!(second.is_none());
+            assert_eq!(1, upstream.index_calls.load(Ordering::SeqCst));
+            assert_eq!(1, stored.lock().unwrap().len());
+        }
     }
 }

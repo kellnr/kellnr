@@ -31,6 +31,8 @@ export type SettingsDefaults = {
   s3: S3
   toolchain: Toolchain
   webhooks: Webhooks
+  cratesio_filter: CrateFilter
+  registry_filter: CrateFilter
 }
 
 export type LeafKind = 'boolean' | 'number' | 'string' | 'array';
@@ -60,6 +62,8 @@ export type Settings = {
   s3: S3
   toolchain: Toolchain
   webhooks: Webhooks
+  cratesio_filter: CrateFilter
+  registry_filter: CrateFilter
   sources: SourceMap
   defaults?: SettingsDefaults
   leaves?: LeafMeta[]
@@ -72,6 +76,13 @@ export type Toolchain = {
 
 export type Webhooks = {
   block_private_targets: boolean
+}
+
+export type CrateFilter = {
+  license_enabled: boolean
+  license_allowed: string[]
+  license_unknown: string
+  license_exempt_crates: string[]
 }
 
 export type Docs = {
@@ -262,6 +273,18 @@ export const emptySettings: Settings = {
   },
   webhooks: {
     block_private_targets: false
+  },
+  cratesio_filter: {
+    license_enabled: false,
+    license_allowed: [],
+    license_unknown: "deny",
+    license_exempt_crates: []
+  },
+  registry_filter: {
+    license_enabled: false,
+    license_allowed: [],
+    license_unknown: "deny",
+    license_exempt_crates: []
   },
   sources: {},
   defaults: undefined,

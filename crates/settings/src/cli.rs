@@ -260,8 +260,19 @@ pub fn cli_flag_map() -> HashMap<String, String> {
 /// one `-` (those don't come from a `clap_prefix`-ed section and so don't
 /// map to a leaf).
 fn id_to_dotted_path(id: &str) -> Option<String> {
-    let (section, rest) = id.split_once('-')?;
-    Some(format!("{section}.{}", rest.replace('-', "_")))
+    // Sections whose name contains "_" have a prefix with "-", so the first
+    // "-" does not end the section for them.
+    const MULTI_WORD_SECTIONS: &[&str] = &["cratesio-filter", "registry-filter"];
+
+    let (section, rest) = MULTI_WORD_SECTIONS
+        .iter()
+        .find_map(|s| Some((*s, id.strip_prefix(s)?.strip_prefix('-')?)))
+        .or_else(|| id.split_once('-'))?;
+    Some(format!(
+        "{}.{}",
+        section.replace('-', "_"),
+        rest.replace('-', "_")
+    ))
 }
 
 #[cfg(test)]
@@ -351,6 +362,64 @@ mod tests {
     }
 
     #[test]
+    fn filter_flags_reach_the_settings() {
+        let CliResult::RunServer(resolved) = run_start(
+            None,
+            &[
+                "--cratesio-filter-license-enabled",
+                "true",
+                "--cratesio-filter-license-allowed",
+                "MIT,Apache-2.0",
+                "--cratesio-filter-license-unknown",
+                "allow",
+                "--registry-filter-license-exempt-crates",
+                "ring,openssl",
+            ],
+        ) else {
+            panic!("expected RunServer");
+        };
+
+        let cratesio = &resolved.settings.cratesio_filter;
+        assert!(cratesio.license_enabled);
+        assert_eq!(vec!["MIT", "Apache-2.0"], cratesio.license_allowed);
+        assert_eq!(crate::LicenseUnknown::Allow, cratesio.license_unknown);
+        assert_eq!(
+            vec!["ring", "openssl"],
+            resolved.settings.registry_filter.license_exempt_crates
+        );
+        assert_eq!(
+            resolved
+                .prov
+                .cratesio_filter
+                .license_allowed
+                .source()
+                .category(),
+            Category::Cli,
+        );
+        assert_eq!(
+            resolved
+                .prov
+                .registry_filter
+                .license_enabled
+                .source()
+                .category(),
+            Category::Default,
+        );
+    }
+
+    #[test]
+    fn invalid_license_unknown_flag_is_rejected() {
+        let result = Cli::try_parse_from([
+            "kellnr",
+            "start",
+            "--registry-filter-license-unknown",
+            "deneay",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn config_show_returns_show_config_variant_with_options() {
         // `config show --sources` flows through `build_from_command` like
         // `start` does, so it must also produce a usable `SettingsProv`.
@@ -420,6 +489,17 @@ mod tests {
         assert_eq!(
             map.get("local.port").map(String::as_str),
             Some("--local-port, -p")
+        );
+        // Sections with a multi-word name keep it together.
+        assert_eq!(
+            map.get("cratesio_filter.license_allowed")
+                .map(String::as_str),
+            Some("--cratesio-filter-license-allowed")
+        );
+        assert_eq!(
+            map.get("registry_filter.license_unknown")
+                .map(String::as_str),
+            Some("--registry-filter-license-unknown")
         );
         // The top-level `--config` arg is not a settings leaf, must not leak in.
         assert!(
