@@ -15,6 +15,7 @@ kellnr-common.workspace = true
 kellnr-settings.workspace = true
 
 # External dependencies
+moka = { workspace = true, features = ["sync"] }
 spdx.workspace = true
 thiserror.workspace = true
 

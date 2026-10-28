@@ -13,7 +13,7 @@ use kellnr_cratesio_sync::{CratesioSync, SyncSource};
 use kellnr_db::DbProvider;
 use kellnr_db::provider::CratesioVersionMeta;
 use kellnr_error::api_error::ApiResult;
-use kellnr_filter::CrateInfo;
+use kellnr_filter::{CrateInfo, KnownLicense};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::storage_error::StorageError;
 use reqwest::Url;
@@ -106,27 +106,64 @@ pub async fn download(
 ) -> Result<Bytes, DownloadError> {
     trace!("Downloading crate: {name} ({version})");
 
-    let meta = synced_version_meta(&state.db, &state.cratesio_sync, &name, &version).await?;
+    let normalized_name = name.to_normalized();
+    let filters = &state.download_filters.cratesio;
+    let cached = state.cratesio_storage.get(&name, &version).await;
+
+    // The license is only needed if filters are enabled, the checksum only to
+    // verify a crate that is not cached yet. Cache hits without filters need
+    // no database query.
+    let known_license = if filters.is_empty() {
+        None
+    } else {
+        filters.licenses().get(&normalized_name, &version)
+    };
+    let need_license = !filters.is_empty() && known_license.is_none();
+    let meta = if cached.is_none() || need_license {
+        synced_version_meta(
+            &state.db,
+            &state.cratesio_sync,
+            &name,
+            &version,
+            need_license,
+        )
+        .await?
+    } else {
+        None
+    };
 
     // Checked on cache hits too, as the policy may have changed since the
     // crate was cached.
-    let normalized_name = name.to_normalized();
-    let krate = CrateInfo {
-        name: &normalized_name,
-        version: &version,
-        license: meta.as_ref().and_then(|m| m.license.as_deref()),
-    };
-    if let Some(message) = state
-        .download_filters
-        .cratesio
-        .check(&krate)
-        .deny_message(&krate)
-    {
-        warn!("{message}");
-        return Err(DownloadError::Denied(message));
+    if !filters.is_empty() {
+        let license = match known_license {
+            Some(known) => known.into_license(),
+            None => meta
+                .as_ref()
+                .and_then(|m| m.license.clone())
+                .inspect(|license| {
+                    // Only fetched licenses are remembered, a missing one is
+                    // fetched again on the next download. A version without a
+                    // license is stored as `UNKNOWN_LICENSE`, which is a license
+                    // here.
+                    filters.licenses().insert(
+                        &normalized_name,
+                        &version,
+                        KnownLicense::Declared(license.clone()),
+                    );
+                }),
+        };
+        let krate = CrateInfo {
+            name: &normalized_name,
+            version: &version,
+            license: license.as_deref(),
+        };
+        if let Some(message) = filters.check(&krate).deny_message(&krate) {
+            warn!("{message}");
+            return Err(DownloadError::Denied(message));
+        }
     }
 
-    let file = if let Some(file) = state.cratesio_storage.get(&name, &version).await {
+    let file = if let Some(file) = cached {
         file
     } else {
         let crate_data = download_crate(
@@ -177,14 +214,16 @@ impl IntoResponse for DownloadError {
     }
 }
 
-/// Checksum and license of the version from the cached index. If either is
-/// missing, the crate is synced from crates.io first, or the running sync of
-/// it is awaited, so a cold download can be verified and cached right away.
+/// Checksum and license of the version from the cached index. If the checksum
+/// or a needed license is missing, the crate is synced from crates.io first,
+/// or the running sync of it is awaited, so a cold download can be verified
+/// and cached right away.
 async fn synced_version_meta(
     db: &Arc<dyn DbProvider>,
     sync: &CratesioSync,
     name: &OriginalName,
     version: &Version,
+    need_license: bool,
 ) -> Result<Option<CratesioVersionMeta>, StatusCode> {
     let get_meta = || async {
         db.get_cratesio_version_meta(&name.to_normalized(), version)
@@ -196,7 +235,10 @@ async fn synced_version_meta(
     };
 
     let meta = get_meta().await?;
-    if meta.as_ref().is_some_and(|m| m.license.is_some()) {
+    if meta
+        .as_ref()
+        .is_some_and(|m| !need_license || m.license.is_some())
+    {
         return Ok(meta);
     }
     trace!("Syncing {name} from crates.io, the metadata of {version} is incomplete");
@@ -508,6 +550,78 @@ mod tests {
         Router::new()
             .nest("/api/v1/cratesio", routes)
             .with_state(state)
+    }
+
+    /// A Kellnr whose database is a mock, with "upstream" 1.0.0 in the cache.
+    async fn kellnr_with_cached_crate(
+        db: kellnr_db::mock::MockDb,
+        filter: CratesioFilter,
+    ) -> (Router, tempfile::TempDir) {
+        let data_dir = tempfile::tempdir().unwrap();
+        let settings = Settings {
+            registry: kellnr_settings::Registry {
+                data_dir: data_dir.path().to_string_lossy().to_string(),
+                ..kellnr_settings::Registry::default()
+            },
+            proxy: kellnr_settings::Proxy {
+                enabled: true,
+                ..kellnr_settings::Proxy::default()
+            },
+            cratesio_filter: filter,
+            ..Settings::default()
+        };
+        let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
+        let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
+        storage
+            .put(
+                &OriginalName::try_from("upstream").unwrap(),
+                &Version::try_from("1.0.0").unwrap(),
+                Arc::from(UPSTREAM_CRATE),
+            )
+            .await
+            .unwrap();
+        (app(settings, storage, Arc::new(db)), data_dir)
+    }
+
+    async fn status_of(client: &Router, uri: &str) -> StatusCode {
+        client
+            .clone()
+            .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
+    #[tokio::test]
+    async fn cache_hit_without_filters_needs_no_database() {
+        // The mock panics on any database call
+        let (client, _data_dir) =
+            kellnr_with_cached_crate(kellnr_db::mock::MockDb::new(), CratesioFilter::default())
+                .await;
+
+        let status = status_of(&client, "/api/v1/cratesio/upstream/1.0.0/download").await;
+
+        assert_eq!(StatusCode::OK, status);
+    }
+
+    #[tokio::test]
+    async fn known_license_is_not_queried_again() {
+        let mut db = kellnr_db::mock::MockDb::new();
+        db.expect_get_cratesio_version_meta()
+            .times(1)
+            .returning(|_, _| {
+                Ok(Some(CratesioVersionMeta {
+                    cksum: sha256::digest(UPSTREAM_CRATE),
+                    license: Some("MIT".to_string()),
+                }))
+            });
+        let (client, _data_dir) =
+            kellnr_with_cached_crate(db, license_filter(LicenseUnknown::Deny)).await;
+
+        for _ in 0..3 {
+            let status = status_of(&client, "/api/v1/cratesio/upstream/1.0.0/download").await;
+            assert_eq!(StatusCode::OK, status);
+        }
     }
 
     #[tokio::test]

@@ -3,6 +3,7 @@
 //! A [`FilterChain`] runs all configured [`CrateFilter`]s. To add a filter,
 //! implement [`CrateFilter`] and add the data it needs to [`CrateInfo`].
 
+mod known_licenses;
 mod license;
 
 use std::sync::Arc;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::version::Version;
 use kellnr_settings::{CratesioFilter, RegistryFilter, Settings};
+pub use known_licenses::{KnownLicense, KnownLicenses};
 pub use license::LicenseFilter;
 
 /// The data of a crate version the filters decide on.
@@ -77,11 +79,21 @@ impl DownloadFilters {
 #[derive(Clone, Default)]
 pub struct FilterChain {
     filters: Vec<Arc<dyn CrateFilter>>,
+    licenses: KnownLicenses,
 }
 
 impl FilterChain {
     pub fn new(filters: Vec<Arc<dyn CrateFilter>>) -> Self {
-        Self { filters }
+        Self {
+            filters,
+            licenses: KnownLicenses::default(),
+        }
+    }
+
+    /// Licenses looked up for this chain, so that downloads do not need to
+    /// query them again.
+    pub fn licenses(&self) -> &KnownLicenses {
+        &self.licenses
     }
 
     /// Filters for downloads through the crates.io proxy.

@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use axum::Router;
-use axum::http::{StatusCode as HttpStatus, header};
+use axum::http::{HeaderMap, StatusCode as HttpStatus, header};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use kellnr_common::prefetch::Prefetch;
@@ -39,12 +39,18 @@ async fn fake_cratesio(api_ok: bool, calls: Arc<Calls>) -> kellnr_settings::Prox
     let app = Router::new()
         .route(
             "/index/{a}/{b}/{name}",
-            get(move || {
+            get(move |headers: HeaderMap| {
                 let calls = index_calls.clone();
                 async move {
                     calls.index.fetch_add(1, Ordering::SeqCst);
                     tokio::time::sleep(Duration::from_millis(200)).await;
-                    ([(header::ETAG, "etag")], INDEX)
+                    if headers
+                        .get(header::IF_NONE_MATCH)
+                        .is_some_and(|etag| etag == "etag")
+                    {
+                        return HttpStatus::NOT_MODIFIED.into_response();
+                    }
+                    ([(header::ETAG, "etag")], INDEX).into_response()
                 }
             }),
         )
@@ -225,6 +231,51 @@ async fn index_source_stores_new_index_without_fetching_it() {
 
     assert!(synced.is_some());
     assert_eq!(0, calls.index.load(Ordering::SeqCst));
+    assert_eq!(1, calls.api.load(Ordering::SeqCst));
+    assert_eq!(1, stored.lock().unwrap().len());
+}
+
+#[tokio::test]
+async fn refresh_of_unchanged_index_writes_nothing() {
+    let calls = Arc::new(Calls::default());
+    let proxy = fake_cratesio(true, calls.clone()).await;
+    let (db, stored) = recording_db(PrefetchState::NotFound);
+    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+
+    let synced = sync
+        .sync(
+            &upstream(),
+            SyncSource::Refresh {
+                etag: Some("etag".to_string()),
+                last_modified: None,
+            },
+        )
+        .await;
+
+    assert!(synced.is_none());
+    assert_eq!(1, calls.index.load(Ordering::SeqCst));
+    assert_eq!(0, calls.api.load(Ordering::SeqCst));
+    assert!(stored.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn refresh_of_changed_index_writes_it() {
+    let calls = Arc::new(Calls::default());
+    let proxy = fake_cratesio(true, calls.clone()).await;
+    let (db, stored) = recording_db(PrefetchState::NotFound);
+    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+
+    let synced = sync
+        .sync(
+            &upstream(),
+            SyncSource::Refresh {
+                etag: Some("old-etag".to_string()),
+                last_modified: None,
+            },
+        )
+        .await;
+
+    assert_eq!(2, synced.unwrap().len());
     assert_eq!(1, calls.api.load(Ordering::SeqCst));
     assert_eq!(1, stored.lock().unwrap().len());
 }

@@ -362,6 +362,64 @@ mod tests {
     }
 
     #[test]
+    fn filter_flags_reach_the_settings() {
+        let CliResult::RunServer(resolved) = run_start(
+            None,
+            &[
+                "--cratesio-filter-license-enabled",
+                "true",
+                "--cratesio-filter-license-allowed",
+                "MIT,Apache-2.0",
+                "--cratesio-filter-license-unknown",
+                "allow",
+                "--registry-filter-license-exempt-crates",
+                "ring,openssl",
+            ],
+        ) else {
+            panic!("expected RunServer");
+        };
+
+        let cratesio = &resolved.settings.cratesio_filter;
+        assert!(cratesio.license_enabled);
+        assert_eq!(vec!["MIT", "Apache-2.0"], cratesio.license_allowed);
+        assert_eq!(crate::LicenseUnknown::Allow, cratesio.license_unknown);
+        assert_eq!(
+            vec!["ring", "openssl"],
+            resolved.settings.registry_filter.license_exempt_crates
+        );
+        assert_eq!(
+            resolved
+                .prov
+                .cratesio_filter
+                .license_allowed
+                .source()
+                .category(),
+            Category::Cli,
+        );
+        assert_eq!(
+            resolved
+                .prov
+                .registry_filter
+                .license_enabled
+                .source()
+                .category(),
+            Category::Default,
+        );
+    }
+
+    #[test]
+    fn invalid_license_unknown_flag_is_rejected() {
+        let result = Cli::try_parse_from([
+            "kellnr",
+            "start",
+            "--registry-filter-license-unknown",
+            "deneay",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn config_show_returns_show_config_variant_with_options() {
         // `config show --sources` flows through `build_from_command` like
         // `start` does, so it must also produce a usable `SettingsProv`.

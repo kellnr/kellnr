@@ -2389,26 +2389,38 @@ impl DbProvider for Database {
         crate_name: &NormalizedName,
         version: &Version,
     ) -> DbResult<Option<CratesioVersionMeta>> {
-        let Some(index) = cratesio_index::Entity::find()
+        #[derive(FromQueryResult)]
+        struct Meta {
+            cksum: String,
+            license: Option<String>,
+        }
+
+        // One query, as it runs for every download from the crates.io proxy
+        let version = version.to_string();
+        let meta_version = version.clone();
+        let meta_of_version =
+            cratesio_crate::Relation::CratesioMeta
+                .def()
+                .on_condition(move |_crate, meta| {
+                    Condition::all().add(
+                        Expr::col((meta, cratesio_meta::Column::Version)).eq(meta_version.clone()),
+                    )
+                });
+        let meta = cratesio_index::Entity::find()
+            .select_only()
+            .column(cratesio_index::Column::Cksum)
+            .column(cratesio_meta::Column::License)
             .inner_join(cratesio_crate::Entity)
+            .join(JoinType::LeftJoin, meta_of_version)
             .filter(cratesio_crate::Column::Name.eq(crate_name))
             .filter(cratesio_index::Column::Vers.eq(version))
+            .into_model::<Meta>()
             .one(&self.db_con)
-            .await?
-        else {
-            return Ok(None);
-        };
+            .await?;
 
-        let license = cratesio_meta::Entity::find()
-            .filter(cratesio_meta::Column::CratesIoFk.eq(index.crates_io_fk))
-            .filter(cratesio_meta::Column::Version.eq(version))
-            .one(&self.db_con)
-            .await?
-            .and_then(|meta| meta.license);
-
-        Ok(Some(CratesioVersionMeta {
-            cksum: index.cksum,
-            license,
+        Ok(meta.map(|m| CratesioVersionMeta {
+            cksum: m.cksum,
+            license: m.license,
         }))
     }
 

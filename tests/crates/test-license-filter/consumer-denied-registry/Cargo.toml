@@ -1,0 +1,11 @@
+[package]
+name = "consumer-denied-registry"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Declares no license, which is denied as unknown
+[dependencies]
+unlicensed-lib = { version = "1.0", registry = "kellnr-test" }
+
+[workspace]

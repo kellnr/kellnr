@@ -671,7 +671,15 @@ pub async fn download(
 
     let filters = &state.download_filters.registry;
     if !filters.is_empty() {
-        let license = db.get_crate_license(&normalized_name, &version).await?;
+        let license = if let Some(known) = filters.licenses().get(&normalized_name, &version) {
+            known.into_license()
+        } else {
+            let license = db.get_crate_license(&normalized_name, &version).await?;
+            filters
+                .licenses()
+                .insert(&normalized_name, &version, license.clone().into());
+            license
+        };
         let krate = CrateInfo {
             name: &normalized_name,
             version: &version,

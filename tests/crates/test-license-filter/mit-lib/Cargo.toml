@@ -1,0 +1,9 @@
+[package]
+name = "mit-lib"
+version = "1.0.0"
+edition = "2021"
+description = "Test crate with an allowed license"
+license = "MIT"
+publish = ["kellnr-test"]
+
+[workspace]

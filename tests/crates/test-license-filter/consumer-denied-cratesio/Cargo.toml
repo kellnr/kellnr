@@ -1,0 +1,11 @@
+[package]
+name = "consumer-denied-cratesio"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Licensed "Apache-2.0 OR BSL-1.0", neither is allowed
+[dependencies]
+ryu = "=1.0.23"
+
+[workspace]

@@ -1,0 +1,8 @@
+[package]
+name = "unlicensed-lib"
+version = "1.0.0"
+edition = "2021"
+description = "Test crate without a license"
+publish = ["kellnr-test"]
+
+[workspace]

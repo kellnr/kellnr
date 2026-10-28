@@ -272,16 +272,21 @@ async fn cratesio_prefetch_thread(args: CratesIoPrefetchArgs) -> ! {
         if let Some(metadata) = synced
             && args.download_on_update
         {
-            for idx in metadata.iter() {
-                if is_denied(idx, &args).await {
-                    trace!(
-                        "Crate {} version {} is denied by the filters, skipping download",
-                        idx.name, idx.vers
-                    );
-                } else {
-                    predownload_crate(idx, &args).await;
-                }
-            }
+            predownload_crates(&metadata, &args).await;
+        }
+    }
+}
+
+/// Download the versions into the cache, except for those the filters deny.
+async fn predownload_crates(metadata: &[IndexMetadata], args: &CratesIoPrefetchArgs) {
+    for idx in metadata {
+        if is_denied(idx, args).await {
+            trace!(
+                "Crate {} version {} is denied by the filters, skipping download",
+                idx.name, idx.vers
+            );
+        } else {
+            predownload_crate(idx, args).await;
         }
     }
 }
@@ -712,5 +717,271 @@ mod tests {
         Router::new()
             .nest("/api/v1/cratesio", cratesio_prefetch)
             .with_state(state)
+    }
+
+    mod worker {
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+
+        use axum::extract::Path as AxumPath;
+        use axum::response::IntoResponse;
+        use kellnr_common::license::UNKNOWN_LICENSE;
+        use kellnr_db::provider::CratesioVersionMeta;
+        use kellnr_settings::CratesioFilter;
+        use kellnr_storage::cached_crate_storage::DynStorage;
+        use kellnr_storage::fs_storage::FSStorage;
+
+        use super::*;
+
+        const CRATE: &[u8] = b"crate bytes";
+        /// Versions of the crate "upstream" with their license.
+        const VERSIONS: &[(&str, &str)] = &[("1.0.0", "MIT"), ("1.1.0", "GPL-3.0-only")];
+
+        #[derive(Default)]
+        struct Upstream {
+            index_calls: AtomicUsize,
+            api_calls: AtomicUsize,
+            downloads: Mutex<Vec<String>>,
+        }
+
+        fn index() -> String {
+            let cksum = sha256::digest(CRATE);
+            VERSIONS
+                .iter()
+                .map(|(vers, _)| {
+                    format!(
+                        r#"{{"name":"upstream","vers":"{vers}","deps":[],"cksum":"{cksum}","features":{{}},"yanked":false}}"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+
+        /// A fake crates.io with the index, the API and downloads of "upstream".
+        async fn fake_cratesio(upstream: Arc<Upstream>) -> kellnr_settings::Proxy {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let (index_up, api_up, dl_up) = (upstream.clone(), upstream.clone(), upstream);
+            let app = Router::new()
+                .route(
+                    "/index/{a}/{b}/{name}",
+                    get(move || {
+                        let upstream = index_up.clone();
+                        async move {
+                            upstream.index_calls.fetch_add(1, Ordering::SeqCst);
+                            ([(header::ETAG, "etag")], index())
+                        }
+                    }),
+                )
+                .route(
+                    "/api/{name}",
+                    get(move || {
+                        let upstream = api_up.clone();
+                        async move {
+                            upstream.api_calls.fetch_add(1, Ordering::SeqCst);
+                            let versions: Vec<_> = VERSIONS
+                                .iter()
+                                .map(|(num, license)| serde_json::json!({"num": num, "license": license}))
+                                .collect();
+                            serde_json::json!({"crate": {"description": null}, "versions": versions})
+                                .to_string()
+                        }
+                    }),
+                )
+                .route(
+                    "/dl/{name}/{version}/download",
+                    get(move |AxumPath((_, version)): AxumPath<(String, String)>| {
+                        let upstream = dl_up.clone();
+                        async move {
+                            upstream.downloads.lock().unwrap().push(version);
+                            CRATE.into_response()
+                        }
+                    }),
+                );
+            tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+            kellnr_settings::Proxy {
+                index: Url::parse(&format!("http://{addr}/index/")).unwrap(),
+                api: Url::parse(&format!("http://{addr}/api/")).unwrap(),
+                url: Url::parse(&format!("http://{addr}/dl/")).unwrap(),
+                ..kellnr_settings::Proxy::default()
+            }
+        }
+
+        type Stored = Arc<Mutex<Vec<HashMap<String, String>>>>;
+
+        /// A database without stored crates that records the licenses written.
+        fn recording_db() -> (MockDb, Stored) {
+            let stored: Stored = Arc::default();
+            let mut db = MockDb::new();
+            db.expect_is_cratesio_cache_up_to_date()
+                .returning(|_, _, _| Ok(PrefetchState::NotFound));
+            db.expect_add_cratesio_prefetch_data().returning({
+                let stored = stored.clone();
+                move |_, _, _, _, _, licenses| {
+                    stored.lock().unwrap().push(licenses.clone());
+                    Ok(Prefetch {
+                        data: vec![],
+                        etag: String::new(),
+                        last_modified: String::new(),
+                    })
+                }
+            });
+            (db, stored)
+        }
+
+        struct Worker {
+            args: CratesIoPrefetchArgs,
+            sender: flume::Sender<CratesioPrefetchMsg>,
+            _data_dir: tempfile::TempDir,
+        }
+
+        fn worker(db: MockDb, proxy: &kellnr_settings::Proxy, filters: FilterChain) -> Worker {
+            let data_dir = tempfile::tempdir().unwrap();
+            let settings = Settings {
+                registry: kellnr_settings::Registry {
+                    data_dir: data_dir.path().to_string_lossy().to_string(),
+                    ..kellnr_settings::Registry::default()
+                },
+                ..Settings::default()
+            };
+            let storage =
+                Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
+            let db: Arc<dyn DbProvider> = Arc::new(db);
+            let (sender, recv) = flume::unbounded();
+            let args = CratesIoPrefetchArgs {
+                db: db.clone(),
+                cache: Cache::builder().build(),
+                recv,
+                download_on_update: true,
+                url: proxy.url.clone(),
+                storage: Arc::new(CratesIoCrateStorage::new(&settings, storage)),
+                proxy_settings: Arc::new(proxy.clone()),
+                sync: CratesioSync::new(db, Client::new(), proxy),
+                filters,
+            };
+            Worker {
+                args,
+                sender,
+                _data_dir: data_dir,
+            }
+        }
+
+        fn upstream_name() -> OriginalName {
+            OriginalName::try_from("upstream").unwrap()
+        }
+
+        fn metadata() -> Vec<IndexMetadata> {
+            index()
+                .lines()
+                .map(|l| serde_json::from_str(l).unwrap())
+                .collect()
+        }
+
+        async fn is_cached(worker: &Worker, version: &str) -> bool {
+            worker
+                .args
+                .storage
+                .exists(&upstream_name(), &Version::from_unchecked_str(version))
+                .await
+                .unwrap()
+        }
+
+        #[tokio::test]
+        async fn predownload_skips_versions_denied_by_filters() {
+            let upstream = Arc::new(Upstream::default());
+            let proxy = fake_cratesio(upstream.clone()).await;
+            let mut db = MockDb::new();
+            db.expect_get_cratesio_version_meta()
+                .returning(|_, version| {
+                    let license = VERSIONS
+                        .iter()
+                        .find(|(v, _)| *v == version.to_string())
+                        .map(|(_, l)| (*l).to_string());
+                    Ok(Some(CratesioVersionMeta {
+                        cksum: sha256::digest(CRATE),
+                        license,
+                    }))
+                });
+            let filters = FilterChain::cratesio(&CratesioFilter {
+                license_enabled: true,
+                license_allowed: vec!["MIT".to_string()],
+                ..CratesioFilter::default()
+            })
+            .unwrap();
+            let worker = worker(db, &proxy, filters);
+
+            predownload_crates(&metadata(), &worker.args).await;
+
+            assert_eq!(vec!["1.0.0"], *upstream.downloads.lock().unwrap());
+            assert!(is_cached(&worker, "1.0.0").await);
+            assert!(!is_cached(&worker, "1.1.0").await);
+        }
+
+        #[tokio::test]
+        async fn predownload_without_filters_downloads_all_versions() {
+            let upstream = Arc::new(Upstream::default());
+            let proxy = fake_cratesio(upstream.clone()).await;
+            // No license lookup is expected, the mock panics on unexpected calls
+            let worker = worker(MockDb::new(), &proxy, FilterChain::default());
+
+            predownload_crates(&metadata(), &worker.args).await;
+
+            assert!(is_cached(&worker, "1.0.0").await);
+            assert!(is_cached(&worker, "1.1.0").await);
+        }
+
+        #[tokio::test]
+        async fn insert_message_syncs_the_index_it_carries() {
+            let upstream = Arc::new(Upstream::default());
+            let proxy = fake_cratesio(upstream.clone()).await;
+            let (db, stored) = recording_db();
+            let worker = worker(db, &proxy, FilterChain::default());
+
+            worker
+                .sender
+                .send(CratesioPrefetchMsg::Insert(InsertData {
+                    name: upstream_name(),
+                    etag: Some("etag".to_string()),
+                    last_modified: None,
+                    data: index(),
+                }))
+                .unwrap();
+            let synced = handle_cratesio_prefetch_msg(&worker.args).await;
+
+            assert_eq!(2, synced.unwrap().len());
+            // The index came with the message, only the API is called
+            assert_eq!(0, upstream.index_calls.load(Ordering::SeqCst));
+            assert_eq!(1, upstream.api_calls.load(Ordering::SeqCst));
+            let stored = stored.lock().unwrap();
+            assert_eq!(Some(&"MIT".to_string()), stored[0].get("1.0.0"));
+            assert_eq!(Some(&"GPL-3.0-only".to_string()), stored[0].get("1.1.0"));
+            assert!(!stored[0].values().any(|l| l == UNKNOWN_LICENSE));
+        }
+
+        #[tokio::test]
+        async fn update_message_refreshes_once_within_the_cache_timeout() {
+            let upstream = Arc::new(Upstream::default());
+            let proxy = fake_cratesio(upstream.clone()).await;
+            let (db, stored) = recording_db();
+            let worker = worker(db, &proxy, FilterChain::default());
+            let update = || {
+                CratesioPrefetchMsg::Update(UpdateData {
+                    name: upstream_name(),
+                    etag: Some("old-etag".to_string()),
+                    last_modified: None,
+                })
+            };
+
+            worker.sender.send(update()).unwrap();
+            let first = handle_cratesio_prefetch_msg(&worker.args).await;
+            worker.sender.send(update()).unwrap();
+            let second = handle_cratesio_prefetch_msg(&worker.args).await;
+
+            assert_eq!(2, first.unwrap().len());
+            assert!(second.is_none());
+            assert_eq!(1, upstream.index_calls.load(Ordering::SeqCst));
+            assert_eq!(1, stored.lock().unwrap().len());
+        }
     }
 }
