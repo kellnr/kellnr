@@ -3,16 +3,17 @@ use std::sync::Arc;
 use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
-use kellnr_appstate::{
-    CrateIoStorageState, DbState, DownloadCounterState, ProxyClientState, SettingsState,
-};
+use kellnr_appstate::{AppState, ProxyClientState, SettingsState};
 use kellnr_common::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
+use kellnr_cratesio_sync::{CratesioSync, SyncSource};
 use kellnr_db::DbProvider;
+use kellnr_db::provider::CratesioVersionMeta;
 use kellnr_error::api_error::ApiResult;
+use kellnr_filter::CrateInfo;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::storage_error::StorageError;
 use reqwest::Url;
@@ -92,6 +93,7 @@ pub async fn search(
     responses(
         (status = 200, description = "Crate archive", content_type = "application/octet-stream"),
         (status = 400, description = "Invalid package name or version"),
+        (status = 403, description = "Download denied by a crates.io filter, e.g. the license filter"),
         (status = 404, description = "Crate not found or proxy disabled"),
         (status = 422, description = "Failed to save crate"),
         (status = 502, description = "Crate from crates.io does not match the index checksum")
@@ -99,61 +101,125 @@ pub async fn search(
     security(("cargo_token" = []))
 )]
 pub async fn download(
+    State(state): AppState,
     Path((name, version)): Path<(OriginalName, Version)>,
-    State(crate_storage): CrateIoStorageState,
-    State(download_counter): DownloadCounterState,
-    State(settings): SettingsState,
-    State(proxy_client): ProxyClientState,
-    State(db): DbState,
-) -> Result<Bytes, StatusCode> {
+) -> Result<Bytes, DownloadError> {
     trace!("Downloading crate: {name} ({version})");
 
-    let file = if let Some(file) = crate_storage.get(&name, &version).await {
+    let meta = synced_version_meta(&state.db, &state.cratesio_sync, &name, &version).await?;
+
+    // Checked on cache hits too, as the policy may have changed since the
+    // crate was cached.
+    let normalized_name = name.to_normalized();
+    let krate = CrateInfo {
+        name: &normalized_name,
+        version: &version,
+        license: meta.as_ref().and_then(|m| m.license.as_deref()),
+    };
+    if let Some(message) = state
+        .download_filters
+        .cratesio
+        .check(&krate)
+        .deny_message(&krate)
+    {
+        warn!("{message}");
+        return Err(DownloadError::Denied(message));
+    }
+
+    let file = if let Some(file) = state.cratesio_storage.get(&name, &version).await {
         file
     } else {
-        let crate_data =
-            download_crate(&proxy_client, &name, &version, &settings.proxy.url).await?;
+        let crate_data = download_crate(
+            &state.proxy_client,
+            &name,
+            &version,
+            &state.settings.proxy.url,
+        )
+        .await
+        .map_err(StatusCode::from)?;
 
-        if is_verified_upstream_crate(&db, &name, &version, &crate_data).await? {
-            cache_crate(&crate_storage, &name, &version, crate_data).await?
+        let cksum = meta.as_ref().map(|m| m.cksum.as_str());
+        if is_verified_upstream_crate(&name, &version, cksum, &crate_data)? {
+            cache_crate(&state.cratesio_storage, &name, &version, crate_data).await?
         } else {
             Bytes::copy_from_slice(&crate_data)
         }
     };
 
     // Count ALL downloads (both cache hits and upstream fetches)
-    download_counter
-        .increment_cached_and_maybe_flush(name.to_normalized(), version.clone())
+    state
+        .download_counter
+        .increment_cached_and_maybe_flush(normalized_name, version.clone())
         .await;
 
     Ok(file)
 }
 
-/// Check a crate downloaded from crates.io against the checksum of the cached
-/// crates.io index. Returns `Ok(true)` if the crate matches and may be cached
-/// and `Ok(false)` if no checksum is known yet. A mismatch is an error, as the
-/// upstream or the connection to it is not trustworthy.
-///
-/// Without a known checksum, which happens if the index was not fetched through
-/// Kellnr yet, the crate is served but not cached. Cargo verifies it against the
-/// index it received, and the next download after the index is cached gets
-/// verified and cached.
-async fn is_verified_upstream_crate(
+/// Error of a download from the crates.io proxy.
+pub enum DownloadError {
+    Status(StatusCode),
+    /// Denied by a filter, with the message for the client.
+    Denied(String),
+}
+
+impl From<StatusCode> for DownloadError {
+    fn from(status: StatusCode) -> Self {
+        Self::Status(status)
+    }
+}
+
+impl IntoResponse for DownloadError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Status(status) => status.into_response(),
+            Self::Denied(message) => (StatusCode::FORBIDDEN, message).into_response(),
+        }
+    }
+}
+
+/// Checksum and license of the version from the cached index. If either is
+/// missing, the crate is synced from crates.io first, or the running sync of
+/// it is awaited, so a cold download can be verified and cached right away.
+async fn synced_version_meta(
     db: &Arc<dyn DbProvider>,
+    sync: &CratesioSync,
     name: &OriginalName,
     version: &Version,
+) -> Result<Option<CratesioVersionMeta>, StatusCode> {
+    let get_meta = || async {
+        db.get_cratesio_version_meta(&name.to_normalized(), version)
+            .await
+            .map_err(|e| {
+                error!("Could not get crates.io metadata for {name} ({version}): {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })
+    };
+
+    let meta = get_meta().await?;
+    if meta.as_ref().is_some_and(|m| m.license.is_some()) {
+        return Ok(meta);
+    }
+    trace!("Syncing {name} from crates.io, the metadata of {version} is incomplete");
+    sync.sync(name, SyncSource::Fetch).await;
+    get_meta().await
+}
+
+/// Check a crate downloaded from crates.io against the checksum of the cached
+/// crates.io index. Returns `Ok(true)` if the crate matches and may be cached
+/// and `Ok(false)` if no checksum is known. A mismatch is an error, as the
+/// upstream or the connection to it is not trustworthy.
+///
+/// Without a known checksum, which happens if the index could not be synced
+/// from crates.io, the crate is served but not cached. Cargo verifies it
+/// against the index it received.
+fn is_verified_upstream_crate(
+    name: &OriginalName,
+    version: &Version,
+    cksum: Option<&str>,
     crate_data: &[u8],
 ) -> Result<bool, StatusCode> {
-    let cksum = db
-        .get_cratesio_cksum(&name.to_normalized(), version)
-        .await
-        .map_err(|e| {
-            error!("Could not get crates.io checksum for {name} ({version}): {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
     match cksum {
-        Some(cksum) if has_checksum(crate_data, &cksum) => Ok(true),
+        Some(cksum) if has_checksum(crate_data, cksum) => Ok(true),
         Some(_) => {
             error!("Checksum mismatch for crate {name} ({version}) downloaded from crates.io");
             Err(StatusCode::BAD_GATEWAY)
@@ -198,254 +264,213 @@ async fn cache_crate(
 mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use axum::body::Body;
-    use axum::http::Request;
+    use axum::extract::Path as AxumPath;
+    use axum::http::{Request, header};
     use axum::routing::get;
     use axum::{Router, middleware};
     use http_body_util::BodyExt;
     use kellnr_appstate::AppStateData;
     use kellnr_common::util::generate_rand_string;
-    use kellnr_db::mock::MockDb;
-    use kellnr_settings::Settings;
+    use kellnr_db::{ConString, Database, SqliteConString};
+    use kellnr_filter::DownloadFilters;
+    use kellnr_settings::{CratesioFilter, LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use tower::ServiceExt;
 
     use super::*;
 
-    #[tokio::test]
-    async fn download_not_existing_package() {
-        let settings = get_settings();
-        let kellnr = TestKellnr::new(settings);
-        let r = kellnr
-            .client
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/cratesio/does_not_exist/0.1.0/download")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::NOT_FOUND);
-    }
-
-    #[tokio::test]
-    async fn download_invalid_package_name() {
-        let settings = get_settings();
-        let kellnr = TestKellnr::new(settings);
-        let r = kellnr
-            .client
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/cratesio/-invalid_name/0.1.0/download")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        // An invalid crate name is rejected by the `OriginalName` extractor
-        // before reaching the handler.
-        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn download_not_existing_version() {
-        let settings = get_settings();
-        let kellnr = TestKellnr::new(settings);
-        let r = kellnr
-            .client
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/cratesio/test-lib/99.1.0/download")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::NOT_FOUND);
-    }
-
-    #[tokio::test]
-    async fn download_invalid_package_version() {
-        let settings = get_settings();
-        let kellnr = TestKellnr::new(settings);
-        let r = kellnr
-            .client
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/cratesio/invalid_version/0.a.0/download")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        // Invalid semver is rejected during path deserialization (400 Bad Request)
-        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn download_valid_package() {
-        let settings = get_settings();
-        let mut db = MockDb::new();
-        // Checksum of adler 1.0.2 from the crates.io index.
-        db.expect_get_cratesio_cksum().returning(|_, _| {
-            Ok(Some(
-                "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe".to_string(),
-            ))
-        });
-        let kellnr = TestKellnr::with_db(settings, db);
-        let r = kellnr
-            .client
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/cratesio/adler/1.0.2/download")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::OK);
-        let body = r.into_body().collect().await.unwrap().to_bytes();
-        assert_eq!(12778, body.len());
-    }
-
-    #[tokio::test]
-    async fn cratesio_disabled_returns_404() {
-        let mut settings = get_settings();
-        settings.proxy.enabled = false;
-        let kellnr = TestKellnr::new(settings);
-        let r = kellnr
-            .client
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/cratesio/adler/1.0.2/download")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::NOT_FOUND);
-    }
-
     const UPSTREAM_CRATE: &[u8] = b"upstream crate bytes";
 
-    /// Serve `UPSTREAM_CRATE` for every download, like crates.io would.
-    async fn fake_upstream() -> Url {
+    /// Versions of the crate "upstream" on the fake crates.io: the version,
+    /// its license and whether the index checksum matches `UPSTREAM_CRATE`.
+    const VERSIONS: &[(&str, Option<&str>, bool)] = &[
+        ("1.0.0", Some("MIT OR Apache-2.0"), true),
+        ("1.1.0", Some("GPL-3.0-only"), true),
+        ("1.2.0", None, true),
+        ("1.3.0", Some("MIT"), false),
+    ];
+
+    #[derive(Default)]
+    struct Upstream {
+        api_down: AtomicBool,
+        api_calls: AtomicUsize,
+        index_calls: AtomicUsize,
+    }
+
+    fn index_line(vers: &str, matches: bool) -> String {
+        let cksum = if matches {
+            sha256::digest(UPSTREAM_CRATE)
+        } else {
+            sha256::digest(b"something else".as_slice())
+        };
+        format!(
+            r#"{{"name":"upstream","vers":"{vers}","deps":[],"cksum":"{cksum}","features":{{}},"yanked":false}}"#
+        )
+    }
+
+    fn api_body() -> String {
+        let versions: Vec<_> = VERSIONS
+            .iter()
+            .map(|(vers, license, _)| serde_json::json!({"num": vers, "license": license}))
+            .collect();
+        serde_json::json!({"crate": {"description": "upstream"}, "versions": versions}).to_string()
+    }
+
+    /// A fake crates.io with a sparse index, an API and downloads. Only the
+    /// crate "upstream" exists in the index. Downloads exist for every crate,
+    /// except for version 99.x and the crate `does_not_exist`.
+    async fn fake_cratesio(upstream: Arc<Upstream>) -> kellnr_settings::Proxy {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let app = Router::new().route(
-            "/{name}/{version}/download",
-            get(|| async { UPSTREAM_CRATE }),
-        );
+        let index_upstream = upstream.clone();
+        let app = Router::new()
+            .route(
+                "/index/{a}/{b}/{name}",
+                get(
+                    move |AxumPath((_, _, name)): AxumPath<(String, String, String)>| {
+                        let upstream = index_upstream.clone();
+                        async move {
+                            upstream.index_calls.fetch_add(1, Ordering::SeqCst);
+                            // Slow, so concurrent downloads overlap
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                            if name != "upstream" {
+                                return StatusCode::NOT_FOUND.into_response();
+                            }
+                            let index: Vec<_> = VERSIONS
+                                .iter()
+                                .map(|(vers, _, matches)| index_line(vers, *matches))
+                                .collect();
+                            ([(header::ETAG, "etag")], index.join("\n")).into_response()
+                        }
+                    },
+                ),
+            )
+            .route(
+                "/api/{name}",
+                get(move || {
+                    let upstream = upstream.clone();
+                    async move {
+                        upstream.api_calls.fetch_add(1, Ordering::SeqCst);
+                        if upstream.api_down.load(Ordering::SeqCst) {
+                            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                        } else {
+                            api_body().into_response()
+                        }
+                    }
+                }),
+            )
+            .route(
+                "/dl/{name}/{version}/download",
+                get(
+                    |AxumPath((name, version)): AxumPath<(String, String)>| async move {
+                        if name == "does_not_exist" || version.starts_with("99.") {
+                            StatusCode::NOT_FOUND.into_response()
+                        } else {
+                            UPSTREAM_CRATE.into_response()
+                        }
+                    },
+                ),
+            );
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-        Url::parse(&format!("http://{addr}/")).unwrap()
+
+        kellnr_settings::Proxy {
+            enabled: true,
+            index: Url::parse(&format!("http://{addr}/index/")).unwrap(),
+            api: Url::parse(&format!("http://{addr}/api/")).unwrap(),
+            url: Url::parse(&format!("http://{addr}/dl/")).unwrap(),
+            ..kellnr_settings::Proxy::default()
+        }
     }
 
-    async fn download_from_upstream(cksum: Option<String>) -> (StatusCode, Bytes, bool) {
-        let mut settings = get_settings();
-        settings.proxy.url = fake_upstream().await;
-        let mut db = MockDb::new();
-        db.expect_get_cratesio_cksum()
-            .returning(move |_, _| Ok(cksum.clone()));
-        let kellnr = TestKellnr::with_db(settings, db);
-
-        let r = kellnr
-            .client
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/cratesio/upstream/1.0.0/download")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        let status = r.status();
-        let body = r.into_body().collect().await.unwrap().to_bytes();
-        let cached = kellnr
-            .storage
-            .exists(
-                &OriginalName::try_from("upstream").unwrap(),
-                &Version::try_from("1.0.0").unwrap(),
-            )
-            .await
-            .unwrap();
-        (status, body, cached)
-    }
-
-    #[tokio::test]
-    async fn download_caches_crate_with_matching_checksum() {
-        let cksum = sha256::digest(UPSTREAM_CRATE);
-
-        let (status, body, cached) = download_from_upstream(Some(cksum)).await;
-
-        assert_eq!(StatusCode::OK, status);
-        assert_eq!(UPSTREAM_CRATE, &body[..]);
-        assert!(cached);
-    }
-
-    #[tokio::test]
-    async fn download_rejects_crate_with_wrong_checksum() {
-        let cksum = sha256::digest(b"something else".as_slice());
-
-        let (status, _, cached) = download_from_upstream(Some(cksum)).await;
-
-        assert_eq!(StatusCode::BAD_GATEWAY, status);
-        assert!(!cached);
-    }
-
-    #[tokio::test]
-    async fn download_serves_but_does_not_cache_crate_without_known_checksum() {
-        let (status, body, cached) = download_from_upstream(None).await;
-
-        assert_eq!(StatusCode::OK, status);
-        assert_eq!(UPSTREAM_CRATE, &body[..]);
-        assert!(!cached);
+    fn license_filter(unknown: LicenseUnknown) -> CratesioFilter {
+        CratesioFilter {
+            license_enabled: true,
+            license_allowed: vec!["MIT".to_string()],
+            license_unknown: unknown,
+            license_exempt_crates: vec![],
+        }
     }
 
     struct TestKellnr {
         path: PathBuf,
         client: Router,
         storage: Arc<CratesIoCrateStorage>,
-    }
-
-    fn get_settings() -> Settings {
-        Settings {
-            registry: kellnr_settings::Registry {
-                data_dir: "/tmp/".to_string() + &generate_rand_string(10),
-                session_age_seconds: 10,
-                ..kellnr_settings::Registry::default()
-            },
-            proxy: kellnr_settings::Proxy {
-                enabled: true,
-                ..kellnr_settings::Proxy::default()
-            },
-            ..Settings::default()
-        }
+        upstream: Arc<Upstream>,
     }
 
     impl TestKellnr {
-        fn new(settings: Settings) -> Self {
-            Self::with_db(settings, MockDb::new())
+        async fn new() -> Self {
+            Self::with_filter(CratesioFilter::default()).await
         }
 
-        fn with_db(settings: Settings, db: MockDb) -> Self {
+        async fn with_filter(filter: CratesioFilter) -> Self {
+            let upstream = Arc::new(Upstream::default());
+            let settings = Settings {
+                registry: kellnr_settings::Registry {
+                    data_dir: "/tmp/".to_string() + &generate_rand_string(10),
+                    ..kellnr_settings::Registry::default()
+                },
+                proxy: fake_cratesio(upstream.clone()).await,
+                cratesio_filter: filter,
+                ..Settings::default()
+            };
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let storage =
                 Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
             let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
+            let con_string = ConString::Sqlite(SqliteConString::from(&settings));
+            let db: Arc<dyn DbProvider> = Arc::new(Database::new(&con_string, 10).await.unwrap());
+
             TestKellnr {
                 path: PathBuf::from(&settings.registry.data_dir),
                 client: app(settings, storage.clone(), db),
                 storage,
+                upstream,
             }
+        }
+
+        async fn download(&self, name: &str, version: &str) -> (StatusCode, Bytes) {
+            let r = self
+                .client
+                .clone()
+                .oneshot(
+                    Request::get(format!("/api/v1/cratesio/{name}/{version}/download"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let status = r.status();
+            (status, r.into_body().collect().await.unwrap().to_bytes())
+        }
+
+        async fn is_cached(&self, name: &str, version: &str) -> bool {
+            self.storage
+                .exists(
+                    &OriginalName::try_from(name).unwrap(),
+                    &Version::try_from(version).unwrap(),
+                )
+                .await
+                .unwrap()
+        }
+
+        async fn cache(&self, name: &str, version: &str) {
+            self.storage
+                .put(
+                    &OriginalName::try_from(name).unwrap(),
+                    &Version::try_from(version).unwrap(),
+                    Arc::from(UPSTREAM_CRATE),
+                )
+                .await
+                .unwrap();
+        }
+
+        fn api_calls(&self) -> usize {
+            self.upstream.api_calls.load(Ordering::SeqCst)
         }
     }
 
@@ -455,11 +480,20 @@ mod tests {
         }
     }
 
-    fn app(settings: Settings, storage: Arc<CratesIoCrateStorage>, db: MockDb) -> Router {
+    fn app(
+        settings: Settings,
+        storage: Arc<CratesIoCrateStorage>,
+        db: Arc<dyn DbProvider>,
+    ) -> Router {
+        let download_filters = Arc::new(DownloadFilters::from_settings(&settings).unwrap());
+        let proxy_client = kellnr_common::cratesio_downloader::CLIENT.clone();
         let state = AppStateData {
+            cratesio_sync: CratesioSync::new(db.clone(), proxy_client.clone(), &settings.proxy),
+            download_filters,
+            proxy_client,
             settings: settings.into(),
             cratesio_storage: storage,
-            db: Arc::<MockDb>::new(db),
+            db,
             ..kellnr_appstate::test_state()
         };
 
@@ -474,5 +508,209 @@ mod tests {
         Router::new()
             .nest("/api/v1/cratesio", routes)
             .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn download_not_existing_package() {
+        let kellnr = TestKellnr::new().await;
+
+        let (status, _) = kellnr.download("does_not_exist", "0.1.0").await;
+
+        assert_eq!(StatusCode::NOT_FOUND, status);
+    }
+
+    #[tokio::test]
+    async fn download_invalid_package_name() {
+        let kellnr = TestKellnr::new().await;
+
+        let (status, _) = kellnr.download("-invalid_name", "0.1.0").await;
+
+        // An invalid crate name is rejected by the `OriginalName` extractor
+        // before reaching the handler.
+        assert_eq!(StatusCode::BAD_REQUEST, status);
+    }
+
+    #[tokio::test]
+    async fn download_not_existing_version() {
+        let kellnr = TestKellnr::new().await;
+
+        let (status, _) = kellnr.download("upstream", "99.1.0").await;
+
+        assert_eq!(StatusCode::NOT_FOUND, status);
+    }
+
+    #[tokio::test]
+    async fn download_invalid_package_version() {
+        let kellnr = TestKellnr::new().await;
+
+        let (status, _) = kellnr.download("upstream", "0.a.0").await;
+
+        // Invalid semver is rejected during path deserialization (400 Bad Request)
+        assert_eq!(StatusCode::BAD_REQUEST, status);
+    }
+
+    #[tokio::test]
+    async fn cratesio_disabled_returns_404() {
+        let settings = Settings {
+            registry: kellnr_settings::Registry {
+                data_dir: "/tmp/".to_string() + &generate_rand_string(10),
+                ..kellnr_settings::Registry::default()
+            },
+            ..Settings::default()
+        };
+        let data_dir = settings.registry.data_dir.clone();
+        let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
+        let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
+        let client = app(settings, storage, Arc::new(kellnr_db::mock::MockDb::new()));
+
+        let r = client
+            .oneshot(
+                Request::get("/api/v1/cratesio/upstream/1.0.0/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::NOT_FOUND, r.status());
+        rm_rf::remove(data_dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn cold_download_is_verified_and_cached_on_first_fetch() {
+        // Regression test: the index was never fetched through Kellnr, so the
+        // checksum is unknown until the download syncs the crate.
+        let kellnr = TestKellnr::new().await;
+
+        let (status, body) = kellnr.download("upstream", "1.0.0").await;
+
+        assert_eq!(StatusCode::OK, status);
+        assert_eq!(UPSTREAM_CRATE, &body[..]);
+        assert!(kellnr.is_cached("upstream", "1.0.0").await);
+    }
+
+    #[tokio::test]
+    async fn download_after_sync_does_not_sync_again() {
+        let kellnr = TestKellnr::new().await;
+
+        kellnr.download("upstream", "1.0.0").await;
+        kellnr.download("upstream", "1.1.0").await;
+
+        assert_eq!(1, kellnr.api_calls());
+    }
+
+    #[tokio::test]
+    async fn concurrent_cold_downloads_sync_once() {
+        let kellnr = TestKellnr::new().await;
+
+        let (a, b) = tokio::join!(
+            kellnr.download("upstream", "1.0.0"),
+            kellnr.download("upstream", "1.1.0"),
+        );
+
+        assert_eq!(StatusCode::OK, a.0);
+        assert_eq!(StatusCode::OK, b.0);
+        assert_eq!(1, kellnr.api_calls());
+        assert_eq!(1, kellnr.upstream.index_calls.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn download_rejects_crate_with_wrong_checksum() {
+        let kellnr = TestKellnr::new().await;
+
+        let (status, _) = kellnr.download("upstream", "1.3.0").await;
+
+        assert_eq!(StatusCode::BAD_GATEWAY, status);
+        assert!(!kellnr.is_cached("upstream", "1.3.0").await);
+    }
+
+    #[tokio::test]
+    async fn download_serves_but_does_not_cache_crate_without_known_checksum() {
+        // The index of the crate cannot be synced
+        let kellnr = TestKellnr::new().await;
+
+        let (status, body) = kellnr.download("noindex", "1.0.0").await;
+
+        assert_eq!(StatusCode::OK, status);
+        assert_eq!(UPSTREAM_CRATE, &body[..]);
+        assert!(!kellnr.is_cached("noindex", "1.0.0").await);
+    }
+
+    #[tokio::test]
+    async fn license_filter_allows_allowed_license() {
+        let kellnr = TestKellnr::with_filter(license_filter(LicenseUnknown::Deny)).await;
+
+        let (status, _) = kellnr.download("upstream", "1.0.0").await;
+
+        assert_eq!(StatusCode::OK, status);
+    }
+
+    #[tokio::test]
+    async fn license_filter_denies_on_cache_miss() {
+        let kellnr = TestKellnr::with_filter(license_filter(LicenseUnknown::Deny)).await;
+
+        let (status, body) = kellnr.download("upstream", "1.1.0").await;
+
+        assert_eq!(StatusCode::FORBIDDEN, status);
+        assert_eq!(
+            "Download of upstream@1.1.0 denied by Kellnr license filter: license \"GPL-3.0-only\" is not allowed",
+            String::from_utf8_lossy(&body)
+        );
+        assert!(!kellnr.is_cached("upstream", "1.1.0").await);
+    }
+
+    #[tokio::test]
+    async fn license_filter_denies_on_cache_hit() {
+        let kellnr = TestKellnr::with_filter(license_filter(LicenseUnknown::Deny)).await;
+        kellnr.cache("upstream", "1.1.0").await;
+
+        let (status, _) = kellnr.download("upstream", "1.1.0").await;
+
+        assert_eq!(StatusCode::FORBIDDEN, status);
+    }
+
+    #[tokio::test]
+    async fn license_filter_decides_on_declared_no_license() {
+        let deny = TestKellnr::with_filter(license_filter(LicenseUnknown::Deny)).await;
+        let allow = TestKellnr::with_filter(license_filter(LicenseUnknown::Allow)).await;
+
+        assert_eq!(
+            StatusCode::FORBIDDEN,
+            deny.download("upstream", "1.2.0").await.0
+        );
+        assert_eq!(StatusCode::OK, allow.download("upstream", "1.2.0").await.0);
+    }
+
+    #[tokio::test]
+    async fn license_unknown_decides_if_api_is_down_and_next_download_retries() {
+        let deny = TestKellnr::with_filter(license_filter(LicenseUnknown::Deny)).await;
+        deny.upstream.api_down.store(true, Ordering::SeqCst);
+        let allow = TestKellnr::with_filter(license_filter(LicenseUnknown::Allow)).await;
+        allow.upstream.api_down.store(true, Ordering::SeqCst);
+
+        assert_eq!(
+            StatusCode::FORBIDDEN,
+            deny.download("upstream", "1.0.0").await.0
+        );
+        assert_eq!(StatusCode::OK, allow.download("upstream", "1.0.0").await.0);
+        // The checksum was stored nonetheless
+        assert!(allow.is_cached("upstream", "1.0.0").await);
+
+        // The license is still unknown, so the next download syncs again and
+        // gets it once the API is back
+        deny.upstream.api_down.store(false, Ordering::SeqCst);
+        assert_eq!(StatusCode::OK, deny.download("upstream", "1.0.0").await.0);
+        assert_eq!(2, deny.api_calls());
+    }
+
+    #[tokio::test]
+    async fn exempt_crate_is_downloaded_regardless_of_license() {
+        let mut filter = license_filter(LicenseUnknown::Deny);
+        filter.license_exempt_crates = vec!["upstream".to_string()];
+        let kellnr = TestKellnr::with_filter(filter).await;
+
+        let (status, _) = kellnr.download("upstream", "1.1.0").await;
+
+        assert_eq!(StatusCode::OK, status);
     }
 }

@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::config_source::SourceMap;
 use crate::docs::{Docs, DocsArgs, DocsPartial, DocsProv};
+use crate::filter::{
+    CratesioFilter, CratesioFilterArgs, CratesioFilterPartial, CratesioFilterProv, RegistryFilter,
+    RegistryFilterArgs, RegistryFilterPartial, RegistryFilterProv,
+};
 use crate::gcs::{Gcs, GcsArgs, GcsPartial, GcsProv};
 use crate::local::{Local, LocalArgs, LocalPartial, LocalProv};
 use crate::log::{Log, LogArgs, LogPartial, LogProv};
@@ -56,6 +60,10 @@ pub struct Settings {
     pub toolchain: Toolchain,
     #[configurable(nested)]
     pub webhooks: Webhooks,
+    #[configurable(nested)]
+    pub cratesio_filter: CratesioFilter,
+    #[configurable(nested)]
+    pub registry_filter: RegistryFilter,
 }
 
 /// Build a `SettingsProv` from the configured sources: optional TOML file,
@@ -90,6 +98,10 @@ pub(crate) fn env_list_keys() -> &'static [&'static str] {
         "oauth2.scopes",
         "oauth2.additional_audiences",
         "docs.build_wrapper",
+        "cratesio_filter.license_allowed",
+        "cratesio_filter.license_exempt_crates",
+        "registry_filter.license_allowed",
+        "registry_filter.license_exempt_crates",
     ]
 }
 

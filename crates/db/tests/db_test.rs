@@ -1,10 +1,11 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::index_metadata::IndexMetadata;
+use kellnr_common::license::UNKNOWN_LICENSE;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
@@ -1745,6 +1746,7 @@ async fn search_in_crate_name_and_description_ranks_name_matches_first(
                 features2: None,
                 rust_version: None,
             }],
+            &HashMap::new(),
         )
         .await
         .unwrap();
@@ -1879,6 +1881,7 @@ async fn count_by_crate_name_and_description_with_cache(test_db: &kellnr_db::Dat
                 features2: None,
                 rust_version: None,
             }],
+            &HashMap::new(),
         )
         .await
         .unwrap();
@@ -3078,6 +3081,7 @@ async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &kellnr_db::Database) 
                 features2: None,
                 rust_version: None,
             }],
+            &HashMap::new(),
         )
         .await
         .unwrap();
@@ -3122,6 +3126,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
             "last_modified",
             None,
             &indices1,
+            &HashMap::new(),
         )
         .await
         .unwrap();
@@ -3160,6 +3165,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
             "last_modified2",
             None,
             &indices2,
+            &HashMap::new(),
         )
         .await
         .unwrap();
@@ -3691,6 +3697,7 @@ async fn cratesio_index_keeps_rust_version(test_db: &kellnr_db::Database) {
             "last_modified",
             None,
             &indices,
+            &HashMap::new(),
         )
         .await
         .unwrap();
@@ -3751,7 +3758,14 @@ async fn cratesio_index_heals_missing_rust_version(test_db: &kellnr_db::Database
 
     // A cache written before rust_version was known, e.g. by an older Kellnr.
     test_db
-        .add_cratesio_prefetch_data(&name, "etag", "last_modified", None, &[index.clone()])
+        .add_cratesio_prefetch_data(
+            &name,
+            "etag",
+            "last_modified",
+            None,
+            &[index.clone()],
+            &HashMap::new(),
+        )
         .await
         .unwrap();
 
@@ -3759,7 +3773,14 @@ async fn cratesio_index_heals_missing_rust_version(test_db: &kellnr_db::Database
     // MSRV. The row already exists, so only an update can heal it.
     index.rust_version = Some("1.85".to_string());
     test_db
-        .add_cratesio_prefetch_data(&name, "new_etag", "last_modified", None, &[index])
+        .add_cratesio_prefetch_data(
+            &name,
+            "new_etag",
+            "last_modified",
+            None,
+            &[index],
+            &HashMap::new(),
+        )
         .await
         .unwrap();
 
@@ -3990,43 +4011,156 @@ async fn statistics_respect_visibility(test_db: &kellnr_db::Database) {
     assert_eq!("restricted_other", last.0.to_string());
 }
 
-#[db_test]
-async fn get_cratesio_cksum_returns_index_checksum(test_db: &kellnr_db::Database) {
+fn upstream_index(vers: &str) -> IndexMetadata {
+    IndexMetadata {
+        name: "Upstream".to_string(),
+        vers: vers.to_string(),
+        deps: vec![],
+        cksum: format!("cksum-{vers}"),
+        features: BTreeMap::default(),
+        yanked: false,
+        links: None,
+        pubtime: None,
+        v: Some(1),
+        features2: None,
+        rust_version: None,
+    }
+}
+
+async fn add_upstream(
+    test_db: &kellnr_db::Database,
+    etag: &str,
+    versions: &[&str],
+    licenses: &[(&str, &str)],
+) {
+    let indices: Vec<_> = versions.iter().map(|v| upstream_index(v)).collect();
+    let licenses: HashMap<String, String> = licenses
+        .iter()
+        .map(|(v, l)| ((*v).to_string(), (*l).to_string()))
+        .collect();
     test_db
         .add_cratesio_prefetch_data(
             &OriginalName::try_from("Upstream").unwrap(),
-            "etag",
+            etag,
             "last_modified",
             None,
-            &[IndexMetadata {
-                name: "Upstream".to_string(),
-                vers: "1.0.0".to_string(),
-                deps: vec![],
-                cksum: "abc123".to_string(),
-                features: BTreeMap::default(),
-                yanked: false,
-                links: None,
-                pubtime: None,
-                v: Some(1),
-                features2: None,
-                rust_version: None,
-            }],
+            &indices,
+            &licenses,
         )
         .await
         .unwrap();
-    let name = NormalizedName::from_unchecked_str("upstream");
+}
 
-    let known = test_db
-        .get_cratesio_cksum(&name, &Version::try_from("1.0.0").unwrap())
+async fn upstream_meta(
+    test_db: &kellnr_db::Database,
+    version: &str,
+) -> Option<kellnr_db::provider::CratesioVersionMeta> {
+    test_db
+        .get_cratesio_version_meta(
+            &NormalizedName::from_unchecked_str("upstream"),
+            &Version::try_from(version).unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+#[db_test]
+async fn get_cratesio_version_meta_returns_checksum_and_license(test_db: &kellnr_db::Database) {
+    add_upstream(
+        test_db,
+        "etag",
+        &["1.0.0", "1.1.0", "1.2.0"],
+        &[("1.0.0", "MIT OR Apache-2.0"), ("1.1.0", UNKNOWN_LICENSE)],
+    )
+    .await;
+
+    assert_eq!(
+        Some(kellnr_db::provider::CratesioVersionMeta {
+            cksum: "cksum-1.0.0".to_string(),
+            license: Some("MIT OR Apache-2.0".to_string()),
+        }),
+        upstream_meta(test_db, "1.0.0").await
+    );
+    // The crate declares no license
+    assert_eq!(
+        Some(UNKNOWN_LICENSE.to_string()),
+        upstream_meta(test_db, "1.1.0").await.unwrap().license
+    );
+    // The license was not fetched, e.g. because the API call failed
+    assert_eq!(
+        Some(kellnr_db::provider::CratesioVersionMeta {
+            cksum: "cksum-1.2.0".to_string(),
+            license: None,
+        }),
+        upstream_meta(test_db, "1.2.0").await
+    );
+    assert_eq!(None, upstream_meta(test_db, "2.0.0").await);
+}
+
+#[db_test]
+async fn cratesio_prefetch_fills_missing_licenses_of_cached_versions(
+    test_db: &kellnr_db::Database,
+) {
+    // Cached before licenses were fetched, or while the API was down
+    add_upstream(test_db, "etag", &["1.0.0", "1.1.0"], &[]).await;
+    assert_eq!(None, upstream_meta(test_db, "1.0.0").await.unwrap().license);
+
+    add_upstream(
+        test_db,
+        "new_etag",
+        &["1.0.0", "1.1.0"],
+        &[("1.0.0", "MIT")],
+    )
+    .await;
+
+    assert_eq!(
+        Some("MIT".to_string()),
+        upstream_meta(test_db, "1.0.0").await.unwrap().license
+    );
+    assert_eq!(None, upstream_meta(test_db, "1.1.0").await.unwrap().license);
+}
+
+#[db_test]
+async fn cratesio_prefetch_keeps_known_licenses(test_db: &kellnr_db::Database) {
+    add_upstream(test_db, "etag", &["1.0.0"], &[("1.0.0", "MIT")]).await;
+
+    add_upstream(test_db, "new_etag", &["1.0.0"], &[("1.0.0", "GPL-3.0")]).await;
+
+    assert_eq!(
+        Some("MIT".to_string()),
+        upstream_meta(test_db, "1.0.0").await.unwrap().license
+    );
+}
+
+#[db_test]
+async fn get_crate_license_returns_license_of_version(test_db: &kellnr_db::Database) {
+    let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
+    let name = NormalizedName::from_unchecked_str("licensed");
+    let mut pm = PublishMetadata::minimal("licensed", "1.0.0");
+    pm.license = Some("MIT".to_string());
+    test_db
+        .add_crate(&pm, "cksum", 1, &created, "admin", None)
         .await
         .unwrap();
-    let unknown = test_db
-        .get_cratesio_cksum(&name, &Version::try_from("2.0.0").unwrap())
+    let pm = PublishMetadata::minimal("licensed", "2.0.0");
+    test_db
+        .add_crate(&pm, "cksum", 1, &created, "admin", None)
         .await
         .unwrap();
 
-    assert_eq!(Some("abc123".to_string()), known);
-    assert_eq!(None, unknown);
+    let license = |v: &'static str| {
+        let name = name.clone();
+        async move {
+            test_db
+                .get_crate_license(&name, &Version::try_from(v).unwrap())
+                .await
+                .unwrap()
+        }
+    };
+
+    assert_eq!(Some("MIT".to_string()), license("1.0.0").await);
+    assert_eq!(None, license("2.0.0").await);
+    assert_eq!(None, license("3.0.0").await);
 }
 
 #[db_test]

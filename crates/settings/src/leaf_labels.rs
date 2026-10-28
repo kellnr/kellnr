@@ -50,6 +50,16 @@ pub fn leaf_label(dotted_path: &str) -> Option<&'static str> {
         "proxy.num_threads" => "Number of Threads",
         "s3.cratesio_bucket" | "gcs.cratesio_bucket" => "Crates.io Bucket",
 
+        // Filter settings, reworded as the field names carry the filter as prefix.
+        "cratesio_filter.license_enabled" | "registry_filter.license_enabled" => {
+            "License Filter Enabled"
+        }
+        "cratesio_filter.license_allowed" | "registry_filter.license_allowed" => "Allowed Licenses",
+        "cratesio_filter.license_unknown" | "registry_filter.license_unknown" => "Unknown License",
+        "cratesio_filter.license_exempt_crates" | "registry_filter.license_exempt_crates" => {
+            "License-Exempt Crates"
+        }
+
         _ => return None,
     })
 }

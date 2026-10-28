@@ -17,7 +17,7 @@
 //!     .unwrap();
 //! ```
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use chrono::{DateTime, TimeZone, Utc};
 use kellnr_common::index_metadata::IndexMetadata;
@@ -259,6 +259,7 @@ pub async fn test_add_cached_crate(db: &Database, name: &str, version: &str) -> 
         last_modified,
         description,
         &indices,
+        &HashMap::new(),
     )
     .await
 }

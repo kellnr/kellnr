@@ -1,0 +1,22 @@
+[package]
+name = "kellnr-filter"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+
+[dependencies]
+# Internal dependencies
+kellnr-common.workspace = true
+kellnr-settings.workspace = true
+
+# External dependencies
+spdx.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

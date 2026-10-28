@@ -260,8 +260,19 @@ pub fn cli_flag_map() -> HashMap<String, String> {
 /// one `-` (those don't come from a `clap_prefix`-ed section and so don't
 /// map to a leaf).
 fn id_to_dotted_path(id: &str) -> Option<String> {
-    let (section, rest) = id.split_once('-')?;
-    Some(format!("{section}.{}", rest.replace('-', "_")))
+    // Sections whose name contains "_" have a prefix with "-", so the first
+    // "-" does not end the section for them.
+    const MULTI_WORD_SECTIONS: &[&str] = &["cratesio-filter", "registry-filter"];
+
+    let (section, rest) = MULTI_WORD_SECTIONS
+        .iter()
+        .find_map(|s| Some((*s, id.strip_prefix(s)?.strip_prefix('-')?)))
+        .or_else(|| id.split_once('-'))?;
+    Some(format!(
+        "{}.{}",
+        section.replace('-', "_"),
+        rest.replace('-', "_")
+    ))
 }
 
 #[cfg(test)]
@@ -420,6 +431,17 @@ mod tests {
         assert_eq!(
             map.get("local.port").map(String::as_str),
             Some("--local-port, -p")
+        );
+        // Sections with a multi-word name keep it together.
+        assert_eq!(
+            map.get("cratesio_filter.license_allowed")
+                .map(String::as_str),
+            Some("--cratesio-filter-license-allowed")
+        );
+        assert_eq!(
+            map.get("registry_filter.license_unknown")
+                .map(String::as_str),
+            Some("--registry-filter-license-unknown")
         );
         // The top-level `--config` arg is not a settings leaf, must not leak in.
         assert!(

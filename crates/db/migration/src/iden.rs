@@ -212,6 +212,7 @@ pub enum CratesIoMetaIden {
     Downloads,
     CratesIoFk,
     Documentation,
+    License,
 }
 
 #[derive(Iden, Copy, Clone)]

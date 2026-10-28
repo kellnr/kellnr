@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
@@ -31,6 +32,15 @@ pub enum PrefetchState {
     },
     NeedsUpdate(Prefetch),
     NotFound,
+}
+
+/// Checksum and license of a cached crates.io crate version.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CratesioVersionMeta {
+    pub cksum: String,
+    /// `None` if the license was not fetched yet, `UNKNOWN_LICENSE` if the
+    /// version declares none.
+    pub license: Option<String>,
 }
 
 /// Which download-restricted crates a caller may see in crate listings.
@@ -355,10 +365,19 @@ pub trait DbProvider: Send + Sync {
         last_modified: &str,
         description: Option<String>,
         indices: &[IndexMetadata],
+        licenses: &HashMap<String, String>,
     ) -> DbResult<Prefetch>;
     async fn get_cratesio_index_update_list(&self) -> DbResult<Vec<CratesioPrefetchMsg>>;
-    /// Checksum of a crates.io crate version from the cached index, if known.
-    async fn get_cratesio_cksum(
+    /// Checksum and license of a crates.io crate version from the cached
+    /// index, if the version is known.
+    async fn get_cratesio_version_meta(
+        &self,
+        crate_name: &NormalizedName,
+        version: &Version,
+    ) -> DbResult<Option<CratesioVersionMeta>>;
+    /// License of a Kellnr crate version, `None` if it declares none or the
+    /// version does not exist.
+    async fn get_crate_license(
         &self,
         crate_name: &NormalizedName,
         version: &Version,
@@ -816,6 +835,7 @@ pub mod mock {
                 last_modified: &str,
                 description: Option<String>,
                 indices: &[IndexMetadata],
+                licenses: &HashMap<String, String>,
             ) -> DbResult<Prefetch> {
                 unimplemented!()
             }
@@ -824,7 +844,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_cratesio_cksum(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<Option<String>> {
+            async fn get_cratesio_version_meta(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<Option<CratesioVersionMeta>> {
+                unimplemented!()
+            }
+
+            async fn get_crate_license(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<Option<String>> {
                 unimplemented!()
             }
 

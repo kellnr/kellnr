@@ -13,6 +13,8 @@ pub struct Model {
     pub crates_io_fk: i64,
     #[sea_orm(column_type = "Text", nullable)]
     pub documentation: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub license: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

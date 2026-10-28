@@ -110,6 +110,8 @@ const sectionDescriptors: SectionDescriptor[] = [
   { key: 'gcs', title: 'GCS Storage', icon: 'mdi-cloud-outline' },
   { key: 'toolchain', title: 'Toolchain', icon: 'mdi-wrench' },
   { key: 'webhooks', title: 'Webhooks', icon: 'mdi-webhook' },
+  { key: 'cratesio_filter', title: 'Crates.io Filter', icon: 'mdi-filter-outline' },
+  { key: 'registry_filter', title: 'Registry Filter', icon: 'mdi-filter-outline' },
 ];
 
 // Leaves whose boolean `true` value should render with a warning style

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use bytes::Bytes;
+use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
 pub use kellnr_auth::crate_access::has_restricted_crate_access;
@@ -19,6 +19,7 @@ use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use kellnr_db::provider::DbResult;
 use kellnr_error::api_error::{ApiError, ApiResult};
+use kellnr_filter::CrateInfo;
 use tracing::warn;
 
 use crate::pub_data::{EmptyCrateData, PubData};
@@ -647,6 +648,7 @@ pub async fn search(
     responses(
         (status = 200, description = "Crate archive", content_type = "application/octet-stream"),
         (status = 400, description = "Invalid package name or version"),
+        (status = 403, description = "Download denied by a registry filter, e.g. the license filter"),
         (status = 404, description = "Crate not found or download-restricted without access")
     ),
     security(("cargo_token" = []))
@@ -655,24 +657,39 @@ pub async fn download(
     State(state): AppState,
     token: token::OptionToken,
     Path((package, version)): Path<(OriginalName, Version)>,
-) -> ApiResult<Bytes> {
+) -> ApiResult<Response> {
     let db = state.db;
     let cs = state.crate_storage;
     let download_counter = state.download_counter;
-    check_download_auth(&package.to_normalized(), &token, &db).await?;
+    let normalized_name = package.to_normalized();
+    check_download_auth(&normalized_name, &token, &db).await?;
 
     let file = cs
         .get(&package, &version)
         .await
         .ok_or(RegistryError::CrateNotFound)?;
 
+    let filters = &state.download_filters.registry;
+    if !filters.is_empty() {
+        let license = db.get_crate_license(&normalized_name, &version).await?;
+        let krate = CrateInfo {
+            name: &normalized_name,
+            version: &version,
+            license: license.as_deref(),
+        };
+        if let Some(message) = filters.check(&krate).deny_message(&krate) {
+            warn!("{message}");
+            return Ok((StatusCode::FORBIDDEN, message).into_response());
+        }
+    }
+
     // Only count downloads of crates that exist, so requests for made-up names
     // cannot fill the counter (immediate DB call when flush_interval=0).
     download_counter
-        .increment_and_maybe_flush(package.to_normalized(), version)
+        .increment_and_maybe_flush(normalized_name, version)
         .await;
 
-    Ok(file)
+    Ok(file.into_response())
 }
 
 /// Create an empty crate placeholder
@@ -980,6 +997,7 @@ mod reg_api_tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use axum::routing::{delete, get, put};
+    use bytes::Bytes;
     use http_body_util::BodyExt;
     use hyper::header;
     use kellnr_appstate::AppStateData;
@@ -988,7 +1006,7 @@ mod reg_api_tests {
     use kellnr_db::mock::MockDb;
     use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, test_utils};
     use kellnr_error::api_error::ErrorDetails;
-    use kellnr_settings::Settings;
+    use kellnr_settings::{LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
@@ -2109,6 +2127,71 @@ mod reg_api_tests {
         }
 
         assert_eq!(1, kellnr.db.get_total_downloads().await.unwrap());
+    }
+
+    async fn download_with_registry_filter(
+        unknown: LicenseUnknown,
+        license: Option<&str>,
+    ) -> (StatusCode, String) {
+        let settings = Settings {
+            registry_filter: kellnr_settings::RegistryFilter {
+                license_enabled: true,
+                license_allowed: vec!["MIT".to_string()],
+                license_unknown: unknown,
+                license_exempt_crates: vec![],
+            },
+            ..get_settings()
+        };
+        let kellnr = TestKellnr::new(settings).await;
+        let mut metadata = PublishMetadata::minimal("filtered", "1.0.0");
+        metadata.license = license.map(ToString::to_string);
+        let (status, detail) = publish_metadata(&kellnr, TOKEN, &metadata).await;
+        // Publishing is never blocked by the filter
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/filtered/1.0.0/download")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = r.status();
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        (status, String::from_utf8_lossy(&body).to_string())
+    }
+
+    #[tokio::test]
+    async fn registry_filter_allows_allowed_license() {
+        let (status, _) =
+            download_with_registry_filter(LicenseUnknown::Deny, Some("MIT OR Apache-2.0")).await;
+
+        assert_eq!(StatusCode::OK, status);
+    }
+
+    #[tokio::test]
+    async fn registry_filter_denies_license() {
+        let (status, body) =
+            download_with_registry_filter(LicenseUnknown::Deny, Some("GPL-3.0-only")).await;
+
+        assert_eq!(StatusCode::FORBIDDEN, status);
+        assert_eq!(
+            "Download of filtered@1.0.0 denied by Kellnr license filter: license \"GPL-3.0-only\" is not allowed",
+            body
+        );
+    }
+
+    #[tokio::test]
+    async fn registry_filter_treats_missing_license_as_unknown() {
+        let (deny, _) = download_with_registry_filter(LicenseUnknown::Deny, None).await;
+        let (allow, _) = download_with_registry_filter(LicenseUnknown::Allow, None).await;
+
+        assert_eq!(StatusCode::FORBIDDEN, deny);
+        assert_eq!(StatusCode::OK, allow);
     }
 
     #[tokio::test]
@@ -3367,6 +3450,9 @@ mod reg_api_tests {
         let state = AppStateData {
             download_counter: Arc::new(DownloadCounter::new(db.clone(), 0)),
             db,
+            download_filters: Arc::new(
+                kellnr_filter::DownloadFilters::from_settings(&settings).unwrap(),
+            ),
             settings: settings.into(),
             crate_storage: cs.into(),
             // Use a fixed signing key matching the test cookie helper so that

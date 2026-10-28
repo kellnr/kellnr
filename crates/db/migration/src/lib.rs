@@ -13,6 +13,7 @@ mod m20261025_000001_auth_token_dates;
 mod m20261025_000002_crate_meta_size;
 mod m20261025_000003_crate_meta_publisher;
 mod m20261027_000001_crate_dependency;
+mod m20261028_000001_cratesio_meta_license;
 
 /// Fills the dependency table from the index, as the migration does. Public
 /// for the database tests.
@@ -37,6 +38,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261025_000002_crate_meta_size::Migration),
             Box::new(m20261025_000003_crate_meta_publisher::Migration),
             Box::new(m20261027_000001_crate_dependency::Migration),
+            Box::new(m20261028_000001_cratesio_meta_license::Migration),
         ]
     }
 }

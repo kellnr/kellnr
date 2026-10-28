@@ -20,11 +20,13 @@ keywords = ["cargo", "registry", "crates-io", "self-hosted"]
 kellnr-appstate = { version = "6.12.0", path = "./crates/appstate" }
 kellnr-auth = { version = "6.12.0", path = "./crates/auth" }
 kellnr-common = { version = "6.12.0", path = "./crates/common" }
+kellnr-cratesio-sync = { version = "6.12.0", path = "./crates/cratesio-sync" }
 kellnr-db = { version = "6.12.0", path = "./crates/db" }
 kellnr-db-testcontainer = { version = "6.12.0", path = "./crates/db/db-testcontainer" }
 kellnr-docs = { version = "6.12.0", path = "./crates/docs" }
 kellnr-entity = { version = "6.12.0", path = "./crates/db/entity" }
 kellnr-error = { version = "6.12.0", path = "./crates/error" }
+kellnr-filter = { version = "6.12.0", path = "./crates/filter" }
 kellnr-index = { version = "6.12.0", path = "./crates/index" }
 kellnr-migration = { version = "6.12.0", path = "./crates/db/migration" }
 kellnr-rustfs-testcontainer = { version = "6.12.0", path = "./crates/storage/rustfs-testcontainer" }
@@ -76,6 +78,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 sha2 = "0.11.0"
 sha256 = "1.6.0"
+spdx = "0.13.6"
 subtle = "2.6.1"
 syn = { version = "3.0.3", features = ["full"] }
 tar = "0.4.46"
