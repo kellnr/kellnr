@@ -3155,6 +3155,42 @@ async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &kellnr_db::Database) 
 }
 
 #[db_test]
+async fn is_cratesio_cache_up_to_date_with_a_single_validator(test_db: &kellnr_db::Database) {
+    test_db
+        .add_cratesio_prefetch_data(
+            &OriginalName::from_unchecked("crate".to_string()),
+            "\"etag\"",
+            "Fri, 30 Oct 2026 12:00:00 GMT",
+            None,
+            &[IndexMetadata::minimal("crate", "1.0.0", "cksum")],
+            &HashMap::new(),
+        )
+        .await
+        .unwrap();
+    let name = NormalizedName::from_unchecked("crate".to_string());
+    let up_to_date = PrefetchState::UpToDate {
+        etag: "\"etag\"".to_string(),
+        last_modified: "Fri, 30 Oct 2026 12:00:00 GMT".to_string(),
+    };
+
+    let weak_etag = test_db
+        .is_cratesio_cache_up_to_date(&name, Some("W/\"etag\"".to_string()), None)
+        .await
+        .unwrap();
+    let later_date = test_db
+        .is_cratesio_cache_up_to_date(
+            &name,
+            None,
+            Some("Sat, 31 Oct 2026 12:00:00 GMT".to_string()),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(up_to_date, weak_etag);
+    assert_eq!(up_to_date, later_date);
+}
+
+#[db_test]
 async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database) {
     let indices1 = vec![IndexMetadata {
         name: "crate".to_string(),
