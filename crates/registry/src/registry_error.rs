@@ -19,6 +19,8 @@ pub enum RegistryError {
     UrlParseError(#[from] url::ParseError),
     #[error("Failed request: {0}")]
     RequestError(#[from] reqwest::Error),
+    #[error("Crates.io responded with {0}")]
+    UpstreamStatus(StatusCode),
     #[error("Crate with version already exists: {0}-{1}")]
     CrateExists(String, String),
     #[error("Failed to extract bytes from request: {0}")]
@@ -51,6 +53,9 @@ impl From<RegistryError> for ApiError {
             }
             RegistryError::CrateNotFound => ApiError::from_err(&e, StatusCode::NOT_FOUND),
             RegistryError::NotOwner => ApiError::from_err(&e, StatusCode::FORBIDDEN),
+            RegistryError::RequestError(_) | RegistryError::UpstreamStatus(_) => {
+                ApiError::from_err(&e, StatusCode::BAD_GATEWAY)
+            }
             RegistryError::CrateExists(_, _) | RegistryError::OrphanedCrateFile(_, _) => {
                 ApiError::from_err(&e, StatusCode::CONFLICT)
             }
