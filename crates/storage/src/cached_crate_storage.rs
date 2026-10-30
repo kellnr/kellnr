@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use bytes::Bytes;
 use kellnr_common::original_name::OriginalName;
@@ -53,11 +52,11 @@ impl CachedCrateStorage {
         &self,
         name: &OriginalName,
         version: &Version,
-        crate_data: Arc<[u8]>,
+        crate_data: Bytes,
     ) -> Result<String, StorageError> {
         let crate_file = Self::file_name(name, version);
         self.storage
-            .put(&crate_file, crate_data.to_vec().into())
+            .put(&crate_file, crate_data.clone())
             .await
             .map_err(|e| {
                 if let StorageError::S3Error(object_store::Error::AlreadyExists {
@@ -121,6 +120,7 @@ impl CachedCrateStorage {
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use async_trait::async_trait;

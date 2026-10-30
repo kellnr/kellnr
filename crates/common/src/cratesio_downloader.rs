@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use std::time::Duration;
 
+use axum::body::Bytes;
 use reqwest::{Client, ClientBuilder, StatusCode, Url};
 use tracing::error;
 
@@ -81,7 +81,7 @@ pub async fn download_crate(
     name: &str,
     version: &str,
     url: &Url,
-) -> Result<Arc<[u8]>, DownloadCrateError> {
+) -> Result<Bytes, DownloadCrateError> {
     let path = format!("{name}/{version}/download");
     let target = url.join(&path)?;
 
@@ -97,13 +97,9 @@ pub async fn download_crate(
         }
     }?;
 
-    let crate_data = res
-        .bytes()
+    res.bytes()
         .await
-        .map_err(DownloadCrateError::CannotParseResponse)?;
-    let crate_data: Arc<[u8]> = Arc::from(crate_data.iter().as_slice());
-
-    Ok(crate_data)
+        .map_err(DownloadCrateError::CannotParseResponse)
 }
 
 #[cfg(test)]

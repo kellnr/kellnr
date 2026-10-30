@@ -279,7 +279,7 @@ async fn cache_crate(
     crate_storage: &CratesIoCrateStorage,
     name: &OriginalName,
     version: &Version,
-    crate_data: Arc<[u8]>,
+    crate_data: Bytes,
 ) -> Result<Bytes, StatusCode> {
     match crate_storage.put(name, version, crate_data).await {
         Ok(_) => crate_storage
@@ -505,7 +505,7 @@ mod tests {
                 .put(
                     &OriginalName::try_from(name).unwrap(),
                     &Version::try_from(version).unwrap(),
-                    Arc::from(UPSTREAM_CRATE),
+                    Bytes::from_static(UPSTREAM_CRATE),
                 )
                 .await
                 .unwrap();
@@ -576,7 +576,7 @@ mod tests {
             .put(
                 &OriginalName::try_from("upstream").unwrap(),
                 &Version::try_from("1.0.0").unwrap(),
-                Arc::from(UPSTREAM_CRATE),
+                Bytes::from_static(UPSTREAM_CRATE),
             )
             .await
             .unwrap();

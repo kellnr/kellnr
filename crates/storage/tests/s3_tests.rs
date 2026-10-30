@@ -1,5 +1,4 @@
 use std::convert::TryFrom;
-use std::sync::Arc;
 
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::publish_metadata::PublishMetadata;
@@ -61,7 +60,7 @@ fn test_docs_storage(data_dir: &str, url: &str) -> DocsStorage {
 async fn add_and_get_crate() {
     let host = container.get_host().await.unwrap().to_string();
     let url = format!("http://{host}:{port}");
-    let cratedata = Arc::new([0x00, 0x11, 0x22, 0x33, 0x44]);
+    let cratedata = bytes::Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44]);
     let metadata = PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0");
     let test_storage = TestS3Storage::from("Test_Add_crate_binary_Upper-Case", &url);
     let name = OriginalName::try_from(metadata.name).unwrap();
@@ -89,7 +88,7 @@ async fn add_and_get_crate() {
 async fn remove_crate() {
     let host = container.get_host().await.unwrap().to_string();
     let url = format!("http://{host}:{port}");
-    let cratedata = Arc::new([0x00, 0x11, 0x22, 0x33, 0x44]);
+    let cratedata = bytes::Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44]);
     let test_storage = TestS3Storage::from("test_delete", &url);
     let name = OriginalName::try_from("test").unwrap();
     let version = Version::try_from("0.1.0").unwrap();
