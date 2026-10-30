@@ -560,7 +560,7 @@ pub fn crate_index_model_to_index_metadata(
             yanked: ci.yanked,
             pubtime: ci.pubtime.map(|dt| dt.and_utc()),
             links: ci.links,
-            v: Some(ci.v as u32),
+            v: u32::try_from(ci.v).ok(),
             features2: None,
             rust_version: ci.rust_version,
         };
@@ -607,7 +607,7 @@ pub fn cratesio_index_model_to_index_metadata(
             features2,
             yanked: ci.yanked,
             links: ci.links.clone(),
-            v: Some(ci.v as u32),
+            v: u32::try_from(ci.v).ok(),
             rust_version: ci.rust_version.clone(),
         };
         index_metadata.push(cm);

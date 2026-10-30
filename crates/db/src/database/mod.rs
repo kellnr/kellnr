@@ -974,7 +974,7 @@ impl DbProvider for Database {
         krate::Entity::update_many()
             .col_expr(
                 krate::Column::TotalDownloads,
-                Expr::col(krate::Column::TotalDownloads).add(count as i64),
+                Expr::col(krate::Column::TotalDownloads).add(saturating_i64(count)),
             )
             .filter(krate::Column::Name.eq(crate_name))
             .exec(&txn)
@@ -990,7 +990,7 @@ impl DbProvider for Database {
         crate_meta::Entity::update_many()
             .col_expr(
                 crate_meta::Column::Downloads,
-                Expr::col(crate_meta::Column::Downloads).add(count as i64),
+                Expr::col(crate_meta::Column::Downloads).add(saturating_i64(count)),
             )
             .filter(
                 Cond::all()
@@ -1015,7 +1015,7 @@ impl DbProvider for Database {
         cratesio_crate::Entity::update_many()
             .col_expr(
                 cratesio_crate::Column::TotalDownloads,
-                Expr::col(cratesio_crate::Column::TotalDownloads).add(count as i64),
+                Expr::col(cratesio_crate::Column::TotalDownloads).add(saturating_i64(count)),
             )
             .filter(cratesio_crate::Column::Name.eq(crate_name))
             .exec(&txn)
@@ -1031,7 +1031,7 @@ impl DbProvider for Database {
         cratesio_meta::Entity::update_many()
             .col_expr(
                 cratesio_meta::Column::Downloads,
-                Expr::col(cratesio_meta::Column::Downloads).add(count as i64),
+                Expr::col(cratesio_meta::Column::Downloads).add(saturating_i64(count)),
             )
             .filter(
                 Cond::all()
@@ -1614,7 +1614,12 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?
             .into_iter()
-            .map(|x| (x.original_name, x.total_downloads as u64))
+            .map(|x| {
+                (
+                    x.original_name,
+                    u64::try_from(x.total_downloads).unwrap_or(0),
+                )
+            })
             .collect())
     }
 
@@ -2507,7 +2512,12 @@ impl DbProvider for Database {
             .all(&self.db_con)
             .await?
             .into_iter()
-            .filter_map(|w| webhook_model_to_obj(w).ok())
+            .filter_map(|w| {
+                let id = w.id;
+                webhook_model_to_obj(w)
+                    .inspect_err(|e| warn!("Skipping invalid webhook {id}: {e}"))
+                    .ok()
+            })
             .collect())
     }
 
@@ -2961,6 +2971,12 @@ impl DbProvider for Database {
             })
             .collect())
     }
+}
+
+/// Converts a count to the type of the database columns, saturating as no
+/// realistic count gets that large.
+fn saturating_i64(count: u64) -> i64 {
+    i64::try_from(count).unwrap_or(i64::MAX)
 }
 
 fn parse_db_version(value: &str) -> DbResult<Version> {
