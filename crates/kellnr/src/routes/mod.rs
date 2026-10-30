@@ -34,13 +34,11 @@ mod ui_routes;
 mod user_routes;
 mod webhook_routes;
 
-pub fn create_router(
-    state: AppStateData,
-    max_docs_size: usize,
-    max_crate_size: usize,
-    max_toolchain_size: usize,
-    oauth2_handler: Option<Arc<OAuth2Handler>>,
-) -> Router {
+pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handler>>) -> Router {
+    let max_docs_size = state.settings.docs.max_size;
+    let max_crate_size = state.settings.registry.max_crate_size as usize;
+    let max_toolchain_size = state.settings.toolchain.max_size;
+
     // Docs are served from the pluggable Storage backend, not embedded assets.
     let docs_service: Router<AppStateData> = Router::new()
         .route("/{*path}", get(docs_static::serve_doc_file))
@@ -325,7 +323,7 @@ mod tests {
     }
 
     async fn get_docs(state: AppStateData, request: Request<Body>) -> StatusCode {
-        create_router(state, 100, 100, 100, None)
+        create_router(state, None)
             .oneshot(request)
             .await
             .unwrap()
@@ -480,7 +478,7 @@ mod tests {
     async fn restricted_docs_never_answer_conditional_request_without_access() {
         let state = docs_test_state(restricted_db());
         let uri = put_secret_docs(&state).await;
-        let app = create_router(state, 100, 100, 100, None);
+        let app = create_router(state, None);
 
         let allowed = app
             .clone()
@@ -522,7 +520,7 @@ mod tests {
             .await
             .unwrap();
 
-        let app = create_router(state, 100, 100, 100, None);
+        let app = create_router(state, None);
 
         let r = app
             .oneshot(
@@ -557,7 +555,7 @@ mod tests {
     }
 
     async fn get_response(state: AppStateData, uri: &str) -> axum::response::Response {
-        create_router(state, 100, 100, 100, None)
+        create_router(state, None)
             .oneshot(Request::get(uri).body(Body::empty()).unwrap())
             .await
             .unwrap()
@@ -637,7 +635,7 @@ mod tests {
             .await
             .unwrap();
 
-        let r = create_router(state, 100, 100, 100, None)
+        let r = create_router(state, None)
             .oneshot(
                 Request::get(format!("/docs/{key}"))
                     .body(Body::empty())
@@ -683,7 +681,7 @@ mod tests {
             .await
             .unwrap();
 
-        let app = create_router(state, 100, 100, 100, None);
+        let app = create_router(state, None);
 
         let first = app
             .clone()
@@ -716,7 +714,7 @@ mod tests {
     #[tokio::test]
     async fn docs_route_404_for_missing_file() {
         let state = docs_test_state(unrestricted_db());
-        let app = create_router(state, 100, 100, 100, None);
+        let app = create_router(state, None);
 
         let r = app
             .oneshot(

@@ -225,10 +225,7 @@ async fn run_server(resolved: ResolvedSettings) {
     init_webhook_service(&settings, db.clone());
 
     let signing_key = init_cookie_signing_key(&settings);
-    let max_docs_size = settings.docs.max_size;
-    let max_crate_size = settings.registry.max_crate_size as usize;
     let route_path_prefix = settings.origin.path.clone();
-    let max_toolchain_size = settings.toolchain.max_size;
     let token_cache = Arc::new(TokenCacheManager::new(
         settings.registry.token_cache_enabled,
         settings.registry.token_cache_ttl_seconds,
@@ -361,13 +358,7 @@ async fn run_server(resolved: ResolvedSettings) {
     };
 
     // Create router using the route module
-    let mut app = routes::create_router(
-        state,
-        max_docs_size,
-        max_crate_size,
-        max_toolchain_size,
-        oauth2_handler,
-    );
+    let mut app = routes::create_router(state, oauth2_handler);
     if !route_path_prefix.is_empty() {
         let route_path_prefix_with_trailing = format!("{route_path_prefix}/");
         app = Router::new()
