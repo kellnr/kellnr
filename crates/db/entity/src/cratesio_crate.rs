@@ -19,6 +19,8 @@ pub struct Model {
     pub total_downloads: i64,
     #[sea_orm(column_type = "Text")]
     pub max_version: String,
+    #[sea_orm(column_type = "Text")]
+    pub last_updated: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

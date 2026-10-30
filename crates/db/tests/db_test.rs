@@ -4615,3 +4615,90 @@ async fn migration_skips_dependencies_that_cannot_be_read(test_db: &kellnr_db::D
         dependents_of_foo(test_db).await
     );
 }
+
+async fn add_cached(
+    test_db: &kellnr_db::Database,
+    name: &str,
+    last_modified: &str,
+    description: Option<&str>,
+) {
+    let index = IndexMetadata {
+        name: name.to_string(),
+        ..upstream_index("1.0.0")
+    };
+    test_db
+        .add_cratesio_prefetch_data(
+            &OriginalName::try_from(name).unwrap(),
+            "etag",
+            last_modified,
+            description.map(str::to_string),
+            &[index],
+            &HashMap::new(),
+        )
+        .await
+        .unwrap();
+}
+
+async fn cached_overview(test_db: &kellnr_db::Database, sort: CrateSort) -> Vec<CrateOverview> {
+    test_db
+        .get_crate_overview_list(
+            100,
+            0,
+            true,
+            &CrateVisibility::All,
+            sort,
+            &CrateTagFilter::default(),
+        )
+        .await
+        .unwrap()
+}
+
+#[db_test]
+async fn crate_overview_sorts_cached_crates_by_their_last_modified_date(
+    test_db: &kellnr_db::Database,
+) {
+    test_add_crate(
+        test_db,
+        "local",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &Utc.with_ymd_and_hms(2024, 5, 1, 0, 0, 0).unwrap(),
+    )
+    .await
+    .unwrap();
+    add_cached(test_db, "newer", "Thu, 01 Oct 2026 12:34:56 GMT", None).await;
+    add_cached(test_db, "older", "Mon, 01 Jan 2018 00:00:00 GMT", None).await;
+    add_cached(test_db, "unknown", "", None).await;
+
+    let overview = cached_overview(test_db, CrateSort::Updated).await;
+
+    let names: Vec<_> = overview.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(vec!["newer", "local", "older", "unknown"], names);
+    assert_eq!("2026-10-01 12:34:56", overview[0].date);
+
+    // A sync without a valid date keeps the known one
+    add_cached(test_db, "newer", "", None).await;
+    let overview = cached_overview(test_db, CrateSort::Updated).await;
+    assert_eq!("2026-10-01 12:34:56", overview[0].date);
+}
+
+#[db_test]
+async fn migration_sets_date_of_cached_crates(test_db: &kellnr_db::Database) {
+    add_cached(test_db, "newer", "Thu, 01 Oct 2026 12:34:56 GMT", None).await;
+    add_cached(test_db, "invalid", "last_modified", None).await;
+
+    test_refill_cratesio_last_updated(test_db).await.unwrap();
+
+    let dates: Vec<_> = cached_overview(test_db, CrateSort::Updated)
+        .await
+        .into_iter()
+        .map(|c| (c.name, c.date))
+        .collect();
+    assert_eq!(
+        vec![
+            ("newer".to_string(), "2026-10-01 12:34:56".to_string()),
+            ("invalid".to_string(), String::new()),
+        ],
+        dates
+    );
+}

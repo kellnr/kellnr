@@ -394,6 +394,17 @@ pub async fn test_refill_crate_dependencies(db: &Database) -> DbResult<()> {
     Ok(())
 }
 
+/// Clears the date of all cached crates.io crates and sets it again from
+/// their Last-Modified header, like the migration that added it does.
+pub async fn test_refill_cratesio_last_updated(db: &Database) -> DbResult<()> {
+    cratesio_crate::Entity::update_many()
+        .col_expr(cratesio_crate::Column::LastUpdated, Expr::value(""))
+        .exec(&db.db_con)
+        .await?;
+    kellnr_migration::fill_cratesio_last_updated(&db.db_con).await?;
+    Ok(())
+}
+
 /// Overwrites the deps in the index of all versions of a crate, e.g. to
 /// store deps that cannot be parsed.
 pub async fn test_set_index_deps(
