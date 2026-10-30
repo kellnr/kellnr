@@ -5,12 +5,15 @@
 //! attempts are counted per username instead. Unknown usernames are counted
 //! the same way, so the throttle does not reveal which users exist.
 
+use std::hash::{BuildHasher, RandomState};
 use std::time::{Duration, Instant};
 
 use moka::future::Cache;
 
 /// Upper bound of usernames tracked at once. Bounds memory when an attacker
 /// sprays random usernames; the least valuable entries are evicted first.
+/// Usernames are tracked by their hash, so long usernames do not take more
+/// memory.
 const MAX_TRACKED_USERS: u64 = 100_000;
 
 #[derive(Clone, Copy)]
@@ -22,7 +25,10 @@ struct AttemptWindow {
 pub struct LoginThrottle {
     max_attempts: u32,
     window: Duration,
-    attempts: Option<Cache<String, AttemptWindow>>,
+    attempts: Option<Cache<u64, AttemptWindow>>,
+    /// Randomly seeded, so attackers cannot craft usernames that share the
+    /// hash of a victim.
+    hasher: RandomState,
 }
 
 impl LoginThrottle {
@@ -39,7 +45,12 @@ impl LoginThrottle {
             max_attempts,
             window,
             attempts,
+            hasher: RandomState::new(),
         }
+    }
+
+    fn key(&self, user: &str) -> u64 {
+        self.hasher.hash_one(user)
     }
 
     /// Registers a password check for `user` before it runs. Returns `false`
@@ -57,7 +68,7 @@ impl LoginThrottle {
         // Saturate one above the limit so the count cannot overflow.
         let ceiling = self.max_attempts.saturating_add(1);
         let entry = attempts
-            .entry_by_ref(user)
+            .entry(self.key(user))
             .and_upsert_with(|existing| {
                 let mut current = existing
                     .map(moka::Entry::into_value)
@@ -77,7 +88,7 @@ impl LoginThrottle {
     /// Clears the attempts of `user` after a successful password check.
     pub async fn succeeded(&self, user: &str) {
         if let Some(attempts) = &self.attempts {
-            attempts.invalidate(user).await;
+            attempts.invalidate(&self.key(user)).await;
         }
     }
 }
