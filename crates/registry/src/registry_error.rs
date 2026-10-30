@@ -23,6 +23,10 @@ pub enum RegistryError {
     CrateExists(String, String),
     #[error("Failed to extract bytes from request: {0}")]
     ExtractBytesFailed(#[from] axum::extract::rejection::BytesRejection),
+    #[error(
+        "A different crate file of {0} {1} exists in the storage without being published. An administrator must remove the file {0}-{1}.crate from the crate storage"
+    )]
+    OrphanedCrateFile(String, String),
     #[error("Not the owner of the crate")]
     NotOwner,
     #[error("Crate not found")]
@@ -47,7 +51,9 @@ impl From<RegistryError> for ApiError {
             }
             RegistryError::CrateNotFound => ApiError::from_err(&e, StatusCode::NOT_FOUND),
             RegistryError::NotOwner => ApiError::from_err(&e, StatusCode::FORBIDDEN),
-            RegistryError::CrateExists(_, _) => ApiError::from_err(&e, StatusCode::CONFLICT),
+            RegistryError::CrateExists(_, _) | RegistryError::OrphanedCrateFile(_, _) => {
+                ApiError::from_err(&e, StatusCode::CONFLICT)
+            }
             _ => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
         }
     }

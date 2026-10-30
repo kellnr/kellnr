@@ -5,6 +5,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use bytes::Bytes;
 use chrono::Utc;
 use kellnr_appstate::{AppState, DbState};
 pub use kellnr_auth::crate_access::has_restricted_crate_access;
@@ -20,7 +21,9 @@ use kellnr_db::DbProvider;
 use kellnr_db::provider::DbResult;
 use kellnr_error::api_error::{ApiError, ApiResult};
 use kellnr_filter::CrateInfo;
-use tracing::warn;
+use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+use kellnr_storage::storage_error::StorageError;
+use tracing::{error, warn};
 
 use crate::pub_data::{EmptyCrateData, PubData};
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
@@ -788,7 +791,7 @@ pub async fn publish(
     let version = Version::try_from(&pub_data.metadata.vers)?;
 
     // Check if user from token is an owner of the crate.
-    // If not, he is not allowed push a new version.
+    // If not, they are not allowed to push a new version.
     // Check if crate with same version already exists.
     let id = db.get_crate_id(&normalized_name).await?;
     match (id, settings.registry.new_crates_restricted) {
@@ -838,20 +841,18 @@ pub async fn publish(
 
     // Store the crate file and add it to the DB in a detached task. If the client
     // disconnects, the handler future gets dropped. Without the task, that could happen
-    // between the storage write and the DB commit, leaving an orphaned crate file that
-    // blocks every later publish of this version.
+    // between the storage write and the DB commit, leaving an orphaned crate file.
     let created = tokio::spawn({
         let db = db.clone();
         let cs = cs.clone();
         let orig_name = orig_name.clone();
         let version = version.clone();
         async move {
-            // Set SHA256 from crate file
-            let cksum = cs.put(&orig_name, &version, pub_data.cratedata).await?;
-
+            let cratedata = pub_data.cratedata;
+            let adopted = store_crate(&cs, &orig_name, &version, &cratedata).await?;
+            let cksum = sha256::digest(&*cratedata);
             let created = Utc::now();
 
-            // Add crate to DB
             if let Err(e) = db
                 .add_crate(
                     &pub_data.metadata,
@@ -863,9 +864,14 @@ pub async fn publish(
                 )
                 .await
             {
-                // On DB error rollback storage insert and bail.
-                let _ = cs.delete(&orig_name, &version).await;
+                // An adopted file was not stored by this publish, so it is kept.
+                if !adopted {
+                    remove_stored_crate(&db, &cs, &orig_name, &version).await;
+                }
                 return Err(ApiError::from(e));
+            }
+            if adopted {
+                restore_adopted_crate(&cs, &orig_name, &version, cratedata).await;
             }
             Ok(created)
         }
@@ -873,6 +879,8 @@ pub async fn publish(
     .await
     .map_err(|e| ApiError::internal(&e))??;
 
+    // The crate is published at this point, so later failures are only logged
+    // instead of telling cargo that the publish failed.
     kellnr_webhooks::notify_crate(
         if id.is_none() {
             WebhookEvent::CrateAdd
@@ -888,15 +896,92 @@ pub async fn publish(
 
     // Add crate to queue for doc extraction if there is no documentation value set already
     if settings.docs.enabled && !has_docs_link {
-        db.add_doc_queue(
-            &normalized_name,
-            &version,
-            &cs.create_rand_doc_queue_path().await?,
-        )
-        .await?;
+        match cs.create_rand_doc_queue_path().await {
+            Ok(path) => {
+                if let Err(e) = db.add_doc_queue(&normalized_name, &version, &path).await {
+                    error!("Failed to queue the docs build of {normalized_name} {version}: {e}");
+                }
+            }
+            Err(e) => {
+                error!("Failed to create the docs queue path for {normalized_name} {version}: {e}");
+            }
+        }
     }
 
     Ok(Json(PubDataSuccess::new()))
+}
+
+/// Store the crate file. Returns `true` if an orphaned file with the same
+/// content already existed and is used instead. Such a file is left behind
+/// if Kellnr stops between storing a crate and committing it to the database.
+/// A file with a different content is never overwritten.
+async fn store_crate(
+    cs: &KellnrCrateStorage,
+    name: &OriginalName,
+    version: &Version,
+    cratedata: &Bytes,
+) -> ApiResult<bool> {
+    match cs.put(name, version, cratedata.clone()).await {
+        Ok(_) => Ok(false),
+        Err(StorageError::CrateExists(_, _)) => match cs.get(name, version).await {
+            Some(existing) if existing == *cratedata => {
+                warn!("Using the existing crate file of {name} {version} with the same content");
+                Ok(true)
+            }
+            Some(_) => {
+                error!(
+                    "A different crate file of {name} {version} exists without a database entry"
+                );
+                Err(RegistryError::OrphanedCrateFile(name.to_string(), version.to_string()).into())
+            }
+            None => Err(ApiError::internal(&StorageError::GenericError(format!(
+                "Failed to read the existing crate file of {name} {version}"
+            )))),
+        },
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Remove the crate file stored by a publish that failed to commit, unless a
+/// concurrent publish of the same file committed the version in the meantime.
+async fn remove_stored_crate(
+    db: &Arc<dyn DbProvider>,
+    cs: &KellnrCrateStorage,
+    name: &OriginalName,
+    version: &Version,
+) {
+    let committed = match db.get_crate_id(&name.to_normalized()).await {
+        Ok(Some(id)) => db.crate_version_exists(id, version).await,
+        Ok(None) => Ok(false),
+        Err(e) => Err(e),
+    };
+    match committed {
+        Ok(false) => {
+            if let Err(e) = cs.delete(name, version).await {
+                error!(
+                    "Failed to remove the crate file of the failed publish of {name} {version}: {e}"
+                );
+            }
+        }
+        Ok(true) => {}
+        Err(e) => {
+            error!("Keeping the crate file of the failed publish of {name} {version}: {e}");
+        }
+    }
+}
+
+/// A concurrent publish of the same file can remove an adopted file if its
+/// database commit failed, so it is stored again if it is missing.
+async fn restore_adopted_crate(
+    cs: &KellnrCrateStorage,
+    name: &OriginalName,
+    version: &Version,
+    cratedata: Bytes,
+) {
+    match cs.put(name, version, cratedata).await {
+        Ok(_) | Err(StorageError::CrateExists(_, _)) => {}
+        Err(e) => error!("Failed to restore the crate file of {name} {version}: {e}"),
+    }
 }
 
 /// Yank a crate version
@@ -1156,6 +1241,122 @@ mod reg_api_tests {
             detail
         );
         let name = NormalizedName::from_unchecked_str("mycrate");
+        assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
+    }
+
+    /// Path of the crate file in the storage of the test settings.
+    fn crate_file(settings: &Settings, name: &str, version: &str) -> PathBuf {
+        settings.bin_path().join(format!("{name}-{version}.crate"))
+    }
+
+    /// The crate bytes `pub_body` sends.
+    const CRATE_BYTES: [u8; 4] = [0x1f, 0x8b, 0x08, 0x00];
+
+    #[tokio::test]
+    async fn publish_adopts_orphaned_crate_file_with_same_content() {
+        let settings = get_settings();
+        let file = crate_file(&settings, "orphan", "1.0.0");
+        let kellnr = TestKellnr::new(settings).await;
+        std::fs::write(&file, CRATE_BYTES).unwrap();
+
+        let (status, detail) =
+            publish_metadata(&kellnr, TOKEN, &PublishMetadata::minimal("orphan", "1.0.0")).await;
+
+        assert_eq!(StatusCode::OK, status, "{detail}");
+        assert_eq!(CRATE_BYTES.to_vec(), std::fs::read(&file).unwrap());
+        let name = NormalizedName::from_unchecked_str("orphan");
+        assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
+    }
+
+    #[tokio::test]
+    async fn publish_rejects_orphaned_crate_file_with_other_content() {
+        let settings = get_settings();
+        let file = crate_file(&settings, "orphan", "1.0.0");
+        let kellnr = TestKellnr::new(settings).await;
+        std::fs::write(&file, b"other").unwrap();
+
+        let (status, detail) =
+            publish_metadata(&kellnr, TOKEN, &PublishMetadata::minimal("orphan", "1.0.0")).await;
+
+        assert_eq!(StatusCode::CONFLICT, status);
+        assert_eq!(
+            "ERROR: A different crate file of orphan 1.0.0 exists in the storage without being published. An administrator must remove the file orphan-1.0.0.crate from the crate storage",
+            detail
+        );
+        assert_eq!(b"other".to_vec(), std::fs::read(&file).unwrap());
+        let name = NormalizedName::from_unchecked_str("orphan");
+        assert!(kellnr.db.get_crate_id(&name).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn failed_publish_keeps_adopted_crate_file() {
+        let settings = get_settings();
+        let file = crate_file(&settings, "foo_bar", "1.0.0");
+        let kellnr = TestKellnr::new(settings).await;
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("foo-bar", "1.0.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+        std::fs::write(&file, CRATE_BYTES).unwrap();
+
+        // Fails in the database as the name only differs in '-' and '_'.
+        let (status, _) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("foo_bar", "1.0.0"),
+        )
+        .await;
+
+        assert_eq!(StatusCode::BAD_REQUEST, status);
+        assert!(file.exists());
+    }
+
+    #[tokio::test]
+    async fn failed_publish_removes_its_crate_file() {
+        let settings = get_settings();
+        let file = crate_file(&settings, "foo_bar", "1.0.0");
+        let kellnr = TestKellnr::new(settings).await;
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("foo-bar", "1.0.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        let (status, _) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("foo_bar", "1.0.0"),
+        )
+        .await;
+
+        assert_eq!(StatusCode::BAD_REQUEST, status);
+        assert!(!file.exists());
+    }
+
+    #[tokio::test]
+    async fn publish_succeeds_when_queueing_the_docs_build_fails() {
+        let mut settings = get_settings();
+        settings.docs.enabled = true;
+        let doc_queue = settings.doc_queue_path();
+        let kellnr = TestKellnr::new(settings).await;
+        // A file where the queue directory belongs makes queueing fail.
+        let _ = std::fs::remove_dir_all(&doc_queue);
+        std::fs::write(&doc_queue, b"").unwrap();
+
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("docs_fail", "1.0.0"),
+        )
+        .await;
+
+        assert_eq!(StatusCode::OK, status, "{detail}");
+        let name = NormalizedName::from_unchecked_str("docs_fail");
         assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
     }
 
