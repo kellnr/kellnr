@@ -53,11 +53,13 @@ pub async fn embedded_static_handler(uri: Uri) -> Response<Body> {
     }
 
     // SPA fallback: for any non-asset route, serve `index.html`
-    // (but keep true 404s for unknown files under /assets or /img etc.)
+    // (but keep true 404s for unknown files under /assets or /img etc. and
+    // for unknown API endpoints, which clients expect to answer with JSON)
     let looks_like_asset = candidate.contains('.')
         || candidate.starts_with("assets/")
         || candidate.starts_with("img/");
-    if looks_like_asset {
+    let is_api = candidate == "api" || candidate.starts_with("api/");
+    if looks_like_asset || is_api {
         return Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::from(Cow::Borrowed("404 Not Found")))
@@ -70,4 +72,27 @@ pub async fn embedded_static_handler(uri: Uri) -> Response<Body> {
 #[allow(clippy::unused_async)]
 pub async fn embedded_static_root_handler() -> Response<Body> {
     serve_embedded_asset("index.html")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn status_of(path: &str) -> StatusCode {
+        embedded_static_handler(Uri::try_from(path).unwrap())
+            .await
+            .status()
+    }
+
+    #[tokio::test]
+    async fn unknown_api_paths_are_not_found() {
+        assert_eq!(StatusCode::NOT_FOUND, status_of("/api").await);
+        assert_eq!(StatusCode::NOT_FOUND, status_of("/api/v1/toolchains").await);
+    }
+
+    #[tokio::test]
+    async fn ui_routes_serve_the_spa() {
+        assert_eq!(StatusCode::OK, status_of("/crates").await);
+        assert_eq!(StatusCode::OK, status_of("/apikeys").await);
+    }
 }
