@@ -5349,3 +5349,15 @@ async fn get_original_name_returns_the_published_spelling(test_db: &kellnr_db::D
     );
     assert_eq!(None, missing);
 }
+
+#[db_test]
+async fn is_username_available_ignores_case(test_db: &kellnr_db::Database) {
+    test_db
+        .add_user("Alice", "pwd", false, false)
+        .await
+        .unwrap();
+
+    assert!(!test_db.is_username_available("alice").await.unwrap());
+    assert!(!test_db.is_username_available("Alice").await.unwrap());
+    assert!(test_db.is_username_available("bob").await.unwrap());
+}

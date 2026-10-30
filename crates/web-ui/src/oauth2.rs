@@ -289,9 +289,13 @@ pub async fn callback(
             // Generate unique username
             let username = generate_unique_username(&user_info, |name| {
                 let db = app_state.db.clone();
-                async move { db.is_username_available(&name).await.unwrap_or(false) }
+                async move { db.is_username_available(&name).await }
             })
-            .await;
+            .await
+            .map_err(|e| {
+                error!("Failed to check if a user name is available: {e}");
+                RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            })?;
 
             trace!(
                 "Creating new OAuth2 user '{}' (admin: {}, read_only: {})",
