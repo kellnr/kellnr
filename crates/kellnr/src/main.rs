@@ -3,6 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::Router;
 use axum::response::Redirect;
 use axum::routing::get;
 use axum_extra::extract::cookie::Key;
@@ -366,7 +367,7 @@ async fn run_server(resolved: ResolvedSettings) {
     );
     if !route_path_prefix.is_empty() {
         let route_path_prefix_with_trailing = format!("{route_path_prefix}/");
-        app = axum::Router::new()
+        app = Router::new()
             .nest(&route_path_prefix_with_trailing, app)
             .route(
                 &route_path_prefix,
@@ -387,6 +388,56 @@ async fn run_server(resolved: ResolvedSettings) {
         );
     }
 
+    serve(listener, app, shutdown_signal(), SHUTDOWN_DRAIN_TIMEOUT).await;
+
+    // Flush any accumulated download counts before exiting
+    download_counter_for_shutdown.flush().await;
+    trace!("Download counters flushed. Shutting down.");
+}
+
+/// How long open requests may take to finish after a shutdown signal.
+const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Serves `app` until `shutdown` completes. Then no new connections are
+/// accepted and open requests get up to `drain_timeout` to finish, so a publish
+/// is not cut off between its database and storage writes.
+async fn serve(
+    listener: TcpListener,
+    app: Router,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+    drain_timeout: Duration,
+) {
+    let (signalled_tx, signalled_rx) = tokio::sync::oneshot::channel();
+    let server = axum::serve(listener, app).with_graceful_shutdown(async move {
+        shutdown.await;
+        let _ = signalled_tx.send(());
+    });
+    let mut server = std::pin::pin!(server.into_future());
+
+    tokio::select! {
+        result = &mut server => {
+            if let Err(e) = result {
+                error!("Server error: {e}");
+            }
+        }
+        Ok(()) = signalled_rx => {
+            info!(
+                "Shutting down, waiting up to {}s for open requests to finish",
+                drain_timeout.as_secs()
+            );
+            match tokio::time::timeout(drain_timeout, server).await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => error!("Server error: {e}"),
+                Err(_) => warn!(
+                    "Open requests did not finish within {}s, shutting down anyway",
+                    drain_timeout.as_secs()
+                ),
+            }
+        }
+    }
+}
+
+async fn shutdown_signal() {
     #[cfg(unix)]
     let sigterm = async {
         tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
@@ -398,22 +449,9 @@ async fn run_server(resolved: ResolvedSettings) {
     let sigterm = std::future::pending::<()>();
 
     tokio::select! {
-        result = axum::serve(listener, app) => {
-            if let Err(e) = result {
-                error!("Server error: {e}");
-            }
-        }
-        _ = tokio::signal::ctrl_c() => {
-            trace!("Shutdown signal received, flushing download counters...");
-        }
-        () = sigterm => {
-            trace!("SIGTERM received, flushing download counters...");
-        }
+        _ = tokio::signal::ctrl_c() => trace!("Shutdown signal received"),
+        () = sigterm => trace!("SIGTERM received"),
     }
-
-    // Flush any accumulated download counts before exiting
-    download_counter_for_shutdown.flush().await;
-    trace!("Download counters flushed. Shutting down.");
 }
 
 fn init_cookie_signing_key(settings: &Settings) -> Key {
@@ -569,10 +607,107 @@ async fn init_oauth2_handler(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     use bytes::Bytes;
     use kellnr_settings::test_settings;
 
     use super::*;
+
+    async fn get_with_raw_http(addr: SocketAddr, path: &str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        stream
+            .write_all(
+                format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut response = String::new();
+        let _ = stream.read_to_string(&mut response).await;
+        response
+    }
+
+    /// A router whose `/slow` route signals `started`, waits `delay` and then
+    /// sets `answered`.
+    fn slow_app(
+        started: Arc<tokio::sync::Notify>,
+        answered: Arc<AtomicBool>,
+        delay: Duration,
+    ) -> Router {
+        Router::new().route(
+            "/slow",
+            get(move || async move {
+                started.notify_one();
+                tokio::time::sleep(delay).await;
+                answered.store(true, Ordering::SeqCst);
+                "done"
+            }),
+        )
+    }
+
+    /// `serve` must only return once open requests are answered, the process
+    /// exits right after it.
+    #[tokio::test]
+    async fn shutdown_lets_open_requests_finish() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let started = Arc::new(tokio::sync::Notify::new());
+        let answered = Arc::new(AtomicBool::new(false));
+        let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(serve(
+            listener,
+            slow_app(
+                started.clone(),
+                answered.clone(),
+                Duration::from_millis(300),
+            ),
+            async {
+                let _ = stopped.await;
+            },
+            Duration::from_secs(10),
+        ));
+
+        let request = tokio::spawn(get_with_raw_http(addr, "/slow"));
+        started.notified().await;
+        stop.send(()).unwrap();
+        server.await.unwrap();
+
+        assert!(
+            answered.load(Ordering::SeqCst),
+            "serve returned before the request was answered"
+        );
+        let response = request.await.unwrap();
+        assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+        assert!(response.ends_with("done"), "{response}");
+    }
+
+    #[tokio::test]
+    async fn shutdown_stops_waiting_for_requests_after_the_drain_timeout() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let started = Arc::new(tokio::sync::Notify::new());
+        let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(serve(
+            listener,
+            slow_app(started.clone(), Arc::default(), Duration::from_hours(1)),
+            async {
+                let _ = stopped.await;
+            },
+            Duration::from_millis(100),
+        ));
+
+        let _request = tokio::spawn(get_with_raw_http(addr, "/slow"));
+        started.notified().await;
+        stop.send(()).unwrap();
+
+        tokio::time::timeout(Duration::from_secs(5), server)
+            .await
+            .expect("server must stop after the drain timeout")
+            .unwrap();
+    }
 
     #[test]
     fn low_variety_cookie_keys_are_detected() {
