@@ -634,74 +634,88 @@ pub async fn cratesio_data(
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
-pub struct DeleteCrateVersionParams {
-    name: OriginalName,
-    version: Version,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
-pub struct DeleteCrateParams {
-    name: OriginalName,
-}
-
-/// Helper function to delete crate versions from db, storage, and docs.
+/// Helper function to delete crate versions from storage, db, and docs.
 /// If `versions` is `None`, all versions of the crate are deleted.
+///
+/// The crate file is deleted before the database entry, so that a failure
+/// cannot leave a file behind that no database entry refers to. A failed
+/// version does not stop the deletion of the others.
 async fn delete_crate_versions_impl(
     state: &kellnr_appstate::AppStateData,
     name: &OriginalName,
     versions: Option<Vec<Version>>,
 ) -> Result<(), RouteError> {
+    let normalized_name = name.to_normalized();
+    // Crate files are stored under the name the crate was first published
+    // with, which may differ in case from the requested name.
+    let original_name = state
+        .db
+        .get_original_name(&normalized_name)
+        .await?
+        .ok_or_else(|| RouteError::NotFound(format!("Crate not found: {name}")))?;
+
     let versions_to_delete = if let Some(v) = versions {
         v
     } else {
-        let crate_meta = state.db.get_crate_meta_list(&name.to_normalized()).await?;
-        crate_meta
+        state
+            .db
+            .get_crate_meta_list(&normalized_name)
+            .await?
             .iter()
             .map(|cm| Version::from_unchecked_str(&cm.version))
             .collect()
     };
 
+    let mut first_error = None;
     for version in &versions_to_delete {
-        if let Err(e) = state.db.delete_crate(&name.to_normalized(), version).await {
-            error!("Failed to delete crate from database: {e:?}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-        }
-        // The version may be published again with another license
-        state
-            .download_filters
-            .registry
-            .licenses()
-            .forget(&name.to_normalized(), version);
-
-        if let Err(e) = state.crate_storage.delete(name, version).await {
-            error!("Failed to delete crate from storage: {e}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
-        }
-
-        if let Err(e) = kellnr_docs::delete(name, version, &state.docs_storage).await {
-            error!("Failed to delete crate from docs: {e}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        if let Err(e) = delete_one_version(state, &original_name, version).await {
+            first_error.get_or_insert(e);
         }
     }
 
+    first_error.map_or(Ok(()), Err)
+}
+
+async fn delete_one_version(
+    state: &kellnr_appstate::AppStateData,
+    name: &OriginalName,
+    version: &Version,
+) -> Result<(), RouteError> {
+    let normalized_name = name.to_normalized();
+
+    // A missing file is fine, e.g. when an earlier deletion failed after it.
+    let exists = state
+        .crate_storage
+        .exists(name, version)
+        .await
+        .map_err(|e| {
+            error!("Failed to check crate {name}-{version} in storage: {e}");
+            RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+    if exists && let Err(e) = state.crate_storage.delete(name, version).await {
+        error!("Failed to delete crate {name}-{version} from storage: {e}");
+        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+    }
+
+    state
+        .db
+        .delete_crate(&normalized_name, version)
+        .await
+        .inspect_err(|e| error!("Failed to delete crate {name}-{version} from database: {e}"))?;
+
+    // The version may be published again with another license
+    state
+        .download_filters
+        .registry
+        .licenses()
+        .forget(&normalized_name, version);
+
+    if let Err(e) = kellnr_docs::delete(name, version, &state.docs_storage).await {
+        error!("Failed to delete docs of crate {name}-{version}: {e}");
+        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+    }
+
     Ok(())
-}
-
-pub async fn delete_version(
-    Query(params): Query<DeleteCrateVersionParams>,
-    _user: AdminUser,
-    State(state): AppState,
-) -> Result<(), RouteError> {
-    delete_crate_versions_impl(&state, &params.name, Some(vec![params.version])).await
-}
-
-pub async fn delete_crate(
-    Query(params): Query<DeleteCrateParams>,
-    _user: AdminUser,
-    State(state): AppState,
-) -> Result<(), RouteError> {
-    delete_crate_versions_impl(&state, &params.name, None).await
 }
 
 /// Delete a specific version of a crate (path parameter version)
@@ -1083,6 +1097,7 @@ mod tests {
     use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+    use kellnr_storage::storage_error::StorageError;
     use mockall::predicate::*;
     use tower::ServiceExt;
 
@@ -1104,6 +1119,9 @@ mod tests {
             FSStorage::new(&settings.docs_path()).unwrap(),
         ) as DynStorage));
         let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_original_name()
+            .returning(|_| Ok(Some(OriginalName::from_unchecked("licensed".to_string()))));
         mock_db.expect_delete_crate().returning(|_, _| Ok(()));
         let state = AppStateData {
             db: Arc::new(mock_db),
@@ -1131,6 +1149,183 @@ mod tests {
 
         // A version published again with another license is looked up anew
         assert_eq!(None, licenses.get(&name.to_normalized(), &version));
+    }
+
+    fn delete_state(mock_db: MockDb, data_dir: &std::path::Path) -> AppStateData {
+        let settings = Settings {
+            registry: kellnr_settings::Registry {
+                data_dir: data_dir.to_string_lossy().to_string(),
+                ..kellnr_settings::Registry::default()
+            },
+            ..Settings::default()
+        };
+        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+        let docs_storage = Arc::new(DocsStorage::new(Box::new(
+            FSStorage::new(&settings.docs_path()).unwrap(),
+        ) as DynStorage));
+        AppStateData {
+            db: Arc::new(mock_db),
+            crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
+            settings: Arc::new(settings),
+            docs_storage,
+            ..kellnr_appstate::test_state()
+        }
+    }
+
+    /// Storage that records deleted keys. Every key exists, deleting fails
+    /// if `fail_delete` is set.
+    struct RecordingStorage {
+        deleted: Arc<std::sync::Mutex<Vec<String>>>,
+        fail_delete: bool,
+    }
+
+    #[async_trait::async_trait]
+    impl kellnr_storage::storage::Storage for RecordingStorage {
+        async fn get(&self, _key: &str) -> Result<Bytes, StorageError> {
+            unimplemented!()
+        }
+        async fn get_with_meta(
+            &self,
+            _key: &str,
+        ) -> Result<kellnr_storage::storage::ObjectWithMeta, StorageError> {
+            unimplemented!()
+        }
+        async fn put(&self, _key: &str, _object: Bytes) -> Result<(), StorageError> {
+            unimplemented!()
+        }
+        async fn put_overwrite(&self, _key: &str, _object: Bytes) -> Result<(), StorageError> {
+            unimplemented!()
+        }
+        async fn delete(&self, key: &str) -> Result<(), StorageError> {
+            if self.fail_delete {
+                return Err(StorageError::GenericError("delete failed".to_string()));
+            }
+            self.deleted.lock().unwrap().push(key.to_string());
+            Ok(())
+        }
+        async fn exists(&self, _key: &str) -> Result<bool, StorageError> {
+            Ok(true)
+        }
+        async fn size(&self, _key: &str) -> Result<u64, StorageError> {
+            unimplemented!()
+        }
+        async fn list(&self, _prefix: &str) -> Result<Vec<String>, StorageError> {
+            Ok(vec![])
+        }
+    }
+
+    fn with_recording_storage(
+        mut state: AppStateData,
+        fail_delete: bool,
+    ) -> (AppStateData, Arc<std::sync::Mutex<Vec<String>>>) {
+        let deleted = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let storage = Box::new(RecordingStorage {
+            deleted: deleted.clone(),
+            fail_delete,
+        }) as DynStorage;
+        state.crate_storage = Arc::new(KellnrCrateStorage::new(&state.settings, storage));
+        (state, deleted)
+    }
+
+    /// Crate files are stored under the name the crate was first published
+    /// with, not under the spelling used in the delete request.
+    #[tokio::test]
+    async fn deleting_a_crate_removes_the_file_of_its_original_name() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_original_name()
+            .returning(|_| Ok(Some(OriginalName::from_unchecked("My_Crate".to_string()))));
+        mock_db.expect_get_crate_meta_list().returning(|_| {
+            Ok(vec![kellnr_db::CrateMeta {
+                version: "1.0.0".to_string(),
+                ..kellnr_db::CrateMeta::default()
+            }])
+        });
+        mock_db
+            .expect_delete_crate()
+            .times(1)
+            .returning(|_, _| Ok(()));
+        let (state, deleted) =
+            with_recording_storage(delete_state(mock_db, data_dir.path()), false);
+
+        let requested = OriginalName::try_from("my_crate").unwrap();
+        delete_crate_versions_impl(&state, &requested, None)
+            .await
+            .unwrap();
+
+        assert_eq!(*deleted.lock().unwrap(), vec!["My_Crate-1.0.0.crate"]);
+    }
+
+    /// If the crate file cannot be deleted, the database entry must stay so
+    /// that the crate is not left without an entry that refers to its file.
+    #[tokio::test]
+    async fn failed_storage_deletion_keeps_the_database_entry() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_original_name()
+            .returning(|_| Ok(Some(OriginalName::from_unchecked("foo".to_string()))));
+        mock_db.expect_delete_crate().times(0);
+        let (state, _) = with_recording_storage(delete_state(mock_db, data_dir.path()), true);
+
+        let result = delete_crate_versions_impl(
+            &state,
+            &OriginalName::try_from("foo").unwrap(),
+            Some(vec![Version::try_from("1.0.0").unwrap()]),
+        )
+        .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn deleting_an_unknown_crate_is_not_found() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let mut mock_db = MockDb::new();
+        mock_db.expect_get_original_name().returning(|_| Ok(None));
+        let state = delete_state(mock_db, data_dir.path());
+
+        let result =
+            delete_crate_versions_impl(&state, &OriginalName::try_from("nope").unwrap(), None)
+                .await;
+
+        assert!(matches!(result, Err(RouteError::NotFound(_))));
+    }
+
+    /// A failing version must not keep the remaining versions from being
+    /// deleted.
+    #[tokio::test]
+    async fn deleting_all_versions_continues_after_a_failure() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_original_name()
+            .returning(|_| Ok(Some(OriginalName::from_unchecked("foo".to_string()))));
+        mock_db.expect_get_crate_meta_list().returning(|_| {
+            Ok(["1.0.0", "2.0.0"]
+                .map(|v| kellnr_db::CrateMeta {
+                    version: v.to_string(),
+                    ..kellnr_db::CrateMeta::default()
+                })
+                .to_vec())
+        });
+        mock_db
+            .expect_delete_crate()
+            .with(always(), eq(Version::try_from("1.0.0").unwrap()))
+            .times(1)
+            .returning(|_, _| Err(DbError::FailedToCountCrates));
+        mock_db
+            .expect_delete_crate()
+            .with(always(), eq(Version::try_from("2.0.0").unwrap()))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        let state = delete_state(mock_db, data_dir.path());
+
+        let result =
+            delete_crate_versions_impl(&state, &OriginalName::try_from("foo").unwrap(), None).await;
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]

@@ -3041,6 +3041,17 @@ impl DbProvider for Database {
             })
             .collect())
     }
+
+    async fn get_original_name(
+        &self,
+        crate_name: &NormalizedName,
+    ) -> DbResult<Option<OriginalName>> {
+        Ok(krate::Entity::find()
+            .filter(krate::Column::Name.eq(crate_name))
+            .one(&self.db_con)
+            .await?
+            .map(|k| OriginalName::from_unchecked(k.original_name)))
+    }
 }
 
 /// Converts a count to the type of the database columns, saturating as no
