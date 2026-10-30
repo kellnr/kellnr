@@ -71,7 +71,8 @@ pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson>
     responses(
         (status = 200, description = "Crate index metadata"),
         (status = 304, description = "Not modified"),
-        (status = 404, description = "Crate not found")
+        (status = 404, description = "Crate not found"),
+        (status = 502, description = "Crates.io is not reachable")
     ),
     security(("cargo_token" = []))
 )]
@@ -108,7 +109,8 @@ pub async fn prefetch_cratesio(
     responses(
         (status = 200, description = "Crate index metadata"),
         (status = 304, description = "Not modified"),
-        (status = 404, description = "Crate not found")
+        (status = 404, description = "Crate not found"),
+        (status = 502, description = "Crates.io is not reachable")
     ),
     security(("cargo_token" = []))
 )]
@@ -461,10 +463,10 @@ async fn fetch_cratesio_prefetch(
                         .get("Last-Modified")
                         .map(|h| h.to_str().unwrap_or_default().to_string());
 
-                    let data = r
-                        .text()
-                        .await
-                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    let data = r.text().await.map_err(|e| {
+                        error!("Could not read prefetch data of {name} from crates.io: {e}");
+                        StatusCode::BAD_GATEWAY
+                    })?;
 
                     let prefetch = Prefetch {
                         etag: etag.clone().unwrap_or_default(),
@@ -489,15 +491,16 @@ async fn fetch_cratesio_prefetch(
 
                     Ok(prefetch)
                 }
+                // A bad gateway lets cargo retry the request.
                 s => {
                     error!("Unexpected status code from crates.io for {name}: {s}");
-                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                    Err(StatusCode::BAD_GATEWAY)
                 }
             }
         }
         Err(e) => {
             error!("Error fetching prefetch data from crates.io: {e}");
-            Err(StatusCode::NOT_FOUND)
+            Err(StatusCode::BAD_GATEWAY)
         }
     }
 }
@@ -554,6 +557,24 @@ mod tests {
             .unwrap();
         let status = r.status();
         assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn fetch_cratesio_prefetch_unreachable_upstream_is_bad_gateway() {
+        let (sender, _receiver) = flume::unbounded::<CratesioPrefetchMsg>();
+        let proxy = kellnr_settings::Proxy::default();
+        // Nothing listens on port 1, so the connection is refused.
+        let index_url = Url::parse("http://127.0.0.1:1/").unwrap();
+
+        let result = fetch_cratesio_prefetch(
+            OriginalName::try_from("rocket").unwrap(),
+            &index_url,
+            &sender,
+            &proxy,
+        )
+        .await;
+
+        assert_eq!(Err(StatusCode::BAD_GATEWAY), result);
     }
 
     #[tokio::test]
