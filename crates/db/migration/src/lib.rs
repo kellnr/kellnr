@@ -15,6 +15,7 @@ mod m20261025_000003_crate_meta_publisher;
 mod m20261027_000001_crate_dependency;
 mod m20261028_000001_cratesio_meta_license;
 mod m20261030_000001_cratesio_last_updated;
+mod m20261030_000002_unique_crate_tags;
 
 /// Fills the dependency table from the index, as the migration does. Public
 /// for the database tests.
@@ -25,6 +26,9 @@ pub use m20261030_000001_cratesio_last_updated::fill_last_updated as fill_crates
 /// Converts an HTTP Last-Modified header into the date format of the
 /// database, as the migration does.
 pub use m20261030_000001_cratesio_last_updated::http_date_to_db_date;
+/// Removes duplicate links of crates to keywords, categories and authors, as
+/// the migration does. Public for the database tests.
+pub use m20261030_000002_unique_crate_tags::remove_duplicate_links as remove_duplicate_crate_tag_links;
 
 pub struct Migrator;
 
@@ -47,6 +51,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261027_000001_crate_dependency::Migration),
             Box::new(m20261028_000001_cratesio_meta_license::Migration),
             Box::new(m20261030_000001_cratesio_last_updated::Migration),
+            Box::new(m20261030_000002_unique_crate_tags::Migration),
         ]
     }
 }

@@ -19,7 +19,7 @@ use kellnr_entity::{
 };
 use sea_orm::sea_query::{Alias, Expr, Func};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, ExprTrait,
     QueryFilter, QuerySelect, Set,
 };
 
@@ -353,46 +353,51 @@ pub async fn add_crate_metadata<C: ConnectionTrait>(
     Ok(())
 }
 
+/// The values without duplicates, in the order they first occur.
+fn unique_values(values: &[String]) -> Vec<&String> {
+    let mut seen = HashSet::new();
+    values.iter().filter(|v| seen.insert(*v)).collect()
+}
+
 pub async fn update_crate_categories<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
     crate_id: i64,
 ) -> DbResult<()> {
-    let categories = pub_metadata.categories.clone();
-
     // Delete all existing categories relationships as only the latest list of categories is relevant
     crate_category_to_crate::Entity::delete_many()
         .filter(crate_category_to_crate::Column::CrateFk.eq(crate_id))
         .exec(db_con)
         .await?;
 
-    // Set the latest list of categories for the crate
-    for category in categories {
+    // Set the latest list of categories for the crate. Categories are shared
+    // between crates, so a concurrent publish may create the same one.
+    for category in unique_values(&pub_metadata.categories) {
+        crate_category::Entity::insert(crate_category::ActiveModel {
+            id: ActiveValue::default(),
+            category: Set(category.clone()),
+        })
+        .on_conflict_do_nothing_on([crate_category::Column::Category])
+        .exec_without_returning(db_con)
+        .await?;
         let category_fk = crate_category::Entity::find()
-            .filter(crate_category::Column::Category.eq(&category))
+            .filter(crate_category::Column::Category.eq(category))
             .one(db_con)
             .await?
-            .map(|model| model.id);
+            .ok_or_else(|| DbErr::RecordNotFound(format!("crate category {category}")))?
+            .id;
 
-        // If the category does not exist, create it
-        let category_fk = if let Some(category_fk) = category_fk {
-            category_fk
-        } else {
-            let cc = crate_category::ActiveModel {
-                id: ActiveValue::default(),
-                category: Set(category),
-            };
-
-            cc.insert(db_con).await?.id
-        };
-
-        // Add the relationship between the crate and the category
-        let cctc = crate_category_to_crate::ActiveModel {
+        crate_category_to_crate::Entity::insert(crate_category_to_crate::ActiveModel {
             id: ActiveValue::default(),
             crate_fk: Set(crate_id),
             category_fk: Set(category_fk),
-        };
-        cctc.insert(db_con).await?;
+        })
+        .on_conflict_do_nothing_on([
+            crate_category_to_crate::Column::CrateFk,
+            crate_category_to_crate::Column::CategoryFk,
+        ])
+        .exec_without_returning(db_con)
+        .await?;
     }
 
     Ok(())
@@ -403,41 +408,40 @@ pub async fn update_crate_keywords<C: ConnectionTrait>(
     pub_metadata: &PublishMetadata,
     crate_id: i64,
 ) -> DbResult<()> {
-    let keywords = pub_metadata.keywords.clone();
-
     // Delete all existing keywords relationships as only the latest list of keywords is relevant
     crate_keyword_to_crate::Entity::delete_many()
         .filter(crate_keyword_to_crate::Column::CrateFk.eq(crate_id))
         .exec(db_con)
         .await?;
 
-    // Set the latest list of keywords for the crate
-    for keyword in keywords {
+    // Set the latest list of keywords for the crate. Keywords are shared
+    // between crates, so a concurrent publish may create the same one.
+    for keyword in unique_values(&pub_metadata.keywords) {
+        crate_keyword::Entity::insert(crate_keyword::ActiveModel {
+            id: ActiveValue::default(),
+            keyword: Set(keyword.clone()),
+        })
+        .on_conflict_do_nothing_on([crate_keyword::Column::Keyword])
+        .exec_without_returning(db_con)
+        .await?;
         let keyword_fk = crate_keyword::Entity::find()
-            .filter(crate_keyword::Column::Keyword.eq(&keyword))
+            .filter(crate_keyword::Column::Keyword.eq(keyword))
             .one(db_con)
             .await?
-            .map(|model| model.id);
+            .ok_or_else(|| DbErr::RecordNotFound(format!("crate keyword {keyword}")))?
+            .id;
 
-        // If the keyword does not exist, create it
-        let keyword_fk = if let Some(keyword_fk) = keyword_fk {
-            keyword_fk
-        } else {
-            let ck = crate_keyword::ActiveModel {
-                id: ActiveValue::default(),
-                keyword: Set(keyword),
-            };
-
-            ck.insert(db_con).await?.id
-        };
-
-        // Add the relationship between the crate and the keyword
-        let cktc = crate_keyword_to_crate::ActiveModel {
+        crate_keyword_to_crate::Entity::insert(crate_keyword_to_crate::ActiveModel {
             id: ActiveValue::default(),
             crate_fk: Set(crate_id),
             keyword_fk: Set(keyword_fk),
-        };
-        cktc.insert(db_con).await?;
+        })
+        .on_conflict_do_nothing_on([
+            crate_keyword_to_crate::Column::CrateFk,
+            crate_keyword_to_crate::Column::KeywordFk,
+        ])
+        .exec_without_returning(db_con)
+        .await?;
     }
 
     Ok(())
@@ -456,33 +460,34 @@ pub async fn update_crate_authors<C: ConnectionTrait>(
         .exec(db_con)
         .await?;
 
-    // Set the latest list of authors for the crate
-    for author in authors {
+    // Set the latest list of authors for the crate. Authors are shared
+    // between crates, so a concurrent publish may create the same one.
+    for author in unique_values(&authors) {
+        crate_author::Entity::insert(crate_author::ActiveModel {
+            id: ActiveValue::default(),
+            author: Set(author.clone()),
+        })
+        .on_conflict_do_nothing_on([crate_author::Column::Author])
+        .exec_without_returning(db_con)
+        .await?;
         let author_fk = crate_author::Entity::find()
-            .filter(crate_author::Column::Author.eq(&author))
+            .filter(crate_author::Column::Author.eq(author))
             .one(db_con)
             .await?
-            .map(|model| model.id);
+            .ok_or_else(|| DbErr::RecordNotFound(format!("crate author {author}")))?
+            .id;
 
-        // If the author does not exist, create it
-        let author_fk = if let Some(author_fk) = author_fk {
-            author_fk
-        } else {
-            let ca = crate_author::ActiveModel {
-                id: ActiveValue::default(),
-                author: Set(author),
-            };
-
-            ca.insert(db_con).await?.id
-        };
-
-        // Add the relationship between the crate and the author
-        let catc = crate_author_to_crate::ActiveModel {
+        crate_author_to_crate::Entity::insert(crate_author_to_crate::ActiveModel {
             id: ActiveValue::default(),
             crate_fk: Set(crate_id),
             author_fk: Set(author_fk),
-        };
-        catc.insert(db_con).await?;
+        })
+        .on_conflict_do_nothing_on([
+            crate_author_to_crate::Column::CrateFk,
+            crate_author_to_crate::Column::AuthorFk,
+        ])
+        .exec_without_returning(db_con)
+        .await?;
     }
 
     Ok(())

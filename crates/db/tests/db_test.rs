@@ -4829,3 +4829,110 @@ async fn add_crate_rejects_invalid_version_of_new_crate(test_db: &kellnr_db::Dat
     ));
     assert_eq!(0, test_db.get_total_unique_crates().await.unwrap());
 }
+
+#[db_test]
+async fn add_crate_with_duplicate_keywords_categories_and_authors(test_db: &kellnr_db::Database) {
+    let twice = |a: &str, b: &str| vec![a.to_string(), b.to_string(), a.to_string()];
+    for name in ["first", "second"] {
+        let pm = PublishMetadata {
+            keywords: twice("keyword", "shared-keyword"),
+            categories: twice("category", "shared-category"),
+            authors: Some(twice("author", "shared-author")),
+            ..PublishMetadata::minimal(name, "1.0.0")
+        };
+        test_db
+            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .await
+            .unwrap();
+    }
+
+    for name in ["first", "second"] {
+        let data = test_db
+            .get_crate_data(&NormalizedName::from_unchecked_str(name))
+            .await
+            .unwrap();
+        let mut keywords = data.keywords;
+        keywords.sort();
+        let mut categories = data.categories;
+        categories.sort();
+        let mut authors = data.authors;
+        authors.sort();
+        assert_eq!(vec!["keyword", "shared-keyword"], keywords);
+        assert_eq!(vec!["category", "shared-category"], categories);
+        assert_eq!(vec!["author", "shared-author"], authors);
+    }
+}
+
+#[db_test]
+async fn migration_removes_duplicate_crate_tag_links(test_db: &kellnr_db::Database) {
+    let pm = PublishMetadata {
+        keywords: vec!["keyword".to_string()],
+        categories: vec!["category".to_string()],
+        authors: Some(vec!["author".to_string()]),
+        ..PublishMetadata::minimal("tagged", "1.0.0")
+    };
+    test_db
+        .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+        .await
+        .unwrap();
+
+    test_duplicate_and_remove_crate_tag_links(test_db)
+        .await
+        .unwrap();
+
+    let data = test_db
+        .get_crate_data(&NormalizedName::from_unchecked_str("tagged"))
+        .await
+        .unwrap();
+    assert_eq!(vec!["keyword"], data.keywords);
+    assert_eq!(vec!["category"], data.categories);
+    assert_eq!(vec!["author"], data.authors);
+}
+
+/// Only on PostgreSQL, as concurrent write transactions of SQLite fail with
+/// "database is locked" before they get to the keywords.
+#[tokio::test]
+async fn postgres_concurrent_publishes_share_new_keywords() {
+    use testcontainers::runners::AsyncRunner;
+
+    let pg_container = image::Postgres::default().start().await.unwrap();
+    let port = pg_container
+        .get_host_port_ipv4(image::Postgres::PG_PORT)
+        .await
+        .unwrap();
+    let admin = kellnr_db::AdminUser::new("123".to_string(), Some("token".to_string()));
+    let con = kellnr_db::ConString::Postgres(kellnr_db::PgConString::new(
+        "localhost",
+        port,
+        "kellnr",
+        "admin",
+        "admin",
+        admin,
+        std::time::Duration::from_secs(3600),
+    ));
+    let test_db = &kellnr_db::Database::new(&con, 10).await.unwrap();
+
+    let publish = |name: &'static str| async move {
+        let pm = PublishMetadata {
+            keywords: vec!["new-keyword".to_string()],
+            categories: vec!["new-category".to_string()],
+            authors: Some(vec!["new-author".to_string()]),
+            ..PublishMetadata::minimal(name, "1.0.0")
+        };
+        test_db
+            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .await
+    };
+
+    let results = tokio::join!(
+        publish("crate1"),
+        publish("crate2"),
+        publish("crate3"),
+        publish("crate4"),
+    );
+
+    results.0.unwrap();
+    results.1.unwrap();
+    results.2.unwrap();
+    results.3.unwrap();
+}
