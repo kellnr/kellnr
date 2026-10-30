@@ -31,7 +31,8 @@ use kellnr_entity::{
 };
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, ExprTrait, QueryFilter, Set,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait,
+    QueryFilter, Set,
 };
 
 use super::{DB_DATE_FORMAT, Database, parse_db_version};
@@ -402,6 +403,40 @@ pub async fn test_refill_cratesio_last_updated(db: &Database) -> DbResult<()> {
         .exec(&db.db_con)
         .await?;
     kellnr_migration::fill_cratesio_last_updated(&db.db_con).await?;
+    Ok(())
+}
+
+/// Links every keyword, category and author of all crates a second time, like
+/// before the links were unique, and removes the duplicates again like the
+/// migration that made them unique does.
+pub async fn test_duplicate_and_remove_crate_tag_links(db: &Database) -> DbResult<()> {
+    for (table, index, tag_fk) in [
+        (
+            "crate_keyword_to_crate",
+            "idx-crate-keyword-to-crate",
+            "keyword_fk",
+        ),
+        (
+            "crate_category_to_crate",
+            "idx-crate-category-to-crate",
+            "category_fk",
+        ),
+        (
+            "crate_author_to_crate",
+            "idx-crate-author-to-crate",
+            "author_fk",
+        ),
+    ] {
+        db.db_con
+            .execute_unprepared(&format!("DROP INDEX \"{index}\""))
+            .await?;
+        db.db_con
+            .execute_unprepared(&format!(
+                "INSERT INTO {table} (crate_fk, {tag_fk}) SELECT crate_fk, {tag_fk} FROM {table}"
+            ))
+            .await?;
+    }
+    kellnr_migration::remove_duplicate_crate_tag_links(&db.db_con).await?;
     Ok(())
 }
 
