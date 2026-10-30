@@ -11,7 +11,9 @@ use axum::routing::put;
 use axum::{Json, Router};
 use bytes::Bytes;
 use kellnr_appstate::{AppStateData, DbState, SettingsState, ToolchainStorageState};
-use kellnr_db::{ChannelInfo, ToolchainWithTargets};
+use kellnr_db::error::DbError;
+use kellnr_db::{ChannelInfo, ToolchainTargetInfo, ToolchainWithTargets};
+use kellnr_storage::storage_error::StorageError;
 use kellnr_storage::toolchain_storage::ToolchainStorage;
 use kellnr_web_ui::session::AdminUser;
 use serde::{Deserialize, Serialize};
@@ -53,6 +55,31 @@ pub struct UploadQuery {
     /// Optional channel to associate (e.g., "stable")
     #[serde(default)]
     pub channel: Option<String>,
+}
+
+type ErrorResponse = (StatusCode, Json<ToolchainResponse>);
+
+fn error_response(status: StatusCode, message: impl Into<String>) -> ErrorResponse {
+    (
+        status,
+        Json(ToolchainResponse {
+            success: false,
+            message: Some(message.into()),
+        }),
+    )
+}
+
+/// Logs the error and answers with a 500 that does not reveal its details.
+fn internal_error(message: &str, error: impl std::fmt::Display) -> ErrorResponse {
+    tracing::error!("{message}: {error}");
+    error_response(StatusCode::INTERNAL_SERVER_ERROR, message)
+}
+
+fn storage_not_configured() -> ErrorResponse {
+    error_response(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Toolchain storage not configured",
+    )
 }
 
 /// Creates the toolchain API routes (management endpoints)
@@ -124,69 +151,29 @@ async fn upload_toolchain(
         "Uploading toolchain"
     );
 
-    let storage = storage.as_ref().ok_or_else(|| {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ToolchainResponse {
-                success: false,
-                message: Some("Toolchain storage not configured".to_string()),
-            }),
-        )
-    })?;
+    let storage = storage.as_ref().ok_or_else(storage_not_configured)?;
 
-    // Check if toolchain exists, if not create it
     let toolchain = db
         .get_toolchain_by_version(&params.name, &params.version)
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Database error: {e}")),
-                }),
-            )
-        })?;
+        .map_err(|e| internal_error("Failed to load toolchain", e))?;
 
-    let toolchain_id = if let Some(tc) = toolchain {
-        // Check if target already exists
-        if tc.targets.iter().any(|t| t.target == params.target) {
-            return Err((
-                StatusCode::CONFLICT,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!(
-                        "Target {} already exists for {}-{}",
-                        params.target, params.name, params.version
-                    )),
-                }),
-            ));
-        }
-        tc.id
-    } else {
-        // Create new toolchain
-        db.add_toolchain(
-            &params.name,
-            &params.version,
-            &params.date,
-            params.channel.clone(),
-        )
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Failed to create toolchain: {e}")),
-                }),
-            )
-        })?
-    };
+    if let Some(tc) = &toolchain
+        && tc.targets.iter().any(|t| t.target == params.target)
+    {
+        return Err(error_response(
+            StatusCode::CONFLICT,
+            format!(
+                "Target {} already exists for {}-{}",
+                params.target, params.name, params.version
+            ),
+        ));
+    }
 
-    // Get the size before consuming the body
     let size = body.len() as i64;
 
-    // Store the archive
+    // Store the archive before it is added to the database, so a failed store
+    // does not leave a toolchain or target without archive behind.
     let (path, hash) = storage
         .put(
             &params.date,
@@ -196,29 +183,23 @@ async fn upload_toolchain(
             body,
         )
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Failed to store archive: {e}")),
-                }),
-            )
+        .map_err(|e| match e {
+            StorageError::ToolchainArchiveExists { .. } => {
+                error_response(StatusCode::CONFLICT, e.to_string())
+            }
+            e => internal_error("Failed to store archive", e),
         })?;
 
-    // Add target to database
-    let target_id = db
-        .add_toolchain_target(toolchain_id, &params.target, &path, &hash, size)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Failed to add target: {e}")),
-                }),
-            )
-        })?;
+    let target_id =
+        match add_target_to_db(&db, toolchain.as_ref(), &params, &path, &hash, size).await {
+            Ok(id) => id,
+            Err(e) => {
+                if let Err(e) = storage.delete(&path).await {
+                    tracing::warn!("Failed to delete archive {path} after failed upload: {e}");
+                }
+                return Err(e);
+            }
+        };
 
     // Spawn background task to split the combined archive into individual component archives.
     // This can take a while for large archives, so we don't block the upload response.
@@ -306,6 +287,49 @@ async fn upload_toolchain(
     }))
 }
 
+/// Adds the uploaded target, and its toolchain if it is new, to the database.
+/// Removes a toolchain created here again if the target cannot be added.
+async fn add_target_to_db(
+    db: &Arc<dyn kellnr_db::DbProvider>,
+    toolchain: Option<&ToolchainWithTargets>,
+    params: &UploadQuery,
+    path: &str,
+    hash: &str,
+    size: i64,
+) -> Result<i64, ErrorResponse> {
+    let toolchain_id = match toolchain {
+        Some(tc) => tc.id,
+        None => db
+            .add_toolchain(
+                &params.name,
+                &params.version,
+                &params.date,
+                params.channel.clone(),
+            )
+            .await
+            .map_err(|e| internal_error("Failed to create toolchain", e))?,
+    };
+
+    match db
+        .add_toolchain_target(toolchain_id, &params.target, path, hash, size)
+        .await
+    {
+        Ok(target_id) => Ok(target_id),
+        Err(e) => {
+            if toolchain.is_none()
+                && let Err(e) = db.delete_toolchain(&params.name, &params.version).await
+            {
+                tracing::warn!(
+                    "Failed to delete toolchain {}-{} after failed upload: {e}",
+                    params.name,
+                    params.version
+                );
+            }
+            Err(internal_error("Failed to add target", e))
+        }
+    }
+}
+
 /// Delete a toolchain and all its targets
 ///
 /// Removes a toolchain version and all associated target archives.
@@ -335,62 +359,29 @@ async fn delete_toolchain(
 ) -> Result<Json<ToolchainResponse>, (StatusCode, Json<ToolchainResponse>)> {
     trace!(name = %name, version = %version, "Deleting toolchain");
 
-    let storage = storage.as_ref().ok_or_else(|| {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ToolchainResponse {
-                success: false,
-                message: Some("Toolchain storage not configured".to_string()),
-            }),
-        )
-    })?;
+    let storage = storage.as_ref().ok_or_else(storage_not_configured)?;
 
-    // Get the toolchain to find all storage paths
     let toolchain = db
         .get_toolchain_by_version(&name, &version)
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Database error: {e}")),
-                }),
-            )
-        })?;
+        .map_err(|e| internal_error("Failed to load toolchain", e))?;
 
     let Some(tc) = toolchain else {
-        return Err((
+        return Err(error_response(
             StatusCode::NOT_FOUND,
-            Json(ToolchainResponse {
-                success: false,
-                message: Some(format!("Toolchain {name}-{version} not found")),
-            }),
+            format!("Toolchain {name}-{version} not found"),
         ));
     };
 
-    // Delete all archives (combined + individual components) from storage
-    for target in &tc.targets {
-        if let Err(e) = storage.delete(&target.storage_path).await {
-            tracing::warn!("Failed to delete archive from storage: {e}");
-        }
-        for component in &target.components {
-            if let Err(e) = storage.delete(&component.storage_path).await {
-                tracing::warn!("Failed to delete component archive from storage: {e}");
-            }
-        }
-    }
+    // Delete from the database first (cascades to targets and components), so
+    // a failure does not leave targets whose archives are gone.
+    db.delete_toolchain(&name, &version)
+        .await
+        .map_err(|e| internal_error("Failed to delete toolchain", e))?;
 
-    // Delete toolchain from database (cascades to targets and components)
-    db.delete_toolchain(&name, &version).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ToolchainResponse {
-                success: false,
-                message: Some(format!("Failed to delete toolchain: {e}")),
-            }),
-        )
-    })?;
+    for target in &tc.targets {
+        delete_target_archives(storage, target).await;
+    }
 
     Ok(Json(ToolchainResponse {
         success: true,
@@ -437,95 +428,67 @@ async fn delete_toolchain_target(
         "Deleting toolchain target"
     );
 
-    let storage = storage.as_ref().ok_or_else(|| {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ToolchainResponse {
-                success: false,
-                message: Some("Toolchain storage not configured".to_string()),
-            }),
-        )
-    })?;
+    let storage = storage.as_ref().ok_or_else(storage_not_configured)?;
 
-    // Get the toolchain to find the storage path and check target count
     let toolchain = db
         .get_toolchain_by_version(&name, &version)
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Database error: {e}")),
-                }),
-            )
-        })?;
+        .map_err(|e| internal_error("Failed to load toolchain", e))?;
 
     let Some(tc) = toolchain else {
-        return Err((
+        return Err(error_response(
             StatusCode::NOT_FOUND,
-            Json(ToolchainResponse {
-                success: false,
-                message: Some(format!("Toolchain {name}-{version} not found")),
-            }),
+            format!("Toolchain {name}-{version} not found"),
         ));
     };
 
     let Some(t) = tc.targets.iter().find(|t| t.target == target) else {
-        return Err((
+        return Err(error_response(
             StatusCode::NOT_FOUND,
-            Json(ToolchainResponse {
-                success: false,
-                message: Some(format!("Target {target} of {name}-{version} not found")),
-            }),
+            format!("Target {target} of {name}-{version} not found"),
         ));
     };
 
-    // Delete the archive and component archives from storage
-    if let Err(e) = storage.delete(&t.storage_path).await {
-        tracing::warn!("Failed to delete archive from storage: {e}");
-    }
-    for component in &t.components {
-        if let Err(e) = storage.delete(&component.storage_path).await {
-            tracing::warn!("Failed to delete component archive from storage: {e}");
-        }
+    // Delete from the database first, so a failure does not leave a target
+    // whose archives are gone. If this is the last target, the entire
+    // toolchain is deleted.
+    let last_target = tc.targets.len() == 1;
+    if last_target {
+        db.delete_toolchain(&name, &version)
+            .await
+            .map_err(|e| internal_error("Failed to delete toolchain", e))?;
+    } else {
+        db.delete_toolchain_target(&name, &version, &target)
+            .await
+            .map_err(|e| internal_error("Failed to delete target", e))?;
     }
 
-    // If this is the last target, delete the entire toolchain
-    if tc.targets.len() == 1 {
-        db.delete_toolchain(&name, &version).await.map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Failed to delete toolchain: {e}")),
-                }),
-            )
-        })?;
+    delete_target_archives(storage, t).await;
 
+    if last_target {
         return Ok(Json(ToolchainResponse {
             success: true,
             message: Some(format!("Deleted {name}-{version} (last target removed)")),
         }));
     }
 
-    // Delete target from database
-    db.delete_toolchain_target(&name, &version, &target)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Failed to delete target: {e}")),
-                }),
-            )
-        })?;
-
     Ok(Json(ToolchainResponse {
         success: true,
         message: Some(format!("Deleted {name}-{version}-{target}")),
     }))
+}
+
+/// Deletes the archive of a target and its component archives. Failures are
+/// only logged, the target is already removed from the database.
+async fn delete_target_archives(storage: &ToolchainStorage, target: &ToolchainTargetInfo) {
+    if let Err(e) = storage.delete(&target.storage_path).await {
+        tracing::warn!("Failed to delete archive from storage: {e}");
+    }
+    for component in &target.components {
+        if let Err(e) = storage.delete(&component.storage_path).await {
+            tracing::warn!("Failed to delete component archive from storage: {e}");
+        }
+    }
 }
 
 /// List all channels
@@ -588,40 +551,11 @@ async fn set_channel(
         "Setting channel"
     );
 
-    // Verify the toolchain exists
-    let toolchain = db
-        .get_toolchain_by_version(&req.name, &req.version)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Database error: {e}")),
-                }),
-            )
-        })?;
-
-    if toolchain.is_none() {
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(ToolchainResponse {
-                success: false,
-                message: Some(format!("Toolchain {}-{} not found", req.name, req.version)),
-            }),
-        ));
-    }
-
     db.set_channel(&channel, &req.name, &req.version)
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ToolchainResponse {
-                    success: false,
-                    message: Some(format!("Failed to set channel: {e}")),
-                }),
-            )
+        .map_err(|e| match e {
+            DbError::ToolchainNotFound(..) => error_response(StatusCode::NOT_FOUND, e.to_string()),
+            e => internal_error("Failed to set channel", e),
         })?;
 
     Ok(Json(ToolchainResponse {
@@ -2030,9 +1964,14 @@ mod tests {
                 })
             });
         mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("99.99.99"))
-            .returning(|_, _| Ok(None));
+            .expect_set_channel()
+            .with(eq("stable"), eq("rust"), eq("99.99.99"))
+            .returning(|_, name, version| {
+                Err(DbError::ToolchainNotFound(
+                    name.to_string(),
+                    version.to_string(),
+                ))
+            });
 
         let state = create_app_state(Arc::new(mock_db), None);
         let router = create_test_router(state);
@@ -2641,5 +2580,161 @@ mod tests {
             .unwrap();
 
         assert_eq!(StatusCode::NOT_FOUND, response.status());
+    }
+
+    /// Stands in for a database error whose text must not reach the client.
+    fn db_error() -> DbError {
+        DbError::InitializationError("secret detail".to_string())
+    }
+
+    const ARCHIVE_PATH: &str = "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz";
+    const UPLOAD_URL: &str = "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15";
+
+    async fn send(state: AppStateData, request: Request<Body>) -> (StatusCode, ToolchainResponse) {
+        let response = create_test_router(state).oneshot(request).await.unwrap();
+        let status = response.status();
+        (status, parse_response(response).await)
+    }
+
+    fn upload_request() -> Request<Body> {
+        Request::put(UPLOAD_URL)
+            .header(header::COOKIE, admin_cookie())
+            .header(header::CONTENT_TYPE, "application/octet-stream")
+            .body(Body::from(sample_archive()))
+            .unwrap()
+    }
+
+    fn delete_request(uri: &str) -> Request<Body> {
+        Request::delete(uri)
+            .header(header::COOKIE, admin_cookie())
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn upload_does_not_create_toolchain_when_archive_cannot_be_stored() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = fs_toolchain_storage(&temp_dir);
+        storage
+            .put_raw(ARCHIVE_PATH, Bytes::from_static(b"orphan"))
+            .await
+            .unwrap();
+        let mut mock_db = admin_db();
+        mock_db
+            .expect_get_toolchain_by_version()
+            .returning(|_, _| Ok(None));
+        mock_db.expect_add_toolchain().never();
+        mock_db.expect_add_toolchain_target().never();
+
+        let (status, _) = send(
+            create_app_state(Arc::new(mock_db), Some(storage)),
+            upload_request(),
+        )
+        .await;
+
+        assert_eq!(StatusCode::CONFLICT, status);
+    }
+
+    #[tokio::test]
+    async fn upload_removes_archive_and_new_toolchain_when_target_cannot_be_added() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = fs_toolchain_storage(&temp_dir);
+        let mut mock_db = admin_db();
+        mock_db
+            .expect_get_toolchain_by_version()
+            .returning(|_, _| Ok(None));
+        mock_db.expect_add_toolchain().returning(|_, _, _, _| Ok(1));
+        mock_db
+            .expect_add_toolchain_target()
+            .returning(|_, _, _, _, _| Err(db_error()));
+        mock_db
+            .expect_delete_toolchain()
+            .with(eq("rust"), eq("1.0.0"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+
+        let (status, result) = send(
+            create_app_state(Arc::new(mock_db), Some(storage.clone())),
+            upload_request(),
+        )
+        .await;
+
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
+        assert!(!result.message.unwrap().contains("secret detail"));
+        assert!(!storage.exists(ARCHIVE_PATH).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn delete_toolchain_keeps_archives_when_database_delete_fails() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = fs_toolchain_storage(&temp_dir);
+        storage
+            .put_raw(ARCHIVE_PATH, Bytes::from_static(b"archive"))
+            .await
+            .unwrap();
+        let mut mock_db = admin_db();
+        mock_db
+            .expect_get_toolchain_by_version()
+            .returning(|_, _| Ok(Some(ready_toolchain(&["x86_64-unknown-linux-gnu"]))));
+        mock_db
+            .expect_delete_toolchain()
+            .returning(|_, _| Err(db_error()));
+
+        let (status, result) = send(
+            create_app_state(Arc::new(mock_db), Some(storage.clone())),
+            delete_request("/api/v1/toolchains/rust/1.0.0"),
+        )
+        .await;
+
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
+        assert!(!result.message.unwrap().contains("secret detail"));
+        assert!(storage.exists(ARCHIVE_PATH).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn delete_target_keeps_archives_when_database_delete_fails() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = fs_toolchain_storage(&temp_dir);
+        storage
+            .put_raw(ARCHIVE_PATH, Bytes::from_static(b"archive"))
+            .await
+            .unwrap();
+        let mut mock_db = admin_db();
+        mock_db.expect_get_toolchain_by_version().returning(|_, _| {
+            Ok(Some(ready_toolchain(&[
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+            ])))
+        });
+        mock_db
+            .expect_delete_toolchain_target()
+            .returning(|_, _, _| Err(db_error()));
+
+        let (status, _) = send(
+            create_app_state(Arc::new(mock_db), Some(storage.clone())),
+            delete_request("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu"),
+        )
+        .await;
+
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
+        assert!(storage.exists(ARCHIVE_PATH).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn database_errors_are_not_returned_to_the_client() {
+        let mut mock_db = admin_db();
+        mock_db
+            .expect_get_toolchain_by_version()
+            .returning(|_, _| Err(db_error()));
+        let temp_dir = TempDir::new().unwrap();
+
+        let (status, result) = send(
+            create_app_state(Arc::new(mock_db), Some(fs_toolchain_storage(&temp_dir))),
+            delete_request("/api/v1/toolchains/rust/1.0.0"),
+        )
+        .await;
+
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
+        assert!(!result.message.unwrap().contains("secret detail"));
     }
 }
