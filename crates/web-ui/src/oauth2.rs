@@ -40,13 +40,18 @@ pub struct OAuth2Config {
     pub auto_redirect: bool,
 }
 
-/// Query parameters received in the `OAuth2` callback
+/// Query parameters received in the `OAuth2` callback. The provider sends
+/// either `code` on success or `error` if the login failed or was cancelled.
 #[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct CallbackQuery {
     /// Authorization code from the provider
-    pub code: String,
+    pub code: Option<String>,
     /// CSRF protection state
-    pub state: String,
+    pub state: Option<String>,
+    /// Error code from the provider, e.g. `access_denied`
+    pub error: Option<String>,
+    /// Human readable error from the provider
+    pub error_description: Option<String>,
 }
 
 /// Get `OAuth2` configuration for the UI
@@ -171,8 +176,8 @@ fn take_state_cookie(
     tag = "oauth2",
     params(CallbackQuery),
     responses(
-        (status = 302, description = "Redirect to UI after successful login"),
-        (status = 400, description = "Invalid state"),
+        (status = 302, description = "Redirect to UI after successful login or to the login page on a provider error"),
+        (status = 400, description = "Invalid state or missing code"),
         (status = 401, description = "Token exchange failed"),
         (status = 403, description = "User not found and auto-provisioning disabled"),
         (status = 404, description = "OAuth2 not enabled")
@@ -184,7 +189,26 @@ pub async fn callback(
     State(app_state): AppState,
     Extension(oauth2_handler): OAuth2Ext,
 ) -> Result<(PrivateCookieJar, Redirect), RouteError> {
-    trace!(state = %query.state, "OAuth2 callback received");
+    trace!(state = ?query.state, "OAuth2 callback received");
+
+    // The login was cancelled or rejected at the provider.
+    if let Some(error) = &query.error {
+        warn!(
+            "OAuth2 provider returned an error: {} - {:?}",
+            error, query.error_description
+        );
+        let cookies = cookies.remove(Cookie::build((COOKIE_OAUTH2_STATE, "")).path("/"));
+        let redirect = login_error_redirect(
+            &app_state.settings.origin.path,
+            query.error_description.as_deref().unwrap_or(error),
+        );
+        return Ok((cookies, redirect));
+    }
+
+    let (Some(code), Some(query_state)) = (&query.code, &query.state) else {
+        warn!("OAuth2 callback without code or state");
+        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+    };
 
     // Check if OAuth2 is enabled
     let handler = oauth2_handler.as_ref().ok_or_else(|| {
@@ -192,28 +216,25 @@ pub async fn callback(
         RouteError::Status(StatusCode::NOT_FOUND)
     })?;
 
-    let cookies = take_state_cookie(cookies, &query.state)?;
+    let cookies = take_state_cookie(cookies, query_state)?;
 
     // Retrieve and validate state from database
     let state_data = app_state
         .db
-        .get_and_delete_oauth2_state(&query.state)
+        .get_and_delete_oauth2_state(query_state)
         .await
         .map_err(|e| {
             error!("Failed to retrieve OAuth2 state: {}", e);
             RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
         })?
         .ok_or_else(|| {
-            warn!(
-                "OAuth2 callback with invalid or expired state: {}",
-                query.state
-            );
+            warn!("OAuth2 callback with invalid or expired state: {query_state}");
             RouteError::Status(StatusCode::BAD_REQUEST)
         })?;
 
     // Exchange code for tokens and validate
     let token_result = handler
-        .exchange_and_validate(&query.code, &state_data.pkce_verifier, &state_data.nonce)
+        .exchange_and_validate(code, &state_data.pkce_verifier, &state_data.nonce)
         .await
         .map_err(|e| {
             error!("Failed to exchange OAuth2 code: {}", e);
@@ -372,9 +393,7 @@ async fn sync_oauth2_privileges(
     Ok(user)
 }
 
-/// Error callback for `OAuth2` flow
-///
-/// Handles errors from the `OAuth2` provider (e.g., user cancelled, access denied)
+/// Query parameters of the `OAuth2` error callback
 #[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct ErrorQuery {
     pub error: String,
@@ -382,7 +401,9 @@ pub struct ErrorQuery {
     pub error_description: Option<String>,
 }
 
-/// Handle `OAuth2` error callback
+/// Error callback for `OAuth2` flow
+///
+/// Handles errors from the `OAuth2` provider (e.g., user cancelled, access denied)
 #[utoipa::path(
     get,
     path = "/error",
@@ -393,16 +414,23 @@ pub struct ErrorQuery {
     )
 )]
 #[allow(clippy::unused_async)]
-pub async fn error_callback(Query(query): Query<ErrorQuery>) -> Redirect {
+pub async fn error_callback(
+    State(settings): SettingsState,
+    Query(query): Query<ErrorQuery>,
+) -> Redirect {
     warn!(
         "OAuth2 error callback: {} - {:?}",
         query.error, query.error_description
     );
 
-    // Redirect to login page with error parameter
     let error_msg = query.error_description.as_deref().unwrap_or(&query.error);
-    let encoded_error = urlencoding::encode(error_msg);
-    Redirect::to(&format!("/login?error={encoded_error}"))
+    login_error_redirect(&settings.origin.path, error_msg)
+}
+
+/// Redirect to the login page of the UI, which shows `error`.
+fn login_error_redirect(origin_path: &str, error: &str) -> Redirect {
+    let encoded_error = urlencoding::encode(error);
+    Redirect::to(&format!("{origin_path}/login?error={encoded_error}"))
 }
 
 #[cfg(test)]
@@ -594,5 +622,95 @@ mod state_cookie_tests {
             result,
             Err(RouteError::Status(StatusCode::BAD_REQUEST))
         ));
+    }
+}
+
+#[cfg(test)]
+mod callback_tests {
+    use axum::http::{HeaderMap, header};
+    use axum::response::IntoResponse;
+    use axum_extra::extract::cookie::Key;
+    use kellnr_appstate::TEST_KEY;
+    use kellnr_settings::Settings;
+
+    use super::*;
+
+    fn state_with_origin_path(path: &str) -> AppStateData {
+        let mut settings = Settings::clone(&kellnr_appstate::test_state().settings);
+        settings.origin.path = path.to_string();
+        AppStateData {
+            settings: Arc::new(settings),
+            ..kellnr_appstate::test_state()
+        }
+    }
+
+    fn location(response: impl IntoResponse) -> String {
+        response.into_response().headers()[header::LOCATION]
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
+    fn query(code: Option<&str>, error: Option<&str>) -> CallbackQuery {
+        CallbackQuery {
+            code: code.map(String::from),
+            state: Some("abc".to_string()),
+            error: error.map(String::from),
+            error_description: None,
+        }
+    }
+
+    /// The provider redirects to the callback with `error` instead of `code`
+    /// when the user cancels the login.
+    #[tokio::test]
+    async fn provider_error_redirects_to_login_page() {
+        let jar = PrivateCookieJar::from_headers(&HeaderMap::new(), Key::from(TEST_KEY));
+
+        let result = callback(
+            jar,
+            Query(query(None, Some("access_denied"))),
+            State(state_with_origin_path("/kellnr")),
+            Extension(None),
+        )
+        .await;
+
+        let Ok((_, redirect)) = result else {
+            panic!("expected a redirect");
+        };
+        assert_eq!(location(redirect), "/kellnr/login?error=access_denied");
+    }
+
+    #[tokio::test]
+    async fn callback_without_code_is_rejected() {
+        let jar = PrivateCookieJar::from_headers(&HeaderMap::new(), Key::from(TEST_KEY));
+
+        let result = callback(
+            jar,
+            Query(query(None, None)),
+            State(state_with_origin_path("")),
+            Extension(None),
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(RouteError::Status(StatusCode::BAD_REQUEST))
+        ));
+    }
+
+    #[tokio::test]
+    async fn error_callback_redirects_below_origin_path() {
+        let settings = state_with_origin_path("/kellnr").settings;
+
+        let redirect = error_callback(
+            State(settings),
+            Query(ErrorQuery {
+                error: "access_denied".to_string(),
+                error_description: Some("User cancelled".to_string()),
+            }),
+        )
+        .await;
+
+        assert_eq!(location(redirect), "/kellnr/login?error=User%20cancelled");
     }
 }
