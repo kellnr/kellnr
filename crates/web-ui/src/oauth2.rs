@@ -300,7 +300,7 @@ pub async fn callback(
     let jar = jar.add(session_cookie(
         COOKIE_OIDC_ID_TOKEN,
         token_result.id_token.clone(),
-        app_state.settings.registry.session_age_seconds as i64,
+        app_state.settings.registry.session_max_age(),
         app_state.settings.origin.secure_cookies(),
     ));
     trace!("Created session for OAuth2 user: {}", user.name);

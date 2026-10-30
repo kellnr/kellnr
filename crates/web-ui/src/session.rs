@@ -33,14 +33,13 @@ pub(crate) async fn create_session_jar(
             error!("Failed to create session: {e}");
             RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
-    let session_age_seconds = app_state.settings.registry.session_age_seconds as i64;
     // `Secure` follows `origin.protocol` unless `origin.cookie_secure` forces
     // it, since browsers drop secure cookies on plain-HTTP deployments.
     let secure = app_state.settings.origin.secure_cookies();
     Ok(cookies.add(session_cookie(
         COOKIE_SESSION_ID,
         session_token,
-        session_age_seconds,
+        app_state.settings.registry.session_max_age(),
         secure,
     )))
 }
@@ -48,11 +47,13 @@ pub(crate) async fn create_session_jar(
 pub(crate) fn session_cookie(
     name: &'static str,
     value: String,
-    session_age_seconds: i64,
+    max_age: std::time::Duration,
     secure: bool,
 ) -> Cookie<'static> {
+    // `max_age` is bounded by `MAX_SESSION_AGE`, which always fits.
+    let max_age = Duration::try_from(max_age).unwrap_or(Duration::MAX);
     Cookie::build((name, value))
-        .max_age(Duration::seconds(session_age_seconds))
+        .max_age(max_age)
         .same_site(SameSite::Strict)
         .http_only(true)
         .secure(secure)
@@ -689,16 +690,14 @@ mod session_cookie_tests {
     use axum::http::HeaderMap;
     use axum_extra::extract::cookie::Key;
     use kellnr_db::mock::MockDb;
+    use kellnr_settings::constants::MAX_SESSION_AGE;
     use kellnr_settings::{Protocol, Settings};
 
     use super::*;
 
-    async fn session_cookie_secure(protocol: Protocol, cookie_secure: Option<bool>) -> bool {
+    async fn new_session_cookie(settings: Settings) -> Cookie<'static> {
         let mut db = MockDb::new();
         db.expect_add_session_token().returning(|_, _| Ok(()));
-        let mut settings = Settings::clone(&kellnr_appstate::test_state().settings);
-        settings.origin.protocol = protocol;
-        settings.origin.cookie_secure = cookie_secure;
         let state = AppStateData {
             db: Arc::new(db),
             settings: Arc::new(settings),
@@ -708,9 +707,37 @@ mod session_cookie_tests {
 
         let jar = create_session_jar(jar, &state, "user").await.unwrap();
 
-        jar.get(COOKIE_SESSION_ID)
-            .and_then(|c| c.secure())
-            .unwrap_or(false)
+        jar.get(COOKIE_SESSION_ID).unwrap()
+    }
+
+    async fn session_cookie_secure(protocol: Protocol, cookie_secure: Option<bool>) -> bool {
+        let mut settings = Settings::clone(&kellnr_appstate::test_state().settings);
+        settings.origin.protocol = protocol;
+        settings.origin.cookie_secure = cookie_secure;
+        new_session_cookie(settings).await.secure().unwrap_or(false)
+    }
+
+    async fn session_cookie_max_age(session_age_seconds: u64) -> Option<Duration> {
+        let mut settings = Settings::clone(&kellnr_appstate::test_state().settings);
+        settings.registry.session_age_seconds = session_age_seconds;
+        new_session_cookie(settings).await.max_age()
+    }
+
+    #[tokio::test]
+    async fn cookie_lives_as_long_as_the_session() {
+        assert_eq!(
+            session_cookie_max_age(3600).await,
+            Some(Duration::seconds(3600))
+        );
+    }
+
+    /// A session age of zero means sessions never expire. A cookie with
+    /// `Max-Age=0` would be dropped by the browser right away.
+    #[tokio::test]
+    async fn cookie_of_a_session_that_never_expires_is_kept() {
+        let max_age = Duration::try_from(MAX_SESSION_AGE).unwrap();
+        assert_eq!(session_cookie_max_age(0).await, Some(max_age));
+        assert_eq!(session_cookie_max_age(u64::MAX).await, Some(max_age));
     }
 
     #[tokio::test]
