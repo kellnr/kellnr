@@ -216,7 +216,7 @@ async fn run_server(resolved: ResolvedSettings) {
     let signing_key = init_cookie_signing_key(&settings);
     let max_docs_size = settings.docs.max_size;
     let max_crate_size = settings.registry.max_crate_size as usize;
-    let route_path_prefix = settings.origin.path.trim().trim_end_matches('/').to_owned();
+    let route_path_prefix = settings.origin.path.clone();
     let max_toolchain_size = settings.toolchain.max_size;
     let token_cache = Arc::new(TokenCacheManager::new(
         settings.registry.token_cache_enabled,
