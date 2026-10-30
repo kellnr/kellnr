@@ -43,7 +43,7 @@ impl DocsStorage {
         self.storage.get(key).await.map_err(|e| {
             if matches!(
                 &e,
-                StorageError::S3Error(object_store::Error::NotFound { .. })
+                StorageError::ObjectStore(object_store::Error::NotFound { .. })
                     | StorageError::FileDoesNotExist(_)
             ) {
                 return StorageError::DocsNotFound {
@@ -61,7 +61,7 @@ impl DocsStorage {
         self.storage.get_with_meta(key).await.map_err(|e| {
             if matches!(
                 &e,
-                StorageError::S3Error(object_store::Error::NotFound { .. })
+                StorageError::ObjectStore(object_store::Error::NotFound { .. })
                     | StorageError::FileDoesNotExist(_)
             ) {
                 return StorageError::DocsNotFound {

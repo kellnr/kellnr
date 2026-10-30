@@ -39,7 +39,7 @@ impl ToolchainStorage {
         let hash = sha256::digest(&archive_data[..]);
 
         self.storage.put(&path, archive_data).await.map_err(|e| {
-            if let StorageError::S3Error(object_store::Error::AlreadyExists { .. }) = e {
+            if let StorageError::ObjectStore(object_store::Error::AlreadyExists { .. }) = e {
                 return StorageError::ToolchainArchiveExists {
                     name: name.to_string(),
                     version: version.to_string(),
@@ -73,7 +73,7 @@ impl ToolchainStorage {
         self.storage.get(path).await.map_err(|e| {
             if matches!(
                 &e,
-                StorageError::S3Error(object_store::Error::NotFound { .. })
+                StorageError::ObjectStore(object_store::Error::NotFound { .. })
                     | StorageError::FileDoesNotExist(_)
             ) {
                 return StorageError::ToolchainNotFound {
