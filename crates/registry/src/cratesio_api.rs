@@ -49,7 +49,8 @@ pub async fn cratesio_enabled(
     ),
     responses(
         (status = 200, description = "Search results from crates.io"),
-        (status = 404, description = "Crates.io proxy disabled")
+        (status = 404, description = "Crates.io proxy disabled"),
+        (status = 502, description = "Crates.io search failed")
     ),
     security(("cargo_token" = []))
 )]
@@ -72,6 +73,9 @@ pub async fn search(
         .send()
         .await
         .map_err(RegistryError::RequestError)?;
+    if !response.status().is_success() {
+        return Err(RegistryError::UpstreamStatus(response.status()).into());
+    }
 
     let body = response.text().await.map_err(RegistryError::RequestError)?;
 
@@ -326,6 +330,47 @@ mod tests {
     use super::*;
 
     const UPSTREAM_CRATE: &[u8] = b"upstream crate bytes";
+
+    async fn search_status(api: &str) -> StatusCode {
+        let mut settings = Settings::default();
+        settings.proxy.api = Url::parse(api).unwrap();
+        let state = AppStateData {
+            settings: settings.into(),
+            proxy_client: reqwest::Client::new(),
+            ..kellnr_appstate::test_state()
+        };
+        let app = Router::new().route("/", get(search)).with_state(state);
+
+        app.oneshot(Request::get("/?q=foo").body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
+    #[tokio::test]
+    async fn search_failing_upstream_is_bad_gateway() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let app = Router::new().route(
+            "/api",
+            get(|| async { (StatusCode::TOO_MANY_REQUESTS, "slow down") }),
+        );
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        assert_eq!(
+            StatusCode::BAD_GATEWAY,
+            search_status(&format!("http://{addr}/api")).await
+        );
+    }
+
+    #[tokio::test]
+    async fn search_unreachable_upstream_is_bad_gateway() {
+        // Nothing listens on port 1, so the connection is refused.
+        assert_eq!(
+            StatusCode::BAD_GATEWAY,
+            search_status("http://127.0.0.1:1/api").await
+        );
+    }
 
     /// Versions of the crate "upstream" on the fake crates.io: the version,
     /// its license and whether the index checksum matches `UPSTREAM_CRATE`.
