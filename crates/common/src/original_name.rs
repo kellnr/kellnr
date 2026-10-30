@@ -8,6 +8,7 @@ use sea_orm::Value;
 use thiserror::Error;
 use utoipa::ToSchema;
 
+use crate::canonical_name::CanonicalName;
 use crate::normalized_name::NormalizedName;
 
 static NAME_REGEX: LazyLock<Regex> =
@@ -31,6 +32,9 @@ pub enum NameError {
 }
 
 impl OriginalName {
+    pub fn to_canonical(&self) -> CanonicalName {
+        CanonicalName::from(self)
+    }
     pub fn to_normalized(&self) -> NormalizedName {
         NormalizedName::from(self)
     }
