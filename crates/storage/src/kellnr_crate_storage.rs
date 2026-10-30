@@ -24,14 +24,11 @@ impl KellnrCrateStorage {
     }
 
     async fn create_recursive_path(path: &Path) -> Result<(), StorageError> {
-        if !path.exists() {
-            DirBuilder::new()
-                .recursive(true)
-                .create(path)
-                .await
-                .map_err(|e| StorageError::CreateDocQueuePath(path.to_path_buf(), e))?;
-        }
-        Ok(())
+        DirBuilder::new()
+            .recursive(true)
+            .create(path)
+            .await
+            .map_err(|e| StorageError::CreateDocQueuePath(path.to_path_buf(), e))
     }
 }
 
