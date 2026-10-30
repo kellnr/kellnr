@@ -1140,6 +1140,33 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
+    async fn publish_rejects_other_spelling_of_existing_crate() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("MyCrate", "1.0.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("mycrate", "1.1.0"),
+        )
+        .await;
+
+        assert_eq!(StatusCode::BAD_REQUEST, status);
+        assert_eq!(
+            "ERROR: Crate mycrate must be spelled like the existing crate MyCrate",
+            detail
+        );
+        let name = NormalizedName::from_unchecked_str("mycrate");
+        assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
+    }
+
+    #[tokio::test]
     async fn publish_records_the_publisher_and_token() {
         let kellnr = TestKellnr::new(get_settings()).await;
         let (status, detail) = publish_metadata(

@@ -11,7 +11,7 @@ use kellnr_common::crate_dependents::LocalDependency;
 use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::publish_metadata::PublishMetadata;
-use kellnr_common::version::latest_version;
+use kellnr_common::version::{Version, latest_version};
 use kellnr_entity::{
     auth_token, crate_author, crate_author_to_crate, crate_category, crate_category_to_crate,
     crate_dependency, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta,
@@ -242,6 +242,22 @@ pub async fn ensure_owner_or_admin<C: ConnectionTrait>(
     } else {
         Err(DbError::NotOwner(crate_name.to_string()))
     }
+}
+
+/// Find a version of the crate that equals `version` when build metadata is
+/// ignored, as cargo treats them as the same version.
+pub async fn find_version_ignoring_build<C: ConnectionTrait>(
+    db_con: &C,
+    crate_id: i64,
+    version: &Version,
+) -> DbResult<Option<String>> {
+    Ok(crate_meta::Entity::find()
+        .filter(crate_meta::Column::CrateFk.eq(crate_id))
+        .all(db_con)
+        .await?
+        .into_iter()
+        .map(|meta| meta.version)
+        .find(|existing| Version::from_unchecked_str(existing).eq_ignoring_build(version)))
 }
 
 pub async fn add_owner_if_not_exists<C: ConnectionTrait>(
@@ -635,11 +651,11 @@ pub async fn update_etag<C: ConnectionTrait>(
 pub async fn get_max_version_from_id<C: ConnectionTrait>(
     db_con: &C,
     crate_id: i64,
-) -> DbResult<kellnr_common::version::Version> {
+) -> DbResult<Version> {
     let krate = krate::Entity::find_by_id(crate_id).one(db_con).await?;
 
     let k = krate.ok_or(DbError::FailedToGetMaxVersionById(crate_id))?;
-    let v = kellnr_common::version::Version::try_from(&k.max_version)
+    let v = Version::try_from(&k.max_version)
         .map_err(|_| DbError::FailedToGetMaxVersionById(crate_id))?;
     Ok(v)
 }

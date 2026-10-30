@@ -5169,3 +5169,62 @@ async fn adding_a_crate_user_twice_is_a_unique_violation(test_db: &kellnr_db::Da
 
     assert!(e.is_unique_violation(), "{e}");
 }
+
+#[db_test]
+async fn add_crate_rejects_version_differing_only_in_build_metadata(test_db: &kellnr_db::Database) {
+    let publish = |vers: &str| PublishMetadata::minimal("crate", vers);
+    test_db
+        .add_crate(&publish("1.0.0+a"), "cksum", 1, &Utc::now(), "admin", None)
+        .await
+        .unwrap();
+
+    let result = test_db
+        .add_crate(&publish("1.0.0+b"), "cksum", 1, &Utc::now(), "admin", None)
+        .await;
+
+    assert!(
+        matches!(
+            result,
+            Err(kellnr_db::error::DbError::CrateVersionExists(ref name, ref vers))
+                if name == "crate" && vers == "1.0.0+a"
+        ),
+        "{result:?}"
+    );
+}
+
+#[db_test]
+async fn add_crate_rejects_other_spelling_of_existing_crate(test_db: &kellnr_db::Database) {
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("MyCrate", "1.0.0"),
+            "cksum",
+            1,
+            &Utc::now(),
+            "admin",
+            None,
+        )
+        .await
+        .unwrap();
+
+    let result = test_db
+        .add_crate(
+            &PublishMetadata::minimal("mycrate", "1.1.0"),
+            "cksum",
+            1,
+            &Utc::now(),
+            "admin",
+            None,
+        )
+        .await;
+
+    assert!(
+        matches!(
+            result,
+            Err(kellnr_db::error::DbError::CrateNameMismatch(ref name, ref existing))
+                if name == "mycrate" && existing == "MyCrate"
+        ),
+        "{result:?}"
+    );
+    let name = NormalizedName::from_unchecked("mycrate".to_string());
+    assert_eq!(1, test_db.get_crate_meta_list(&name).await.unwrap().len());
+}

@@ -2074,10 +2074,13 @@ impl DbProvider for Database {
         // Look up the crate by its normalized name. The transaction keeps the
         // publish atomic, but does not serialize concurrent first publishes.
         // Two of the same name fail on the unique crate name, while two names
-        // that only differ in '-' and '_' can still both be created.
+        // that only differ in '-' and '_' can still both be created. The row
+        // lock serializes publishes of an existing crate on PostgreSQL, so the
+        // version check below sees concurrently published versions.
         let txn = self.db_con.begin().await?;
         let existing = krate::Entity::find()
             .filter(krate::Column::Name.eq(&normalized_name))
+            .lock_exclusive()
             .one(&txn)
             .await?;
 
@@ -2085,6 +2088,22 @@ impl DbProvider for Database {
         let (crate_id, is_newest) = if let Some(krate) = existing {
             let krate_id = krate.id;
             operations::ensure_owner_or_admin(&txn, owner, &normalized_name, krate_id).await?;
+            // Like crates.io, the name must be spelled like on the first publish,
+            // else the index and the storage would use different spellings.
+            if krate.original_name != pub_metadata.name {
+                return Err(DbError::CrateNameMismatch(
+                    pub_metadata.name.clone(),
+                    krate.original_name,
+                ));
+            }
+            if let Some(existing) =
+                operations::find_version_ignoring_build(&txn, krate_id, &version).await?
+            {
+                return Err(DbError::CrateVersionExists(
+                    pub_metadata.name.clone(),
+                    existing,
+                ));
+            }
             // The crate level metadata is the one of the newest version, so a
             // fix release of an older version must not overwrite it.
             let is_newest = version >= parse_db_version(&krate.max_version)?;

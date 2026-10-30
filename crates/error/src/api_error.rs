@@ -134,10 +134,12 @@ impl From<DbError> for ApiError {
             | DbError::ToolchainNotFound(_, _) => ApiError::from_err(&e, StatusCode::NOT_FOUND),
             DbError::PasswordMismatch
             | DbError::CrateNameConflict(_, _)
+            | DbError::CrateNameMismatch(_, _)
             | DbError::InvalidCrateName(_)
             | DbError::InvalidVersion(_)
             | DbError::InvalidWebhookEvent(_)
             | DbError::InvalidId(_) => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
+            DbError::CrateVersionExists(_, _) => ApiError::from_err(&e, StatusCode::CONFLICT),
             _ if e.is_unique_violation() => {
                 tracing::warn!("Conflict with an existing entry: {e}");
                 ApiError::from_str("The entry already exists", StatusCode::CONFLICT)
