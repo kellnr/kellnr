@@ -1,7 +1,6 @@
 mod operations;
 pub mod test_utils;
 
-use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
@@ -2057,30 +2056,32 @@ impl DbProvider for Database {
             .one(&txn)
             .await?;
 
-        let crate_id = if let Some(krate) = existing {
+        let version = parse_db_version(&pub_metadata.vers)?;
+        let (crate_id, is_newest) = if let Some(krate) = existing {
             let krate_id = krate.id;
             operations::ensure_owner_or_admin(&txn, owner, &normalized_name, krate_id).await?;
-            let max_version = max(
-                parse_db_version(&krate.max_version)?,
-                parse_db_version(&pub_metadata.vers)?,
-            );
+            // The crate level metadata is the one of the newest version, so a
+            // fix release of an older version must not overwrite it.
+            let is_newest = version >= parse_db_version(&krate.max_version)?;
 
             let mut krate: krate::ActiveModel = krate.into();
             krate.last_updated = Set(created.clone());
-            krate.max_version = Set(max_version.into_inner());
-            krate.homepage = Set(pub_metadata.homepage.clone());
-            krate.description = Set(pub_metadata.description.clone());
-            krate.repository = Set(pub_metadata.repository.clone());
+            if is_newest {
+                krate.max_version = Set(version.into_inner());
+                krate.homepage = Set(pub_metadata.homepage.clone());
+                krate.description = Set(pub_metadata.description.clone());
+                krate.repository = Set(pub_metadata.repository.clone());
+            }
             krate.e_tag = Set(String::new()); // Set to empty string, as it can be computed, when the crate index is inserted
             krate.update(&txn).await?;
-            krate_id
+            (krate_id, is_newest)
         } else {
             operations::ensure_no_similar_crate(&txn, &normalized_name).await?;
             let krate = krate::ActiveModel {
                 id: ActiveValue::default(),
                 name: Set(normalized_name.to_string()),
                 original_name: Set(pub_metadata.name.clone()),
-                max_version: Set(pub_metadata.vers.clone()),
+                max_version: Set(version.into_inner()),
                 last_updated: Set(created.clone()),
                 total_downloads: Set(0),
                 homepage: Set(pub_metadata.homepage.clone()),
@@ -2090,7 +2091,7 @@ impl DbProvider for Database {
                 restricted_download: Set(false),
             };
             let krate = krate.insert(&txn).await?;
-            krate.id
+            (krate.id, true)
         };
 
         operations::add_owner_if_not_exists(&txn, owner, crate_id).await?;
@@ -2106,9 +2107,11 @@ impl DbProvider for Database {
         .await?;
         operations::add_crate_index(&txn, pub_metadata, cksum, crate_id).await?;
         operations::update_etag(&txn, &pub_metadata.name, crate_id).await?;
-        operations::update_crate_categories(&txn, pub_metadata, crate_id).await?;
-        operations::update_crate_keywords(&txn, pub_metadata, crate_id).await?;
-        operations::update_crate_authors(&txn, pub_metadata, crate_id).await?;
+        if is_newest {
+            operations::update_crate_categories(&txn, pub_metadata, crate_id).await?;
+            operations::update_crate_keywords(&txn, pub_metadata, crate_id).await?;
+            operations::update_crate_authors(&txn, pub_metadata, crate_id).await?;
+        }
 
         txn.commit().await?;
         Ok(crate_id)
