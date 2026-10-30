@@ -64,6 +64,8 @@ pub enum DbError {
     InvalidWebhookEvent(String),
     #[error("Invalid id {0}")]
     InvalidId(String),
+    #[error("Toolchain {0}-{1} not found")]
+    ToolchainNotFound(String, String),
     #[error("Path is not valid UTF-8: {0}")]
     NonUtf8Path(String),
 }
