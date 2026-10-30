@@ -213,17 +213,32 @@ impl Database {
     }
 
     /// Looks up a crate index by name and version; returns the entity model or [`DbError::CrateIndexNotFound`].
-    async fn get_crate_index_model(
+    /// Yanks or unyanks a version and updates the `ETag` of the crate index,
+    /// so clients fetch the changed index.
+    async fn set_yanked(
         &self,
         crate_name: &NormalizedName,
         version: &Version,
-    ) -> DbResult<crate_index::Model> {
-        crate_index::Entity::find()
-            .filter(crate_index::Column::Name.eq(crate_name))
+        yanked: bool,
+    ) -> DbResult<()> {
+        let txn = self.db_con.begin().await?;
+        // The index stores the original name, so look it up by the crate
+        let ci = crate_index::Entity::find()
+            .inner_join(krate::Entity)
+            .filter(krate::Column::Name.eq(crate_name))
             .filter(crate_index::Column::Vers.eq(version))
-            .one(&self.db_con)
+            .one(&txn)
             .await?
-            .ok_or_else(|| DbError::CrateIndexNotFound(crate_name.to_string(), version.to_string()))
+            .ok_or_else(|| {
+                DbError::CrateIndexNotFound(crate_name.to_string(), version.to_string())
+            })?;
+        let crate_id = ci.crate_fk;
+        let mut ci: crate_index::ActiveModel = ci.into();
+        ci.yanked = Set(yanked);
+        ci.update(&txn).await?;
+        operations::update_etag(&txn, crate_name, crate_id).await?;
+        txn.commit().await?;
+        Ok(())
     }
 
     /// Looks up a toolchain by name and version; returns `None` if not found.
@@ -2160,17 +2175,12 @@ impl DbProvider for Database {
     }
 
     async fn get_prefetch_data(&self, crate_name: &str) -> DbResult<Prefetch> {
-        let mut krate = krate::Entity::find()
+        let krate = krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
-            .find_with_related(crate_index::Entity)
-            .all(&self.db_con)
+            .one(&self.db_con)
             .await?
-            .into_iter();
-
-        // Expecting only one crate with its related indices
-        let (Some((krate, crate_indices)), None) = (krate.next(), krate.next()) else {
-            return Err(DbError::CrateNotFound(crate_name.to_string()));
-        };
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+        let crate_indices = operations::crate_indices(&self.db_con, krate.id).await?;
 
         let index_metadata =
             operations::crate_index_model_to_index_metadata(crate_name, crate_indices)?;
@@ -2214,6 +2224,7 @@ impl DbProvider for Database {
         } else {
             let crate_indices = krate
                 .find_related(cratesio_index::Entity)
+                .order_by_asc(cratesio_index::Column::Id)
                 .all(&self.db_con)
                 .await?;
             let index_metadata =
@@ -2459,23 +2470,11 @@ impl DbProvider for Database {
     }
 
     async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
-        let mut ci: crate_index::ActiveModel = self
-            .get_crate_index_model(crate_name, version)
-            .await?
-            .into();
-        ci.yanked = Set(false);
-        ci.save(&self.db_con).await?;
-        Ok(())
+        self.set_yanked(crate_name, version, false).await
     }
 
     async fn yank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
-        let mut ci: crate_index::ActiveModel = self
-            .get_crate_index_model(crate_name, version)
-            .await?
-            .into();
-        ci.yanked = Set(true);
-        ci.save(&self.db_con).await?;
-        Ok(())
+        self.set_yanked(crate_name, version, true).await
     }
 
     async fn register_webhook(&self, webhook: Webhook) -> DbResult<String> {
