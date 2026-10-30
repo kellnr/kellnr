@@ -4721,3 +4721,46 @@ async fn migration_sets_date_of_cached_crates(test_db: &kellnr_db::Database) {
         dates
     );
 }
+
+#[db_test]
+async fn get_crate_data_with_more_dependencies_than_bind_parameters(test_db: &kellnr_db::Database) {
+    // Every version repeats the dependencies, together they exceed the bind
+    // parameter limits of SQLite and PostgreSQL
+    let deps: Vec<RegistryDep> = (0..35_000)
+        .map(|i| RegistryDep {
+            name: format!("dep-{i}"),
+            version_req: "^1".to_string(),
+            features: None,
+            optional: false,
+            default_features: true,
+            target: None,
+            kind: Some("normal".to_string()),
+            registry: Some(kellnr_common::crate_data::CRATESIO_INDEX.to_string()),
+            explicit_name_in_toml: None,
+        })
+        .collect();
+    for version in ["1.0.0", "2.0.0"] {
+        let pm = PublishMetadata {
+            deps: deps.clone(),
+            ..PublishMetadata::minimal("many_deps", version)
+        };
+        test_db
+            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .await
+            .unwrap();
+    }
+    add_cached(test_db, "dep-7", "", Some("cached dependency")).await;
+
+    let data = test_db
+        .get_crate_data(&NormalizedName::from_unchecked_str("many_deps"))
+        .await
+        .unwrap();
+
+    let dep = data.versions[0]
+        .dependencies
+        .iter()
+        .find(|d| d.name == "dep-7")
+        .unwrap();
+    assert_eq!(Some("cached dependency".to_string()), dep.description);
+    assert_eq!(Some("1.0.0".to_string()), dep.latest_version);
+}
