@@ -6,6 +6,7 @@
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 
+use kellnr_common::account_name::MAX_NAME_LEN;
 use kellnr_settings::OAuth2 as OAuth2Settings;
 use openidconnect::core::{
     CoreAuthDisplay, CoreAuthPrompt, CoreAuthenticationFlow, CoreClient, CoreErrorResponseType,
@@ -626,46 +627,56 @@ fn sanitize_username_impl(input: &str, allow_dot: bool) -> String {
         result = format!("u_{result}");
     }
 
-    // Truncate if too long (max 64 chars is reasonable)
-    if result.len() > 64 {
-        result.truncate(64);
-    }
+    // Only ASCII characters are left, so truncating cannot split a char.
+    result.truncate(MAX_NAME_LEN);
 
     result
 }
 
+/// `base` with `suffix` appended, `base` shortened so that the result fits
+/// into [`MAX_NAME_LEN`]. `base` is the output of `sanitize_username_impl`,
+/// so it only contains ASCII characters.
+fn with_suffix(base: &str, suffix: &str) -> String {
+    let keep = MAX_NAME_LEN.saturating_sub(suffix.len()).min(base.len());
+    format!("{}{suffix}", &base[..keep])
+}
+
 /// Generate a unique username with collision handling
 ///
-/// If the base username is taken, appends _2, _3, etc.
-pub async fn generate_unique_username<F, Fut>(user_info: &UserInfo, is_available: F) -> String
+/// If the base username is taken, appends _2, _3, etc. The result is never
+/// longer than [`MAX_NAME_LEN`]. Errors of `is_available` are returned.
+pub async fn generate_unique_username<F, Fut, E>(
+    user_info: &UserInfo,
+    is_available: F,
+) -> Result<String, E>
 where
     F: Fn(String) -> Fut,
-    Fut: Future<Output = bool>,
+    Fut: Future<Output = Result<bool, E>>,
 {
     let base = OAuth2Handler::generate_username(user_info);
 
     // Try the base username first
-    if is_available(base.clone()).await {
-        return base;
+    if is_available(base.clone()).await? {
+        return Ok(base);
     }
 
     // Try with numeric suffixes
     for i in 2..=100 {
-        let candidate = format!("{base}_{i}");
-        if is_available(candidate.clone()).await {
-            return candidate;
+        let candidate = with_suffix(&base, &format!("_{i}"));
+        if is_available(candidate.clone()).await? {
+            return Ok(candidate);
         }
     }
 
     // Fallback: use subject with timestamp (very unlikely to reach here)
     warn!("Could not find unique username after 100 attempts, using fallback");
-    format!(
-        "{}_{:x}",
-        sanitize_username(&user_info.subject),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_secs())
-    )
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    Ok(with_suffix(
+        &sanitize_username(&user_info.subject),
+        &format!("_{timestamp:x}"),
+    ))
 }
 
 #[cfg(test)]
@@ -831,20 +842,67 @@ mod tests {
         };
 
         // First username is available
-        let username = generate_unique_username(&user_info, |_| async { true }).await;
-        assert_eq!(username, "johndoe");
+        let username = generate_unique_username(&user_info, |_| async { Ok::<_, ()>(true) }).await;
+        assert_eq!(username, Ok("johndoe".to_string()));
 
         // First username is taken, second is available
         let username =
-            generate_unique_username(&user_info, |name| async move { name != "johndoe" }).await;
-        assert_eq!(username, "johndoe_2");
+            generate_unique_username(
+                &user_info,
+                |name| async move { Ok::<_, ()>(name != "johndoe") },
+            )
+            .await;
+        assert_eq!(username, Ok("johndoe_2".to_string()));
 
         // First two are taken
         let username = generate_unique_username(&user_info, |name| async move {
-            name != "johndoe" && name != "johndoe_2"
+            Ok::<_, ()>(name != "johndoe" && name != "johndoe_2")
         })
         .await;
-        assert_eq!(username, "johndoe_3");
+        assert_eq!(username, Ok("johndoe_3".to_string()));
+    }
+
+    fn long_user_info() -> UserInfo {
+        UserInfo {
+            subject: "s".repeat(200),
+            email: None,
+            preferred_username: Some("a".repeat(100)),
+            groups: vec![],
+            is_admin: false,
+            is_read_only: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn unique_username_with_suffix_is_not_too_long() {
+        let base = "a".repeat(MAX_NAME_LEN);
+        let username = generate_unique_username(&long_user_info(), |name| {
+            let taken = name == base;
+            async move { Ok::<_, ()>(!taken) }
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(username, format!("{}_2", "a".repeat(MAX_NAME_LEN - 2)));
+    }
+
+    #[tokio::test]
+    async fn fallback_username_is_not_too_long() {
+        let username =
+            generate_unique_username(&long_user_info(), |_| async { Ok::<_, ()>(false) })
+                .await
+                .unwrap();
+
+        assert!(username.starts_with("sss"), "{username}");
+        assert!(username.len() <= MAX_NAME_LEN, "{username}");
+    }
+
+    #[tokio::test]
+    async fn unique_username_returns_errors() {
+        let result =
+            generate_unique_username(&long_user_info(), |_| async { Err("db down") }).await;
+
+        assert_eq!(result, Err("db down"));
     }
 
     #[test]

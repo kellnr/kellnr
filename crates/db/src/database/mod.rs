@@ -2832,8 +2832,9 @@ impl DbProvider for Database {
     }
 
     async fn is_username_available(&self, username: &str) -> DbResult<bool> {
+        // Names that only differ in case are too easy to confuse.
         let existing = user::Entity::find()
-            .filter(user::Column::Name.eq(username))
+            .filter(Func::lower(Expr::col(user::Column::Name)).eq(username.to_lowercase()))
             .one(&self.db_con)
             .await?;
 
