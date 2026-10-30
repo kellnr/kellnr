@@ -39,7 +39,6 @@ pub async fn get_doc_url(
 
 pub fn compute_doc_url(crate_name: &str, crate_version: &Version, path_prefix: &str) -> String {
     let docs_name = crate_name_to_docs_name(crate_name);
-    let path_prefix = path_prefix.trim();
     format!("{path_prefix}/docs/{crate_name}/{crate_version}/doc/{docs_name}/index.html")
 }
 
@@ -113,13 +112,6 @@ mod tests {
     fn compute_doc_url_with_path_prefix() {
         let version = Version::try_from("1.0.0").unwrap();
         let url = compute_doc_url("my-crate", &version, "/kellnr");
-        assert_eq!(url, "/kellnr/docs/my-crate/1.0.0/doc/my_crate/index.html");
-    }
-
-    #[test]
-    fn compute_doc_url_trims_whitespace_from_path_prefix() {
-        let version = Version::try_from("1.0.0").unwrap();
-        let url = compute_doc_url("my-crate", &version, "  /kellnr  ");
         assert_eq!(url, "/kellnr/docs/my-crate/1.0.0/doc/my_crate/index.html");
     }
 

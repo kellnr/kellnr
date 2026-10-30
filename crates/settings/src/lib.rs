@@ -41,7 +41,8 @@ pub use provcfg::{Category, Config, Provenance, erased_serde};
 pub use proxy::Proxy;
 pub use registry::Registry;
 pub use settings::{
-    Settings, SettingsError, SettingsProv, build_prov_with_cli, sources_from_prov, test_settings,
+    Settings, SettingsError, SettingsProv, build_prov_with_cli, settings_from_prov,
+    sources_from_prov, test_settings,
 };
 pub use setup::Setup;
 pub use toolchain::Toolchain;

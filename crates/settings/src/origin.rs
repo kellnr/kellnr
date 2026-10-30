@@ -57,14 +57,32 @@ impl Origin {
             .unwrap_or(self.protocol == Protocol::Https)
     }
 
+    /// Brings `path` into the form `/prefix`, or empty for the root: no
+    /// surrounding whitespace, one leading slash and no trailing slash.
+    /// Applied once when the settings are loaded, so callers can append
+    /// `/...` to it.
+    pub fn normalize(&mut self) {
+        let path = self.path.trim().trim_matches('/');
+        self.path = if path.is_empty() {
+            String::new()
+        } else {
+            format!("/{path}")
+        };
+    }
+
+    /// External URL of Kellnr without a trailing slash. The port is left out
+    /// if it is the default port of the protocol.
     pub fn base_url(&self) -> String {
-        let path_prefix = self.path.trim().trim_end_matches('/');
-        if self.port == 443 || self.port == 80 {
-            format!("{}://{}{}", self.protocol, self.hostname, path_prefix)
+        let default_port = match self.protocol {
+            Protocol::Http => 80,
+            Protocol::Https => 443,
+        };
+        if self.port == default_port {
+            format!("{}://{}{}", self.protocol, self.hostname, self.path)
         } else {
             format!(
                 "{}://{}:{}{}",
-                self.protocol, self.hostname, self.port, path_prefix
+                self.protocol, self.hostname, self.port, self.path
             )
         }
     }
@@ -140,33 +158,45 @@ mod tests {
         );
     }
 
-    /// A bare or trailing slash must not leak into the URL, otherwise callers
-    /// appending their own path produce a double slash.
     #[test]
-    fn base_url_normalizes_slashes_in_path_prefix() {
-        for path in ["", "/", "  /  ", "/registry/", "/registry//"] {
-            let url = origin(8000, path).base_url();
-            assert!(
-                !url.ends_with('/'),
-                "base_url for path {path:?} must not end in a slash, got {url}"
-            );
-        }
+    fn base_url_keeps_port_that_is_not_the_protocol_default() {
+        assert_eq!(origin(80, "").base_url(), "https://kellnr.example.com:80");
 
-        assert_eq!(
-            origin(8000, "/registry/").base_url(),
-            "https://kellnr.example.com:8000/registry"
-        );
+        let mut http = origin(443, "");
+        http.protocol = Protocol::Http;
+        assert_eq!(http.base_url(), "http://kellnr.example.com:443");
     }
 
-    /// The `OAuth2` callback and post-logout redirect are both built by appending
-    /// to `base_url`, so the join must stay free of double slashes.
     #[test]
-    fn base_url_composes_into_callback_url() {
-        for path in ["", "/", "/registry", "/registry/"] {
-            let url = format!("{}/api/v1/oauth2/callback", origin(443, path).base_url());
+    fn normalize_brings_path_into_prefix_form() {
+        for (path, expected) in [
+            ("", ""),
+            ("/", ""),
+            ("  /  ", ""),
+            ("registry", "/registry"),
+            ("/registry", "/registry"),
+            ("/registry/", "/registry"),
+            (" registry// ", "/registry"),
+            ("/a/b/", "/a/b"),
+        ] {
+            let mut o = origin(443, path);
+            o.normalize();
+            assert_eq!(o.path, expected, "path {path:?}");
+        }
+    }
+
+    /// A bare, missing or trailing slash must not leak into the URL, otherwise
+    /// callers appending their own path produce a double slash.
+    #[test]
+    fn base_url_of_normalized_origin_composes_into_callback_url() {
+        for path in ["", "/", "registry", "/registry", "/registry/"] {
+            let mut o = origin(443, path);
+            o.normalize();
+            let url = format!("{}/api/v1/oauth2/callback", o.base_url());
             assert!(
-                !url.contains("com//") && !url.contains("registry//"),
-                "callback URL for path {path:?} has a double slash: {url}"
+                url == "https://kellnr.example.com/api/v1/oauth2/callback"
+                    || url == "https://kellnr.example.com/registry/api/v1/oauth2/callback",
+                "callback URL for path {path:?} is malformed: {url}"
             );
         }
     }

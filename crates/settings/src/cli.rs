@@ -7,6 +7,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use crate::compile_time_config;
 use crate::settings::{
     Settings, SettingsArgs, SettingsError, SettingsPartial, SettingsProv, build_prov_with_cli,
+    settings_from_prov,
 };
 
 #[derive(Parser)]
@@ -156,7 +157,7 @@ pub fn settings_from_process() -> Option<Settings> {
     let cli = Cli::try_parse().ok()?;
     let command = cli.command?;
     let prov = build_prov(cli.config_file, &command).ok()?;
-    Some(Settings::from(&prov))
+    Some(settings_from_prov(&prov))
 }
 
 fn build_prov(
@@ -187,7 +188,7 @@ fn build_from_command(
 ) -> Result<CliResult, SettingsError> {
     let prov = build_prov(cli_config_file, command)?;
     let resolved = ResolvedSettings {
-        settings: Settings::from(&prov),
+        settings: settings_from_prov(&prov),
         prov: Arc::new(prov),
     };
 

@@ -89,6 +89,14 @@ pub fn build_prov_with_cli(
     cfg.build::<SettingsProv>()
 }
 
+/// The active settings of `prov`, normalized so that the rest of Kellnr can
+/// rely on the form of values like `origin.path`.
+pub fn settings_from_prov(prov: &SettingsProv) -> Settings {
+    let mut settings = Settings::from(prov);
+    settings.normalize();
+    settings
+}
+
 /// Dotted paths that the env source should treat as comma-separated lists.
 /// Matches the kellnr 6.x behaviour driven by the `config` crate's
 /// `with_list_parse_key`.
@@ -115,6 +123,11 @@ pub fn sources_from_prov(prov: &SettingsProv) -> SourceMap {
 }
 
 impl Settings {
+    /// Normalize values that can be written in several equivalent ways.
+    pub fn normalize(&mut self) {
+        self.origin.normalize();
+    }
+
     pub fn bin_path(&self) -> PathBuf {
         PathBuf::from(&self.registry.data_dir).join("crates")
     }
@@ -241,5 +254,15 @@ mod tests {
         // across leaves that the TOML source didn't supply.
         assert_eq!(map.get("registry.cache_size"), Some(&ConfigSource::Default));
         assert_eq!(map.get("s3.enabled"), Some(&ConfigSource::Default));
+    }
+
+    #[test]
+    fn settings_from_prov_normalizes_origin_path() {
+        let prov = Config::new()
+            .add_toml_str("test.toml", "[origin]\npath = \"registry/\"\n")
+            .build::<SettingsProv>()
+            .unwrap();
+
+        assert_eq!(settings_from_prov(&prov).origin.path, "/registry");
     }
 }

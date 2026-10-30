@@ -306,13 +306,7 @@ pub async fn callback(
     trace!("Created session for OAuth2 user: {}", user.name);
 
     // Redirect to UI root
-    let mut base_path = app_state.settings.origin.path.clone();
-    if !base_path.ends_with('/') {
-        base_path.push('/');
-    }
-    if !base_path.starts_with('/') {
-        base_path.insert(0, '/');
-    }
+    let base_path = format!("{}/", app_state.settings.origin.path);
     Ok((jar, Redirect::to(&base_path)))
 }
 
