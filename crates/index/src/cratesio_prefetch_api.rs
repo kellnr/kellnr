@@ -25,7 +25,7 @@ use super::config_json::ConfigJson;
 
 pub static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 pub static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
-static UPDATE_LIST_RETRY_SECS: u64 = 60; // retry delay if the update list cannot be loaded
+static UPDATE_LIST_RETRY_SECS: u64 = 60; // retry delay if an update round cannot run
 static CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
 
 fn get_client(settings: &kellnr_settings::Proxy) -> &'static Client {
@@ -137,12 +137,22 @@ pub fn init_cratesio_prefetch_thread(
     num_threads: usize,
     args: CratesIoPrefetchArgs,
 ) {
-    // Tasks that take messages to update the crates.io index
-    for _ in 0..num_threads {
+    // Tasks that take messages to update the crates.io index. A task that
+    // panics is logged and started again.
+    for worker in 0..num_threads {
         let args = args.clone();
 
         tokio::spawn(async move {
-            cratesio_prefetch_thread(args).await;
+            loop {
+                let args = args.clone();
+                let task = tokio::spawn(async move {
+                    cratesio_prefetch_thread(args).await;
+                });
+                // The worker never returns, it can only panic.
+                let Err(e) = task.await;
+                error!("crates.io prefetch worker {worker} stopped, restarting it: {e}");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
         });
     }
 
@@ -233,22 +243,39 @@ async fn background_update_thread(
     sender: flume::Sender<CratesioPrefetchMsg>,
 ) {
     loop {
-        let next_run_secs = match db.get_cratesio_index_update_list().await {
-            Ok(crates) => {
-                for c in crates {
-                    if let Err(e) = sender.send(c) {
-                        error!("Could not send update message: {e}");
-                    }
-                }
-                UPDATE_INTERVAL_SECS
-            }
-            Err(e) => {
-                error!("Could not get crates.io index update list: {e}");
-                UPDATE_LIST_RETRY_SECS
-            }
-        };
-
+        let next_run_secs = queue_update_round(db.as_ref(), &sender).await;
         tokio::time::sleep(Duration::from_secs(next_run_secs)).await;
+    }
+}
+
+/// Queues an update of all cached crates and returns the seconds until the
+/// next round. While messages are still queued, the round is postponed, so
+/// rounds do not pile up if the workers cannot keep up.
+async fn queue_update_round(
+    db: &dyn DbProvider,
+    sender: &flume::Sender<CratesioPrefetchMsg>,
+) -> u64 {
+    if !sender.is_empty() {
+        warn!(
+            "Postponing the crates.io index update, {} updates are still queued",
+            sender.len()
+        );
+        return UPDATE_LIST_RETRY_SECS;
+    }
+
+    match db.get_cratesio_index_update_list().await {
+        Ok(crates) => {
+            for c in crates {
+                if let Err(e) = sender.send(c) {
+                    error!("Could not send update message: {e}");
+                }
+            }
+            UPDATE_INTERVAL_SECS
+        }
+        Err(e) => {
+            error!("Could not get crates.io index update list: {e}");
+            UPDATE_LIST_RETRY_SECS
+        }
     }
 }
 
@@ -1004,5 +1031,39 @@ mod tests {
             assert_eq!(1, upstream.index_calls.load(Ordering::SeqCst));
             assert_eq!(1, stored.lock().unwrap().len());
         }
+    }
+
+    fn update_msg(name: &str) -> CratesioPrefetchMsg {
+        CratesioPrefetchMsg::Update(UpdateData {
+            name: OriginalName::from_unchecked(name.to_string()),
+            etag: None,
+            last_modified: None,
+        })
+    }
+
+    #[tokio::test]
+    async fn update_round_queues_all_cached_crates() {
+        let mut db = MockDb::new();
+        db.expect_get_cratesio_index_update_list()
+            .returning(|| Ok(vec![update_msg("a"), update_msg("b")]));
+        let (sender, receiver) = flume::unbounded();
+
+        let next = queue_update_round(&db, &sender).await;
+
+        assert_eq!(UPDATE_INTERVAL_SECS, next);
+        assert_eq!(2, receiver.len());
+    }
+
+    #[tokio::test]
+    async fn update_round_is_postponed_while_the_previous_one_is_queued() {
+        let mut db = MockDb::new();
+        db.expect_get_cratesio_index_update_list().never();
+        let (sender, receiver) = flume::unbounded();
+        sender.send(update_msg("still-queued")).unwrap();
+
+        let next = queue_update_round(&db, &sender).await;
+
+        assert_eq!(UPDATE_LIST_RETRY_SECS, next);
+        assert_eq!(1, receiver.len());
     }
 }
