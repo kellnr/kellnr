@@ -137,7 +137,7 @@ pub fn init_cratesio_prefetch_thread(
     num_threads: usize,
     args: CratesIoPrefetchArgs,
 ) {
-    // Threads that takes messages to update the crates.io index
+    // Tasks that take messages to update the crates.io index
     for _ in 0..num_threads {
         let args = args.clone();
 
