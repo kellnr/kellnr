@@ -28,6 +28,12 @@ function getErrorMessage(error: AxiosError, customMessages?: Record<number, stri
 
   const status = error.response.status
 
+  // Validation errors carry a message that tells the user what to fix
+  const body = error.response.data
+  if (status === 400 && typeof body === 'string' && body.length > 0) {
+    return body
+  }
+
   // Check custom messages first
   if (customMessages?.[status]) {
     return customMessages[status]

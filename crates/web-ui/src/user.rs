@@ -6,6 +6,7 @@ use axum_extra::extract::cookie::Cookie;
 use kellnr_appstate::{AppState, DbState, LoginThrottleState, SettingsState, TokenCacheState};
 use kellnr_auth::password::{PasswordAuthError, authenticate_password};
 use kellnr_auth::token;
+use kellnr_common::account_name::{validate_token_name, validate_user_name};
 use kellnr_common::util::generate_rand_string;
 use kellnr_db::{self, AuthToken, DbProvider, User};
 use kellnr_settings::Settings;
@@ -54,6 +55,7 @@ pub struct NewTokenResponse {
     request_body = token::NewTokenReqData,
     responses(
         (status = 200, description = "Token created successfully", body = NewTokenResponse),
+        (status = 400, description = "Invalid token name"),
         (status = 401, description = "Not authenticated")
     ),
     security(("session_cookie" = []))
@@ -64,6 +66,7 @@ pub async fn add_token(
     State(cache): TokenCacheState,
     Json(auth_token): Json<token::NewTokenReqData>,
 ) -> Result<Json<NewTokenResponse>, RouteError> {
+    validate_token_name(&auth_token.name)?;
     let token = token::generate_token();
     db.add_auth_token(&auth_token.name, &token, user.name())
         .await?;
@@ -529,9 +532,7 @@ pub struct NewUser {
 
 impl NewUser {
     pub fn validate(&self) -> Result<(), RouteError> {
-        if self.name.is_empty() {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-        }
+        validate_user_name(&self.name)?;
         if self.pwd1.is_empty() || self.pwd2.is_empty() {
             return Err(RouteError::Status(StatusCode::BAD_REQUEST));
         }
@@ -920,6 +921,41 @@ mod tests {
             name: name.to_string(),
             is_admin: false,
             is_read_only: false,
+        }
+    }
+
+    /// Basic auth splits at the first ':', so such a user could never log in.
+    #[tokio::test]
+    async fn test_add_user_with_invalid_name_is_bad_request() {
+        for name in ["", "  ", "a:b", "line\nbreak", &"a".repeat(65)] {
+            let result = add(
+                AdminUser("admin".to_string()),
+                State(Arc::new(MockDb::new())),
+                State(Arc::new(TokenCacheManager::new(false, 60, 100))),
+                State(Arc::new(Settings::default())),
+                Json(new_user(name)),
+            )
+            .await;
+
+            assert!(
+                matches!(result, Err(RouteError::BadRequest(_))),
+                "{name:?}: {result:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_token_with_invalid_name_is_bad_request() {
+        for name in [String::new(), "a".repeat(129)] {
+            let result = add_token(
+                MaybeUser::Normal("user".to_string()),
+                State(Arc::new(MockDb::new())),
+                State(Arc::new(TokenCacheManager::new(false, 60, 100))),
+                Json(token::NewTokenReqData { name }),
+            )
+            .await;
+
+            assert!(matches!(result, Err(RouteError::BadRequest(_))));
         }
     }
 

@@ -1,3 +1,4 @@
+pub mod account_name;
 pub mod crate_data;
 pub mod crate_dependents;
 pub mod crate_overview;

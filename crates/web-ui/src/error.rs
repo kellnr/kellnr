@@ -1,5 +1,6 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use kellnr_common::account_name::AccountNameError;
 use kellnr_db::error::DbError;
 
 #[derive(Debug)]
@@ -47,6 +48,12 @@ impl From<DbError> for RouteError {
             }
             _ => Self::DbError(err),
         }
+    }
+}
+
+impl From<AccountNameError> for RouteError {
+    fn from(err: AccountNameError) -> Self {
+        Self::BadRequest(err.to_string())
     }
 }
 
