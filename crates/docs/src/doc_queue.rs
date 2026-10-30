@@ -116,7 +116,7 @@ impl DocQueueWorker {
         // TODO: Only works if normalized name = original name -> Need to get original name from db
         let orig_name = OriginalName::from_unchecked(doc.normalized_name.to_string());
         let version = Version::from_unchecked_str(&doc.version);
-        let contents = self.cs.get(&orig_name, &version).await.ok_or_else(|| {
+        let contents = self.cs.get(&orig_name, &version).await?.ok_or_else(|| {
             error!("Failed to get crate from storage");
             DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.clone())
         })?;

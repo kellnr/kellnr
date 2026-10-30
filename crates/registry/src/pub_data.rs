@@ -264,6 +264,7 @@ mod bin_tests {
             .crate_storage
             .get(&name, &version)
             .await
+            .unwrap()
             .expect("Couldn't find file...");
 
         assert!(result.is_ok());
@@ -293,6 +294,7 @@ mod bin_tests {
             .crate_storage
             .get(&name, &version)
             .await
+            .unwrap()
             .expect("Couldn't find file...");
 
         assert!(result.is_ok());
@@ -409,6 +411,7 @@ mod bin_tests {
                 .crate_storage
                 .get(&name, &version)
                 .await
+                .unwrap()
                 .is_some()
         );
         assert!(test_storage.crate_storage.cache_has_path(&name, &version));
@@ -426,6 +429,7 @@ mod bin_tests {
                 .crate_storage
                 .get(&name, &version)
                 .await
+                .unwrap()
                 .is_none()
         );
 
