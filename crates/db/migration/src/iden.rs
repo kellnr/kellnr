@@ -183,6 +183,7 @@ pub enum CratesIoIden {
     Description,
     ETag,
     LastModified,
+    LastUpdated,
     TotalDownloads,
     MaxVersion,
 }

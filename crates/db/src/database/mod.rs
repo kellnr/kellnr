@@ -25,6 +25,7 @@ use kellnr_entity::{
     oauth2_identity, oauth2_state, owner, session, toolchain, toolchain_component,
     toolchain_target, user, webhook, webhook_queue,
 };
+use kellnr_migration::http_date_to_db_date;
 use kellnr_migration::iden::{
     AuthTokenIden, CrateIden, CrateMetaIden, CratesIoIden, CratesIoMetaIden, GroupIden,
 };
@@ -574,7 +575,7 @@ impl Database {
             let mut query2 = select_fields(&[
                 (Expr::col(CratesIoIden::OriginalName), "name"),
                 (Expr::col(CratesIoIden::MaxVersion), "version"),
-                (Expr::col(CratesIoIden::LastModified), "date"),
+                (Expr::col(CratesIoIden::LastUpdated), "date"),
                 (Expr::col(CratesIoIden::TotalDownloads), "total_downloads"),
                 (Expr::col(CratesIoIden::Description), "description"),
                 (Expr::col(CratesIoMetaIden::Documentation), "documentation"),
@@ -600,6 +601,7 @@ impl Database {
         match sort {
             CrateSort::Name => query.order_by(Alias::new("search_rank"), Order::Asc),
             // Dates are stored as "YYYY-MM-DD HH:MM:SS", so they sort as text.
+            // Cached crates with an unknown date have an empty one and come last.
             CrateSort::Updated => query.order_by(Alias::new("date"), Order::Desc),
             CrateSort::Downloads => query.order_by(Alias::new("total_downloads"), Order::Desc),
         };
@@ -2252,10 +2254,17 @@ impl DbProvider for Database {
             .one(&txn)
             .await?;
 
+        // The Last-Modified header is kept as is for conditional requests to
+        // crates.io, the date is stored separately to sort by it.
+        let last_updated = http_date_to_db_date(last_modified);
+
         let krate = if let Some(krate) = krate {
             let mut krate: cratesio_crate::ActiveModel = krate.into();
             krate.e_tag = Set(etag.to_string());
             krate.last_modified = Set(last_modified.to_string());
+            if let Some(last_updated) = last_updated {
+                krate.last_updated = Set(last_updated);
+            }
             krate.max_version = Set(max_version.into_inner());
             krate.update(&txn).await?
         } else {
@@ -2266,6 +2275,7 @@ impl DbProvider for Database {
                 description: Set(description),
                 e_tag: Set(etag.to_string()),
                 last_modified: Set(last_modified.to_string()),
+                last_updated: Set(last_updated.unwrap_or_default()),
                 total_downloads: Set(0),
                 max_version: Set(max_version.to_string()),
             };
