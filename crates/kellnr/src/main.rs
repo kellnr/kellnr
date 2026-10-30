@@ -43,7 +43,10 @@ mod routes;
 
 #[tokio::main]
 async fn main() {
-    let cli_result = parse_cli().expect("Cannot read config");
+    let cli_result = parse_cli().unwrap_or_else(|e| {
+        eprintln!("Error: cannot read the configuration: {e}");
+        std::process::exit(1);
+    });
 
     match cli_result {
         CliResult::ShowConfig { resolved, options } => {
@@ -167,8 +170,8 @@ async fn run_server(resolved: ResolvedSettings) {
     // Initialize kellnr crate storage
     let crate_storage: Arc<KellnrCrateStorage> = init_kellnr_crate_storage(&settings).into();
 
-    // Create the database connection. Has to be done after the index and storage
-    // as the needed folders for the sqlite database may not have been created before that.
+    // Create the database connection. Has to be done after the data directory
+    // is created, as the SQLite database is stored in it.
     let con_string = get_connect_string(&settings);
     let db = Database::new(&con_string, settings.registry.max_db_connections)
         .await
@@ -378,9 +381,10 @@ async fn run_server(resolved: ResolvedSettings) {
     }
 
     // Start the server with graceful shutdown
-    let listener = TcpListener::bind(addr)
-        .await
-        .unwrap_or_else(|_| panic!("Failed to bind to {addr}"));
+    let listener = TcpListener::bind(addr).await.unwrap_or_else(|e| {
+        error!("Failed to bind to {addr}: {e}");
+        std::process::exit(1);
+    });
     info!("Kellnr has been started on http://{addr}/");
     if sponsor_links_enabled {
         info!(
