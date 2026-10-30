@@ -5026,3 +5026,63 @@ async fn total_downloads_of_empty_registry_are_zero(test_db: &kellnr_db::Databas
     assert_eq!(0, test_db.get_total_downloads().await.unwrap());
     assert_eq!(0, test_db.get_total_cached_downloads().await.unwrap());
 }
+
+#[db_test]
+async fn cratesio_prefetch_skips_invalid_versions_for_max_version(test_db: &kellnr_db::Database) {
+    let indices = vec![
+        upstream_index("1.0.0"),
+        upstream_index("not-a-version"),
+        upstream_index("1.2.0"),
+    ];
+    test_db
+        .add_cratesio_prefetch_data(
+            &OriginalName::try_from("Upstream").unwrap(),
+            "etag",
+            "",
+            None,
+            &indices,
+            &HashMap::new(),
+        )
+        .await
+        .unwrap();
+
+    let overview = cached_overview(test_db, CrateSort::Name).await;
+    assert_eq!("1.2.0", overview[0].version);
+}
+
+#[db_test]
+async fn delete_crate_skips_invalid_versions_for_max_version(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    let crate_id = test_add_crate(
+        test_db,
+        "invalid_meta",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &created,
+    )
+    .await
+    .unwrap();
+    test_add_crate(
+        test_db,
+        "invalid_meta",
+        "admin",
+        &Version::try_from("2.0.0").unwrap(),
+        &created,
+    )
+    .await
+    .unwrap();
+    test_add_crate_meta(test_db, crate_id, "not-a-version", &created, None)
+        .await
+        .unwrap();
+
+    let name = NormalizedName::from_unchecked_str("invalid_meta");
+    test_db
+        .delete_crate(&name, &Version::try_from("2.0.0").unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        Version::try_from("1.0.0").unwrap(),
+        test_db.get_max_version_from_name(&name).await.unwrap()
+    );
+}
