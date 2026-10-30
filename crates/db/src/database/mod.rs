@@ -694,6 +694,24 @@ impl Database {
         self.count_by_statement(statement, error).await
     }
 
+    /// Executes `SELECT SUM(column) FROM table` and returns the sum as u64, 0 for an
+    /// empty table. Cast, as PostgreSQL sums a bigint column to a numeric.
+    async fn sum<T>(&self, table: T, column: T, error: DbError) -> DbResult<u64>
+    where
+        T: Iden + Copy + 'static,
+    {
+        let sum = Func::coalesce([Expr::col((table, column)).sum(), Expr::val(0)]);
+        let statement = self.db_con.get_database_backend().build(
+            Query::select()
+                .expr_as(
+                    Func::cast_as(sum, Alias::new("BIGINT")),
+                    Alias::new("count"),
+                )
+                .from(table),
+        );
+        self.count_by_statement(statement, error).await
+    }
+
     /// Runs a statement that selects a single `count` column and returns it as u64.
     async fn count_by_statement(&self, statement: Statement, error: DbError) -> DbResult<u64> {
         let Some(result) = CountResult::find_by_statement(statement)
@@ -839,22 +857,12 @@ impl DbProvider for Database {
     }
 
     async fn get_total_cached_downloads(&self) -> DbResult<u64> {
-        #[derive(FromQueryResult)]
-        struct Model {
-            total_downloads: i64,
-        }
-
-        let total_downloads = cratesio_crate::Entity::find()
-            .select_only()
-            .column(cratesio_crate::Column::TotalDownloads)
-            .into_model::<Model>()
-            .all(&self.db_con)
-            .await?;
-
-        Ok(total_downloads
-            .iter()
-            .map(|m| m.total_downloads as u64)
-            .sum())
+        self.sum(
+            CratesIoIden::Table,
+            CratesIoIden::TotalDownloads,
+            DbError::FailedToCountTotalDownloads,
+        )
+        .await
     }
 
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User> {
@@ -1572,20 +1580,12 @@ impl DbProvider for Database {
     }
 
     async fn get_total_downloads(&self) -> DbResult<u64> {
-        #[derive(FromQueryResult)]
-        struct Model {
-            total_downloads: i64,
-        }
-
-        Ok(krate::Entity::find()
-            .select_only()
-            .column(krate::Column::TotalDownloads)
-            .into_model::<Model>()
-            .all(&self.db_con)
-            .await?
-            .into_iter()
-            .map(|m| m.total_downloads as u64)
-            .sum())
+        self.sum(
+            CrateIden::Table,
+            CrateIden::TotalDownloads,
+            DbError::FailedToCountTotalDownloads,
+        )
+        .await
     }
 
     async fn get_top_crates_downloads(
