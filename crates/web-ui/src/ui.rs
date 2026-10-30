@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use kellnr_appstate::{AppState, DbState, SettingsProvState, SettingsState};
+use kellnr_appstate::{AppState, DbState, ProxyClientState, SettingsProvState, SettingsState};
 use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
 use kellnr_auth::maybe_user::MaybeUser as MaybeUserOrToken;
 use kellnr_common::crate_data::{CRATESIO_INDEX, CrateData};
@@ -570,48 +569,40 @@ pub struct CratesIoDataParams {
     params(CratesIoDataParams),
     responses(
         (status = 200, description = "Crates.io crate data", body = String),
-        (status = 404, description = "Crate not found")
+        (status = 404, description = "Crate not found"),
+        (status = 502, description = "crates.io failed or cannot be reached")
     )
 )]
 pub async fn cratesio_data(
     State(settings): SettingsState,
+    State(client): ProxyClientState,
     Query(params): Query<CratesIoDataParams>,
 ) -> Result<String, StatusCode> {
     let url = settings
         .proxy
         .api
         .join(&params.name)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(internal_error)?;
 
-    let client = kellnr_common::cratesio_downloader::build_client(
-        &settings.proxy.user_agent,
-        Duration::from_secs(settings.proxy.connect_timeout_seconds),
-        Duration::from_secs(settings.proxy.request_timeout_seconds),
-    );
-    let req = client.get(url).header("Accept", "application/json");
-    let resp = req.send().await;
-
-    match resp {
-        Ok(resp) => match resp.status() {
-            StatusCode::OK => {
-                let data = resp.text().await;
-                match data {
-                    Ok(data) => Ok(data),
-                    Err(e) => {
-                        error!("Failed to parse crates.io data: {e}");
-                        Err(StatusCode::INTERNAL_SERVER_ERROR)
-                    }
-                }
-            }
-            StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
-            _ => {
-                error!("Failed to get crates.io data: {}", resp.status());
-                Err(StatusCode::NOT_FOUND)
-            }
-        },
-        Err(e) => {
+    let resp = client
+        .get(url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| {
             error!("Failed to get crates.io data: {e}");
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    match resp.status() {
+        StatusCode::OK => resp.text().await.map_err(|e| {
+            error!("Failed to read crates.io data: {e}");
+            StatusCode::BAD_GATEWAY
+        }),
+        StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
+        status => {
+            error!("Failed to get crates.io data: {status}");
+            Err(StatusCode::BAD_GATEWAY)
         }
     }
 }
@@ -845,7 +836,8 @@ pub struct BuildParams {
     responses(
         (status = 200, description = "Build queued successfully"),
         (status = 400, description = "Crate or version does not exist"),
-        (status = 401, description = "Not authorized, not an owner or read-only")
+        (status = 401, description = "Not logged in"),
+        (status = 403, description = "Not an owner of the crate or read-only")
     ),
     security(("session_cookie" = []))
 )]
@@ -870,30 +862,30 @@ pub async fn build_rustdoc(
         MaybeUser::Normal(user) => {
             db.is_owner(&normalized_name, &user)
                 .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(internal_error)?
                 && !db
                     .get_user(&user)
                     .await
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                    .map_err(internal_error)?
                     .is_read_only
         }
         MaybeUser::Admin(_) => true,
     };
 
     if !is_allowed {
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(StatusCode::FORBIDDEN);
     }
 
     // Check if crate with the version exists.
     if let Some(id) = db
         .get_crate_id(&normalized_name)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(internal_error)?
     {
         if !db
             .crate_version_exists(id, &version)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(internal_error)?
         {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -909,12 +901,18 @@ pub async fn build_rustdoc(
             .crate_storage
             .create_rand_doc_queue_path()
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+            .map_err(internal_error)?,
     )
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(internal_error)?;
 
     Ok(())
+}
+
+/// Logs `e` and returns a 500 without leaking details to the client.
+fn internal_error(e: impl std::fmt::Display) -> StatusCode {
+    error!("Internal server error: {e}");
+    StatusCode::INTERNAL_SERVER_ERROR
 }
 
 /// Response for [`migrate_docs_storage`].
@@ -1035,6 +1033,7 @@ async fn list_local_crate_versions(
 mod tests {
     use std::collections::BTreeMap;
     use std::sync::Arc;
+    use std::time::Duration;
 
     use axum::Router;
     use axum::body::Body;
@@ -1579,7 +1578,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
@@ -1711,7 +1710,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
@@ -1863,7 +1862,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
@@ -3397,6 +3396,32 @@ mod tests {
         .unwrap();
 
         assert_eq!(r.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// Errors of crates.io like rate limits are not a missing crate.
+    #[tokio::test]
+    async fn cratesio_data_upstream_error_is_bad_gateway() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let upstream = Router::new().fallback(|| async { StatusCode::TOO_MANY_REQUESTS });
+        tokio::spawn(async move { axum::serve(listener, upstream).await.unwrap() });
+        let (mut settings, storage) = test_deps();
+        settings.proxy.api = format!("http://{addr}/api/v1/crates/").parse().unwrap();
+
+        let r = app(
+            MockDb::new(),
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(
+            Request::get("/cratesio_data?name=quote")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::BAD_GATEWAY);
     }
 
     fn test_deps() -> (Settings, DynStorage) {
