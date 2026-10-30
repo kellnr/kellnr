@@ -66,6 +66,10 @@ pub enum DbError {
     InvalidId(String),
     #[error("Toolchain {0}-{1} not found")]
     ToolchainNotFound(String, String),
+    #[error("Crate {0} must be spelled like the existing crate {1}")]
+    CrateNameMismatch(String, String),
+    #[error("Crate with version already exists: {0}-{1}")]
+    CrateVersionExists(String, String),
     #[error("Path is not valid UTF-8: {0}")]
     NonUtf8Path(String),
 }
