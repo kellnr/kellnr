@@ -440,6 +440,18 @@ pub async fn test_duplicate_and_remove_crate_tag_links(db: &Database) -> DbResul
     Ok(())
 }
 
+/// Creates the admin user like a Kellnr instance does that starts at the same
+/// time as the one that already created it.
+pub async fn test_insert_admin_credentials_again(db: &Database) -> DbResult<()> {
+    let con = crate::ConString::Sqlite(crate::SqliteConString {
+        path: std::path::PathBuf::new(),
+        admin_pwd: "other".to_string(),
+        admin_token: Some("other_token".to_string()),
+        session_age: std::time::Duration::from_secs(3600),
+    });
+    super::operations::insert_admin_credentials(&db.db_con, &con).await
+}
+
 /// Overwrites the deps in the index of all versions of a crate, e.g. to
 /// store deps that cannot be parsed.
 pub async fn test_set_index_deps(

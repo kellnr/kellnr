@@ -20,7 +20,7 @@ use kellnr_entity::{
 use sea_orm::sea_query::{Alias, Expr, Func};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, ExprTrait,
-    QueryFilter, QueryOrder, QuerySelect, Set,
+    QueryFilter, QueryOrder, QuerySelect, Set, TryInsertResult,
 };
 
 use crate::ConString;
@@ -152,8 +152,14 @@ pub async fn insert_admin_credentials<C: ConnectionTrait>(
         ..Default::default()
     };
 
-    let res: sea_orm::InsertResult<user::ActiveModel> =
-        user::Entity::insert(admin).exec(db_con).await?;
+    let res = user::Entity::insert(admin)
+        .on_conflict_do_nothing_on([user::Column::Name])
+        .exec(db_con)
+        .await?;
+    // Another Kellnr instance that starts at the same time created the admin
+    let TryInsertResult::Inserted(res) = res else {
+        return Ok(());
+    };
 
     if let Some(token) = &con_string.admin_token() {
         let auth_token_hash = hash_token(token);
