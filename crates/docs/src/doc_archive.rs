@@ -61,7 +61,7 @@ impl FromRequest<AppStateData, Body> for DocArchive {
 
         let max_docs_size = state.settings.docs.max_size * 1_000_000;
         if data_bytes.len() > max_docs_size {
-            return Err(RegistryError::InvalidMinLength(data_bytes.len(), max_docs_size).into());
+            return Err(RegistryError::TooLarge(data_bytes.len(), max_docs_size).into());
         }
 
         let reader = Cursor::new(data_bytes);
@@ -110,6 +110,27 @@ mod tests {
                 zip.write_all(&vec![0; size]).unwrap();
             }
         }
+    }
+
+    #[tokio::test]
+    async fn rejects_archive_larger_than_max_size_with_413() {
+        let mut settings = kellnr_settings::test_settings();
+        settings.docs.max_size = 0;
+        let state = AppStateData {
+            settings: std::sync::Arc::new(settings),
+            ..kellnr_appstate::test_state()
+        };
+        let request = Request::builder().body(Body::from("zip")).unwrap();
+
+        let err = DocArchive::from_request(request, &state)
+            .await
+            .err()
+            .unwrap();
+
+        assert_eq!(
+            axum::response::IntoResponse::into_response(err).status(),
+            axum::http::StatusCode::PAYLOAD_TOO_LARGE
+        );
     }
 
     #[test]
