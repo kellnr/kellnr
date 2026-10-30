@@ -200,11 +200,13 @@ async fn run_server(resolved: ResolvedSettings) {
         filters: download_filters.cratesio.clone(),
     };
 
-    init_cratesio_prefetch_thread(
-        cratesio_prefetch_sender.clone(),
-        settings.proxy.num_threads,
-        prefetch_args,
-    );
+    if settings.proxy.enabled {
+        init_cratesio_prefetch_thread(
+            cratesio_prefetch_sender.clone(),
+            settings.proxy.num_threads,
+            prefetch_args,
+        );
+    }
 
     // Docs hosting
     let docs_storage: Arc<DocsStorage> = init_docs_storage(&settings).into();
