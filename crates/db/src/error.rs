@@ -69,3 +69,14 @@ pub enum DbError {
     #[error("Path is not valid UTF-8: {0}")]
     NonUtf8Path(String),
 }
+
+impl DbError {
+    /// Whether a unique constraint failed, e.g. because an entry already exists.
+    pub fn is_unique_violation(&self) -> bool {
+        matches!(
+            self,
+            DbError::PostgresError(e)
+                if matches!(e.sql_err(), Some(sea_orm::SqlErr::UniqueConstraintViolation(_)))
+        )
+    }
+}
