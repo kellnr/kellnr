@@ -15,3 +15,7 @@ pub const COOKIE_OAUTH2_STATE: &str = "kellnr_oauth2_state";
 
 // Time a user has to complete the OAuth2 login at the identity provider.
 pub const OAUTH2_STATE_MAX_AGE: Duration = Duration::from_mins(10);
+
+// Upper bound of a session's lifetime. A configured session age of zero means
+// sessions never expire and uses this bound, as do larger configured values.
+pub const MAX_SESSION_AGE: Duration = Duration::from_hours(876_000);

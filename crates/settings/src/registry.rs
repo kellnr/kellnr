@@ -1,7 +1,10 @@
+use std::time::Duration;
+
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 
 use crate::compile_time_config;
+use crate::constants::MAX_SESSION_AGE;
 
 fn default_data_dir() -> String {
     // Priority: runtime env var > compile-time > empty (must be set via CLI or config)
@@ -20,7 +23,8 @@ pub struct Registry {
     #[arg(short = 'd')]
     pub data_dir: String,
 
-    /// Session timeout in seconds
+    /// Session lifetime in seconds, counted from the login (0 = sessions
+    /// never expire)
     #[arg(long = "registry-session-age")]
     pub session_age_seconds: u64,
 
@@ -93,6 +97,18 @@ pub struct Registry {
     pub sponsor_links_enabled: bool,
 }
 
+impl Registry {
+    /// The lifetime of a session. Zero (sessions never expire) and values
+    /// above [`MAX_SESSION_AGE`] resolve to [`MAX_SESSION_AGE`].
+    pub fn session_max_age(&self) -> Duration {
+        if self.session_age_seconds == 0 {
+            MAX_SESSION_AGE
+        } else {
+            Duration::from_secs(self.session_age_seconds).min(MAX_SESSION_AGE)
+        }
+    }
+}
+
 impl Default for Registry {
     fn default() -> Self {
         Self {
@@ -118,5 +134,28 @@ impl Default for Registry {
             auth_failed_attempts_window_seconds: 300,
             sponsor_links_enabled: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn registry(session_age_seconds: u64) -> Registry {
+        Registry {
+            session_age_seconds,
+            ..Registry::default()
+        }
+    }
+
+    #[test]
+    fn session_max_age_is_the_configured_age() {
+        assert_eq!(registry(60).session_max_age(), Duration::from_mins(1));
+    }
+
+    #[test]
+    fn session_max_age_is_bounded() {
+        assert_eq!(registry(0).session_max_age(), MAX_SESSION_AGE);
+        assert_eq!(registry(u64::MAX).session_max_age(), MAX_SESSION_AGE);
     }
 }

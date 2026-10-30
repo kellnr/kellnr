@@ -78,10 +78,11 @@ fn escape_like_pattern(input: &str) -> String {
         .replace('_', "\\_")
 }
 
-/// Upper bound on the configured session age. Clamping to this keeps cutoff
-/// arithmetic well within `chrono::Duration`/`DateTime` range, avoiding
-/// overflow panics for absurd configuration values.
-const MAX_SESSION_AGE: std::time::Duration = std::time::Duration::from_hours(876_000);
+// Upper bound on the configured session age. Clamping to this keeps cutoff
+// arithmetic well within `chrono::Duration`/`DateTime` range, avoiding
+// overflow panics for absurd configuration values. The session cookie uses
+// the same bound.
+use kellnr_settings::constants::MAX_SESSION_AGE;
 
 /// Resolve a configured session age into the internal expiry duration.
 ///
