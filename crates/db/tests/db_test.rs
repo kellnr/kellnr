@@ -5020,3 +5020,9 @@ async fn admin_created_by_concurrent_start_is_kept(test_db: &kellnr_db::Database
     test_db.get_user_from_token("token").await.unwrap();
     assert!(test_db.get_user_from_token("other_token").await.is_err());
 }
+
+#[db_test]
+async fn total_downloads_of_empty_registry_are_zero(test_db: &kellnr_db::Database) {
+    assert_eq!(0, test_db.get_total_downloads().await.unwrap());
+    assert_eq!(0, test_db.get_total_cached_downloads().await.unwrap());
+}
