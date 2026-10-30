@@ -5,14 +5,14 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RegistryError {
-    #[error("Invalid raw metadata: {0}")]
-    InvalidRawMetadata(#[from] std::string::FromUtf8Error),
     #[error("Invalid metadata string: {0}")]
     InvalidMetadataString(#[from] serde_json::error::Error),
     #[error("Invalid metadata length: {0}")]
     InvalidMetadataLength(#[from] std::array::TryFromSliceError),
     #[error("Invalid metadata size")]
     InvalidMetadataSize,
+    #[error("Unexpected {0} bytes after the crate data")]
+    TrailingData(usize),
     #[error("Invalid min. length {0}/{1} bytes")]
     InvalidMinLength(usize, usize),
     #[error("Failed to parse URL: {0}")]

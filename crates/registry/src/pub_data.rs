@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
 use axum::http::Request;
@@ -22,16 +20,11 @@ pub struct PubData {
     pub metadata_length: u32,
     pub metadata: PublishMetadata,
     pub crate_length: u32,
-    pub cratedata: Arc<[u8]>,
-}
-
-fn convert_raw_metadata_to_string(raw_data: &[u8]) -> Result<String, RegistryError> {
-    Ok(String::from_utf8((raw_data).to_vec())?)
+    pub cratedata: Bytes,
 }
 
 fn deserialize_metadata(raw_data: &[u8]) -> Result<PublishMetadata, RegistryError> {
-    let metadata_string = convert_raw_metadata_to_string(raw_data)?;
-    Ok(serde_json::from_str(&metadata_string)?)
+    Ok(serde_json::from_slice(raw_data)?)
 }
 
 fn convert_length(raw_data: &[u8]) -> Result<u32, RegistryError> {
@@ -53,8 +46,9 @@ fn slice_end(start: usize, len: u32) -> Result<usize, RegistryError> {
 ///
 /// The two length fields are attacker-controlled, so every slice bound is
 /// validated against the actual buffer length before indexing. A mismatch
-/// returns an error instead of panicking on an out-of-bounds slice.
-fn parse_pub_data(data_bytes: &[u8]) -> Result<PubData, RegistryError> {
+/// returns an error instead of panicking on an out-of-bounds slice. The crate
+/// data shares the memory of `data_bytes` instead of being copied.
+fn parse_pub_data(data_bytes: &Bytes) -> Result<PubData, RegistryError> {
     if data_bytes.len() < MIN_BODY_CRATE_AND_DOC_BYTES {
         return Err(RegistryError::InvalidMinLength(
             data_bytes.len(),
@@ -80,8 +74,11 @@ fn parse_pub_data(data_bytes: &[u8]) -> Result<PubData, RegistryError> {
     if crate_end > data_bytes.len() {
         return Err(RegistryError::InvalidMetadataSize);
     }
+    if crate_end < data_bytes.len() {
+        return Err(RegistryError::TrailingData(data_bytes.len() - crate_end));
+    }
 
-    let cratedata = Arc::from(data_bytes[crate_start..crate_end].to_vec());
+    let cratedata = data_bytes.slice(crate_start..crate_end);
 
     Ok(PubData {
         metadata_length,
@@ -98,10 +95,9 @@ impl FromRequest<AppStateData, Body> for PubData {
         req: Request<Body>,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        let data_bytes: Vec<u8> = Bytes::from_request(req, state)
+        let data_bytes = Bytes::from_request(req, state)
             .await
-            .map_err(RegistryError::ExtractBytesFailed)?
-            .to_vec();
+            .map_err(RegistryError::ExtractBytesFailed)?;
 
         Ok(parse_pub_data(&data_bytes)?)
     }
@@ -109,18 +105,19 @@ impl FromRequest<AppStateData, Body> for PubData {
 
 #[cfg(test)]
 mod parse_tests {
+    use axum::body::Bytes;
     use kellnr_common::publish_metadata::PublishMetadata;
 
     use super::{parse_pub_data, slice_end};
 
-    fn body(metadata: &PublishMetadata, crate_length: u32, crate_bytes: &[u8]) -> Vec<u8> {
+    fn body(metadata: &PublishMetadata, crate_length: u32, crate_bytes: &[u8]) -> Bytes {
         let meta = serde_json::to_vec(metadata).unwrap();
         let mut buf = Vec::new();
         buf.extend_from_slice(&(meta.len() as u32).to_le_bytes());
         buf.extend_from_slice(&meta);
         buf.extend_from_slice(&crate_length.to_le_bytes());
         buf.extend_from_slice(crate_bytes);
-        buf
+        buf.into()
     }
 
     #[test]
@@ -133,6 +130,29 @@ mod parse_tests {
 
         assert_eq!(parsed.metadata, meta);
         assert_eq!(&*parsed.cratedata, &crate_bytes);
+    }
+
+    #[test]
+    fn crate_data_is_not_copied() {
+        let meta = PublishMetadata::minimal("test", "0.1.0");
+        let buf = body(&meta, 3, &[0x1, 0x2, 0x3]);
+
+        let parsed = parse_pub_data(&buf).unwrap();
+
+        assert_eq!(buf[buf.len() - 3..].as_ptr(), parsed.cratedata.as_ptr());
+    }
+
+    #[test]
+    fn trailing_data_is_rejected() {
+        let meta = PublishMetadata::minimal("test", "0.1.0");
+        let buf = body(&meta, 2, &[0x1, 0x2, 0x3]);
+
+        let result = parse_pub_data(&buf);
+
+        assert_eq!(
+            "Unexpected 1 bytes after the crate data",
+            result.unwrap_err().to_string()
+        );
     }
 
     #[test]
@@ -154,7 +174,7 @@ mod parse_tests {
         buf.extend_from_slice(&meta);
         buf.extend_from_slice(&[0x00, 0x00]); // only 2 of the required 4 prefix bytes
 
-        assert!(parse_pub_data(&buf).is_err());
+        assert!(parse_pub_data(&buf.into()).is_err());
     }
 
     #[test]
@@ -165,7 +185,7 @@ mod parse_tests {
 
     #[test]
     fn too_short_body_is_rejected() {
-        assert!(parse_pub_data(&[0x00, 0x01, 0x02]).is_err());
+        assert!(parse_pub_data(&Bytes::from_static(&[0x00, 0x01, 0x02])).is_err());
     }
 }
 
@@ -174,6 +194,7 @@ mod bin_tests {
     use std::convert::TryFrom;
     use std::path::Path;
 
+    use axum::body::Bytes;
     use kellnr_common::original_name::OriginalName;
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_common::version::Version;
@@ -226,7 +247,7 @@ mod bin_tests {
     async fn add_crate_binary() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
+            cratedata: Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44]),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
@@ -255,7 +276,7 @@ mod bin_tests {
     async fn add_crate_binary_with_upper_case_name() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
+            cratedata: Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44]),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0"),
         };
@@ -284,7 +305,7 @@ mod bin_tests {
     async fn add_duplicate_crate_binary() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
+            cratedata: Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44]),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
@@ -337,7 +358,7 @@ mod bin_tests {
     async fn delete_crate() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
+            cratedata: Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44]),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
@@ -365,7 +386,7 @@ mod bin_tests {
     async fn delete_crate_invalidates_cache() {
         let pub_data = PubData {
             crate_length: 5,
-            cratedata: vec![0x00, 0x11, 0x22, 0x33, 0x44].into(),
+            cratedata: Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44]),
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.2.0"),
         };

@@ -1086,7 +1086,7 @@ mod tests {
         let name = OriginalName::try_from("licensed").unwrap();
         let version = Version::try_from("1.0.0").unwrap();
         crate_storage
-            .put(&name, &version, Arc::from(b"crate".as_slice()))
+            .put(&name, &version, Bytes::from_static(b"crate"))
             .await
             .unwrap();
         let licenses = state.download_filters.registry.licenses();
