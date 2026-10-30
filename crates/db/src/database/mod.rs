@@ -3043,7 +3043,7 @@ impl DbProvider for Database {
             .collect())
     }
 
-    async fn get_original_name(
+    async fn get_crate_original_name(
         &self,
         crate_name: &NormalizedName,
     ) -> DbResult<Option<OriginalName>> {
@@ -3052,6 +3052,25 @@ impl DbProvider for Database {
             .one(&self.db_con)
             .await?
             .map(|k| OriginalName::from_unchecked(k.original_name)))
+    }
+
+    async fn get_original_name(
+        &self,
+        crate_name: &NormalizedName,
+        version: &Version,
+    ) -> DbResult<Option<OriginalName>> {
+        let found = crate_meta::Entity::find()
+            .find_also_related(krate::Entity)
+            .filter(
+                Cond::all()
+                    .add(krate::Column::Name.eq(crate_name))
+                    .add(crate_meta::Column::Version.eq(version)),
+            )
+            .one(&self.db_con)
+            .await?;
+        Ok(found
+            .and_then(|(_, krate)| krate)
+            .map(|krate| OriginalName::from_unchecked(krate.original_name)))
     }
 }
 

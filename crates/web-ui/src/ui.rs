@@ -650,7 +650,7 @@ async fn delete_crate_versions_impl(
     // with, which may differ in case from the requested name.
     let original_name = state
         .db
-        .get_original_name(&normalized_name)
+        .get_crate_original_name(&normalized_name)
         .await?
         .ok_or_else(|| RouteError::NotFound(format!("Crate not found: {name}")))?;
 
@@ -710,7 +710,7 @@ async fn delete_one_version(
         .licenses()
         .forget(&normalized_name, version);
 
-    if let Err(e) = kellnr_docs::delete(name, version, &state.docs_storage).await {
+    if let Err(e) = kellnr_docs::delete(&name.to_normalized(), version, &state.docs_storage).await {
         error!("Failed to delete docs of crate {name}-{version}: {e}");
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
@@ -1021,7 +1021,10 @@ pub async fn migrate_docs_storage(
     let docs_storage = state.docs_storage.clone();
     tokio::spawn(async move {
         for (crate_name, version, dir) in crate_versions {
-            match upload_dir_and_prune(&dir, "", &crate_name, &version, &docs_storage).await {
+            // Keep the folder names, the docs links in the database point to them.
+            let name = NormalizedName::from_unchecked(crate_name.clone());
+            let version = Version::from_unchecked_str(&version);
+            match upload_dir_and_prune(&dir, "", &name, &version, &docs_storage).await {
                 Ok(()) => {
                     tracing::info!(
                         "Migrated local docs for {crate_name} {version} to configured storage backend"
@@ -1120,7 +1123,7 @@ mod tests {
         ) as DynStorage));
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_original_name()
+            .expect_get_crate_original_name()
             .returning(|_| Ok(Some(OriginalName::from_unchecked("licensed".to_string()))));
         mock_db.expect_delete_crate().returning(|_, _| Ok(()));
         let state = AppStateData {
@@ -1234,7 +1237,7 @@ mod tests {
         let data_dir = tempfile::tempdir().unwrap();
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_original_name()
+            .expect_get_crate_original_name()
             .returning(|_| Ok(Some(OriginalName::from_unchecked("My_Crate".to_string()))));
         mock_db.expect_get_crate_meta_list().returning(|_| {
             Ok(vec![kellnr_db::CrateMeta {
@@ -1264,7 +1267,7 @@ mod tests {
         let data_dir = tempfile::tempdir().unwrap();
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_original_name()
+            .expect_get_crate_original_name()
             .returning(|_| Ok(Some(OriginalName::from_unchecked("foo".to_string()))));
         mock_db.expect_delete_crate().times(0);
         let (state, _) = with_recording_storage(delete_state(mock_db, data_dir.path()), true);
@@ -1283,7 +1286,9 @@ mod tests {
     async fn deleting_an_unknown_crate_is_not_found() {
         let data_dir = tempfile::tempdir().unwrap();
         let mut mock_db = MockDb::new();
-        mock_db.expect_get_original_name().returning(|_| Ok(None));
+        mock_db
+            .expect_get_crate_original_name()
+            .returning(|_| Ok(None));
         let state = delete_state(mock_db, data_dir.path());
 
         let result =
@@ -1300,7 +1305,7 @@ mod tests {
         let data_dir = tempfile::tempdir().unwrap();
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_original_name()
+            .expect_get_crate_original_name()
             .returning(|_| Ok(Some(OriginalName::from_unchecked("foo".to_string()))));
         mock_db.expect_get_crate_meta_list().returning(|_| {
             Ok(["1.0.0", "2.0.0"]
@@ -2375,8 +2380,16 @@ mod tests {
         assert!(response.started);
         assert_eq!(response.crate_versions_found, 2);
 
-        let key_a = DocsStorage::file_key("crate-a", "1.0.0", "doc/index.html");
-        let key_b = DocsStorage::file_key("crate-b", "2.0.0", "doc/nested/page.html");
+        let key_a = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("crate-a"),
+            &Version::from_unchecked_str("1.0.0"),
+            "doc/index.html",
+        );
+        let key_b = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("crate-b"),
+            &Version::from_unchecked_str("2.0.0"),
+            "doc/nested/page.html",
+        );
         for _ in 0..50 {
             if target_docs_storage.exists(&key_a).await.unwrap()
                 && target_docs_storage.exists(&key_b).await.unwrap()

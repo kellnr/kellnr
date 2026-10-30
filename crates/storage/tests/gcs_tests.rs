@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 
+use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
@@ -115,8 +116,16 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
     let url = format!("http://localhost:{port}");
     let docs = test_docs_storage("test_docs_delete_prefix_gcs", &url);
 
-    let v1 = DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/index.html");
-    let v2 = DocsStorage::file_key("my-crate", "2.0.0", "doc/my_crate/index.html");
+    let v1 = DocsStorage::file_key(
+        &NormalizedName::from_unchecked_str("my-crate"),
+        &Version::from_unchecked_str("1.0.0"),
+        "doc/my_crate/index.html",
+    );
+    let v2 = DocsStorage::file_key(
+        &NormalizedName::from_unchecked_str("my-crate"),
+        &Version::from_unchecked_str("2.0.0"),
+        "doc/my_crate/index.html",
+    );
     docs.put(&v1, bytes::Bytes::from_static(b"a"))
         .await
         .unwrap();
@@ -124,9 +133,12 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
         .await
         .unwrap();
 
-    docs.delete_prefix(&DocsStorage::version_prefix("my-crate", "1.0.0"))
-        .await
-        .unwrap();
+    docs.delete_prefix(&DocsStorage::version_prefix(
+        &NormalizedName::from_unchecked_str("my-crate"),
+        &Version::from_unchecked_str("1.0.0"),
+    ))
+    .await
+    .unwrap();
 
     assert!(!docs.exists(&v1).await.unwrap());
     assert!(docs.exists(&v2).await.unwrap());
@@ -138,7 +150,11 @@ async fn get_with_meta_returns_bytes_etag_and_last_modified() {
     // `localhost`, not `container.get_host()`: see the comment on `add_and_get_crate`.
     let url = format!("http://localhost:{port}");
     let docs = test_docs_storage("test_docs_get_with_meta_gcs", &url);
-    let key = DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/index.html");
+    let key = DocsStorage::file_key(
+        &NormalizedName::from_unchecked_str("my-crate"),
+        &Version::from_unchecked_str("1.0.0"),
+        "doc/my_crate/index.html",
+    );
     docs.put(&key, bytes::Bytes::from_static(b"hello"))
         .await
         .unwrap();

@@ -615,6 +615,8 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use bytes::Bytes;
+    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_common::version::Version;
     use kellnr_settings::test_settings;
 
     use super::*;
@@ -773,7 +775,11 @@ mod tests {
         settings.s3.docs_bucket = None;
 
         let docs_storage = init_docs_storage(&settings);
-        let key = DocsStorage::file_key("my-crate", "1.0.0", "doc/index.html");
+        let key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            "doc/index.html",
+        );
         docs_storage
             .put(&key, Bytes::from_static(b"hi"))
             .await

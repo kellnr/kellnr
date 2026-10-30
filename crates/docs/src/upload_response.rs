@@ -29,7 +29,7 @@ impl DocUploadResponse {
             message,
             crate_name: crate_name.to_string(),
             crate_version: crate_version.to_string(),
-            url: compute_doc_url(&crate_name.to_string(), crate_version, path_prefix),
+            url: compute_doc_url(crate_name, crate_version, path_prefix),
         }
     }
 }

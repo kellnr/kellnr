@@ -5321,7 +5321,7 @@ async fn prefetch_data_puts_new_feature_syntax_into_features2(test_db: &kellnr_d
 }
 
 #[db_test]
-async fn get_original_name_returns_the_published_spelling(test_db: &kellnr_db::Database) {
+async fn get_crate_original_name_returns_the_published_spelling(test_db: &kellnr_db::Database) {
     test_db
         .add_crate(
             &PublishMetadata::minimal("My_Crate", "1.0.0"),
@@ -5335,11 +5335,11 @@ async fn get_original_name_returns_the_published_spelling(test_db: &kellnr_db::D
         .unwrap();
 
     let name = test_db
-        .get_original_name(&NormalizedName::from_unchecked("my_crate".to_string()))
+        .get_crate_original_name(&NormalizedName::from_unchecked("my_crate".to_string()))
         .await
         .unwrap();
     let missing = test_db
-        .get_original_name(&NormalizedName::from_unchecked("other".to_string()))
+        .get_crate_original_name(&NormalizedName::from_unchecked("other".to_string()))
         .await
         .unwrap();
 
@@ -5360,4 +5360,45 @@ async fn is_username_available_ignores_case(test_db: &kellnr_db::Database) {
     assert!(!test_db.is_username_available("alice").await.unwrap());
     assert!(!test_db.is_username_available("Alice").await.unwrap());
     assert!(test_db.is_username_available("bob").await.unwrap());
+}
+
+#[db_test]
+async fn get_original_name_of_existing_version(test_db: &kellnr_db::Database) {
+    let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
+    test_db
+        .add_user("owner1", "pwd", false, false)
+        .await
+        .unwrap();
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("My-Crate", "1.0.0"),
+            "cksum",
+            1024,
+            &created,
+            "owner1",
+            None,
+        )
+        .await
+        .unwrap();
+    let name = NormalizedName::from_unchecked("my-crate".to_string());
+
+    let found = test_db
+        .get_original_name(&name, &Version::try_from("1.0.0").unwrap())
+        .await
+        .unwrap();
+    let missing_version = test_db
+        .get_original_name(&name, &Version::try_from("2.0.0").unwrap())
+        .await
+        .unwrap();
+    let missing_crate = test_db
+        .get_original_name(
+            &NormalizedName::from_unchecked("other".to_string()),
+            &Version::try_from("1.0.0").unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(found.map(|n| n.to_string()), Some("My-Crate".to_string()));
+    assert_eq!(missing_version, None);
+    assert_eq!(missing_crate, None);
 }

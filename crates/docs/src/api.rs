@@ -21,7 +21,7 @@ use crate::doc_queue_response::DocQueueResponse;
 use crate::docs_error::DocsError;
 use crate::upload::upload_dir_and_prune;
 use crate::upload_response::DocUploadResponse;
-use crate::{compute_doc_url, get_latest_version_with_doc};
+use crate::{compute_doc_url, doc_exists};
 
 /// Get documentation build queue
 ///
@@ -79,14 +79,15 @@ pub async fn latest_docs(
         return Redirect::temporary("/");
     }
 
-    let opt_doc_version = get_latest_version_with_doc(&name, &docs_storage).await;
-    let res_db_version = db.get_max_version_from_name(&name).await;
-
-    if let Some(doc_version) = opt_doc_version
-        && let Ok(db_version) = res_db_version
-        && doc_version == db_version
+    if let Ok(version) = db.get_max_version_from_name(&name).await
+        && let Ok(Some(original_name)) = db.get_original_name(&name, &version).await
+        && doc_exists(&original_name, &version, &docs_storage).await
     {
-        return Redirect::temporary(&compute_doc_url(&name, &db_version, &settings.origin.path));
+        return Redirect::temporary(&compute_doc_url(
+            &original_name,
+            &version,
+            &settings.origin.path,
+        ));
     }
 
     Redirect::temporary("/")
@@ -137,7 +138,6 @@ pub async fn publish_docs(
     let settings = state.settings;
     let docs_storage = state.docs_storage;
     let normalized_name = package.to_normalized();
-    let crate_version = &version.to_string();
 
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed to push the docs. This comes before the
@@ -147,14 +147,9 @@ pub async fn publish_docs(
     check_can_modify(&user)?;
     check_ownership(&normalized_name, &user, &db).await?;
 
-    // Check if crate with the version exists.
-    if let Some(id) = db.get_crate_id(&normalized_name).await? {
-        if !db.crate_version_exists(id, crate_version).await? {
-            return crate_does_not_exist(&normalized_name, crate_version);
-        }
-    } else {
-        return crate_does_not_exist(&normalized_name, crate_version);
-    }
+    let Some(original_name) = db.get_original_name(&normalized_name, &version).await? else {
+        return crate_does_not_exist(&normalized_name, &version);
+    };
 
     let tmp_dir = tempfile::tempdir().map_err(DocsError::IoError)?;
     let extract_path = tmp_dir.path().to_path_buf();
@@ -163,26 +158,33 @@ pub async fn publish_docs(
         .await
         .map_err(|_| DocsError::ExtractFailed)??;
 
-    upload_dir_and_prune(tmp_dir.path(), "", &package, crate_version, &docs_storage).await?;
+    upload_dir_and_prune(
+        tmp_dir.path(),
+        "",
+        &normalized_name,
+        &version,
+        &docs_storage,
+    )
+    .await?;
 
     db.update_docs_link(
         &normalized_name,
         &version,
-        &compute_doc_url(&package, &version, &settings.origin.path),
+        &compute_doc_url(&original_name, &version, &settings.origin.path),
     )
     .await?;
 
     Ok(Json(DocUploadResponse::new(
         "Successfully published docs.".to_string(),
-        &package,
+        &original_name,
         &version,
         &settings.origin.path,
     )))
 }
 
 fn crate_does_not_exist(
-    crate_name: &str,
-    crate_version: &str,
+    crate_name: &NormalizedName,
+    crate_version: &Version,
 ) -> ApiResult<Json<DocUploadResponse>> {
     Err(DocsError::CrateDoesNotExist(crate_name.to_string(), crate_version.to_string()).into())
 }
@@ -206,6 +208,7 @@ mod tests {
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
+    use kellnr_storage::object_storage::MemoryStorage;
     use mockall::predicate::eq;
     use tower::ServiceExt;
 
@@ -359,12 +362,7 @@ mod tests {
     }
 
     fn expect_admin_owner(db: &mut MockDb, normalized: &NormalizedName) {
-        db.expect_get_crate_id()
-            .with(eq(normalized.clone()))
-            .returning(|_| Ok(Some(1)));
-        db.expect_crate_version_exists()
-            .with(eq(1), eq("1.0.0"))
-            .returning(|_, _| Ok(true));
+        expect_original_name(db, normalized, "test-crate");
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
                 is_admin: true,
@@ -372,6 +370,63 @@ mod tests {
                 ..User::default()
             })
         });
+    }
+
+    fn expect_original_name(db: &mut MockDb, normalized: &NormalizedName, original: &'static str) {
+        db.expect_get_original_name()
+            .with(
+                eq(normalized.clone()),
+                eq(Version::try_from("1.0.0").unwrap()),
+            )
+            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked(original.to_string()))));
+    }
+
+    #[tokio::test]
+    async fn publish_docs_stores_docs_under_normalized_name_and_links_rustdoc_folder() {
+        let normalized = NormalizedName::from_unchecked("my-crate".to_string());
+        let mut db = MockDb::new();
+        expect_original_name(&mut db, &normalized, "My-Crate");
+        db.expect_get_user_from_token().returning(|_| {
+            Ok(User {
+                is_admin: true,
+                name: "admin".to_string(),
+                ..User::default()
+            })
+        });
+        db.expect_update_docs_link()
+            .with(
+                eq(normalized.clone()),
+                eq(Version::try_from("1.0.0").unwrap()),
+                eq("/docs/my-crate/1.0.0/doc/My_Crate/index.html".to_string()),
+            )
+            .returning(|_, _, _| Ok(()));
+        let docs_storage = Arc::new(DocsStorage::new(
+            Box::new(MemoryStorage::new()) as DynStorage
+        ));
+
+        let r = publish_app(Arc::new(db), docs_storage.clone())
+            .oneshot(
+                Request::put("/MY-crate/1.0.0")
+                    .header(header::AUTHORIZATION, "sometoken")
+                    .body(Body::from(build_zip(&[(
+                        "doc/My_Crate/index.html",
+                        b"<html>docs</html>",
+                    )])))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+        let key = DocsStorage::file_key(
+            &normalized,
+            &Version::from_unchecked_str("1.0.0"),
+            "doc/My_Crate/index.html",
+        );
+        assert!(docs_storage.exists(&key).await.unwrap());
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        let response: DocUploadResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(response.crate_name, "My-Crate");
     }
 
     #[tokio::test]
@@ -407,7 +462,11 @@ mod tests {
 
         assert_eq!(r.status(), StatusCode::OK);
 
-        let key = DocsStorage::file_key("test-crate", "1.0.0", "doc/test_crate/index.html");
+        let key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("test-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            "doc/test_crate/index.html",
+        );
         let stored = docs_storage.get(&key).await.unwrap();
         assert_eq!(stored, bytes::Bytes::from_static(b"<html>docs</html>"));
     }
@@ -416,12 +475,7 @@ mod tests {
     async fn publish_docs_rejects_read_only_owner() {
         let normalized = NormalizedName::from_unchecked("test-crate".to_string());
         let mut db = MockDb::new();
-        db.expect_get_crate_id()
-            .with(eq(normalized.clone()))
-            .returning(|_| Ok(Some(1)));
-        db.expect_crate_version_exists()
-            .with(eq(1), eq("1.0.0"))
-            .returning(|_, _| Ok(true));
+        expect_original_name(&mut db, &normalized, "test-crate");
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
                 name: "reader".to_string(),
@@ -452,7 +506,11 @@ mod tests {
 
         // Read-only users are rejected with 400, like on all other modifying endpoints.
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
-        let key = DocsStorage::file_key("test-crate", "1.0.0", "doc/test_crate/index.html");
+        let key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("test-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            "doc/test_crate/index.html",
+        );
         assert!(!docs_storage.exists(&key).await.unwrap());
     }
 
@@ -461,10 +519,12 @@ mod tests {
     #[tokio::test]
     async fn publish_docs_non_owner_cannot_tell_missing_from_existing_crate() {
         let mut db = MockDb::new();
-        db.expect_get_crate_id()
-            .returning(|name| Ok((name.as_str() == "test-crate").then_some(1)));
-        db.expect_crate_version_exists()
-            .returning(|_, version| Ok(version == "1.0.0"));
+        db.expect_get_original_name().returning(|name, version| {
+            Ok(
+                (name.as_str() == "test-crate" && version.to_string() == "1.0.0")
+                    .then(|| OriginalName::from_unchecked(name.to_string())),
+            )
+        });
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
                 name: "other".to_string(),
@@ -543,7 +603,11 @@ mod tests {
         let docs_storage = Arc::new(DocsStorage::new(Box::new(
             FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
         ) as DynStorage));
-        let key = DocsStorage::file_key("secret", "1.0.0", "doc/secret/index.html");
+        let key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("secret"),
+            &Version::from_unchecked_str("1.0.0"),
+            "doc/secret/index.html",
+        );
         docs_storage
             .put(&key, bytes::Bytes::from_static(b"<html>docs</html>"))
             .await
@@ -556,6 +620,8 @@ mod tests {
             .returning(move |_| Ok(restricted));
         db.expect_get_max_version_from_name()
             .returning(|_| Ok(Version::try_from("1.0.0").unwrap()));
+        db.expect_get_original_name()
+            .returning(|_, _| Ok(Some(OriginalName::from_unchecked("secret".to_string()))));
     }
 
     fn expect_token_user(db: &mut MockDb, name: &'static str) {
@@ -593,6 +659,45 @@ mod tests {
         let location = latest_location(db, docs_storage, None).await;
 
         assert_eq!(location, "/docs/secret/1.0.0/doc/secret/index.html");
+    }
+
+    #[tokio::test]
+    async fn latest_docs_redirects_to_docs_of_crate_with_uppercase_letters() {
+        let docs_storage = Arc::new(DocsStorage::new(
+            Box::new(MemoryStorage::new()) as DynStorage
+        ));
+        let key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            "doc/My_Crate/index.html",
+        );
+        docs_storage
+            .put(&key, bytes::Bytes::from_static(b"<html>docs</html>"))
+            .await
+            .unwrap();
+        let mut db = MockDb::new();
+        db.expect_is_download_restricted().returning(|_| Ok(false));
+        db.expect_get_max_version_from_name()
+            .returning(|_| Ok(Version::try_from("1.0.0").unwrap()));
+        expect_original_name(
+            &mut db,
+            &NormalizedName::from_unchecked_str("my-crate"),
+            "My-Crate",
+        );
+
+        let r = latest_app(Arc::new(db), docs_storage)
+            .oneshot(
+                Request::get("/My-Crate/latest")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            r.headers()[header::LOCATION],
+            "/docs/my-crate/1.0.0/doc/My_Crate/index.html"
+        );
     }
 
     #[tokio::test]
