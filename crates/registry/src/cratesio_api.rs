@@ -859,7 +859,8 @@ mod tests {
         // gets it once the API is back
         deny.upstream.api_down.store(false, Ordering::SeqCst);
         assert_eq!(StatusCode::OK, deny.download("upstream", "1.0.0").await.0);
-        assert_eq!(2, deny.api_calls());
+        // Three tries while the API was down, one after it is back
+        assert_eq!(4, deny.api_calls());
     }
 
     #[tokio::test]
