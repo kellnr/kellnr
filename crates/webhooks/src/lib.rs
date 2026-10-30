@@ -19,6 +19,9 @@ pub use endpoints::{
 };
 pub use service::run_webhook_service;
 
+/// Queue a webhook message for all webhooks of `event`. The payload contains
+/// the normalized crate name as `crate_name` and the name the crate was
+/// published with as `original_name`.
 pub async fn notify_crate(
     event: WebhookEvent,
     timestamp: &DateTime<Utc>,
@@ -26,11 +29,20 @@ pub async fn notify_crate(
     version: &Version,
     db: &std::sync::Arc<dyn DbProvider>,
 ) {
+    let original_name = match db.get_original_name(normalized_name, version).await {
+        Ok(Some(original_name)) => original_name.to_string(),
+        Ok(None) => normalized_name.to_string(),
+        Err(err) => {
+            tracing::error!("Cannot read the original name of {normalized_name}: {err}");
+            normalized_name.to_string()
+        }
+    };
     let payload = json!({
         "type": event,
         "timestamp": timestamp,
         "data": {
             "crate_name": format!("{}", normalized_name),
+            "original_name": original_name,
             "crate_version": version
         }
     });
