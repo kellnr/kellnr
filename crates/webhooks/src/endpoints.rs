@@ -157,7 +157,7 @@ pub async fn delete_webhook(
         (status = 400, description = "Invalid callback URL or target address not permitted"),
         (status = 401, description = "Admin access required"),
         (status = 500, description = "Webhook callback request failed"),
-        (status = 502, description = "Webhook callback returned an unexpected status. A 4xx or 5xx status of the callback is passed on as is.")
+        (status = 502, description = "Webhook callback returned a status other than 2xx, which is contained in the error message")
     ),
     security(("cargo_token" = []))
 )]
@@ -196,17 +196,14 @@ pub async fn test_webhook(
         "Webhook test callback returned status {status}. Body: {:?}",
         truncated_body(resp).await
     );
-    // Only the status code is passed on, the response body of the callback
-    // host is never returned to the caller.
-    let api_status = if status.is_client_error() || status.is_server_error() {
-        status
-    } else {
-        StatusCode::BAD_GATEWAY
-    };
+    // Only the status code is passed on in the message, the response body of
+    // the callback host is never returned to the caller. The callback status
+    // is not used as the response status, as e.g. a 401 of the callback would
+    // look like a failed login to Kellnr.
     Err(ApiError::new(
         &format!("Webhook callback returned status {}", status.as_u16()),
         "",
-        api_status,
+        StatusCode::BAD_GATEWAY,
     ))
 }
 
@@ -595,11 +592,35 @@ mod endpoint_tests {
             .await
             .unwrap();
 
-        assert_eq!(503, response.status().as_u16());
+        assert_eq!(502, response.status().as_u16());
         let response_body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let response_body = String::from_utf8_lossy(&response_body);
         assert!(!response_body.contains(body));
         assert!(response_body.contains("503"));
+    }
+
+    #[tokio::test]
+    async fn test_test_webhook_returns_502_for_unauthorized_callback() {
+        let (router, db) = get_app().await;
+        let _listener = get_test_listener(9996, 401).await;
+        let mut webhook = sample_webhook();
+        webhook.callback_url = "http://127.0.0.1:9996".to_string();
+        let id = db.register_webhook(webhook).await.unwrap();
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::get(format!("/api/v1/webhook/{id}/test"))
+                    .header(header::AUTHORIZATION, ADMIN_TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(502, response.status().as_u16());
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert!(String::from_utf8_lossy(&body).contains("401"));
     }
 
     #[tokio::test]
