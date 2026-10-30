@@ -1,6 +1,7 @@
 mod operations;
 pub mod test_utils;
 
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
@@ -1712,9 +1713,9 @@ impl DbProvider for Database {
             if version == &current_max_version {
                 let new_max_version = crate_meta_rows
                     .into_iter()
-                    .map(|cm| Version::from_unchecked_str(&cm.version))
+                    .filter_map(|cm| valid_version(&cm.version, krate))
                     .max()
-                    .unwrap(); // Safe to unwrap, as crate_meta_rows is not empty
+                    .ok_or(DbError::FailedToGetMaxVersionById(crate_id))?;
                 c.max_version = Set(new_max_version.into_inner());
             }
             // Update the ETag value of the crate index.
@@ -1923,9 +1924,8 @@ impl DbProvider for Database {
                 publisher_token: cm.publisher_token.clone(),
             });
         }
-        versions.sort_by(|a, b| {
-            Version::from_unchecked_str(&b.version).cmp(&Version::from_unchecked_str(&a.version))
-        });
+        // Newest first, invalid versions last
+        versions.sort_by_cached_key(|v| Reverse(valid_version(&v.version, &krate.name)));
 
         let crate_data = CrateData {
             name: krate.original_name,
@@ -2257,7 +2257,7 @@ impl DbProvider for Database {
 
         let max_version = indices
             .iter()
-            .map(|i| Version::from_unchecked_str(&i.vers))
+            .filter_map(|i| valid_version(&i.vers, crate_name))
             .max()
             .ok_or_else(|| DbError::FailedToGetMaxVersionByName(crate_name.to_string()))?;
 
@@ -2977,6 +2977,14 @@ impl DbProvider for Database {
 /// realistic count gets that large.
 fn saturating_i64(count: u64) -> i64 {
     i64::try_from(count).unwrap_or(i64::MAX)
+}
+
+/// The version if it is a valid semantic version. Invalid versions are logged,
+/// so callers can skip them instead of failing on the whole crate.
+fn valid_version(value: &str, crate_name: &str) -> Option<Version> {
+    Version::try_from(value)
+        .inspect_err(|_| warn!("Skipping invalid version {value} of crate {crate_name}"))
+        .ok()
 }
 
 fn parse_db_version(value: &str) -> DbResult<Version> {
