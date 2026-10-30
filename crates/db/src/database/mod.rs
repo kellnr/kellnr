@@ -13,7 +13,7 @@ use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
 use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
-use kellnr_common::prefetch::Prefetch;
+use kellnr_common::prefetch::{Prefetch, is_not_modified};
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::{Version, latest_version};
 use kellnr_common::webhook::{Webhook, WebhookEvent, WebhookQueue};
@@ -2217,14 +2217,12 @@ impl DbProvider for Database {
             return Ok(PrefetchState::NotFound);
         };
 
-        let needs_update = match (etag, last_modified) {
-            (Some(etag), Some(last_modified)) => {
-                krate.e_tag != etag || krate.last_modified != last_modified
-            }
-            (Some(etag), None) => krate.e_tag != etag,
-            (None, Some(last_modified)) => krate.last_modified != last_modified,
-            (None, None) => true,
-        };
+        let needs_update = !is_not_modified(
+            etag.as_deref(),
+            last_modified.as_deref(),
+            &krate.e_tag,
+            &krate.last_modified,
+        );
 
         if !needs_update {
             Ok(PrefetchState::UpToDate {

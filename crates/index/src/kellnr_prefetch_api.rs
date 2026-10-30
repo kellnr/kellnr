@@ -2,14 +2,15 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, header};
 use kellnr_appstate::{DbState, SettingsState};
 use kellnr_auth::crate_access::can_read_crate;
 use kellnr_auth::maybe_user::MaybeUser;
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
-use kellnr_common::prefetch::Prefetch;
+use kellnr_common::prefetch::{Prefetch, db_date_to_http_date, is_not_modified, quote_etag};
 use kellnr_db::DbProvider;
+use kellnr_db::error::DbError;
 use tracing::error;
 
 use super::config_json::ConfigJson;
@@ -106,20 +107,30 @@ async fn internal_kellnr_prefetch(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
-    match db.get_prefetch_data(name).await {
-        Ok(prefetch) if needs_update(headers, &prefetch) => Ok(prefetch),
-        Ok(_prefetch) => Err(StatusCode::NOT_MODIFIED),
-        Err(_) => Err(StatusCode::NOT_FOUND),
-    }
-}
+    let prefetch = match db.get_prefetch_data(name).await {
+        Ok(prefetch) => prefetch,
+        Err(DbError::CrateNotFound(_)) => return Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            error!("Failed to get the index data of crate {name}: {e}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
-fn needs_update(headers: &HeaderMap, prefetch: &Prefetch) -> bool {
-    let if_none_match = headers.get("if-none-match");
-    let if_modified_since = headers.get("if-modified-since");
-    match (if_none_match, if_modified_since) {
-        (Some(etag), Some(date)) => *etag != prefetch.etag || *date != prefetch.last_modified,
-        (_, _) => true,
+    let value = |name: header::HeaderName| headers.get(name).and_then(|h| h.to_str().ok());
+    if is_not_modified(
+        value(header::IF_NONE_MATCH),
+        value(header::IF_MODIFIED_SINCE),
+        &prefetch.etag,
+        &prefetch.last_modified,
+    ) {
+        return Err(StatusCode::NOT_MODIFIED);
     }
+
+    Ok(Prefetch {
+        etag: quote_etag(&prefetch.etag),
+        last_modified: db_date_to_http_date(&prefetch.last_modified),
+        data: prefetch.data,
+    })
 }
 
 #[cfg(test)]
@@ -130,7 +141,6 @@ mod tests {
     use axum::routing::get;
     use http_body_util::BodyExt;
     use kellnr_appstate::AppStateData;
-    use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::{Protocol, Settings};
     use mockall::predicate::*;
@@ -184,27 +194,86 @@ mod tests {
 
         assert_eq!(StatusCode::OK, result_status);
         assert_eq!("3", r.headers().get(header::CONTENT_LENGTH).unwrap());
-        assert_eq!("date", r.headers().get(header::LAST_MODIFIED).unwrap());
+        assert_eq!(
+            "Fri, 30 Oct 2026 12:00:00 GMT",
+            r.headers().get(header::LAST_MODIFIED).unwrap()
+        );
+        assert_eq!("\"etag\"", r.headers().get(header::ETAG).unwrap());
         assert_eq!(
             vec![0x1, 0x2, 0x3],
             r.into_body().collect().await.unwrap().to_bytes()
         );
     }
 
+    async fn prefetch_status(headers: &[(header::HeaderName, &str)]) -> StatusCode {
+        let mut request = Request::get("/api/v1/index/me/ta/metadata");
+        for (name, value) in headers {
+            request = request.header(name, *value);
+        }
+        app()
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
     #[tokio::test]
     async fn prefetch_returns_not_modified() {
+        let status = prefetch_status(&[
+            (header::IF_MODIFIED_SINCE, "Fri, 30 Oct 2026 12:00:00 GMT"),
+            (header::IF_NONE_MATCH, "\"etag\""),
+        ])
+        .await;
+
+        assert_eq!(StatusCode::NOT_MODIFIED, status);
+    }
+
+    #[tokio::test]
+    async fn prefetch_returns_not_modified_for_matching_etag_alone() {
+        let status = prefetch_status(&[(header::IF_NONE_MATCH, "\"etag\"")]).await;
+
+        assert_eq!(StatusCode::NOT_MODIFIED, status);
+    }
+
+    #[tokio::test]
+    async fn prefetch_returns_not_modified_for_matching_date_alone() {
+        let status =
+            prefetch_status(&[(header::IF_MODIFIED_SINCE, "Fri, 30 Oct 2026 12:00:00 GMT")]).await;
+
+        assert_eq!(StatusCode::NOT_MODIFIED, status);
+    }
+
+    #[tokio::test]
+    async fn prefetch_returns_data_for_older_date() {
+        let status =
+            prefetch_status(&[(header::IF_MODIFIED_SINCE, "Thu, 29 Oct 2026 12:00:00 GMT")]).await;
+
+        assert_eq!(StatusCode::OK, status);
+    }
+
+    #[tokio::test]
+    async fn prefetch_returns_data_for_other_etag_with_matching_date() {
+        let status = prefetch_status(&[
+            (header::IF_MODIFIED_SINCE, "Fri, 30 Oct 2026 12:00:00 GMT"),
+            (header::IF_NONE_MATCH, "\"old\""),
+        ])
+        .await;
+
+        assert_eq!(StatusCode::OK, status);
+    }
+
+    #[tokio::test]
+    async fn prefetch_returns_internal_error_on_database_failure() {
         let r = app()
             .oneshot(
-                Request::get("/api/v1/index/me/ta/metadata")
-                    .header(header::IF_MODIFIED_SINCE, "date")
-                    .header(header::IF_NONE_MATCH, "etag")
+                Request::get("/api/v1/index/br/ok/broken")
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        assert_eq!(StatusCode::NOT_MODIFIED, r.status());
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, r.status());
     }
 
     #[tokio::test]
@@ -290,7 +359,7 @@ mod tests {
                 Ok(Prefetch {
                     data: vec![0x4],
                     etag: "etag".to_string(),
-                    last_modified: "date".to_string(),
+                    last_modified: "2026-10-30 12:00:00".to_string(),
                 })
             });
         mock_db
@@ -300,13 +369,17 @@ mod tests {
                 Ok(Prefetch {
                     data: vec![0x1, 0x2, 0x3],
                     etag: "etag".to_string(),
-                    last_modified: "date".to_string(),
+                    last_modified: "2026-10-30 12:00:00".to_string(),
                 })
             });
         mock_db
             .expect_get_prefetch_data()
             .with(eq("notfound"))
             .returning(move |_| Err(DbError::CrateNotFound("notfound".to_string())));
+        mock_db
+            .expect_get_prefetch_data()
+            .with(eq("broken"))
+            .returning(move |_| Err(DbError::FailedToCountCrates));
 
         let kellnr_prefetch = Router::new()
             .route("/config.json", get(config_kellnr))
