@@ -244,7 +244,9 @@ pub trait DbProvider: Send + Sync {
     async fn get_auth_token_name(&self, token: &str) -> DbResult<Option<String>>;
     async fn get_user(&self, name: &str) -> DbResult<User>;
     async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>>;
-    async fn delete_auth_token(&self, id: i32) -> DbResult<()>;
+    /// Deletes the token `id` of the user, [`DbError::TokenNotFound`] if the
+    /// user has no such token.
+    async fn delete_auth_token(&self, user_name: &str, id: i32) -> DbResult<()>;
     async fn delete_owner(&self, crate_name: &str, owner: &str) -> DbResult<()>;
     async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
     async fn add_user(
@@ -704,7 +706,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn delete_auth_token(&self, _id: i32) -> DbResult<()> {
+            async fn delete_auth_token(&self, _user_name: &str, _id: i32) -> DbResult<()> {
                 unimplemented!()
             }
 
