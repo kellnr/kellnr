@@ -22,6 +22,32 @@ async fn put_then_get_roundtrips() {
 }
 
 #[tokio::test]
+async fn list_returns_keys_with_special_characters_as_stored() {
+    let (_dir, storage) = temp_storage();
+    let keys = [
+        "a/a~b.html",
+        "a/x%20y.html",
+        "a/[c] {d}#e.html",
+        "a/x y.html",
+    ];
+    for key in keys {
+        storage.put(key, Bytes::from(key)).await.unwrap();
+    }
+
+    let mut listed = storage.list("a").await.unwrap();
+    listed.sort_unstable();
+
+    let mut expected = keys.map(String::from).to_vec();
+    expected.sort_unstable();
+    assert_eq!(listed, expected);
+    for key in listed {
+        assert_eq!(storage.get(&key).await.unwrap(), Bytes::from(key.clone()));
+        storage.delete(&key).await.unwrap();
+    }
+    assert!(storage.list("a").await.unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn get_with_meta_returns_bytes_etag_and_last_modified() {
     let (_dir, storage) = temp_storage();
     storage

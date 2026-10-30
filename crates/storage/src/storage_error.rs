@@ -42,8 +42,6 @@ pub enum StorageError {
     GenericError(String),
     #[error("Object storage error: {0}")]
     ObjectStore(#[from] object_store::Error),
-    #[error("Object storage path error: {0}")]
-    ObjectStorePath(#[from] object_store::path::Error),
     #[error("Toolchain archive already exists: {name}-{version}-{target}")]
     ToolchainArchiveExists {
         name: String,
