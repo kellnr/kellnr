@@ -5075,6 +5075,38 @@ async fn set_channel_of_unknown_toolchain_fails_and_keeps_channel(test_db: &kell
 }
 
 #[db_test]
+async fn fail_processing_toolchain_targets_marks_only_processing_targets(
+    test_db: &kellnr_db::Database,
+) {
+    let tc = test_db
+        .add_toolchain("rust", "1.0.0", "2024-01-01", None)
+        .await
+        .unwrap();
+    let processing = test_db
+        .add_toolchain_target(tc, "x86_64-unknown-linux-gnu", "a.tar.xz", "a", 1)
+        .await
+        .unwrap();
+    let ready = test_db
+        .add_toolchain_target(tc, "aarch64-unknown-linux-gnu", "b.tar.xz", "b", 1)
+        .await
+        .unwrap();
+    test_db.set_target_status(ready, "ready").await.unwrap();
+
+    let marked = test_db.fail_processing_toolchain_targets().await.unwrap();
+
+    assert_eq!(1, marked);
+    let targets = test_db
+        .get_toolchain_by_version("rust", "1.0.0")
+        .await
+        .unwrap()
+        .unwrap()
+        .targets;
+    let status = |id| &targets.iter().find(|t| t.id == id).unwrap().status;
+    assert_eq!("failed", status(processing));
+    assert_eq!("ready", status(ready));
+}
+
+#[db_test]
 async fn admin_created_by_concurrent_start_is_kept(test_db: &kellnr_db::Database) {
     test_insert_admin_credentials_again(test_db).await.unwrap();
 

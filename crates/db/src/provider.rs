@@ -509,6 +509,10 @@ pub trait DbProvider: Send + Sync {
     /// Update the processing status of a toolchain target
     async fn set_target_status(&self, target_id: i64, status: &str) -> DbResult<()>;
 
+    /// Mark all toolchain targets that are still "processing" as "failed".
+    /// Returns the number of marked targets.
+    async fn fail_processing_toolchain_targets(&self) -> DbResult<u64>;
+
     /// Get a toolchain by its channel (e.g., "stable", "nightly")
     async fn get_toolchain_by_channel(
         &self,
@@ -1039,6 +1043,10 @@ pub mod mock {
             }
 
             async fn set_target_status(&self, target_id: i64, status: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn fail_processing_toolchain_targets(&self) -> DbResult<u64> {
                 unimplemented!()
             }
 

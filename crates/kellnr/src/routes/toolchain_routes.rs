@@ -212,7 +212,7 @@ async fn upload_toolchain(
     let bg_target = params.target.clone();
     let bg_date = params.date.clone();
     let bg_path = path.clone();
-    tokio::spawn(async move {
+    spawn_target_processing(db.clone(), target_id, async move {
         let archive_bytes = {
             let mut archive = None;
             for attempt in 1..=3 {
@@ -285,6 +285,23 @@ async fn upload_toolchain(
             params.name, params.version, params.target, size
         )),
     }))
+}
+
+/// Runs the processing of an uploaded target in the background. If it panics,
+/// the target is marked as failed instead of staying "processing" forever.
+fn spawn_target_processing(
+    db: Arc<dyn kellnr_db::DbProvider>,
+    target_id: i64,
+    processing: impl Future<Output = ()> + Send + 'static,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        if let Err(e) = tokio::spawn(processing).await {
+            tracing::error!("Processing of toolchain target {target_id} stopped: {e}");
+            if let Err(e) = db.set_target_status(target_id, "failed").await {
+                tracing::warn!("Failed to set target status to failed: {e}");
+            }
+        }
+    })
 }
 
 /// Adds the uploaded target, and its toolchain if it is new, to the database.
@@ -2736,5 +2753,19 @@ mod tests {
 
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
         assert!(!result.message.unwrap().contains("secret detail"));
+    }
+
+    #[tokio::test]
+    async fn target_is_marked_failed_when_processing_panics() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_set_target_status()
+            .with(eq(7), eq("failed"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+
+        spawn_target_processing(Arc::new(mock_db), 7, async { panic!("extraction bug") })
+            .await
+            .unwrap();
     }
 }
