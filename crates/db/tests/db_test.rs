@@ -4970,3 +4970,43 @@ async fn yank_and_unyank_update_etag_of_crate_index(test_db: &kellnr_db::Databas
     assert_eq!(published.etag, unyanked.etag);
     assert_eq!(published.data, unyanked.data);
 }
+
+#[db_test]
+async fn set_channel_moves_channel_to_toolchain(test_db: &kellnr_db::Database) {
+    test_db
+        .add_toolchain("rust", "1.0.0", "2024-01-01", Some("stable".to_string()))
+        .await
+        .unwrap();
+    test_db
+        .add_toolchain("rust", "1.1.0", "2024-02-01", None)
+        .await
+        .unwrap();
+
+    test_db
+        .set_channel("stable", "rust", "1.1.0")
+        .await
+        .unwrap();
+
+    let channels = test_db.get_channels().await.unwrap();
+    assert_eq!(1, channels.len());
+    assert_eq!("stable", channels[0].name);
+    assert_eq!("1.1.0", channels[0].version);
+}
+
+#[db_test]
+async fn set_channel_of_unknown_toolchain_fails_and_keeps_channel(test_db: &kellnr_db::Database) {
+    test_db
+        .add_toolchain("rust", "1.0.0", "2024-01-01", Some("stable".to_string()))
+        .await
+        .unwrap();
+
+    let result = test_db.set_channel("stable", "rust", "9.9.9").await;
+
+    assert!(matches!(
+        result,
+        Err(kellnr_db::error::DbError::ToolchainNotFound(_, _))
+    ));
+    let channels = test_db.get_channels().await.unwrap();
+    assert_eq!(1, channels.len());
+    assert_eq!("1.0.0", channels[0].version);
+}

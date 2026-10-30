@@ -2916,25 +2916,31 @@ impl DbProvider for Database {
     }
 
     async fn set_channel(&self, channel: &str, name: &str, version: &str) -> DbResult<()> {
+        // In one transaction, so the channel is never lost or on two toolchains
+        let txn = self.db_con.begin().await?;
+        let tc = toolchain::Entity::find()
+            .filter(toolchain::Column::Name.eq(name))
+            .filter(toolchain::Column::Version.eq(version))
+            .one(&txn)
+            .await?
+            .ok_or_else(|| DbError::ToolchainNotFound(name.to_string(), version.to_string()))?;
+
         // First, clear the channel from any other toolchain that has it
-        let toolchains_with_channel = toolchain::Entity::find()
+        toolchain::Entity::update_many()
+            .col_expr(
+                toolchain::Column::Channel,
+                Expr::value(Option::<String>::None),
+            )
             .filter(toolchain::Column::Channel.eq(channel))
-            .all(&self.db_con)
+            .exec(&txn)
             .await?;
 
-        for tc in toolchains_with_channel {
-            let mut model: toolchain::ActiveModel = tc.into();
-            model.channel = Set(None);
-            model.update(&self.db_con).await?;
-        }
-
         // Then set the channel on the target toolchain
-        if let Some(tc) = self.get_toolchain_by_name_version(name, version).await? {
-            let mut model: toolchain::ActiveModel = tc.into();
-            model.channel = Set(Some(channel.to_string()));
-            model.update(&self.db_con).await?;
-        }
+        let mut model: toolchain::ActiveModel = tc.into();
+        model.channel = Set(Some(channel.to_string()));
+        model.update(&txn).await?;
 
+        txn.commit().await?;
         Ok(())
     }
 
