@@ -7,6 +7,7 @@ use kellnr_appstate::{AppState, DbState, LoginThrottleState, SettingsState, Toke
 use kellnr_auth::password::{PasswordAuthError, authenticate_password};
 use kellnr_auth::token;
 use kellnr_common::util::generate_rand_string;
+use kellnr_db::error::DbError;
 use kellnr_db::{self, AuthToken, DbProvider, User};
 use kellnr_settings::Settings;
 use kellnr_settings::constants::{COOKIE_OIDC_ID_TOKEN, COOKIE_SESSION_ID, COOKIE_SESSION_USER};
@@ -134,13 +135,13 @@ pub async fn delete_token(
     State(db): DbState,
     State(cache): TokenCacheState,
 ) -> Result<(), RouteError> {
-    db.get_auth_tokens(user.name())
-        .await?
-        .iter()
-        .find(|t| t.id == id)
-        .ok_or_else(|| RouteError::Status(StatusCode::BAD_REQUEST))?;
-
-    db.delete_auth_token(id).await?;
+    // Only deletes a token of the user
+    db.delete_auth_token(user.name(), id)
+        .await
+        .map_err(|e| match e {
+            DbError::TokenNotFound => RouteError::Status(StatusCode::BAD_REQUEST),
+            e => e.into(),
+        })?;
 
     cache.invalidate_all();
 
@@ -591,7 +592,6 @@ mod tests {
     use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
     use kellnr_common::login_throttle::LoginThrottle;
     use kellnr_common::token_cache::{CachedTokenData, TokenCacheManager};
-    use kellnr_db::AuthToken;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::constants::COOKIE_SESSION_ID;
@@ -1120,18 +1120,11 @@ mod tests {
                 is_read_only: false,
             })
         });
-        mock_db.expect_get_auth_tokens().times(1).returning(|_| {
-            Ok(vec![AuthToken::new(
-                1,
-                "token".to_string(),
-                "secret".to_string(),
-            )])
-        });
         mock_db
             .expect_delete_auth_token()
             .times(1)
-            .with(eq(1))
-            .returning(|_| Ok(()));
+            .with(eq("test_user"), eq(1))
+            .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
         let app = Router::new()
@@ -1159,6 +1152,43 @@ mod tests {
 
         // Verify cache was invalidated
         assert!(cache.get("token_to_keep").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_token_of_other_user_is_bad_request() {
+        let mut mock_db = MockDb::new();
+        mock_db.expect_validate_session().times(1).returning(|_| {
+            Ok(kellnr_db::SessionInfo {
+                name: "test_user".to_string(),
+                is_admin: false,
+                is_read_only: false,
+            })
+        });
+        mock_db
+            .expect_delete_auth_token()
+            .times(1)
+            .with(eq("test_user"), eq(1))
+            .returning(|_, _| Err(DbError::TokenNotFound));
+
+        let state = test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(true, 60, 100)));
+        let app = Router::new()
+            .route("/delete_token/{id}", axum::routing::delete(delete_token))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::delete("/delete_token/1")
+                    .header(
+                        header::COOKIE,
+                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::BAD_REQUEST, response.status());
     }
 
     #[tokio::test]

@@ -1473,10 +1473,15 @@ impl DbProvider for Database {
         Ok(at.into_iter().map(AuthToken::from).collect())
     }
 
-    async fn delete_auth_token(&self, id: i32) -> DbResult<()> {
-        auth_token::Entity::delete_by_id(id as i64)
+    async fn delete_auth_token(&self, user_name: &str, id: i32) -> DbResult<()> {
+        let deleted = auth_token::Entity::delete_many()
+            .filter(auth_token::Column::Id.eq(i64::from(id)))
+            .filter(auth_token::Column::UserFk.in_subquery(Self::user_id_by_name(user_name)))
             .exec(&self.db_con)
             .await?;
+        if deleted.rows_affected == 0 {
+            return Err(DbError::TokenNotFound);
+        }
         Ok(())
     }
 

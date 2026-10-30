@@ -840,9 +840,36 @@ async fn auth_token_insert_and_delete(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    test_db.delete_auth_token(2).await.unwrap();
+    test_db.delete_auth_token("admin", 2).await.unwrap();
 
     assert!(test_db.get_user_from_token("mytoken").await.is_err());
+}
+
+#[db_test]
+async fn delete_auth_token_of_other_user_fails(test_db: &kellnr_db::Database) {
+    test_db
+        .add_user("other", "pwd", false, false)
+        .await
+        .unwrap();
+    test_db
+        .add_auth_token("test", "mytoken", "admin")
+        .await
+        .unwrap();
+
+    let result = test_db.delete_auth_token("other", 2).await;
+
+    assert!(matches!(
+        result,
+        Err(kellnr_db::error::DbError::TokenNotFound)
+    ));
+    assert_eq!(
+        "admin",
+        test_db.get_user_from_token("mytoken").await.unwrap().name
+    );
+    assert!(matches!(
+        test_db.delete_auth_token("admin", 99).await,
+        Err(kellnr_db::error::DbError::TokenNotFound)
+    ));
 }
 
 #[db_test]
