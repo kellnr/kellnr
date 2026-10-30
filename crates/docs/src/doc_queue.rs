@@ -18,13 +18,13 @@ use kellnr_settings::Settings;
 use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use tokio::fs::remove_dir_all;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use crate::build_process::DocBuilder;
-use crate::compute_doc_url;
 use crate::docs_error::DocsError;
 use crate::unpack::{ExtractLimits, unpack_crate};
 use crate::upload::upload_dir_and_prune;
+use crate::{compute_doc_url, crate_name_to_docs_name};
 
 pub fn doc_extraction_queue(
     db: Arc<dyn DbProvider>,
@@ -208,6 +208,11 @@ impl DocQueueWorker {
         // uploaded zip already contains a top-level `doc/` folder: both must land
         // under `{crate}/{version}/doc/...` to match `compute_doc_url`.
         let from = generated_docs_path.join("target").join("doc");
+        let docs_dir = from.clone();
+        let docs_name = crate_name_to_docs_name(original_name);
+        tokio::task::spawn_blocking(move || remove_non_rustdoc_files(&docs_dir, &docs_name))
+            .await
+            .map_err(|_| DocsError::ExtractFailed)??;
         upload_dir_and_prune(
             &from,
             "doc",
@@ -232,6 +237,67 @@ impl DocQueueWorker {
             Err(e) => error!("Failed to remove entry {id} from the docs queue: {e}"),
         }
     }
+}
+
+/// Files and folders rustdoc writes to `target/doc` besides the folder of the
+/// crate and the `src` folder. Older rustdoc versions wrote some of them.
+const RUSTDOC_OUTPUT: &[&str] = &[
+    "static.files",
+    "search.index",
+    "search.desc",
+    "trait.impl",
+    "type.impl",
+    "implementors",
+    "crates.js",
+    "help.html",
+    "settings.html",
+    "src-files.js",
+    "source-files.js",
+];
+
+fn is_rustdoc_output(name: &str, docs_name: &str) -> bool {
+    name == docs_name
+        || RUSTDOC_OUTPUT.contains(&name)
+        || (name.starts_with("search-index") && name.to_ascii_lowercase().ends_with(".js"))
+}
+
+/// Remove everything from `doc_dir` that is not rustdoc output of the crate
+/// `docs_name`.
+///
+/// The build runs untrusted code, which could copy files of the host into
+/// `target/doc` to get them published. This limits what is published to the
+/// files rustdoc writes, but the build can still write into the crate's own
+/// docs. Only a confining `docs.build_wrapper` prevents that.
+fn remove_non_rustdoc_files(doc_dir: &Path, docs_name: &str) -> std::io::Result<()> {
+    retain_entries(doc_dir, |name| {
+        name == "src" || is_rustdoc_output(name, docs_name)
+    })?;
+    let src = doc_dir.join("src");
+    if std::fs::symlink_metadata(&src).is_ok_and(|m| m.is_dir()) {
+        retain_entries(&src, |name| name == docs_name)?;
+    }
+    Ok(())
+}
+
+/// Remove the entries of `dir` whose name does not satisfy `keep`, without
+/// following symlinks.
+fn retain_entries(dir: &Path, keep: impl Fn(&str) -> bool) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        if keep(&entry.file_name().to_string_lossy()) {
+            continue;
+        }
+        debug!(
+            "Not publishing {}, it is no rustdoc output",
+            entry.path().display()
+        );
+        if entry.file_type()?.is_dir() {
+            std::fs::remove_dir_all(entry.path())?;
+        } else {
+            std::fs::remove_file(entry.path())?;
+        }
+    }
+    Ok(())
 }
 
 async fn clean_up(path: &Path) -> Result<(), DocsError> {
@@ -642,6 +708,78 @@ mod tests {
             &Version::from_unchecked_str("1.0.0"),
         );
         assert!(worker.docs_storage.list(&prefix).await.unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_publishes_only_rustdoc_output() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let mut db = MockDb::new();
+        expect_queue(&mut db, data_dir.path(), &["a"]);
+        expect_original_names(&mut db);
+        db.expect_update_docs_link().returning(|_, _, _| Ok(()));
+        db.expect_delete_doc_queue().returning(|_| Ok(()));
+        let builder = shell_builder(
+            "mkdir -p \"$3/target/doc\" && cd \"$3/target/doc\" && mkdir -p a src/a src/other && touch a/index.html src/a/lib.rs.html src/other/x.html crates.js leak.txt",
+            data_dir.path(),
+        );
+        let worker = worker(db, data_dir.path(), &["a"], builder).await;
+
+        worker.process_queue().await.unwrap();
+
+        let prefix = DocsStorage::version_prefix(
+            &NormalizedName::from_unchecked_str("a"),
+            &Version::from_unchecked_str("1.0.0"),
+        );
+        let mut keys = worker.docs_storage.list(&prefix).await.unwrap();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            vec![
+                "a/1.0.0/doc/a/index.html",
+                "a/1.0.0/doc/crates.js",
+                "a/1.0.0/doc/src/a/lib.rs.html",
+            ]
+        );
+    }
+
+    #[test]
+    fn remove_non_rustdoc_files_keeps_rustdoc_output_of_the_crate() {
+        let dir = tempfile::tempdir().unwrap();
+        let kept = [
+            "My_Crate/index.html",
+            "static.files/rustdoc.css",
+            "search.index/root.js",
+            "trait.impl/core/clone/trait.Clone.js",
+            "type.impl/x.js",
+            "implementors/x.js",
+            "src/My_Crate/lib.rs.html",
+            "crates.js",
+            "help.html",
+            "settings.html",
+            "src-files.js",
+            "search-index1.70.0.js",
+        ];
+        let removed = [
+            "src/other/secret.html",
+            "debug/secret",
+            ".lock",
+            "secret.txt",
+        ];
+        for file in kept.iter().chain(&removed) {
+            let path = dir.path().join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "").unwrap();
+        }
+
+        remove_non_rustdoc_files(dir.path(), "My_Crate").unwrap();
+
+        for file in kept {
+            assert!(dir.path().join(file).exists(), "{file}");
+        }
+        for file in removed {
+            assert!(!dir.path().join(file).exists(), "{file}");
+        }
     }
 
     #[tokio::test]

@@ -29,9 +29,11 @@ pub struct Docs {
     /// and should belong to a dedicated read-only user.
     /// The build still runs as the Kellnr user: it can read every
     /// file Kellnr can read (for example the config file or the `SQLite`
-    /// database, e.g. via `include_str!`) and it has network access. Only
-    /// enable docs for crates you trust, or set a wrapper that confines the
-    /// build, e.g. with bubblewrap:
+    /// database, e.g. via `include_str!`) and it has network access. Kellnr
+    /// only publishes the files rustdoc generates, but the build can write
+    /// such content into the generated docs of the crate. Only enable docs
+    /// for crates you trust, or set a wrapper that confines the build, e.g.
+    /// with bubblewrap:
     /// `["bwrap", "--ro-bind", "/", "/", "--tmpfs", "<data_dir>",
     /// "--bind", "<data_dir>/doc_queue", "<data_dir>/doc_queue",
     /// "--bind", "<cargo_home>", "<cargo_home>", "--tmpfs", "/etc/kellnr",
