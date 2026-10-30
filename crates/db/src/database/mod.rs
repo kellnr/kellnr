@@ -2,7 +2,7 @@ mod operations;
 pub mod test_utils;
 
 use std::cmp::Reverse;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
@@ -39,7 +39,7 @@ use sea_orm::sea_query::{
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
-    FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set, Statement,
+    FromQueryResult, ModelTrait, PaginatorTrait, QueryFilter, RelationTrait, Set, Statement,
 };
 use tracing::warn;
 
@@ -834,7 +834,6 @@ impl Database {
         group_fk,
         user_fk
     );
-    impl_add_relation!(add_owner_impl, owner, Owner, crate_fk, user_fk);
 }
 
 #[async_trait]
@@ -1163,8 +1162,7 @@ impl DbProvider for Database {
 
     async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()> {
         let crate_fk = self.get_krate_model(crate_name).await?.id;
-        let user_fk = self.get_user_model(owner).await?.id;
-        self.add_owner_impl(crate_fk, user_fk).await
+        operations::add_owner_if_not_exists(&self.db_con, owner, crate_fk).await
     }
 
     async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool> {
@@ -1489,6 +1487,46 @@ impl DbProvider for Database {
         let model = self.get_owner_by_crate_and_user(crate_name, owner).await?;
         self.delete_or_not_found(model, DbError::OwnerNotFound(owner.to_string()))
             .await
+    }
+
+    async fn delete_owners(
+        &self,
+        crate_name: &NormalizedName,
+        owners: &[String],
+        allow_ownerless: bool,
+    ) -> DbResult<()> {
+        let txn = self.db_con.begin().await?;
+        // The row lock serializes concurrent removals on PostgreSQL, else each
+        // could remove a different owner and leave the crate without one.
+        let krate = krate::Entity::find()
+            .filter(krate::Column::Name.eq(crate_name))
+            .lock_exclusive()
+            .one(&txn)
+            .await?
+            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
+
+        let owners: HashSet<&String> = owners.iter().collect();
+        for name in owners {
+            let owner = owner::Entity::find()
+                .join(JoinType::InnerJoin, owner::Relation::User.def())
+                .filter(owner::Column::CrateFk.eq(krate.id))
+                .filter(user::Column::Name.eq(name.as_str()))
+                .one(&txn)
+                .await?
+                .ok_or_else(|| DbError::OwnerNotFound(name.clone()))?;
+            owner.delete(&txn).await?;
+        }
+
+        let remaining = owner::Entity::find()
+            .filter(owner::Column::CrateFk.eq(krate.id))
+            .count(&txn)
+            .await?;
+        if remaining == 0 && !allow_ownerless {
+            return Err(DbError::LastOwner);
+        }
+
+        txn.commit().await?;
+        Ok(())
     }
 
     async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {

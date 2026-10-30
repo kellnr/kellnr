@@ -216,6 +216,8 @@ pub trait DbProvider: Send + Sync {
         keep_session_token: &str,
     ) -> DbResult<u64>;
     async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
+    /// Adds `owner` to the owners of the crate. Adding an existing owner
+    /// succeeds without a change.
     async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()>;
     async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool>;
     async fn change_download_restricted(
@@ -248,6 +250,16 @@ pub trait DbProvider: Send + Sync {
     /// user has no such token.
     async fn delete_auth_token(&self, user_name: &str, id: i32) -> DbResult<()>;
     async fn delete_owner(&self, crate_name: &str, owner: &str) -> DbResult<()>;
+    /// Removes all `owners` from the crate in one transaction. Nothing is
+    /// removed if one of them is not an owner ([`DbError::OwnerNotFound`]) or
+    /// if no owner would remain and `allow_ownerless` is false
+    /// ([`DbError::LastOwner`]).
+    async fn delete_owners(
+        &self,
+        crate_name: &NormalizedName,
+        owners: &[String],
+        allow_ownerless: bool,
+    ) -> DbResult<()>;
     async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
     async fn add_user(
         &self,
@@ -711,6 +723,10 @@ pub mod mock {
             }
 
             async fn delete_owner(&self, _crate_name: &str, _owner: &str) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn delete_owners(&self, _crate_name: &NormalizedName, _owners: &[String], _allow_ownerless: bool) -> DbResult<()> {
                 unimplemented!()
             }
 

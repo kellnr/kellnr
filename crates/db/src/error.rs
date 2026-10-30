@@ -18,6 +18,8 @@ pub enum DbError {
     GroupNotFound(String),
     #[error("Owner not found: {0}")]
     OwnerNotFound(String),
+    #[error("A crate must have at least one owner")]
+    LastOwner,
     #[error("Not the owner of the crate {0}")]
     NotOwner(String),
     #[error(
