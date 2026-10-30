@@ -506,6 +506,9 @@ pub trait DbProvider: Send + Sync {
         size: i64,
     ) -> DbResult<()>;
 
+    /// Whether a component of any toolchain target is stored at `storage_path`
+    async fn is_toolchain_component_stored_at(&self, storage_path: &str) -> DbResult<bool>;
+
     /// Update the processing status of a toolchain target
     async fn set_target_status(&self, target_id: i64, status: &str) -> DbResult<()>;
 
@@ -1053,6 +1056,10 @@ pub mod mock {
                 hash: &str,
                 size: i64,
             ) -> DbResult<()> {
+                unimplemented!()
+            }
+
+            async fn is_toolchain_component_stored_at(&self, storage_path: &str) -> DbResult<bool> {
                 unimplemented!()
             }
 

@@ -2965,6 +2965,14 @@ impl DbProvider for Database {
         Ok(())
     }
 
+    async fn is_toolchain_component_stored_at(&self, storage_path: &str) -> DbResult<bool> {
+        Ok(toolchain_component::Entity::find()
+            .filter(toolchain_component::Column::StoragePath.eq(storage_path))
+            .one(&self.db_con)
+            .await?
+            .is_some())
+    }
+
     async fn get_toolchain_by_channel(
         &self,
         channel: &str,

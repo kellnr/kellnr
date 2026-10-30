@@ -69,6 +69,18 @@ impl ToolchainStorage {
             })
     }
 
+    /// Like [`Self::put_raw`], but replaces an existing file.
+    pub async fn put_raw_overwrite(&self, path: &str, data: Bytes) -> Result<(), StorageError> {
+        self.storage.put_overwrite(path, data).await.map_err(|e| {
+            StorageError::ToolchainStoreFailed {
+                name: format!("component at {path}"),
+                version: String::new(),
+                target: String::new(),
+                reason: e.to_string(),
+            }
+        })
+    }
+
     pub async fn get(&self, path: &str) -> Result<Bytes, StorageError> {
         self.storage.get(path).await.map_err(|e| {
             if e.is_not_found() {
