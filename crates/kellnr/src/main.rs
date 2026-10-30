@@ -360,15 +360,7 @@ async fn run_server(resolved: ResolvedSettings) {
     // Create router using the route module
     let mut app = routes::create_router(state, oauth2_handler);
     if !route_path_prefix.is_empty() {
-        let route_path_prefix_with_trailing = format!("{route_path_prefix}/");
-        app = Router::new()
-            .nest(&route_path_prefix_with_trailing, app)
-            .route(
-                &route_path_prefix,
-                get(move || async move {
-                    Redirect::permanent(route_path_prefix_with_trailing.as_str())
-                }),
-            );
+        app = nest_under_path_prefix(app, &route_path_prefix);
     }
 
     // Start the server with graceful shutdown
@@ -388,6 +380,16 @@ async fn run_server(resolved: ResolvedSettings) {
     // Flush any accumulated download counts before exiting
     download_counter_for_shutdown.flush().await;
     trace!("Download counters flushed. Shutting down.");
+}
+
+/// Serves `app` under `path_prefix`, the normalized `origin.path`, and
+/// redirects the bare prefix to the prefix with a trailing slash.
+fn nest_under_path_prefix(app: Router, path_prefix: &str) -> Router {
+    let path_prefix_with_trailing = format!("{path_prefix}/");
+    Router::new().nest(&path_prefix_with_trailing, app).route(
+        path_prefix,
+        get(move || async move { Redirect::permanent(path_prefix_with_trailing.as_str()) }),
+    )
 }
 
 /// How long open requests may take to finish after a shutdown signal.
@@ -702,6 +704,34 @@ mod tests {
             .await
             .expect("server must stop after the drain timeout")
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn unknown_api_paths_under_the_path_prefix_are_not_found() {
+        use tower::ServiceExt;
+
+        let app = nest_under_path_prefix(
+            routes::create_router(kellnr_appstate::test_state(), None),
+            "/registry",
+        );
+        let status = |uri: &'static str| {
+            let app = app.clone();
+            async move {
+                app.oneshot(
+                    axum::http::Request::get(uri)
+                        .body(axum::body::Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status()
+            }
+        };
+
+        // Toolchains are disabled in the test settings
+        assert_eq!(404, status("/registry/api/v1/toolchains").await);
+        assert_eq!(200, status("/registry/crates").await);
+        assert_eq!(308, status("/registry").await);
     }
 
     #[test]
