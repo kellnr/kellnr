@@ -2894,6 +2894,15 @@ impl DbProvider for Database {
         Ok(())
     }
 
+    async fn fail_processing_toolchain_targets(&self) -> DbResult<u64> {
+        let result = toolchain_target::Entity::update_many()
+            .col_expr(toolchain_target::Column::Status, Expr::value("failed"))
+            .filter(toolchain_target::Column::Status.eq("processing"))
+            .exec(&self.db_con)
+            .await?;
+        Ok(result.rows_affected)
+    }
+
     async fn add_toolchain_component(
         &self,
         target_id: i64,

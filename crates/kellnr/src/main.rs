@@ -235,6 +235,9 @@ async fn run_server(resolved: ResolvedSettings) {
 
     // Initialize toolchain storage if enabled
     let toolchain_storage = init_toolchain_storage(&settings);
+    if settings.toolchain.enabled {
+        fail_interrupted_toolchain_targets(db.as_ref()).await;
+    }
 
     // Initialize OAuth2/OIDC handler if enabled
     let oauth2_handler = init_oauth2_handler(&settings).await.unwrap_or_else(|e| {
@@ -535,6 +538,17 @@ fn init_toolchain_storage(settings: &Arc<Settings>) -> Option<Arc<ToolchainStora
     let toolchain_storage = ToolchainStorage::new(storage);
 
     Some(Arc::new(toolchain_storage))
+}
+
+/// Targets still "processing" at startup were interrupted by a restart and
+/// would never become ready. Another instance that is still processing one of
+/// them sets its final status when it is done.
+async fn fail_interrupted_toolchain_targets(db: &dyn DbProvider) {
+    match db.fail_processing_toolchain_targets().await {
+        Ok(0) => {}
+        Ok(n) => warn!("Marked {n} toolchain target(s) interrupted during processing as failed"),
+        Err(e) => error!("Failed to mark interrupted toolchain targets as failed: {e}"),
+    }
 }
 
 async fn init_oauth2_handler(
