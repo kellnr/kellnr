@@ -28,8 +28,12 @@ pub struct Registry {
     #[arg(long = "registry-session-age")]
     pub session_age_seconds: u64,
 
-    /// Cache size
+    /// Max number of crates in the in-memory crate cache (0 = disabled)
     pub cache_size: u64,
+
+    /// Max total size of the in-memory crate cache in MB (0 = no size limit,
+    /// only `cache_size` applies)
+    pub cache_max_size: u64,
 
     /// Max crate size in MB
     pub max_crate_size: u64,
@@ -115,6 +119,7 @@ impl Default for Registry {
             data_dir: default_data_dir(),
             session_age_seconds: 60 * 60 * 8,
             cache_size: 1000,
+            cache_max_size: 0,
             max_crate_size: 10,
             max_db_connections: 0,
             auth_required: false,

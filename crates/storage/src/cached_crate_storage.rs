@@ -4,7 +4,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
-use kellnr_settings::Settings;
+use kellnr_settings::{Registry, Settings};
 use moka::future::Cache;
 
 use crate::storage::Storage;
@@ -21,20 +21,10 @@ pub struct CachedCrateStorage {
 
 impl CachedCrateStorage {
     pub fn new(settings: &Settings, storage: DynStorage) -> Self {
-        let cache = if settings.registry.cache_size > 0 {
-            Some(
-                Cache::builder()
-                    .max_capacity(settings.registry.cache_size)
-                    .build(),
-            )
-        } else {
-            None
-        };
-
         Self {
             doc_queue_path: settings.doc_queue_path(),
             storage,
-            cache,
+            cache: build_cache(&settings.registry),
         }
     }
 
@@ -127,6 +117,30 @@ impl CachedCrateStorage {
         let file_name = Self::file_name(name, version);
         self.storage.exists(&file_name).await
     }
+}
+
+/// A cache for at most `cache_size` crates and, if `cache_max_size` is set,
+/// at most `cache_max_size` MB.
+fn build_cache(registry: &Registry) -> Option<CrateCache> {
+    if registry.cache_size == 0 {
+        return None;
+    }
+    if registry.cache_max_size == 0 {
+        return Some(Cache::builder().max_capacity(registry.cache_size).build());
+    }
+    let max_bytes = registry.cache_max_size.saturating_mul(1_000_000);
+    // Every crate weighs at least its share of the size limit, so the cache
+    // also never holds more than `cache_size` crates.
+    let min_weight = max_bytes.div_ceil(registry.cache_size);
+    Some(
+        Cache::builder()
+            .max_capacity(max_bytes)
+            .weigher(move |_key, value: &Bytes| {
+                let weight = (value.len() as u64).max(min_weight);
+                u32::try_from(weight).unwrap_or(u32::MAX)
+            })
+            .build(),
+    )
 }
 
 #[cfg(test)]
@@ -269,13 +283,66 @@ mod tests {
 
     fn test_settings(cache_size: u64) -> Settings {
         Settings {
-            registry: kellnr_settings::Registry {
+            registry: Registry {
                 data_dir: "/tmp/kellnr-test-cache".to_string(),
                 cache_size,
-                ..kellnr_settings::Registry::default()
+                ..Registry::default()
             },
             ..Settings::default()
         }
+    }
+
+    fn test_registry(cache_size: u64, cache_max_size: u64) -> Registry {
+        Registry {
+            cache_size,
+            cache_max_size,
+            ..Registry::default()
+        }
+    }
+
+    async fn cached_weight(cache: &CrateCache, entries: &[(&str, usize)]) -> (u64, u64) {
+        for (key, size) in entries {
+            cache
+                .insert((*key).to_string(), Bytes::from(vec![0; *size]))
+                .await;
+        }
+        cache.run_pending_tasks().await;
+        let bytes = cache.iter().map(|(_, v)| v.len() as u64).sum();
+        (cache.entry_count(), bytes)
+    }
+
+    #[tokio::test]
+    async fn cache_without_max_size_limits_the_number_of_crates() {
+        let cache = build_cache(&test_registry(2, 0)).unwrap();
+
+        let (count, _) = cached_weight(&cache, &[("a", 10), ("b", 10), ("c", 10)]).await;
+
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn cache_with_max_size_limits_the_total_size() {
+        let cache = build_cache(&test_registry(100, 1)).unwrap();
+
+        let (count, bytes) =
+            cached_weight(&cache, &[("a", 400_000), ("b", 400_000), ("c", 400_000)]).await;
+
+        assert_eq!(count, 2);
+        assert!(bytes <= 1_000_000, "{bytes}");
+    }
+
+    #[tokio::test]
+    async fn cache_with_max_size_still_limits_the_number_of_crates() {
+        let cache = build_cache(&test_registry(2, 1)).unwrap();
+
+        let (count, _) = cached_weight(&cache, &[("a", 10), ("b", 10), ("c", 10)]).await;
+
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn cache_is_disabled_with_size_zero() {
+        assert!(build_cache(&test_registry(0, 1)).is_none());
     }
 
     fn name(s: &str) -> OriginalName {
