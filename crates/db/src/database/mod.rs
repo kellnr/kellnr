@@ -2265,6 +2265,9 @@ impl DbProvider for Database {
             if let Some(last_updated) = last_updated {
                 krate.last_updated = Set(last_updated);
             }
+            if let Some(description) = description {
+                krate.description = Set(Some(description));
+            }
             krate.max_version = Set(max_version.into_inner());
             krate.update(&txn).await?
         } else {

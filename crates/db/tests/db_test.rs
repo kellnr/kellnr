@@ -4683,6 +4683,25 @@ async fn crate_overview_sorts_cached_crates_by_their_last_modified_date(
 }
 
 #[db_test]
+async fn cratesio_prefetch_updates_description_of_cached_crate(test_db: &kellnr_db::Database) {
+    let description = |overview: Vec<CrateOverview>| overview[0].description.clone();
+    add_cached(test_db, "cached", "", None).await;
+
+    add_cached(test_db, "cached", "", Some("new description")).await;
+    assert_eq!(
+        Some("new description".to_string()),
+        description(cached_overview(test_db, CrateSort::Name).await)
+    );
+
+    // A sync without a description, e.g. as the API call failed, keeps it
+    add_cached(test_db, "cached", "", None).await;
+    assert_eq!(
+        Some("new description".to_string()),
+        description(cached_overview(test_db, CrateSort::Name).await)
+    );
+}
+
+#[db_test]
 async fn migration_sets_date_of_cached_crates(test_db: &kellnr_db::Database) {
     add_cached(test_db, "newer", "Thu, 01 Oct 2026 12:34:56 GMT", None).await;
     add_cached(test_db, "invalid", "last_modified", None).await;
