@@ -161,6 +161,14 @@ async fn run_server(resolved: ResolvedSettings) {
     init_tracing(&settings);
 
     info!("Starting kellnr");
+    for warning in settings
+        .oauth2
+        .warnings()
+        .into_iter()
+        .chain(settings.proxy.warnings())
+    {
+        warn!("{warning}");
+    }
 
     // Ensure the data directory exists, if not create it
     create_dir_all(&settings.registry.data_dir)

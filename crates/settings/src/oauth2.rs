@@ -46,13 +46,15 @@ pub struct OAuth2 {
     /// Automatically create local user accounts for new `OAuth2` users
     pub auto_provision_users: bool,
 
-    /// Claim name to check for admin group membership (e.g., "groups")
+    /// Claim name to check for admin group membership (e.g., "groups"),
+    /// requires `admin_group_value`
     pub admin_group_claim: Option<String>,
 
     /// Value in the admin group claim that grants admin privileges (e.g., "kellnr-admins")
     pub admin_group_value: Option<String>,
 
-    /// Claim name to check for read-only group membership (e.g., "groups")
+    /// Claim name to check for read-only group membership (e.g., "groups"),
+    /// requires `read_only_group_value`
     pub read_only_group_claim: Option<String>,
 
     /// Value in the read-only group claim that grants read-only access (e.g., "kellnr-readonly")
@@ -109,16 +111,18 @@ impl OAuth2 {
             return Ok(());
         }
 
-        if self.issuer_url.is_none() {
+        if is_unset(self.issuer_url.as_ref()) {
             return Err("OAuth2 is enabled but issuer_url is not set".to_string());
         }
 
-        if self.client_id.is_none() {
+        if is_unset(self.client_id.as_ref()) {
             return Err("OAuth2 is enabled but client_id is not set".to_string());
         }
 
         // client_secret may be optional for public clients using PKCE,
-        // but we require it for confidential clients (default use case)
+        // but we require it for confidential clients (default use case).
+        // An empty secret is accepted, as some providers ignore it for
+        // public clients.
         if self.client_secret.is_none() {
             return Err("OAuth2 is enabled but client_secret is not set. \
                 Set it via KELLNR_OAUTH2__CLIENT_SECRET environment variable"
@@ -135,6 +139,35 @@ impl OAuth2 {
 
         Ok(())
     }
+
+    /// Configuration that is accepted but most likely a mistake, for
+    /// example a group claim without its value, which grants nothing.
+    pub fn warnings(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+        if !self.enabled {
+            return warnings;
+        }
+        if self.admin_group_claim.is_some() != self.admin_group_value.is_some() {
+            warnings.push(
+                "OAuth2 admin_group_claim and admin_group_value must be set together, \
+                 admin status is not synced from the provider"
+                    .to_string(),
+            );
+        }
+        if self.read_only_group_claim.is_some() != self.read_only_group_value.is_some() {
+            warnings.push(
+                "OAuth2 read_only_group_claim and read_only_group_value must be set \
+                 together, read-only status is not synced from the provider"
+                    .to_string(),
+            );
+        }
+        warnings
+    }
+}
+
+/// Whether a required setting is missing or empty.
+fn is_unset(value: Option<&String>) -> bool {
+    value.is_none_or(|v| v.trim().is_empty())
 }
 
 #[cfg(test)]
@@ -208,6 +241,81 @@ mod tests {
             ..Default::default()
         };
         assert!(oauth2.validate().is_ok());
+    }
+
+    fn enabled() -> OAuth2 {
+        OAuth2 {
+            enabled: true,
+            issuer_url: Some("https://example.com".to_string()),
+            client_id: Some("client-id".to_string()),
+            client_secret: Some("client-secret".to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_validate_empty_required_values() {
+        for oauth2 in [
+            OAuth2 {
+                issuer_url: Some(String::new()),
+                ..enabled()
+            },
+            OAuth2 {
+                client_id: Some(" ".to_string()),
+                ..enabled()
+            },
+        ] {
+            assert!(oauth2.validate().unwrap_err().contains("not set"));
+        }
+    }
+
+    #[test]
+    fn test_validate_accepts_empty_client_secret() {
+        let oauth2 = OAuth2 {
+            client_secret: Some(String::new()),
+            ..enabled()
+        };
+        assert!(oauth2.validate().is_ok());
+    }
+
+    #[test]
+    fn test_warnings_for_half_configured_group_claims() {
+        for oauth2 in [
+            OAuth2 {
+                admin_group_claim: Some("groups".to_string()),
+                ..enabled()
+            },
+            OAuth2 {
+                admin_group_value: Some("admins".to_string()),
+                ..enabled()
+            },
+            OAuth2 {
+                read_only_group_claim: Some("groups".to_string()),
+                ..enabled()
+            },
+            OAuth2 {
+                read_only_group_value: Some("readers".to_string()),
+                ..enabled()
+            },
+        ] {
+            assert!(oauth2.validate().is_ok());
+            let warnings = oauth2.warnings();
+            assert_eq!(1, warnings.len());
+            assert!(warnings[0].contains("set together"));
+        }
+    }
+
+    #[test]
+    fn test_validate_complete_group_claims() {
+        let oauth2 = OAuth2 {
+            admin_group_claim: Some("groups".to_string()),
+            admin_group_value: Some("admins".to_string()),
+            read_only_group_claim: Some("groups".to_string()),
+            read_only_group_value: Some("readers".to_string()),
+            ..enabled()
+        };
+        assert!(oauth2.validate().is_ok());
+        assert!(oauth2.warnings().is_empty());
     }
 
     #[test]
