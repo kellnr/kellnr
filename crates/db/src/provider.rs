@@ -545,6 +545,13 @@ pub trait DbProvider: Send + Sync {
 
     /// Get all channels with their current versions
     async fn get_channels(&self) -> DbResult<Vec<ChannelInfo>>;
+
+    /// The name a crate was first published with, or `None` if the crate
+    /// does not exist. Crate files are stored under this name.
+    async fn get_original_name(
+        &self,
+        crate_name: &NormalizedName,
+    ) -> DbResult<Option<OriginalName>>;
 }
 
 pub mod mock {
@@ -1084,6 +1091,10 @@ pub mod mock {
             }
 
             async fn get_channels(&self) -> DbResult<Vec<ChannelInfo>> {
+                unimplemented!()
+            }
+
+            async fn get_original_name(&self, crate_name: &NormalizedName) -> DbResult<Option<OriginalName>> {
                 unimplemented!()
             }
         }

@@ -35,6 +35,7 @@ tracing.workspace = true
 urlencoding = "2"
 
 [dev-dependencies]
+async-trait.workspace = true
 bytes.workspace = true
 flume.workspace = true
 hyper.workspace = true

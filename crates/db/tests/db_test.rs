@@ -5319,3 +5319,33 @@ async fn prefetch_data_puts_new_feature_syntax_into_features2(test_db: &kellnr_d
     );
     assert_eq!(Some(2), index.v);
 }
+
+#[db_test]
+async fn get_original_name_returns_the_published_spelling(test_db: &kellnr_db::Database) {
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("My_Crate", "1.0.0"),
+            "cksum",
+            1,
+            &Utc::now(),
+            "admin",
+            None,
+        )
+        .await
+        .unwrap();
+
+    let name = test_db
+        .get_original_name(&NormalizedName::from_unchecked("my_crate".to_string()))
+        .await
+        .unwrap();
+    let missing = test_db
+        .get_original_name(&NormalizedName::from_unchecked("other".to_string()))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        Some("My_Crate".to_string()),
+        name.map(OriginalName::into_inner)
+    );
+    assert_eq!(None, missing);
+}

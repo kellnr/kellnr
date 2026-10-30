@@ -4544,6 +4544,7 @@ dependencies = [
 name = "kellnr-web-ui"
 version = "6.13.0"
 dependencies = [
+ "async-trait",
  "axum",
  "axum-extra",
  "bytes",
