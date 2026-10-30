@@ -4,7 +4,7 @@
 //! specific operations. Used by the Database impl to keep the main module
 //! focused on the `DbProvider` trait implementation.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use kellnr_common::crate_data::CRATESIO_INDEX;
 use kellnr_common::crate_dependents::LocalDependency;
@@ -49,58 +49,78 @@ where
     C: ConnectionTrait,
     D: Iterator<Item = &'a IndexDep>,
 {
-    let mut cratesio_names = Vec::new();
-    let mut names = Vec::new();
+    let mut cratesio_names = HashSet::new();
+    let mut names = HashSet::new();
 
     for dep in deps {
         match dep.registry.as_ref() {
             Some(r) if r == CRATESIO_INDEX => {
-                cratesio_names.push(dep_lookup_name(dep));
+                cratesio_names.insert(dep_lookup_name(dep));
             }
-            _ => names.push(dep_lookup_name(dep)),
+            _ => {
+                names.insert(dep_lookup_name(dep));
+            }
         }
     }
+    let cratesio_names: Vec<String> = cratesio_names.into_iter().collect();
+    let names: Vec<String> = names.into_iter().collect();
 
     let mut info: HashMap<String, DepInfo> = HashMap::new();
+    let mut cratesio_crates: Vec<(String, Option<String>)> = Vec::new();
+    let mut cratesio_versions: Vec<(String, String)> = Vec::new();
+    let mut crates: Vec<(String, Option<String>)> = Vec::new();
+    let mut versions: Vec<(String, String)> = Vec::new();
 
-    let cratesio_crates: Vec<(String, Option<String>)> = cratesio_crate::Entity::find()
-        .select_only()
-        .columns([
-            cratesio_crate::Column::Name,
-            cratesio_crate::Column::Description,
-        ])
-        .filter(cratesio_crate::Column::Name.is_in(&cratesio_names))
-        .into_tuple()
-        .all(db_con)
-        .await?;
-    let cratesio_versions: Vec<(String, String)> = cratesio_index::Entity::find()
-        .select_only()
-        .column(cratesio_crate::Column::Name)
-        .column(cratesio_index::Column::Vers)
-        .inner_join(cratesio_crate::Entity)
-        .filter(cratesio_crate::Column::Name.is_in(&cratesio_names))
-        .filter(cratesio_index::Column::Yanked.eq(false))
-        .into_tuple()
-        .all(db_con)
-        .await?;
-
-    let crates: Vec<(String, Option<String>)> = krate::Entity::find()
-        .select_only()
-        .columns([krate::Column::Name, krate::Column::Description])
-        .filter(krate::Column::Name.is_in(&names))
-        .into_tuple()
-        .all(db_con)
-        .await?;
-    let versions: Vec<(String, String)> = crate_index::Entity::find()
-        .select_only()
-        .column(krate::Column::Name)
-        .column(crate_index::Column::Vers)
-        .inner_join(krate::Entity)
-        .filter(krate::Column::Name.is_in(&names))
-        .filter(crate_index::Column::Yanked.eq(false))
-        .into_tuple()
-        .all(db_con)
-        .await?;
+    // Chunked to stay below the bind parameter limit of SQLite
+    for chunk in cratesio_names.chunks(1000) {
+        cratesio_crates.extend(
+            cratesio_crate::Entity::find()
+                .select_only()
+                .columns([
+                    cratesio_crate::Column::Name,
+                    cratesio_crate::Column::Description,
+                ])
+                .filter(cratesio_crate::Column::Name.is_in(chunk))
+                .into_tuple::<(String, Option<String>)>()
+                .all(db_con)
+                .await?,
+        );
+        cratesio_versions.extend(
+            cratesio_index::Entity::find()
+                .select_only()
+                .column(cratesio_crate::Column::Name)
+                .column(cratesio_index::Column::Vers)
+                .inner_join(cratesio_crate::Entity)
+                .filter(cratesio_crate::Column::Name.is_in(chunk))
+                .filter(cratesio_index::Column::Yanked.eq(false))
+                .into_tuple::<(String, String)>()
+                .all(db_con)
+                .await?,
+        );
+    }
+    for chunk in names.chunks(1000) {
+        crates.extend(
+            krate::Entity::find()
+                .select_only()
+                .columns([krate::Column::Name, krate::Column::Description])
+                .filter(krate::Column::Name.is_in(chunk))
+                .into_tuple::<(String, Option<String>)>()
+                .all(db_con)
+                .await?,
+        );
+        versions.extend(
+            crate_index::Entity::find()
+                .select_only()
+                .column(krate::Column::Name)
+                .column(crate_index::Column::Vers)
+                .inner_join(krate::Entity)
+                .filter(krate::Column::Name.is_in(chunk))
+                .filter(crate_index::Column::Yanked.eq(false))
+                .into_tuple::<(String, String)>()
+                .all(db_con)
+                .await?,
+        );
+    }
 
     for (name, description) in cratesio_crates.into_iter().chain(crates) {
         info.entry(name).or_default().description = description;
