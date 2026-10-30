@@ -12,6 +12,16 @@ use crate::types::WebhookError;
 const MAX_CONCURRENT_DELIVERIES: usize = 8;
 
 pub fn run_webhook_service(db: Arc<dyn DbProvider>, settings: &Webhooks) {
+    let proxy_in_env = ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"]
+        .iter()
+        .any(|var| std::env::var_os(var).is_some());
+    if settings.block_private_targets && !settings.ignore_env_proxy && proxy_in_env {
+        tracing::warn!(
+            "Webhooks are sent through the proxy from the environment, so only the proxy's \
+             address is checked against the blocked targets. Set webhooks.ignore_env_proxy \
+             to connect directly."
+        );
+    }
     let http_client = match WebhookClient::new(settings) {
         Ok(client) => client,
         Err(err) => {
