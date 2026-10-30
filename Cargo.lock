@@ -4533,6 +4533,7 @@ dependencies = [
  "kellnr-settings",
  "moka",
  "object_store",
+ "percent-encoding",
  "sha256",
  "tempfile",
  "testcontainers",

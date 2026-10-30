@@ -4,10 +4,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::StreamExt;
 use object_store::local::LocalFileSystem;
-use object_store::path::Path;
 use object_store::{ObjectStore, ObjectStoreExt, PutMode};
 
-use crate::storage::{ObjectWithMeta, Storage};
+use crate::storage::{ObjectWithMeta, Storage, object_key, object_path};
 use crate::storage_error::StorageError;
 
 pub struct FSStorage(LocalFileSystem);
@@ -16,7 +15,7 @@ pub struct FSStorage(LocalFileSystem);
 impl Storage for FSStorage {
     async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
         self.storage()
-            .get(&Path::from(key))
+            .get(&object_path(key))
             .await?
             .bytes()
             .await
@@ -24,7 +23,7 @@ impl Storage for FSStorage {
     }
 
     async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
-        let result = self.storage().get(&Path::from(key)).await?;
+        let result = self.storage().get(&object_path(key)).await?;
         let e_tag = result.meta.e_tag.clone();
         let last_modified = result.meta.last_modified;
         let bytes = result.bytes().await?;
@@ -37,26 +36,26 @@ impl Storage for FSStorage {
 
     async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
         self.storage()
-            .put_opts(&Path::from(key), object.into(), PutMode::Create.into())
+            .put_opts(&object_path(key), object.into(), PutMode::Create.into())
             .await?;
         Ok(())
     }
 
     async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
         self.storage()
-            .put_opts(&Path::from(key), object.into(), PutMode::Overwrite.into())
+            .put_opts(&object_path(key), object.into(), PutMode::Overwrite.into())
             .await?;
         Ok(())
     }
 
     async fn delete(&self, key: &str) -> Result<(), StorageError> {
-        self.storage().delete(&Path::from(key)).await?;
+        self.storage().delete(&object_path(key)).await?;
         Ok(())
     }
 
     async fn exists(&self, key: &str) -> Result<bool, StorageError> {
         self.storage()
-            .head(&Path::from(key))
+            .head(&object_path(key))
             .await
             .map(|_| true)
             .or_else(|e| match e {
@@ -66,19 +65,19 @@ impl Storage for FSStorage {
     }
 
     async fn size(&self, key: &str) -> Result<u64, StorageError> {
-        Ok(self.storage().head(&Path::from(key)).await?.size)
+        Ok(self.storage().head(&object_path(key)).await?.size)
     }
 
     async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
         let prefix = if prefix.is_empty() {
             None
         } else {
-            Some(Path::from(prefix))
+            Some(object_path(prefix))
         };
         let mut stream = self.storage().list(prefix.as_ref());
         let mut keys = Vec::new();
         while let Some(meta) = stream.next().await {
-            keys.push(meta?.location.to_string());
+            keys.push(object_key(&meta?.location));
         }
         Ok(keys)
     }

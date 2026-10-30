@@ -144,3 +144,26 @@ async fn get_with_meta_returns_bytes_etag_and_last_modified() {
     assert!(object.e_tag.is_some());
     assert!(object.last_modified <= chrono::Utc::now());
 }
+
+#[rustfs_testcontainer]
+#[tokio::test]
+async fn docs_list_returns_keys_with_special_characters_as_stored() {
+    let host = container.get_host().await.unwrap().to_string();
+    let url = format!("http://{host}:{port}");
+    let docs = test_docs_storage("test_docs_special_characters", &url);
+    let keys = [
+        "my-crate/a~b.html",
+        "my-crate/x%20y.html",
+        "my-crate/x y.html",
+    ];
+    for key in keys {
+        docs.put(key, bytes::Bytes::from(key)).await.unwrap();
+    }
+
+    let mut listed = docs.list("my-crate/").await.unwrap();
+    listed.sort_unstable();
+
+    let mut expected = keys.map(String::from).to_vec();
+    expected.sort_unstable();
+    assert_eq!(listed, expected);
+}

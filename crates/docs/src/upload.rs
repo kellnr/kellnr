@@ -160,6 +160,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn upload_keeps_files_with_special_characters() {
+        let (_storage_dir, docs) = docs_storage();
+        let local = tempfile::tempdir().unwrap();
+        for file in ["a~b.html", "x%20y.html"] {
+            tokio::fs::write(local.path().join(file), file)
+                .await
+                .unwrap();
+        }
+
+        upload_dir_and_prune(local.path(), "", "my-crate", "1.0.0", &docs)
+            .await
+            .unwrap();
+
+        for file in ["a~b.html", "x%20y.html"] {
+            let key = DocsStorage::file_key("my-crate", "1.0.0", file);
+            assert_eq!(docs.get(&key).await.unwrap(), Bytes::from(file), "{file}");
+        }
+    }
+
+    #[tokio::test]
     async fn upload_leaves_other_versions_untouched() {
         let (_storage_dir, docs) = docs_storage();
         let other_version_key = DocsStorage::file_key("my-crate", "2.0.0", "index.html");

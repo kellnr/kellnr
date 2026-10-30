@@ -5,10 +5,9 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use kellnr_settings::Settings;
 use object_store::aws::{AmazonS3, AmazonS3Builder};
-use object_store::path::Path;
 use object_store::{ClientOptions, ObjectStore, ObjectStoreExt, PutMode};
 
-use crate::storage::{ObjectWithMeta, Storage};
+use crate::storage::{ObjectWithMeta, Storage, object_key, object_path};
 use crate::storage_error::StorageError;
 
 pub struct S3Storage(AmazonS3);
@@ -17,7 +16,7 @@ pub struct S3Storage(AmazonS3);
 impl Storage for S3Storage {
     async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
         self.storage()
-            .get(&Self::try_path_from(key)?)
+            .get(&object_path(key))
             .await?
             .bytes()
             .await
@@ -25,7 +24,7 @@ impl Storage for S3Storage {
     }
 
     async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
-        let result = self.storage().get(&Self::try_path_from(key)?).await?;
+        let result = self.storage().get(&object_path(key)).await?;
         let e_tag = result.meta.e_tag.clone();
         let last_modified = result.meta.last_modified;
         let bytes = result.bytes().await?;
@@ -38,34 +37,26 @@ impl Storage for S3Storage {
 
     async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
         self.storage()
-            .put_opts(
-                &Self::try_path_from(key)?,
-                object.into(),
-                PutMode::Create.into(),
-            )
+            .put_opts(&object_path(key), object.into(), PutMode::Create.into())
             .await?;
         Ok(())
     }
 
     async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
         self.storage()
-            .put_opts(
-                &Self::try_path_from(key)?,
-                object.into(),
-                PutMode::Overwrite.into(),
-            )
+            .put_opts(&object_path(key), object.into(), PutMode::Overwrite.into())
             .await?;
         Ok(())
     }
 
     async fn delete(&self, key: &str) -> Result<(), StorageError> {
-        let path = Self::try_path_from(key)?;
+        let path = object_path(key);
         self.storage().delete(&path).await?;
         Ok(())
     }
 
     async fn exists(&self, key: &str) -> Result<bool, StorageError> {
-        let path = Self::try_path_from(key)?;
+        let path = object_path(key);
         self.storage()
             .head(&path)
             .await
@@ -77,7 +68,7 @@ impl Storage for S3Storage {
     }
 
     async fn size(&self, key: &str) -> Result<u64, StorageError> {
-        let path = Self::try_path_from(key)?;
+        let path = object_path(key);
         Ok(self.storage().head(&path).await?.size)
     }
 
@@ -85,22 +76,18 @@ impl Storage for S3Storage {
         let prefix = if prefix.is_empty() {
             None
         } else {
-            Some(Self::try_path_from(prefix)?)
+            Some(object_path(prefix))
         };
         let mut stream = self.storage().list(prefix.as_ref());
         let mut keys = Vec::new();
         while let Some(meta) = stream.next().await {
-            keys.push(meta?.location.to_string());
+            keys.push(object_key(&meta?.location));
         }
         Ok(keys)
     }
 }
 
 impl S3Storage {
-    fn try_path_from(key: &str) -> Result<Path, object_store::path::Error> {
-        Path::from_url_path(key)
-    }
-
     fn storage(&self) -> &AmazonS3 {
         &self.0
     }
