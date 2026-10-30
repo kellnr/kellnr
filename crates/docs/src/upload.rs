@@ -3,9 +3,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
 use bytes::Bytes;
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::version::Version;
-use kellnr_storage::docs_storage::DocsStorage;
+use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 
 use crate::docs_error::DocsError;
 
@@ -41,7 +40,7 @@ fn version_lock(prefix: &str) -> VersionLock {
 pub async fn upload_dir_and_prune(
     local_root: &Path,
     key_prefix: &str,
-    crate_name: &NormalizedName,
+    crate_name: &DocsName,
     version: &Version,
     docs_storage: &DocsStorage,
 ) -> Result<(), DocsError> {
@@ -138,7 +137,7 @@ mod tests {
         upload_dir_and_prune(
             local.path(),
             "",
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from_folder("my-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             &docs,
         )
@@ -147,7 +146,7 @@ mod tests {
 
         assert_eq!(
             docs.get(&DocsStorage::file_key(
-                &NormalizedName::from_unchecked_str("my-crate"),
+                &DocsName::from_folder("my-crate".to_string()),
                 &Version::from_unchecked_str("1.0.0"),
                 "index.html"
             ))
@@ -157,7 +156,7 @@ mod tests {
         );
         assert_eq!(
             docs.get(&DocsStorage::file_key(
-                &NormalizedName::from_unchecked_str("my-crate"),
+                &DocsName::from_folder("my-crate".to_string()),
                 &Version::from_unchecked_str("1.0.0"),
                 "nested/page.html"
             ))
@@ -171,7 +170,7 @@ mod tests {
     async fn upload_prunes_stale_keys_from_previous_build() {
         let (_storage_dir, docs) = docs_storage();
         let stale_key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from_folder("my-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             "removed.html",
         );
@@ -187,7 +186,7 @@ mod tests {
         upload_dir_and_prune(
             local.path(),
             "",
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from_folder("my-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             &docs,
         )
@@ -197,7 +196,7 @@ mod tests {
         assert!(!docs.exists(&stale_key).await.unwrap());
         assert!(
             docs.exists(&DocsStorage::file_key(
-                &NormalizedName::from_unchecked_str("my-crate"),
+                &DocsName::from_folder("my-crate".to_string()),
                 &Version::from_unchecked_str("1.0.0"),
                 "index.html"
             ))
@@ -219,7 +218,7 @@ mod tests {
         upload_dir_and_prune(
             local.path(),
             "",
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from_folder("my-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             &docs,
         )
@@ -228,7 +227,7 @@ mod tests {
 
         for file in ["a~b.html", "x%20y.html"] {
             let key = DocsStorage::file_key(
-                &NormalizedName::from_unchecked_str("my-crate"),
+                &DocsName::from_folder("my-crate".to_string()),
                 &Version::from_unchecked_str("1.0.0"),
                 file,
             );
@@ -248,7 +247,7 @@ mod tests {
     async fn concurrent_uploads_of_one_version_keep_the_files_of_one_upload() {
         let (_storage_dir, docs) = docs_storage();
         let docs = Arc::new(docs);
-        let name = NormalizedName::from_unchecked_str("my-crate");
+        let name = DocsName::from_folder("my-crate".to_string());
         let version = Version::from_unchecked_str("1.0.0");
         let first = local_docs("a", 20);
         let second = local_docs("b", 20);
@@ -284,7 +283,7 @@ mod tests {
     async fn upload_leaves_other_versions_untouched() {
         let (_storage_dir, docs) = docs_storage();
         let other_version_key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from_folder("my-crate".to_string()),
             &Version::from_unchecked_str("2.0.0"),
             "index.html",
         );
@@ -300,7 +299,7 @@ mod tests {
         upload_dir_and_prune(
             local.path(),
             "",
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from_folder("my-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             &docs,
         )
@@ -321,7 +320,7 @@ mod tests {
         upload_dir_and_prune(
             local.path(),
             "doc",
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from_folder("my-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             &docs,
         )
@@ -330,7 +329,7 @@ mod tests {
 
         assert_eq!(
             docs.get(&DocsStorage::file_key(
-                &NormalizedName::from_unchecked_str("my-crate"),
+                &DocsName::from_folder("my-crate".to_string()),
                 &Version::from_unchecked_str("1.0.0"),
                 "doc/index.html"
             ))
@@ -363,7 +362,7 @@ mod tests {
         upload_dir_and_prune(
             local.path(),
             "",
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from_folder("my-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             &docs,
         )
@@ -372,7 +371,7 @@ mod tests {
 
         let keys = docs
             .list(&DocsStorage::version_prefix(
-                &NormalizedName::from_unchecked_str("my-crate"),
+                &DocsName::from_folder("my-crate".to_string()),
                 &Version::from_unchecked_str("1.0.0"),
             ))
             .await
@@ -380,7 +379,7 @@ mod tests {
         assert_eq!(
             keys,
             vec![DocsStorage::file_key(
-                &NormalizedName::from_unchecked_str("my-crate"),
+                &DocsName::from_folder("my-crate".to_string()),
                 &Version::from_unchecked_str("1.0.0"),
                 "index.html"
             )]
@@ -402,7 +401,7 @@ mod tests {
         let result = upload_dir_and_prune(
             &root,
             "",
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from_folder("my-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             &docs,
         )

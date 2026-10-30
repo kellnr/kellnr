@@ -2,11 +2,11 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::license::UNKNOWN_LICENSE;
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::{PublishMetadata, RegistryDep};
@@ -141,28 +141,28 @@ async fn get_total_downloads_returns_number_of_total_downloads(test_db: &kellnr_
     .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate1"),
+            &CanonicalName::try_from("crate1").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate1"),
+            &CanonicalName::try_from("crate1").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate1"),
+            &CanonicalName::try_from("crate1").unwrap(),
             &Version::from_unchecked_str("2.0.0"),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate2"),
+            &CanonicalName::try_from("crate2").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
@@ -198,14 +198,14 @@ async fn get_top_crates_downloads_returns_top_crates_with_downloads(test_db: &ke
 
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("mycrate"),
+            &CanonicalName::try_from("mycrate").unwrap(),
             &Version::from_unchecked_str("0.1.0"),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("mycrate"),
+            &CanonicalName::try_from("mycrate").unwrap(),
             &Version::from_unchecked_str("0.1.0"),
         )
         .await
@@ -272,42 +272,42 @@ async fn increase_download_counter_works(test_db: &kellnr_db::Database) {
 
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate1"),
+            &CanonicalName::try_from("crate1").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate1"),
+            &CanonicalName::try_from("crate1").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate1"),
+            &CanonicalName::try_from("crate1").unwrap(),
             &Version::from_unchecked_str("2.0.0"),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate2"),
+            &CanonicalName::try_from("crate2").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate3"),
+            &CanonicalName::try_from("crate3").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
-            &NormalizedName::from_unchecked_str("crate3"),
+            &CanonicalName::try_from("crate3").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
@@ -393,7 +393,7 @@ async fn get_max_version_from_name(test_db: &kellnr_db::Database) {
     .unwrap();
 
     let version = test_db
-        .get_max_version_from_name(&NormalizedName::from_unchecked("acrate".to_string()))
+        .get_max_version_from_name(&CanonicalName::try_from("acrate").unwrap())
         .await
         .unwrap();
 
@@ -515,7 +515,7 @@ async fn get_crate_versions_returns_all_versions(test_db: &kellnr_db::Database) 
     .unwrap();
 
     let versions = test_db
-        .get_crate_versions(&NormalizedName::from_unchecked_str("crate1"))
+        .get_crate_versions(&CanonicalName::try_from("crate1").unwrap())
         .await
         .unwrap();
 
@@ -551,14 +551,14 @@ async fn get_crate_versions_with_yanked_version(test_db: &kellnr_db::Database) {
     // Yank crate version 2.0.0
     test_db
         .yank_crate(
-            &NormalizedName::from_unchecked_str("crate"),
+            &CanonicalName::try_from("crate").unwrap(),
             &Version::from_unchecked_str("2.0.0"),
         )
         .await
         .unwrap();
 
     let versions = test_db
-        .get_crate_versions(&NormalizedName::from_unchecked_str("crate"))
+        .get_crate_versions(&CanonicalName::try_from("crate").unwrap())
         .await
         .unwrap();
 
@@ -572,7 +572,7 @@ async fn get_crate_versions_with_yanked_version(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_crate_versions_for_nonexistant_crate(test_db: &kellnr_db::Database) {
     let outcome = test_db
-        .get_crate_versions(&NormalizedName::from_unchecked_str("crate1"))
+        .get_crate_versions(&CanonicalName::try_from("crate1").unwrap())
         .await
         .unwrap();
 
@@ -626,10 +626,7 @@ async fn is_owner_true(test_db: &kellnr_db::Database) {
 
     assert!(
         test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "admin"
-            )
+            .is_owner(&CanonicalName::try_from("mycrate").unwrap(), "admin")
             .await
             .unwrap()
     );
@@ -649,10 +646,7 @@ async fn is_owner_false(test_db: &kellnr_db::Database) {
 
     assert!(
         !test_db
-            .is_owner(
-                &NormalizedName::from_unchecked("mycrate".to_string()),
-                "user"
-            )
+            .is_owner(&CanonicalName::try_from("mycrate").unwrap(), "user")
             .await
             .unwrap()
     );
@@ -670,11 +664,14 @@ async fn delete_owner_valid_owner(test_db: &kellnr_db::Database) {
     .await
     .unwrap();
 
-    test_db.delete_owner("mycrate", "admin").await.unwrap();
+    test_db
+        .delete_owner(&CanonicalName::try_from("mycrate").unwrap(), "admin")
+        .await
+        .unwrap();
 
     assert!(
         test_db
-            .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+            .get_crate_owners(&CanonicalName::try_from("mycrate").unwrap())
             .await
             .is_ok()
     );
@@ -702,7 +699,7 @@ async fn test_add_crate_duplicate(test_db: &kellnr_db::Database) {
     .unwrap();
 
     let owners = test_db
-        .get_crate_owners(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .get_crate_owners(&CanonicalName::try_from("mycrate").unwrap())
         .await
         .unwrap();
     assert_eq!(1, owners.len());
@@ -732,8 +729,8 @@ async fn test_add_empty_crate(test_db: &kellnr_db::Database) {
     let created = Utc::now();
     test_db.add_empty_crate("mycrate", &created).await.unwrap();
 
-    let normalized_name = NormalizedName::from(OriginalName::try_from("mycrate").unwrap());
-    let crate_id = test_db.get_crate_id(&normalized_name).await.unwrap();
+    let canonical_name = CanonicalName::from(OriginalName::try_from("mycrate").unwrap());
+    let crate_id = test_db.get_crate_id(&canonical_name).await.unwrap();
     assert!(crate_id.is_some());
 }
 
@@ -1005,7 +1002,7 @@ async fn is_crate_group_user_works(test_db: &kellnr_db::Database) {
     )
     .await
     .unwrap();
-    let crate_name_norm = NormalizedName::from_unchecked_str("foobar");
+    let crate_name_norm = CanonicalName::try_from("foobar").unwrap();
     test_db
         .add_crate_group(&crate_name_norm, group)
         .await
@@ -1352,7 +1349,7 @@ async fn get_total_unique_crates_returns_correct_number(test_db: &kellnr_db::Dat
 async fn add_and_get_doc_queue_entries(test_db: &kellnr_db::Database) {
     test_db
         .add_doc_queue(
-            &NormalizedName::from_unchecked("my_crate".to_string()),
+            &OriginalName::try_from("My_Crate").unwrap(),
             &Version::try_from("1.0.0").unwrap(),
             &PathBuf::from("/tmp/foo"),
         )
@@ -1360,7 +1357,7 @@ async fn add_and_get_doc_queue_entries(test_db: &kellnr_db::Database) {
         .unwrap();
     test_db
         .add_doc_queue(
-            &NormalizedName::from_unchecked("my_crate2".to_string()),
+            &OriginalName::try_from("my-crate2").unwrap(),
             &Version::try_from("2.0.0").unwrap(),
             &PathBuf::from("/tmp/bar"),
         )
@@ -1372,7 +1369,7 @@ async fn add_and_get_doc_queue_entries(test_db: &kellnr_db::Database) {
     assert_eq!(
         DocQueueEntry {
             id: 1,
-            normalized_name: NormalizedName::from_unchecked("my_crate".to_string()),
+            name: "my_crate".to_string(),
             version: "1.0.0".to_string(),
             path: PathBuf::from("/tmp/foo")
         },
@@ -1382,7 +1379,7 @@ async fn add_and_get_doc_queue_entries(test_db: &kellnr_db::Database) {
     assert_eq!(
         DocQueueEntry {
             id: 2,
-            normalized_name: NormalizedName::from_unchecked("my_crate2".to_string()),
+            name: "my-crate2".to_string(),
             version: "2.0.0".to_string(),
             path: PathBuf::from("/tmp/bar")
         },
@@ -1399,7 +1396,7 @@ async fn add_doc_queue_rejects_non_utf8_path(test_db: &kellnr_db::Database) {
         let path = PathBuf::from(std::ffi::OsStr::from_bytes(b"/tmp/inv\xffalid"));
         let result = test_db
             .add_doc_queue(
-                &NormalizedName::from_unchecked("my_crate".to_string()),
+                &OriginalName::try_from("my_crate").unwrap(),
                 &Version::try_from("1.0.0").unwrap(),
                 &path,
             )
@@ -1417,7 +1414,7 @@ async fn add_doc_queue_rejects_non_utf8_path(test_db: &kellnr_db::Database) {
 async fn delete_doc_queue_entry(test_db: &kellnr_db::Database) {
     test_db
         .add_doc_queue(
-            &NormalizedName::from_unchecked("my_crate".to_string()),
+            &OriginalName::try_from("My_Crate").unwrap(),
             &Version::try_from("1.0.0").unwrap(),
             &PathBuf::from("/tmp/foo"),
         )
@@ -1425,7 +1422,7 @@ async fn delete_doc_queue_entry(test_db: &kellnr_db::Database) {
         .unwrap();
     test_db
         .add_doc_queue(
-            &NormalizedName::from_unchecked("my_crate2".to_string()),
+            &OriginalName::try_from("my-crate2").unwrap(),
             &Version::try_from("2.0.0").unwrap(),
             &PathBuf::from("/tmp/bar"),
         )
@@ -1441,7 +1438,7 @@ async fn delete_doc_queue_entry(test_db: &kellnr_db::Database) {
     assert_eq!(
         DocQueueEntry {
             id: 2,
-            normalized_name: NormalizedName::from_unchecked("my_crate2".to_string()),
+            name: "my-crate2".to_string(),
             version: "2.0.0".to_string(),
             path: PathBuf::from("/tmp/bar")
         },
@@ -1483,7 +1480,7 @@ async fn delete_crate_one_of_multiple_versions(test_db: &kellnr_db::Database) {
 
     test_db
         .delete_crate(
-            &NormalizedName::from_unchecked("crate".to_string()),
+            &CanonicalName::try_from("crate").unwrap(),
             &Version::try_from("2.0.0").unwrap(),
         )
         .await
@@ -1491,7 +1488,7 @@ async fn delete_crate_one_of_multiple_versions(test_db: &kellnr_db::Database) {
 
     let summaries = get_crate_meta_list(test_db, 1).await.unwrap();
     let krate = test_db
-        .get_crate_id(&NormalizedName::from_unchecked("crate".to_string()))
+        .get_crate_id(&CanonicalName::try_from("crate").unwrap())
         .await
         .unwrap();
     assert_eq!(3, total_versions_before);
@@ -1535,7 +1532,7 @@ async fn delete_crate_max_version(test_db: &kellnr_db::Database) {
 
     test_db
         .delete_crate(
-            &NormalizedName::from_unchecked("crate".to_string()),
+            &CanonicalName::try_from("crate").unwrap(),
             &Version::try_from("3.0.0").unwrap(),
         )
         .await
@@ -1543,7 +1540,7 @@ async fn delete_crate_max_version(test_db: &kellnr_db::Database) {
 
     let crate_metas = get_crate_meta_list(test_db, 1).await.unwrap();
     let krate = test_db
-        .get_crate_id(&NormalizedName::from_unchecked("crate".to_string()))
+        .get_crate_id(&CanonicalName::try_from("crate").unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -1572,7 +1569,7 @@ async fn delete_crate_only_versions(test_db: &kellnr_db::Database) {
 
     test_db
         .delete_crate(
-            &NormalizedName::from_unchecked("crate".to_string()),
+            &CanonicalName::try_from("crate").unwrap(),
             &Version::try_from("1.0.0").unwrap(),
         )
         .await
@@ -1580,7 +1577,7 @@ async fn delete_crate_only_versions(test_db: &kellnr_db::Database) {
 
     let summaries = get_crate_meta_list(test_db, 1).await.unwrap();
     let krate = test_db
-        .get_crate_id(&NormalizedName::from_unchecked("crate".to_string()))
+        .get_crate_id(&CanonicalName::try_from("crate").unwrap())
         .await
         .unwrap();
     assert_eq!(1, total_versions_before);
@@ -2214,7 +2211,7 @@ async fn get_crate_data_returns_size_and_rust_version(test_db: &kellnr_db::Datab
         .unwrap();
 
     let data = test_db
-        .get_crate_data(&NormalizedName::from_unchecked_str("sized"))
+        .get_crate_data(&CanonicalName::try_from("sized").unwrap())
         .await
         .unwrap();
 
@@ -2249,7 +2246,7 @@ async fn get_crate_data_returns_publisher(test_db: &kellnr_db::Database) {
         .unwrap();
 
     let data = test_db
-        .get_crate_data(&NormalizedName::from_unchecked_str("published"))
+        .get_crate_data(&CanonicalName::try_from("published").unwrap())
         .await
         .unwrap();
 
@@ -2293,7 +2290,7 @@ async fn get_crate_data_returns_latest_version_of_dependencies(test_db: &kellnr_
     // Yanked versions and pre-releases do not count as the latest version
     test_db
         .yank_crate(
-            &NormalizedName::from_unchecked_str("dep-lib"),
+            &CanonicalName::try_from("dep-lib").unwrap(),
             &Version::from_unchecked_str("3.0.0"),
         )
         .await
@@ -2327,7 +2324,7 @@ async fn get_crate_data_returns_latest_version_of_dependencies(test_db: &kellnr_
         .unwrap();
 
     let data = test_db
-        .get_crate_data(&NormalizedName::from_unchecked_str("app"))
+        .get_crate_data(&CanonicalName::try_from("app").unwrap())
         .await
         .unwrap();
     let deps = &data.versions[0].dependencies;
@@ -2531,18 +2528,19 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
     test_db
-        .add_owner(
-            &NormalizedName::from_unchecked("crate1".to_string()),
-            "owner2",
-        )
+        .add_owner(&CanonicalName::try_from("crate1").unwrap(), "owner2")
         .await
         .unwrap();
 
     let crate_data1_v1 = test_db
-        .get_crate_data(&NormalizedName::from_unchecked("crate1".to_string()))
+        .get_crate_data(&CanonicalName::try_from("crate1").unwrap())
         .await
         .unwrap();
-    let etag1_v1 = test_db.get_prefetch_data("crate1").await.unwrap().etag;
+    let etag1_v1 = test_db
+        .get_prefetch_data(&OriginalName::try_from("crate1").unwrap())
+        .await
+        .unwrap()
+        .etag;
 
     assert_eq!(
         CrateData {
@@ -2591,10 +2589,14 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
         .unwrap();
 
     let crate_data1_v2 = test_db
-        .get_crate_data(&NormalizedName::from_unchecked("crate1".to_string()))
+        .get_crate_data(&CanonicalName::try_from("crate1").unwrap())
         .await
         .unwrap();
-    let etag1_v2 = test_db.get_prefetch_data("crate1").await.unwrap().etag;
+    let etag1_v2 = test_db
+        .get_prefetch_data(&OriginalName::try_from("crate1").unwrap())
+        .await
+        .unwrap()
+        .etag;
 
     assert_eq!(
         CrateData {
@@ -2670,7 +2672,7 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
         .unwrap();
 
     let crate_data2_v1 = test_db
-        .get_crate_data(&NormalizedName::from_unchecked("crate2".to_string()))
+        .get_crate_data(&CanonicalName::try_from("crate2").unwrap())
         .await
         .unwrap();
 
@@ -2721,7 +2723,7 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
         .unwrap();
 
     let crate_data2_v2 = test_db
-        .get_crate_data(&NormalizedName::from_unchecked("crate2".to_string()))
+        .get_crate_data(&CanonicalName::try_from("crate2").unwrap())
         .await
         .unwrap();
 
@@ -2805,14 +2807,14 @@ async fn update_docs_link(test_db: &kellnr_db::Database) {
         .unwrap();
 
     let crate_before = test_db
-        .get_crate_data(&NormalizedName::from_unchecked("crate1".to_string()))
+        .get_crate_data(&CanonicalName::try_from("crate1").unwrap())
         .await
         .unwrap();
     assert_eq!(crate_before.versions[0].documentation, None);
 
     test_db
         .update_docs_link(
-            &NormalizedName::from_unchecked("crate1".to_string()),
+            &CanonicalName::try_from("crate1").unwrap(),
             &Version::try_from("1.0.0").unwrap(),
             "https://docs.rs/crate1/1.0.0/crate1/",
         )
@@ -2820,7 +2822,7 @@ async fn update_docs_link(test_db: &kellnr_db::Database) {
         .unwrap();
 
     let crate_after = test_db
-        .get_crate_data(&NormalizedName::from_unchecked("crate1".to_string()))
+        .get_crate_data(&CanonicalName::try_from("crate1").unwrap())
         .await
         .unwrap();
     assert_eq!(
@@ -2852,7 +2854,10 @@ async fn get_prefetch_data_with_minimal_data(test_db: &kellnr_db::Database) {
     .await
     .unwrap();
 
-    let prefetch_data = test_db.get_prefetch_data("crate").await.unwrap();
+    let prefetch_data = test_db
+        .get_prefetch_data(&OriginalName::try_from("crate").unwrap())
+        .await
+        .unwrap();
 
     // etag changes with pubtime (set to Utc::now()), so just verify it's not empty
     assert!(!prefetch_data.etag.is_empty());
@@ -2984,7 +2989,10 @@ async fn get_prefetch_data_with_full_data(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    let prefetch_data = test_db.get_prefetch_data("crate").await.unwrap();
+    let prefetch_data = test_db
+        .get_prefetch_data(&OriginalName::try_from("crate").unwrap())
+        .await
+        .unwrap();
 
     // data length and etag vary with pubtime (set to Utc::now()), just verify data is present
     assert!(!prefetch_data.data.is_empty());
@@ -3080,17 +3088,23 @@ async fn delete_updates_etag(test_db: &kellnr_db::Database) {
         .add_crate(&pm2, "cksum2_1", 1024, &created2, "admin", None)
         .await
         .unwrap();
-    let prefetch_data = test_db.get_prefetch_data("crate").await.unwrap();
+    let prefetch_data = test_db
+        .get_prefetch_data(&OriginalName::try_from("crate").unwrap())
+        .await
+        .unwrap();
     let etag_before = prefetch_data.etag;
 
     test_db
         .delete_crate(
-            &NormalizedName::from_unchecked("crate".to_string()),
+            &CanonicalName::try_from("crate").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
         .unwrap();
-    let prefetch_data = test_db.get_prefetch_data("crate").await.unwrap();
+    let prefetch_data = test_db
+        .get_prefetch_data(&OriginalName::try_from("crate").unwrap())
+        .await
+        .unwrap();
     let etag_after = prefetch_data.etag;
 
     assert_ne!(etag_before, etag_after);
@@ -3100,7 +3114,7 @@ async fn delete_updates_etag(test_db: &kellnr_db::Database) {
 async fn is_cratesio_cache_up_to_date_not_found(test_db: &kellnr_db::Database) {
     let prefetch_state = test_db
         .is_cratesio_cache_up_to_date(
-            &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
+            &OriginalName::try_from("crate").unwrap(),
             Some("etag".to_string()),
             Some("last_modified".to_string()),
         )
@@ -3138,7 +3152,7 @@ async fn is_cratesio_cache_up_to_date_up_to_date(test_db: &kellnr_db::Database) 
 
     let prefetch_state = test_db
         .is_cratesio_cache_up_to_date(
-            &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
+            &OriginalName::try_from("crate").unwrap(),
             Some("etag".to_string()),
             Some("last_modified".to_string()),
         )
@@ -3167,7 +3181,7 @@ async fn is_cratesio_cache_up_to_date_with_a_single_validator(test_db: &kellnr_d
         )
         .await
         .unwrap();
-    let name = NormalizedName::from_unchecked("crate".to_string());
+    let name = OriginalName::try_from("crate").unwrap();
     let up_to_date = PrefetchState::UpToDate {
         etag: "\"etag\"".to_string(),
         last_modified: "Fri, 30 Oct 2026 12:00:00 GMT".to_string(),
@@ -3267,7 +3281,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
     // Old etag
     let prefetch_state = test_db
         .is_cratesio_cache_up_to_date(
-            &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
+            &OriginalName::try_from("crate").unwrap(),
             Some("old_etag".to_string()),
             Some("last_modified".to_string()),
         )
@@ -3282,7 +3296,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
     // Old last_modified
     let prefetch_state = test_db
         .is_cratesio_cache_up_to_date(
-            &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
+            &OriginalName::try_from("crate").unwrap(),
             Some("etag".to_string()),
             Some("old_last_modified".to_string()),
         )
@@ -3296,7 +3310,7 @@ async fn is_cratesio_cache_up_to_date_needs_update(test_db: &kellnr_db::Database
     // Old etag and last_modified
     let prefetch_state = test_db
         .is_cratesio_cache_up_to_date(
-            &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
+            &OriginalName::try_from("crate").unwrap(),
             Some("etag".to_string()),
             Some("old_last_modified".to_string()),
         )
@@ -3324,7 +3338,7 @@ async fn un_yank_crate(test_db: &kellnr_db::Database) {
     // Yank the version
     test_db
         .yank_crate(
-            &NormalizedName::from_unchecked_str("crate"),
+            &CanonicalName::try_from("crate").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
@@ -3332,7 +3346,7 @@ async fn un_yank_crate(test_db: &kellnr_db::Database) {
 
     // Test if yanked
     let ci = test_db
-        .get_crate_data(&NormalizedName::from_unchecked_str("crate"))
+        .get_crate_data(&CanonicalName::try_from("crate").unwrap())
         .await
         .unwrap();
     assert!(
@@ -3346,7 +3360,7 @@ async fn un_yank_crate(test_db: &kellnr_db::Database) {
     // Unyank the version
     test_db
         .unyank_crate(
-            &NormalizedName::from_unchecked_str("crate"),
+            &CanonicalName::try_from("crate").unwrap(),
             &Version::from_unchecked_str("1.0.0"),
         )
         .await
@@ -3354,7 +3368,7 @@ async fn un_yank_crate(test_db: &kellnr_db::Database) {
 
     // Test if unyanked
     let ci = test_db
-        .get_crate_data(&NormalizedName::from_unchecked_str("crate"))
+        .get_crate_data(&CanonicalName::try_from("crate").unwrap())
         .await
         .unwrap();
     assert!(
@@ -3507,7 +3521,7 @@ async fn test_add_crate_rollback(test_db: &kellnr_db::Database) {
     assert!(result.is_err());
 
     let max_version = test_db
-        .get_max_version_from_name(&NormalizedName::from_unchecked("mycrate".to_string()))
+        .get_max_version_from_name(&CanonicalName::try_from("mycrate").unwrap())
         .await
         .unwrap();
 
@@ -3525,11 +3539,11 @@ async fn test_delete_crate_rollback(test_db: &kellnr_db::Database) {
     // Manually delete crate index entry so the crate delete method fails in the middle.
     test_delete_crate_index(test_db, crate_id).await.unwrap();
 
-    let normalized_name = NormalizedName::from_unchecked("mycrate".to_string());
-    let result = test_db.delete_crate(&normalized_name, &version).await;
+    let canonical_name = CanonicalName::try_from("mycrate").unwrap();
+    let result = test_db.delete_crate(&canonical_name, &version).await;
     assert!(result.is_err());
 
-    let meta = test_db.get_crate_meta_list(&normalized_name).await.unwrap();
+    let meta = test_db.get_crate_meta_list(&canonical_name).await.unwrap();
     // Crate meta is deleted first, but the actions should be rolled back on error.
     assert_eq!(1, meta.len());
 }
@@ -3726,7 +3740,10 @@ async fn pubtime_stored_and_serialized_correctly(test_db: &kellnr_db::Database) 
     .unwrap();
 
     // Retrieve the prefetch data
-    let prefetch_data = test_db.get_prefetch_data("testcrate").await.unwrap();
+    let prefetch_data = test_db
+        .get_prefetch_data(&OriginalName::try_from("testcrate").unwrap())
+        .await
+        .unwrap();
 
     // Convert the bytes to string
     let json_str = String::from_utf8(prefetch_data.data).unwrap();
@@ -3792,7 +3809,7 @@ async fn cratesio_index_keeps_rust_version(test_db: &kellnr_db::Database) {
     // instead of being echoed back from the data passed in above.
     let prefetch_state = test_db
         .is_cratesio_cache_up_to_date(
-            &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
+            &OriginalName::try_from("crate").unwrap(),
             Some("old_etag".to_string()),
             None,
         )
@@ -3818,7 +3835,10 @@ async fn crate_index_keeps_rust_version(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    let prefetch = test_db.get_prefetch_data("crate").await.unwrap();
+    let prefetch = test_db
+        .get_prefetch_data(&OriginalName::try_from("crate").unwrap())
+        .await
+        .unwrap();
     let data = String::from_utf8(prefetch.data).unwrap();
     let index: IndexMetadata = serde_json::from_str(data.lines().next().unwrap()).unwrap();
 
@@ -3872,7 +3892,7 @@ async fn cratesio_index_heals_missing_rust_version(test_db: &kellnr_db::Database
 
     let prefetch_state = test_db
         .is_cratesio_cache_up_to_date(
-            &NormalizedName::from(OriginalName::try_from("crate").unwrap()),
+            &OriginalName::try_from("crate").unwrap(),
             Some("old_etag".to_string()),
             None,
         )
@@ -3945,7 +3965,7 @@ async fn add_crates_with_restrictions(test_db: &kellnr_db::Database) {
         .unwrap();
         test_db
             .increase_download_counter_by(
-                &NormalizedName::from_unchecked(name.to_string()),
+                &CanonicalName::try_from(name).unwrap(),
                 &Version::try_from("1.0.0").unwrap(),
                 u64::from(day) * 10,
             )
@@ -3953,21 +3973,18 @@ async fn add_crates_with_restrictions(test_db: &kellnr_db::Database) {
             .unwrap();
         if name != "public" {
             test_db
-                .change_download_restricted(&NormalizedName::from_unchecked(name.to_string()), true)
+                .change_download_restricted(&CanonicalName::try_from(name).unwrap(), true)
                 .await
                 .unwrap();
         }
     }
     test_db
-        .add_crate_user(
-            &NormalizedName::from_unchecked("restricted_user".to_string()),
-            "user",
-        )
+        .add_crate_user(&CanonicalName::try_from("restricted_user").unwrap(), "user")
         .await
         .unwrap();
     test_db
         .add_crate_group(
-            &NormalizedName::from_unchecked("restricted_group".to_string()),
+            &CanonicalName::try_from("restricted_group").unwrap(),
             "group",
         )
         .await
@@ -4143,7 +4160,7 @@ async fn upstream_meta(
 ) -> Option<kellnr_db::provider::CratesioVersionMeta> {
     test_db
         .get_cratesio_version_meta(
-            &NormalizedName::from_unchecked_str("upstream"),
+            &CanonicalName::try_from("upstream").unwrap(),
             &Version::try_from(version).unwrap(),
         )
         .await
@@ -4221,7 +4238,7 @@ async fn cratesio_prefetch_keeps_known_licenses(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_crate_license_returns_license_of_version(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
-    let name = NormalizedName::from_unchecked_str("licensed");
+    let name = CanonicalName::try_from("licensed").unwrap();
     let mut pm = PublishMetadata::minimal("licensed", "1.0.0");
     pm.license = Some("MIT".to_string());
     test_db
@@ -4266,7 +4283,7 @@ async fn add_crate_adds_version_to_mixed_case_crate(test_db: &kellnr_db::Databas
             .unwrap();
     }
 
-    let name = NormalizedName::from_unchecked_str("mycrate");
+    let name = CanonicalName::try_from("mycrate").unwrap();
     assert_eq!(2, test_db.get_crate_meta_list(&name).await.unwrap().len());
     assert_eq!(
         Version::try_from("1.1.0").unwrap(),
@@ -4308,7 +4325,7 @@ async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Data
         result,
         Err(kellnr_db::error::DbError::NotOwner(_))
     ));
-    let name = NormalizedName::from_unchecked_str("taken");
+    let name = CanonicalName::try_from("taken").unwrap();
     assert!(!test_db.is_owner(&name, "mallory").await.unwrap());
     assert_eq!(1, test_db.get_crate_meta_list(&name).await.unwrap().len());
 }
@@ -4346,13 +4363,16 @@ async fn add_crate_rejects_name_differing_only_in_dash_and_underscore(
             "{name}: {result:?}"
         );
     }
-    assert!(
+    let name = CanonicalName::try_from("foo_bar").unwrap();
+    assert_eq!(
+        Some("foo-bar".to_string()),
         test_db
-            .get_crate_id(&NormalizedName::from_unchecked_str("foo_bar"))
+            .get_crate_original_name(&name)
             .await
             .unwrap()
-            .is_none()
+            .map(OriginalName::into_inner)
     );
+    assert_eq!(1, test_db.get_crate_meta_list(&name).await.unwrap().len());
 }
 
 #[db_test]
@@ -4369,36 +4389,224 @@ async fn add_empty_crate_rejects_similar_name(test_db: &kellnr_db::Database) {
 }
 
 #[db_test]
-async fn add_crate_keeps_existing_similar_names_publishable(test_db: &kellnr_db::Database) {
-    // Registries created before the check may already hold both spellings.
-    test_insert_crate_unchecked(test_db, "foo-bar")
+async fn crates_are_found_under_any_spelling_of_their_name(test_db: &kellnr_db::Database) {
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("My-Crate", "1.0.0"),
+            "cksum",
+            1024,
+            &Utc::now(),
+            "admin",
+            None,
+        )
         .await
         .unwrap();
-    test_insert_crate_unchecked(test_db, "foo_bar")
-        .await
-        .unwrap();
-    let created = Utc::now();
 
-    for name in ["foo-bar", "foo_bar"] {
+    for name in ["My-Crate", "my-crate", "my_crate", "MY_CRATE"] {
+        let canonical = CanonicalName::try_from(name).unwrap();
+        assert!(
+            test_db.get_crate_id(&canonical).await.unwrap().is_some(),
+            "{name}"
+        );
+        assert_eq!(
+            Some("My-Crate".to_string()),
+            test_db
+                .get_original_name(&canonical, &Version::try_from("1.0.0").unwrap())
+                .await
+                .unwrap()
+                .map(OriginalName::into_inner),
+            "{name}"
+        );
+    }
+}
+
+#[db_test]
+async fn index_file_is_only_found_under_the_published_separators(test_db: &kellnr_db::Database) {
+    test_db
+        .add_crate(
+            &PublishMetadata::minimal("My-Crate", "1.0.0"),
+            "cksum",
+            1024,
+            &Utc::now(),
+            "admin",
+            None,
+        )
+        .await
+        .unwrap();
+    test_add_cached_crate(test_db, "cached-crate", "1.0.0")
+        .await
+        .unwrap();
+
+    for name in ["my-crate", "My-Crate"] {
+        let name = OriginalName::try_from(name).unwrap();
+        assert!(test_db.get_prefetch_data(&name).await.is_ok());
+    }
+    let other = OriginalName::try_from("my_crate").unwrap();
+    assert!(matches!(
+        test_db.get_prefetch_data(&other).await,
+        Err(kellnr_db::error::DbError::CrateNotFound(_))
+    ));
+
+    let cached = OriginalName::try_from("cached-crate").unwrap();
+    let other = OriginalName::try_from("cached_crate").unwrap();
+    assert!(matches!(
+        test_db
+            .is_cratesio_cache_up_to_date(&cached, None, None)
+            .await
+            .unwrap(),
+        PrefetchState::NeedsUpdate(_)
+    ));
+    assert_eq!(
+        PrefetchState::NotFound,
+        test_db
+            .is_cratesio_cache_up_to_date(&other, None, None)
+            .await
+            .unwrap()
+    );
+}
+
+#[db_test]
+async fn migration_stores_canonical_crate_names(test_db: &kellnr_db::Database) {
+    let dep = RegistryDep {
+        name: "Foo-Bar".to_string(),
+        version_req: "^1".to_string(),
+        features: None,
+        optional: false,
+        default_features: true,
+        target: None,
+        kind: Some("normal".to_string()),
+        registry: None,
+        explicit_name_in_toml: None,
+    };
+    for pm in [
+        PublishMetadata::minimal("Foo-Bar", "1.0.0"),
+        PublishMetadata {
+            deps: vec![dep],
+            ..PublishMetadata::minimal("my-dependent", "1.0.0")
+        },
+    ] {
+        test_db
+            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .await
+            .unwrap();
+    }
+    test_insert_legacy_cached_crate(test_db, "Serde-Json")
+        .await
+        .unwrap();
+    // Like before the migration
+    test_set_legacy_crate_names(test_db).await.unwrap();
+    test_set_legacy_dependency_names(test_db, "Foo-Bar")
+        .await
+        .unwrap();
+    let names = |names: &[&str]| names.iter().map(ToString::to_string).collect::<Vec<_>>();
+    assert_eq!(
+        [
+            names(&["foo-bar", "my-dependent"]),
+            names(&["serde-json"]),
+            names(&["foo-bar"]),
+        ],
+        test_stored_crate_names(test_db).await.unwrap()
+    );
+
+    test_canonicalize_crate_names(test_db).await.unwrap();
+
+    assert_eq!(
+        [
+            names(&["foo_bar", "my_dependent"]),
+            names(&["serde_json"]),
+            names(&["foo_bar"]),
+        ],
+        test_stored_crate_names(test_db).await.unwrap()
+    );
+    let foo_bar = CanonicalName::try_from("foo-bar").unwrap();
+    assert!(test_db.get_crate_id(&foo_bar).await.unwrap().is_some());
+    let dependents: Vec<String> = test_db
+        .get_crate_dependents(&foo_bar)
+        .await
+        .unwrap()
+        .dependents
+        .into_iter()
+        .map(|d| d.name)
+        .collect();
+    assert_eq!(vec!["my-dependent".to_string()], dependents);
+}
+
+#[db_test]
+async fn migration_fails_without_changes_on_crates_with_the_same_canonical_name(
+    test_db: &kellnr_db::Database,
+) {
+    // Older versions of Kellnr allowed these as different crates
+    for name in ["foo-bar", "Foo_Bar", "other-crate"] {
+        test_insert_legacy_crate(test_db, name).await.unwrap();
+    }
+    for name in ["serde-json", "serde_json"] {
+        test_insert_legacy_cached_crate(test_db, name)
+            .await
+            .unwrap();
+    }
+    let before = test_stored_crate_names(test_db).await.unwrap();
+
+    let result = test_canonicalize_crate_names(test_db).await;
+
+    let message = result.unwrap_err().to_string();
+    assert!(message.contains("Foo_Bar and foo-bar"), "{message}");
+    assert!(
+        message.contains("serde-json and serde_json (crates.io cache)"),
+        "{message}"
+    );
+    assert!(!message.contains("other-crate"), "{message}");
+    assert!(message.contains("No data was changed"), "{message}");
+    assert_eq!(before, test_stored_crate_names(test_db).await.unwrap());
+}
+
+/// Only on PostgreSQL, as concurrent write transactions of SQLite fail with
+/// "database is locked".
+#[tokio::test]
+async fn postgres_concurrent_first_publishes_of_two_spellings_conflict() {
+    use testcontainers::runners::AsyncRunner;
+
+    let pg_container = image::Postgres::default().start().await.unwrap();
+    let port = pg_container
+        .get_host_port_ipv4(image::Postgres::PG_PORT)
+        .await
+        .unwrap();
+    let admin = kellnr_db::AdminUser::new("123".to_string(), Some("token".to_string()));
+    let con = kellnr_db::ConString::Postgres(kellnr_db::PgConString::new(
+        "localhost",
+        port,
+        "kellnr",
+        "admin",
+        "admin",
+        admin,
+        std::time::Duration::from_secs(3600),
+    ));
+    let test_db = &kellnr_db::Database::new(&con, 10).await.unwrap();
+
+    let publish = |name: String| async move {
         test_db
             .add_crate(
-                &PublishMetadata::minimal(name, "1.0.0"),
+                &PublishMetadata::minimal(&name, "1.0.0"),
                 "cksum",
                 1024,
-                &created,
+                &Utc::now(),
                 "admin",
                 None,
             )
             .await
-            .unwrap();
-        let normalized = NormalizedName::from_unchecked_str(name);
-        assert_eq!(
-            1,
-            test_db
-                .get_crate_meta_list(&normalized)
-                .await
-                .unwrap()
-                .len()
+    };
+
+    for i in 0..10 {
+        let results = tokio::join!(
+            publish(format!("race-crate{i}")),
+            publish(format!("race_crate{i}"))
+        );
+
+        let results = [results.0, results.1];
+        assert_eq!(1, results.iter().filter(|r| r.is_ok()).count());
+        assert!(
+            results
+                .iter()
+                .any(|r| matches!(r, Err(kellnr_db::error::DbError::CrateNameConflict(_, _))))
         );
     }
 }
@@ -4435,7 +4643,7 @@ async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database)
         .await
         .unwrap();
 
-    let name = NormalizedName::from_unchecked_str("owned");
+    let name = CanonicalName::try_from("owned").unwrap();
     assert_eq!(2, test_db.get_crate_meta_list(&name).await.unwrap().len());
 }
 
@@ -4489,7 +4697,7 @@ async fn get_crate_dependents_uses_latest_version_of_dependents(test_db: &kellnr
     publish("app-yanked", "2.0.0", vec![]).await;
     test_db
         .yank_crate(
-            &NormalizedName::from_unchecked_str("app-yanked"),
+            &CanonicalName::try_from("app-yanked").unwrap(),
             &Version::from_unchecked_str("2.0.0"),
         )
         .await
@@ -4506,7 +4714,7 @@ async fn get_crate_dependents_uses_latest_version_of_dependents(test_db: &kellnr
     .await;
 
     let cd = test_db
-        .get_crate_dependents(&NormalizedName::from_unchecked_str("foo"))
+        .get_crate_dependents(&CanonicalName::try_from("foo").unwrap())
         .await
         .unwrap();
 
@@ -4546,7 +4754,7 @@ async fn get_crate_dependents_uses_latest_version_of_dependents(test_db: &kellnr
 #[db_test]
 async fn get_crate_dependents_of_unknown_crate_fails(test_db: &kellnr_db::Database) {
     let result = test_db
-        .get_crate_dependents(&NormalizedName::from_unchecked_str("missing"))
+        .get_crate_dependents(&CanonicalName::try_from("missing").unwrap())
         .await;
     assert!(matches!(
         result,
@@ -4588,7 +4796,7 @@ async fn publish_with_foo_dep(
 /// Name and version of the dependents of "foo"
 async fn dependents_of_foo(test_db: &kellnr_db::Database) -> Vec<(String, String)> {
     test_db
-        .get_crate_dependents(&NormalizedName::from_unchecked_str("foo"))
+        .get_crate_dependents(&CanonicalName::try_from("foo").unwrap())
         .await
         .unwrap()
         .dependents
@@ -4605,7 +4813,7 @@ async fn get_crate_dependents_follows_deleted_and_yanked_versions(test_db: &kell
     assert!(dependents_of_foo(test_db).await.is_empty());
 
     // With the latest version yanked, the one before counts again
-    let bar = NormalizedName::from_unchecked_str("bar");
+    let bar = CanonicalName::try_from("bar").unwrap();
     let v2 = Version::from_unchecked_str("2.0.0");
     test_db.yank_crate(&bar, &v2).await.unwrap();
     assert_eq!(
@@ -4815,7 +5023,7 @@ async fn get_crate_data_with_more_dependencies_than_bind_parameters(test_db: &ke
     add_cached(test_db, "dep-7", "", Some("cached dependency")).await;
 
     let data = test_db
-        .get_crate_data(&NormalizedName::from_unchecked_str("many_deps"))
+        .get_crate_data(&CanonicalName::try_from("many_deps").unwrap())
         .await
         .unwrap();
 
@@ -4849,7 +5057,7 @@ async fn publish_with_metadata(
 
 async fn assert_crate_metadata(test_db: &kellnr_db::Database, max_version: &str, text: &str) {
     let data = test_db
-        .get_crate_data(&NormalizedName::from_unchecked_str("meta"))
+        .get_crate_data(&CanonicalName::try_from("meta").unwrap())
         .await
         .unwrap();
     assert_eq!(max_version, data.max_version);
@@ -4911,7 +5119,7 @@ async fn add_crate_with_duplicate_keywords_categories_and_authors(test_db: &kell
 
     for name in ["first", "second"] {
         let data = test_db
-            .get_crate_data(&NormalizedName::from_unchecked_str(name))
+            .get_crate_data(&CanonicalName::try_from(name).unwrap())
             .await
             .unwrap();
         let mut keywords = data.keywords;
@@ -4944,7 +5152,7 @@ async fn migration_removes_duplicate_crate_tag_links(test_db: &kellnr_db::Databa
         .unwrap();
 
     let data = test_db
-        .get_crate_data(&NormalizedName::from_unchecked_str("tagged"))
+        .get_crate_data(&CanonicalName::try_from("tagged").unwrap())
         .await
         .unwrap();
     assert_eq!(vec!["keyword"], data.keywords);
@@ -5002,9 +5210,9 @@ async fn postgres_concurrent_publishes_share_new_keywords() {
 
 #[db_test]
 async fn yank_and_unyank_update_etag_of_crate_index(test_db: &kellnr_db::Database) {
-    let name = NormalizedName::from_unchecked_str("yankee");
+    let name = CanonicalName::try_from("yankee").unwrap();
     let version = Version::try_from("1.0.0").unwrap();
-    // The index stores the original name, which differs from the normalized one
+    // The index stores the original name, which differs from the canonical one
     for vers in ["1.0.0", "2.0.0"] {
         let pm = PublishMetadata::minimal("Yankee", vers);
         test_db
@@ -5012,11 +5220,17 @@ async fn yank_and_unyank_update_etag_of_crate_index(test_db: &kellnr_db::Databas
             .await
             .unwrap();
     }
-    let published = test_db.get_prefetch_data("yankee").await.unwrap();
+    let published = test_db
+        .get_prefetch_data(&OriginalName::try_from("yankee").unwrap())
+        .await
+        .unwrap();
 
     test_db.yank_crate(&name, &version).await.unwrap();
 
-    let yanked = test_db.get_prefetch_data("yankee").await.unwrap();
+    let yanked = test_db
+        .get_prefetch_data(&OriginalName::try_from("yankee").unwrap())
+        .await
+        .unwrap();
     assert_ne!(published.etag, yanked.etag);
     assert_eq!(sha256::digest(yanked.data.as_slice()), yanked.etag);
     let lines: Vec<IndexMetadata> = String::from_utf8(yanked.data)
@@ -5029,7 +5243,10 @@ async fn yank_and_unyank_update_etag_of_crate_index(test_db: &kellnr_db::Databas
 
     test_db.unyank_crate(&name, &version).await.unwrap();
 
-    let unyanked = test_db.get_prefetch_data("yankee").await.unwrap();
+    let unyanked = test_db
+        .get_prefetch_data(&OriginalName::try_from("yankee").unwrap())
+        .await
+        .unwrap();
     assert_eq!(published.etag, unyanked.etag);
     assert_eq!(published.data, unyanked.data);
 }
@@ -5170,7 +5387,7 @@ async fn delete_crate_skips_invalid_versions_for_max_version(test_db: &kellnr_db
         .await
         .unwrap();
 
-    let name = NormalizedName::from_unchecked_str("invalid_meta");
+    let name = CanonicalName::try_from("invalid_meta").unwrap();
     test_db
         .delete_crate(&name, &Version::try_from("2.0.0").unwrap())
         .await
@@ -5194,7 +5411,7 @@ async fn adding_a_crate_user_twice_is_a_unique_violation(test_db: &kellnr_db::Da
     )
     .await
     .unwrap();
-    let name = NormalizedName::from_unchecked("crate".to_string());
+    let name = CanonicalName::try_from("crate").unwrap();
     test_db.add_crate_user(&name, "user").await.unwrap();
 
     let e = test_db.add_crate_user(&name, "user").await.unwrap_err();
@@ -5257,7 +5474,7 @@ async fn add_crate_rejects_other_spelling_of_existing_crate(test_db: &kellnr_db:
         ),
         "{result:?}"
     );
-    let name = NormalizedName::from_unchecked("mycrate".to_string());
+    let name = CanonicalName::try_from("mycrate").unwrap();
     assert_eq!(1, test_db.get_crate_meta_list(&name).await.unwrap().len());
 }
 
@@ -5273,7 +5490,7 @@ async fn delete_owners_removes_nothing_when_no_owner_would_remain(test_db: &kell
     )
     .await
     .unwrap();
-    let name = NormalizedName::from_unchecked("crate".to_string());
+    let name = CanonicalName::try_from("crate").unwrap();
     test_db.add_owner(&name, "user").await.unwrap();
     test_db.add_owner(&name, "user").await.unwrap();
     let owners = ["admin".to_string(), "user".to_string()];
@@ -5303,7 +5520,10 @@ async fn prefetch_data_puts_new_feature_syntax_into_features2(test_db: &kellnr_d
         .await
         .unwrap();
 
-    let prefetch = test_db.get_prefetch_data("crate").await.unwrap();
+    let prefetch = test_db
+        .get_prefetch_data(&OriginalName::try_from("crate").unwrap())
+        .await
+        .unwrap();
     let index: IndexMetadata = serde_json::from_slice(&prefetch.data).unwrap();
 
     assert_eq!(
@@ -5335,11 +5555,11 @@ async fn get_crate_original_name_returns_the_published_spelling(test_db: &kellnr
         .unwrap();
 
     let name = test_db
-        .get_crate_original_name(&NormalizedName::from_unchecked("my_crate".to_string()))
+        .get_crate_original_name(&CanonicalName::try_from("my_crate").unwrap())
         .await
         .unwrap();
     let missing = test_db
-        .get_crate_original_name(&NormalizedName::from_unchecked("other".to_string()))
+        .get_crate_original_name(&CanonicalName::try_from("other").unwrap())
         .await
         .unwrap();
 
@@ -5380,7 +5600,7 @@ async fn get_original_name_of_existing_version(test_db: &kellnr_db::Database) {
         )
         .await
         .unwrap();
-    let name = NormalizedName::from_unchecked("my-crate".to_string());
+    let name = CanonicalName::try_from("my-crate").unwrap();
 
     let found = test_db
         .get_original_name(&name, &Version::try_from("1.0.0").unwrap())
@@ -5392,7 +5612,7 @@ async fn get_original_name_of_existing_version(test_db: &kellnr_db::Database) {
         .unwrap();
     let missing_crate = test_db
         .get_original_name(
-            &NormalizedName::from_unchecked("other".to_string()),
+            &CanonicalName::try_from("other").unwrap(),
             &Version::try_from("1.0.0").unwrap(),
         )
         .await

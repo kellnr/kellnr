@@ -1,6 +1,5 @@
 use std::convert::TryFrom;
 
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
@@ -8,7 +7,7 @@ use kellnr_rustfs_testcontainer::*;
 use kellnr_settings::Settings;
 use kellnr_settings::s3::S3;
 use kellnr_storage::cached_crate_storage::DynStorage;
-use kellnr_storage::docs_storage::DocsStorage;
+use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::s3_storage::S3Storage;
 mod image;
@@ -116,12 +115,12 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
     let docs = test_docs_storage("test_docs_delete_prefix", &url);
 
     let v1 = DocsStorage::file_key(
-        &NormalizedName::from_unchecked_str("my-crate"),
+        &docs_name("my-crate"),
         &Version::from_unchecked_str("1.0.0"),
         "doc/my_crate/index.html",
     );
     let v2 = DocsStorage::file_key(
-        &NormalizedName::from_unchecked_str("my-crate"),
+        &docs_name("my-crate"),
         &Version::from_unchecked_str("2.0.0"),
         "doc/my_crate/index.html",
     );
@@ -133,7 +132,7 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
         .unwrap();
 
     docs.delete_prefix(&DocsStorage::version_prefix(
-        &NormalizedName::from_unchecked_str("my-crate"),
+        &docs_name("my-crate"),
         &Version::from_unchecked_str("1.0.0"),
     ))
     .await
@@ -150,7 +149,7 @@ async fn get_with_meta_returns_bytes_etag_and_last_modified() {
     let url = format!("http://{host}:{port}");
     let docs = test_docs_storage("test_docs_get_with_meta", &url);
     let key = DocsStorage::file_key(
-        &NormalizedName::from_unchecked_str("my-crate"),
+        &docs_name("my-crate"),
         &Version::from_unchecked_str("1.0.0"),
         "doc/my_crate/index.html",
     );
@@ -186,4 +185,8 @@ async fn docs_list_returns_keys_with_special_characters_as_stored() {
     let mut expected = keys.map(String::from).to_vec();
     expected.sort_unstable();
     assert_eq!(listed, expected);
+}
+
+fn docs_name(name: &str) -> DocsName {
+    DocsName::from(&OriginalName::try_from(name).unwrap())
 }

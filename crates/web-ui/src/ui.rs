@@ -8,11 +8,11 @@ use axum::http::StatusCode;
 use kellnr_appstate::{AppState, DbState, ProxyClientState, SettingsProvState, SettingsState};
 use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
 use kellnr_auth::maybe_user::MaybeUser as MaybeUserOrToken;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CRATESIO_INDEX, CrateData};
 use kellnr_common::crate_dependents::CrateDependents;
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::name_or_description::NameOrDescription;
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
@@ -22,6 +22,7 @@ use kellnr_settings::{
     ConfigSource, Provenance, Settings, SettingsProv, SourceMap, cli_flag_map, compile_time_config,
     erased_serde, leaf_label, sources_from_prov,
 };
+use kellnr_storage::docs_storage::DocsName;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use utoipa::ToSchema;
@@ -456,7 +457,7 @@ pub async fn crate_data(
     State(db): DbState,
     user: Result<MaybeUserOrToken, StatusCode>,
 ) -> Result<Json<CrateData>, StatusCode> {
-    let index_name = NormalizedName::from(params.name);
+    let index_name = CanonicalName::from(params.name);
     let user = user.ok();
     // Same response as a missing crate to not reveal that a restricted crate exists.
     match can_read_crate(&index_name, user.as_ref(), &db).await {
@@ -497,7 +498,10 @@ async fn hide_restricted_dep_info(
         if dep.registry.as_deref() == Some(CRATESIO_INDEX) {
             continue;
         }
-        let name = NormalizedName::from_unchecked(dep.name.to_lowercase());
+        // A name no crate can have cannot be restricted
+        let Ok(name) = CanonicalName::try_from(dep.name.as_str()) else {
+            continue;
+        };
         let can_read = if let Some(can_read) = readable.get(name.as_str()) {
             *can_read
         } else {
@@ -535,7 +539,7 @@ pub async fn crate_dependents(
     State(db): DbState,
     user: Result<MaybeUserOrToken, StatusCode>,
 ) -> Result<Json<CrateDependents>, StatusCode> {
-    let index_name = NormalizedName::from(params.name);
+    let index_name = CanonicalName::from(params.name);
     let user = user.ok();
     // Same response as a missing crate to not reveal that a restricted crate exists.
     match can_read_crate(&index_name, user.as_ref(), &db).await {
@@ -572,8 +576,11 @@ async fn hide_restricted_dependents(
 ) -> Result<(), DbError> {
     let mut visible = Vec::with_capacity(cd.dependents.len());
     for dependent in std::mem::take(&mut cd.dependents) {
-        let name = NormalizedName::from_unchecked(dependent.name.to_lowercase());
-        if can_read_crate(&name, user, db).await? {
+        let can_read = match CanonicalName::try_from(dependent.name.as_str()) {
+            Ok(name) => can_read_crate(&name, user, db).await?,
+            Err(_) => false,
+        };
+        if can_read {
             visible.push(dependent);
         } else {
             cd.restricted += 1;
@@ -645,12 +652,12 @@ async fn delete_crate_versions_impl(
     name: &OriginalName,
     versions: Option<Vec<Version>>,
 ) -> Result<(), RouteError> {
-    let normalized_name = name.to_normalized();
+    let canonical_name = name.to_canonical();
     // Crate files are stored under the name the crate was first published
-    // with, which may differ in case from the requested name.
+    // with, which may differ in case or separators from the requested name.
     let original_name = state
         .db
-        .get_crate_original_name(&normalized_name)
+        .get_crate_original_name(&canonical_name)
         .await?
         .ok_or_else(|| RouteError::NotFound(format!("Crate not found: {name}")))?;
 
@@ -659,7 +666,7 @@ async fn delete_crate_versions_impl(
     } else {
         state
             .db
-            .get_crate_meta_list(&normalized_name)
+            .get_crate_meta_list(&canonical_name)
             .await?
             .iter()
             .map(|cm| Version::from_unchecked_str(&cm.version))
@@ -681,7 +688,7 @@ async fn delete_one_version(
     name: &OriginalName,
     version: &Version,
 ) -> Result<(), RouteError> {
-    let normalized_name = name.to_normalized();
+    let canonical_name = name.to_canonical();
 
     // A missing file is fine, e.g. when an earlier deletion failed after it.
     let exists = state
@@ -699,7 +706,7 @@ async fn delete_one_version(
 
     state
         .db
-        .delete_crate(&normalized_name, version)
+        .delete_crate(&canonical_name, version)
         .await
         .inspect_err(|e| error!("Failed to delete crate {name}-{version} from database: {e}"))?;
 
@@ -708,9 +715,9 @@ async fn delete_one_version(
         .download_filters
         .registry
         .licenses()
-        .forget(&normalized_name, version);
+        .forget(&canonical_name, version);
 
-    if let Err(e) = kellnr_docs::delete(&name.to_normalized(), version, &state.docs_storage).await {
+    if let Err(e) = kellnr_docs::delete(name, version, &state.docs_storage).await {
         error!("Failed to delete docs of crate {name}-{version}: {e}");
         return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
@@ -894,7 +901,7 @@ pub async fn build_rustdoc(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let normalized_name = NormalizedName::from(params.package);
+    let canonical_name = CanonicalName::from(params.package);
     let db = state.db;
     let version = params.version;
 
@@ -904,7 +911,7 @@ pub async fn build_rustdoc(
     // same error for a missing crate.
     let is_allowed = match user {
         MaybeUser::Normal(user) => {
-            db.is_owner(&normalized_name, &user)
+            db.is_owner(&canonical_name, &user)
                 .await
                 .map_err(internal_error)?
                 && !db
@@ -921,25 +928,17 @@ pub async fn build_rustdoc(
     }
 
     // Check if crate with the version exists.
-    if let Some(id) = db
-        .get_crate_id(&normalized_name)
+    let Some(original_name) = db
+        .get_original_name(&canonical_name, &version)
         .await
         .map_err(internal_error)?
-    {
-        if !db
-            .crate_version_exists(id, &version)
-            .await
-            .map_err(internal_error)?
-        {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    } else {
+    else {
         return Err(StatusCode::BAD_REQUEST);
-    }
+    };
 
     // Add to build queue
     db.add_doc_queue(
-        &normalized_name,
+        &original_name,
         &version,
         &state
             .crate_storage
@@ -1022,7 +1021,7 @@ pub async fn migrate_docs_storage(
     tokio::spawn(async move {
         for (crate_name, version, dir) in crate_versions {
             // Keep the folder names, the docs links in the database point to them.
-            let name = NormalizedName::from_unchecked(crate_name.clone());
+            let name = DocsName::from_folder(crate_name.clone());
             let version = Version::from_unchecked_str(&version);
             match upload_dir_and_prune(&dir, "", &name, &version, &docs_storage).await {
                 Ok(()) => {
@@ -1141,7 +1140,7 @@ mod tests {
             .unwrap();
         let licenses = state.download_filters.registry.licenses();
         licenses.insert(
-            &name.to_normalized(),
+            &name.to_canonical(),
             &version,
             kellnr_filter::KnownLicense::Declared("MIT".to_string()),
         );
@@ -1151,7 +1150,7 @@ mod tests {
             .unwrap();
 
         // A version published again with another license is looked up anew
-        assert_eq!(None, licenses.get(&name.to_normalized(), &version));
+        assert_eq!(None, licenses.get(&name.to_canonical(), &version));
     }
 
     fn delete_state(mock_db: MockDb, data_dir: &std::path::Path) -> AppStateData {
@@ -1728,9 +1727,12 @@ mod tests {
     async fn build_rust_doc_crate_not_found() {
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_crate_id()
-            .with(eq(NormalizedName::from_unchecked("foobar".to_string())))
-            .returning(move |_| Ok(None));
+            .expect_get_original_name()
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(Version::try_from("1.0.0").unwrap()),
+            )
+            .returning(move |_, _| Ok(None));
         mock_db
             .expect_validate_session()
             .with(eq("cookie"))
@@ -1782,10 +1784,7 @@ mod tests {
             });
         mock_db
             .expect_is_owner()
-            .with(
-                eq(NormalizedName::from_unchecked("foobar".to_string())),
-                eq("user"),
-            )
+            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
             .returning(move |_, _| Ok(false));
         let (mut settings, storage) = test_deps();
         settings.docs.enabled = true;
@@ -1815,10 +1814,6 @@ mod tests {
     async fn build_rust_doc_version_not_found() {
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_crate_id()
-            .with(eq(NormalizedName::from_unchecked("foobar".to_string())))
-            .returning(move |_| Ok(Some(1)));
-        mock_db
             .expect_validate_session()
             .with(eq("cookie"))
             .returning(move |_| {
@@ -1830,10 +1825,7 @@ mod tests {
             });
         mock_db
             .expect_is_owner()
-            .with(
-                eq(NormalizedName::from_unchecked("foobar".to_string())),
-                eq("user"),
-            )
+            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
             .returning(move |_, _| Ok(true));
         mock_db
             .expect_get_user()
@@ -1850,9 +1842,12 @@ mod tests {
                 })
             });
         mock_db
-            .expect_crate_version_exists()
-            .with(eq(1), eq("1.0.0"))
-            .returning(move |_, _| Ok(false));
+            .expect_get_original_name()
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(Version::try_from("1.0.0").unwrap()),
+            )
+            .returning(move |_, _| Ok(None));
         let (mut settings, storage) = test_deps();
         settings.docs.enabled = true;
         let r = app(
@@ -1881,10 +1876,6 @@ mod tests {
     async fn build_rust_doc_not_owner() {
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_crate_id()
-            .with(eq(NormalizedName::from_unchecked("foobar".to_string())))
-            .returning(move |_| Ok(Some(1)));
-        mock_db
             .expect_validate_session()
             .with(eq("cookie"))
             .returning(move |_| {
@@ -1895,15 +1886,15 @@ mod tests {
                 })
             });
         mock_db
-            .expect_crate_version_exists()
-            .with(eq(1), eq("1.0.0"))
-            .returning(move |_, _| Ok(true));
+            .expect_get_original_name()
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(Version::try_from("1.0.0").unwrap()),
+            )
+            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
         mock_db
             .expect_is_owner()
-            .with(
-                eq(NormalizedName::from_unchecked("foobar".to_string())),
-                eq("user"),
-            )
+            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
             .returning(move |_, _| Ok(false));
         mock_db
             .expect_get_user()
@@ -1947,10 +1938,6 @@ mod tests {
     async fn build_rust_doc_is_owner() {
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_crate_id()
-            .with(eq(NormalizedName::from_unchecked("foobar".to_string())))
-            .returning(move |_| Ok(Some(1)));
-        mock_db
             .expect_validate_session()
             .with(eq("cookie"))
             .returning(move |_| {
@@ -1961,15 +1948,15 @@ mod tests {
                 })
             });
         mock_db
-            .expect_crate_version_exists()
-            .with(eq(1), eq("1.0.0"))
-            .returning(move |_, _| Ok(true));
+            .expect_get_original_name()
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(Version::try_from("1.0.0").unwrap()),
+            )
+            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
         mock_db
             .expect_is_owner()
-            .with(
-                eq(NormalizedName::from_unchecked("foobar".to_string())),
-                eq("user"),
-            )
+            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
             .returning(move |_, _| Ok(true));
         mock_db
             .expect_get_user()
@@ -1988,7 +1975,7 @@ mod tests {
         mock_db
             .expect_add_doc_queue()
             .with(
-                eq(NormalizedName::from_unchecked("foobar".to_string())),
+                eq(OriginalName::try_from("foobar").unwrap()),
                 eq(Version::try_from("1.0.0").unwrap()),
                 always(),
             )
@@ -2023,10 +2010,6 @@ mod tests {
     async fn build_rust_doc_read_only_owner_is_rejected() {
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_crate_id()
-            .with(eq(NormalizedName::from_unchecked("foobar".to_string())))
-            .returning(move |_| Ok(Some(1)));
-        mock_db
             .expect_validate_session()
             .with(eq("cookie"))
             .returning(move |_| {
@@ -2037,15 +2020,15 @@ mod tests {
                 })
             });
         mock_db
-            .expect_crate_version_exists()
-            .with(eq(1), eq("1.0.0"))
-            .returning(move |_, _| Ok(true));
+            .expect_get_original_name()
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(Version::try_from("1.0.0").unwrap()),
+            )
+            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
         mock_db
             .expect_is_owner()
-            .with(
-                eq(NormalizedName::from_unchecked("foobar".to_string())),
-                eq("user"),
-            )
+            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
             .returning(move |_, _| Ok(true));
         mock_db
             .expect_get_user()
@@ -2064,7 +2047,7 @@ mod tests {
         mock_db
             .expect_add_doc_queue()
             .with(
-                eq(NormalizedName::from_unchecked("foobar".to_string())),
+                eq(OriginalName::try_from("foobar").unwrap()),
                 eq(Version::try_from("1.0.0").unwrap()),
                 always(),
             )
@@ -2099,10 +2082,6 @@ mod tests {
     async fn build_rust_doc_not_owner_but_admin() {
         let mut mock_db = MockDb::new();
         mock_db
-            .expect_get_crate_id()
-            .with(eq(NormalizedName::from_unchecked("foobar".to_string())))
-            .returning(move |_| Ok(Some(1)));
-        mock_db
             .expect_validate_session()
             .with(eq("cookie"))
             .returning(move |_| {
@@ -2113,15 +2092,15 @@ mod tests {
                 })
             });
         mock_db
-            .expect_crate_version_exists()
-            .with(eq(1), eq("1.0.0"))
-            .returning(move |_, _| Ok(true));
+            .expect_get_original_name()
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(Version::try_from("1.0.0").unwrap()),
+            )
+            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
         mock_db
             .expect_is_owner()
-            .with(
-                eq(NormalizedName::from_unchecked("foobar".to_string())),
-                eq("user"),
-            )
+            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
             .returning(move |_, _| Ok(false));
         mock_db
             .expect_get_user()
@@ -2140,7 +2119,7 @@ mod tests {
         mock_db
             .expect_add_doc_queue()
             .with(
-                eq(NormalizedName::from_unchecked("foobar".to_string())),
+                eq(OriginalName::try_from("foobar").unwrap()),
                 eq(Version::try_from("1.0.0").unwrap()),
                 always(),
             )
@@ -2381,12 +2360,12 @@ mod tests {
         assert_eq!(response.crate_versions_found, 2);
 
         let key_a = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("crate-a"),
+            &DocsName::from_folder("crate-a".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             "doc/index.html",
         );
         let key_b = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("crate-b"),
+            &DocsName::from_folder("crate-b".to_string()),
             &Version::from_unchecked_str("2.0.0"),
             "doc/nested/page.html",
         );
@@ -3040,10 +3019,7 @@ mod tests {
             .returning(|name| Ok(name.as_str() == "secret"));
         mock_db
             .expect_is_crate_user()
-            .with(
-                eq(NormalizedName::from_unchecked("secret".to_string())),
-                eq("user"),
-            )
+            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("user"))
             .returning(|_, _| Ok(true));
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
         let user = MaybeUserOrToken {
@@ -3072,7 +3048,7 @@ mod tests {
             .returning(|name| Ok(name.as_str() == "secret"));
         mock_db
             .expect_get_crate_dependents()
-            .with(eq(NormalizedName::from_unchecked("foo".to_string())))
+            .with(eq(CanonicalName::try_from("foo").unwrap()))
             .returning(|_| {
                 Ok(CrateDependents {
                     latest_version: Some("2.0.0".to_string()),
@@ -3155,7 +3131,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_is_download_restricted()
-            .with(eq(NormalizedName::from_unchecked("secret".to_string())))
+            .with(eq(CanonicalName::try_from("secret").unwrap()))
             .returning(|_| Ok(true));
         mock_db.expect_get_crate_data().returning(|_| {
             Ok(CrateData {
@@ -3223,10 +3199,7 @@ mod tests {
         let mut mock_db = restricted_crate_mock(Some(("user", false)));
         mock_db
             .expect_is_crate_user()
-            .with(
-                eq(NormalizedName::from_unchecked("secret".to_string())),
-                eq("user"),
-            )
+            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("user"))
             .returning(|_, _| Ok(true));
         assert_eq!(StatusCode::OK, get_secret_crate_data(mock_db, true).await);
     }

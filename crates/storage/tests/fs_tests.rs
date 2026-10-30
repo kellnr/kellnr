@@ -1,7 +1,7 @@
 use bytes::Bytes;
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
-use kellnr_storage::docs_storage::DocsStorage;
+use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::storage::Storage;
 
@@ -172,7 +172,7 @@ fn docs_storage() -> (tempfile::TempDir, DocsStorage) {
 async fn docs_storage_put_overwrites_and_gets() {
     let (_dir, docs) = docs_storage();
     let key = DocsStorage::file_key(
-        &NormalizedName::from_unchecked_str("my-crate"),
+        &docs_name("my-crate"),
         &Version::from_unchecked_str("1.0.0"),
         "doc/my_crate/index.html",
     );
@@ -188,12 +188,12 @@ async fn docs_storage_put_overwrites_and_gets() {
 async fn docs_storage_delete_prefix_removes_only_matching_version() {
     let (_dir, docs) = docs_storage();
     let v1 = DocsStorage::file_key(
-        &NormalizedName::from_unchecked_str("my-crate"),
+        &docs_name("my-crate"),
         &Version::from_unchecked_str("1.0.0"),
         "doc/my_crate/index.html",
     );
     let v2 = DocsStorage::file_key(
-        &NormalizedName::from_unchecked_str("my-crate"),
+        &docs_name("my-crate"),
         &Version::from_unchecked_str("2.0.0"),
         "doc/my_crate/index.html",
     );
@@ -202,7 +202,7 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
     docs.put(&v2, Bytes::from_static(b"b")).await.unwrap();
 
     docs.delete_prefix(&DocsStorage::version_prefix(
-        &NormalizedName::from_unchecked_str("my-crate"),
+        &docs_name("my-crate"),
         &Version::from_unchecked_str("1.0.0"),
     ))
     .await
@@ -210,4 +210,8 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
 
     assert!(!docs.exists(&v1).await.unwrap());
     assert!(docs.exists(&v2).await.unwrap());
+}
+
+fn docs_name(name: &str) -> DocsName {
+    DocsName::from(&OriginalName::try_from(name).unwrap())
 }

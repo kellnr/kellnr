@@ -4,7 +4,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use kellnr_appstate::DbState;
 use kellnr_auth::maybe_user::MaybeUser;
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_db::DbProvider;
 use kellnr_registry::crate_group::{CrateGroup, CrateGroupList};
@@ -30,7 +30,7 @@ enum AclAction {
 /// Read-only owners may only read.
 async fn authorize(
     user: &MaybeUser,
-    crate_name: &NormalizedName,
+    crate_name: &CanonicalName,
     action: AclAction,
     db: &Arc<dyn DbProvider>,
 ) -> Result<(), RouteError> {
@@ -66,7 +66,7 @@ pub async fn list_users(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> Result<Json<CrateUserList>, RouteError> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     authorize(&user, &crate_name, AclAction::Read, &db).await?;
     let users: Vec<CrateUser> = db
         .get_crate_users(&crate_name)
@@ -103,7 +103,7 @@ pub async fn add_user(
     Path((crate_name, name)): Path<(OriginalName, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     authorize(&user, &crate_name, AclAction::Modify, &db).await?;
 
     // Fails with 404 for an unknown user.
@@ -136,7 +136,7 @@ pub async fn delete_user(
     Path((crate_name, name)): Path<(OriginalName, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     authorize(&user, &crate_name, AclAction::Modify, &db).await?;
     Ok(db.delete_crate_user(&crate_name, &name).await?)
 }
@@ -160,7 +160,7 @@ pub async fn list_groups(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> Result<Json<CrateGroupList>, RouteError> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     authorize(&user, &crate_name, AclAction::Read, &db).await?;
     let groups: Vec<CrateGroup> = db
         .get_crate_groups(&crate_name)
@@ -195,7 +195,7 @@ pub async fn add_group(
     Path((crate_name, name)): Path<(OriginalName, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     authorize(&user, &crate_name, AclAction::Modify, &db).await?;
     if !db.is_crate_group(&crate_name, &name).await? {
         db.add_crate_group(&crate_name, &name).await?;
@@ -224,7 +224,7 @@ pub async fn delete_group(
     Path((crate_name, name)): Path<(OriginalName, String)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     authorize(&user, &crate_name, AclAction::Modify, &db).await?;
     Ok(db.delete_crate_group(&crate_name, &name).await?)
 }
@@ -248,7 +248,7 @@ pub async fn get_access_data(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> Result<Json<AccessData>, RouteError> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     authorize(&user, &crate_name, AclAction::Read, &db).await?;
     Ok(Json(AccessData {
         download_restricted: db.is_download_restricted(&crate_name).await?,
@@ -276,7 +276,7 @@ pub async fn set_access_data(
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<AccessData>,
 ) -> Result<Json<AccessData>, RouteError> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     db.change_download_restricted(&crate_name, input.download_restricted)
         .await?;
 
@@ -301,8 +301,8 @@ mod tests {
 
     use super::*;
 
-    fn crate_name() -> NormalizedName {
-        NormalizedName::from_unchecked("mycrate".to_string())
+    fn crate_name() -> CanonicalName {
+        CanonicalName::try_from("mycrate").unwrap()
     }
 
     /// Mock with a session for `name` who owns "mycrate" if `is_owner`.

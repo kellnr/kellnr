@@ -9,7 +9,6 @@ pub mod index_metadata;
 pub mod license;
 pub mod login_throttle;
 pub mod name_or_description;
-pub mod normalized_name;
 pub mod original_name;
 pub mod prefetch;
 pub mod publish_metadata;

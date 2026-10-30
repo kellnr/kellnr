@@ -6,12 +6,12 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use kellnr_common::crate_dependents::{CrateDependent, CrateDependents};
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
 use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::{Prefetch, is_not_modified};
 use kellnr_common::publish_metadata::PublishMetadata;
@@ -158,13 +158,27 @@ impl Database {
             .ok_or_else(|| DbError::UserNotFound(name.to_owned()))
     }
 
-    /// Looks up a krate by normalized name; returns the entity model or [`DbError::CrateNotFound`].
-    async fn get_krate_model(&self, crate_name: &NormalizedName) -> DbResult<krate::Model> {
+    /// Looks up a krate by canonical name; returns the entity model or [`DbError::CrateNotFound`].
+    async fn get_krate_model(&self, crate_name: &CanonicalName) -> DbResult<krate::Model> {
         krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
             .one(&self.db_con)
             .await?
             .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))
+    }
+
+    /// The error for a crate that could not be created, as a concurrent
+    /// publish created one with the same canonical name.
+    async fn concurrent_name_conflict(&self, name: &OriginalName) -> DbError {
+        match krate::Entity::find()
+            .filter(krate::Column::Name.eq(name.to_canonical()))
+            .one(&self.db_con)
+            .await
+        {
+            Ok(Some(krate)) => operations::name_conflict(name, krate.original_name),
+            Ok(None) => operations::name_conflict(name, name.to_string()),
+            Err(e) => e.into(),
+        }
     }
 
     /// Looks up a group by name; returns the entity model or [`DbError::GroupNotFound`].
@@ -219,7 +233,7 @@ impl Database {
     /// so clients fetch the changed index.
     async fn set_yanked(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         version: &Version,
         yanked: bool,
     ) -> DbResult<()> {
@@ -238,7 +252,7 @@ impl Database {
         let mut ci: crate_index::ActiveModel = ci.into();
         ci.yanked = Set(yanked);
         ci.update(&txn).await?;
-        operations::update_etag(&txn, crate_name, crate_id).await?;
+        operations::update_etag(&txn, crate_name.as_str(), crate_id).await?;
         txn.commit().await?;
         Ok(())
     }
@@ -260,7 +274,7 @@ impl Database {
     /// Looks up a `crate_group` by crate name and group name; returns `None` if not found.
     async fn get_crate_group_by_name_and_group(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         group: &str,
     ) -> DbResult<Option<crate_group::Model>> {
         crate_group::Entity::find()
@@ -298,7 +312,7 @@ impl Database {
     /// Looks up a `crate_user` by crate name and user name; returns `None` if not found.
     async fn get_crate_user_by_crate_and_user(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         user: &str,
     ) -> DbResult<Option<crate_user::Model>> {
         crate_user::Entity::find()
@@ -750,7 +764,7 @@ impl Database {
 
     async fn get_owner_by_crate_and_user(
         &self,
-        crate_name: &str,
+        crate_name: &CanonicalName,
         owner_name: &str,
     ) -> DbResult<Option<owner::Model>> {
         owner::Entity::find()
@@ -886,7 +900,7 @@ impl DbProvider for Database {
 
     async fn increase_download_counter(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         crate_version: &Version,
     ) -> DbResult<()> {
         let txn = self.db_con.begin().await?;
@@ -926,7 +940,7 @@ impl DbProvider for Database {
 
     async fn increase_cached_download_counter(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         crate_version: &Version,
     ) -> DbResult<()> {
         let txn = self.db_con.begin().await?;
@@ -966,7 +980,7 @@ impl DbProvider for Database {
 
     async fn increase_download_counter_by(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()> {
@@ -1007,7 +1021,7 @@ impl DbProvider for Database {
 
     async fn increase_cached_download_counter_by(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()> {
@@ -1143,13 +1157,13 @@ impl DbProvider for Database {
         Ok(res.rows_affected)
     }
 
-    async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
+    async fn add_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()> {
         let crate_fk = self.get_krate_model(crate_name).await?.id;
         let user_fk = self.get_user_model(user).await?.id;
         self.add_crate_user_impl(crate_fk, user_fk).await
     }
 
-    async fn add_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()> {
+    async fn add_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()> {
         let crate_fk = self.get_krate_model(crate_name).await?.id;
         let group_fk = self.get_group_model(group).await?.id;
         self.add_crate_group_impl(crate_fk, group_fk).await
@@ -1161,12 +1175,12 @@ impl DbProvider for Database {
         self.add_group_user_impl(group_fk, user_fk).await
     }
 
-    async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()> {
+    async fn add_owner(&self, crate_name: &CanonicalName, owner: &str) -> DbResult<()> {
         let crate_fk = self.get_krate_model(crate_name).await?.id;
         operations::add_owner_if_not_exists(&self.db_con, owner, crate_fk).await
     }
 
-    async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool> {
+    async fn is_download_restricted(&self, crate_name: &CanonicalName) -> DbResult<bool> {
         Ok(krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
             .one(&self.db_con)
@@ -1176,7 +1190,7 @@ impl DbProvider for Database {
 
     async fn change_download_restricted(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         restricted: bool,
     ) -> DbResult<()> {
         let mut krate: krate::ActiveModel = self.get_krate_model(crate_name).await?.into();
@@ -1185,21 +1199,21 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn is_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool> {
+    async fn is_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool> {
         Ok(self
             .get_crate_user_by_crate_and_user(crate_name, user)
             .await?
             .is_some())
     }
 
-    async fn is_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<bool> {
+    async fn is_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<bool> {
         Ok(self
             .get_crate_group_by_name_and_group(crate_name, group)
             .await?
             .is_some())
     }
 
-    async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool> {
+    async fn is_crate_group_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool> {
         let user = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::GroupUser.def())
             .join(JoinType::InnerJoin, group_user::Relation::Group.def())
@@ -1222,7 +1236,7 @@ impl DbProvider for Database {
             .is_some())
     }
 
-    async fn is_owner(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool> {
+    async fn is_owner(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool> {
         let owner = owner::Entity::find()
             .join(JoinType::InnerJoin, owner::Relation::Krate.def())
             .join(JoinType::InnerJoin, owner::Relation::User.def())
@@ -1237,7 +1251,7 @@ impl DbProvider for Database {
         Ok(owner.is_some())
     }
 
-    async fn get_crate_id(&self, crate_name: &NormalizedName) -> DbResult<Option<i64>> {
+    async fn get_crate_id(&self, crate_name: &CanonicalName) -> DbResult<Option<i64>> {
         let id = krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
             .one(&self.db_con)
@@ -1247,7 +1261,7 @@ impl DbProvider for Database {
         Ok(id)
     }
 
-    async fn get_crate_owners(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>> {
+    async fn get_crate_owners(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>> {
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::Owner.def())
             .join(JoinType::InnerJoin, owner::Relation::Krate.def())
@@ -1258,7 +1272,7 @@ impl DbProvider for Database {
         Ok(u.into_iter().map(User::from).collect())
     }
 
-    async fn get_crate_users(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>> {
+    async fn get_crate_users(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>> {
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::CrateUser.def())
             .join(JoinType::InnerJoin, crate_user::Relation::Krate.def())
@@ -1269,7 +1283,7 @@ impl DbProvider for Database {
         Ok(u.into_iter().map(User::from).collect())
     }
 
-    async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>> {
+    async fn get_crate_groups(&self, crate_name: &CanonicalName) -> DbResult<Vec<Group>> {
         let u = group::Entity::find()
             .join(JoinType::InnerJoin, group::Relation::CrateGroup.def())
             .join(JoinType::InnerJoin, crate_group::Relation::Krate.def())
@@ -1291,7 +1305,7 @@ impl DbProvider for Database {
         Ok(u.into_iter().map(User::from).collect())
     }
 
-    async fn get_crate_versions(&self, crate_name: &NormalizedName) -> DbResult<Vec<Version>> {
+    async fn get_crate_versions(&self, crate_name: &CanonicalName) -> DbResult<Vec<Version>> {
         let u = crate_meta::Entity::find()
             .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
             .filter(Expr::col((CrateIden::Table, krate::Column::Name)).eq(crate_name))
@@ -1376,7 +1390,7 @@ impl DbProvider for Database {
         operations::get_max_version_from_id(&self.db_con, crate_id).await
     }
 
-    async fn get_max_version_from_name(&self, crate_name: &NormalizedName) -> DbResult<Version> {
+    async fn get_max_version_from_name(&self, crate_name: &CanonicalName) -> DbResult<Version> {
         let k = self.get_krate_model(crate_name).await?;
         let v = Version::try_from(&k.max_version)
             .map_err(|_| DbError::FailedToGetMaxVersionByName(crate_name.to_string()))?;
@@ -1484,7 +1498,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn delete_owner(&self, crate_name: &str, owner: &str) -> DbResult<()> {
+    async fn delete_owner(&self, crate_name: &CanonicalName, owner: &str) -> DbResult<()> {
         let model = self.get_owner_by_crate_and_user(crate_name, owner).await?;
         self.delete_or_not_found(model, DbError::OwnerNotFound(owner.to_string()))
             .await
@@ -1492,7 +1506,7 @@ impl DbProvider for Database {
 
     async fn delete_owners(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         owners: &[String],
         allow_ownerless: bool,
     ) -> DbResult<()> {
@@ -1530,7 +1544,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
+    async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()> {
         let model = self
             .get_crate_user_by_crate_and_user(crate_name, user)
             .await?;
@@ -1538,7 +1552,7 @@ impl DbProvider for Database {
             .await
     }
 
-    async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()> {
+    async fn delete_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()> {
         let model = self
             .get_crate_group_by_name_and_group(crate_name, group)
             .await?;
@@ -1679,12 +1693,13 @@ impl DbProvider for Database {
 
     async fn add_doc_queue(
         &self,
-        krate: &NormalizedName,
+        krate: &OriginalName,
         version: &Version,
         path: &Path,
     ) -> DbResult<()> {
         let s = doc_queue::ActiveModel {
-            krate: Set(krate.to_string()),
+            // Lowercase, as the queue showed it before crate names were canonical
+            krate: Set(krate.to_lowercase()),
             version: Set(version.to_string()),
             path: Set(path
                 .to_str()
@@ -1708,7 +1723,7 @@ impl DbProvider for Database {
         Ok(entities.into_iter().map(DocQueueEntry::from).collect())
     }
 
-    async fn delete_crate(&self, krate: &NormalizedName, version: &Version) -> DbResult<()> {
+    async fn delete_crate(&self, krate: &CanonicalName, version: &Version) -> DbResult<()> {
         let txn = self.db_con.begin().await?;
 
         // Delete the entry from the "crate_meta" table
@@ -1757,13 +1772,13 @@ impl DbProvider for Database {
             if version == &current_max_version {
                 let new_max_version = crate_meta_rows
                     .into_iter()
-                    .filter_map(|cm| valid_version(&cm.version, krate))
+                    .filter_map(|cm| valid_version(&cm.version, krate.as_str()))
                     .max()
                     .ok_or(DbError::FailedToGetMaxVersionById(crate_id))?;
                 c.max_version = Set(new_max_version.into_inner());
             }
             // Update the ETag value of the crate index.
-            let etag = operations::compute_etag(&txn, krate, crate_id).await?;
+            let etag = operations::compute_etag(&txn, krate.as_str(), crate_id).await?;
             c.e_tag = Set(etag);
             c.update(&txn).await?;
         }
@@ -1773,17 +1788,24 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>> {
-        let crate_meta = crate_meta::Entity::find()
-            .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
+    async fn get_crate_meta_list(&self, crate_name: &CanonicalName) -> DbResult<Vec<CrateMeta>> {
+        let Some(krate) = krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
+            .one(&self.db_con)
+            .await?
+        else {
+            return Ok(Vec::new());
+        };
+        let crate_meta = krate
+            .find_related(crate_meta::Entity)
             .all(&self.db_con)
             .await?;
 
+        let name = krate.original_name.to_lowercase();
         let crate_meta = crate_meta
             .into_iter()
             .map(|cm| CrateMeta {
-                name: crate_name.to_string(),
+                name: name.clone(),
                 id: cm.id,
                 version: cm.version,
                 created: cm.created,
@@ -1866,7 +1888,7 @@ impl DbProvider for Database {
         self.count_crates(None, cache, visibility, tags).await
     }
 
-    async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {
+    async fn get_crate_data(&self, crate_name: &CanonicalName) -> DbResult<CrateData> {
         let krate = self.get_krate_model(crate_name).await?;
 
         let owners: Vec<String> = krate
@@ -1935,8 +1957,8 @@ impl DbProvider for Database {
                 .into_iter()
                 .flatten()
                 .map(|dep| {
-                    let info = dep_info
-                        .get(&operations::dep_lookup_name(dep))
+                    let info = operations::dep_lookup_name(dep)
+                        .and_then(|name| dep_info.get(name.as_str()))
                         .cloned()
                         .unwrap_or_default();
                     CrateRegistryDep::from_index(info.description, info.latest_version, dep.clone())
@@ -1989,7 +2011,7 @@ impl DbProvider for Database {
         Ok(crate_data)
     }
 
-    async fn get_crate_dependents(&self, crate_name: &NormalizedName) -> DbResult<CrateDependents> {
+    async fn get_crate_dependents(&self, crate_name: &CanonicalName) -> DbResult<CrateDependents> {
         let krate = self.get_krate_model(crate_name).await?;
 
         // Requirements on the crate, by the non-yanked version that has them
@@ -2074,14 +2096,12 @@ impl DbProvider for Database {
 
     async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64> {
         let created = created.format(DB_DATE_FORMAT).to_string();
-        let normalized_name = NormalizedName::from(
-            OriginalName::try_from(name)
-                .map_err(|_| DbError::InvalidCrateName(name.to_string()))?,
-        );
-        operations::ensure_no_similar_crate(&self.db_con, &normalized_name).await?;
+        let original_name = OriginalName::try_from(name)
+            .map_err(|_| DbError::InvalidCrateName(name.to_string()))?;
+        operations::ensure_no_similar_crate(&self.db_con, &original_name).await?;
         let krate = krate::ActiveModel {
             id: ActiveValue::default(),
-            name: Set(normalized_name.to_string()),
+            name: Set(original_name.to_canonical().into_inner()),
             original_name: Set(name.to_string()),
             max_version: Set("0.0.0".to_string()),
             last_updated: Set(created),
@@ -2092,7 +2112,13 @@ impl DbProvider for Database {
             e_tag: Set(String::new()), // Set to empty string, as it can be computed, when the crate index is inserted
             restricted_download: Set(false),
         };
-        Ok(krate.insert(&self.db_con).await?.id)
+        match krate.insert(&self.db_con).await {
+            Ok(krate) => Ok(krate.id),
+            Err(e) if operations::is_unique_violation(&e) => {
+                Err(self.concurrent_name_conflict(&original_name).await)
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn add_crate(
@@ -2105,20 +2131,18 @@ impl DbProvider for Database {
         token_name: Option<String>,
     ) -> DbResult<i64> {
         let created = created.format(DB_DATE_FORMAT).to_string();
-        let normalized_name = NormalizedName::from(
-            OriginalName::try_from(&pub_metadata.name)
-                .map_err(|_| DbError::InvalidCrateName(pub_metadata.name.clone()))?,
-        );
+        let original_name = OriginalName::try_from(&pub_metadata.name)
+            .map_err(|_| DbError::InvalidCrateName(pub_metadata.name.clone()))?;
+        let canonical_name = original_name.to_canonical();
 
-        // Look up the crate by its normalized name. The transaction keeps the
+        // Look up the crate by its canonical name. The transaction keeps the
         // publish atomic, but does not serialize concurrent first publishes.
-        // Two of the same name fail on the unique crate name, while two names
-        // that only differ in '-' and '_' can still both be created. The row
-        // lock serializes publishes of an existing crate on PostgreSQL, so the
-        // version check below sees concurrently published versions.
+        // Those fail on the unique crate name. The row lock serializes
+        // publishes of an existing crate on PostgreSQL, so the version check
+        // below sees concurrently published versions.
         let txn = self.db_con.begin().await?;
         let existing = krate::Entity::find()
-            .filter(krate::Column::Name.eq(&normalized_name))
+            .filter(krate::Column::Name.eq(&canonical_name))
             .lock_exclusive()
             .one(&txn)
             .await?;
@@ -2126,7 +2150,9 @@ impl DbProvider for Database {
         let version = parse_db_version(&pub_metadata.vers)?;
         let (crate_id, is_newest) = if let Some(krate) = existing {
             let krate_id = krate.id;
-            operations::ensure_owner_or_admin(&txn, owner, &normalized_name, krate_id).await?;
+            operations::ensure_same_separators(&original_name, &krate.original_name)?;
+            operations::ensure_owner_or_admin(&txn, owner, &original_name.to_lowercase(), krate_id)
+                .await?;
             // Like crates.io, the name must be spelled like on the first publish,
             // else the index and the storage would use different spellings.
             if krate.original_name != pub_metadata.name {
@@ -2159,10 +2185,9 @@ impl DbProvider for Database {
             krate.update(&txn).await?;
             (krate_id, is_newest)
         } else {
-            operations::ensure_no_similar_crate(&txn, &normalized_name).await?;
             let krate = krate::ActiveModel {
                 id: ActiveValue::default(),
-                name: Set(normalized_name.to_string()),
+                name: Set(canonical_name.into_inner()),
                 original_name: Set(pub_metadata.name.clone()),
                 max_version: Set(version.into_inner()),
                 last_updated: Set(created.clone()),
@@ -2173,7 +2198,14 @@ impl DbProvider for Database {
                 e_tag: Set(String::new()), // Set to empty string, as it can be computed, when the crate index is inserted
                 restricted_download: Set(false),
             };
-            let krate = krate.insert(&txn).await?;
+            let krate = match krate.insert(&txn).await {
+                Ok(krate) => krate,
+                Err(e) if operations::is_unique_violation(&e) => {
+                    txn.rollback().await?;
+                    return Err(self.concurrent_name_conflict(&original_name).await);
+                }
+                Err(e) => return Err(e.into()),
+            };
             (krate.id, true)
         };
 
@@ -2202,7 +2234,7 @@ impl DbProvider for Database {
 
     async fn update_docs_link(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         version: &Version,
         docs_link: &str,
     ) -> DbResult<()> {
@@ -2242,11 +2274,14 @@ impl DbProvider for Database {
         .await
     }
 
-    async fn get_prefetch_data(&self, crate_name: &str) -> DbResult<Prefetch> {
+    async fn get_prefetch_data(&self, crate_name: &OriginalName) -> DbResult<Prefetch> {
+        // Like the index of crates.io, the index file is only found under the
+        // separators the crate was published with.
         let krate = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name))
+            .filter(krate::Column::Name.eq(crate_name.to_canonical()))
             .one(&self.db_con)
             .await?
+            .filter(|krate| krate.original_name.to_lowercase() == crate_name.to_lowercase())
             .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
         let crate_indices = operations::crate_indices(&self.db_con, krate.id).await?;
 
@@ -2263,14 +2298,17 @@ impl DbProvider for Database {
 
     async fn is_cratesio_cache_up_to_date(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &OriginalName,
         etag: Option<String>,
         last_modified: Option<String>,
     ) -> DbResult<PrefetchState> {
+        // Like the index of crates.io, the index file is only found under the
+        // separators the crate was published with.
         let Some(krate) = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(crate_name))
+            .filter(cratesio_crate::Column::Name.eq(crate_name.to_canonical()))
             .one(&self.db_con)
             .await?
+            .filter(|krate| krate.original_name.to_lowercase() == crate_name.to_lowercase())
         else {
             return Ok(PrefetchState::NotFound);
         };
@@ -2314,7 +2352,7 @@ impl DbProvider for Database {
         indices: &[IndexMetadata],
         licenses: &HashMap<String, String>,
     ) -> DbResult<Prefetch> {
-        let normalized_name = crate_name.to_normalized();
+        let canonical_name = crate_name.to_canonical();
 
         let max_version = indices
             .iter()
@@ -2330,7 +2368,7 @@ impl DbProvider for Database {
         let txn = self.db_con.begin().await?;
 
         let krate = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(&normalized_name))
+            .filter(cratesio_crate::Column::Name.eq(&canonical_name))
             .one(&txn)
             .await?;
 
@@ -2353,7 +2391,7 @@ impl DbProvider for Database {
         } else {
             let krate = cratesio_crate::ActiveModel {
                 id: ActiveValue::default(),
-                name: Set(normalized_name.to_string()),
+                name: Set(canonical_name.to_string()),
                 original_name: Set(crate_name.to_string()),
                 description: Set(description),
                 e_tag: Set(etag.to_string()),
@@ -2432,7 +2470,8 @@ impl DbProvider for Database {
                     downloads: Set(0),
                     crates_io_fk: Set(krate.id),
                     documentation: Set(Some(format!(
-                        "https://docs.rs/{normalized_name}/{}",
+                        "https://docs.rs/{}/{}",
+                        crate_name.to_lowercase(),
                         index.vers,
                     ))),
                     license: Set(licenses.get(&index.vers).cloned()),
@@ -2483,7 +2522,7 @@ impl DbProvider for Database {
 
     async fn get_cratesio_version_meta(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         version: &Version,
     ) -> DbResult<Option<CratesioVersionMeta>> {
         #[derive(FromQueryResult)]
@@ -2523,7 +2562,7 @@ impl DbProvider for Database {
 
     async fn get_crate_license(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         version: &Version,
     ) -> DbResult<Option<String>> {
         let meta = crate_meta::Entity::find()
@@ -2535,11 +2574,11 @@ impl DbProvider for Database {
         Ok(meta.and_then(|m| m.license))
     }
 
-    async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
+    async fn unyank_crate(&self, crate_name: &CanonicalName, version: &Version) -> DbResult<()> {
         self.set_yanked(crate_name, version, false).await
     }
 
-    async fn yank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
+    async fn yank_crate(&self, crate_name: &CanonicalName, version: &Version) -> DbResult<()> {
         self.set_yanked(crate_name, version, true).await
     }
 
@@ -3045,7 +3084,7 @@ impl DbProvider for Database {
 
     async fn get_crate_original_name(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
     ) -> DbResult<Option<OriginalName>> {
         Ok(krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
@@ -3056,7 +3095,7 @@ impl DbProvider for Database {
 
     async fn get_original_name(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         version: &Version,
     ) -> DbResult<Option<OriginalName>> {
         let found = crate_meta::Entity::find()

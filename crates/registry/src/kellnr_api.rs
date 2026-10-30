@@ -11,13 +11,14 @@ use kellnr_appstate::{AppState, DbState};
 pub use kellnr_auth::crate_access::has_restricted_crate_access;
 use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
 use kellnr_auth::{maybe_user, token};
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::search_result;
 use kellnr_common::search_result::{Crate, SearchResult};
 use kellnr_common::version::Version;
 use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
+use kellnr_db::error::DbError;
 use kellnr_db::provider::DbResult;
 use kellnr_error::api_error::{ApiError, ApiResult};
 use kellnr_filter::CrateInfo;
@@ -33,7 +34,7 @@ use crate::yank_success::YankSuccess;
 use crate::{crate_group, crate_user, crate_version};
 
 pub async fn check_ownership(
-    crate_name: &NormalizedName,
+    crate_name: &CanonicalName,
     user: &maybe_user::MaybeUser,
     db: &Arc<dyn DbProvider>,
 ) -> Result<(), ApiError> {
@@ -44,10 +45,21 @@ pub async fn check_ownership(
     }
 }
 
+/// Fail like the database does if `name` is spelled with other separators
+/// than the existing crate `existing` of the same canonical name. Checked
+/// before the ownership, so that everyone gets the same error.
+fn ensure_same_separators(name: &OriginalName, existing: &OriginalName) -> ApiResult<()> {
+    if name.to_lowercase() == existing.to_lowercase() {
+        Ok(())
+    } else {
+        Err(DbError::CrateNameConflict(name.to_lowercase(), existing.to_string()).into())
+    }
+}
+
 /// Find an existing version of the crate that equals `version` when build
 /// metadata is ignored.
 async fn find_same_version(
-    crate_name: &NormalizedName,
+    crate_name: &CanonicalName,
     version: &Version,
     db: &Arc<dyn DbProvider>,
 ) -> DbResult<Option<String>> {
@@ -71,7 +83,7 @@ pub fn check_can_modify(user: &maybe_user::MaybeUser) -> Result<(), ApiError> {
 /// A download-restricted crate gets the same response as a missing one, so
 /// that its existence is not revealed.
 async fn check_crate_visible(
-    crate_name: &NormalizedName,
+    crate_name: &CanonicalName,
     user: Option<&maybe_user::MaybeUser>,
     db: &Arc<dyn DbProvider>,
 ) -> ApiResult<()> {
@@ -86,7 +98,7 @@ async fn check_crate_visible(
 /// download-restricted crate gets the same response as a missing one, so that
 /// its existence is not revealed.
 pub async fn check_download_auth(
-    crate_name: &NormalizedName,
+    crate_name: &CanonicalName,
     token: &token::OptionToken,
     db: &Arc<dyn DbProvider>,
 ) -> ApiResult<()> {
@@ -142,7 +154,7 @@ pub async fn remove_owner(
     let settings = &state.settings;
     let db = &state.db;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, db).await?;
 
     db.delete_owners(
@@ -186,7 +198,7 @@ pub async fn remove_owner_single(
     let settings = &state.settings;
     let db = &state.db;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, db).await?;
 
     db.delete_owners(
@@ -228,7 +240,7 @@ pub async fn remove_crate_user(
     // their read-only status.
     check_can_modify(&user)?;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     db.delete_crate_user(&crate_name, &name).await?;
@@ -264,7 +276,7 @@ pub async fn remove_crate_group(
     // their read-only status.
     check_can_modify(&user)?;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     db.delete_crate_group(&crate_name, &name).await?;
@@ -301,7 +313,7 @@ pub async fn add_owner(
     // their read-only status.
     check_can_modify(&user)?;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     for user in &input.users {
@@ -337,7 +349,7 @@ pub async fn add_owner_single(
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     check_can_modify(&user)?;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     db.add_owner(&crate_name, &added_user).await?;
@@ -368,7 +380,7 @@ pub async fn list_owners(
     State(db): DbState,
     user: Result<maybe_user::MaybeUser, StatusCode>,
 ) -> ApiResult<Json<crate_user::CrateUserList>> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_crate_visible(&crate_name, user.ok().as_ref(), &db).await?;
 
     let owners: Vec<crate_user::CrateUser> = db
@@ -412,7 +424,7 @@ pub async fn add_crate_user(
     // their read-only status.
     check_can_modify(&user)?;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     if !db.is_crate_user(&crate_name, &name).await? {
@@ -445,7 +457,7 @@ pub async fn list_crate_users(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> ApiResult<Json<crate_user::CrateUserList>> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     let users: Vec<crate_user::CrateUser> = db
@@ -489,7 +501,7 @@ pub async fn add_crate_group(
     // their read-only status.
     check_can_modify(&user)?;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     if !db.is_crate_group(&crate_name, &name).await? {
@@ -522,7 +534,7 @@ pub async fn list_crate_groups(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> ApiResult<Json<crate_group::CrateGroupList>> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     let groups: Vec<crate_group::CrateGroup> = db
@@ -559,7 +571,7 @@ pub async fn list_crate_versions(
     State(db): DbState,
     user: Result<maybe_user::MaybeUser, StatusCode>,
 ) -> ApiResult<Json<crate_version::CrateVersionList>> {
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_crate_visible(&crate_name, user.ok().as_ref(), &db).await?;
 
     let versions: Vec<crate_version::CrateVersion> = db
@@ -657,8 +669,8 @@ pub async fn download(
     let db = state.db;
     let cs = state.crate_storage;
     let download_counter = state.download_counter;
-    let normalized_name = package.to_normalized();
-    check_download_auth(&normalized_name, &token, &db).await?;
+    let canonical_name = package.to_canonical();
+    check_download_auth(&canonical_name, &token, &db).await?;
 
     let file = cs
         .get(&package, &version)
@@ -667,17 +679,17 @@ pub async fn download(
 
     let filters = &state.download_filters.registry;
     if !filters.is_empty() {
-        let license = if let Some(known) = filters.licenses().get(&normalized_name, &version) {
+        let license = if let Some(known) = filters.licenses().get(&canonical_name, &version) {
             known.into_license()
         } else {
-            let license = db.get_crate_license(&normalized_name, &version).await?;
+            let license = db.get_crate_license(&canonical_name, &version).await?;
             filters
                 .licenses()
-                .insert(&normalized_name, &version, license.clone().into());
+                .insert(&canonical_name, &version, license.clone().into());
             license
         };
         let krate = CrateInfo {
-            name: &normalized_name,
+            name: &package,
             version: &version,
             license: license.as_deref(),
         };
@@ -690,7 +702,7 @@ pub async fn download(
     // Only count downloads of crates that exist, so requests for made-up names
     // cannot fill the counter (immediate DB call when flush_interval=0).
     download_counter
-        .increment_and_maybe_flush(normalized_name, version)
+        .increment_and_maybe_flush(canonical_name, version)
         .await;
 
     Ok(file.into_response())
@@ -722,9 +734,12 @@ pub async fn add_empty_crate(
     }
     let db = state.db;
     let orig_name = OriginalName::try_from(&data.name)?;
-    let normalized_name = orig_name.to_normalized();
+    let canonical_name = orig_name.to_canonical();
 
-    if let Some(id) = db.get_crate_id(&normalized_name).await? {
+    if let Some(existing) = db.get_crate_original_name(&canonical_name).await? {
+        ensure_same_separators(&orig_name, &existing)?;
+    }
+    if let Some(id) = db.get_crate_id(&canonical_name).await? {
         let version = match db.get_max_version_from_id(id).await {
             Ok(v) => format!("{v}"),
             _ => String::new(),
@@ -764,7 +779,7 @@ pub async fn publish(
     let settings = state.settings;
     let cs = state.crate_storage;
     let orig_name = OriginalName::try_from(&pub_data.metadata.name)?;
-    let normalized_name = orig_name.to_normalized();
+    let canonical_name = orig_name.to_canonical();
 
     let token_user = token.user.clone();
     // Shown in the version list. Publishing works without it, so a failed
@@ -793,12 +808,15 @@ pub async fn publish(
     // Check if user from token is an owner of the crate.
     // If not, they are not allowed to push a new version.
     // Check if crate with same version already exists.
-    let id = db.get_crate_id(&normalized_name).await?;
+    if let Some(existing) = db.get_crate_original_name(&canonical_name).await? {
+        ensure_same_separators(&orig_name, &existing)?;
+    }
+    let id = db.get_crate_id(&canonical_name).await?;
     match (id, settings.registry.new_crates_restricted) {
         (Some(_), _) => {
-            check_ownership(&normalized_name, &user, &db).await?;
+            check_ownership(&canonical_name, &user, &db).await?;
 
-            if let Some(existing) = find_same_version(&normalized_name, &version, &db).await? {
+            if let Some(existing) = find_same_version(&canonical_name, &version, &db).await? {
                 return Err(RegistryError::CrateExists(pub_data.metadata.name, existing).into());
             }
         }
@@ -888,7 +906,7 @@ pub async fn publish(
             WebhookEvent::CrateUpdate
         },
         &created,
-        &normalized_name,
+        &canonical_name,
         &version,
         &db,
     )
@@ -898,12 +916,12 @@ pub async fn publish(
     if settings.docs.enabled && !has_docs_link {
         match cs.create_rand_doc_queue_path().await {
             Ok(path) => {
-                if let Err(e) = db.add_doc_queue(&normalized_name, &version, &path).await {
-                    error!("Failed to queue the docs build of {normalized_name} {version}: {e}");
+                if let Err(e) = db.add_doc_queue(&orig_name, &version, &path).await {
+                    error!("Failed to queue the docs build of {orig_name} {version}: {e}");
                 }
             }
             Err(e) => {
-                error!("Failed to create the docs queue path for {normalized_name} {version}: {e}");
+                error!("Failed to create the docs queue path for {orig_name} {version}: {e}");
             }
         }
     }
@@ -950,7 +968,7 @@ async fn remove_stored_crate(
     name: &OriginalName,
     version: &Version,
 ) {
-    let committed = match db.get_crate_id(&name.to_normalized()).await {
+    let committed = match db.get_crate_id(&name.to_canonical()).await {
         Ok(Some(id)) => db.crate_version_exists(id, version).await,
         Ok(None) => Ok(false),
         Err(e) => Err(e),
@@ -1012,7 +1030,7 @@ pub async fn yank(
     let user = maybe_user::MaybeUser::from_token(token);
     check_can_modify(&user)?;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     db.yank_crate(&crate_name, &version).await?;
@@ -1057,7 +1075,7 @@ pub async fn unyank(
     let user = maybe_user::MaybeUser::from_token(token);
     check_can_modify(&user)?;
 
-    let crate_name = crate_name.to_normalized();
+    let crate_name = crate_name.to_canonical();
     check_ownership(&crate_name, &user, &db).await?;
 
     db.unyank_crate(&crate_name, &version).await?;
@@ -1177,7 +1195,7 @@ mod reg_api_tests {
         assert!(
             kellnr
                 .db
-                .get_crate_id(&NormalizedName::from_unchecked_str("url_test"))
+                .get_crate_id(&CanonicalName::try_from("url_test").unwrap())
                 .await
                 .unwrap()
                 .is_none()
@@ -1204,7 +1222,7 @@ mod reg_api_tests {
         .await;
         assert_eq!(StatusCode::OK, status, "{detail}");
 
-        let name = NormalizedName::from_unchecked_str("mycrate");
+        let name = CanonicalName::try_from("mycrate").unwrap();
         assert_eq!(2, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
         assert_eq!(
             "1.1.0",
@@ -1240,7 +1258,7 @@ mod reg_api_tests {
             "ERROR: Crate mycrate must be spelled like the existing crate MyCrate",
             detail
         );
-        let name = NormalizedName::from_unchecked_str("mycrate");
+        let name = CanonicalName::try_from("mycrate").unwrap();
         assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
     }
 
@@ -1264,7 +1282,7 @@ mod reg_api_tests {
 
         assert_eq!(StatusCode::OK, status, "{detail}");
         assert_eq!(CRATE_BYTES.to_vec(), std::fs::read(&file).unwrap());
-        let name = NormalizedName::from_unchecked_str("orphan");
+        let name = CanonicalName::try_from("orphan").unwrap();
         assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
     }
 
@@ -1284,7 +1302,7 @@ mod reg_api_tests {
             detail
         );
         assert_eq!(b"other".to_vec(), std::fs::read(&file).unwrap());
-        let name = NormalizedName::from_unchecked_str("orphan");
+        let name = CanonicalName::try_from("orphan").unwrap();
         assert!(kellnr.db.get_crate_id(&name).await.unwrap().is_none());
     }
 
@@ -1356,7 +1374,7 @@ mod reg_api_tests {
         .await;
 
         assert_eq!(StatusCode::OK, status, "{detail}");
-        let name = NormalizedName::from_unchecked_str("docs_fail");
+        let name = CanonicalName::try_from("docs_fail").unwrap();
         assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
     }
 
@@ -1373,7 +1391,7 @@ mod reg_api_tests {
 
         let data = kellnr
             .db
-            .get_crate_data(&NormalizedName::from_unchecked_str("recorded"))
+            .get_crate_data(&CanonicalName::try_from("recorded").unwrap())
             .await
             .unwrap();
         assert_eq!(Some("admin".to_string()), data.versions[0].publisher);
@@ -1403,14 +1421,47 @@ mod reg_api_tests {
             "ERROR: Crate name foo_bar is too similar to the existing crate foo-bar, names must not only differ in '-' and '_'",
             detail
         );
-        assert!(
-            kellnr
-                .db
-                .get_crate_id(&NormalizedName::from_unchecked_str("foo_bar"))
-                .await
-                .unwrap()
-                .is_none()
+        let name = CanonicalName::try_from("foo_bar").unwrap();
+        assert_eq!(
+            Some(OriginalName::try_from("foo-bar").unwrap()),
+            kellnr.db.get_crate_original_name(&name).await.unwrap()
         );
+        assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
+    }
+
+    #[tokio::test]
+    async fn crate_apis_find_crates_under_the_other_separator() {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("foo-bar", "1.0.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+        let name = CanonicalName::try_from("foo-bar").unwrap();
+        let is_yanked =
+            || async { kellnr.db.get_crate_data(&name).await.unwrap().versions[0].yanked };
+
+        for (request, yanked) in [
+            (Request::get("/api/v1/crates/foo_bar/owners"), false),
+            (Request::delete("/api/v1/crates/foo_bar/1.0.0/yank"), true),
+            (Request::put("/api/v1/crates/Foo_Bar/1.0.0/unyank"), false),
+        ] {
+            let r = kellnr
+                .client
+                .clone()
+                .oneshot(
+                    request
+                        .header(header::AUTHORIZATION, TOKEN)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(StatusCode::OK, r.status());
+            assert_eq!(yanked, is_yanked().await);
+        }
     }
 
     #[tokio::test]
@@ -1461,7 +1512,7 @@ mod reg_api_tests {
             "ERROR: Crate with version already exists: build_meta-1.0.0+a",
             detail
         );
-        let name = NormalizedName::from_unchecked_str("build_meta");
+        let name = CanonicalName::try_from("build_meta").unwrap();
         assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
     }
 
@@ -1526,7 +1577,7 @@ mod reg_api_tests {
     async fn owner_names(kellnr: &TestKellnr) -> Vec<String> {
         let mut names: Vec<String> = kellnr
             .db
-            .get_crate_owners(&NormalizedName::from_unchecked_str("owned"))
+            .get_crate_owners(&CanonicalName::try_from("owned").unwrap())
             .await
             .unwrap()
             .into_iter()
@@ -1634,7 +1685,7 @@ mod reg_api_tests {
             1,
             kellnr
                 .db
-                .get_crate_owners(&NormalizedName::from_unchecked("test_lib".to_string()))
+                .get_crate_owners(&CanonicalName::try_from("test_lib").unwrap())
                 .await
                 .unwrap()
                 .len()
@@ -1694,7 +1745,7 @@ mod reg_api_tests {
         assert!(
             kellnr
                 .db
-                .get_crate_owners(&NormalizedName::from_unchecked("test_lib".to_string()))
+                .get_crate_owners(&CanonicalName::try_from("test_lib").unwrap())
                 .await
                 .unwrap()
                 .is_empty()
@@ -1793,7 +1844,7 @@ mod reg_api_tests {
 
         let owners = kellnr
             .db
-            .get_crate_owners(&NormalizedName::from_unchecked("test_lib".to_string()))
+            .get_crate_owners(&CanonicalName::try_from("test_lib").unwrap())
             .await
             .unwrap();
         assert_eq!(2, owners.len());
@@ -1876,7 +1927,7 @@ mod reg_api_tests {
 
         let owners = kellnr
             .db
-            .get_crate_owners(&NormalizedName::from_unchecked("test_lib".to_string()))
+            .get_crate_owners(&CanonicalName::try_from("test_lib").unwrap())
             .await
             .unwrap();
         assert!(owners.is_empty());
@@ -2179,10 +2230,7 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_owner(
-                &NormalizedName::from_unchecked("test_lib".to_string()),
-                "rouser",
-            )
+            .add_owner(&CanonicalName::try_from("test_lib").unwrap(), "rouser")
             .await
             .unwrap();
 
@@ -2242,10 +2290,7 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_owner(
-                &NormalizedName::from_unchecked("test_lib".to_string()),
-                "rwowner",
-            )
+            .add_owner(&CanonicalName::try_from("test_lib").unwrap(), "rwowner")
             .await
             .unwrap();
         kellnr
@@ -2645,7 +2690,7 @@ mod reg_api_tests {
     /// `crate-user-token` of user `crate_user` may access. The token
     /// `other-token` of user `other` has no access. No other crate exists.
     fn restricted_crate_mock_db() -> MockDb {
-        let secret = NormalizedName::from_unchecked("secret".to_string());
+        let secret = CanonicalName::try_from("secret").unwrap();
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_crate_id()
@@ -3054,12 +3099,10 @@ mod reg_api_tests {
             serde_json::from_slice(&result_msg).expect("Cannot deserialize success message");
 
         assert_eq!(StatusCode::OK, response_status);
-        let normalized_name = OriginalName::try_from("next-crate")
-            .unwrap()
-            .to_normalized();
+        let canonical_name = OriginalName::try_from("next-crate").unwrap().to_canonical();
         let crate_id = kellnr
             .db
-            .get_crate_id(&normalized_name)
+            .get_crate_id(&canonical_name)
             .await
             .unwrap()
             .unwrap();
@@ -3090,13 +3133,10 @@ mod reg_api_tests {
 
         assert_eq!(StatusCode::UNAUTHORIZED, response_status);
 
-        let normalized_name = OriginalName::try_from("rogue-crate")
+        let canonical_name = OriginalName::try_from("rogue-crate")
             .unwrap()
-            .to_normalized();
-        assert_eq!(
-            None,
-            kellnr.db.get_crate_id(&normalized_name).await.unwrap()
-        );
+            .to_canonical();
+        assert_eq!(None, kellnr.db.get_crate_id(&canonical_name).await.unwrap());
     }
 
     #[tokio::test]
@@ -3331,10 +3371,10 @@ mod reg_api_tests {
             .await
             .unwrap();
         // add the non_admin user as the owner
-        let normalized_name = OriginalName::try_from("test_lib").unwrap().to_normalized();
+        let canonical_name = OriginalName::try_from("test_lib").unwrap().to_canonical();
         kellnr
             .db
-            .add_owner(&normalized_name, "non_admin")
+            .add_owner(&canonical_name, "non_admin")
             .await
             .unwrap();
 
@@ -3373,7 +3413,7 @@ mod reg_api_tests {
             1,
             kellnr
                 .db
-                .get_crate_meta_list(&normalized_name)
+                .get_crate_meta_list(&canonical_name)
                 .await
                 .unwrap()
                 .len()
@@ -3382,7 +3422,7 @@ mod reg_api_tests {
             "0.2.0",
             kellnr
                 .db
-                .get_crate_meta_list(&normalized_name)
+                .get_crate_meta_list(&canonical_name)
                 .await
                 .unwrap()[0]
                 .version

@@ -309,12 +309,14 @@ async fn panicking_sync_does_not_block_later_syncs() {
 
 #[test]
 fn crate_sub_path_follows_sparse_index_layout() {
-    let path = |n: &str| crate_sub_path(&NormalizedName::from_unchecked_str(n));
+    let path = |n: &str| crate_sub_path(&OriginalName::try_from(n).unwrap());
 
     assert_eq!("1/a", path("a"));
     assert_eq!("2/ab", path("ab"));
     assert_eq!("3/a/abc", path("abc"));
     assert_eq!("ab/cd/abcd", path("abcd"));
+    assert_eq!("fo/o-/foo-bar", path("Foo-Bar"));
+    assert_eq!("fo/o_/foo_bar", path("foo_bar"));
 }
 
 /// A fake crates.io whose index answers 503 and whose API answers 429 to the

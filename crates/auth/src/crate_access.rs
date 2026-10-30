@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_db::provider::DbResult;
 use kellnr_db::{CrateVisibility, DbProvider};
 
@@ -9,7 +9,7 @@ use crate::maybe_user::MaybeUser;
 /// Whether `user` may read the content of a download-restricted crate,
 /// i.e. the crate archive and its hosted rustdoc.
 pub async fn has_restricted_crate_access(
-    crate_name: &NormalizedName,
+    crate_name: &CanonicalName,
     user: &str,
     is_admin: bool,
     db: &Arc<dyn DbProvider>,
@@ -23,7 +23,7 @@ pub async fn has_restricted_crate_access(
 /// Whether `user` may see a crate and its metadata, honoring its download
 /// restriction. `None` is an anonymous caller, who only sees unrestricted crates.
 pub async fn can_read_crate(
-    crate_name: &NormalizedName,
+    crate_name: &CanonicalName,
     user: Option<&MaybeUser>,
     db: &Arc<dyn DbProvider>,
 ) -> DbResult<bool> {
@@ -52,8 +52,8 @@ mod tests {
 
     use super::*;
 
-    fn name() -> NormalizedName {
-        NormalizedName::from_unchecked("restricted".to_string())
+    fn name() -> CanonicalName {
+        CanonicalName::try_from("restricted").unwrap()
     }
 
     fn user(is_admin: bool) -> MaybeUser {

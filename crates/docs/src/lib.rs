@@ -8,24 +8,23 @@ mod unpack;
 pub mod upload;
 pub mod upload_response;
 
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
-use kellnr_storage::docs_storage::DocsStorage;
+use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 
 use crate::docs_error::DocsError;
 
 /// URL of the docs of a crate version. The docs are stored under the
-/// normalized crate name, but rustdoc keeps the casing of the crate name for
+/// lowercase crate name, but rustdoc keeps the casing of the crate name for
 /// its output folder.
 pub fn compute_doc_url(
     crate_name: &OriginalName,
     crate_version: &Version,
     path_prefix: &str,
 ) -> String {
-    let normalized_name = crate_name.to_normalized();
+    let folder = DocsName::from(crate_name);
     let docs_name = crate_name_to_docs_name(crate_name);
-    format!("{path_prefix}/docs/{normalized_name}/{crate_version}/doc/{docs_name}/index.html")
+    format!("{path_prefix}/docs/{folder}/{crate_version}/doc/{docs_name}/index.html")
 }
 
 fn crate_name_to_docs_name(crate_name: &OriginalName) -> String {
@@ -41,7 +40,7 @@ async fn doc_exists(
 ) -> bool {
     let docs_name = crate_name_to_docs_name(crate_name);
     let key = DocsStorage::file_key(
-        &crate_name.to_normalized(),
+        &DocsName::from(crate_name),
         crate_version,
         &format!("doc/{docs_name}/index.html"),
     );
@@ -49,12 +48,15 @@ async fn doc_exists(
 }
 
 pub async fn delete(
-    crate_name: &NormalizedName,
+    crate_name: &OriginalName,
     crate_version: &Version,
     docs_storage: &DocsStorage,
 ) -> Result<(), DocsError> {
     docs_storage
-        .delete_prefix(&DocsStorage::version_prefix(crate_name, crate_version))
+        .delete_prefix(&DocsStorage::version_prefix(
+            &DocsName::from(crate_name),
+            crate_version,
+        ))
         .await?;
     Ok(())
 }
@@ -112,7 +114,7 @@ mod tests {
     async fn doc_exists_true_when_index_html_present() {
         let (_dir, docs) = docs_storage();
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from(&original("my-crate")),
             &Version::from_unchecked_str("1.0.0"),
             "doc/my_crate/index.html",
         );
@@ -145,7 +147,7 @@ mod tests {
     async fn doc_exists_for_crate_with_uppercase_letters() {
         let docs = DocsStorage::new(Box::new(MemoryStorage::new()));
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from(&original("my-crate")),
             &Version::from_unchecked_str("1.0.0"),
             "doc/My_Crate/index.html",
         );
@@ -165,12 +167,12 @@ mod tests {
     async fn delete_removes_only_targeted_version() {
         let (_dir, docs) = docs_storage();
         let v1 = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from(&original("my-crate")),
             &Version::from_unchecked_str("1.0.0"),
             "doc/my_crate/index.html",
         );
         let v2 = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from(&original("my-crate")),
             &Version::from_unchecked_str("2.0.0"),
             "doc/my_crate/index.html",
         );
@@ -178,7 +180,7 @@ mod tests {
         docs.put(&v2, Bytes::from_static(b"b")).await.unwrap();
 
         delete(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &original("my-crate"),
             &Version::from_unchecked_str("1.0.0"),
             &docs,
         )

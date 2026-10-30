@@ -265,13 +265,13 @@ mod tests {
     use axum_extra::extract::cookie::Key;
     use bytes::Bytes;
     use kellnr_appstate::{TEST_KEY, encode_cookies};
-    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_common::canonical_name::CanonicalName;
     use kellnr_common::version::Version;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{SessionInfo, User};
     use kellnr_settings::constants::COOKIE_SESSION_ID;
-    use kellnr_storage::docs_storage::DocsStorage;
+    use kellnr_storage::docs_storage::{DocsName, DocsStorage};
     use mockall::predicate::eq;
     use tower::ServiceExt;
 
@@ -296,7 +296,7 @@ mod tests {
     fn restricted_db() -> MockDb {
         let mut db = MockDb::new();
         db.expect_is_download_restricted()
-            .with(eq(NormalizedName::from_unchecked("secret".to_string())))
+            .with(eq(CanonicalName::try_from("secret").unwrap()))
             .returning(|_| Ok(true));
         db.expect_get_user_from_token().returning(|token| {
             Ok(User {
@@ -315,7 +315,7 @@ mod tests {
 
     async fn put_secret_docs(state: &AppStateData) -> String {
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("secret"),
+            &DocsName::from_folder("secret".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             "src/secret/lib.rs.html",
         );
@@ -447,10 +447,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn restricted_docs_checked_with_normalized_crate_name() {
+    async fn restricted_docs_checked_with_canonical_crate_name() {
         let state = docs_test_state(restricted_db());
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("Secret"),
+            &DocsName::from_folder("Secret".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             "src/secret/lib.rs.html",
         );
@@ -519,7 +519,7 @@ mod tests {
     async fn docs_route_serves_stored_file_with_mime_and_csp() {
         let state = docs_test_state(unrestricted_db());
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("routes-test-crate"),
+            &DocsName::from_folder("routes-test-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             "doc/routes_test_crate/index.html",
         );
@@ -638,7 +638,7 @@ mod tests {
     async fn cache_control_for(file: &str) -> String {
         let state = docs_test_state(unrestricted_db());
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("routes-test-crate"),
+            &DocsName::from_folder("routes-test-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             file,
         );
@@ -684,7 +684,7 @@ mod tests {
     async fn docs_route_returns_304_for_matching_if_none_match() {
         let state = docs_test_state(unrestricted_db());
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("routes-test-crate"),
+            &DocsName::from_folder("routes-test-crate".to_string()),
             &Version::from_unchecked_str("1.0.0"),
             "doc/routes_test_crate/index.html",
         );

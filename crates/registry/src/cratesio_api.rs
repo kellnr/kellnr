@@ -110,7 +110,7 @@ pub async fn download(
 ) -> Result<Bytes, DownloadError> {
     trace!("Downloading crate: {name} ({version})");
 
-    let normalized_name = name.to_normalized();
+    let canonical_name = name.to_canonical();
     let filters = &state.download_filters.cratesio;
     let cached = state
         .cratesio_storage
@@ -124,7 +124,7 @@ pub async fn download(
     let known_license = if filters.is_empty() {
         None
     } else {
-        filters.licenses().get(&normalized_name, &version)
+        filters.licenses().get(&canonical_name, &version)
     };
     let need_license = !filters.is_empty() && known_license.is_none();
     let meta = if cached.is_none() || need_license {
@@ -154,14 +154,14 @@ pub async fn download(
                     // license is stored as `UNKNOWN_LICENSE`, which is a license
                     // here.
                     filters.licenses().insert(
-                        &normalized_name,
+                        &canonical_name,
                         &version,
                         KnownLicense::Declared(license.clone()),
                     );
                 }),
         };
         let krate = CrateInfo {
-            name: &normalized_name,
+            name: &name,
             version: &version,
             license: license.as_deref(),
         };
@@ -194,7 +194,7 @@ pub async fn download(
     // Count ALL downloads (both cache hits and upstream fetches)
     state
         .download_counter
-        .increment_cached_and_maybe_flush(normalized_name, version.clone())
+        .increment_cached_and_maybe_flush(canonical_name, version.clone())
         .await;
 
     Ok(file)
@@ -234,7 +234,7 @@ async fn synced_version_meta(
     need_license: bool,
 ) -> Result<Option<CratesioVersionMeta>, StatusCode> {
     let get_meta = || async {
-        db.get_cratesio_version_meta(&name.to_normalized(), version)
+        db.get_cratesio_version_meta(&name.to_canonical(), version)
             .await
             .map_err(|e| {
                 error!("Could not get crates.io metadata for {name} ({version}): {e}");

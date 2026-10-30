@@ -147,7 +147,7 @@ mod service_tests {
     use std::sync::Arc;
 
     use chrono::Utc;
-    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_common::canonical_name::CanonicalName;
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_common::version::Version;
     use kellnr_common::webhook::{Webhook, WebhookEvent};
@@ -171,7 +171,7 @@ mod service_tests {
         notify_crate(
             WebhookEvent::CrateAdd,
             &Utc::now(),
-            &NormalizedName::from_unchecked_str("Test-Crate"),
+            &CanonicalName::try_from("Test-Crate").unwrap(),
             &Version::from_unchecked_str("0.1.0"),
             &db,
         )
@@ -205,7 +205,7 @@ mod service_tests {
         notify_crate(
             WebhookEvent::CrateAdd,
             &Utc::now(),
-            &NormalizedName::from_unchecked_str("Test-Crate"),
+            &CanonicalName::try_from("Test-Crate").unwrap(),
             &Version::from_unchecked_str("0.1.0"),
             &db,
         )
@@ -240,7 +240,7 @@ mod service_tests {
         notify_crate(
             WebhookEvent::CrateAdd,
             &Utc::now(),
-            &NormalizedName::from_unchecked_str("Test-Crate"),
+            &CanonicalName::try_from("Test-Crate").unwrap(),
             &Version::from_unchecked_str("0.1.0"),
             &db,
         )
@@ -301,7 +301,7 @@ mod service_tests {
         notify_crate(
             WebhookEvent::CrateAdd,
             &Utc::now(),
-            &NormalizedName::from_unchecked_str("Test-Crate"),
+            &CanonicalName::try_from("Test-Crate").unwrap(),
             &Version::from_unchecked_str("0.1.0"),
             &db,
         )
@@ -350,7 +350,7 @@ mod service_tests {
         notify_crate(
             WebhookEvent::CrateAdd,
             &Utc::now(),
-            &NormalizedName::from_unchecked_str("Test-Crate"),
+            &CanonicalName::try_from("Test-Crate").unwrap(),
             &Version::from_unchecked_str("0.1.0"),
             &db,
         )
@@ -389,7 +389,7 @@ mod service_tests {
         notify_crate(
             WebhookEvent::CrateYank,
             &Utc::now(),
-            &NormalizedName::from_unchecked_str("test-crate"),
+            &CanonicalName::try_from("test-crate").unwrap(),
             &Version::from_unchecked_str("0.1.0"),
             &db,
         )
@@ -415,7 +415,7 @@ mod service_tests {
         notify_crate(
             WebhookEvent::CrateAdd,
             &Utc::now(),
-            &NormalizedName::from_unchecked_str("Test-Crate"),
+            &CanonicalName::try_from("Test-Crate").unwrap(),
             &Version::from_unchecked_str("0.1.0"),
             &db,
         )

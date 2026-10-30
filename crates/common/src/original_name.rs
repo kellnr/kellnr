@@ -9,7 +9,6 @@ use thiserror::Error;
 use utoipa::ToSchema;
 
 use crate::canonical_name::CanonicalName;
-use crate::normalized_name::NormalizedName;
 
 static NAME_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-zA-Z][a-zA-Z0-9-_]*$").unwrap());
@@ -34,9 +33,6 @@ pub enum NameError {
 impl OriginalName {
     pub fn to_canonical(&self) -> CanonicalName {
         CanonicalName::from(self)
-    }
-    pub fn to_normalized(&self) -> NormalizedName {
-        NormalizedName::from(self)
     }
     pub fn from_unchecked(name: String) -> Self {
         Self(name)

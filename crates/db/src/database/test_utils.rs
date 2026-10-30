@@ -20,6 +20,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use chrono::{DateTime, TimeZone, Utc};
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
@@ -221,7 +222,7 @@ pub async fn test_add_cached_crate_with_downloads(
     let _ = test_add_cached_crate(db, name, version).await?;
 
     let krate = cratesio_crate::Entity::find()
-        .filter(cratesio_crate::Column::Name.eq(name))
+        .filter(cratesio_crate::Column::Name.eq(canonical(name)))
         .one(&db.db_con)
         .await?
         .ok_or_else(|| DbError::CrateNotFound(name.to_string()))?;
@@ -289,9 +290,14 @@ pub async fn test_add_crate(
     db.add_crate(&pm, "cksum", 1024, created, owner, None).await
 }
 
-/// Insert an empty crate without any name checks, to simulate data created
-/// before a check was introduced.
-pub async fn test_insert_crate_unchecked(db: &Database, name: &str) -> DbResult<i64> {
+/// The canonical name of a crate name used in a test.
+fn canonical(name: &str) -> CanonicalName {
+    OriginalName::from_unchecked(name.to_string()).to_canonical()
+}
+
+/// Insert an empty crate like Kellnr versions before canonical crate names
+/// did: with the lowercase name and without any name checks.
+pub async fn test_insert_legacy_crate(db: &Database, name: &str) -> DbResult<i64> {
     let krate = krate::ActiveModel {
         id: ActiveValue::default(),
         name: Set(name.to_lowercase()),
@@ -306,6 +312,81 @@ pub async fn test_insert_crate_unchecked(db: &Database, name: &str) -> DbResult<
         restricted_download: Set(false),
     };
     Ok(krate.insert(&db.db_con).await?.id)
+}
+
+/// Stores the names of all crates in lowercase with the separators they were
+/// published with, like Kellnr versions before canonical crate names did.
+pub async fn test_set_legacy_crate_names(db: &Database) -> DbResult<()> {
+    db.db_con
+        .execute_unprepared("UPDATE krate SET name = LOWER(original_name)")
+        .await?;
+    Ok(())
+}
+
+/// Insert a cached crates.io crate like Kellnr versions before canonical
+/// crate names did: with the lowercase name.
+pub async fn test_insert_legacy_cached_crate(db: &Database, name: &str) -> DbResult<i64> {
+    let krate = cratesio_crate::ActiveModel {
+        id: ActiveValue::default(),
+        name: Set(name.to_lowercase()),
+        original_name: Set(name.to_string()),
+        e_tag: Set(String::new()),
+        last_modified: Set(String::new()),
+        last_updated: Set(String::new()),
+        description: Set(None),
+        total_downloads: Set(0),
+        max_version: Set("1.0.0".to_string()),
+    };
+    Ok(krate.insert(&db.db_con).await?.id)
+}
+
+/// Stores the names of all crate dependencies in lowercase with the
+/// separators they were published with, like Kellnr versions before
+/// canonical crate names did.
+pub async fn test_set_legacy_dependency_names(db: &Database, name: &str) -> DbResult<()> {
+    crate_dependency::Entity::update_many()
+        .col_expr(
+            crate_dependency::Column::Name,
+            Expr::value(name.to_lowercase()),
+        )
+        .filter(crate_dependency::Column::Name.eq(canonical(name)))
+        .exec(&db.db_con)
+        .await?;
+    Ok(())
+}
+
+/// Converts the crate names to their canonical form, like the migration that
+/// introduced them does.
+pub async fn test_canonicalize_crate_names(db: &Database) -> DbResult<()> {
+    kellnr_migration::canonicalize_crate_names(&db.db_con).await?;
+    Ok(())
+}
+
+/// The stored names of all crates, crates.io crates and crate dependencies,
+/// sorted.
+pub async fn test_stored_crate_names(db: &Database) -> DbResult<[Vec<String>; 3]> {
+    let mut crates: Vec<String> = krate::Entity::find()
+        .all(&db.db_con)
+        .await?
+        .into_iter()
+        .map(|k| k.name)
+        .collect();
+    let mut cached: Vec<String> = cratesio_crate::Entity::find()
+        .all(&db.db_con)
+        .await?
+        .into_iter()
+        .map(|k| k.name)
+        .collect();
+    let mut deps: Vec<String> = crate_dependency::Entity::find()
+        .all(&db.db_con)
+        .await?
+        .into_iter()
+        .map(|d| d.name)
+        .collect();
+    crates.sort();
+    cached.sort();
+    deps.sort();
+    Ok([crates, cached, deps])
 }
 
 /// Add a test crate with a specified download count.
@@ -336,7 +417,7 @@ pub async fn test_add_crate_with_downloads(
         .await?;
     let (cm, krate) = crate_meta::Entity::find()
         .find_also_related(krate::Entity)
-        .filter(krate::Column::Name.eq(name))
+        .filter(krate::Column::Name.eq(canonical(name)))
         .filter(crate_meta::Column::Version.eq(version))
         .one(&db.db_con)
         .await?
@@ -522,7 +603,7 @@ pub async fn get_crate_meta_list(db: &Database, crate_id: i64) -> DbResult<Vec<C
     let crate_metas: Vec<CrateMeta> = cm
         .into_iter()
         .map(|(m, c)| CrateMeta {
-            name: c.unwrap().name, // Unwarp is ok, as a relation always exists
+            name: c.unwrap().original_name.to_lowercase(), // Unwrap is ok, as a relation always exists
             id: m.id,
             version: m.version,
             created: m.created,

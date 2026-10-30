@@ -183,11 +183,7 @@ async fn internal_prefetch_cratesio(
     );
 
     let prefetch_state = db
-        .is_cratesio_cache_up_to_date(
-            &name.to_normalized(),
-            if_none_match.clone(),
-            if_modified_since.clone(),
-        )
+        .is_cratesio_cache_up_to_date(&name, if_none_match.clone(), if_modified_since.clone())
         .await
         .map_err(|e| {
             error!("Could not check if cache is up to date for {name}. Error {e}",);
@@ -325,9 +321,13 @@ async fn is_denied(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) -> bool {
     if args.filters.is_empty() {
         return false;
     }
-    let name = OriginalName::from_unchecked(idx.name.clone()).to_normalized();
+    let name = OriginalName::from_unchecked(idx.name.clone());
     let version = Version::from_unchecked_str(&idx.vers);
-    let license = match args.db.get_cratesio_version_meta(&name, &version).await {
+    let license = match args
+        .db
+        .get_cratesio_version_meta(&name.to_canonical(), &version)
+        .await
+    {
         Ok(meta) => meta.and_then(|m| m.license),
         Err(e) => {
             error!(
@@ -469,7 +469,7 @@ async fn fetch_cratesio_prefetch(
     proxy_settings: &kellnr_settings::Proxy,
 ) -> Result<Prefetch, StatusCode> {
     let url = index_url
-        .join(&crate_sub_path(&name.to_normalized()))
+        .join(&crate_sub_path(&name))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let response = get_client(proxy_settings).get(url).send().await;

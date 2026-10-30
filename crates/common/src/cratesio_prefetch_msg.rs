@@ -1,4 +1,4 @@
-use crate::normalized_name::NormalizedName;
+use crate::canonical_name::CanonicalName;
 use crate::original_name::OriginalName;
 use crate::version::Version;
 
@@ -16,7 +16,7 @@ pub struct UpdateData {
 }
 
 pub struct DownloadData {
-    pub name: NormalizedName,
+    pub name: CanonicalName,
     pub version: Version,
 }
 
