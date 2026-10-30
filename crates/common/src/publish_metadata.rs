@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::index_metadata::IndexDep;
 
-// The Metadata struct defined here is the one send by Cargo to the registry.
+// The Metadata struct defined here is the one sent by Cargo to the registry.
 // It is different to the one saved in the index!
 // See: https://doc.rust-lang.org/cargo/reference/registries.html#publish
 // Crates.io implementation: https://github.com/rust-lang/crates.io/blob/5c7070829418f72639dd0b91993eaf91e516416b/src/views/krate_publish.rs
