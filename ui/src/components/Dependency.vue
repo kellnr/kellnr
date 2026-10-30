@@ -56,11 +56,7 @@ const route = useRoute()
 const router = useRouter()
 
 onBeforeMount(() => {
-  if (!props.desc) {
-    setDesc(props.name, props.registry);
-  } else {
-    fetched_desc.value = props.desc
-  }
+  setDesc(props.name, props.registry, props.desc)
 })
 
 function getCratesIoUrl(crate: string) {
@@ -91,8 +87,12 @@ async function setDescFromKellnr(crate: string) {
   }
 }
 
-function setDesc(crate: string, registry: string | undefined) {
-  if (isCratesIoDep(registry)) {
+// Kellnr sends the description if the crate is known, only unknown
+// crates.io dependencies are looked up live.
+function setDesc(crate: string, registry: string | undefined, desc: string | undefined) {
+  if (desc) {
+    fetched_desc.value = desc
+  } else if (isCratesIoDep(registry)) {
     setDescFromCratesIo(crate);
   } else {
     setDescFromKellnr(crate);
@@ -118,7 +118,7 @@ function openCratePage() {
 // Watches route changes and reloads the data.
 // Needed, if the query parameter "name=crate" changes.
 watch(route, () => {
-  setDesc(props.name, props.registry)
+  setDesc(props.name, props.registry, props.desc)
 })
 </script>
 
@@ -152,10 +152,10 @@ watch(route, () => {
   min-width: 0;
 }
 
+/* A fixed width keeps the descriptions of all rows aligned */
 .dep-info {
   flex-shrink: 0;
-  min-width: 180px;
-  max-width: 220px;
+  width: 220px;
 }
 
 .dep-header {
@@ -263,8 +263,7 @@ watch(route, () => {
   }
 
   .dep-info {
-    min-width: auto;
-    max-width: none;
+    width: auto;
   }
 
   .dep-description {
