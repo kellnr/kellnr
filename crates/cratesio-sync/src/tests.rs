@@ -316,3 +316,91 @@ fn crate_sub_path_follows_sparse_index_layout() {
     assert_eq!("3/a/abc", path("abc"));
     assert_eq!("ab/cd/abcd", path("abcd"));
 }
+
+/// A fake crates.io whose index answers 503 and whose API answers 429 to the
+/// first request.
+async fn flaky_cratesio(calls: Arc<Calls>) -> kellnr_settings::Proxy {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let index_calls = calls.clone();
+    let app = Router::new()
+        .route(
+            "/index/{a}/{b}/{name}",
+            get(move || {
+                let calls = index_calls.clone();
+                async move {
+                    if calls.index.fetch_add(1, Ordering::SeqCst) == 0 {
+                        HttpStatus::SERVICE_UNAVAILABLE.into_response()
+                    } else {
+                        INDEX.into_response()
+                    }
+                }
+            }),
+        )
+        .route(
+            "/api/{name}",
+            get(move || {
+                let calls = calls.clone();
+                async move {
+                    if calls.api.fetch_add(1, Ordering::SeqCst) == 0 {
+                        (HttpStatus::TOO_MANY_REQUESTS, [(header::RETRY_AFTER, "0")])
+                            .into_response()
+                    } else {
+                        API.into_response()
+                    }
+                }
+            }),
+        );
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    kellnr_settings::Proxy {
+        index: Url::parse(&format!("http://{addr}/index/")).unwrap(),
+        api: Url::parse(&format!("http://{addr}/api/")).unwrap(),
+        ..kellnr_settings::Proxy::default()
+    }
+}
+
+#[tokio::test]
+async fn server_errors_and_rate_limits_are_retried() {
+    let calls = Arc::new(Calls::default());
+    let proxy = flaky_cratesio(calls.clone()).await;
+    let (db, stored) = recording_db(PrefetchState::NotFound);
+    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+
+    let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
+
+    assert_eq!(2, synced.unwrap().len());
+    assert_eq!(2, calls.index.load(Ordering::SeqCst));
+    assert_eq!(2, calls.api.load(Ordering::SeqCst));
+    let stored = stored.lock().unwrap();
+    assert_eq!(Some("An upstream crate".to_string()), stored[0].0);
+}
+
+#[tokio::test]
+async fn retries_wait_with_backoff() {
+    let tries = Arc::new(AtomicUsize::new(0));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = Router::new().route(
+        "/",
+        get({
+            let tries = tries.clone();
+            move || async move {
+                tries.fetch_add(1, Ordering::SeqCst);
+                HttpStatus::BAD_GATEWAY
+            }
+        }),
+    );
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let client = Client::new();
+    let start = std::time::Instant::now();
+
+    let response = send_with_retries("test", || client.get(format!("http://{addr}/")))
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::BAD_GATEWAY, response.status());
+    assert_eq!(MAX_TRIES as usize, tries.load(Ordering::SeqCst));
+    // 0.5s before the second and 1s before the third try
+    assert!(start.elapsed() >= Duration::from_millis(1500));
+}

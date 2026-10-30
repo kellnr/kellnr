@@ -9,6 +9,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 
 use futures_util::FutureExt;
 use futures_util::future::{BoxFuture, Shared};
@@ -18,11 +19,18 @@ use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{Client, RequestBuilder, Response, StatusCode, Url};
 use serde::Deserialize;
 use tracing::{error, trace, warn};
 
-const MAX_INDEX_RETRIES: usize = 3;
+/// Tries of a request to crates.io that fails with a transport error, 429 or
+/// a server error, with a backoff between them that starts at
+/// `RETRY_BASE_DELAY` and doubles.
+const MAX_TRIES: u32 = 3;
+const RETRY_BASE_DELAY: Duration = Duration::from_millis(500);
+/// Upper bound for the wait between tries, also if crates.io asks for a longer
+/// one with `Retry-After`.
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
 
 /// Where the index data of a sync comes from.
 pub enum SyncSource {
@@ -218,8 +226,7 @@ impl Inner {
             }
         };
 
-        let mut retries = 0;
-        let response = loop {
+        let response = send_with_retries(&format!("index of {name}"), || {
             let mut request = self.client.get(url.clone());
             if let Some(etag) = etag.as_deref().filter(|e| !e.is_empty()) {
                 request = request.header("If-None-Match", etag);
@@ -227,19 +234,13 @@ impl Inner {
             if let Some(last_modified) = last_modified.as_deref().filter(|lm| !lm.is_empty()) {
                 request = request.header("If-Modified-Since", last_modified);
             }
-            match request.send().await {
-                Ok(response) => break response,
-                Err(e) => {
-                    retries += 1;
-                    warn!(
-                        "Retry {retries}/{MAX_INDEX_RETRIES} - Could not fetch index from crates.io for {name}: {e}"
-                    );
-                }
-            }
-            if retries >= MAX_INDEX_RETRIES {
-                error!(
-                    "Could not fetch index from crates.io for {name} after {MAX_INDEX_RETRIES} tries"
-                );
+            request
+        })
+        .await;
+        let response = match response {
+            Ok(response) => response,
+            Err(e) => {
+                error!("Could not fetch index from crates.io for {name}: {e}");
                 return None;
             }
         };
@@ -302,13 +303,12 @@ impl Inner {
         }
 
         let url = self.api_url.join(name).map_err(|e| e.to_string())?;
-        let response = self
-            .client
-            .get(url)
-            .send()
-            .await
-            .and_then(reqwest::Response::error_for_status)
-            .map_err(|e| e.to_string())?;
+        let response = send_with_retries(&format!("crate info of {name}"), || {
+            self.client.get(url.clone())
+        })
+        .await
+        .and_then(Response::error_for_status)
+        .map_err(|e| e.to_string())?;
         let api_crate = response
             .json::<ApiCrate>()
             .await
@@ -331,6 +331,48 @@ impl Inner {
             licenses,
         })
     }
+}
+
+/// Sends the request built by `request` and retries it with a backoff on
+/// transport errors, 429 and server errors. Returns the last result.
+async fn send_with_retries(
+    what: &str,
+    request: impl Fn() -> RequestBuilder,
+) -> reqwest::Result<Response> {
+    let mut delay = RETRY_BASE_DELAY;
+    let mut tries = 1;
+    loop {
+        let result = request().send().await;
+        let (retry_after, reason) = match &result {
+            Ok(r) if is_retryable(r.status()) => (retry_after(r), r.status().to_string()),
+            Err(e) if !e.is_builder() => (None, e.to_string()),
+            _ => return result,
+        };
+        if tries >= MAX_TRIES {
+            return result;
+        }
+        warn!("Try {tries}/{MAX_TRIES} to fetch {what} from crates.io failed: {reason}");
+        tokio::time::sleep(retry_after.unwrap_or(delay).min(MAX_RETRY_DELAY)).await;
+        delay *= 2;
+        tries += 1;
+    }
+}
+
+fn is_retryable(status: StatusCode) -> bool {
+    status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+}
+
+/// The wait requested with a `Retry-After` header in seconds.
+fn retry_after(response: &Response) -> Option<Duration> {
+    response
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+        .map(Duration::from_secs)
 }
 
 #[derive(Default)]
