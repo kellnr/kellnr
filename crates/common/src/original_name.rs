@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Deref;
+use std::sync::LazyLock;
 
 use regex::Regex;
 use sea_orm::Value;
@@ -8,6 +9,9 @@ use thiserror::Error;
 use utoipa::ToSchema;
 
 use crate::normalized_name::NormalizedName;
+
+static NAME_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-zA-Z][a-zA-Z0-9-_]*$").unwrap());
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Hash, ToSchema)]
 #[schema(value_type = String)]
@@ -42,9 +46,7 @@ impl TryFrom<String> for OriginalName {
     type Error = NameError;
 
     fn try_from(package_name: String) -> Result<Self, Self::Error> {
-        let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9-_]*$").unwrap();
-
-        if !re.is_match(&package_name) {
+        if !NAME_REGEX.is_match(&package_name) {
             Err(NameError::InvalidCharacter)
         } else if package_name.len() > 64 {
             Err(NameError::InvalidLength)
