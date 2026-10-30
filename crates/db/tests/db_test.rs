@@ -5010,3 +5010,13 @@ async fn set_channel_of_unknown_toolchain_fails_and_keeps_channel(test_db: &kell
     assert_eq!(1, channels.len());
     assert_eq!("1.0.0", channels[0].version);
 }
+
+#[db_test]
+async fn admin_created_by_concurrent_start_is_kept(test_db: &kellnr_db::Database) {
+    test_insert_admin_credentials_again(test_db).await.unwrap();
+
+    assert_eq!(1, test_db.get_users().await.unwrap().len());
+    test_db.authenticate_user("admin", "123").await.unwrap();
+    test_db.get_user_from_token("token").await.unwrap();
+    assert!(test_db.get_user_from_token("other_token").await.is_err());
+}
