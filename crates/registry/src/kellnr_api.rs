@@ -710,7 +710,7 @@ pub async fn download(
     request_body = EmptyCrateData,
     responses(
         (status = 200, description = "Empty crate created", body = EmptyCrateSuccess),
-        (status = 400, description = "Crate already exists"),
+        (status = 409, description = "Crate already exists"),
         (status = 401, description = "Unauthorized - admin only")
     ),
     security(("cargo_token" = []))
@@ -752,8 +752,10 @@ pub async fn add_empty_crate(
     tag = "crates",
     responses(
         (status = 200, description = "Crate published", body = PubDataSuccess),
-        (status = 400, description = "Invalid crate data or version exists"),
-        (status = 403, description = "Not an owner")
+        (status = 400, description = "Invalid crate data"),
+        (status = 403, description = "Not an owner"),
+        (status = 409, description = "Version exists"),
+        (status = 413, description = "Crate is too large")
     ),
     security(("cargo_token" = []))
 )]
@@ -1233,7 +1235,7 @@ mod reg_api_tests {
         )
         .await;
 
-        assert_eq!(StatusCode::BAD_REQUEST, status);
+        assert_eq!(StatusCode::CONFLICT, status);
         assert_eq!(
             "ERROR: Crate with version already exists: build_meta-1.0.0+a",
             detail
@@ -2822,7 +2824,7 @@ mod reg_api_tests {
         let error: ErrorDetails =
             serde_json::from_slice(&result_msg).expect("Cannot deserialize error message");
 
-        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(StatusCode::CONFLICT, response_status);
         assert_eq!(
             "ERROR: Crate with version already exists: test_lib-0.2.0",
             error.errors[0].detail
@@ -3263,7 +3265,7 @@ mod reg_api_tests {
         let error: ErrorDetails =
             serde_json::from_slice(&msg).expect("Cannot deserialize error message");
 
-        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(StatusCode::CONFLICT, response_status);
         assert_eq!(
             "ERROR: Crate with version already exists: test_lib-0.2.0",
             error.errors[0].detail

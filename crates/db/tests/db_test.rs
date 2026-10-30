@@ -5149,3 +5149,23 @@ async fn delete_crate_skips_invalid_versions_for_max_version(test_db: &kellnr_db
         test_db.get_max_version_from_name(&name).await.unwrap()
     );
 }
+
+#[db_test]
+async fn adding_a_crate_user_twice_is_a_unique_violation(test_db: &kellnr_db::Database) {
+    test_db.add_user("user", "pwd", false, false).await.unwrap();
+    test_add_crate(
+        test_db,
+        "crate",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &Utc::now(),
+    )
+    .await
+    .unwrap();
+    let name = NormalizedName::from_unchecked("crate".to_string());
+    test_db.add_crate_user(&name, "user").await.unwrap();
+
+    let e = test_db.add_crate_user(&name, "user").await.unwrap_err();
+
+    assert!(e.is_unique_violation(), "{e}");
+}

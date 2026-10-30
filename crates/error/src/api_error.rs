@@ -118,25 +118,30 @@ impl Display for ApiError {
 
 impl From<DbError> for ApiError {
     fn from(e: DbError) -> Self {
+        // These only carry user supplied names and are useful to the client.
         match e {
             DbError::NotOwner(_) => ApiError::from_err(&e, StatusCode::FORBIDDEN),
-            DbError::CrateNameConflict(_, _) => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
-            // These only carry user supplied names and are useful to the client.
-            DbError::PasswordMismatch
-            | DbError::UserNotFound(_)
+            DbError::UserNotFound(_)
             | DbError::GroupNotFound(_)
             | DbError::OwnerNotFound(_)
             | DbError::CrateNotFound(_)
             | DbError::CrateNotFoundWithId(_)
             | DbError::CrateMetaNotFound(_, _)
             | DbError::CrateIndexNotFound(_, _)
-            | DbError::InvalidCrateName(_)
-            | DbError::InvalidVersion(_)
             | DbError::TokenNotFound
             | DbError::SessionNotFound
             | DbError::WebhookNotFound
+            | DbError::ToolchainNotFound(_, _) => ApiError::from_err(&e, StatusCode::NOT_FOUND),
+            DbError::PasswordMismatch
+            | DbError::CrateNameConflict(_, _)
+            | DbError::InvalidCrateName(_)
+            | DbError::InvalidVersion(_)
             | DbError::InvalidWebhookEvent(_)
-            | DbError::InvalidId(_) => ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR),
+            | DbError::InvalidId(_) => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
+            _ if e.is_unique_violation() => {
+                tracing::warn!("Conflict with an existing entry: {e}");
+                ApiError::from_str("The entry already exists", StatusCode::CONFLICT)
+            }
             _ => ApiError::internal(&e),
         }
     }
@@ -146,7 +151,7 @@ impl From<StorageError> for ApiError {
     fn from(e: StorageError) -> Self {
         match e {
             StorageError::CrateExists(_, _) | StorageError::ToolchainArchiveExists { .. } => {
-                ApiError::from_err(&e, StatusCode::INTERNAL_SERVER_ERROR)
+                ApiError::from_err(&e, StatusCode::CONFLICT)
             }
             _ => ApiError::internal(&e),
         }
@@ -175,6 +180,30 @@ mod tests {
     }
 
     #[test]
+    fn missing_entries_are_not_found() {
+        for e in [
+            DbError::CrateNotFound("foo".to_string()),
+            DbError::OwnerNotFound("bob".to_string()),
+            DbError::TokenNotFound,
+            DbError::ToolchainNotFound("stable".to_string(), "x86_64".to_string()),
+        ] {
+            assert_eq!(StatusCode::NOT_FOUND, ApiError::from(e).status);
+        }
+    }
+
+    #[test]
+    fn invalid_input_is_a_bad_request() {
+        for e in [
+            DbError::InvalidCrateName("f o o".to_string()),
+            DbError::InvalidVersion("x".to_string()),
+            DbError::InvalidId("x".to_string()),
+            DbError::PasswordMismatch,
+        ] {
+            assert_eq!(StatusCode::BAD_REQUEST, ApiError::from(e).status);
+        }
+    }
+
+    #[test]
     fn storage_and_io_errors_are_not_leaked() {
         let storage = ApiError::from(StorageError::GenericError("/var/lib/kellnr".to_string()));
         let io = ApiError::from(std::io::Error::other("/var/lib/kellnr"));
@@ -190,6 +219,7 @@ mod tests {
             "1.0.0".to_string(),
         ));
 
+        assert_eq!(StatusCode::CONFLICT, e.status);
         assert_eq!(
             "ERROR: Crate with version already exists: foo-1.0.0",
             e.to_string()

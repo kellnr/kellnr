@@ -42,10 +42,62 @@ pub enum RegistryError {
 impl From<RegistryError> for ApiError {
     fn from(e: RegistryError) -> Self {
         match e {
+            // E.g. 413 if the body is larger than the configured maximum.
+            RegistryError::ExtractBytesFailed(ref rejection) => {
+                let status = rejection.status();
+                ApiError::from_err(&e, status)
+            }
             RegistryError::CrateNotFound => ApiError::from_err(&e, StatusCode::NOT_FOUND),
             RegistryError::NotOwner => ApiError::from_err(&e, StatusCode::FORBIDDEN),
-            RegistryError::LastOwner => ApiError::from_err(&e, StatusCode::CONFLICT),
+            RegistryError::CrateExists(_, _) | RegistryError::LastOwner => {
+                ApiError::from_err(&e, StatusCode::CONFLICT)
+            }
             _ => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::Router;
+    use axum::body::{Body, Bytes};
+    use axum::extract::DefaultBodyLimit;
+    use axum::extract::rejection::BytesRejection;
+    use axum::http::Request;
+    use axum::response::{IntoResponse, Response};
+    use axum::routing::put;
+    use tower::ServiceExt;
+
+    use super::*;
+
+    async fn read_body(body: Result<Bytes, BytesRejection>) -> Response {
+        match body {
+            Ok(_) => StatusCode::OK.into_response(),
+            Err(e) => ApiError::from(RegistryError::ExtractBytesFailed(e)).into_response(),
+        }
+    }
+
+    #[tokio::test]
+    async fn too_large_body_is_payload_too_large() {
+        let app = Router::new()
+            .route("/", put(read_body))
+            .layer(DefaultBodyLimit::max(4));
+
+        let response = app
+            .oneshot(Request::put("/").body(Body::from(vec![0; 8])).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::PAYLOAD_TOO_LARGE, response.status());
+    }
+
+    #[test]
+    fn existing_crate_version_is_a_conflict() {
+        let e = ApiError::from(RegistryError::CrateExists(
+            "foo".to_string(),
+            "1.0.0".to_string(),
+        ));
+
+        assert_eq!(StatusCode::CONFLICT, e.into_response().status());
     }
 }
