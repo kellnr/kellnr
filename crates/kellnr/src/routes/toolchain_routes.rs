@@ -993,10 +993,7 @@ fn generate_manifest(
     toolchain: &ToolchainWithTargets,
     settings: &Arc<kellnr_settings::Settings>,
 ) -> String {
-    let base_url = format!(
-        "{}://{}:{}/api/v1/toolchains/dist",
-        settings.origin.protocol, settings.origin.hostname, settings.origin.port
-    );
+    let base_url = format!("{}/api/v1/toolchains/dist", settings.origin.base_url());
 
     let mut manifest = String::new();
     let _ = write!(
@@ -2543,6 +2540,51 @@ mod tests {
         assert!(
             hash.chars().all(|c| c.is_ascii_hexdigit()),
             "SHA256 hash should only contain hex characters"
+        );
+    }
+
+    fn ready_toolchain(targets: &[&str]) -> ToolchainWithTargets {
+        ToolchainWithTargets {
+            id: 1,
+            name: "rust".to_string(),
+            version: "1.0.0".to_string(),
+            date: "2024-01-15".to_string(),
+            channel: Some("stable".to_string()),
+            created: "2024-01-15".to_string(),
+            targets: targets
+                .iter()
+                .zip(1..)
+                .map(|(target, id)| ToolchainTargetInfo {
+                    id,
+                    target: (*target).to_string(),
+                    storage_path: format!("2024-01-15/rust-1.0.0-{target}.tar.xz"),
+                    hash: "abc123".to_string(),
+                    size: 1024,
+                    components: vec![],
+                    status: "ready".to_string(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn manifest_urls_use_the_origin_path_and_omit_the_default_port() {
+        let mut settings = kellnr_settings::test_settings();
+        settings.origin.hostname = "kellnr.example.com".to_string();
+        settings.origin.protocol = kellnr_settings::Protocol::Https;
+        settings.origin.port = 443;
+        settings.origin.path = "/registry".to_string();
+
+        let manifest = generate_manifest(
+            &ready_toolchain(&["x86_64-unknown-linux-gnu"]),
+            &Arc::new(settings),
+        );
+
+        assert!(
+            manifest.contains(
+                "xz_url = \"https://kellnr.example.com/registry/api/v1/toolchains/dist/2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz\""
+            ),
+            "unexpected manifest: {manifest}"
         );
     }
 }
