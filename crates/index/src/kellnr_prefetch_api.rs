@@ -6,7 +6,6 @@ use axum::http::{HeaderMap, StatusCode, header};
 use kellnr_appstate::{DbState, SettingsState};
 use kellnr_auth::crate_access::can_read_crate;
 use kellnr_auth::maybe_user::MaybeUser;
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::{Prefetch, db_date_to_http_date, is_not_modified, quote_etag};
 use kellnr_db::DbProvider;
@@ -57,8 +56,7 @@ pub async fn prefetch_kellnr(
     State(db): DbState,
     user: Result<MaybeUser, StatusCode>,
 ) -> Result<Prefetch, StatusCode> {
-    let index_name = NormalizedName::from(package);
-    internal_kellnr_prefetch(&index_name, &headers, &db, user.ok().as_ref()).await
+    internal_kellnr_prefetch(&package, &headers, &db, user.ok().as_ref()).await
 }
 
 /// Prefetch crate index data for short names
@@ -85,21 +83,20 @@ pub async fn prefetch_len2_kellnr(
     State(db): DbState,
     user: Result<MaybeUser, StatusCode>,
 ) -> Result<Prefetch, StatusCode> {
-    let index_name = NormalizedName::from(package);
-    internal_kellnr_prefetch(&index_name, &headers, &db, user.ok().as_ref()).await
+    internal_kellnr_prefetch(&package, &headers, &db, user.ok().as_ref()).await
 }
 
 /// Index entries of download-restricted crates are only served to callers with
 /// access. Cargo sends credentials on index requests only if `config.json`
 /// reports `auth-required`, which is also required to download such crates.
 async fn internal_kellnr_prefetch(
-    name: &NormalizedName,
+    name: &OriginalName,
     headers: &HeaderMap,
     db: &Arc<dyn DbProvider>,
     user: Option<&MaybeUser>,
 ) -> Result<Prefetch, StatusCode> {
     // Same response as a missing crate to not reveal that a restricted crate exists.
-    match can_read_crate(name, user, db).await {
+    match can_read_crate(&name.to_canonical(), user, db).await {
         Ok(true) => {}
         Ok(false) => return Err(StatusCode::NOT_FOUND),
         Err(e) => {
@@ -333,7 +330,7 @@ mod tests {
             ..Settings::default()
         };
 
-        let secret = NormalizedName::from_unchecked("secret".to_string());
+        let secret = OriginalName::try_from("secret").unwrap().to_canonical();
         let mut mock_db = MockDb::new();
         let restricted = secret.clone();
         mock_db
@@ -354,7 +351,7 @@ mod tests {
             .returning(|_, _| Ok(true));
         mock_db
             .expect_get_prefetch_data()
-            .with(eq("secret"))
+            .with(eq(OriginalName::try_from("secret").unwrap()))
             .returning(move |_| {
                 Ok(Prefetch {
                     data: vec![0x4],
@@ -364,7 +361,7 @@ mod tests {
             });
         mock_db
             .expect_get_prefetch_data()
-            .with(eq("metadata"))
+            .with(eq(OriginalName::try_from("metadata").unwrap()))
             .returning(move |_| {
                 Ok(Prefetch {
                     data: vec![0x1, 0x2, 0x3],
@@ -374,11 +371,11 @@ mod tests {
             });
         mock_db
             .expect_get_prefetch_data()
-            .with(eq("notfound"))
+            .with(eq(OriginalName::try_from("notfound").unwrap()))
             .returning(move |_| Err(DbError::CrateNotFound("notfound".to_string())));
         mock_db
             .expect_get_prefetch_data()
-            .with(eq("broken"))
+            .with(eq(OriginalName::try_from("broken").unwrap()))
             .returning(move |_| Err(DbError::FailedToCountCrates));
 
         let kellnr_prefetch = Router::new()

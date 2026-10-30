@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::version::Version;
 use tracing::{debug, trace, warn};
 
@@ -15,7 +15,7 @@ use crate::provider::DbResult;
 /// cannot grow without bound.
 const MAX_PENDING_ENTRIES: usize = 100_000;
 
-type CountKey = (NormalizedName, Version);
+type CountKey = (CanonicalName, Version);
 
 /// Download counts waiting to be flushed to the database.
 struct PendingCounts {
@@ -80,7 +80,7 @@ impl DownloadCounter {
 
     /// Record a download for a kellnr-hosted crate.
     /// When `flush_interval` is 0, flushes directly to DB.
-    pub async fn increment_and_maybe_flush(&self, name: NormalizedName, version: Version) {
+    pub async fn increment_and_maybe_flush(&self, name: CanonicalName, version: Version) {
         if self.flush_interval == 0 {
             if let Err(e) = self.db.increase_download_counter(&name, &version).await {
                 warn!("Failed to increment download counter for {name} {version}: {e}");
@@ -92,7 +92,7 @@ impl DownloadCounter {
 
     /// Record a download for a cached crates.io crate.
     /// When `flush_interval` is 0, flushes directly to DB.
-    pub async fn increment_cached_and_maybe_flush(&self, name: NormalizedName, version: Version) {
+    pub async fn increment_cached_and_maybe_flush(&self, name: CanonicalName, version: Version) {
         if self.flush_interval == 0 {
             if let Err(e) = self
                 .db
@@ -163,9 +163,9 @@ mod tests {
     use super::*;
     use crate::mock::MockDb;
 
-    fn key(name: &str) -> (NormalizedName, Version) {
+    fn key(name: &str) -> (CanonicalName, Version) {
         (
-            NormalizedName::from_unchecked_str(name),
+            CanonicalName::try_from(name).unwrap(),
             Version::from_unchecked_str("1.0.0"),
         )
     }

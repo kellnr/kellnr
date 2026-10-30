@@ -24,7 +24,7 @@ impl From<Vec<DocQueueEntry>> for DocQueueResponse {
             queue: entries
                 .into_iter()
                 .map(|e| DocQueueEntryResponse {
-                    name: e.normalized_name.to_string(),
+                    name: e.name,
                     version: e.version,
                 })
                 .collect(),
@@ -36,8 +36,6 @@ impl From<Vec<DocQueueEntry>> for DocQueueResponse {
 mod tests {
     use std::path::PathBuf;
 
-    use kellnr_common::normalized_name::NormalizedName;
-
     use super::*;
 
     #[test]
@@ -45,13 +43,13 @@ mod tests {
         let doc_queue = vec![
             DocQueueEntry {
                 id: 0,
-                normalized_name: NormalizedName::from_unchecked("crate1".to_string()),
+                name: "crate1".to_string(),
                 version: "0.0.1".to_string(),
                 path: PathBuf::default(),
             },
             DocQueueEntry {
                 id: 1,
-                normalized_name: NormalizedName::from_unchecked("crate2".to_string()),
+                name: "crate2".to_string(),
                 version: "0.0.2".to_string(),
                 path: PathBuf::default(),
             },

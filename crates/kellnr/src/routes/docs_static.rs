@@ -8,7 +8,7 @@ use axum_extra::TypedHeader;
 use axum_extra::headers::{ETag, HeaderMapExt, IfModifiedSince, IfNoneMatch, LastModified};
 use kellnr_appstate::{AppStateData, DocsStorageState};
 use kellnr_auth::maybe_user::MaybeUser;
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_registry::kellnr_api::has_restricted_crate_access;
 use tracing::error;
@@ -57,14 +57,14 @@ pub async fn restrict_docs_access(
 /// Rejects paths with empty segments (`//`, leading or trailing `/`). The
 /// storage layer drops them, so the checked segment could differ from the
 /// served key.
-fn crate_name_from_doc_path(path: &str) -> Option<NormalizedName> {
+fn crate_name_from_doc_path(path: &str) -> Option<CanonicalName> {
     if path.split('/').any(str::is_empty) {
         return None;
     }
     let first = path.split('/').next()?;
     OriginalName::try_from(first)
         .ok()
-        .map(|name| name.to_normalized())
+        .map(|name| name.to_canonical())
 }
 
 pub async fn serve_doc_file(

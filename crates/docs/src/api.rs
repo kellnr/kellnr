@@ -8,12 +8,13 @@ use kellnr_appstate::{AppState, DbState, DocsStorageState, SettingsState};
 use kellnr_auth::crate_access::can_read_crate;
 use kellnr_auth::maybe_user::MaybeUser;
 use kellnr_auth::token::Token;
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
 use kellnr_error::api_error::ApiResult;
 use kellnr_registry::kellnr_api::{check_can_modify, check_ownership};
+use kellnr_storage::docs_storage::DocsName;
 use tracing::error;
 
 use crate::doc_archive::DocArchive;
@@ -43,7 +44,10 @@ pub async fn docs_in_queue(
     let user = user.ok();
     let mut visible = Vec::new();
     for entry in db.get_doc_queue().await? {
-        if can_read_docs(&entry.normalized_name, user.as_ref(), &db).await {
+        let Ok(name) = entry.canonical_name() else {
+            continue;
+        };
+        if can_read_docs(&name, user.as_ref(), &db).await {
             visible.push(entry);
         }
     }
@@ -72,7 +76,7 @@ pub async fn latest_docs(
     State(docs_storage): DocsStorageState,
     State(db): DbState,
 ) -> Redirect {
-    let name = package.to_normalized();
+    let name = package.to_canonical();
 
     // Same response as "no docs" to not reveal that a restricted crate exists.
     if !can_read_docs(&name, user.ok().as_ref(), &db).await {
@@ -95,7 +99,7 @@ pub async fn latest_docs(
 
 /// Whether `user` may read the docs of a crate, honoring its download restriction.
 async fn can_read_docs(
-    crate_name: &NormalizedName,
+    crate_name: &CanonicalName,
     user: Option<&MaybeUser>,
     db: &Arc<dyn DbProvider>,
 ) -> bool {
@@ -137,7 +141,7 @@ pub async fn publish_docs(
     let db = state.db;
     let settings = state.settings;
     let docs_storage = state.docs_storage;
-    let normalized_name = package.to_normalized();
+    let canonical_name = package.to_canonical();
 
     // Check if user from token is an owner of the crate.
     // If not, he is not allowed to push the docs. This comes before the
@@ -145,10 +149,10 @@ pub async fn publish_docs(
     // exist: they get the same error for a missing crate.
     let user = MaybeUser::from_token(token);
     check_can_modify(&user)?;
-    check_ownership(&normalized_name, &user, &db).await?;
+    check_ownership(&canonical_name, &user, &db).await?;
 
-    let Some(original_name) = db.get_original_name(&normalized_name, &version).await? else {
-        return crate_does_not_exist(&normalized_name, &version);
+    let Some(original_name) = db.get_original_name(&canonical_name, &version).await? else {
+        return crate_does_not_exist(&package, &version);
     };
 
     let tmp_dir = tempfile::tempdir().map_err(DocsError::IoError)?;
@@ -161,14 +165,14 @@ pub async fn publish_docs(
     upload_dir_and_prune(
         tmp_dir.path(),
         "",
-        &normalized_name,
+        &DocsName::from(&original_name),
         &version,
         &docs_storage,
     )
     .await?;
 
     db.update_docs_link(
-        &normalized_name,
+        &canonical_name,
         &version,
         &compute_doc_url(&original_name, &version, &settings.origin.path),
     )
@@ -183,10 +187,10 @@ pub async fn publish_docs(
 }
 
 fn crate_does_not_exist(
-    crate_name: &NormalizedName,
+    crate_name: &OriginalName,
     crate_version: &Version,
 ) -> ApiResult<Json<DocUploadResponse>> {
-    Err(DocsError::CrateDoesNotExist(crate_name.to_string(), crate_version.to_string()).into())
+    Err(DocsError::CrateDoesNotExist(crate_name.to_lowercase(), crate_version.to_string()).into())
 }
 
 #[cfg(test)]
@@ -201,7 +205,7 @@ mod tests {
     use axum::routing::{get, put};
     use http_body_util::BodyExt;
     use kellnr_appstate::AppStateData;
-    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_common::canonical_name::CanonicalName;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{DbProvider, DocQueueEntry, User};
@@ -223,13 +227,13 @@ mod tests {
             Ok(vec![
                 DocQueueEntry {
                     id: 0,
-                    normalized_name: NormalizedName::from_unchecked("crate1".to_string()),
+                    name: "crate1".to_string(),
                     version: "0.0.1".to_string(),
                     path: PathBuf::default(),
                 },
                 DocQueueEntry {
                     id: 1,
-                    normalized_name: NormalizedName::from_unchecked("crate2".to_string()),
+                    name: "crate2".to_string(),
                     version: "0.0.2".to_string(),
                     path: PathBuf::default(),
                 },
@@ -264,7 +268,7 @@ mod tests {
     fn queue_entry(id: i64, name: &str) -> DocQueueEntry {
         DocQueueEntry {
             id,
-            normalized_name: NormalizedName::from_unchecked(name.to_string()),
+            name: name.to_string(),
             version: "1.0.0".to_string(),
             path: PathBuf::default(),
         }
@@ -361,8 +365,8 @@ mod tests {
             })
     }
 
-    fn expect_admin_owner(db: &mut MockDb, normalized: &NormalizedName) {
-        expect_original_name(db, normalized, "test-crate");
+    fn expect_admin_owner(db: &mut MockDb, canonical: &CanonicalName) {
+        expect_original_name(db, canonical, "test-crate");
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
                 is_admin: true,
@@ -372,20 +376,20 @@ mod tests {
         });
     }
 
-    fn expect_original_name(db: &mut MockDb, normalized: &NormalizedName, original: &'static str) {
+    fn expect_original_name(db: &mut MockDb, canonical: &CanonicalName, original: &'static str) {
         db.expect_get_original_name()
             .with(
-                eq(normalized.clone()),
+                eq(canonical.clone()),
                 eq(Version::try_from("1.0.0").unwrap()),
             )
             .returning(move |_, _| Ok(Some(OriginalName::from_unchecked(original.to_string()))));
     }
 
     #[tokio::test]
-    async fn publish_docs_stores_docs_under_normalized_name_and_links_rustdoc_folder() {
-        let normalized = NormalizedName::from_unchecked("my-crate".to_string());
+    async fn publish_docs_stores_docs_under_lowercase_name_and_links_rustdoc_folder() {
+        let canonical = CanonicalName::try_from("my-crate").unwrap();
         let mut db = MockDb::new();
-        expect_original_name(&mut db, &normalized, "My-Crate");
+        expect_original_name(&mut db, &canonical, "My-Crate");
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
                 is_admin: true,
@@ -395,7 +399,7 @@ mod tests {
         });
         db.expect_update_docs_link()
             .with(
-                eq(normalized.clone()),
+                eq(canonical.clone()),
                 eq(Version::try_from("1.0.0").unwrap()),
                 eq("/docs/my-crate/1.0.0/doc/My_Crate/index.html".to_string()),
             )
@@ -419,7 +423,7 @@ mod tests {
 
         assert_eq!(r.status(), StatusCode::OK);
         let key = DocsStorage::file_key(
-            &normalized,
+            &docs_name("my-crate"),
             &Version::from_unchecked_str("1.0.0"),
             "doc/My_Crate/index.html",
         );
@@ -429,14 +433,65 @@ mod tests {
         assert_eq!(response.crate_name, "My-Crate");
     }
 
+    // Docs stay under the lowercase name the crate was published with, also
+    // if they are uploaded under another spelling of the crate name.
     #[tokio::test]
-    async fn publish_docs_uploads_files_and_updates_docs_link() {
-        let normalized = NormalizedName::from_unchecked("test-crate".to_string());
+    async fn publish_docs_under_other_separator_stores_docs_under_published_name() {
+        let canonical = CanonicalName::try_from("my-crate").unwrap();
         let mut db = MockDb::new();
-        expect_admin_owner(&mut db, &normalized);
+        expect_original_name(&mut db, &canonical, "My-Crate");
+        db.expect_get_user_from_token().returning(|_| {
+            Ok(User {
+                is_admin: true,
+                name: "admin".to_string(),
+                ..User::default()
+            })
+        });
         db.expect_update_docs_link()
             .with(
-                eq(normalized.clone()),
+                eq(canonical.clone()),
+                eq(Version::try_from("1.0.0").unwrap()),
+                eq("/docs/my-crate/1.0.0/doc/My_Crate/index.html".to_string()),
+            )
+            .returning(|_, _, _| Ok(()));
+        let docs_storage = Arc::new(DocsStorage::new(
+            Box::new(MemoryStorage::new()) as DynStorage
+        ));
+
+        let r = publish_app(Arc::new(db), docs_storage.clone())
+            .oneshot(
+                Request::put("/my_crate/1.0.0")
+                    .header(header::AUTHORIZATION, "sometoken")
+                    .body(Body::from(build_zip(&[(
+                        "doc/My_Crate/index.html",
+                        b"<html>docs</html>",
+                    )])))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(r.status(), StatusCode::OK);
+        let version = Version::from_unchecked_str("1.0.0");
+        let key =
+            DocsStorage::file_key(&docs_name("my-crate"), &version, "doc/My_Crate/index.html");
+        assert!(docs_storage.exists(&key).await.unwrap());
+        let other = DocsStorage::version_prefix(&docs_name("my_crate"), &version);
+        assert!(docs_storage.list(&other).await.unwrap().is_empty());
+    }
+
+    fn docs_name(name: &str) -> DocsName {
+        DocsName::from(&OriginalName::try_from(name).unwrap())
+    }
+
+    #[tokio::test]
+    async fn publish_docs_uploads_files_and_updates_docs_link() {
+        let canonical = CanonicalName::try_from("test-crate").unwrap();
+        let mut db = MockDb::new();
+        expect_admin_owner(&mut db, &canonical);
+        db.expect_update_docs_link()
+            .with(
+                eq(canonical.clone()),
                 eq(Version::try_from("1.0.0").unwrap()),
                 eq("/docs/test-crate/1.0.0/doc/test_crate/index.html".to_string()),
             )
@@ -463,7 +518,7 @@ mod tests {
         assert_eq!(r.status(), StatusCode::OK);
 
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("test-crate"),
+            &docs_name("test-crate"),
             &Version::from_unchecked_str("1.0.0"),
             "doc/test_crate/index.html",
         );
@@ -473,9 +528,9 @@ mod tests {
 
     #[tokio::test]
     async fn publish_docs_rejects_read_only_owner() {
-        let normalized = NormalizedName::from_unchecked("test-crate".to_string());
+        let canonical = CanonicalName::try_from("test-crate").unwrap();
         let mut db = MockDb::new();
-        expect_original_name(&mut db, &normalized, "test-crate");
+        expect_original_name(&mut db, &canonical, "test-crate");
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
                 name: "reader".to_string(),
@@ -507,7 +562,7 @@ mod tests {
         // Read-only users are rejected with 400, like on all other modifying endpoints.
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("test-crate"),
+            &docs_name("test-crate"),
             &Version::from_unchecked_str("1.0.0"),
             "doc/test_crate/index.html",
         );
@@ -561,9 +616,9 @@ mod tests {
         // archive parses fine (`ZipArchive::new` succeeds) but `ZipArchive::extract`
         // rejects the unsafe path, so the inner `Result` from `docs.extract(..)` must
         // reach the caller as an error (previously silently discarded, returning 200).
-        let normalized = NormalizedName::from_unchecked("test-crate".to_string());
+        let canonical = CanonicalName::try_from("test-crate").unwrap();
         let mut db = MockDb::new();
-        expect_admin_owner(&mut db, &normalized);
+        expect_admin_owner(&mut db, &canonical);
 
         let tmp = tempfile::tempdir().unwrap();
         let docs_storage = Arc::new(DocsStorage::new(Box::new(
@@ -604,7 +659,7 @@ mod tests {
             FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
         ) as DynStorage));
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("secret"),
+            &docs_name("secret"),
             &Version::from_unchecked_str("1.0.0"),
             "doc/secret/index.html",
         );
@@ -667,7 +722,7 @@ mod tests {
             Box::new(MemoryStorage::new()) as DynStorage
         ));
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &docs_name("my-crate"),
             &Version::from_unchecked_str("1.0.0"),
             "doc/My_Crate/index.html",
         );
@@ -681,7 +736,7 @@ mod tests {
             .returning(|_| Ok(Version::try_from("1.0.0").unwrap()));
         expect_original_name(
             &mut db,
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &CanonicalName::try_from("my-crate").unwrap(),
             "My-Crate",
         );
 
@@ -733,10 +788,7 @@ mod tests {
         expect_restricted_crate(&mut db, true);
         expect_token_user(&mut db, "alice");
         db.expect_is_crate_user()
-            .with(
-                eq(NormalizedName::from_unchecked("secret".to_string())),
-                eq("alice"),
-            )
+            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("alice"))
             .returning(|_, _| Ok(true));
 
         let location = latest_location(db, docs_storage, Some("token")).await;
@@ -753,10 +805,7 @@ mod tests {
         db.expect_is_crate_user().returning(|_, _| Ok(false));
         db.expect_is_crate_group_user().returning(|_, _| Ok(false));
         db.expect_is_owner()
-            .with(
-                eq(NormalizedName::from_unchecked("secret".to_string())),
-                eq("olivia"),
-            )
+            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("olivia"))
             .returning(|_, _| Ok(true));
 
         let location = latest_location(db, docs_storage, Some("token")).await;
@@ -772,10 +821,7 @@ mod tests {
         expect_token_user(&mut db, "greg");
         db.expect_is_crate_user().returning(|_, _| Ok(false));
         db.expect_is_crate_group_user()
-            .with(
-                eq(NormalizedName::from_unchecked("secret".to_string())),
-                eq("greg"),
-            )
+            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("greg"))
             .returning(|_, _| Ok(true));
 
         let location = latest_location(db, docs_storage, Some("token")).await;

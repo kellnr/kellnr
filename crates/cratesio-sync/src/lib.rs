@@ -13,9 +13,9 @@ use std::time::Duration;
 
 use futures_util::FutureExt;
 use futures_util::future::{BoxFuture, Shared};
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::license::UNKNOWN_LICENSE;
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
@@ -67,7 +67,7 @@ struct Inner {
     client: Client,
     index_url: Url,
     api_url: Url,
-    running: Mutex<HashMap<NormalizedName, Job>>,
+    running: Mutex<HashMap<CanonicalName, Job>>,
 }
 
 impl CratesioSync {
@@ -86,7 +86,7 @@ impl CratesioSync {
     /// Sync the crate, or wait for the sync of it that is already running, in
     /// which case `source` is not used.
     pub async fn sync(&self, name: &OriginalName, source: SyncSource) -> Synced {
-        let key = name.to_normalized();
+        let key = name.to_canonical();
         let job = {
             let mut running = self
                 .inner
@@ -121,7 +121,7 @@ impl CratesioSync {
 /// panics does not block all later syncs of its crate.
 struct RemoveOnDrop {
     inner: Arc<Inner>,
-    key: NormalizedName,
+    key: CanonicalName,
 }
 
 impl Drop for RemoveOnDrop {
@@ -206,7 +206,7 @@ impl Inner {
     ) -> bool {
         matches!(
             self.db
-                .is_cratesio_cache_up_to_date(&name.to_normalized(), etag, last_modified)
+                .is_cratesio_cache_up_to_date(name, etag, last_modified)
                 .await,
             Ok(PrefetchState::UpToDate { .. })
         )
@@ -218,7 +218,7 @@ impl Inner {
         etag: Option<String>,
         last_modified: Option<String>,
     ) -> Option<IndexData> {
-        let url = match self.index_url.join(&crate_sub_path(&name.to_normalized())) {
+        let url = match self.index_url.join(&crate_sub_path(name)) {
             Ok(url) => url,
             Err(e) => {
                 error!("Could not parse crates.io url for {name}: {e}");
@@ -397,7 +397,9 @@ fn parse_index(name: &OriginalName, data: &str) -> Option<Vec<IndexMetadata>> {
 }
 
 /// Path of a crate in the sparse index.
-pub fn crate_sub_path(name: &NormalizedName) -> String {
+pub fn crate_sub_path(name: &OriginalName) -> String {
+    // The index of crates.io uses the lowercase name with its separators
+    let name = name.to_lowercase();
     match name.len() {
         1 => format!("1/{name}"),
         2 => format!("2/{name}"),

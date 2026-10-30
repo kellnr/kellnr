@@ -3,12 +3,12 @@ use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use crate_meta::CrateMeta;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::CrateData;
 use kellnr_common::crate_dependents::CrateDependents;
 use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::index_metadata::IndexMetadata;
-use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
@@ -181,23 +181,23 @@ pub trait DbProvider: Send + Sync {
     async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User>;
     async fn increase_download_counter(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         crate_version: &Version,
     ) -> DbResult<()>;
     async fn increase_cached_download_counter(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         crate_version: &Version,
     ) -> DbResult<()>;
     async fn increase_download_counter_by(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()>;
     async fn increase_cached_download_counter_by(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()>;
@@ -215,22 +215,22 @@ pub trait DbProvider: Send + Sync {
         user_name: &str,
         keep_session_token: &str,
     ) -> DbResult<u64>;
-    async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
+    async fn add_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()>;
     /// Adds `owner` to the owners of the crate. Adding an existing owner
     /// succeeds without a change.
-    async fn add_owner(&self, crate_name: &NormalizedName, owner: &str) -> DbResult<()>;
-    async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool>;
+    async fn add_owner(&self, crate_name: &CanonicalName, owner: &str) -> DbResult<()>;
+    async fn is_download_restricted(&self, crate_name: &CanonicalName) -> DbResult<bool>;
     async fn change_download_restricted(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         restricted: bool,
     ) -> DbResult<()>;
-    async fn is_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>;
-    async fn is_owner(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>;
-    async fn get_crate_id(&self, crate_name: &NormalizedName) -> DbResult<Option<i64>>;
-    async fn get_crate_owners(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>>;
-    async fn get_crate_users(&self, crate_name: &NormalizedName) -> DbResult<Vec<User>>;
-    async fn get_crate_versions(&self, crate_name: &NormalizedName) -> DbResult<Vec<Version>>;
+    async fn is_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>;
+    async fn is_owner(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>;
+    async fn get_crate_id(&self, crate_name: &CanonicalName) -> DbResult<Option<i64>>;
+    async fn get_crate_owners(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>>;
+    async fn get_crate_users(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>>;
+    async fn get_crate_versions(&self, crate_name: &CanonicalName) -> DbResult<Vec<Version>>;
     async fn delete_session_token(&self, session_token: &str) -> DbResult<()>;
     async fn delete_user(&self, user_name: &str) -> DbResult<()>;
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()>;
@@ -238,7 +238,7 @@ pub trait DbProvider: Send + Sync {
     async fn change_admin_state(&self, user_name: &str, state: bool) -> DbResult<()>;
     async fn crate_version_exists(&self, crate_id: i64, version: &str) -> DbResult<bool>;
     async fn get_max_version_from_id(&self, crate_id: i64) -> DbResult<Version>;
-    async fn get_max_version_from_name(&self, crate_name: &NormalizedName) -> DbResult<Version>;
+    async fn get_max_version_from_name(&self, crate_name: &CanonicalName) -> DbResult<Version>;
     async fn update_max_version(&self, crate_id: i64, version: &Version) -> DbResult<()>;
     async fn add_auth_token(&self, name: &str, token: &str, user: &str) -> DbResult<()>;
     async fn get_user_from_token(&self, token: &str) -> DbResult<User>;
@@ -249,18 +249,18 @@ pub trait DbProvider: Send + Sync {
     /// Deletes the token `id` of the user, [`DbError::TokenNotFound`] if the
     /// user has no such token.
     async fn delete_auth_token(&self, user_name: &str, id: i32) -> DbResult<()>;
-    async fn delete_owner(&self, crate_name: &str, owner: &str) -> DbResult<()>;
+    async fn delete_owner(&self, crate_name: &CanonicalName, owner: &str) -> DbResult<()>;
     /// Removes all `owners` from the crate in one transaction. Nothing is
     /// removed if one of them is not an owner ([`DbError::OwnerNotFound`]) or
     /// if no owner would remain and `allow_ownerless` is false
     /// ([`DbError::LastOwner`]).
     async fn delete_owners(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         owners: &[String],
         allow_ownerless: bool,
     ) -> DbResult<()>;
-    async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>;
+    async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()>;
     async fn add_user(
         &self,
         name: &str,
@@ -277,11 +277,11 @@ pub trait DbProvider: Send + Sync {
     async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()>;
     async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>>;
     async fn is_group_user(&self, group_name: &str, user: &str) -> DbResult<bool>;
-    async fn add_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>;
-    async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>;
-    async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>>;
-    async fn is_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<bool>;
-    async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>;
+    async fn add_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()>;
+    async fn delete_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()>;
+    async fn get_crate_groups(&self, crate_name: &CanonicalName) -> DbResult<Vec<Group>>;
+    async fn is_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<bool>;
+    async fn is_crate_group_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>;
     async fn get_total_unique_crates(&self) -> DbResult<u64>;
     async fn get_total_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_downloads(&self) -> DbResult<u64>;
@@ -296,14 +296,14 @@ pub trait DbProvider: Send + Sync {
     async fn get_crate_summaries(&self) -> DbResult<Vec<CrateSummary>>;
     async fn add_doc_queue(
         &self,
-        krate: &NormalizedName,
+        krate: &OriginalName,
         version: &Version,
         path: &Path,
     ) -> DbResult<()>;
     async fn delete_doc_queue(&self, id: i64) -> DbResult<()>;
     async fn get_doc_queue(&self) -> DbResult<Vec<DocQueueEntry>>;
-    async fn delete_crate(&self, krate: &NormalizedName, version: &Version) -> DbResult<()>;
-    async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>>;
+    async fn delete_crate(&self, krate: &CanonicalName, version: &Version) -> DbResult<()>;
+    async fn get_crate_meta_list(&self, crate_name: &CanonicalName) -> DbResult<Vec<CrateMeta>>;
     async fn update_last_updated(&self, id: i64, last_updated: &DateTime<Utc>) -> DbResult<()>;
     async fn search_in_crate_name_and_description(
         &self,
@@ -334,11 +334,11 @@ pub trait DbProvider: Send + Sync {
         visibility: &CrateVisibility,
         tags: &CrateTagFilter,
     ) -> DbResult<u64>;
-    async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData>;
+    async fn get_crate_data(&self, crate_name: &CanonicalName) -> DbResult<CrateData>;
     /// Crates whose latest non-yanked version depends on the crate, with the
     /// latest version of the crate. `restricted` is always 0, the caller
     /// decides which dependents to hide.
-    async fn get_crate_dependents(&self, crate_name: &NormalizedName) -> DbResult<CrateDependents>;
+    async fn get_crate_dependents(&self, crate_name: &CanonicalName) -> DbResult<CrateDependents>;
     async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64>;
     /// Adds a published crate version. `owner` is the publishing user, who
     /// becomes the owner of a new crate. `token_name` is the name of the auth
@@ -354,7 +354,7 @@ pub trait DbProvider: Send + Sync {
     ) -> DbResult<i64>;
     async fn update_docs_link(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         version: &Version,
         docs_link: &str,
     ) -> DbResult<()>;
@@ -365,10 +365,10 @@ pub trait DbProvider: Send + Sync {
         created: &str,
         crate_id: i64,
     ) -> DbResult<()>;
-    async fn get_prefetch_data(&self, crate_name: &str) -> DbResult<Prefetch>;
+    async fn get_prefetch_data(&self, crate_name: &OriginalName) -> DbResult<Prefetch>;
     async fn is_cratesio_cache_up_to_date(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &OriginalName,
         if_none_match: Option<String>,
         if_modified_since: Option<String>,
     ) -> DbResult<PrefetchState>;
@@ -386,18 +386,18 @@ pub trait DbProvider: Send + Sync {
     /// index, if the version is known.
     async fn get_cratesio_version_meta(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         version: &Version,
     ) -> DbResult<Option<CratesioVersionMeta>>;
     /// License of a Kellnr crate version, `None` if it declares none or the
     /// version does not exist.
     async fn get_crate_license(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         version: &Version,
     ) -> DbResult<Option<String>>;
-    async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()>;
-    async fn yank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()>;
+    async fn unyank_crate(&self, crate_name: &CanonicalName, version: &Version) -> DbResult<()>;
+    async fn yank_crate(&self, crate_name: &CanonicalName, version: &Version) -> DbResult<()>;
     async fn register_webhook(&self, webhook: Webhook) -> DbResult<String>;
     async fn delete_webhook(&self, id: &str) -> DbResult<()>;
     async fn get_webhook(&self, id: &str) -> DbResult<Webhook>;
@@ -550,13 +550,13 @@ pub trait DbProvider: Send + Sync {
     /// does not exist. Crate files are stored under this name.
     async fn get_crate_original_name(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
     ) -> DbResult<Option<OriginalName>>;
 
     /// The original name of the crate if the crate has the version.
     async fn get_original_name(
         &self,
-        crate_name: &NormalizedName,
+        crate_name: &CanonicalName,
         version: &Version,
     ) -> DbResult<Option<OriginalName>>;
 }
@@ -584,7 +584,7 @@ pub mod mock {
 
             async fn increase_download_counter(
                 &self,
-                _crate_name: &NormalizedName,
+                _crate_name: &CanonicalName,
                 _crate_version: &Version,
             ) -> DbResult<()> {
                 unimplemented!()
@@ -592,7 +592,7 @@ pub mod mock {
 
             async fn increase_cached_download_counter(
                 &self,
-                _crate_name: &NormalizedName,
+                _crate_name: &CanonicalName,
                 _crate_version: &Version,
             ) -> DbResult<()> {
                 unimplemented!()
@@ -600,7 +600,7 @@ pub mod mock {
 
             async fn increase_download_counter_by(
                 &self,
-                _crate_name: &NormalizedName,
+                _crate_name: &CanonicalName,
                 _crate_version: &Version,
                 _count: u64,
             ) -> DbResult<()> {
@@ -609,7 +609,7 @@ pub mod mock {
 
             async fn increase_cached_download_counter_by(
                 &self,
-                _crate_name: &NormalizedName,
+                _crate_name: &CanonicalName,
                 _crate_version: &Version,
                 _count: u64,
             ) -> DbResult<()> {
@@ -636,47 +636,47 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()> {
+            async fn add_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn add_owner(&self, _crate_name: &NormalizedName, _owner: &str) -> DbResult<()> {
+            async fn add_owner(&self, _crate_name: &CanonicalName, _owner: &str) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn is_download_restricted(&self, crate_name: &NormalizedName) -> DbResult<bool> {
+            async fn is_download_restricted(&self, crate_name: &CanonicalName) -> DbResult<bool> {
                 unimplemented!()
             }
 
             async fn change_download_restricted(
                 &self,
-                crate_name: &NormalizedName,
+                crate_name: &CanonicalName,
                 restricted: bool,
             ) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn is_crate_user(&self, _crate_name: &NormalizedName, _user: &str) -> DbResult<bool> {
+            async fn is_crate_user(&self, _crate_name: &CanonicalName, _user: &str) -> DbResult<bool> {
                 unimplemented!()
             }
 
-            async fn is_owner(&self, _crate_name: &NormalizedName, _user: &str) -> DbResult<bool> {
+            async fn is_owner(&self, _crate_name: &CanonicalName, _user: &str) -> DbResult<bool> {
                 unimplemented!()
             }
 
-            async fn get_crate_id(&self, _crate_name: &NormalizedName) -> DbResult<Option<i64>> {
+            async fn get_crate_id(&self, _crate_name: &CanonicalName) -> DbResult<Option<i64>> {
                 unimplemented!()
             }
 
-            async fn get_crate_owners(&self, _crate_name: &NormalizedName) -> DbResult<Vec<User>> {
+            async fn get_crate_owners(&self, _crate_name: &CanonicalName) -> DbResult<Vec<User>> {
                 unimplemented!()
             }
 
-            async fn get_crate_users(&self, _crate_name: &NormalizedName) -> DbResult<Vec<User>> {
+            async fn get_crate_users(&self, _crate_name: &CanonicalName) -> DbResult<Vec<User>> {
                 unimplemented!()
             }
 
-            async fn get_crate_versions(&self, _crate_name: &NormalizedName) -> DbResult<Vec<Version>> {
+            async fn get_crate_versions(&self, _crate_name: &CanonicalName) -> DbResult<Vec<Version>> {
                 unimplemented!()
             }
 
@@ -708,7 +708,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_max_version_from_name(&self, crate_name: &NormalizedName) -> DbResult<Version> {
+            async fn get_max_version_from_name(&self, crate_name: &CanonicalName) -> DbResult<Version> {
                 unimplemented!()
             }
 
@@ -740,15 +740,15 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn delete_owner(&self, _crate_name: &str, _owner: &str) -> DbResult<()> {
+            async fn delete_owner(&self, _crate_name: &CanonicalName, _owner: &str) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn delete_owners(&self, _crate_name: &NormalizedName, _owners: &[String], _allow_ownerless: bool) -> DbResult<()> {
+            async fn delete_owners(&self, _crate_name: &CanonicalName, _owners: &[String], _allow_ownerless: bool) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn delete_crate_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<()>{
+            async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()>{
                 unimplemented!()
             }
 
@@ -788,7 +788,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-                async fn add_doc_queue(&self, krate: &NormalizedName, version: &Version, path: &Path) -> DbResult<()>{
+                async fn add_doc_queue(&self, krate: &OriginalName, version: &Version, path: &Path) -> DbResult<()>{
                     unimplemented!()
                 }
 
@@ -800,7 +800,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn delete_crate(&self, krate: &NormalizedName, version: &Version) -> DbResult<()> {
+            async fn delete_crate(&self, krate: &CanonicalName, version: &Version) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -808,7 +808,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_crate_meta_list(&self, crate_name: &NormalizedName) -> DbResult<Vec<CrateMeta>>{
+            async fn get_crate_meta_list(&self, crate_name: &CanonicalName) -> DbResult<Vec<CrateMeta>>{
                 unimplemented!()
             }
 
@@ -832,11 +832,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_crate_data(&self, crate_name: &NormalizedName) -> DbResult<CrateData> {
+            async fn get_crate_data(&self, crate_name: &CanonicalName) -> DbResult<CrateData> {
                 unimplemented!()
             }
 
-            async fn get_crate_dependents(&self, crate_name: &NormalizedName) -> DbResult<CrateDependents> {
+            async fn get_crate_dependents(&self, crate_name: &CanonicalName) -> DbResult<CrateDependents> {
                 unimplemented!()
             }
 
@@ -848,7 +848,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn update_docs_link(&self, crate_name: &NormalizedName, version: &Version, docs_link: &str) -> DbResult<()> {
+            async fn update_docs_link(&self, crate_name: &CanonicalName, version: &Version, docs_link: &str) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -856,11 +856,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_prefetch_data(&self, crate_name: &str) -> DbResult<Prefetch> {
+            async fn get_prefetch_data(&self, crate_name: &OriginalName) -> DbResult<Prefetch> {
                 unimplemented!()
             }
 
-            async fn is_cratesio_cache_up_to_date(&self, crate_name: &NormalizedName, etag: Option<String>, last_modified: Option<String>) -> DbResult<PrefetchState> {
+            async fn is_cratesio_cache_up_to_date(&self, crate_name: &OriginalName, etag: Option<String>, last_modified: Option<String>) -> DbResult<PrefetchState> {
                 unimplemented!()
             }
 
@@ -880,19 +880,19 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_cratesio_version_meta(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<Option<CratesioVersionMeta>> {
+            async fn get_cratesio_version_meta(&self, crate_name: &CanonicalName, version: &Version) -> DbResult<Option<CratesioVersionMeta>> {
                 unimplemented!()
             }
 
-            async fn get_crate_license(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<Option<String>> {
+            async fn get_crate_license(&self, crate_name: &CanonicalName, version: &Version) -> DbResult<Option<String>> {
                 unimplemented!()
             }
 
-            async fn unyank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
+            async fn unyank_crate(&self, crate_name: &CanonicalName, version: &Version) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn yank_crate(&self, crate_name: &NormalizedName, version: &Version) -> DbResult<()> {
+            async fn yank_crate(&self, crate_name: &CanonicalName, version: &Version) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -921,20 +921,20 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>{
+            async fn add_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()>{
                 unimplemented!()
             }
-            async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>{
+            async fn delete_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()>{
                 unimplemented!()
             }
-            async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>>{
+            async fn get_crate_groups(&self, crate_name: &CanonicalName) -> DbResult<Vec<Group>>{
                 unimplemented!()
             }
-            async fn is_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<bool>{
+            async fn is_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<bool>{
                 unimplemented!()
             }
 
-            async fn is_crate_group_user(&self, crate_name: &NormalizedName, user: &str) -> DbResult<bool>{
+            async fn is_crate_group_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>{
                 unimplemented!()
             }
 
@@ -1101,13 +1101,13 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_crate_original_name(&self, crate_name: &NormalizedName) -> DbResult<Option<OriginalName>> {
+            async fn get_crate_original_name(&self, crate_name: &CanonicalName) -> DbResult<Option<OriginalName>> {
                 unimplemented!()
             }
 
             async fn get_original_name(
                 &self,
-                crate_name: &NormalizedName,
+                crate_name: &CanonicalName,
                 version: &Version,
             ) -> DbResult<Option<OriginalName>> {
                 unimplemented!()

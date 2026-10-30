@@ -6,10 +6,11 @@
 
 use std::collections::{HashMap, HashSet};
 
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::CRATESIO_INDEX;
 use kellnr_common::crate_dependents::LocalDependency;
 use kellnr_common::index_metadata::{IndexDep, IndexMetadata, schema_version, split_features};
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::{Version, latest_version};
 use kellnr_entity::{
@@ -17,10 +18,9 @@ use kellnr_entity::{
     crate_dependency, crate_index, crate_keyword, crate_keyword_to_crate, crate_meta,
     cratesio_crate, cratesio_index, krate, owner, user,
 };
-use sea_orm::sea_query::{Alias, Expr, Func};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, ExprTrait,
-    QueryFilter, QueryOrder, QuerySelect, Set, TryInsertResult,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set, SqlErr, TryInsertResult,
 };
 
 use crate::ConString;
@@ -37,12 +37,13 @@ pub struct DepInfo {
 }
 
 /// Name a dependency is looked up by: the package name for renamed
-/// dependencies, normalized like the crate names in the database.
-pub fn dep_lookup_name(dep: &IndexDep) -> String {
-    dep.package.as_ref().unwrap_or(&dep.name).to_lowercase()
+/// dependencies. `None` for names no crate can have.
+pub fn dep_lookup_name(dep: &IndexDep) -> Option<CanonicalName> {
+    CanonicalName::try_from(dep.package.as_deref().unwrap_or(&dep.name)).ok()
 }
 
-/// Description and latest version of the dependencies, by [`dep_lookup_name`].
+/// Description and latest version of the dependencies, by the canonical name
+/// [`dep_lookup_name`] returns.
 /// crates.io dependencies are only known if they are in the proxy cache.
 pub async fn get_dep_info<'a, C, D>(db_con: &C, deps: D) -> DbResult<HashMap<String, DepInfo>>
 where
@@ -53,17 +54,20 @@ where
     let mut names = HashSet::new();
 
     for dep in deps {
+        let Some(name) = dep_lookup_name(dep) else {
+            continue;
+        };
         match dep.registry.as_ref() {
             Some(r) if r == CRATESIO_INDEX => {
-                cratesio_names.insert(dep_lookup_name(dep));
+                cratesio_names.insert(name);
             }
             _ => {
-                names.insert(dep_lookup_name(dep));
+                names.insert(name);
             }
         }
     }
-    let cratesio_names: Vec<String> = cratesio_names.into_iter().collect();
-    let names: Vec<String> = names.into_iter().collect();
+    let cratesio_names: Vec<CanonicalName> = cratesio_names.into_iter().collect();
+    let names: Vec<CanonicalName> = names.into_iter().collect();
 
     let mut info: HashMap<String, DepInfo> = HashMap::new();
     let mut cratesio_crates: Vec<(String, Option<String>)> = Vec::new();
@@ -80,7 +84,7 @@ where
                     cratesio_crate::Column::Name,
                     cratesio_crate::Column::Description,
                 ])
-                .filter(cratesio_crate::Column::Name.is_in(chunk))
+                .filter(cratesio_crate::Column::Name.is_in(chunk.iter().cloned()))
                 .into_tuple::<(String, Option<String>)>()
                 .all(db_con)
                 .await?,
@@ -91,7 +95,7 @@ where
                 .column(cratesio_crate::Column::Name)
                 .column(cratesio_index::Column::Vers)
                 .inner_join(cratesio_crate::Entity)
-                .filter(cratesio_crate::Column::Name.is_in(chunk))
+                .filter(cratesio_crate::Column::Name.is_in(chunk.iter().cloned()))
                 .filter(cratesio_index::Column::Yanked.eq(false))
                 .into_tuple::<(String, String)>()
                 .all(db_con)
@@ -103,7 +107,7 @@ where
             krate::Entity::find()
                 .select_only()
                 .columns([krate::Column::Name, krate::Column::Description])
-                .filter(krate::Column::Name.is_in(chunk))
+                .filter(krate::Column::Name.is_in(chunk.iter().cloned()))
                 .into_tuple::<(String, Option<String>)>()
                 .all(db_con)
                 .await?,
@@ -114,7 +118,7 @@ where
                 .column(krate::Column::Name)
                 .column(crate_index::Column::Vers)
                 .inner_join(krate::Entity)
-                .filter(krate::Column::Name.is_in(chunk))
+                .filter(krate::Column::Name.is_in(chunk.iter().cloned()))
                 .filter(crate_index::Column::Yanked.eq(false))
                 .into_tuple::<(String, String)>()
                 .all(db_con)
@@ -188,36 +192,52 @@ pub async fn no_user_exists<C: ConnectionTrait>(db_con: &C) -> DbResult<bool> {
     Ok(id.is_none())
 }
 
-/// Fail with [`DbError::CrateNameConflict`] if a crate exists whose name only
-/// differs from `name` in `-` versus `_`, like cargo and crates.io treat them as
-/// the same crate. Used before creating a new crate to prevent typosquatting.
+/// Fail with [`DbError::CrateNameConflict`] if a crate with the same canonical
+/// name as `name` exists, like cargo and crates.io treat names that only
+/// differ in case or in `-` versus `_` as the same crate. Used before creating
+/// a new crate to prevent typosquatting.
 pub async fn ensure_no_similar_crate<C: ConnectionTrait>(
     db_con: &C,
-    name: &NormalizedName,
+    name: &OriginalName,
 ) -> DbResult<()> {
-    let canonical_name = Func::cust(Alias::new("REPLACE"))
-        .arg(Expr::col(krate::Column::Name))
-        .arg("-")
-        .arg("_");
     let similar = krate::Entity::find()
-        .filter(canonical_name.eq(name.replace('-', "_")))
+        .filter(krate::Column::Name.eq(name.to_canonical()))
         .one(db_con)
         .await?;
 
     match similar {
-        Some(krate) => Err(DbError::CrateNameConflict(
-            name.to_string(),
-            krate.original_name,
-        )),
+        Some(krate) => Err(name_conflict(name, krate.original_name)),
         None => Ok(()),
     }
+}
+
+/// Fail with [`DbError::CrateNameConflict`] if `name` is spelled with other
+/// separators than the existing crate `existing_name` of the same canonical
+/// name. Names that only differ in case are the same crate, they are rejected
+/// later with a better error for its owners.
+pub fn ensure_same_separators(name: &OriginalName, existing_name: &str) -> DbResult<()> {
+    if name.to_lowercase() == existing_name.to_lowercase() {
+        Ok(())
+    } else {
+        Err(name_conflict(name, existing_name.to_string()))
+    }
+}
+
+pub fn name_conflict(name: &OriginalName, existing_name: String) -> DbError {
+    DbError::CrateNameConflict(name.to_lowercase(), existing_name)
+}
+
+/// Whether the insert of a crate failed on the unique crate name, as a
+/// concurrent publish created a crate with the same canonical name.
+pub fn is_unique_violation(err: &DbErr) -> bool {
+    matches!(err.sql_err(), Some(SqlErr::UniqueConstraintViolation(_)))
 }
 
 /// Fail with [`DbError::NotOwner`] unless `user_name` owns the crate or is an admin.
 pub async fn ensure_owner_or_admin<C: ConnectionTrait>(
     db_con: &C,
     user_name: &str,
-    crate_name: &NormalizedName,
+    crate_name: &str,
     crate_id: i64,
 ) -> DbResult<()> {
     let user = user::Entity::find()
@@ -334,7 +354,7 @@ pub async fn add_crate_index<C: ConnectionTrait>(
         .map(|dep| crate_dependency::ActiveModel {
             id: ActiveValue::default(),
             crate_index_fk: Set(ci.id),
-            name: Set(dep.name),
+            name: Set(dep.name.into_inner()),
             version_req: Set(dep.version_req),
             kind: Set(dep.kind),
         })
@@ -593,7 +613,7 @@ pub fn crate_index_model_to_index_metadata(
 }
 
 pub fn cratesio_index_model_to_index_metadata(
-    crate_name: &NormalizedName,
+    crate_name: &str,
     crate_indices: Vec<cratesio_index::Model>,
 ) -> DbResult<Vec<IndexMetadata>> {
     let mut index_metadata = vec![];

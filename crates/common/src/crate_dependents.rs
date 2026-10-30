@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::canonical_name::CanonicalName;
 use crate::crate_data::is_outdated;
 use crate::index_metadata::IndexDep;
 
@@ -45,21 +46,22 @@ pub struct DependentRequirement {
 /// crate version to find the dependents of a crate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalDependency {
-    // Normalized package name, the original one for renamed dependencies
-    pub name: String,
+    // Package name, the original one for renamed dependencies
+    pub name: CanonicalName,
     pub version_req: String,
     // "normal", "build" or "dev"
     pub kind: String,
 }
 
 impl LocalDependency {
-    /// `None` for dependencies from other registries, like crates.io.
+    /// `None` for dependencies from other registries, like crates.io, and for
+    /// names no crate can have.
     pub fn from_index_dep(dep: &IndexDep) -> Option<Self> {
         if dep.registry.is_some() {
             return None;
         }
         Some(LocalDependency {
-            name: dep.package.as_ref().unwrap_or(&dep.name).to_lowercase(),
+            name: CanonicalName::try_from(dep.package.as_deref().unwrap_or(&dep.name)).ok()?,
             version_req: dep.req.clone(),
             kind: dep
                 .kind
@@ -169,12 +171,12 @@ mod tests {
     }
 
     #[test]
-    fn local_dependency_uses_normalized_package_name() {
+    fn local_dependency_uses_canonical_package_name() {
         let mut renamed = dep("foo_renamed", "^2", Some(DependencyKind::Dev));
-        renamed.package = Some("Foo".to_string());
+        renamed.package = Some("Foo-Bar".to_string());
         assert_eq!(
             Some(LocalDependency {
-                name: "foo".to_string(),
+                name: CanonicalName::try_from("foo_bar").unwrap(),
                 version_req: "^2".to_string(),
                 kind: "dev".to_string(),
             }),

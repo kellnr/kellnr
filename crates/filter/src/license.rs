@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::license::UNKNOWN_LICENSE;
 use kellnr_settings::LicenseUnknown;
 use spdx::{Expression, LicenseReq, Licensee, ParseMode};
@@ -13,7 +14,7 @@ use crate::{CrateFilter, CrateInfo, FilterError, Verdict};
 pub struct LicenseFilter {
     allowed: Vec<AllowedLicense>,
     unknown: LicenseUnknown,
-    exempt_crates: HashSet<String>,
+    exempt_crates: HashSet<CanonicalName>,
 }
 
 struct AllowedLicense {
@@ -66,7 +67,12 @@ impl LicenseFilter {
         Ok(Self {
             allowed,
             unknown,
-            exempt_crates: exempt_crates.iter().map(|c| crate_key(c)).collect(),
+            // Crate names are compared like cargo does. A name no crate can
+            // have never matches.
+            exempt_crates: exempt_crates
+                .iter()
+                .filter_map(|c| CanonicalName::try_from(c.trim()).ok())
+                .collect(),
         })
     }
 
@@ -81,19 +87,13 @@ impl LicenseFilter {
     }
 }
 
-/// Crate names are compared case-insensitively and with "-" equal to "_", as
-/// cargo does.
-fn crate_key(name: &str) -> String {
-    name.trim().to_lowercase().replace('_', "-")
-}
-
 impl CrateFilter for LicenseFilter {
     fn name(&self) -> &'static str {
         "license"
     }
 
     fn check(&self, krate: &CrateInfo) -> Verdict {
-        if self.exempt_crates.contains(&crate_key(krate.name)) {
+        if self.exempt_crates.contains(&krate.name.to_canonical()) {
             return Verdict::Allow;
         }
 
@@ -133,7 +133,7 @@ impl CrateFilter for LicenseFilter {
 
 #[cfg(test)]
 mod tests {
-    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_common::original_name::OriginalName;
     use kellnr_common::version::Version;
 
     use super::*;
@@ -150,7 +150,7 @@ mod tests {
 
     fn check_crate(filter: &LicenseFilter, name: &str, license: Option<&str>) -> Verdict {
         filter.check(&CrateInfo {
-            name: &NormalizedName::from_unchecked_str(name),
+            name: &OriginalName::try_from(name).unwrap(),
             version: &Version::from_unchecked_str("1.0.0"),
             license,
         })

@@ -10,12 +10,12 @@ use cargo::core::compiler::UserIntent;
 use cargo::core::resolver::CliFeatures;
 use cargo::ops::{self, CompileOptions, DocOptions, OutputFormat};
 use flate2::read::GzDecoder;
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::{DbProvider, DocQueueEntry};
 use kellnr_settings::Settings;
-use kellnr_storage::docs_storage::DocsStorage;
+use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use tokio::fs::remove_dir_all;
 use tracing::{debug, error, warn};
@@ -95,7 +95,7 @@ impl DocQueueWorker {
 
         for entry in entries {
             // A crate version queued several times is only built once.
-            let is_first = built.insert((entry.normalized_name.to_string(), entry.version.clone()));
+            let is_first = built.insert((entry.name.clone(), entry.version.clone()));
             let outcome = if is_first && !self.is_processed(entry.id) {
                 self.process_entry(&entry).await
             } else {
@@ -119,8 +119,15 @@ impl DocQueueWorker {
     /// could not be read is retried, failed builds are not, as every build
     /// runs untrusted code.
     async fn process_entry(&self, entry: &DocQueueEntry) -> Outcome {
-        let name = &entry.normalized_name;
         let version = Version::from_unchecked_str(&entry.version);
+        let Ok(name) = entry.canonical_name() else {
+            warn!(
+                "Skipping the docs build of {} {version}, the crate name is invalid",
+                entry.name
+            );
+            return Outcome::Done;
+        };
+        let name = &name;
         let (original_name, contents) = match self.read_crate(name, &version).await {
             Ok(Some(krate)) => krate,
             Ok(None) => {
@@ -134,7 +141,7 @@ impl DocQueueWorker {
         };
 
         let result = self
-            .build_docs(entry, &original_name, &version, contents)
+            .build_docs(entry, name, &original_name, &version, contents)
             .await;
         // A failure afterwards must not trigger another build.
         self.processed.lock().unwrap().insert(entry.id);
@@ -154,7 +161,7 @@ impl DocQueueWorker {
     /// does not exist.
     async fn read_crate(
         &self,
-        name: &NormalizedName,
+        name: &CanonicalName,
         version: &Version,
     ) -> Result<Option<(OriginalName, Bytes)>, DocsError> {
         // The crate file and the folder in it are named after the original name.
@@ -168,6 +175,7 @@ impl DocQueueWorker {
     async fn build_docs(
         &self,
         doc: &DocQueueEntry,
+        name: &CanonicalName,
         original_name: &OriginalName,
         version: &Version,
         contents: Bytes,
@@ -191,14 +199,9 @@ impl DocQueueWorker {
 
         // The version may have been deleted during the build. Its docs would
         // never be deleted then.
-        if self
-            .db
-            .get_original_name(&doc.normalized_name, version)
-            .await?
-            .is_none()
-        {
+        if self.db.get_original_name(name, version).await?.is_none() {
             return Err(DocsError::CrateDoesNotExist(
-                doc.normalized_name.to_string(),
+                doc.name.clone(),
                 version.to_string(),
             ));
         }
@@ -216,7 +219,7 @@ impl DocQueueWorker {
         upload_dir_and_prune(
             &from,
             "doc",
-            &doc.normalized_name,
+            &DocsName::from(original_name),
             version,
             &self.docs_storage,
         )
@@ -466,7 +469,7 @@ mod tests {
     fn queue_entry(id: i64, name: &str, path: PathBuf) -> DocQueueEntry {
         DocQueueEntry {
             id,
-            normalized_name: NormalizedName::from_unchecked(name.to_string()),
+            name: name.to_string(),
             version: "1.0.0".to_string(),
             path,
         }
@@ -574,7 +577,7 @@ mod tests {
             .returning(|_, _| Ok(Some(OriginalName::from_unchecked("My-Crate".to_string()))));
         db.expect_update_docs_link()
             .withf(|name, _, link| {
-                name.as_str() == "my-crate"
+                name.as_str() == "my_crate"
                     && link == "/docs/my-crate/1.0.0/doc/My_Crate/index.html"
             })
             .times(1)
@@ -589,7 +592,7 @@ mod tests {
         worker.process_queue().await.unwrap();
 
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from(&OriginalName::try_from("my-crate").unwrap()),
             &Version::from_unchecked_str("1.0.0"),
             "doc/My_Crate/index.html",
         );
@@ -704,7 +707,7 @@ mod tests {
 
         assert_eq!(build_count(&build_log), 1);
         let prefix = DocsStorage::version_prefix(
-            &NormalizedName::from_unchecked_str("a"),
+            &DocsName::from(&OriginalName::try_from("a").unwrap()),
             &Version::from_unchecked_str("1.0.0"),
         );
         assert!(worker.docs_storage.list(&prefix).await.unwrap().is_empty());
@@ -728,7 +731,7 @@ mod tests {
         worker.process_queue().await.unwrap();
 
         let prefix = DocsStorage::version_prefix(
-            &NormalizedName::from_unchecked_str("a"),
+            &DocsName::from(&OriginalName::try_from("a").unwrap()),
             &Version::from_unchecked_str("1.0.0"),
         );
         let mut keys = worker.docs_storage.list(&prefix).await.unwrap();

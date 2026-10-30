@@ -8,7 +8,7 @@ mod license;
 
 use std::sync::Arc;
 
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_settings::{CratesioFilter, RegistryFilter, Settings};
 pub use known_licenses::{KnownLicense, KnownLicenses};
@@ -16,7 +16,7 @@ pub use license::LicenseFilter;
 
 /// The data of a crate version the filters decide on.
 pub struct CrateInfo<'a> {
-    pub name: &'a NormalizedName,
+    pub name: &'a OriginalName,
     pub version: &'a Version,
     /// `None` if the license could not be determined.
     pub license: Option<&'a str>,
@@ -38,7 +38,8 @@ impl Verdict {
             Verdict::Allow => None,
             Verdict::Deny { filter, reason } => Some(format!(
                 "Download of {}@{} denied by Kellnr {filter} filter: {reason}",
-                krate.name, krate.version
+                krate.name.to_lowercase(),
+                krate.version
             )),
         }
     }
@@ -164,7 +165,7 @@ mod tests {
 
     fn check(chain: &FilterChain) -> Verdict {
         chain.check(&CrateInfo {
-            name: &NormalizedName::from_unchecked_str("foo"),
+            name: &OriginalName::try_from("foo").unwrap(),
             version: &Version::from_unchecked_str("1.2.3"),
             license: None,
         })
@@ -190,7 +191,7 @@ mod tests {
     #[test]
     fn deny_message_names_crate_and_filter() {
         let krate = CrateInfo {
-            name: &NormalizedName::from_unchecked_str("foo"),
+            name: &OriginalName::try_from("foo").unwrap(),
             version: &Version::from_unchecked_str("1.2.3"),
             license: Some("GPL-3.0"),
         };

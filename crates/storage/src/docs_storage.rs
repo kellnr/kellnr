@@ -1,10 +1,36 @@
+use std::fmt;
+
 use bytes::Bytes;
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 
 use crate::cached_crate_storage::DynStorage;
 use crate::storage::ObjectWithMeta;
 use crate::storage_error::StorageError;
+
+/// Name of the folder that holds the docs of a crate: the name the crate was
+/// published with, in lowercase. Docs links point to it, so it must not change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocsName(String);
+
+impl DocsName {
+    /// A folder of docs that was stored before, kept as it is.
+    pub fn from_folder(name: String) -> Self {
+        Self(name)
+    }
+}
+
+impl From<&OriginalName> for DocsName {
+    fn from(name: &OriginalName) -> Self {
+        Self(name.to_lowercase())
+    }
+}
+
+impl fmt::Display for DocsName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
 
 pub struct DocsStorage {
     storage: DynStorage,
@@ -17,11 +43,11 @@ impl DocsStorage {
 
     /// Key for one file under a crate+version's doc tree, e.g.
     /// `my-crate/1.0.0/doc/my_crate/index.html`.
-    pub fn file_key(crate_name: &NormalizedName, version: &Version, relative_path: &str) -> String {
+    pub fn file_key(crate_name: &DocsName, version: &Version, relative_path: &str) -> String {
         format!("{crate_name}/{version}/{relative_path}")
     }
 
-    pub fn version_prefix(crate_name: &NormalizedName, version: &Version) -> String {
+    pub fn version_prefix(crate_name: &DocsName, version: &Version) -> String {
         format!("{crate_name}/{version}/")
     }
 

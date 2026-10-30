@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::version::Version;
 use moka::sync::Cache;
 
@@ -35,7 +35,7 @@ impl From<Option<String>> for KnownLicense {
 /// Licenses of crate versions that are known, so that a download needs no
 /// database query. The license of a published version does not change.
 #[derive(Clone)]
-pub struct KnownLicenses(Cache<(NormalizedName, Version), KnownLicense>);
+pub struct KnownLicenses(Cache<(CanonicalName, Version), KnownLicense>);
 
 impl Default for KnownLicenses {
     fn default() -> Self {
@@ -49,16 +49,16 @@ impl Default for KnownLicenses {
 }
 
 impl KnownLicenses {
-    pub fn get(&self, name: &NormalizedName, version: &Version) -> Option<KnownLicense> {
+    pub fn get(&self, name: &CanonicalName, version: &Version) -> Option<KnownLicense> {
         self.0.get(&(name.clone(), version.clone()))
     }
 
-    pub fn insert(&self, name: &NormalizedName, version: &Version, license: KnownLicense) {
+    pub fn insert(&self, name: &CanonicalName, version: &Version, license: KnownLicense) {
         self.0.insert((name.clone(), version.clone()), license);
     }
 
     /// Forget the license of a deleted version, as it may be published again.
-    pub fn forget(&self, name: &NormalizedName, version: &Version) {
+    pub fn forget(&self, name: &CanonicalName, version: &Version) {
         self.0.invalidate(&(name.clone(), version.clone()));
     }
 }
@@ -67,9 +67,9 @@ impl KnownLicenses {
 mod tests {
     use super::*;
 
-    fn key() -> (NormalizedName, Version) {
+    fn key() -> (CanonicalName, Version) {
         (
-            NormalizedName::from_unchecked_str("foo"),
+            CanonicalName::try_from("foo").unwrap(),
             Version::from_unchecked_str("1.0.0"),
         )
     }

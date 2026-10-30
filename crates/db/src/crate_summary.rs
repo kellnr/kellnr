@@ -12,7 +12,7 @@ pub struct CrateSummary {
 impl From<krate::Model> for CrateSummary {
     fn from(c: krate::Model) -> Self {
         Self {
-            name: c.name,
+            name: c.original_name.to_lowercase(),
             max_version: c.max_version,
             last_updated: c.last_updated,
             total_downloads: c.total_downloads,

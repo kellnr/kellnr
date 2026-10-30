@@ -615,9 +615,10 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use bytes::Bytes;
-    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_common::original_name::OriginalName;
     use kellnr_common::version::Version;
     use kellnr_settings::test_settings;
+    use kellnr_storage::docs_storage::DocsName;
 
     use super::*;
 
@@ -776,7 +777,7 @@ mod tests {
 
         let docs_storage = init_docs_storage(&settings);
         let key = DocsStorage::file_key(
-            &NormalizedName::from_unchecked_str("my-crate"),
+            &DocsName::from(&OriginalName::try_from("my-crate").unwrap()),
             &Version::from_unchecked_str("1.0.0"),
             "doc/index.html",
         );
