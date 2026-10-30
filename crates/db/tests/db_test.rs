@@ -4764,3 +4764,68 @@ async fn get_crate_data_with_more_dependencies_than_bind_parameters(test_db: &ke
     assert_eq!(Some("cached dependency".to_string()), dep.description);
     assert_eq!(Some("1.0.0".to_string()), dep.latest_version);
 }
+
+async fn publish_with_metadata(
+    test_db: &kellnr_db::Database,
+    version: &str,
+    text: &str,
+) -> Result<i64, kellnr_db::error::DbError> {
+    let pm = PublishMetadata {
+        description: Some(text.to_string()),
+        homepage: Some(format!("https://{text}.example.com")),
+        repository: Some(format!("https://{text}.example.com/repo")),
+        keywords: vec![text.to_string()],
+        categories: vec![text.to_string()],
+        authors: Some(vec![text.to_string()]),
+        ..PublishMetadata::minimal("meta", version)
+    };
+    test_db
+        .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+        .await
+}
+
+async fn assert_crate_metadata(test_db: &kellnr_db::Database, max_version: &str, text: &str) {
+    let data = test_db
+        .get_crate_data(&NormalizedName::from_unchecked_str("meta"))
+        .await
+        .unwrap();
+    assert_eq!(max_version, data.max_version);
+    assert_eq!(Some(text.to_string()), data.description);
+    assert_eq!(Some(format!("https://{text}.example.com")), data.homepage);
+    assert_eq!(
+        Some(format!("https://{text}.example.com/repo")),
+        data.repository
+    );
+    assert_eq!(vec![text.to_string()], data.keywords);
+    assert_eq!(vec![text.to_string()], data.categories);
+    assert_eq!(vec![text.to_string()], data.authors);
+}
+
+#[db_test]
+async fn add_crate_keeps_metadata_of_newest_version(test_db: &kellnr_db::Database) {
+    publish_with_metadata(test_db, "2.0.0", "newest")
+        .await
+        .unwrap();
+
+    // A fix release of an older version
+    publish_with_metadata(test_db, "1.0.1", "older")
+        .await
+        .unwrap();
+    assert_crate_metadata(test_db, "2.0.0", "newest").await;
+
+    publish_with_metadata(test_db, "3.0.0", "latest")
+        .await
+        .unwrap();
+    assert_crate_metadata(test_db, "3.0.0", "latest").await;
+}
+
+#[db_test]
+async fn add_crate_rejects_invalid_version_of_new_crate(test_db: &kellnr_db::Database) {
+    let result = publish_with_metadata(test_db, "not-a-version", "invalid").await;
+
+    assert!(matches!(
+        result,
+        Err(kellnr_db::error::DbError::InvalidVersion(_))
+    ));
+    assert_eq!(0, test_db.get_total_unique_crates().await.unwrap());
+}
