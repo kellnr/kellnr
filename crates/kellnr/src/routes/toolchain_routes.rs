@@ -419,7 +419,7 @@ async fn delete_toolchain(
         (status = 200, description = "Target deleted", body = ToolchainResponse),
         (status = 401, description = "Not authenticated"),
         (status = 403, description = "Admin access required"),
-        (status = 404, description = "Toolchain not found"),
+        (status = 404, description = "Toolchain or target not found"),
         (status = 503, description = "Storage not configured")
     ),
     security(("session_cookie" = []))
@@ -471,15 +471,23 @@ async fn delete_toolchain_target(
         ));
     };
 
+    let Some(t) = tc.targets.iter().find(|t| t.target == target) else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ToolchainResponse {
+                success: false,
+                message: Some(format!("Target {target} of {name}-{version} not found")),
+            }),
+        ));
+    };
+
     // Delete the archive and component archives from storage
-    if let Some(t) = tc.targets.iter().find(|t| t.target == target) {
-        if let Err(e) = storage.delete(&t.storage_path).await {
-            tracing::warn!("Failed to delete archive from storage: {e}");
-        }
-        for component in &t.components {
-            if let Err(e) = storage.delete(&component.storage_path).await {
-                tracing::warn!("Failed to delete component archive from storage: {e}");
-            }
+    if let Err(e) = storage.delete(&t.storage_path).await {
+        tracing::warn!("Failed to delete archive from storage: {e}");
+    }
+    for component in &t.components {
+        if let Err(e) = storage.delete(&component.storage_path).await {
+            tracing::warn!("Failed to delete component archive from storage: {e}");
         }
     }
 
@@ -2586,5 +2594,52 @@ mod tests {
             ),
             "unexpected manifest: {manifest}"
         );
+    }
+
+    fn admin_db() -> MockDb {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("admin_session"))
+            .returning(|_| {
+                Ok(kellnr_db::SessionInfo {
+                    name: "admin".to_string(),
+                    is_admin: true,
+                    is_read_only: false,
+                })
+            });
+        mock_db
+    }
+
+    fn fs_toolchain_storage(dir: &TempDir) -> Arc<ToolchainStorage> {
+        let storage: DynStorage = Box::new(FSStorage::new(dir.path().to_str().unwrap()).unwrap());
+        Arc::new(ToolchainStorage::new(storage))
+    }
+
+    /// A misspelled target must not count as the last target, which would
+    /// delete the whole toolchain.
+    #[tokio::test]
+    async fn delete_unknown_target_of_single_target_toolchain_is_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut mock_db = admin_db();
+        mock_db
+            .expect_get_toolchain_by_version()
+            .with(eq("rust"), eq("1.0.0"))
+            .returning(|_, _| Ok(Some(ready_toolchain(&["x86_64-unknown-linux-gnu"]))));
+        mock_db.expect_delete_toolchain().never();
+        mock_db.expect_delete_toolchain_target().never();
+
+        let state = create_app_state(Arc::new(mock_db), Some(fs_toolchain_storage(&temp_dir)));
+        let response = create_test_router(state)
+            .oneshot(
+                Request::delete("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnux")
+                    .header(header::COOKIE, admin_cookie())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::NOT_FOUND, response.status());
     }
 }
