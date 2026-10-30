@@ -79,6 +79,15 @@ async fn deliver(db: &Arc<dyn DbProvider>, client: &WebhookClient, entry: Webhoo
                 tracing::error!("Error while handling webhook failure: {err}");
             }
         }
+        Err(err) if err.is_permanent() => {
+            tracing::error!(
+                "Webhook callback failed for: {}. Reason: {err}. Not retrying, the error is permanent",
+                entry.callback_url
+            );
+            if let Err(err) = db.delete_webhook_queue(&entry.id).await {
+                tracing::error!("Cannot delete webhook queue entry. Reason {err}");
+            }
+        }
         Err(err) => {
             tracing::error!(
                 "Webhook callback failed for: {}. Reason: {err}",
@@ -107,6 +116,9 @@ async fn handle_failed_entry(
 
 /// Resend timings according to:
 /// <https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md#deliverability-and-reliability>
+///
+/// The delays between the attempts are 5s, 5m, 30m, 2h, 5h, 10h, 14h, 20h
+/// and 24h, so the last attempt is about 76 hours after the first one.
 fn get_next_attempt(
     last_attempt: Option<&DateTime<Utc>>,
     current_attempt: &DateTime<Utc>,
@@ -124,7 +136,7 @@ fn get_next_attempt(
         Some(d) if d < TimeDelta::hours(14) => TimeDelta::hours(14),
         Some(d) if d < TimeDelta::hours(20) => TimeDelta::hours(20),
         Some(d) if d < TimeDelta::hours(24) => TimeDelta::hours(24),
-        // More than 24 hours -> do not send anymore.
+        // The last attempt was 24 hours after the previous one.
         _ => return None,
     };
     Some(*current_attempt + offset)
@@ -320,6 +332,38 @@ mod service_tests {
         assert_eq!(
             pending[0].next_attempt,
             pending[0].last_attempt.unwrap() + TimeDelta::minutes(5)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_queue_drops_entries_with_permanent_errors() {
+        let db = get_db().await;
+        for callback_url in ["http://169.254.169.254/", "not a url"] {
+            db.register_webhook(Webhook {
+                callback_url: callback_url.to_string(),
+                ..sample_webhook(WebhookEvent::CrateAdd, 0)
+            })
+            .await
+            .unwrap();
+        }
+        notify_crate(
+            WebhookEvent::CrateAdd,
+            &Utc::now(),
+            &NormalizedName::from_unchecked_str("Test-Crate"),
+            &Version::from_unchecked_str("0.1.0"),
+            &db,
+        )
+        .await;
+
+        let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
+        handle_queue(&db, &http_client).await.unwrap();
+
+        let ts = Utc::now() + TimeDelta::days(30);
+        assert!(
+            db.get_pending_webhook_queue_entries(ts)
+                .await
+                .unwrap()
+                .is_empty()
         );
     }
 
