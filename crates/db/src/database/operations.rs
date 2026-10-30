@@ -20,7 +20,7 @@ use kellnr_entity::{
 use sea_orm::sea_query::{Alias, Expr, Func};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, ExprTrait,
-    QueryFilter, QuerySelect, Set,
+    QueryFilter, QueryOrder, QuerySelect, Set,
 };
 
 use crate::ConString;
@@ -493,16 +493,25 @@ pub async fn update_crate_authors<C: ConnectionTrait>(
     Ok(())
 }
 
+/// The index entries of all versions of a crate, in the order they were
+/// published, so the index file and its `ETag` are always the same.
+pub async fn crate_indices<C: ConnectionTrait>(
+    db_con: &C,
+    crate_id: i64,
+) -> DbResult<Vec<crate_index::Model>> {
+    Ok(crate_index::Entity::find()
+        .filter(crate_index::Column::CrateFk.eq(crate_id))
+        .order_by_asc(crate_index::Column::Id)
+        .all(db_con)
+        .await?)
+}
+
 pub async fn compute_etag<C: ConnectionTrait>(
     db_con: &C,
     crate_name: &str,
     crate_id: i64,
 ) -> DbResult<String> {
-    let crate_indices = crate_index::Entity::find()
-        .filter(crate_index::Column::CrateFk.eq(crate_id))
-        .all(db_con)
-        .await?;
-
+    let crate_indices = crate_indices(db_con, crate_id).await?;
     let index_metadata = crate_index_model_to_index_metadata(crate_name, crate_indices)?;
     let data = index_metadata_to_bytes(&index_metadata)?;
 

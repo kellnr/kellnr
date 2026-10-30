@@ -4936,3 +4936,37 @@ async fn postgres_concurrent_publishes_share_new_keywords() {
     results.2.unwrap();
     results.3.unwrap();
 }
+
+#[db_test]
+async fn yank_and_unyank_update_etag_of_crate_index(test_db: &kellnr_db::Database) {
+    let name = NormalizedName::from_unchecked_str("yankee");
+    let version = Version::try_from("1.0.0").unwrap();
+    // The index stores the original name, which differs from the normalized one
+    for vers in ["1.0.0", "2.0.0"] {
+        let pm = PublishMetadata::minimal("Yankee", vers);
+        test_db
+            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .await
+            .unwrap();
+    }
+    let published = test_db.get_prefetch_data("yankee").await.unwrap();
+
+    test_db.yank_crate(&name, &version).await.unwrap();
+
+    let yanked = test_db.get_prefetch_data("yankee").await.unwrap();
+    assert_ne!(published.etag, yanked.etag);
+    assert_eq!(sha256::digest(yanked.data.as_slice()), yanked.etag);
+    let lines: Vec<IndexMetadata> = String::from_utf8(yanked.data)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let versions: Vec<_> = lines.iter().map(|l| (l.vers.as_str(), l.yanked)).collect();
+    assert_eq!(vec![("1.0.0", true), ("2.0.0", false)], versions);
+
+    test_db.unyank_crate(&name, &version).await.unwrap();
+
+    let unyanked = test_db.get_prefetch_data("yankee").await.unwrap();
+    assert_eq!(published.etag, unyanked.etag);
+    assert_eq!(published.data, unyanked.data);
+}
