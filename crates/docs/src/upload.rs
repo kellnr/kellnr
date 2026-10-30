@@ -1,5 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use bytes::Bytes;
 use kellnr_common::normalized_name::NormalizedName;
@@ -7,6 +8,19 @@ use kellnr_common::version::Version;
 use kellnr_storage::docs_storage::DocsStorage;
 
 use crate::docs_error::DocsError;
+
+type VersionLock = Arc<tokio::sync::Mutex<()>>;
+
+/// Locks of the crate versions whose docs are uploaded, by key prefix.
+static UPLOAD_LOCKS: LazyLock<Mutex<HashMap<String, VersionLock>>> = LazyLock::new(Mutex::default);
+
+/// Lock for the uploads of one crate version, so that the prune of one upload
+/// cannot delete the files of a concurrent upload.
+fn version_lock(prefix: &str) -> VersionLock {
+    let mut locks = UPLOAD_LOCKS.lock().unwrap();
+    locks.retain(|_, lock| Arc::strong_count(lock) > 1);
+    Arc::clone(locks.entry(prefix.to_string()).or_default())
+}
 
 /// Upload every regular file under `local_root` to `docs_storage` under the
 /// `{crate_name}/{version}/{key_prefix}/` prefix, then delete any pre-existing
@@ -16,7 +30,8 @@ use crate::docs_error::DocsError;
 /// `local_root` can end up in the docs storage.
 ///
 /// Upload-then-prune (not delete-then-upload) so a partial/failed upload
-/// never leaves a doc version with zero pages.
+/// never leaves a doc version with zero pages. Concurrent uploads of the same
+/// crate version run one after the other.
 ///
 /// `key_prefix` lets the auto-generation queue (which walks `target/doc`
 /// directly) and the manual-upload path (whose zip already contains a
@@ -30,9 +45,16 @@ pub async fn upload_dir_and_prune(
     version: &Version,
     docs_storage: &DocsStorage,
 ) -> Result<(), DocsError> {
-    let mut uploaded_keys = HashSet::new();
+    let prefix = DocsStorage::version_prefix(crate_name, version);
+    let lock = version_lock(&prefix);
+    let _guard = lock.lock().await;
 
-    for file_path in regular_files(local_root)? {
+    let root = local_root.to_path_buf();
+    let files = tokio::task::spawn_blocking(move || regular_files(&root))
+        .await
+        .map_err(|_| DocsError::ExtractFailed)??;
+    let mut uploaded_keys = HashSet::new();
+    for file_path in files {
         let relative =
             file_path
                 .strip_prefix(local_root)
@@ -53,7 +75,6 @@ pub async fn upload_dir_and_prune(
         uploaded_keys.insert(key);
     }
 
-    let prefix = DocsStorage::version_prefix(crate_name, version);
     for existing_key in docs_storage.list(&prefix).await? {
         if !uploaded_keys.contains(&existing_key) {
             docs_storage.delete(&existing_key).await?;
@@ -212,6 +233,50 @@ mod tests {
                 file,
             );
             assert_eq!(docs.get(&key).await.unwrap(), Bytes::from(file), "{file}");
+        }
+    }
+
+    fn local_docs(prefix: &str, files: usize) -> tempfile::TempDir {
+        let local = tempfile::tempdir().unwrap();
+        for i in 0..files {
+            std::fs::write(local.path().join(format!("{prefix}{i}.html")), "").unwrap();
+        }
+        local
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_uploads_of_one_version_keep_the_files_of_one_upload() {
+        let (_storage_dir, docs) = docs_storage();
+        let docs = Arc::new(docs);
+        let name = NormalizedName::from_unchecked_str("my-crate");
+        let version = Version::from_unchecked_str("1.0.0");
+        let first = local_docs("a", 20);
+        let second = local_docs("b", 20);
+
+        for _ in 0..10 {
+            let uploads = [first.path().to_path_buf(), second.path().to_path_buf()].map(|dir| {
+                let (docs, name, version) = (docs.clone(), name.clone(), version.clone());
+                tokio::spawn(async move {
+                    upload_dir_and_prune(&dir, "", &name, &version, &docs)
+                        .await
+                        .unwrap();
+                })
+            });
+            for upload in uploads {
+                upload.await.unwrap();
+            }
+
+            let keys = docs
+                .list(&DocsStorage::version_prefix(&name, &version))
+                .await
+                .unwrap();
+            assert_eq!(keys.len(), 20, "{keys:?}");
+            let prefix = keys[0].split('/').nth(2).unwrap().chars().next().unwrap();
+            assert!(
+                keys.iter()
+                    .all(|k| k.split('/').nth(2).unwrap().starts_with(prefix)),
+                "{keys:?}"
+            );
         }
     }
 
