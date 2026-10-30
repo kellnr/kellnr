@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use kellnr_appstate::DbState;
+use kellnr_common::account_name::validate_group_name;
 use kellnr_db::{self, Group};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -62,10 +62,7 @@ pub struct NewGroup {
 
 impl NewGroup {
     pub fn validate(&self) -> Result<(), RouteError> {
-        if self.name.is_empty() {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-        }
-        Ok(())
+        Ok(validate_group_name(&self.name)?)
     }
 }
 
@@ -189,4 +186,29 @@ pub async fn delete_user(
     State(db): DbState,
 ) -> Result<(), RouteError> {
     Ok(db.delete_group_user(&group_name, &name).await?)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use kellnr_db::mock::MockDb;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn add_group_with_invalid_name_is_bad_request() {
+        for name in ["", " ", "dev\tteam", &"a".repeat(65)] {
+            let result = add(
+                AdminUser("admin".to_string()),
+                State(Arc::new(MockDb::new())),
+                Json(NewGroup {
+                    name: name.to_string(),
+                }),
+            )
+            .await;
+
+            assert!(matches!(result, Err(RouteError::BadRequest(_))), "{name:?}");
+        }
+    }
 }
