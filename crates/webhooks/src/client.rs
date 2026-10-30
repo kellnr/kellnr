@@ -93,6 +93,16 @@ impl WebhookClient {
     }
 }
 
+impl DeliveryError {
+    /// Whether the delivery fails the same way on every attempt.
+    pub(crate) fn is_permanent(&self) -> bool {
+        matches!(
+            self,
+            Self::InvalidUrl(_) | Self::BlockedTarget | Self::InvalidSecret(_) | Self::Payload(_)
+        )
+    }
+}
+
 pub(crate) struct Delivery<'a, T: ?Sized> {
     /// Unique message id, identical for all delivery attempts of a message.
     pub(crate) id: &'a str,
