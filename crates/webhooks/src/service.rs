@@ -148,6 +148,7 @@ mod service_tests {
 
     use chrono::Utc;
     use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_common::version::Version;
     use kellnr_common::webhook::{Webhook, WebhookEvent};
     use kellnr_db::{ConString, Database, DbProvider, SqliteConString};
@@ -365,6 +366,41 @@ mod service_tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[tokio::test]
+    async fn notify_crate_adds_original_name_to_payload() {
+        let db = get_db().await;
+        db.register_webhook(sample_webhook(WebhookEvent::CrateYank, 9995))
+            .await
+            .unwrap();
+        db.add_user("owner", "pwd", false, false).await.unwrap();
+        db.add_crate(
+            &PublishMetadata::minimal("Test-Crate", "0.1.0"),
+            "cksum",
+            1,
+            &Utc::now(),
+            "owner",
+            None,
+        )
+        .await
+        .unwrap();
+
+        notify_crate(
+            WebhookEvent::CrateYank,
+            &Utc::now(),
+            &NormalizedName::from_unchecked_str("test-crate"),
+            &Version::from_unchecked_str("0.1.0"),
+            &db,
+        )
+        .await;
+
+        let pending = db
+            .get_pending_webhook_queue_entries(Utc::now() + TimeDelta::minutes(5))
+            .await
+            .unwrap();
+        assert_eq!(pending[0].payload["data"]["crate_name"], "test-crate");
+        assert_eq!(pending[0].payload["data"]["original_name"], "Test-Crate");
     }
 
     #[tokio::test]
