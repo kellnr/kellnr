@@ -2,15 +2,23 @@
 //!
 //! `openidconnect`'s built-in reqwest integration targets reqwest 0.12, which trusts
 //! the compiled-in Mozilla root bundle and ignores the system trust store.
-//! This adapter lets it use Kellnr's reqwest client instead, so OIDC providers
-//! behind a private CA are trusted the same way as every other outgoing
-//! request (see <https://github.com/kellnr/kellnr/issues/1376>).
+//! This adapter lets it use the reqwest version of Kellnr instead, which also
+//! trusts the system trust store, so OIDC providers behind a private CA are
+//! trusted the same way as every other outgoing request
+//! (see <https://github.com/kellnr/kellnr/issues/1376>).
 
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 
 use openidconnect::{AsyncHttpClient, HttpClientError, HttpRequest, HttpResponse, http};
+
+/// Time to connect to the identity provider.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Time for a whole request to the identity provider, so that a hanging
+/// provider cannot block logins forever.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// A reqwest client that implements `openidconnect`'s [`AsyncHttpClient`].
 #[derive(Clone, Debug)]
@@ -20,8 +28,14 @@ impl OidcHttpClient {
     /// Build a client that does not follow redirects, as recommended for
     /// `OAuth2` to prevent SSRF via redirecting endpoints.
     pub fn new() -> reqwest::Result<Self> {
+        Self::with_timeouts(CONNECT_TIMEOUT, REQUEST_TIMEOUT)
+    }
+
+    fn with_timeouts(connect: Duration, request: Duration) -> reqwest::Result<Self> {
         reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(connect)
+            .timeout(request)
             .build()
             .map(Self)
     }
@@ -76,6 +90,30 @@ mod tests {
     #[derive(Debug, thiserror::Error)]
     #[error("inner")]
     struct Inner;
+
+    /// A provider that accepts the connection but never answers must not
+    /// block the login forever.
+    #[tokio::test]
+    async fn hanging_provider_times_out() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (_socket, _) = listener.accept().await.unwrap();
+            std::future::pending::<()>().await;
+        });
+        let client =
+            OidcHttpClient::with_timeouts(Duration::from_secs(1), Duration::from_millis(100))
+                .unwrap();
+        let request = http::Request::get(format!("http://{addr}/"))
+            .body(Vec::new())
+            .unwrap();
+
+        let result = tokio::time::timeout(Duration::from_secs(10), client.call(request))
+            .await
+            .expect("request must time out on its own");
+
+        assert!(result.is_err());
+    }
 
     #[test]
     fn error_chain_includes_all_sources() {
