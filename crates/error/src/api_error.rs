@@ -139,7 +139,9 @@ impl From<DbError> for ApiError {
             | DbError::InvalidVersion(_)
             | DbError::InvalidWebhookEvent(_)
             | DbError::InvalidId(_) => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
-            DbError::CrateVersionExists(_, _) => ApiError::from_err(&e, StatusCode::CONFLICT),
+            DbError::CrateVersionExists(_, _) | DbError::LastOwner => {
+                ApiError::from_err(&e, StatusCode::CONFLICT)
+            }
             _ if e.is_unique_violation() => {
                 tracing::warn!("Conflict with an existing entry: {e}");
                 ApiError::from_str("The entry already exists", StatusCode::CONFLICT)

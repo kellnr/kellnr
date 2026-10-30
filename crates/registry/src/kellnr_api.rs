@@ -120,6 +120,7 @@ pub async fn check_download_auth(
     responses(
         (status = 200, description = "Owners removed", body = crate_user::CrateUserResponse),
         (status = 403, description = "Not an owner"),
+        (status = 404, description = "User is not an owner"),
         (status = 409, description = "Cannot remove last owner")
     ),
     security(("cargo_token" = []))
@@ -141,18 +142,12 @@ pub async fn remove_owner(
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &user, db).await?;
 
-    if !settings.registry.allow_ownerless_crates {
-        // Never allow removing the last owner.
-        let owners = db.get_crate_owners(&crate_name).await?;
-        let owners_to_remove = input.users.len();
-        if owners.len().saturating_sub(owners_to_remove) == 0 {
-            return Err(RegistryError::LastOwner.into());
-        }
-    }
-
-    for user in &input.users {
-        db.delete_owner(&crate_name, user).await?;
-    }
+    db.delete_owners(
+        &crate_name,
+        &input.users,
+        settings.registry.allow_ownerless_crates,
+    )
+    .await?;
 
     Ok(Json(crate_user::CrateUserResponse::from(
         "Removed owners from crate.",
@@ -173,6 +168,7 @@ pub async fn remove_owner(
     responses(
         (status = 200, description = "Owner removed", body = crate_user::CrateUserResponse),
         (status = 403, description = "Not an owner"),
+        (status = 404, description = "User is not an owner"),
         (status = 409, description = "Cannot remove last owner")
     ),
     security(("cargo_token" = []))
@@ -190,15 +186,12 @@ pub async fn remove_owner_single(
     let crate_name = crate_name.to_normalized();
     check_ownership(&crate_name, &user, db).await?;
 
-    if !settings.registry.allow_ownerless_crates {
-        // Never allow removing the last owner.
-        let owners = db.get_crate_owners(&crate_name).await?;
-        if owners.len() <= 1 {
-            return Err(RegistryError::LastOwner.into());
-        }
-    }
-
-    db.delete_owner(&crate_name, &removed_user).await?;
+    db.delete_owners(
+        &crate_name,
+        &[removed_user],
+        settings.registry.allow_ownerless_crates,
+    )
+    .await?;
 
     Ok(Json(crate_user::CrateUserResponse::from(
         "Removed owner from crate.",
@@ -1298,6 +1291,100 @@ mod reg_api_tests {
         let (status, detail) = publish_metadata(&kellnr, TOKEN, &metadata).await;
 
         assert_eq!(StatusCode::OK, status, "{detail}");
+    }
+
+    async fn change_owners(kellnr: &TestKellnr, add: bool, users: &[&str]) -> (StatusCode, String) {
+        let request = crate_user::CrateUserRequest {
+            users: users.iter().map(ToString::to_string).collect(),
+        };
+        let builder = if add {
+            Request::put("/api/v1/crates/owned/owners")
+        } else {
+            Request::delete("/api/v1/crates/owned/owners")
+        };
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                builder
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::from(serde_json::to_string(&request).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = r.status();
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        let detail = serde_json::from_slice::<ErrorDetails>(&body)
+            .map(|e| e.errors[0].detail.clone())
+            .unwrap_or_default();
+        (status, detail)
+    }
+
+    async fn owner_names(kellnr: &TestKellnr) -> Vec<String> {
+        let mut names: Vec<String> = kellnr
+            .db
+            .get_crate_owners(&NormalizedName::from_unchecked_str("owned"))
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|u| u.name)
+            .collect();
+        names.sort();
+        names
+    }
+
+    async fn crate_with_two_owners() -> TestKellnr {
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let (status, detail) =
+            publish_metadata(&kellnr, TOKEN, &PublishMetadata::minimal("owned", "1.0.0")).await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+        let (status, detail) = change_owners(&kellnr, true, &["non_admin"]).await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+        kellnr
+    }
+
+    #[tokio::test]
+    async fn add_existing_owner_succeeds() {
+        let kellnr = crate_with_two_owners().await;
+
+        let (status, detail) = change_owners(&kellnr, true, &["non_admin"]).await;
+
+        assert_eq!(StatusCode::OK, status, "{detail}");
+        assert_eq!(vec!["admin", "non_admin"], owner_names(&kellnr).await);
+    }
+
+    #[tokio::test]
+    async fn remove_owners_with_a_non_owner_removes_nothing() {
+        let kellnr = crate_with_two_owners().await;
+
+        let (status, detail) = change_owners(&kellnr, false, &["non_admin", "ro_dummy"]).await;
+
+        assert_eq!(StatusCode::NOT_FOUND, status);
+        assert_eq!("ERROR: Owner not found: ro_dummy", detail);
+        assert_eq!(vec!["admin", "non_admin"], owner_names(&kellnr).await);
+    }
+
+    #[tokio::test]
+    async fn remove_owners_listed_twice_keeps_the_other_owner() {
+        let kellnr = crate_with_two_owners().await;
+
+        let (status, detail) = change_owners(&kellnr, false, &["non_admin", "non_admin"]).await;
+
+        assert_eq!(StatusCode::OK, status, "{detail}");
+        assert_eq!(vec!["admin"], owner_names(&kellnr).await);
+    }
+
+    #[tokio::test]
+    async fn remove_all_owners_is_rejected() {
+        let kellnr = crate_with_two_owners().await;
+
+        let (status, detail) = change_owners(&kellnr, false, &["admin", "non_admin"]).await;
+
+        assert_eq!(StatusCode::CONFLICT, status);
+        assert_eq!("ERROR: A crate must have at least one owner", detail);
+        assert_eq!(vec!["admin", "non_admin"], owner_names(&kellnr).await);
     }
 
     // Test that removal of the last owner is prevented with default settings.

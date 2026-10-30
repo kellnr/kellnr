@@ -5228,3 +5228,31 @@ async fn add_crate_rejects_other_spelling_of_existing_crate(test_db: &kellnr_db:
     let name = NormalizedName::from_unchecked("mycrate".to_string());
     assert_eq!(1, test_db.get_crate_meta_list(&name).await.unwrap().len());
 }
+
+#[db_test]
+async fn delete_owners_removes_nothing_when_no_owner_would_remain(test_db: &kellnr_db::Database) {
+    test_db.add_user("user", "pwd", false, false).await.unwrap();
+    test_add_crate(
+        test_db,
+        "crate",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &Utc::now(),
+    )
+    .await
+    .unwrap();
+    let name = NormalizedName::from_unchecked("crate".to_string());
+    test_db.add_owner(&name, "user").await.unwrap();
+    test_db.add_owner(&name, "user").await.unwrap();
+    let owners = ["admin".to_string(), "user".to_string()];
+
+    let result = test_db.delete_owners(&name, &owners, false).await;
+
+    assert!(
+        matches!(result, Err(kellnr_db::error::DbError::LastOwner)),
+        "{result:?}"
+    );
+    assert_eq!(2, test_db.get_crate_owners(&name).await.unwrap().len());
+    test_db.delete_owners(&name, &owners, true).await.unwrap();
+    assert!(test_db.get_crate_owners(&name).await.unwrap().is_empty());
+}
