@@ -15,7 +15,7 @@ pub enum StorageError {
     #[error("Failed to write crate to file {0:?}: {1}")]
     WriteCrateFile(PathBuf, std::io::Error),
     #[error("Failed to open crate file {0:?} to calc cksum: {1}")]
-    OpenCrateFileToCalckCksum(PathBuf, std::io::Error),
+    OpenCrateFileToCalcCksum(PathBuf, std::io::Error),
     #[error("Failed to read crate file {0:?} to calc cksum: {1}")]
     ReadCrateFileToCalcCksum(PathBuf, std::io::Error),
     #[error("Failed to create bin path for crate file {0:?}: {1}")]
@@ -40,10 +40,10 @@ pub enum StorageError {
     StorageInitError(String),
     #[error("Error from storage provider. Reason: {0}")]
     GenericError(String),
-    #[error("S3 error: {0}")]
-    S3Error(#[from] object_store::Error),
-    #[error("S3 path error: {0}")]
-    S3PathError(#[from] object_store::path::Error),
+    #[error("Object storage error: {0}")]
+    ObjectStore(#[from] object_store::Error),
+    #[error("Object storage path error: {0}")]
+    ObjectStorePath(#[from] object_store::path::Error),
     #[error("Toolchain archive already exists: {name}-{version}-{target}")]
     ToolchainArchiveExists {
         name: String,

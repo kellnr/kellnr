@@ -59,7 +59,7 @@ impl CachedCrateStorage {
             .put(&crate_file, crate_data.clone())
             .await
             .map_err(|e| {
-                if let StorageError::S3Error(object_store::Error::AlreadyExists {
+                if let StorageError::ObjectStore(object_store::Error::AlreadyExists {
                     path: _,
                     source: _,
                 }) = e
