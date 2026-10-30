@@ -662,7 +662,7 @@ pub async fn download(
 
     let file = cs
         .get(&package, &version)
-        .await
+        .await?
         .ok_or(RegistryError::CrateNotFound)?;
 
     let filters = &state.download_filters.registry;
@@ -923,7 +923,7 @@ async fn store_crate(
 ) -> ApiResult<bool> {
     match cs.put(name, version, cratedata.clone()).await {
         Ok(_) => Ok(false),
-        Err(StorageError::CrateExists(_, _)) => match cs.get(name, version).await {
+        Err(StorageError::CrateExists(_, _)) => match cs.get(name, version).await? {
             Some(existing) if existing == *cratedata => {
                 warn!("Using the existing crate file of {name} {version} with the same content");
                 Ok(true)
@@ -3631,6 +3631,74 @@ mod reg_api_tests {
         async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
             self.inner.list(prefix).await
         }
+    }
+
+    /// Storage that cannot read crate files, like a remote storage that times out.
+    struct UnreadableStorage(FSStorage);
+
+    #[async_trait]
+    impl Storage for UnreadableStorage {
+        async fn get(&self, _key: &str) -> Result<Bytes, StorageError> {
+            Err(StorageError::GenericError("timeout".to_string()))
+        }
+
+        async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
+            self.0.get_with_meta(key).await
+        }
+
+        async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+            self.0.put(key, object).await
+        }
+
+        async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+            self.0.put_overwrite(key, object).await
+        }
+
+        async fn delete(&self, key: &str) -> Result<(), StorageError> {
+            self.0.delete(key).await
+        }
+
+        async fn exists(&self, key: &str) -> Result<bool, StorageError> {
+            self.0.exists(key).await
+        }
+
+        async fn size(&self, key: &str) -> Result<u64, StorageError> {
+            self.0.size(key).await
+        }
+
+        async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+            self.0.list(prefix).await
+        }
+    }
+
+    #[tokio::test]
+    async fn download_returns_500_if_the_storage_cannot_be_read() {
+        let settings = get_settings();
+        let storage = Box::new(UnreadableStorage(
+            FSStorage::new(&settings.crates_path()).unwrap(),
+        )) as DynStorage;
+        let kellnr = TestKellnr::with_storage(settings, storage).await;
+        let (status, detail) = publish_metadata(
+            &kellnr,
+            TOKEN,
+            &PublishMetadata::minimal("unreadable", "1.0.0"),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status, "{detail}");
+
+        let r = kellnr
+            .client
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/crates/unreadable/1.0.0/download")
+                    .header(header::AUTHORIZATION, TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, r.status());
     }
 
     #[tokio::test]

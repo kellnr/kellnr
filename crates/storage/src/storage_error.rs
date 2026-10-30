@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use thiserror::Error;
 
@@ -40,6 +41,9 @@ pub enum StorageError {
     StorageInitError(String),
     #[error("Error from storage provider. Reason: {0}")]
     GenericError(String),
+    /// An error shared by concurrent reads of the same cached crate.
+    #[error("{0}")]
+    Shared(Arc<StorageError>),
     #[error("Object storage error: {0}")]
     ObjectStore(#[from] object_store::Error),
     #[error("Toolchain archive already exists: {name}-{version}-{target}")]
@@ -71,4 +75,17 @@ pub enum StorageError {
     DocsDeleteFailed { key: String, reason: String },
     #[error("Failed to list docs under prefix {prefix}: {reason}")]
     DocsListFailed { prefix: String, reason: String },
+}
+
+impl StorageError {
+    /// Whether the error means that the requested object does not exist.
+    pub fn is_not_found(&self) -> bool {
+        match self {
+            Self::ObjectStore(object_store::Error::NotFound { .. }) | Self::FileDoesNotExist(_) => {
+                true
+            }
+            Self::Shared(e) => e.is_not_found(),
+            _ => false,
+        }
+    }
 }

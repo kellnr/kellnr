@@ -112,7 +112,11 @@ pub async fn download(
 
     let normalized_name = name.to_normalized();
     let filters = &state.download_filters.cratesio;
-    let cached = state.cratesio_storage.get(&name, &version).await;
+    let cached = state
+        .cratesio_storage
+        .get(&name, &version)
+        .await
+        .map_err(|e| storage_read_failed(&name, &version, &e))?;
 
     // The license is only needed if filters are enabled, the checksum only to
     // verify a crate that is not cached yet. Cache hits without filters need
@@ -279,6 +283,11 @@ fn is_verified_upstream_crate(
     }
 }
 
+fn storage_read_failed(name: &OriginalName, version: &Version, e: &StorageError) -> StatusCode {
+    error!("Failed to read crate {name} ({version}) from the crates.io cache: {e}");
+    StatusCode::INTERNAL_SERVER_ERROR
+}
+
 async fn cache_crate(
     crate_storage: &CratesIoCrateStorage,
     name: &OriginalName,
@@ -289,10 +298,15 @@ async fn cache_crate(
         Ok(_) => crate_storage
             .get(name, version)
             .await
+            .map_err(|e| storage_read_failed(name, version, &e))?
             .ok_or(StatusCode::NOT_FOUND),
         Err(StorageError::CrateExists(_, _)) => {
             trace!("Crate cache population raced for {name} ({version}); using the cached copy");
-            crate_storage.get(name, version).await.ok_or_else(|| {
+            let cached = crate_storage
+                .get(name, version)
+                .await
+                .map_err(|e| storage_read_failed(name, version, &e))?;
+            cached.ok_or_else(|| {
                 error!(
                     "Crate {name} ({version}) already existed after a cache race but could not be read afterward"
                 );
@@ -746,6 +760,25 @@ mod tests {
         assert_eq!(StatusCode::OK, status);
         assert_eq!(UPSTREAM_CRATE, &body[..]);
         assert!(kellnr.is_cached("upstream", "1.0.0").await);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn download_returns_500_if_the_cached_crate_cannot_be_read() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let kellnr = TestKellnr::new().await;
+        kellnr.cache("upstream", "1.0.0").await;
+        let file = kellnr.path.join("cratesio/upstream-1.0.0.crate");
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read(&file).is_ok() {
+            // Running as root, the file stays readable.
+            return;
+        }
+
+        let (status, _) = kellnr.download("upstream", "1.0.0").await;
+
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
     }
 
     #[tokio::test]

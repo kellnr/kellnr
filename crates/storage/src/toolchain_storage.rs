@@ -71,11 +71,7 @@ impl ToolchainStorage {
 
     pub async fn get(&self, path: &str) -> Result<Bytes, StorageError> {
         self.storage.get(path).await.map_err(|e| {
-            if matches!(
-                &e,
-                StorageError::ObjectStore(object_store::Error::NotFound { .. })
-                    | StorageError::FileDoesNotExist(_)
-            ) {
+            if e.is_not_found() {
                 return StorageError::ToolchainNotFound {
                     path: path.to_string(),
                 };

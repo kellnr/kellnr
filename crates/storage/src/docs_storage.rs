@@ -41,11 +41,7 @@ impl DocsStorage {
 
     pub async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
         self.storage.get(key).await.map_err(|e| {
-            if matches!(
-                &e,
-                StorageError::ObjectStore(object_store::Error::NotFound { .. })
-                    | StorageError::FileDoesNotExist(_)
-            ) {
+            if e.is_not_found() {
                 return StorageError::DocsNotFound {
                     key: key.to_string(),
                 };
@@ -59,11 +55,7 @@ impl DocsStorage {
 
     pub async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
         self.storage.get_with_meta(key).await.map_err(|e| {
-            if matches!(
-                &e,
-                StorageError::ObjectStore(object_store::Error::NotFound { .. })
-                    | StorageError::FileDoesNotExist(_)
-            ) {
+            if e.is_not_found() {
                 return StorageError::DocsNotFound {
                     key: key.to_string(),
                 };

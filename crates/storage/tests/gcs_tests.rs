@@ -75,7 +75,11 @@ async fn add_and_get_crate() {
         .await;
 
     // Get the crate from the GCS storage
-    let result_crate = test_storage.crate_storage.get(&name, &version).await;
+    let result_crate = test_storage
+        .crate_storage
+        .get(&name, &version)
+        .await
+        .unwrap();
 
     assert!(put_result.is_ok());
     assert!(result_crate.is_some());

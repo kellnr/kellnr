@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use kellnr_common::original_name::OriginalName;
@@ -72,18 +73,29 @@ impl CachedCrateStorage {
         Ok(sha256::digest(&*crate_data))
     }
 
-    pub async fn get(&self, name: &OriginalName, version: &Version) -> Option<Bytes> {
+    /// The crate file, or `None` if it does not exist. Other storage errors,
+    /// e.g. timeouts of a remote storage, are returned as errors.
+    pub async fn get(
+        &self,
+        name: &OriginalName,
+        version: &Version,
+    ) -> Result<Option<Bytes>, StorageError> {
         let file_name = Self::file_name(name, version);
-        match self.cache {
+        let result = match self.cache {
             Some(ref cache) => {
                 let storage = &self.storage;
                 let key = file_name.clone();
                 cache
                     .try_get_with(file_name, async move { storage.get(&key).await })
                     .await
-                    .ok()
+                    .map_err(|e| Arc::try_unwrap(e).unwrap_or_else(StorageError::Shared))
             }
-            None => self.storage.get(&file_name).await.ok(),
+            None => self.storage.get(&file_name).await,
+        };
+        match result {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.is_not_found() => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -159,10 +171,15 @@ mod tests {
             while !self.metrics.ready.load(Ordering::SeqCst) {
                 tokio::task::yield_now().await;
             }
+            if key.starts_with("broken") {
+                return Err(StorageError::GenericError(
+                    "storage unavailable".to_string(),
+                ));
+            }
             self.data
                 .get(key)
                 .cloned()
-                .ok_or_else(|| StorageError::GenericError(format!("not found: {key}")))
+                .ok_or_else(|| StorageError::ObjectStore(not_found(key)))
         }
 
         async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
@@ -204,6 +221,13 @@ mod tests {
                 .filter(|k| k.starts_with(prefix))
                 .cloned()
                 .collect())
+        }
+    }
+
+    fn not_found(key: &str) -> object_store::Error {
+        object_store::Error::NotFound {
+            path: key.to_string(),
+            source: "not found".into(),
         }
     }
 
@@ -275,7 +299,7 @@ mod tests {
         let storage = CountingStorage::new(vec![("mycrate-1.0.0.crate", b"hello")], Arc::clone(&m));
         let cs = CachedCrateStorage::new(&test_settings(1), Box::new(storage));
 
-        let result = cs.get(&name("mycrate"), &ver("1.0.0")).await;
+        let result = cs.get(&name("mycrate"), &ver("1.0.0")).await.unwrap();
         assert_eq!(result, Some(Bytes::from_static(b"hello")));
     }
 
@@ -285,7 +309,7 @@ mod tests {
         let storage = CountingStorage::new(vec![], Arc::clone(&m));
         let cs = CachedCrateStorage::new(&test_settings(1), Box::new(storage));
 
-        let result = cs.get(&name("missing"), &ver("1.0.0")).await;
+        let result = cs.get(&name("missing"), &ver("1.0.0")).await.unwrap();
         assert_eq!(result, None);
     }
 
@@ -297,11 +321,11 @@ mod tests {
         let cs = CachedCrateStorage::new(&test_settings(1), Box::new(storage));
 
         // First call hits storage
-        let r1 = cs.get(&name("mycrate"), &ver("1.0.0")).await;
+        let r1 = cs.get(&name("mycrate"), &ver("1.0.0")).await.unwrap();
         assert_eq!(r1, Some(Bytes::from_static(b"cached")));
 
         // Second call should be served from cache
-        let r2 = cs.get(&name("mycrate"), &ver("1.0.0")).await;
+        let r2 = cs.get(&name("mycrate"), &ver("1.0.0")).await.unwrap();
         assert_eq!(r2, Some(Bytes::from_static(b"cached")));
 
         // Storage should only have been called once
@@ -332,7 +356,7 @@ mod tests {
         let mut join_set = tokio::task::JoinSet::new();
         for _ in 0..50 {
             let cs = Arc::clone(&cs);
-            join_set.spawn(async move { cs.get(&name("popular"), &ver("2.0.0")).await });
+            join_set.spawn(async move { cs.get(&name("popular"), &ver("2.0.0")).await.unwrap() });
         }
 
         // Let all tasks start and queue up, then release them
@@ -366,8 +390,8 @@ mod tests {
         let cs = CachedCrateStorage::new(&test_settings(0), Box::new(storage));
 
         // Call twice
-        let r1 = cs.get(&name("mycrate"), &ver("1.0.0")).await;
-        let r2 = cs.get(&name("mycrate"), &ver("1.0.0")).await;
+        let r1 = cs.get(&name("mycrate"), &ver("1.0.0")).await.unwrap();
+        let r2 = cs.get(&name("mycrate"), &ver("1.0.0")).await.unwrap();
         assert_eq!(r1, Some(Bytes::from_static(b"no-cache")));
         assert_eq!(r2, Some(Bytes::from_static(b"no-cache")));
 
@@ -385,10 +409,10 @@ mod tests {
         let storage = CountingStorage::new(vec![], Arc::clone(&m));
         let cs = CachedCrateStorage::new(&test_settings(1), Box::new(storage));
 
-        let r1 = cs.get(&name("missing"), &ver("1.0.0")).await;
+        let r1 = cs.get(&name("missing"), &ver("1.0.0")).await.unwrap();
         assert_eq!(r1, None);
 
-        let r2 = cs.get(&name("missing"), &ver("1.0.0")).await;
+        let r2 = cs.get(&name("missing"), &ver("1.0.0")).await.unwrap();
         assert_eq!(r2, None);
 
         // Both calls should have hit storage (errors are NOT cached by try_get_with)
@@ -397,6 +421,20 @@ mod tests {
             2,
             "Failed reads should not be cached"
         );
+    }
+
+    #[tokio::test]
+    async fn get_returns_storage_errors_other_than_not_found() {
+        for cache_size in [0, 1] {
+            let m = metrics();
+            let storage = CountingStorage::new(vec![], Arc::clone(&m));
+            let cs = CachedCrateStorage::new(&test_settings(cache_size), Box::new(storage));
+
+            assert!(cs.get(&name("broken"), &ver("1.0.0")).await.is_err());
+            assert!(cs.get(&name("broken"), &ver("1.0.0")).await.is_err());
+
+            assert_eq!(m.get_count.load(Ordering::SeqCst), 2, "{cache_size}");
+        }
     }
 
     #[tokio::test]
@@ -410,7 +448,7 @@ mod tests {
         assert!(!cs.cache_has_path(&name("mycrate"), &ver("1.0.0")));
 
         // After get, it should be cached
-        let _ = cs.get(&name("mycrate"), &ver("1.0.0")).await;
+        let _ = cs.get(&name("mycrate"), &ver("1.0.0")).await.unwrap();
         assert!(cs.cache_has_path(&name("mycrate"), &ver("1.0.0")));
     }
 
@@ -422,7 +460,7 @@ mod tests {
         let cs = CachedCrateStorage::new(&test_settings(1), Box::new(storage));
 
         // Populate cache
-        let _ = cs.get(&name("mycrate"), &ver("1.0.0")).await;
+        let _ = cs.get(&name("mycrate"), &ver("1.0.0")).await.unwrap();
         assert!(cs.cache_has_path(&name("mycrate"), &ver("1.0.0")));
 
         // Delete should invalidate
@@ -448,7 +486,7 @@ mod tests {
         let mut join_set = tokio::task::JoinSet::new();
         for _ in 0..20 {
             let cs = Arc::clone(&cs);
-            join_set.spawn(async move { cs.get(&name("absent"), &ver("1.0.0")).await });
+            join_set.spawn(async move { cs.get(&name("absent"), &ver("1.0.0")).await.unwrap() });
         }
 
         // Let all tasks start and queue up, then release them
@@ -490,7 +528,7 @@ mod tests {
         for i in 0..20 {
             let cs = Arc::clone(&cs);
             let crate_name = if i % 2 == 0 { "crate-a" } else { "crate-b" };
-            join_set.spawn(async move { cs.get(&name(crate_name), &ver("1.0.0")).await });
+            join_set.spawn(async move { cs.get(&name(crate_name), &ver("1.0.0")).await.unwrap() });
         }
 
         // Let all tasks start and queue up, then release them
