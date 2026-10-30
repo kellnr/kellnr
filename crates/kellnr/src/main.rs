@@ -139,6 +139,11 @@ async fn run_server(resolved: ResolvedSettings) {
         std::process::exit(1);
     }
 
+    if let Err(e) = settings.proxy.validate() {
+        eprintln!("Error: invalid crates.io proxy configuration: {e}");
+        std::process::exit(1);
+    }
+
     if let Err(e) = settings.oauth2.validate() {
         eprintln!("Error: invalid OAuth2 configuration: {e}");
         std::process::exit(1);
