@@ -26,7 +26,7 @@ pub enum DbError {
     CrateNameConflict(String, String),
     #[error("Crate not found: {0}")]
     CrateNotFound(String),
-    #[error("Crate with not found with id: {0}")]
+    #[error("Crate not found with id: {0}")]
     CrateNotFoundWithId(i64),
     #[error("Failed to count crate versions")]
     FailedToCountCrateVersions,
@@ -64,4 +64,6 @@ pub enum DbError {
     InvalidWebhookEvent(String),
     #[error("Invalid id {0}")]
     InvalidId(String),
+    #[error("Path is not valid UTF-8: {0}")]
+    NonUtf8Path(String),
 }

@@ -1620,8 +1620,10 @@ impl DbProvider for Database {
         let s = doc_queue::ActiveModel {
             krate: Set(krate.to_string()),
             version: Set(version.to_string()),
-            // FIXME: Convert Path to String properly, handle errors
-            path: Set(path.to_string_lossy().to_string()),
+            path: Set(path
+                .to_str()
+                .ok_or_else(|| DbError::NonUtf8Path(path.display().to_string()))?
+                .to_string()),
             ..Default::default()
         };
 
@@ -2043,8 +2045,10 @@ impl DbProvider for Database {
                 .map_err(|_| DbError::InvalidCrateName(pub_metadata.name.clone()))?,
         );
 
-        // Look up the crate inside the transaction and by its normalized name, so
-        // a concurrent first publish of the same crate cannot slip in between.
+        // Look up the crate by its normalized name. The transaction keeps the
+        // publish atomic, but does not serialize concurrent first publishes.
+        // Two of the same name fail on the unique crate name, while two names
+        // that only differ in '-' and '_' can still both be created.
         let txn = self.db_con.begin().await?;
         let existing = krate::Entity::find()
             .filter(krate::Column::Name.eq(&normalized_name))

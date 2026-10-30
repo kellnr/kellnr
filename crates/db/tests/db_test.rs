@@ -1364,6 +1364,29 @@ async fn add_and_get_doc_queue_entries(test_db: &kellnr_db::Database) {
 }
 
 #[db_test]
+async fn add_doc_queue_rejects_non_utf8_path(test_db: &kellnr_db::Database) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+
+        let path = PathBuf::from(std::ffi::OsStr::from_bytes(b"/tmp/inv\xffalid"));
+        let result = test_db
+            .add_doc_queue(
+                &NormalizedName::from_unchecked("my_crate".to_string()),
+                &Version::try_from("1.0.0").unwrap(),
+                &path,
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(kellnr_db::error::DbError::NonUtf8Path(_))
+        ));
+        assert!(test_db.get_doc_queue().await.unwrap().is_empty());
+    }
+}
+
+#[db_test]
 async fn delete_doc_queue_entry(test_db: &kellnr_db::Database) {
     test_db
         .add_doc_queue(

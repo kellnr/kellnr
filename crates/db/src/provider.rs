@@ -262,7 +262,7 @@ pub trait DbProvider: Send + Sync {
     async fn add_group_user(&self, group_name: &str, user: &str) -> DbResult<()>;
     async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()>;
     async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>>;
-    async fn is_group_user(&self, group_name: &str, group: &str) -> DbResult<bool>;
+    async fn is_group_user(&self, group_name: &str, user: &str) -> DbResult<bool>;
     async fn add_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>;
     async fn delete_crate_group(&self, crate_name: &NormalizedName, group: &str) -> DbResult<()>;
     async fn get_crate_groups(&self, crate_name: &NormalizedName) -> DbResult<Vec<Group>>;
