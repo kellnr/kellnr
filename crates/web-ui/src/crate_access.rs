@@ -106,9 +106,8 @@ pub async fn add_user(
     let crate_name = crate_name.to_normalized();
     authorize(&user, &crate_name, AclAction::Modify, &db).await?;
 
-    if db.get_user(&name).await.is_err() {
-        return Err(RouteError::UserNotFound(name));
-    }
+    // Fails with 404 for an unknown user.
+    db.get_user(&name).await?;
 
     if !db.is_crate_user(&crate_name, &name).await? {
         db.add_crate_user(&crate_name, &name).await?;

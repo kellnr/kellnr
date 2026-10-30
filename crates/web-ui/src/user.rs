@@ -7,7 +7,6 @@ use kellnr_appstate::{AppState, DbState, LoginThrottleState, SettingsState, Toke
 use kellnr_auth::password::{PasswordAuthError, authenticate_password};
 use kellnr_auth::token;
 use kellnr_common::util::generate_rand_string;
-use kellnr_db::error::DbError;
 use kellnr_db::{self, AuthToken, DbProvider, User};
 use kellnr_settings::Settings;
 use kellnr_settings::constants::{COOKIE_OIDC_ID_TOKEN, COOKIE_SESSION_ID, COOKIE_SESSION_USER};
@@ -124,8 +123,8 @@ pub async fn list_users(
     ),
     responses(
         (status = 200, description = "Token deleted successfully"),
-        (status = 400, description = "Token not found"),
-        (status = 401, description = "Not authenticated")
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Token not found")
     ),
     security(("session_cookie" = []))
 )]
@@ -136,12 +135,7 @@ pub async fn delete_token(
     State(cache): TokenCacheState,
 ) -> Result<(), RouteError> {
     // Only deletes a token of the user
-    db.delete_auth_token(user.name(), id)
-        .await
-        .map_err(|e| match e {
-            DbError::TokenNotFound => RouteError::Status(StatusCode::BAD_REQUEST),
-            e => e.into(),
-        })?;
+    db.delete_auth_token(user.name(), id).await?;
 
     cache.invalidate_all();
 
@@ -586,6 +580,7 @@ mod tests {
 
     use axum::Router;
     use axum::body::Body;
+    use axum::response::IntoResponse;
     use axum::routing::{post, put};
     use axum_extra::extract::cookie::Key;
     use hyper::{Request, header};
@@ -866,6 +861,50 @@ mod tests {
             .expect("session cookie must be removed");
         assert!(removal.contains("Path=/"), "{removal}");
         assert!(removal.contains("Max-Age=0"), "{removal}");
+    }
+
+    async fn sqlite_db(data_dir: &std::path::Path) -> Arc<dyn DbProvider> {
+        let settings = Settings {
+            registry: kellnr_settings::Registry {
+                data_dir: data_dir.to_string_lossy().to_string(),
+                ..kellnr_settings::Registry::default()
+            },
+            ..Settings::default()
+        };
+        let con = kellnr_db::ConString::Sqlite(kellnr_db::SqliteConString::from(&settings));
+        Arc::new(kellnr_db::Database::new(&con, 1).await.unwrap())
+    }
+
+    fn new_user(name: &str) -> NewUser {
+        NewUser {
+            pwd1: "pwd".to_string(),
+            pwd2: "pwd".to_string(),
+            name: name.to_string(),
+            is_admin: false,
+            is_read_only: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_existing_user_is_conflict() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let db = sqlite_db(data_dir.path()).await;
+        let cache = Arc::new(TokenCacheManager::new(false, 60, 100));
+        let settings = Arc::new(Settings::default());
+        let add_bob = || {
+            add(
+                AdminUser("admin".to_string()),
+                State(db.clone()),
+                State(cache.clone()),
+                State(settings.clone()),
+                Json(new_user("bob")),
+            )
+        };
+
+        add_bob().await.unwrap();
+        let response = add_bob().await.unwrap_err().into_response();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 
     async fn insert_cached_credentials(cache: &TokenCacheManager) {
@@ -1155,7 +1194,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_delete_token_of_other_user_is_bad_request() {
+    async fn test_delete_token_of_other_user_is_not_found() {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
@@ -1188,7 +1227,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(StatusCode::BAD_REQUEST, response.status());
+        assert_eq!(StatusCode::NOT_FOUND, response.status());
     }
 
     #[tokio::test]
