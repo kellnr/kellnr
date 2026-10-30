@@ -308,10 +308,37 @@ pub struct CratesParams {
     category: Option<String>,
 }
 
+/// Default number of crates per page.
+const DEFAULT_PAGE_SIZE: u64 = 10;
+/// Upper bound of crates per page.
+const MAX_PAGE_SIZE: u64 = 100;
+
+/// Resolves the requested page size and page into `(page_size, page, offset)`.
+/// The page size is clamped to `1..=MAX_PAGE_SIZE`, a page whose offset does
+/// not fit the database is rejected.
+fn pagination(page_size: Option<u64>, page: Option<u64>) -> Result<(u64, u64, u64), RouteError> {
+    let page_size = page_size
+        .unwrap_or(DEFAULT_PAGE_SIZE)
+        .clamp(1, MAX_PAGE_SIZE);
+    let page = page.unwrap_or(0);
+    let offset = page
+        .checked_mul(page_size)
+        .filter(|o| i64::try_from(*o).is_ok())
+        .ok_or_else(|| RouteError::BadRequest(format!("Page {page} is out of range")))?;
+    Ok((page_size, page, offset))
+}
+
+/// Logs a failed database query and returns a 500.
+fn db_error(e: &DbError) -> RouteError {
+    error!("Database query failed: {e}");
+    RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
 pub struct Pagination {
     crates: Vec<CrateOverview>,
     page_size: u64,
+    /// Number of the page, starting at 0
     page: u64,
     /// Number of crates on all pages
     total: u64,
@@ -324,16 +351,16 @@ pub struct Pagination {
     tag = "ui",
     params(CratesParams),
     responses(
-        (status = 200, description = "Paginated crate list", body = Pagination)
+        (status = 200, description = "Paginated crate list", body = Pagination),
+        (status = 400, description = "Page out of range")
     )
 )]
 pub async fn crates(
     Query(params): Query<CratesParams>,
     State(db): DbState,
     user: Result<MaybeUserOrToken, StatusCode>,
-) -> Json<Pagination> {
-    let page_size = params.page_size.unwrap_or(10);
-    let page = params.page.unwrap_or(0);
+) -> Result<Json<Pagination>, RouteError> {
+    let (page_size, page, offset) = pagination(params.page_size, params.page)?;
     let cache = params.cache.unwrap_or(false);
     let visibility = crate_visibility(user.ok().as_ref());
     let sort = params.sort.unwrap_or_default();
@@ -342,20 +369,20 @@ pub async fn crates(
         category: params.category.filter(|c| !c.is_empty()),
     };
     let crates = db
-        .get_crate_overview_list(page_size, page_size * page, cache, &visibility, sort, &tags)
+        .get_crate_overview_list(page_size, offset, cache, &visibility, sort, &tags)
         .await
-        .unwrap_or_default();
+        .map_err(|e| db_error(&e))?;
     let total = db
         .count_crate_overview_list(cache, &visibility, &tags)
         .await
-        .unwrap_or_default();
+        .map_err(|e| db_error(&e))?;
 
-    Json(Pagination {
+    Ok(Json(Pagination {
         crates,
         page_size,
         page,
         total,
-    })
+    }))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
@@ -373,39 +400,39 @@ pub struct SearchParams {
     tag = "ui",
     params(SearchParams),
     responses(
-        (status = 200, description = "Paginated search results", body = Pagination)
+        (status = 200, description = "Paginated search results", body = Pagination),
+        (status = 400, description = "Page out of range")
     )
 )]
 pub async fn search(
     Query(params): Query<SearchParams>,
     State(db): DbState,
     user: Result<MaybeUserOrToken, StatusCode>,
-) -> Json<Pagination> {
-    let page_size = params.page_size.unwrap_or(10);
-    let page = params.page.unwrap_or(0);
+) -> Result<Json<Pagination>, RouteError> {
+    let (page_size, page, offset) = pagination(params.page_size, params.page)?;
     let cache = params.cache.unwrap_or(false);
     let visibility = crate_visibility(user.ok().as_ref());
     let crates = db
         .search_in_crate_name_and_description(
             params.name.as_str(),
             page_size,
-            page_size * page,
+            offset,
             cache,
             &visibility,
         )
         .await
-        .unwrap_or_default();
+        .map_err(|e| db_error(&e))?;
     let total = db
         .count_by_crate_name_and_description(params.name.as_str(), cache, &visibility)
         .await
-        .unwrap_or_default();
+        .map_err(|e| db_error(&e))?;
 
-    Json(Pagination {
+    Ok(Json(Pagination {
         crates,
         page_size,
         page,
         total,
-    })
+    }))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
@@ -745,11 +772,12 @@ pub struct Statistic {
     pub proxy_enabled: bool,
 }
 
+/// The most downloaded crates, `None` if there are fewer crates.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
 pub struct TopCrates {
-    pub first: (String, u64),
-    pub second: (String, u64),
-    pub third: (String, u64),
+    pub first: Option<(String, u64)>,
+    pub second: Option<(String, u64)>,
+    pub third: Option<(String, u64)>,
 }
 
 /// Get registry statistics
@@ -765,40 +793,42 @@ pub async fn statistic(
     State(db): DbState,
     State(settings): SettingsState,
     user: Result<MaybeUserOrToken, StatusCode>,
-) -> Json<Statistic> {
-    fn extract(tops: &[(String, u64)], i: usize) -> (String, u64) {
-        if tops.len() > i {
-            tops[i].clone()
-        } else {
-            (String::new(), 0)
-        }
-    }
-
-    let num_crates = db.get_total_unique_crates().await.unwrap_or_default();
-    let num_crate_versions = db.get_total_crate_versions().await.unwrap_or_default();
-    let num_crate_downloads = db.get_total_downloads().await.unwrap_or_default();
+) -> Result<Json<Statistic>, RouteError> {
+    let num_crates = db
+        .get_total_unique_crates()
+        .await
+        .map_err(|e| db_error(&e))?;
+    let num_crate_versions = db
+        .get_total_crate_versions()
+        .await
+        .map_err(|e| db_error(&e))?;
+    let num_crate_downloads = db.get_total_downloads().await.map_err(|e| db_error(&e))?;
     // Crate names are only listed if the caller may see them. The totals
     // are aggregates and do not reveal individual crates.
     let visibility = crate_visibility(user.ok().as_ref());
-    let tops = db
+    let mut tops = db
         .get_top_crates_downloads(3, &visibility)
         .await
-        .unwrap_or_default();
+        .map_err(|e| db_error(&e))?
+        .into_iter();
     let num_proxy_crates = db
         .get_total_unique_cached_crates()
         .await
-        .unwrap_or_default();
+        .map_err(|e| db_error(&e))?;
     let num_proxy_crate_versions = db
         .get_total_cached_crate_versions()
         .await
-        .unwrap_or_default();
-    let num_proxy_crate_downloads = db.get_total_cached_downloads().await.unwrap_or_default();
+        .map_err(|e| db_error(&e))?;
+    let num_proxy_crate_downloads = db
+        .get_total_cached_downloads()
+        .await
+        .map_err(|e| db_error(&e))?;
     let last_updated_crate = db
         .get_last_updated_crate(&visibility)
         .await
-        .unwrap_or_default();
+        .map_err(|e| db_error(&e))?;
 
-    Json(Statistic {
+    Ok(Json(Statistic {
         num_crates,
         num_crate_versions,
         num_crate_downloads,
@@ -806,13 +836,13 @@ pub async fn statistic(
         num_proxy_crate_versions,
         num_proxy_crate_downloads,
         top_crates: TopCrates {
-            first: extract(&tops, 0),
-            second: extract(&tops, 1),
-            third: extract(&tops, 2),
+            first: tops.next(),
+            second: tops.next(),
+            third: tops.next(),
         },
         last_updated_crate,
         proxy_enabled: settings.proxy.enabled,
-    })
+    }))
 }
 
 /// Parameters for triggering a documentation build
@@ -2171,18 +2201,38 @@ mod tests {
         );
     }
 
+    /// A failing database must not look like an empty registry.
+    #[tokio::test]
+    async fn statistic_database_error_is_internal_error() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_total_unique_crates()
+            .returning(|| Err(DbError::FailedToCountCrates));
+        let (settings, storage) = test_deps();
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
     #[tokio::test]
     async fn statistic_returns_sparse_statistics() {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_total_unique_crates()
-            .returning(move || Err(DbError::FailedToCountCrates));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_total_crate_versions()
-            .returning(move || Err(DbError::FailedToCountCrateVersions));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_total_downloads()
-            .returning(move || Err(DbError::FailedToCountTotalDownloads));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_top_crates_downloads()
             .with(eq(3), eq(CrateVisibility::Unrestricted))
@@ -2192,13 +2242,13 @@ mod tests {
             .returning(move |_| Ok(None));
         mock_db
             .expect_get_total_unique_cached_crates()
-            .returning(move || Err(DbError::FailedToCountCrates));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_total_cached_crate_versions()
-            .returning(move || Err(DbError::FailedToCountCrateVersions));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_total_cached_downloads()
-            .returning(move || Err(DbError::FailedToCountTotalDownloads));
+            .returning(move || Ok(0));
 
         let (settings, storage) = test_deps();
         let r = app(
@@ -2221,9 +2271,9 @@ mod tests {
             num_proxy_crate_versions: 0,
             num_proxy_crate_downloads: 0,
             top_crates: TopCrates {
-                first: ("top1".to_string(), 1000),
-                second: (String::new(), 0),
-                third: (String::new(), 0),
+                first: Some(("top1".to_string(), 1000)),
+                second: None,
+                third: None,
             },
             last_updated_crate: None,
             proxy_enabled: false,
@@ -2237,29 +2287,29 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_total_unique_crates()
-            .returning(move || Err(DbError::FailedToCountCrates));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_total_crate_versions()
-            .returning(move || Err(DbError::FailedToCountCrateVersions));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_total_downloads()
-            .returning(move || Err(DbError::FailedToCountTotalDownloads));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_top_crates_downloads()
             .with(eq(3), eq(CrateVisibility::Unrestricted))
-            .returning(move |_, _| Err(DbError::FailedToCountTotalDownloads));
+            .returning(move |_, _| Ok(vec![]));
         mock_db
             .expect_get_last_updated_crate()
             .returning(move |_| Ok(None));
         mock_db
             .expect_get_total_unique_cached_crates()
-            .returning(move || Err(DbError::FailedToCountCrates));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_total_cached_crate_versions()
-            .returning(move || Err(DbError::FailedToCountCrateVersions));
+            .returning(move || Ok(0));
         mock_db
             .expect_get_total_cached_downloads()
-            .returning(move || Err(DbError::FailedToCountTotalDownloads));
+            .returning(move || Ok(0));
 
         let (settings, storage) = test_deps();
         let r = app(
@@ -2282,9 +2332,9 @@ mod tests {
             num_proxy_crate_versions: 0,
             num_proxy_crate_downloads: 0,
             top_crates: TopCrates {
-                first: (String::new(), 0),
-                second: (String::new(), 0),
-                third: (String::new(), 0),
+                first: None,
+                second: None,
+                third: None,
             },
             last_updated_crate: None,
             proxy_enabled: false,
@@ -2352,9 +2402,9 @@ mod tests {
             num_proxy_crate_versions: 99999,
             num_proxy_crate_downloads: 999_999,
             top_crates: TopCrates {
-                first: ("top1".to_string(), 1000),
-                second: ("top2".to_string(), 500),
-                third: ("top3".to_string(), 100),
+                first: Some(("top1".to_string(), 1000)),
+                second: Some(("top2".to_string(), 500)),
+                third: Some(("top3".to_string(), 100)),
             },
             last_updated_crate: Some((
                 OriginalName::from_unchecked("foobar".to_string()),
@@ -3087,6 +3137,45 @@ mod tests {
         let status = get_with_session("/statistic", mock_db, "user", false).await;
 
         assert_eq!(StatusCode::OK, status);
+    }
+
+    #[test]
+    fn pagination_bounds_the_page_size() {
+        assert_eq!(pagination(None, None).unwrap(), (10, 0, 0));
+        assert_eq!(pagination(Some(0), Some(2)).unwrap(), (1, 2, 2));
+        assert_eq!(pagination(Some(1000), Some(2)).unwrap(), (100, 2, 200));
+    }
+
+    #[test]
+    fn pagination_rejects_pages_out_of_range() {
+        assert!(matches!(
+            pagination(Some(10), Some(u64::MAX)),
+            Err(RouteError::BadRequest(_))
+        ));
+        assert!(matches!(
+            pagination(Some(1), Some(u64::MAX)),
+            Err(RouteError::BadRequest(_))
+        ));
+    }
+
+    /// A failing database must not look like an empty registry.
+    #[tokio::test]
+    async fn crates_database_error_is_internal_error() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_crate_overview_list()
+            .returning(|_, _, _, _, _, _| Err(DbError::FailedToCountCrates));
+        let (settings, storage) = test_deps();
+        let r = app(
+            mock_db,
+            KellnrCrateStorage::new(&settings, storage),
+            settings,
+        )
+        .oneshot(Request::get("/crates").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+        assert_eq!(r.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[tokio::test]
