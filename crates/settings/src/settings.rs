@@ -126,6 +126,7 @@ impl Settings {
     /// Normalize values that can be written in several equivalent ways.
     pub fn normalize(&mut self) {
         self.origin.normalize();
+        self.proxy.normalize();
     }
 
     pub fn bin_path(&self) -> PathBuf {
@@ -264,5 +265,21 @@ mod tests {
             .unwrap();
 
         assert_eq!(settings_from_prov(&prov).origin.path, "/registry");
+    }
+
+    #[test]
+    fn settings_from_prov_normalizes_proxy_urls() {
+        let prov = Config::new()
+            .add_toml_str(
+                "test.toml",
+                "[proxy]\nurl = \"https://mirror.example.com/crates\"\n",
+            )
+            .build::<SettingsProv>()
+            .unwrap();
+
+        assert_eq!(
+            settings_from_prov(&prov).proxy.url.as_str(),
+            "https://mirror.example.com/crates/"
+        );
     }
 }

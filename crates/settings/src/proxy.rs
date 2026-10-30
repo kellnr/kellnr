@@ -72,6 +72,45 @@ impl Default for Proxy {
 }
 
 impl Proxy {
+    /// Lets the upstream URLs end in a slash. They are base URLs for
+    /// `Url::join`, which replaces the last path segment if it is missing.
+    pub fn normalize(&mut self) {
+        for url in [&mut self.url, &mut self.index, &mut self.api] {
+            if !url.path().ends_with('/') {
+                let path = format!("{}/", url.path());
+                url.set_path(&path);
+            }
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.enabled {
+            return Ok(());
+        }
+        for (key, url) in [
+            ("proxy.url", &self.url),
+            ("proxy.index", &self.index),
+            ("proxy.api", &self.api),
+        ] {
+            if !matches!(url.scheme(), "http" | "https") {
+                return Err(format!("{key} must be an http or https URL, got {url}"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Configuration that is accepted but most likely a mistake.
+    pub fn warnings(&self) -> Vec<String> {
+        if self.enabled && self.num_threads == 0 {
+            vec![
+                "proxy.num_threads is 0, cached crates.io crates are not updated in the background"
+                    .to_string(),
+            ]
+        } else {
+            Vec::new()
+        }
+    }
+
     /// The upstream sparse-index URL that internal cargo invocations (e.g. the
     /// docs builder) should resolve crates.io dependencies from, if it differs
     /// from the built-in crates.io default.
@@ -93,6 +132,67 @@ impl Proxy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalize_lets_urls_end_in_a_slash() {
+        let mut proxy: Proxy = toml::from_str(
+            r#"
+            url = "https://mirror.example.com/crates"
+            index = "https://mirror.example.com/index"
+            api = "https://mirror.example.com/api/v1/crates/"
+        "#,
+        )
+        .unwrap();
+
+        proxy.normalize();
+
+        assert_eq!(
+            proxy.url.join("serde/serde-1.0.0.crate").unwrap().as_str(),
+            "https://mirror.example.com/crates/serde/serde-1.0.0.crate"
+        );
+        assert_eq!(proxy.index.as_str(), "https://mirror.example.com/index/");
+        assert_eq!(
+            proxy.api.as_str(),
+            "https://mirror.example.com/api/v1/crates/"
+        );
+    }
+
+    #[test]
+    fn zero_threads_are_accepted_with_a_warning() {
+        let proxy = Proxy {
+            enabled: true,
+            num_threads: 0,
+            ..Proxy::default()
+        };
+        assert!(proxy.validate().is_ok());
+        assert!(proxy.warnings()[0].contains("num_threads"));
+        assert!(Proxy::default().warnings().is_empty());
+    }
+
+    #[test]
+    fn validate_rejects_urls_that_are_not_http() {
+        let proxy = Proxy {
+            enabled: true,
+            index: Url::parse("sparse+https://index.crates.io/").unwrap(),
+            ..Proxy::default()
+        };
+        assert!(proxy.validate().unwrap_err().contains("proxy.index"));
+    }
+
+    #[test]
+    fn validate_ignores_disabled_proxy() {
+        let proxy = Proxy {
+            num_threads: 0,
+            url: Url::parse("ftp://example.com/").unwrap(),
+            ..Proxy::default()
+        };
+        assert!(proxy.validate().is_ok());
+        let enabled = Proxy {
+            enabled: true,
+            ..Proxy::default()
+        };
+        assert!(enabled.validate().is_ok());
+    }
 
     #[test]
     fn default_api_url_is_cratesio() {
