@@ -545,7 +545,6 @@ fn extract_jwt_payload(jwt: &str) -> Result<serde_json::Value, OAuth2Error> {
         .map_err(|e| OAuth2Error::TokenVerificationError(format!("JSON parse error: {e}")))
 }
 
-/// Get a string array from a JSON value
 /// Whether the claim `claim_name` grants `claim_value`. The claim may be a
 /// string, a string array or a boolean (matched against `"true"`). Only the
 /// named claim is consulted: falling back to other claims such as `groups`
@@ -569,6 +568,7 @@ fn claim_contains(
         .is_some_and(|b| b && claim_value.eq_ignore_ascii_case("true"))
 }
 
+/// Get a string array from a JSON value
 fn get_string_array_from_json(payload: &serde_json::Value, name: &str) -> Option<Vec<String>> {
     let value = payload.get(name)?;
 

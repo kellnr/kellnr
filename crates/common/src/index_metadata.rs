@@ -38,7 +38,7 @@ mod pubtime_format {
 use crate::publish_metadata::{PublishMetadata, RegistryDep};
 
 // This Metadata struct defined here is the one saved in the index.
-// It is different to the one send by Cargo to the registry.
+// It is different to the one sent by Cargo to the registry.
 // See: https://doc.rust-lang.org/cargo/reference/registries.html#index-format
 // Crates.io implementation: https://github.com/rust-lang/crates.io/blob/main/crates/crates_io_index/data.rs
 
