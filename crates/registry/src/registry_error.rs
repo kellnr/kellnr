@@ -15,6 +15,8 @@ pub enum RegistryError {
     TrailingData(usize),
     #[error("Invalid min. length {0}/{1} bytes")]
     InvalidMinLength(usize, usize),
+    #[error("Body of {0} bytes exceeds the maximum of {1} bytes")]
+    TooLarge(usize, usize),
     #[error("Failed to parse URL: {0}")]
     UrlParseError(#[from] url::ParseError),
     #[error("Failed request: {0}")]
@@ -52,6 +54,7 @@ impl From<RegistryError> for ApiError {
                 ApiError::from_err(&e, status)
             }
             RegistryError::CrateNotFound => ApiError::from_err(&e, StatusCode::NOT_FOUND),
+            RegistryError::TooLarge(_, _) => ApiError::from_err(&e, StatusCode::PAYLOAD_TOO_LARGE),
             RegistryError::NotOwner => ApiError::from_err(&e, StatusCode::FORBIDDEN),
             RegistryError::RequestError(_) | RegistryError::UpstreamStatus(_) => {
                 ApiError::from_err(&e, StatusCode::BAD_GATEWAY)
