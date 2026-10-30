@@ -41,6 +41,7 @@ moka.workspace = true
 openssl = { version = "0.10", optional = true } # Not needed directly but for cross-compilation with the vendored-openssl feature
 sha256.workspace = true
 tar.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 xz2.workspace = true
 toml.workspace = true
@@ -52,7 +53,6 @@ tracing.workspace = true
 hyper.workspace = true
 mockall.workspace = true
 serde_json.workspace = true
-tempfile.workspace = true
 tower.workspace = true
 
 [features]

@@ -1,5 +1,7 @@
-use std::fmt::Write;
-use std::io::Read as _;
+use std::collections::HashMap;
+use std::fmt::Write as _;
+use std::fs::File;
+use std::io::{BufWriter, Read as _, Seek as _, Write};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -17,6 +19,7 @@ use kellnr_storage::storage_error::StorageError;
 use kellnr_storage::toolchain_storage::ToolchainStorage;
 use kellnr_web_ui::session::AdminUser;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Semaphore;
 use tracing::trace;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
@@ -254,7 +257,7 @@ async fn upload_toolchain(
             &bg_version,
             &bg_target,
             &bg_date,
-            &archive_bytes,
+            archive_bytes,
         )
         .await
         {
@@ -717,6 +720,11 @@ async fn download_archive(
     Ok((headers, Body::from(archive)).into_response())
 }
 
+/// Limits how many uploaded archives are split into components at the same
+/// time. Splitting decompresses a whole toolchain and compresses every
+/// component again, which keeps a CPU core busy for minutes.
+static EXTRACTION_PERMITS: Semaphore = Semaphore::const_new(1);
+
 /// Extract individual component archives from a combined toolchain archive.
 ///
 /// The combined `rust-{version}-{target}.tar.xz` archive contains sub-component
@@ -724,10 +732,9 @@ async fn download_archive(
 /// This function extracts each component into its own `.tar.xz` archive so rustup
 /// can download them individually.
 ///
-/// Uses two streamed passes through the archive.
-/// First it reads metadata (`components`, `rust-installer-version`),
-/// then it routes entries into per-component archives.
-/// This keeps memory bounded while still being robust if metadata appears late.
+/// The decompressed components are written to temporary files and compressed
+/// one by one, so only the archive and one compressed component are held in
+/// memory. The CPU heavy work runs on the blocking thread pool.
 #[expect(clippy::too_many_arguments)]
 async fn extract_and_store_components(
     storage: &Arc<ToolchainStorage>,
@@ -737,10 +744,93 @@ async fn extract_and_store_components(
     version: &str,
     target: &str,
     date: &str,
-    archive_bytes: &[u8],
+    archive_bytes: Bytes,
 ) -> Result<(), String> {
-    use std::collections::HashMap;
+    let _permit = EXTRACTION_PERMITS
+        .acquire()
+        .await
+        .map_err(|e| format!("Failed to wait for component extraction: {e}"))?;
 
+    let components = {
+        let (name, version, target) = (name.to_string(), version.to_string(), target.to_string());
+        tokio::task::spawn_blocking(move || {
+            split_components(&archive_bytes, &name, &version, &target)
+        })
+        .await
+        .map_err(|e| format!("Component extraction stopped: {e}"))??
+    };
+
+    tracing::debug!(
+        "Extracted {} components in two streamed passes, compressing and storing",
+        components.len()
+    );
+
+    // Compress and store each component archive.
+    // Track stored paths so we can clean up on failure (e.g. if the target
+    // was deleted concurrently and the DB insert fails with an FK violation).
+    let mut stored_paths: Vec<String> = Vec::new();
+
+    for (component_name, component_tar) in components {
+        let component_xz = tokio::task::spawn_blocking(move || compress_component(component_tar))
+            .await
+            .map_err(|e| format!("Compression of {component_name} stopped: {e}"))?
+            .map_err(|e| format!("Failed to compress {component_name}: {e}"))?;
+
+        let component_hash = sha256::digest(&component_xz[..]);
+        let component_size = component_xz.len() as i64;
+        let component_storage_path =
+            ToolchainStorage::component_storage_path(date, &component_name, version, target);
+
+        storage
+            .put_raw(&component_storage_path, Bytes::from(component_xz))
+            .await
+            .map_err(|e| format!("Failed to store component {component_name}: {e}"))?;
+        stored_paths.push(component_storage_path.clone());
+
+        if let Err(e) = db
+            .add_toolchain_component(
+                target_id,
+                &component_name,
+                &component_storage_path,
+                &component_hash,
+                component_size,
+            )
+            .await
+        {
+            // DB insert failed (likely FK violation from concurrent delete).
+            // Clean up all stored component files to avoid orphans.
+            for p in &stored_paths {
+                let _ = storage.delete(p).await;
+            }
+            return Err(format!(
+                "Failed to add component {component_name} to DB: {e}"
+            ));
+        }
+
+        tracing::debug!(
+            component = component_name,
+            path = component_storage_path,
+            size = component_size,
+            "Stored component archive"
+        );
+    }
+
+    Ok(())
+}
+
+/// Splits the combined archive into one uncompressed tar per component, each
+/// in a temporary file, in the order of the `components` metadata file.
+///
+/// Uses two streamed passes through the archive.
+/// First it reads metadata (`components`, `rust-installer-version`),
+/// then it routes entries into per-component archives.
+/// This is robust even if the metadata appears late in the archive.
+fn split_components(
+    archive_bytes: &[u8],
+    name: &str,
+    version: &str,
+    target: &str,
+) -> Result<Vec<(String, File)>, String> {
     let prefix = format!("{name}-{version}-{target}/");
     let meta_components_path = format!("{prefix}components");
     let meta_installer_path = format!("{prefix}rust-installer-version");
@@ -788,9 +878,11 @@ async fn extract_and_store_components(
     }
 
     // Per-component tar builders created from metadata
-    let mut builders: HashMap<String, tar::Builder<Vec<u8>>> = HashMap::new();
+    let mut builders: HashMap<String, tar::Builder<BufWriter<File>>> = HashMap::new();
     for cn in &component_names {
-        let mut builder = tar::Builder::new(Vec::new());
+        let file =
+            tempfile::tempfile().map_err(|e| format!("Failed to create temporary file: {e}"))?;
+        let mut builder = tar::Builder::new(BufWriter::new(file));
         builder.mode(tar::HeaderMode::Deterministic);
 
         if !installer_version.is_empty() {
@@ -839,13 +931,9 @@ async fn extract_and_store_components(
         };
 
         let new_path = format!("{component_name}-{version}-{target}/{rel_path}");
-        let mut entry_data = Vec::new();
-        entry
-            .read_to_end(&mut entry_data)
-            .map_err(|e| format!("Failed to read entry data: {e}"))?;
 
         let mut header = tar::Header::new_gnu();
-        header.set_size(entry_data.len() as u64);
+        header.set_size(entry.size());
         header.set_mode(entry.header().mode().unwrap_or(0o644));
         header.set_entry_type(entry.header().entry_type());
         if let Ok(mtime) = entry.header().mtime() {
@@ -859,82 +947,35 @@ async fn extract_and_store_components(
         header.set_cksum();
 
         builder
-            .append_data(&mut header, &new_path, &entry_data[..])
+            .append_data(&mut header, &new_path, &mut entry)
             .map_err(|e| format!("Failed to append to tar: {e}"))?;
     }
 
-    tracing::debug!(
-        components = ?component_names,
-        "Extracted {} components in two streamed passes, compressing and storing",
-        component_names.len()
-    );
+    component_names
+        .into_iter()
+        .map(|component_name| {
+            let builder = builders
+                .remove(&component_name)
+                .ok_or_else(|| format!("Missing builder for {component_name}"))?;
+            let file = builder
+                .into_inner()
+                .and_then(|w| w.into_inner().map_err(std::io::IntoInnerError::into_error))
+                .and_then(|mut f| f.rewind().map(|()| f))
+                .map_err(|e| format!("Failed to finish tar for {component_name}: {e}"))?;
+            Ok((component_name, file))
+        })
+        .collect()
+}
 
-    // Finish, compress, and store each component archive.
-    // Track stored paths so we can clean up on failure (e.g. if the target
-    // was deleted concurrently and the DB insert fails with an FK violation).
-    let mut stored_paths: Vec<String> = Vec::new();
-
-    for component_name in &component_names {
-        let builder = builders
-            .remove(component_name)
-            .ok_or_else(|| format!("Missing builder for {component_name}"))?;
-
-        let component_tar = builder
-            .into_inner()
-            .map_err(|e| format!("Failed to finish tar for {component_name}: {e}"))?;
-
-        let mut xz_encoder = xz2::write::XzEncoder::new(Vec::new(), 6);
-        std::io::Write::write_all(&mut xz_encoder, &component_tar)
-            .map_err(|e| format!("Failed to compress {component_name}: {e}"))?;
-        let component_xz = xz_encoder
-            .finish()
-            .map_err(|e| format!("Failed to finish xz for {component_name}: {e}"))?;
-
-        let component_hash = sha256::digest(&component_xz[..]);
-        let component_size = component_xz.len() as i64;
-        let component_storage_path =
-            ToolchainStorage::component_storage_path(date, component_name, version, target);
-
-        storage
-            .put_raw(&component_storage_path, Bytes::from(component_xz))
-            .await
-            .map_err(|e| format!("Failed to store component {component_name}: {e}"))?;
-        stored_paths.push(component_storage_path.clone());
-
-        if let Err(e) = db
-            .add_toolchain_component(
-                target_id,
-                component_name,
-                &component_storage_path,
-                &component_hash,
-                component_size,
-            )
-            .await
-        {
-            // DB insert failed (likely FK violation from concurrent delete).
-            // Clean up all stored component files to avoid orphans.
-            for p in &stored_paths {
-                let _ = storage.delete(p).await;
-            }
-            return Err(format!(
-                "Failed to add component {component_name} to DB: {e}"
-            ));
-        }
-
-        tracing::debug!(
-            component = component_name,
-            path = component_storage_path,
-            size = component_size,
-            "Stored component archive"
-        );
-    }
-
-    Ok(())
+fn compress_component(mut component_tar: File) -> std::io::Result<Vec<u8>> {
+    let mut xz_encoder = xz2::write::XzEncoder::new(Vec::new(), 6);
+    std::io::copy(&mut component_tar, &mut xz_encoder)?;
+    xz_encoder.finish()
 }
 
 /// Append a small metadata file (rust-installer-version, components) to a tar builder.
-fn append_metadata_file(
-    builder: &mut tar::Builder<Vec<u8>>,
+fn append_metadata_file<W: Write>(
+    builder: &mut tar::Builder<W>,
     path: &str,
     content: &[u8],
 ) -> Result<(), String> {
@@ -2398,7 +2439,7 @@ mod tests {
             "1.0.0",
             "x86_64-unknown-linux-gnu",
             "2024-01-15",
-            &xz_data,
+            Bytes::from(xz_data),
         )
         .await;
 
@@ -2426,12 +2467,17 @@ mod tests {
         let mut tar_bytes = Vec::new();
         xz_dec.read_to_end(&mut tar_bytes).unwrap();
         let mut archive = tar::Archive::new(Cursor::new(&tar_bytes));
-        let entry_names: Vec<String> = archive
-            .entries()
-            .unwrap()
-            .filter_map(Result::ok)
-            .map(|e| e.path().unwrap().to_string_lossy().to_string())
-            .collect();
+        let mut entry_names: Vec<String> = Vec::new();
+        for entry in archive.entries().unwrap() {
+            let mut entry = entry.unwrap();
+            let path = entry.path().unwrap().to_string_lossy().to_string();
+            if path.ends_with("manifest.in") {
+                let mut contents = String::new();
+                entry.read_to_string(&mut contents).unwrap();
+                assert_eq!("file:bin/rustc\n", contents);
+            }
+            entry_names.push(path);
+        }
         assert!(
             entry_names
                 .iter()
