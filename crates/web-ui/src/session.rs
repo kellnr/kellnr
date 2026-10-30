@@ -82,25 +82,11 @@ async fn validate_session(
         })
 }
 
-pub trait Name {
-    fn name(&self) -> String;
-    fn new(name: String) -> Self;
-}
-
 pub struct AdminUser(pub String);
 
 impl AdminUser {
     pub fn name(&self) -> &str {
         &self.0
-    }
-}
-
-impl Name for AdminUser {
-    fn name(&self) -> String {
-        self.0.clone()
-    }
-    fn new(name: String) -> Self {
-        Self(name)
     }
 }
 
@@ -123,29 +109,8 @@ impl FromRequestParts<AppStateData> for AdminUser {
     }
 }
 
-pub struct NormalUser(pub String);
-impl Name for NormalUser {
-    fn name(&self) -> String {
-        self.0.clone()
-    }
-    fn new(name: String) -> Self {
-        Self(name)
-    }
-}
-
-pub struct AnyUser(pub String);
-impl Name for AnyUser {
-    fn name(&self) -> String {
-        self.0.clone()
-    }
-    fn new(name: String) -> Self {
-        Self(name)
-    }
-}
-
 #[derive(Debug)]
 pub enum MaybeUser {
-    // Consider using a db model or something?
     Normal(String),
     Admin(String),
 }
@@ -154,20 +119,6 @@ impl MaybeUser {
     pub fn name(&self) -> &str {
         match self {
             Self::Normal(name) | Self::Admin(name) => name,
-        }
-    }
-
-    pub fn assert_normal(&self) -> Result<(), RouteError> {
-        match self {
-            MaybeUser::Normal(_) => Ok(()),
-            MaybeUser::Admin(_) => Err(RouteError::InsufficientPrivileges),
-        }
-    }
-
-    pub fn assert_admin(&self) -> Result<(), RouteError> {
-        match self {
-            MaybeUser::Normal(_) => Err(RouteError::InsufficientPrivileges),
-            MaybeUser::Admin(_) => Ok(()),
         }
     }
 }
@@ -256,15 +207,7 @@ mod session_tests {
 
     type Result<T = (), E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
-    async fn admin_endpoint(user: MaybeUser) -> Result<(), RouteError> {
-        user.assert_admin()?;
-        Ok(())
-    }
-
-    async fn normal_endpoint(user: MaybeUser) -> Result<(), RouteError> {
-        user.assert_normal()?;
-        Ok(())
-    }
+    async fn admin_endpoint(_user: AdminUser) {}
 
     async fn any_endpoint(_user: MaybeUser) {}
 
@@ -273,7 +216,6 @@ mod session_tests {
         let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         Router::new()
             .route("/admin", get(admin_endpoint))
-            .route("/normal", get(normal_endpoint))
             .route("/any", get(any_endpoint))
             .with_state(AppStateData {
                 db,
@@ -368,92 +310,6 @@ mod session_tests {
         let r = app(Arc::new(mock_db))
             .oneshot(
                 Request::get("/admin")
-                    .header(header::COOKIE, c1234())
-                    .body(Body::empty())?,
-            )
-            .await?;
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
-
-        Ok(())
-    }
-
-    // NormalUser tests
-
-    #[tokio::test]
-    async fn normal_auth_works() -> Result {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq("1234"))
-            .returning(|_st| {
-                Ok(SessionInfo {
-                    name: "normal".to_string(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-
-        let r = app(Arc::new(mock_db))
-            .oneshot(
-                Request::get("/normal")
-                    .header(header::COOKIE, c1234())
-                    .body(Body::empty())?,
-            )
-            .await?;
-        assert_eq!(r.status(), StatusCode::OK);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn normal_auth_user_is_admin() -> Result {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq("1234"))
-            .returning(|_st| {
-                Ok(SessionInfo {
-                    name: "normal".to_string(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-
-        let r = app(Arc::new(mock_db))
-            .oneshot(
-                Request::get("/normal")
-                    .header(header::COOKIE, c1234())
-                    .body(Body::empty())?,
-            )
-            .await?;
-        assert_eq!(r.status(), StatusCode::FORBIDDEN);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn normal_auth_user_but_no_cookie_sent() -> Result {
-        let mock_db = MockDb::new();
-
-        let r = app(Arc::new(mock_db))
-            .oneshot(Request::get("/normal").body(Body::empty())?)
-            .await?;
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn normal_auth_user_but_no_cookie_in_store() -> Result {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq("1234"))
-            .returning(|_st| Err(DbError::SessionNotFound));
-
-        let r = app(Arc::new(mock_db))
-            .oneshot(
-                Request::get("/normal")
                     .header(header::COOKIE, c1234())
                     .body(Body::empty())?,
             )

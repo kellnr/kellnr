@@ -9,12 +9,6 @@ use utoipa::ToSchema;
 use crate::error::RouteError;
 use crate::session::AdminUser;
 
-#[derive(Serialize, ToSchema)]
-pub struct NewTokenResponse {
-    name: String,
-    token: String,
-}
-
 /// List all groups (admin only)
 #[utoipa::path(
     get,

@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Write};
-use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -35,11 +34,8 @@ mod pubtime_format {
         }
     }
 }
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 
 use crate::publish_metadata::{PublishMetadata, RegistryDep};
-use crate::version::Version;
 
 // This Metadata struct defined here is the one saved in the index.
 // It is different to the one send by Cargo to the registry.
@@ -130,61 +126,8 @@ pub struct IndexMetadata {
 }
 
 impl IndexMetadata {
-    pub async fn from_max_version(path: &Path) -> Result<Self, std::io::Error> {
-        let mut file = File::open(path).await?;
-        let mut content = String::new();
-        file.read_to_string(&mut content).await?;
-
-        let mut metadata: Vec<IndexMetadata> = content
-            .lines()
-            .filter_map(|m| serde_json::from_str::<IndexMetadata>(m).ok())
-            .collect();
-
-        metadata.sort_by(|a, b| {
-            let sv1 = Version::from_unchecked_str(&a.vers);
-            let sv2 = Version::from_unchecked_str(&b.vers);
-            sv1.cmp(&sv2)
-        });
-
-        metadata.last().cloned().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Unable to read metadata file.",
-            )
-        })
-    }
-
-    pub async fn from_version(path: &Path, version: &Version) -> Result<Self, std::io::Error> {
-        let mut file = File::open(path).await?;
-        let mut content = String::new();
-        file.read_to_string(&mut content).await?;
-
-        let metadata: Vec<IndexMetadata> = content
-            .lines()
-            .filter_map(|m| serde_json::from_str::<IndexMetadata>(m).ok())
-            .collect();
-
-        metadata
-            .iter()
-            .find(|m| {
-                let sv = Version::try_from(&m.vers).unwrap_or_default();
-                sv == *version
-            })
-            .cloned()
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Unable to read metadata file.",
-                )
-            })
-    }
-
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(&self)
-    }
-
-    pub fn metadata_path(&self, index_path: &Path) -> PathBuf {
-        metadata_path(index_path, &self.name)
     }
 
     pub fn from_reg_meta(registry_metadata: &PublishMetadata, cksum: &str) -> Self {
@@ -379,27 +322,6 @@ impl From<RegistryDep> for IndexDep {
     }
 }
 
-pub fn metadata_path(index_path: &Path, name: &str) -> PathBuf {
-    if name.len() == 1 {
-        index_path.join("1").join(name.to_lowercase())
-    } else if name.len() == 2 {
-        index_path.join("2").join(name.to_lowercase())
-    } else if name.len() == 3 {
-        let first_char = &name[0..1].to_lowercase();
-        index_path
-            .join("3")
-            .join(first_char)
-            .join(name.to_lowercase())
-    } else {
-        let first_two = &name[0..2].to_lowercase();
-        let second_two = &name[2..4].to_lowercase();
-        index_path
-            .join(first_two)
-            .join(second_two)
-            .join(name.to_lowercase())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -507,42 +429,6 @@ mod tests {
         assert_eq!(index_meta.deps[0].package, None);
         assert_eq!(index_meta.deps[1].name, "qux");
         assert_eq!(index_meta.deps[1].package, Some("baz".to_string()));
-    }
-
-    #[test]
-    fn metadata_path_one_letter() {
-        let name = "A";
-        assert_eq!(
-            metadata_path(&PathBuf::from("ip"), name),
-            Path::new("ip").join("1").join("a")
-        );
-    }
-
-    #[test]
-    fn metadata_path_two_letters() {
-        let name = "cB";
-        assert_eq!(
-            metadata_path(&PathBuf::from("ip"), name),
-            Path::new("ip").join("2").join("cb")
-        );
-    }
-
-    #[test]
-    fn metadata_path_three_letters() {
-        let name = "cAb";
-        assert_eq!(
-            metadata_path(&PathBuf::from("ip"), name),
-            Path::new("ip").join("3").join("c").join("cab")
-        );
-    }
-
-    #[test]
-    fn metadata_path_four_or_more_letters() {
-        let name = "foo_bAr";
-        assert_eq!(
-            metadata_path(&PathBuf::from("ip"), name),
-            Path::new("ip").join("fo").join("o_").join("foo_bar")
-        );
     }
 
     #[test]
