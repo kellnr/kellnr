@@ -4,6 +4,7 @@ pub mod docs_storage;
 pub mod fs_storage;
 pub mod gcs_storage;
 pub mod kellnr_crate_storage;
+pub mod object_storage;
 pub mod s3_storage;
 pub mod storage;
 pub mod storage_error;
