@@ -781,10 +781,21 @@ async fn extract_and_store_components(
         let component_storage_path =
             ToolchainStorage::component_storage_path(date, &component_name, version, target);
 
-        storage
-            .put_raw(&component_storage_path, Bytes::from(component_xz))
+        // A file no target refers to is left over, e.g. from a target whose
+        // archives could not all be deleted, and would block the target.
+        let in_use = db
+            .is_toolchain_component_stored_at(&component_storage_path)
             .await
-            .map_err(|e| format!("Failed to store component {component_name}: {e}"))?;
+            .map_err(|e| format!("Failed to check component {component_name}: {e}"))?;
+        let component_xz = Bytes::from(component_xz);
+        let stored = if in_use {
+            storage.put_raw(&component_storage_path, component_xz).await
+        } else {
+            storage
+                .put_raw_overwrite(&component_storage_path, component_xz)
+                .await
+        };
+        stored.map_err(|e| format!("Failed to store component {component_name}: {e}"))?;
         stored_paths.push(component_storage_path.clone());
 
         if let Err(e) = db
@@ -2340,11 +2351,10 @@ mod tests {
         assert!(manifest.contains("xz_hash = \"cargo_hash\""));
     }
 
-    #[tokio::test]
-    async fn test_extract_components_from_archive() {
+    /// A combined archive of the toolchain `rust` 1.0.0 for
+    /// `x86_64-unknown-linux-gnu` with the components `rustc` and `cargo`.
+    fn two_component_archive() -> Vec<u8> {
         use std::io::Write;
-
-        use tempfile::TempDir;
 
         // Build a minimal combined archive with two components
         let mut tar_builder = tar::Builder::new(Vec::new());
@@ -2414,7 +2424,14 @@ mod tests {
         // Compress with xz
         let mut xz_encoder = xz2::write::XzEncoder::new(Vec::new(), 1);
         xz_encoder.write_all(&tar_data).unwrap();
-        let xz_data = xz_encoder.finish().unwrap();
+        xz_encoder.finish().unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_extract_components_from_archive() {
+        use tempfile::TempDir;
+
+        let xz_data = two_component_archive();
 
         // Set up storage and mock DB
         let tmp_dir = TempDir::new().unwrap();
@@ -2424,6 +2441,9 @@ mod tests {
         let storage = Arc::new(ToolchainStorage::new(fs));
 
         let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_toolchain_component_stored_at()
+            .returning(|_| Ok(false));
         mock_db
             .expect_add_toolchain_component()
             .times(2)
@@ -2492,6 +2512,65 @@ mod tests {
             entry_names.iter().any(|n| n.contains("manifest.in")),
             "missing manifest.in in component archive: {entry_names:?}"
         );
+    }
+
+    const RUSTC_COMPONENT: &str = "2024-01-15/rustc-1.0.0-x86_64-unknown-linux-gnu.tar.xz";
+
+    /// Extracts [`two_component_archive`] into `storage` after a leftover file
+    /// was stored at the path of the rustc component, which a target refers
+    /// to if `in_use`.
+    async fn extract_over_leftover(
+        storage: &Arc<ToolchainStorage>,
+        in_use: bool,
+    ) -> Result<(), String> {
+        storage
+            .put_raw(RUSTC_COMPONENT, Bytes::from_static(b"leftover"))
+            .await
+            .unwrap();
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_is_toolchain_component_stored_at()
+            .returning(move |path| Ok(in_use && path == RUSTC_COMPONENT));
+        mock_db
+            .expect_add_toolchain_component()
+            .returning(|_, _, _, _, _| Ok(()));
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+
+        extract_and_store_components(
+            storage,
+            &db,
+            1,
+            "rust",
+            "1.0.0",
+            "x86_64-unknown-linux-gnu",
+            "2024-01-15",
+            Bytes::from(two_component_archive()),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn extract_components_replaces_leftover_component_archive() {
+        let dir = TempDir::new().unwrap();
+        let storage = fs_toolchain_storage(&dir);
+
+        let result = extract_over_leftover(&storage, false).await;
+
+        assert!(result.is_ok(), "extraction failed: {result:?}");
+        let stored = storage.get(RUSTC_COMPONENT).await.unwrap();
+        assert_ne!(Bytes::from_static(b"leftover"), stored);
+    }
+
+    #[tokio::test]
+    async fn extract_components_keeps_component_archive_of_other_target() {
+        let dir = TempDir::new().unwrap();
+        let storage = fs_toolchain_storage(&dir);
+
+        let result = extract_over_leftover(&storage, true).await;
+
+        assert!(result.is_err());
+        let stored = storage.get(RUSTC_COMPONENT).await.unwrap();
+        assert_eq!(Bytes::from_static(b"leftover"), stored);
     }
 
     #[tokio::test]

@@ -5292,6 +5292,37 @@ async fn set_channel_of_unknown_toolchain_fails_and_keeps_channel(test_db: &kell
 }
 
 #[db_test]
+async fn is_toolchain_component_stored_at_finds_components_of_all_targets(
+    test_db: &kellnr_db::Database,
+) {
+    let tc = test_db
+        .add_toolchain("rust", "1.0.0", "2024-01-01", None)
+        .await
+        .unwrap();
+    let target = test_db
+        .add_toolchain_target(tc, "x86_64-unknown-linux-gnu", "a.tar.xz", "a", 1)
+        .await
+        .unwrap();
+    test_db
+        .add_toolchain_component(target, "rustc", "rustc.tar.xz", "r", 1)
+        .await
+        .unwrap();
+
+    assert!(
+        test_db
+            .is_toolchain_component_stored_at("rustc.tar.xz")
+            .await
+            .unwrap()
+    );
+    assert!(
+        !test_db
+            .is_toolchain_component_stored_at("cargo.tar.xz")
+            .await
+            .unwrap()
+    );
+}
+
+#[db_test]
 async fn fail_processing_toolchain_targets_marks_only_processing_targets(
     test_db: &kellnr_db::Database,
 ) {
