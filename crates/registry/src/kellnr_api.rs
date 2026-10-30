@@ -3541,7 +3541,9 @@ mod reg_api_tests {
 
     impl Drop for TestKellnr {
         fn drop(&mut self) {
-            rm_rf::remove(&self.path).expect("Cannot remove TestKellnr");
+            // SQLite can still remove its journal files while the directory is
+            // removed, so a missing file is not an error here.
+            let _ = std::fs::remove_dir_all(&self.path);
         }
     }
 
