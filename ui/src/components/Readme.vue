@@ -72,8 +72,22 @@ watchEffect(() => {
   margin: 16px 0;
   padding: 16px;
   overflow-x: auto;
+  font-family: var(--kellnr-font-mono);
+  font-size: 14px;
+  line-height: 1.6;
   background: rgb(var(--v-theme-surface-variant));
-  border: 1px solid rgb(var(--v-theme-outline));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
+}
+
+/* The pre is the code box, the highlight.js theme only colors the tokens */
+.markdown-body :deep(pre code),
+.markdown-body :deep(pre code.hljs) {
+  display: block;
+  padding: 0;
+  overflow-x: visible;
+  font: inherit;
+  color: rgb(var(--v-theme-on-surface));
+  background: transparent;
 }
 
 .markdown-body :deep(code:not(pre code)) {
