@@ -32,7 +32,9 @@ pub enum DeliveryError {
 /// indefinitely. Redirects are never followed, so a callback host cannot
 /// bounce deliveries to a different target. Link-local and cloud metadata
 /// addresses (and optionally all non-public addresses) are refused, both for
-/// IP literals and after DNS resolution.
+/// IP literals and after DNS resolution. With `ignore_env_proxy`, deliveries
+/// do not use a proxy from the environment (`HTTP_PROXY`, `HTTPS_PROXY`), as
+/// only the proxy's address can be checked then.
 #[derive(Clone)]
 pub struct WebhookClient {
     http: reqwest::Client,
@@ -42,14 +44,17 @@ pub struct WebhookClient {
 impl WebhookClient {
     pub fn new(settings: &Webhooks) -> reqwest::Result<Self> {
         let block_private_targets = settings.block_private_targets;
-        let http = reqwest::Client::builder()
+        let mut builder = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::none())
             .dns_resolver(GuardedResolver {
                 block_private_targets,
-            })
-            .build()?;
+            });
+        if settings.ignore_env_proxy {
+            builder = builder.no_proxy();
+        }
+        let http = builder.build()?;
         Ok(Self {
             http,
             block_private_targets,
@@ -137,6 +142,7 @@ mod tests {
     fn client(block_private_targets: bool) -> WebhookClient {
         WebhookClient::new(&Webhooks {
             block_private_targets,
+            ..Webhooks::default()
         })
         .unwrap()
     }
@@ -228,6 +234,76 @@ mod tests {
 
         assert_eq!(302, response.status().as_u16());
         assert!(target.rx.try_recv().is_err());
+    }
+
+    /// Runs `test` in a child process with `HTTP_PROXY` pointing at
+    /// `proxy_port`, as the environment of this process cannot be changed
+    /// safely, and returns whether the child test passed.
+    async fn run_with_proxy_in_environment(test: &str, proxy_port: u16) -> bool {
+        let proxy = format!("http://127.0.0.1:{proxy_port}");
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+        child
+            .args(["--exact", test, "--ignored"])
+            .env("HTTP_PROXY", &proxy)
+            .env("http_proxy", &proxy)
+            .env_remove("NO_PROXY")
+            .env_remove("no_proxy");
+        tokio::task::spawn_blocking(move || child.status().unwrap().success())
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn uses_proxy_from_environment_by_default() {
+        let mut proxy = get_test_listener(9993, 200).await;
+        let mut target = get_test_listener(9994, 200).await;
+
+        let passed =
+            run_with_proxy_in_environment("client::tests::delivers_with_default_settings", 9993)
+                .await;
+
+        assert!(passed);
+        assert!(proxy.rx.try_recv().is_ok());
+        assert!(target.rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn ignores_proxy_from_environment_if_configured() {
+        let mut proxy = get_test_listener(9997, 200).await;
+        let mut target = get_test_listener(9998, 200).await;
+
+        let passed =
+            run_with_proxy_in_environment("client::tests::delivers_with_ignore_env_proxy", 9997)
+                .await;
+
+        assert!(passed);
+        assert!(proxy.rx.try_recv().is_err());
+        assert!(target.rx.try_recv().is_ok());
+    }
+
+    #[tokio::test]
+    #[ignore = "run by uses_proxy_from_environment_by_default"]
+    async fn delivers_with_default_settings() {
+        let response = client(false)
+            .post("http://127.0.0.1:9994", &unsigned())
+            .await
+            .unwrap();
+        assert_eq!(200, response.status().as_u16());
+    }
+
+    #[tokio::test]
+    #[ignore = "run by ignores_proxy_from_environment_if_configured"]
+    async fn delivers_with_ignore_env_proxy() {
+        let client = WebhookClient::new(&Webhooks {
+            ignore_env_proxy: true,
+            ..Webhooks::default()
+        })
+        .unwrap();
+        let response = client
+            .post("http://127.0.0.1:9998", &unsigned())
+            .await
+            .unwrap();
+        assert_eq!(200, response.status().as_u16());
     }
 
     #[tokio::test]

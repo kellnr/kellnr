@@ -76,6 +76,7 @@ export type Toolchain = {
 
 export type Webhooks = {
   block_private_targets: boolean
+  ignore_env_proxy: boolean
 }
 
 export type CrateFilter = {
@@ -274,7 +275,8 @@ export const emptySettings: Settings = {
     max_size: 500
   },
   webhooks: {
-    block_private_targets: false
+    block_private_targets: false,
+    ignore_env_proxy: false
   },
   cratesio_filter: {
     license_enabled: false,
