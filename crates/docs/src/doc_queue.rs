@@ -1,14 +1,16 @@
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use bytes::Bytes;
 use cargo::GlobalContext;
 use cargo::core::Workspace;
 use cargo::core::compiler::UserIntent;
 use cargo::core::resolver::CliFeatures;
 use cargo::ops::{self, CompileOptions, DocOptions, OutputFormat};
 use flate2::read::GzDecoder;
+use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::{DbProvider, DocQueueEntry};
@@ -16,7 +18,7 @@ use kellnr_settings::Settings;
 use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use tokio::fs::remove_dir_all;
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::build_process::DocBuilder;
 use crate::compute_doc_url;
@@ -53,6 +55,7 @@ pub fn doc_extraction_queue(
         path_prefix: settings.origin.path.clone(),
         builder,
         limits: ExtractLimits::from_max_docs_size(settings.docs.max_size),
+        processed: Mutex::default(),
     };
 
     tokio::spawn(async move {
@@ -73,6 +76,16 @@ struct DocQueueWorker {
     path_prefix: String,
     builder: DocBuilder,
     limits: ExtractLimits,
+    /// Queue entries that were processed but could not be removed from the
+    /// queue. They are only removed, but not built again.
+    processed: Mutex<HashSet<i64>>,
+}
+
+/// Whether a queue entry is done or should be processed again later.
+#[derive(Debug, PartialEq, Eq)]
+enum Outcome {
+    Done,
+    Retry,
 }
 
 impl DocQueueWorker {
@@ -83,10 +96,10 @@ impl DocQueueWorker {
         for entry in entries {
             // A crate version queued several times is only built once.
             let is_first = built.insert((entry.normalized_name.to_string(), entry.version.clone()));
-            let result = if is_first {
-                Some(self.extract_docs(&entry).await)
+            let outcome = if is_first && !self.is_processed(entry.id) {
+                self.process_entry(&entry).await
             } else {
-                None
+                Outcome::Done
             };
 
             // Always remove the working directory, also after failed builds.
@@ -94,39 +107,71 @@ impl DocQueueWorker {
                 error!("Failed to delete temporary rustdoc queue folder: {e}");
             }
 
-            match result {
-                Some(Ok(original_name)) => {
-                    let version = Version::from_unchecked_str(&entry.version);
-                    let docs_link = compute_doc_url(&original_name, &version, &self.path_prefix);
-                    self.db
-                        .update_docs_link(&entry.normalized_name, &version, &docs_link)
-                        .await?;
-                }
-                Some(Err(e)) => error!("Failed to extract docs from crate: {e}"),
-                None => {}
+            if outcome == Outcome::Done {
+                self.remove_from_queue(entry.id).await;
             }
-            self.db.delete_doc_queue(entry.id).await?;
         }
 
         Ok(())
     }
 
-    /// Build and upload the docs. Returns the original name of the crate.
-    async fn extract_docs(&self, doc: &DocQueueEntry) -> Result<OriginalName, DocsError> {
-        let version = Version::from_unchecked_str(&doc.version);
-        let crate_does_not_exist =
-            || DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.clone());
+    /// Build and publish the docs of a queue entry. Only an entry whose crate
+    /// could not be read is retried, failed builds are not, as every build
+    /// runs untrusted code.
+    async fn process_entry(&self, entry: &DocQueueEntry) -> Outcome {
+        let name = &entry.normalized_name;
+        let version = Version::from_unchecked_str(&entry.version);
+        let (original_name, contents) = match self.read_crate(name, &version).await {
+            Ok(Some(krate)) => krate,
+            Ok(None) => {
+                warn!("Skipping the docs build of {name} {version}, the crate does not exist");
+                return Outcome::Done;
+            }
+            Err(e) => {
+                error!("Failed to read {name} {version} for its docs build, retrying later: {e}");
+                return Outcome::Retry;
+            }
+        };
+
+        let result = self
+            .build_docs(entry, &original_name, &version, contents)
+            .await;
+        // A failure afterwards must not trigger another build.
+        self.processed.lock().unwrap().insert(entry.id);
+        if let Err(e) = result {
+            error!("Failed to build the docs of {name} {version}: {e}");
+            return Outcome::Done;
+        }
+
+        let docs_link = compute_doc_url(&original_name, &version, &self.path_prefix);
+        if let Err(e) = self.db.update_docs_link(name, &version, &docs_link).await {
+            error!("Failed to update the docs link of {name} {version}: {e}");
+        }
+        Outcome::Done
+    }
+
+    /// The original name and the crate file, or `None` if the crate version
+    /// does not exist.
+    async fn read_crate(
+        &self,
+        name: &NormalizedName,
+        version: &Version,
+    ) -> Result<Option<(OriginalName, Bytes)>, DocsError> {
         // The crate file and the folder in it are named after the original name.
-        let original_name = self
-            .db
-            .get_original_name(&doc.normalized_name, &version)
-            .await?
-            .ok_or_else(crate_does_not_exist)?;
-        let contents = self
-            .cs
-            .get(&original_name, &version)
-            .await?
-            .ok_or_else(crate_does_not_exist)?;
+        let Some(original_name) = self.db.get_original_name(name, version).await? else {
+            return Ok(None);
+        };
+        let contents = self.cs.get(&original_name, version).await?;
+        Ok(contents.map(|contents| (original_name, contents)))
+    }
+
+    async fn build_docs(
+        &self,
+        doc: &DocQueueEntry,
+        original_name: &OriginalName,
+        version: &Version,
+        contents: Bytes,
+    ) -> Result<(), DocsError> {
         let crate_root = format!("{original_name}-{version}");
         let tar = GzDecoder::new(std::io::Cursor::new(contents));
         let dest = doc.path.clone();
@@ -144,6 +189,20 @@ impl DocQueueWorker {
         // in a separate process without the Kellnr environment. See `DocBuilder`.
         self.builder.build(generated_docs_path).await?;
 
+        // The version may have been deleted during the build. Its docs would
+        // never be deleted then.
+        if self
+            .db
+            .get_original_name(&doc.normalized_name, version)
+            .await?
+            .is_none()
+        {
+            return Err(DocsError::CrateDoesNotExist(
+                doc.normalized_name.to_string(),
+                version.to_string(),
+            ));
+        }
+
         // Upload the docs directory, pruning any stale pages from a previous build.
         // The `doc` key prefix mirrors the manual-upload path (api.rs), where the
         // uploaded zip already contains a top-level `doc/` folder: both must land
@@ -153,12 +212,25 @@ impl DocQueueWorker {
             &from,
             "doc",
             &doc.normalized_name,
-            &version,
+            version,
             &self.docs_storage,
         )
         .await?;
 
-        Ok(original_name)
+        Ok(())
+    }
+
+    fn is_processed(&self, id: i64) -> bool {
+        self.processed.lock().unwrap().contains(&id)
+    }
+
+    async fn remove_from_queue(&self, id: i64) {
+        match self.db.delete_doc_queue(id).await {
+            Ok(()) => {
+                self.processed.lock().unwrap().remove(&id);
+            }
+            Err(e) => error!("Failed to remove entry {id} from the docs queue: {e}"),
+        }
     }
 }
 
@@ -299,7 +371,7 @@ mod tests {
 
     use cargo::core::SourceId;
     use cargo::sources::SourceConfigMap;
-    use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_storage::object_storage::MemoryStorage;
 
@@ -375,6 +447,7 @@ mod tests {
             path_prefix: String::new(),
             builder,
             limits: ExtractLimits::from_max_docs_size(1),
+            processed: Mutex::default(),
         }
     }
 
@@ -455,6 +528,120 @@ mod tests {
             "doc/My_Crate/index.html",
         );
         assert!(worker.docs_storage.exists(&key).await.unwrap());
+    }
+
+    const SUCCESSFUL_BUILD: &str = "echo \"$3\" >> \"$0\"; mkdir -p \"$3/target/doc/a\" && echo docs > \"$3/target/doc/a/index.html\"";
+
+    fn queue_dir(data_dir: &Path, i: i64) -> PathBuf {
+        data_dir.join(format!("queue{i}"))
+    }
+
+    fn expect_queue(db: &mut MockDb, data_dir: &Path, names: &'static [&'static str]) {
+        let data_dir = data_dir.to_path_buf();
+        db.expect_get_doc_queue().returning(move || {
+            Ok((0..)
+                .zip(names)
+                .map(|(i, name)| queue_entry(i, name, queue_dir(&data_dir, i)))
+                .collect())
+        });
+    }
+
+    fn build_count(build_log: &Path) -> usize {
+        std::fs::read_to_string(build_log).map_or(0, |log| log.lines().count())
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_continues_after_database_errors() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let build_log = data_dir.path().join("builds.log");
+        let mut db = MockDb::new();
+        expect_queue(&mut db, data_dir.path(), &["a", "b"]);
+        expect_original_names(&mut db);
+        db.expect_update_docs_link()
+            .times(2)
+            .returning(|_, _, _| Err(DbError::CrateNotFound("a".to_string())));
+        db.expect_delete_doc_queue()
+            .times(2)
+            .returning(|_| Err(DbError::CrateNotFound("a".to_string())));
+        let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
+        let worker = worker(db, data_dir.path(), &["a", "b"], builder).await;
+
+        worker.process_queue().await.unwrap();
+
+        assert_eq!(build_count(&build_log), 2);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_does_not_build_again_if_entry_cannot_be_removed() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let build_log = data_dir.path().join("builds.log");
+        let mut db = MockDb::new();
+        expect_queue(&mut db, data_dir.path(), &["a"]);
+        expect_original_names(&mut db);
+        db.expect_update_docs_link().returning(|_, _, _| Ok(()));
+        let mut deletes = 0;
+        db.expect_delete_doc_queue().times(2).returning(move |_| {
+            deletes += 1;
+            if deletes == 1 {
+                Err(DbError::CrateNotFound("a".to_string()))
+            } else {
+                Ok(())
+            }
+        });
+        let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
+        let worker = worker(db, data_dir.path(), &["a"], builder).await;
+
+        worker.process_queue().await.unwrap();
+        worker.process_queue().await.unwrap();
+
+        assert_eq!(build_count(&build_log), 1);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_retries_entry_if_crate_cannot_be_read() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let build_log = data_dir.path().join("builds.log");
+        let mut db = MockDb::new();
+        expect_queue(&mut db, data_dir.path(), &["a"]);
+        db.expect_get_original_name()
+            .returning(|_, _| Err(DbError::CrateNotFound("a".to_string())));
+        db.expect_delete_doc_queue().never();
+        let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
+        let worker = worker(db, data_dir.path(), &["a"], builder).await;
+
+        worker.process_queue().await.unwrap();
+
+        assert_eq!(build_count(&build_log), 0);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_does_not_upload_docs_of_version_deleted_during_build() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let build_log = data_dir.path().join("builds.log");
+        let mut db = MockDb::new();
+        expect_queue(&mut db, data_dir.path(), &["a"]);
+        let mut lookups = 0;
+        db.expect_get_original_name().returning(move |name, _| {
+            lookups += 1;
+            Ok((lookups == 1).then(|| OriginalName::from_unchecked(name.to_string())))
+        });
+        db.expect_update_docs_link().never();
+        db.expect_delete_doc_queue().times(1).returning(|_| Ok(()));
+        let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
+        let worker = worker(db, data_dir.path(), &["a"], builder).await;
+
+        worker.process_queue().await.unwrap();
+
+        assert_eq!(build_count(&build_log), 1);
+        let prefix = DocsStorage::version_prefix(
+            &NormalizedName::from_unchecked_str("a"),
+            &Version::from_unchecked_str("1.0.0"),
+        );
+        assert!(worker.docs_storage.list(&prefix).await.unwrap().is_empty());
     }
 
     #[tokio::test]
