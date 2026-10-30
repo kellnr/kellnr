@@ -64,13 +64,13 @@ impl Token {
             .map_err(|_| StatusCode::BAD_REQUEST)?;
 
         // Handle basic authentication
-        if token.starts_with("Basic ") || token.starts_with("basic ") {
+        if let Some(credentials) = strip_scheme(token, "Basic") {
             if state.settings.oauth2.enforced {
                 return Err(StatusCode::FORBIDDEN);
             }
 
             let decoded = STANDARD
-                .decode(&token[6..])
+                .decode(credentials)
                 .map_err(|_| StatusCode::BAD_REQUEST)?;
             let decoded_str = String::from_utf8(decoded).map_err(|_| StatusCode::BAD_REQUEST)?;
             let (user, pwd) = decoded_str.split_once(':').ok_or(StatusCode::BAD_REQUEST)?;
@@ -79,8 +79,8 @@ impl Token {
         }
 
         // Handle bearer authentication (uses token cache)
-        if token.starts_with("Bearer ") || token.starts_with("bearer ") {
-            token = &token[7..];
+        if let Some(bearer) = strip_scheme(token, "Bearer") {
+            token = bearer;
         }
 
         // Check cache first
@@ -254,6 +254,14 @@ impl FromRequestParts<AppStateData> for OptionToken {
 #[derive(Deserialize, ToSchema)]
 pub struct NewTokenReqData {
     pub name: String,
+}
+
+/// The credentials of an `Authorization` header value with the given auth
+/// `scheme`, which is compared case-insensitively as required by RFC 9110.
+fn strip_scheme<'a>(value: &'a str, scheme: &str) -> Option<&'a str> {
+    let (prefix, rest) = value.split_at_checked(scheme.len())?;
+    let credentials = rest.strip_prefix(' ')?;
+    prefix.eq_ignore_ascii_case(scheme).then_some(credentials)
 }
 
 #[cfg(test)]
@@ -903,6 +911,17 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().user, "test_user");
+    }
+
+    #[test]
+    fn auth_scheme_is_case_insensitive() {
+        for value in ["Bearer abc", "bearer abc", "BEARER abc", "bEaReR abc"] {
+            assert_eq!(strip_scheme(value, "Bearer"), Some("abc"), "{value}");
+        }
+        assert_eq!(strip_scheme("BASIC abc", "Basic"), Some("abc"));
+        assert_eq!(strip_scheme("Bearerabc", "Bearer"), None);
+        assert_eq!(strip_scheme("abc", "Bearer"), None);
+        assert_eq!(strip_scheme("Bäarer abc", "Bearer"), None);
     }
 
     #[tokio::test]
