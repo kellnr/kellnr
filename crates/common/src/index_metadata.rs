@@ -188,6 +188,7 @@ impl IndexMetadata {
     }
 
     pub fn from_reg_meta(registry_metadata: &PublishMetadata, cksum: &str) -> Self {
+        let (features, features2) = split_features(registry_metadata.features.clone());
         IndexMetadata {
             name: registry_metadata.name.clone(),
             vers: registry_metadata.vers.clone(),
@@ -199,11 +200,11 @@ impl IndexMetadata {
                 .collect(),
             cksum: cksum.to_string(),
             pubtime: Some(Utc::now()),
-            features: registry_metadata.features.clone(),
+            v: Some(schema_version(features2.as_ref())),
+            features,
+            features2,
             yanked: false,
             links: registry_metadata.links.clone(),
-            v: Some(1),
-            features2: None,
             rust_version: registry_metadata.rust_version.clone(),
         }
     }
@@ -231,6 +232,32 @@ impl IndexMetadata {
         }
         Ok(index)
     }
+}
+
+/// Features of a crate with the features or dependencies each one enables.
+pub type Features = BTreeMap<String, Vec<String>>;
+
+/// Split the features like crates.io: features that use the newer `dep:` or
+/// `pkg?/feat` syntax go into the second map, as cargo older than 1.19 cannot
+/// parse them. `None` if there are no such features.
+pub fn split_features(features: Features) -> (Features, Option<Features>) {
+    let (features2, features): (BTreeMap<_, _>, BTreeMap<_, _>) =
+        features.into_iter().partition(|(_, values)| {
+            values
+                .iter()
+                .any(|v| v.starts_with("dep:") || v.contains("?/"))
+        });
+    let features2 = if features2.is_empty() {
+        None
+    } else {
+        Some(features2)
+    };
+    (features, features2)
+}
+
+/// The index schema version, 2 is required for `features2`.
+pub fn schema_version(features2: Option<&Features>) -> u32 {
+    if features2.is_some() { 2 } else { 1 }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -376,6 +403,56 @@ pub fn metadata_path(index_path: &Path, name: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn features(entries: &[(&str, &[&str])]) -> BTreeMap<String, Vec<String>> {
+        entries
+            .iter()
+            .map(|(k, v)| {
+                (
+                    (*k).to_string(),
+                    v.iter().map(ToString::to_string).collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn new_feature_syntax_goes_into_features2() {
+        let reg_meta = PublishMetadata {
+            features: features(&[
+                ("default", &["std"]),
+                ("serde", &["dep:serde"]),
+                ("chrono", &["chrono?/serde", "std"]),
+            ]),
+            ..PublishMetadata::minimal("foo", "1.0.0")
+        };
+
+        let index = IndexMetadata::from_reg_meta(&reg_meta, "cksum");
+
+        assert_eq!(features(&[("default", &["std"])]), index.features);
+        assert_eq!(
+            Some(features(&[
+                ("chrono", &["chrono?/serde", "std"]),
+                ("serde", &["dep:serde"]),
+            ])),
+            index.features2
+        );
+        assert_eq!(Some(2), index.v);
+    }
+
+    #[test]
+    fn old_feature_syntax_stays_in_features() {
+        let reg_meta = PublishMetadata {
+            features: features(&[("default", &["std", "serde/std"])]),
+            ..PublishMetadata::minimal("foo", "1.0.0")
+        };
+
+        let index = IndexMetadata::from_reg_meta(&reg_meta, "cksum");
+
+        assert_eq!(reg_meta.features, index.features);
+        assert_eq!(None, index.features2);
+        assert_eq!(Some(1), index.v);
+    }
 
     #[test]
     fn transitive_dependency_rename() {

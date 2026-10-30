@@ -5256,3 +5256,34 @@ async fn delete_owners_removes_nothing_when_no_owner_would_remain(test_db: &kell
     test_db.delete_owners(&name, &owners, true).await.unwrap();
     assert!(test_db.get_crate_owners(&name).await.unwrap().is_empty());
 }
+
+#[db_test]
+async fn prefetch_data_puts_new_feature_syntax_into_features2(test_db: &kellnr_db::Database) {
+    let mut features = BTreeMap::new();
+    features.insert("default".to_string(), vec!["std".to_string()]);
+    features.insert("serde".to_string(), vec!["dep:serde".to_string()]);
+    let metadata = PublishMetadata {
+        features,
+        ..PublishMetadata::minimal("crate", "1.0.0")
+    };
+    test_db
+        .add_crate(&metadata, "cksum", 1, &Utc::now(), "admin", None)
+        .await
+        .unwrap();
+
+    let prefetch = test_db.get_prefetch_data("crate").await.unwrap();
+    let index: IndexMetadata = serde_json::from_slice(&prefetch.data).unwrap();
+
+    assert_eq!(
+        BTreeMap::from([("default".to_string(), vec!["std".to_string()])]),
+        index.features
+    );
+    assert_eq!(
+        Some(BTreeMap::from([(
+            "serde".to_string(),
+            vec!["dep:serde".to_string()]
+        )])),
+        index.features2
+    );
+    assert_eq!(Some(2), index.v);
+}

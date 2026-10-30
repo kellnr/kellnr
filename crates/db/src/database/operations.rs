@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 
 use kellnr_common::crate_data::CRATESIO_INDEX;
 use kellnr_common::crate_dependents::LocalDependency;
-use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
+use kellnr_common::index_metadata::{IndexDep, IndexMetadata, schema_version, split_features};
 use kellnr_common::normalized_name::NormalizedName;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::{Version, latest_version};
@@ -306,7 +306,8 @@ pub async fn add_crate_index<C: ConnectionTrait>(
         Some(deps)
     };
 
-    let features = serde_json::to_value(&index_data.features)
+    // All features are stored together and split again when the index is read.
+    let features = serde_json::to_value(&pub_metadata.features)
         .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
 
     let ci = crate_index::ActiveModel {
@@ -566,6 +567,12 @@ pub fn crate_index_model_to_index_metadata(
                 "Failed to deserialize crate features of {crate_name}: {e}"
             ))
         })?;
+        // Older versions of Kellnr stored v1 entries that use the newer
+        // feature syntax, so the version is raised if needed.
+        let (features, features2) = split_features(features);
+        let v = u32::try_from(ci.v)
+            .ok()
+            .map(|v| Ord::max(v, schema_version(features2.as_ref())));
 
         let cm = IndexMetadata {
             name: ci.name,
@@ -576,8 +583,8 @@ pub fn crate_index_model_to_index_metadata(
             yanked: ci.yanked,
             pubtime: ci.pubtime.map(|dt| dt.and_utc()),
             links: ci.links,
-            v: u32::try_from(ci.v).ok(),
-            features2: None,
+            v,
+            features2,
             rust_version: ci.rust_version,
         };
         index_metadata.push(cm);
