@@ -5,6 +5,9 @@ use url::{Host, Url};
 
 /// IPv6 address of the AWS instance metadata service (Nitro instances).
 const AWS_METADATA_V6: Ipv6Addr = Ipv6Addr::new(0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x0254);
+/// Address of the Alibaba Cloud metadata service. It is in the shared address
+/// space, which is only blocked with `block_private_targets`.
+const ALIBABA_METADATA: Ipv4Addr = Ipv4Addr::new(100, 100, 100, 200);
 
 /// Parses a webhook callback URL and ensures it is an absolute `http` or
 /// `https` URL with a host.
@@ -40,21 +43,31 @@ pub(crate) fn is_blocked_url(url: &Url, block_private_targets: bool) -> bool {
     }
 }
 
-/// Maps IPv4-mapped and NAT64 (`64:ff9b::/96`) IPv6 addresses to the
-/// embedded IPv4 address, so they cannot be used to bypass IPv4 rules.
+/// Maps IPv6 addresses with an embedded IPv4 address to the IPv4 address, so
+/// they cannot be used to bypass IPv4 rules: IPv4-mapped (`::ffff:0:0/96`),
+/// IPv4-compatible (`::/96`), NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`).
 fn canonical_ip(ip: IpAddr) -> IpAddr {
     match ip.to_canonical() {
-        IpAddr::V6(v6) if v6.segments()[..6] == [0x64, 0xff9b, 0, 0, 0, 0] => {
-            let [.., a, b, c, d] = v6.octets();
-            IpAddr::V4(Ipv4Addr::new(a, b, c, d))
-        }
-        other => other,
+        IpAddr::V6(v6) => match v6.segments() {
+            [0, 0, 0, 0, 0, 0, ..] | [0x64, 0xff9b, 0, 0, 0, 0, ..]
+                if !v6.is_unspecified() && !v6.is_loopback() =>
+            {
+                let [.., a, b, c, d] = v6.octets();
+                IpAddr::V4(Ipv4Addr::new(a, b, c, d))
+            }
+            [0x2002, ..] => {
+                let [_, _, a, b, c, d, ..] = v6.octets();
+                IpAddr::V4(Ipv4Addr::new(a, b, c, d))
+            }
+            _ => IpAddr::V6(v6),
+        },
+        v4 @ IpAddr::V4(_) => v4,
     }
 }
 
 fn is_link_local_or_metadata(ip: IpAddr) -> bool {
     match ip {
-        IpAddr::V4(v4) => v4.is_link_local(),
+        IpAddr::V4(v4) => v4.is_link_local() || v4 == ALIBABA_METADATA,
         IpAddr::V6(v6) => v6.is_unicast_link_local() || v6 == AWS_METADATA_V6,
     }
 }
@@ -66,13 +79,17 @@ fn is_non_public(ip: IpAddr) -> bool {
             v4.is_loopback()
                 || v4.is_private()
                 || v4.is_unspecified()
-                || v4.is_broadcast()
+                || v4.is_multicast()
                 // Shared address space (carrier-grade NAT), 100.64.0.0/10
                 || (a == 100 && (b & 0xc0) == 64)
                 // "This network", 0.0.0.0/8
                 || a == 0
+                // Reserved, 240.0.0.0/4, including the broadcast address
+                || a >= 240
         }
-        IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified() || v6.is_unique_local(),
+        IpAddr::V6(v6) => {
+            v6.is_loopback() || v6.is_unspecified() || v6.is_unique_local() || v6.is_multicast()
+        }
     }
 }
 
@@ -119,6 +136,10 @@ mod tests {
             "fd00:ec2::254",
             "::ffff:169.254.169.254",
             "64:ff9b::a9fe:a9fe",
+            "::169.254.169.254",
+            "2002:a9fe:a9fe::",
+            "100.100.100.200",
+            "::ffff:100.100.100.200",
         ] {
             assert!(is_blocked_ip(ip(addr), false), "{addr}");
             assert!(is_blocked_ip(ip(addr), true), "{addr}");
@@ -157,6 +178,20 @@ mod tests {
             "fd00::1",
             "::ffff:10.0.0.1",
             "64:ff9b::7f00:1",
+            // IPv4-compatible
+            "::10.0.0.1",
+            "::127.0.0.1",
+            // 6to4 with an embedded non-public address
+            "2002:7f00:1::",
+            "2002:c0a8:101::1",
+            // Multicast
+            "224.0.0.1",
+            "239.255.255.250",
+            "ff02::1",
+            "ff0e::1",
+            // Reserved
+            "240.0.0.1",
+            "250.1.2.3",
         ] {
             assert!(is_blocked_ip(ip(addr), true), "{addr}");
         }
@@ -164,7 +199,13 @@ mod tests {
 
     #[test]
     fn allows_public_targets_if_private_targets_are_blocked() {
-        for addr in ["8.8.8.8", "100.128.0.1", "2001:4860:4860::8888"] {
+        for addr in [
+            "8.8.8.8",
+            "100.128.0.1",
+            "2001:4860:4860::8888",
+            "::8.8.8.8",
+            "2002:808:808::",
+        ] {
             assert!(!is_blocked_ip(ip(addr), true), "{addr}");
         }
     }
