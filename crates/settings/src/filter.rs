@@ -23,7 +23,8 @@ pub struct CratesioFilter {
     #[arg(value_delimiter = ',')]
     pub license_allowed: Vec<String>,
 
-    /// Decision for crates without a known or valid license: "deny" or "allow"
+    /// Decision for crates without a known or valid license: "deny" or "allow".
+    /// A license that is no valid SPDX expression counts as unknown
     #[arg(value_enum)]
     pub license_unknown: LicenseUnknown,
 
@@ -48,7 +49,8 @@ pub struct RegistryFilter {
     #[arg(value_delimiter = ',')]
     pub license_allowed: Vec<String>,
 
-    /// Decision for crates without a known or valid license: "deny" or "allow"
+    /// Decision for crates without a known or valid license: "deny" or "allow".
+    /// A license that is no valid SPDX expression counts as unknown
     #[arg(value_enum)]
     pub license_unknown: LicenseUnknown,
 

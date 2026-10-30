@@ -18,6 +18,7 @@ kellnr-settings.workspace = true
 moka = { workspace = true, features = ["sync"] }
 spdx.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

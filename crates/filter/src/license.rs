@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use kellnr_common::license::UNKNOWN_LICENSE;
 use kellnr_settings::LicenseUnknown;
 use spdx::{Expression, LicenseReq, Licensee, ParseMode};
+use tracing::debug;
 
 use crate::{CrateFilter, CrateInfo, FilterError, Verdict};
 
@@ -104,10 +105,19 @@ impl CrateFilter for LicenseFilter {
             Some(l) => l,
         };
 
-        let Ok(expression) = Expression::parse_mode(license, ParseMode::LAX) else {
-            return self.unknown(format!(
-                "license \"{license}\" is not a valid SPDX expression"
-            ));
+        // An expression that cannot be parsed is treated like an unknown
+        // license, so `license_unknown` decides about it.
+        let expression = match Expression::parse_mode(license, ParseMode::LAX) {
+            Ok(expression) => expression,
+            Err(e) => {
+                debug!(
+                    "License \"{license}\" of {} {} is not a valid SPDX expression, applying license_unknown: {e}",
+                    krate.name, krate.version
+                );
+                return self.unknown(format!(
+                    "license \"{license}\" is not a valid SPDX expression"
+                ));
+            }
         };
 
         if expression.evaluate(|req| self.allowed.iter().any(|a| a.satisfies(req))) {
