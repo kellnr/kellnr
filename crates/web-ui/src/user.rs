@@ -440,7 +440,11 @@ pub async fn logout(
     jar = jar.remove(Cookie::build((COOKIE_SESSION_USER, "")).path("/"));
     jar = jar.remove(Cookie::build((COOKIE_OIDC_ID_TOKEN, "")).path("/"));
 
-    state.db.delete_session_token(&session_id).await?;
+    // The browser drops the cookie even if the session cannot be deleted, so
+    // the jar must still be returned.
+    if let Err(e) = state.db.delete_session_token(&session_id).await {
+        tracing::error!("Failed to delete session on logout: {e}");
+    }
     Ok((jar, Json(LogoutResponse { logout_url })))
 }
 
@@ -861,6 +865,40 @@ mod tests {
             .expect("session cookie must be removed");
         assert!(removal.contains("Path=/"), "{removal}");
         assert!(removal.contains("Max-Age=0"), "{removal}");
+    }
+
+    #[tokio::test]
+    async fn test_logout_removes_session_cookie_if_session_cannot_be_deleted() {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_delete_session_token()
+            .returning(|_| Err(DbError::FailedToCountCrates));
+
+        let state =
+            test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100)));
+        let app = Router::new()
+            .route("/logout", post(logout))
+            .layer(Extension::<Option<Arc<kellnr_auth::oauth2::OAuth2Handler>>>(None))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::post("/logout")
+                    .header(header::COOKIE, session_cookie_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(
+            response
+                .headers()
+                .get_all(header::SET_COOKIE)
+                .iter()
+                .any(|v| v.to_str().unwrap().starts_with(COOKIE_SESSION_ID))
+        );
     }
 
     async fn sqlite_db(data_dir: &std::path::Path) -> Arc<dyn DbProvider> {

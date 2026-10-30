@@ -9,6 +9,8 @@ use axum_extra::extract::cookie::Cookie;
 use cookie::{SameSite, time};
 use kellnr_appstate::AppStateData;
 use kellnr_common::util::generate_rand_string;
+use kellnr_db::SessionInfo;
+use kellnr_db::error::DbError;
 use kellnr_settings::constants::COOKIE_SESSION_ID;
 use time::Duration;
 use tracing::error;
@@ -61,6 +63,25 @@ pub(crate) fn session_cookie(
         .into()
 }
 
+/// Looks up the session of `session_token`. A missing or expired session is
+/// a 401, any other failure a 500.
+async fn validate_session(
+    state: &AppStateData,
+    session_token: &str,
+) -> Result<SessionInfo, RouteError> {
+    state
+        .db
+        .validate_session(session_token)
+        .await
+        .map_err(|e| match e {
+            DbError::SessionNotFound => RouteError::Status(StatusCode::UNAUTHORIZED),
+            e => {
+                error!("Failed to validate session: {e}");
+                RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        })
+}
+
 pub trait Name {
     fn name(&self) -> String;
     fn new(name: String) -> Self;
@@ -93,10 +114,9 @@ impl FromRequestParts<AppStateData> for AdminUser {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
         let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
-            Some(cookie) => match state.db.validate_session(cookie.value()).await {
-                Ok(session) if session.is_admin => Ok(Self(session.name)),
-                Ok(_) => Err(RouteError::InsufficientPrivileges),
-                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
+            Some(cookie) => match validate_session(state, cookie.value()).await? {
+                session if session.is_admin => Ok(Self(session.name)),
+                _ => Err(RouteError::InsufficientPrivileges),
             },
             None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
         }
@@ -162,10 +182,9 @@ impl FromRequestParts<AppStateData> for MaybeUser {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
         let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
-            Some(cookie) => match state.db.validate_session(cookie.value()).await {
-                Ok(session) if session.is_admin => Ok(Self::Admin(session.name)),
-                Ok(session) => Ok(Self::Normal(session.name)),
-                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
+            Some(cookie) => match validate_session(state, cookie.value()).await? {
+                session if session.is_admin => Ok(Self::Admin(session.name)),
+                session => Ok(Self::Normal(session.name)),
             },
             None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
         }
@@ -182,10 +201,9 @@ impl OptionalFromRequestParts<AppStateData> for MaybeUser {
         let jar: PrivateCookieJar = parts.extract_with_state(state).await.unwrap();
         let session_cookie = jar.get(COOKIE_SESSION_ID);
         match session_cookie {
-            Some(cookie) => match state.db.validate_session(cookie.value()).await {
-                Ok(session) if session.is_admin => Ok(Some(Self::Admin(session.name))),
-                Ok(session) => Ok(Some(Self::Normal(session.name))),
-                Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
+            Some(cookie) => match validate_session(state, cookie.value()).await? {
+                session if session.is_admin => Ok(Some(Self::Admin(session.name))),
+                session => Ok(Some(Self::Normal(session.name))),
             },
             None => Ok(None),
         }
@@ -206,12 +224,10 @@ pub async fn session_auth_when_required(
     }
     let session_cookie = jar.get(COOKIE_SESSION_ID);
     match session_cookie {
-        Some(cookie) => match state.db.validate_session(cookie.value()).await {
-            // user is logged in
-            Ok(_) => Ok(next.run(request).await),
-            // user is not logged in
-            Err(_) => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
-        },
+        Some(cookie) => {
+            validate_session(&state, cookie.value()).await?;
+            Ok(next.run(request).await)
+        }
         // user is not logged in
         None => Err(RouteError::Status(StatusCode::UNAUTHORIZED)),
     }
@@ -281,7 +297,7 @@ mod session_tests {
             .expect_validate_session()
             .with(eq("1234"))
             .returning(|_st| {
-                Ok(kellnr_db::SessionInfo {
+                Ok(SessionInfo {
                     name: "admin".to_string(),
                     is_admin: true,
                     is_read_only: false,
@@ -310,7 +326,7 @@ mod session_tests {
             .expect_validate_session()
             .with(eq("1234"))
             .returning(|_st| {
-                Ok(kellnr_db::SessionInfo {
+                Ok(SessionInfo {
                     name: "admin".to_string(),
                     is_admin: false,
                     is_read_only: false,
@@ -370,7 +386,7 @@ mod session_tests {
             .expect_validate_session()
             .with(eq("1234"))
             .returning(|_st| {
-                Ok(kellnr_db::SessionInfo {
+                Ok(SessionInfo {
                     name: "normal".to_string(),
                     is_admin: false,
                     is_read_only: false,
@@ -396,7 +412,7 @@ mod session_tests {
             .expect_validate_session()
             .with(eq("1234"))
             .returning(|_st| {
-                Ok(kellnr_db::SessionInfo {
+                Ok(SessionInfo {
                     name: "normal".to_string(),
                     is_admin: true,
                     is_read_only: false,
@@ -456,7 +472,7 @@ mod session_tests {
             .expect_validate_session()
             .with(eq("1234"))
             .returning(|_st| {
-                Ok(kellnr_db::SessionInfo {
+                Ok(SessionInfo {
                     name: "guest".to_string(),
                     is_admin: false,
                     is_read_only: false,
@@ -482,7 +498,7 @@ mod session_tests {
             .expect_validate_session()
             .with(eq("1234"))
             .returning(|_st| {
-                Ok(kellnr_db::SessionInfo {
+                Ok(SessionInfo {
                     name: "guest".to_string(),
                     is_admin: true,
                     is_read_only: false,
@@ -509,6 +525,26 @@ mod session_tests {
             .oneshot(Request::get("/any").body(Body::empty())?)
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn any_auth_database_error() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("1234"))
+            .returning(|_st| Err(DbError::FailedToCountCrates));
+
+        let r = app(Arc::new(mock_db))
+            .oneshot(
+                Request::get("/any")
+                    .header(header::COOKIE, c1234())
+                    .body(Body::empty())?,
+            )
+            .await?;
+
+        assert_eq!(r.status(), StatusCode::INTERNAL_SERVER_ERROR);
         Ok(())
     }
 
@@ -607,7 +643,7 @@ mod auth_middleware_tests {
             .expect_validate_session()
             .with(eq("1234"))
             .returning(|_st| {
-                Ok(kellnr_db::SessionInfo {
+                Ok(SessionInfo {
                     name: "guest".to_string(),
                     is_admin: false,
                     is_read_only: false,
@@ -642,6 +678,27 @@ mod auth_middleware_tests {
             )
             .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    /// A failing database is not a missing login.
+    #[tokio::test]
+    async fn guarded_route_with_database_error() -> Result {
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_validate_session()
+            .with(eq("1234"))
+            .returning(|_st| Err(DbError::FailedToCountCrates));
+
+        let r = app_required_auth(Arc::new(mock_db))
+            .oneshot(
+                Request::get("/guarded")
+                    .header(header::COOKIE, c1234())
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(r.status(), StatusCode::INTERNAL_SERVER_ERROR);
 
         Ok(())
     }
