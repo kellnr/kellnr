@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use bytes::Bytes;
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::version::Version;
 use kellnr_storage::docs_storage::DocsStorage;
 
 use crate::docs_error::DocsError;
@@ -24,8 +26,8 @@ use crate::docs_error::DocsError;
 pub async fn upload_dir_and_prune(
     local_root: &Path,
     key_prefix: &str,
-    crate_name: &str,
-    version: &str,
+    crate_name: &NormalizedName,
+    version: &Version,
     docs_storage: &DocsStorage,
 ) -> Result<(), DocsError> {
     let mut uploaded_keys = HashSet::new();
@@ -112,20 +114,30 @@ mod tests {
             .await
             .unwrap();
 
-        upload_dir_and_prune(local.path(), "", "my-crate", "1.0.0", &docs)
-            .await
-            .unwrap();
+        upload_dir_and_prune(
+            local.path(),
+            "",
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            &docs,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(
-            docs.get(&DocsStorage::file_key("my-crate", "1.0.0", "index.html"))
-                .await
-                .unwrap(),
+            docs.get(&DocsStorage::file_key(
+                &NormalizedName::from_unchecked_str("my-crate"),
+                &Version::from_unchecked_str("1.0.0"),
+                "index.html"
+            ))
+            .await
+            .unwrap(),
             Bytes::from_static(b"root")
         );
         assert_eq!(
             docs.get(&DocsStorage::file_key(
-                "my-crate",
-                "1.0.0",
+                &NormalizedName::from_unchecked_str("my-crate"),
+                &Version::from_unchecked_str("1.0.0"),
                 "nested/page.html"
             ))
             .await
@@ -137,7 +149,11 @@ mod tests {
     #[tokio::test]
     async fn upload_prunes_stale_keys_from_previous_build() {
         let (_storage_dir, docs) = docs_storage();
-        let stale_key = DocsStorage::file_key("my-crate", "1.0.0", "removed.html");
+        let stale_key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            "removed.html",
+        );
         docs.put(&stale_key, Bytes::from_static(b"old"))
             .await
             .unwrap();
@@ -147,15 +163,25 @@ mod tests {
             .await
             .unwrap();
 
-        upload_dir_and_prune(local.path(), "", "my-crate", "1.0.0", &docs)
-            .await
-            .unwrap();
+        upload_dir_and_prune(
+            local.path(),
+            "",
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            &docs,
+        )
+        .await
+        .unwrap();
 
         assert!(!docs.exists(&stale_key).await.unwrap());
         assert!(
-            docs.exists(&DocsStorage::file_key("my-crate", "1.0.0", "index.html"))
-                .await
-                .unwrap()
+            docs.exists(&DocsStorage::file_key(
+                &NormalizedName::from_unchecked_str("my-crate"),
+                &Version::from_unchecked_str("1.0.0"),
+                "index.html"
+            ))
+            .await
+            .unwrap()
         );
     }
 
@@ -169,12 +195,22 @@ mod tests {
                 .unwrap();
         }
 
-        upload_dir_and_prune(local.path(), "", "my-crate", "1.0.0", &docs)
-            .await
-            .unwrap();
+        upload_dir_and_prune(
+            local.path(),
+            "",
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            &docs,
+        )
+        .await
+        .unwrap();
 
         for file in ["a~b.html", "x%20y.html"] {
-            let key = DocsStorage::file_key("my-crate", "1.0.0", file);
+            let key = DocsStorage::file_key(
+                &NormalizedName::from_unchecked_str("my-crate"),
+                &Version::from_unchecked_str("1.0.0"),
+                file,
+            );
             assert_eq!(docs.get(&key).await.unwrap(), Bytes::from(file), "{file}");
         }
     }
@@ -182,7 +218,11 @@ mod tests {
     #[tokio::test]
     async fn upload_leaves_other_versions_untouched() {
         let (_storage_dir, docs) = docs_storage();
-        let other_version_key = DocsStorage::file_key("my-crate", "2.0.0", "index.html");
+        let other_version_key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("2.0.0"),
+            "index.html",
+        );
         docs.put(&other_version_key, Bytes::from_static(b"kept"))
             .await
             .unwrap();
@@ -192,9 +232,15 @@ mod tests {
             .await
             .unwrap();
 
-        upload_dir_and_prune(local.path(), "", "my-crate", "1.0.0", &docs)
-            .await
-            .unwrap();
+        upload_dir_and_prune(
+            local.path(),
+            "",
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            &docs,
+        )
+        .await
+        .unwrap();
 
         assert!(docs.exists(&other_version_key).await.unwrap());
     }
@@ -207,14 +253,20 @@ mod tests {
             .await
             .unwrap();
 
-        upload_dir_and_prune(local.path(), "doc", "my-crate", "1.0.0", &docs)
-            .await
-            .unwrap();
+        upload_dir_and_prune(
+            local.path(),
+            "doc",
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            &docs,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(
             docs.get(&DocsStorage::file_key(
-                "my-crate",
-                "1.0.0",
+                &NormalizedName::from_unchecked_str("my-crate"),
+                &Version::from_unchecked_str("1.0.0"),
                 "doc/index.html"
             ))
             .await
@@ -243,17 +295,30 @@ mod tests {
         .unwrap();
         std::os::unix::fs::symlink(outside.path(), local.path().join("linked_dir")).unwrap();
 
-        upload_dir_and_prune(local.path(), "", "my-crate", "1.0.0", &docs)
-            .await
-            .unwrap();
+        upload_dir_and_prune(
+            local.path(),
+            "",
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            &docs,
+        )
+        .await
+        .unwrap();
 
         let keys = docs
-            .list(&DocsStorage::version_prefix("my-crate", "1.0.0"))
+            .list(&DocsStorage::version_prefix(
+                &NormalizedName::from_unchecked_str("my-crate"),
+                &Version::from_unchecked_str("1.0.0"),
+            ))
             .await
             .unwrap();
         assert_eq!(
             keys,
-            vec![DocsStorage::file_key("my-crate", "1.0.0", "index.html")]
+            vec![DocsStorage::file_key(
+                &NormalizedName::from_unchecked_str("my-crate"),
+                &Version::from_unchecked_str("1.0.0"),
+                "index.html"
+            )]
         );
     }
 
@@ -269,7 +334,14 @@ mod tests {
         let root = local.path().join("doc");
         std::os::unix::fs::symlink(outside.path(), &root).unwrap();
 
-        let result = upload_dir_and_prune(&root, "", "my-crate", "1.0.0", &docs).await;
+        let result = upload_dir_and_prune(
+            &root,
+            "",
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            &docs,
+        )
+        .await;
 
         assert!(result.is_err());
     }

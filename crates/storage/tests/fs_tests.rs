@@ -1,4 +1,6 @@
 use bytes::Bytes;
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::version::Version;
 use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::storage::Storage;
@@ -169,7 +171,11 @@ fn docs_storage() -> (tempfile::TempDir, DocsStorage) {
 #[tokio::test]
 async fn docs_storage_put_overwrites_and_gets() {
     let (_dir, docs) = docs_storage();
-    let key = DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/index.html");
+    let key = DocsStorage::file_key(
+        &NormalizedName::from_unchecked_str("my-crate"),
+        &Version::from_unchecked_str("1.0.0"),
+        "doc/my_crate/index.html",
+    );
 
     docs.put(&key, Bytes::from_static(b"v1")).await.unwrap();
     docs.put(&key, Bytes::from_static(b"v2")).await.unwrap();
@@ -181,44 +187,27 @@ async fn docs_storage_put_overwrites_and_gets() {
 #[tokio::test]
 async fn docs_storage_delete_prefix_removes_only_matching_version() {
     let (_dir, docs) = docs_storage();
-    let v1 = DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/index.html");
-    let v2 = DocsStorage::file_key("my-crate", "2.0.0", "doc/my_crate/index.html");
+    let v1 = DocsStorage::file_key(
+        &NormalizedName::from_unchecked_str("my-crate"),
+        &Version::from_unchecked_str("1.0.0"),
+        "doc/my_crate/index.html",
+    );
+    let v2 = DocsStorage::file_key(
+        &NormalizedName::from_unchecked_str("my-crate"),
+        &Version::from_unchecked_str("2.0.0"),
+        "doc/my_crate/index.html",
+    );
 
     docs.put(&v1, Bytes::from_static(b"a")).await.unwrap();
     docs.put(&v2, Bytes::from_static(b"b")).await.unwrap();
 
-    docs.delete_prefix(&DocsStorage::version_prefix("my-crate", "1.0.0"))
-        .await
-        .unwrap();
+    docs.delete_prefix(&DocsStorage::version_prefix(
+        &NormalizedName::from_unchecked_str("my-crate"),
+        &Version::from_unchecked_str("1.0.0"),
+    ))
+    .await
+    .unwrap();
 
     assert!(!docs.exists(&v1).await.unwrap());
     assert!(docs.exists(&v2).await.unwrap());
-}
-
-#[tokio::test]
-async fn docs_storage_version_candidates_lists_distinct_versions() {
-    let (_dir, docs) = docs_storage();
-    docs.put(
-        &DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/index.html"),
-        Bytes::from_static(b"a"),
-    )
-    .await
-    .unwrap();
-    docs.put(
-        &DocsStorage::file_key("my-crate", "1.0.0", "doc/my_crate/other.html"),
-        Bytes::from_static(b"b"),
-    )
-    .await
-    .unwrap();
-    docs.put(
-        &DocsStorage::file_key("my-crate", "2.0.0", "doc/my_crate/index.html"),
-        Bytes::from_static(b"c"),
-    )
-    .await
-    .unwrap();
-
-    let mut versions = docs.version_candidates("my-crate").await.unwrap();
-    versions.sort();
-
-    assert_eq!(versions, vec!["1.0.0".to_string(), "2.0.0".to_string()]);
 }

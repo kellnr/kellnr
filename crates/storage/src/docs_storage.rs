@@ -1,6 +1,6 @@
-use std::collections::HashSet;
-
 use bytes::Bytes;
+use kellnr_common::normalized_name::NormalizedName;
+use kellnr_common::version::Version;
 
 use crate::cached_crate_storage::DynStorage;
 use crate::storage::ObjectWithMeta;
@@ -16,17 +16,13 @@ impl DocsStorage {
     }
 
     /// Key for one file under a crate+version's doc tree, e.g.
-    /// `file_key("my-crate", "1.0.0", "doc/my_crate/index.html")`.
-    pub fn file_key(crate_name: &str, version: &str, relative_path: &str) -> String {
+    /// `my-crate/1.0.0/doc/my_crate/index.html`.
+    pub fn file_key(crate_name: &NormalizedName, version: &Version, relative_path: &str) -> String {
         format!("{crate_name}/{version}/{relative_path}")
     }
 
-    pub fn version_prefix(crate_name: &str, version: &str) -> String {
+    pub fn version_prefix(crate_name: &NormalizedName, version: &Version) -> String {
         format!("{crate_name}/{version}/")
-    }
-
-    pub fn crate_prefix(crate_name: &str) -> String {
-        format!("{crate_name}/")
     }
 
     pub async fn put(&self, key: &str, data: Bytes) -> Result<(), StorageError> {
@@ -97,21 +93,5 @@ impl DocsStorage {
             self.delete(&key).await?;
         }
         Ok(())
-    }
-
-    /// Distinct version-folder names that have *any* key under `crate_name/`.
-    /// Callers still need to verify a given version actually has an
-    /// `index.html` — this only enumerates candidates.
-    pub async fn version_candidates(&self, crate_name: &str) -> Result<Vec<String>, StorageError> {
-        let prefix = Self::crate_prefix(crate_name);
-        let mut versions = HashSet::new();
-        for key in self.list(&prefix).await? {
-            if let Some(rest) = key.strip_prefix(&prefix)
-                && let Some(v) = rest.split('/').next()
-            {
-                versions.insert(v.to_string());
-            }
-        }
-        Ok(versions.into_iter().collect())
     }
 }

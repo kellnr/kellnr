@@ -95,10 +95,9 @@ impl DocQueueWorker {
             }
 
             match result {
-                Some(Ok(())) => {
+                Some(Ok(original_name)) => {
                     let version = Version::from_unchecked_str(&entry.version);
-                    let docs_link =
-                        compute_doc_url(&entry.normalized_name, &version, &self.path_prefix);
+                    let docs_link = compute_doc_url(&original_name, &version, &self.path_prefix);
                     self.db
                         .update_docs_link(&entry.normalized_name, &version, &docs_link)
                         .await?;
@@ -112,15 +111,23 @@ impl DocQueueWorker {
         Ok(())
     }
 
-    async fn extract_docs(&self, doc: &DocQueueEntry) -> Result<(), DocsError> {
-        // TODO: Only works if normalized name = original name -> Need to get original name from db
-        let orig_name = OriginalName::from_unchecked(doc.normalized_name.to_string());
+    /// Build and upload the docs. Returns the original name of the crate.
+    async fn extract_docs(&self, doc: &DocQueueEntry) -> Result<OriginalName, DocsError> {
         let version = Version::from_unchecked_str(&doc.version);
-        let contents = self.cs.get(&orig_name, &version).await?.ok_or_else(|| {
-            error!("Failed to get crate from storage");
-            DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.clone())
-        })?;
-        let crate_root = format!("{}-{}", doc.normalized_name, doc.version);
+        let crate_does_not_exist =
+            || DocsError::CrateDoesNotExist(doc.normalized_name.to_string(), doc.version.clone());
+        // The crate file and the folder in it are named after the original name.
+        let original_name = self
+            .db
+            .get_original_name(&doc.normalized_name, &version)
+            .await?
+            .ok_or_else(crate_does_not_exist)?;
+        let contents = self
+            .cs
+            .get(&original_name, &version)
+            .await?
+            .ok_or_else(crate_does_not_exist)?;
+        let crate_root = format!("{original_name}-{version}");
         let tar = GzDecoder::new(std::io::Cursor::new(contents));
         let dest = doc.path.clone();
         let root = crate_root.clone();
@@ -145,13 +152,13 @@ impl DocQueueWorker {
         upload_dir_and_prune(
             &from,
             "doc",
-            &doc.normalized_name.to_string(),
-            &doc.version,
+            &doc.normalized_name,
+            &version,
             &self.docs_storage,
         )
         .await?;
 
-        Ok(())
+        Ok(original_name)
     }
 }
 
@@ -294,7 +301,7 @@ mod tests {
     use cargo::sources::SourceConfigMap;
     use kellnr_common::normalized_name::NormalizedName;
     use kellnr_db::mock::MockDb;
-    use kellnr_storage::fs_storage::FSStorage;
+    use kellnr_storage::object_storage::MemoryStorage;
 
     use super::*;
 
@@ -327,39 +334,59 @@ mod tests {
         }
     }
 
-    /// Worker whose builds fail after appending a line to `build_log`.
-    async fn failing_worker(db: MockDb, data_dir: &Path, build_log: &Path) -> DocQueueWorker {
+    /// Builder that runs `script` with `/bin/sh`. In the script, `$0` is
+    /// `arg` and `$3` is the path of the unpacked crate.
+    fn shell_builder(script: &str, arg: &Path) -> DocBuilder {
+        DocBuilder::new(
+            PathBuf::from("unused"),
+            vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                script.to_string(),
+                arg.display().to_string(),
+            ],
+            None,
+        )
+    }
+
+    /// Worker with the crates `names` in a case-sensitive crate storage.
+    async fn worker(
+        db: MockDb,
+        data_dir: &Path,
+        names: &[&str],
+        builder: DocBuilder,
+    ) -> DocQueueWorker {
         let mut settings = kellnr_settings::test_settings();
         settings.registry.data_dir = data_dir.display().to_string();
-        let storage = FSStorage::new(data_dir.join("crates").to_str().unwrap()).unwrap();
-        let cs = KellnrCrateStorage::new(&settings, Box::new(storage));
-        for name in ["a", "b"] {
+        let cs = KellnrCrateStorage::new(&settings, Box::new(MemoryStorage::new()));
+        for name in names {
             cs.put(
-                &OriginalName::from_unchecked(name.to_string()),
+                &OriginalName::from_unchecked((*name).to_string()),
                 &Version::from_unchecked_str("1.0.0"),
                 crate_tarball(name, "1.0.0").into(),
             )
             .await
             .unwrap();
         }
-        let docs_storage = FSStorage::new(data_dir.join("docs").to_str().unwrap()).unwrap();
         DocQueueWorker {
             db: Arc::new(db),
             cs: Arc::new(cs),
-            docs_storage: Arc::new(DocsStorage::new(Box::new(docs_storage))),
+            docs_storage: Arc::new(DocsStorage::new(Box::new(MemoryStorage::new()))),
             path_prefix: String::new(),
-            builder: DocBuilder::new(
-                PathBuf::from("unused"),
-                vec![
-                    "/bin/sh".to_string(),
-                    "-c".to_string(),
-                    "echo \"$3\" >> \"$0\"; exit 1".to_string(),
-                    build_log.display().to_string(),
-                ],
-                None,
-            ),
+            builder,
             limits: ExtractLimits::from_max_docs_size(1),
         }
+    }
+
+    /// Worker whose builds fail after appending a line to `build_log`.
+    async fn failing_worker(db: MockDb, data_dir: &Path, build_log: &Path) -> DocQueueWorker {
+        let builder = shell_builder("echo \"$3\" >> \"$0\"; exit 1", build_log);
+        worker(db, data_dir, &["a", "b"], builder).await
+    }
+
+    fn expect_original_names(db: &mut MockDb) {
+        db.expect_get_original_name()
+            .returning(|name, _| Ok(Some(OriginalName::from_unchecked(name.to_string()))));
     }
 
     #[cfg(unix)]
@@ -383,6 +410,7 @@ mod tests {
                 queue_entry(2, "b", queued[2].clone()),
             ])
         });
+        expect_original_names(&mut db);
         db.expect_delete_doc_queue().times(3).returning(|_| Ok(()));
         db.expect_update_docs_link().never();
         let worker = failing_worker(db, data_dir.path(), &build_log).await;
@@ -392,6 +420,41 @@ mod tests {
         let builds = std::fs::read_to_string(&build_log).unwrap();
         assert_eq!(builds.lines().count(), 2, "builds: {builds}");
         assert!(paths.iter().all(|p| !p.exists()));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_builds_crate_with_uppercase_letters() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let path = data_dir.path().join("queue");
+        let queued = path.clone();
+        let mut db = MockDb::new();
+        db.expect_get_doc_queue()
+            .returning(move || Ok(vec![queue_entry(0, "my-crate", queued.clone())]));
+        db.expect_get_original_name()
+            .returning(|_, _| Ok(Some(OriginalName::from_unchecked("My-Crate".to_string()))));
+        db.expect_update_docs_link()
+            .withf(|name, _, link| {
+                name.as_str() == "my-crate"
+                    && link == "/docs/my-crate/1.0.0/doc/My_Crate/index.html"
+            })
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        db.expect_delete_doc_queue().times(1).returning(|_| Ok(()));
+        let builder = shell_builder(
+            "test -f \"$3/Cargo.toml\" && mkdir -p \"$3/target/doc/My_Crate\" && echo docs > \"$3/target/doc/My_Crate/index.html\"",
+            data_dir.path(),
+        );
+        let worker = worker(db, data_dir.path(), &["My-Crate"], builder).await;
+
+        worker.process_queue().await.unwrap();
+
+        let key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("my-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            "doc/My_Crate/index.html",
+        );
+        assert!(worker.docs_storage.exists(&key).await.unwrap());
     }
 
     #[tokio::test]

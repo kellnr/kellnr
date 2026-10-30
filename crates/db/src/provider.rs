@@ -548,9 +548,16 @@ pub trait DbProvider: Send + Sync {
 
     /// The name a crate was first published with, or `None` if the crate
     /// does not exist. Crate files are stored under this name.
+    async fn get_crate_original_name(
+        &self,
+        crate_name: &NormalizedName,
+    ) -> DbResult<Option<OriginalName>>;
+
+    /// The original name of the crate if the crate has the version.
     async fn get_original_name(
         &self,
         crate_name: &NormalizedName,
+        version: &Version,
     ) -> DbResult<Option<OriginalName>>;
 }
 
@@ -1094,7 +1101,15 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_original_name(&self, crate_name: &NormalizedName) -> DbResult<Option<OriginalName>> {
+            async fn get_crate_original_name(&self, crate_name: &NormalizedName) -> DbResult<Option<OriginalName>> {
+                unimplemented!()
+            }
+
+            async fn get_original_name(
+                &self,
+                crate_name: &NormalizedName,
+                version: &Version,
+            ) -> DbResult<Option<OriginalName>> {
                 unimplemented!()
             }
         }

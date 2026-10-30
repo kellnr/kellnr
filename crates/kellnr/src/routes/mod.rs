@@ -266,6 +266,7 @@ mod tests {
     use bytes::Bytes;
     use kellnr_appstate::{TEST_KEY, encode_cookies};
     use kellnr_common::normalized_name::NormalizedName;
+    use kellnr_common::version::Version;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{SessionInfo, User};
@@ -313,7 +314,11 @@ mod tests {
     }
 
     async fn put_secret_docs(state: &AppStateData) -> String {
-        let key = DocsStorage::file_key("secret", "1.0.0", "src/secret/lib.rs.html");
+        let key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("secret"),
+            &Version::from_unchecked_str("1.0.0"),
+            "src/secret/lib.rs.html",
+        );
         state
             .docs_storage
             .put(&key, Bytes::from_static(b"<html>source</html>"))
@@ -444,7 +449,11 @@ mod tests {
     #[tokio::test]
     async fn restricted_docs_checked_with_normalized_crate_name() {
         let state = docs_test_state(restricted_db());
-        let key = DocsStorage::file_key("Secret", "1.0.0", "src/secret/lib.rs.html");
+        let key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("Secret"),
+            &Version::from_unchecked_str("1.0.0"),
+            "src/secret/lib.rs.html",
+        );
         state
             .docs_storage
             .put(&key, Bytes::from_static(b"<html>source</html>"))
@@ -510,8 +519,8 @@ mod tests {
     async fn docs_route_serves_stored_file_with_mime_and_csp() {
         let state = docs_test_state(unrestricted_db());
         let key = DocsStorage::file_key(
-            "routes-test-crate",
-            "1.0.0",
+            &NormalizedName::from_unchecked_str("routes-test-crate"),
+            &Version::from_unchecked_str("1.0.0"),
             "doc/routes_test_crate/index.html",
         );
         state
@@ -628,7 +637,11 @@ mod tests {
 
     async fn cache_control_for(file: &str) -> String {
         let state = docs_test_state(unrestricted_db());
-        let key = DocsStorage::file_key("routes-test-crate", "1.0.0", file);
+        let key = DocsStorage::file_key(
+            &NormalizedName::from_unchecked_str("routes-test-crate"),
+            &Version::from_unchecked_str("1.0.0"),
+            file,
+        );
         state
             .docs_storage
             .put(&key, Bytes::from_static(b"content"))
@@ -671,8 +684,8 @@ mod tests {
     async fn docs_route_returns_304_for_matching_if_none_match() {
         let state = docs_test_state(unrestricted_db());
         let key = DocsStorage::file_key(
-            "routes-test-crate",
-            "1.0.0",
+            &NormalizedName::from_unchecked_str("routes-test-crate"),
+            &Version::from_unchecked_str("1.0.0"),
             "doc/routes_test_crate/index.html",
         );
         state
