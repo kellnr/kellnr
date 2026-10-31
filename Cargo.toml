@@ -109,6 +109,14 @@ opt-level = 3
 [profile.dev.package.blake2]
 opt-level = 3
 
+# On macOS, debug info leaves object files next to each binary, and cargo
+# never removes the old ones. nextest starts one process per test, and every
+# start gets slower as target/debug/deps grows. Panic messages keep their
+# location without debug info. For a debugger, build with
+# CARGO_PROFILE_DEV_DEBUG=true.
+[profile.dev]
+debug = false
+
 [profile.release]
 lto = "thin"
 strip = true
