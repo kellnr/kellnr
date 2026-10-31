@@ -4560,7 +4560,6 @@ dependencies = [
  "kellnr-db",
  "kellnr-docs",
  "kellnr-filter",
- "kellnr-registry",
  "kellnr-settings",
  "kellnr-storage",
  "mockall",

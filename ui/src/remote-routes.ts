@@ -23,15 +23,14 @@ export const LIST_GROUPS = "./api/v1/groups";
 export const GROUP_USERS = (group_name: string) => `./api/v1/groups/${encodeURIComponent(group_name)}/members`;
 export const GROUP_USER = (group_name: string, name: string) => `./api/v1/groups/${encodeURIComponent(group_name)}/members/${encodeURIComponent(name)}`;
 
-// Crate Access Control (ACL)
+// Crate access settings (download restriction)
 export const CRATE_ACL = (crate_name: string) => `./api/v1/acl/${encodeURIComponent(crate_name)}`;
-export const CRATE_ACL_USERS = (crate_name: string) => `./api/v1/acl/${encodeURIComponent(crate_name)}/users`;
-export const CRATE_ACL_USER = (crate_name: string, name: string) => `./api/v1/acl/${encodeURIComponent(crate_name)}/users/${encodeURIComponent(name)}`;
-export const CRATE_ACL_GROUPS = (crate_name: string) => `./api/v1/acl/${encodeURIComponent(crate_name)}/groups`;
-export const CRATE_ACL_GROUP = (crate_name: string, name: string) => `./api/v1/acl/${encodeURIComponent(crate_name)}/groups/${encodeURIComponent(name)}`;
-
 export const CRATE_OWNERS = (crate_name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/owners`;
 export const CRATE_OWNER = (crate_name: string, name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/owners/${encodeURIComponent(name)}`;
+export const CRATE_USERS = (crate_name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/crate_users`;
+export const CRATE_USER = (crate_name: string, name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/crate_users/${encodeURIComponent(name)}`;
+export const CRATE_GROUPS = (crate_name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/crate_groups`;
+export const CRATE_GROUP = (crate_name: string, name: string) => `./api/v1/crates/${encodeURIComponent(crate_name)}/crate_groups/${encodeURIComponent(name)}`;
 
 export const CRATE_DATA = "./api/v1/ui/crate_data";
 export const CRATE_DEPENDENTS = "./api/v1/ui/crate_dependents";
