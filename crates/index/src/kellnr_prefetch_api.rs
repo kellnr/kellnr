@@ -3,17 +3,17 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
-use kellnr_http::state::{DbState, SettingsState};
-use kellnr_http::authz::can_read_crate;
-use kellnr_http::identity::{AnyUser, Identity};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::{Prefetch, db_date_to_http_date, is_not_modified, quote_etag};
 use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
+use kellnr_http::authz::can_read_crate;
+use kellnr_http::error::ApiResult;
+use kellnr_http::identity::{AnyUser, Identity};
+use kellnr_http::state::{DbState, SettingsState};
 use tracing::error;
 
 use super::config_json::{ConfigJson, IndexKind};
-
 use crate::prefetch_response::PrefetchResponse;
 
 /// Get registry configuration
@@ -57,9 +57,10 @@ pub async fn prefetch_kellnr(
     headers: HeaderMap,
     State(db): DbState,
     user: Option<AnyUser>,
-) -> Result<PrefetchResponse, StatusCode> {
-    internal_kellnr_prefetch(&package, &headers, &db, user.as_deref()).await
-        .map(PrefetchResponse)
+) -> ApiResult<PrefetchResponse> {
+    PrefetchResponse::from_result(
+        internal_kellnr_prefetch(&package, &headers, &db, user.as_deref()).await,
+    )
 }
 
 /// Prefetch crate index data for short names
@@ -85,9 +86,10 @@ pub async fn prefetch_len2_kellnr(
     headers: HeaderMap,
     State(db): DbState,
     user: Option<AnyUser>,
-) -> Result<PrefetchResponse, StatusCode> {
-    internal_kellnr_prefetch(&package, &headers, &db, user.as_deref()).await
-        .map(PrefetchResponse)
+) -> ApiResult<PrefetchResponse> {
+    PrefetchResponse::from_result(
+        internal_kellnr_prefetch(&package, &headers, &db, user.as_deref()).await,
+    )
 }
 
 /// Index entries of download-restricted crates are only served to callers with
@@ -141,10 +143,10 @@ mod tests {
     use axum::http::{Request, header};
     use axum::routing::get;
     use http_body_util::BodyExt;
-    use kellnr_http::state::AppStateData;
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
+    use kellnr_http::state::AppStateData;
     use kellnr_settings::{Protocol, Settings};
     use mockall::predicate::*;
     use tower::ServiceExt;

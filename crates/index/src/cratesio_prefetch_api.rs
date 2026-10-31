@@ -5,18 +5,19 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use hyper::StatusCode;
-use kellnr_http::state::{CratesIoPrefetchSenderState, DbState, SettingsState};
 use kellnr_common::base_url::BaseUrl;
-use kellnr_cratesio_sync::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::version::Version;
+use kellnr_cratesio_sync::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_cratesio_sync::{CratesioSync, SyncSource, crate_sub_path};
 use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
 use kellnr_filter::{CrateInfo, FilterChain, Verdict};
+use kellnr_http::error::ApiResult;
+use kellnr_http::state::{CratesIoPrefetchSenderState, DbState, SettingsState};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use moka::future::Cache;
 use reqwest::Client;
@@ -84,9 +85,10 @@ pub async fn prefetch_cratesio(
     State(db): DbState,
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
-) -> Result<PrefetchResponse, StatusCode> {
-    internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await
-        .map(PrefetchResponse)
+) -> ApiResult<PrefetchResponse> {
+    PrefetchResponse::from_result(
+        internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await,
+    )
 }
 
 /// Prefetch crate metadata from crates.io (1-2 char names)
@@ -115,9 +117,10 @@ pub async fn prefetch_len2_cratesio(
     State(db): DbState,
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
-) -> Result<PrefetchResponse, StatusCode> {
-    internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await
-        .map(PrefetchResponse)
+) -> ApiResult<PrefetchResponse> {
+    PrefetchResponse::from_result(
+        internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await,
+    )
 }
 
 pub fn init_cratesio_prefetch_thread(
@@ -530,8 +533,8 @@ mod tests {
     use axum::http::{Request, header};
     use axum::routing::get;
     use http_body_util::BodyExt;
-    use kellnr_http::state::AppStateData;
     use kellnr_db::mock::MockDb;
+    use kellnr_http::state::AppStateData;
     use kellnr_settings::{Protocol, Settings};
     use reqwest::Url;
     use tower::ServiceExt;

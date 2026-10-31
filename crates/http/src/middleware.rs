@@ -1,10 +1,11 @@
-use axum::body::Body;
 use axum::extract::{Request, State};
+use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use axum::http::{HeaderValue, StatusCode};
 use axum::middleware::Next;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use tracing::warn;
 
+use crate::error::{ApiError, KeepPlainText};
 use crate::identity::{Accepts, identify};
 use crate::state::AppStateData;
 
@@ -38,17 +39,55 @@ pub async fn auth_when_required(
 }
 
 fn rejection(status: StatusCode, accepts: Accepts) -> Response {
-    let mut response = Response::new(Body::empty());
-    *response.status_mut() = match accepts {
+    let status = match accepts {
         Accepts::TokenOrSession => StatusCode::UNAUTHORIZED,
         Accepts::Token | Accepts::Session => status,
     };
+    let mut response = ApiError::from(status).into_response();
     if accepts != Accepts::Session {
         // See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/WWW-Authenticate
         response.headers_mut().insert(
             "WWW-Authenticate",
             HeaderValue::from_static("Basic, Bearer"),
         );
+    }
+    response
+}
+
+/// Largest body of an error response that [`errors_as_json`] reads.
+const MAX_ERROR_BODY: usize = 64 * 1024;
+
+/// Turns error responses that are not JSON yet, like the rejections of axum's
+/// extractors, into the error format of all Kellnr endpoints. Their text
+/// becomes the detail; other headers are kept. A
+/// [`PlainTextError`](crate::error::PlainTextError) stays as it is.
+pub async fn errors_as_json(request: Request, next: Next) -> Response {
+    let response = next.run(request).await;
+    let status = response.status();
+    let is_json = response
+        .headers()
+        .get(CONTENT_TYPE)
+        .is_some_and(|v| v.as_bytes().starts_with(b"application/json"));
+    let keep = response.extensions().get::<KeepPlainText>().is_some();
+    if !(status.is_client_error() || status.is_server_error()) || is_json || keep {
+        return response;
+    }
+
+    let (parts, body) = response.into_parts();
+    let detail = axum::body::to_bytes(body, MAX_ERROR_BODY)
+        .await
+        .map(|b| String::from_utf8_lossy(&b).trim().to_string())
+        .unwrap_or_default();
+    let error = if detail.is_empty() {
+        ApiError::from(status)
+    } else {
+        ApiError::new(&detail, status)
+    };
+    let mut response = error.into_response();
+    for (name, value) in &parts.headers {
+        if name != CONTENT_TYPE && name != CONTENT_LENGTH {
+            response.headers_mut().insert(name, value.clone());
+        }
     }
     response
 }
@@ -62,7 +101,6 @@ mod test {
     use axum::http::{Request, StatusCode, header};
     use axum::routing::get;
     use axum::{Router, middleware};
-    use crate::state::AppStateData;
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::User;
@@ -73,6 +111,7 @@ mod test {
     use tower::ServiceExt;
 
     use super::*;
+    use crate::state::AppStateData;
 
     #[tokio::test]
     async fn no_auth_required() {
@@ -189,7 +228,6 @@ mod auth_middleware_tests {
     use axum::middleware::from_fn_with_state;
     use axum::routing::get;
     use hyper::{Request, header};
-    use crate::state::AppStateData;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
@@ -199,6 +237,7 @@ mod auth_middleware_tests {
     use tower::ServiceExt;
 
     use super::*;
+    use crate::state::AppStateData;
 
     fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
         let settings = Settings::default();
@@ -216,7 +255,10 @@ mod auth_middleware_tests {
 
         Router::new()
             .route("/guarded", get(StatusCode::OK))
-            .route_layer(from_fn_with_state((state.clone(), Accepts::Token), auth_when_required))
+            .route_layer(from_fn_with_state(
+                (state.clone(), Accepts::Token),
+                auth_when_required,
+            ))
             .route("/not_guarded", get(StatusCode::OK))
             .with_state(state)
     }
@@ -230,7 +272,10 @@ mod auth_middleware_tests {
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))
-            .route_layer(from_fn_with_state((state.clone(), Accepts::Token), auth_when_required))
+            .route_layer(from_fn_with_state(
+                (state.clone(), Accepts::Token),
+                auth_when_required,
+            ))
             .with_state(state)
     }
 
@@ -334,7 +379,10 @@ mod session_and_combined_tests {
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))
-            .route_layer(from_fn_with_state((state.clone(), accepts), auth_when_required))
+            .route_layer(from_fn_with_state(
+                (state.clone(), accepts),
+                auth_when_required,
+            ))
             .route("/not_guarded", get(StatusCode::OK))
             .with_state(state)
     }
@@ -349,25 +397,33 @@ mod session_and_combined_tests {
         db
     }
 
-    fn valid_session() -> kellnr_db::provider::DbResult<SessionInfo> {
-        Ok(SessionInfo {
+    fn valid_session() -> SessionInfo {
+        SessionInfo {
             name: UserName::new("guest").unwrap(),
             is_admin: false,
             is_read_only: false,
-        })
+        }
     }
 
     async fn send(app: Router, uri: &str, cookie: bool) -> Result<Response> {
         let mut request = Request::get(uri);
         if cookie {
-            request = request.header(header::COOKIE, encode_cookies([(COOKIE_SESSION_ID, "1234")]));
+            request = request.header(
+                header::COOKIE,
+                encode_cookies([(COOKIE_SESSION_ID, "1234")]),
+            );
         }
         Ok(app.oneshot(request.body(Body::empty())?).await?)
     }
 
     #[tokio::test]
     async fn guarded_route_with_valid_cookie() -> Result {
-        let r = send(app(session_db(valid_session), true, Accepts::Session), "/guarded", true).await?;
+        let r = send(
+            app(session_db(|| Ok(valid_session())), true, Accepts::Session),
+            "/guarded",
+            true,
+        )
+        .await?;
         assert_eq!(r.status(), StatusCode::OK);
         Ok(())
     }
@@ -392,29 +448,52 @@ mod session_and_combined_tests {
 
     #[tokio::test]
     async fn guarded_route_without_cookie() -> Result {
-        let r = send(app(MockDb::new(), true, Accepts::Session), "/guarded", false).await?;
+        let r = send(
+            app(MockDb::new(), true, Accepts::Session),
+            "/guarded",
+            false,
+        )
+        .await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
     #[tokio::test]
     async fn not_guarded_route_without_cookie() -> Result {
-        let r = send(app(MockDb::new(), true, Accepts::Session), "/not_guarded", false).await?;
+        let r = send(
+            app(MockDb::new(), true, Accepts::Session),
+            "/not_guarded",
+            false,
+        )
+        .await?;
         assert_eq!(r.status(), StatusCode::OK);
         Ok(())
     }
 
     #[tokio::test]
     async fn app_not_required_auth_with_guarded_route() -> Result {
-        let r = send(app(MockDb::new(), false, Accepts::Session), "/guarded", false).await?;
+        let r = send(
+            app(MockDb::new(), false, Accepts::Session),
+            "/guarded",
+            false,
+        )
+        .await?;
         assert_eq!(r.status(), StatusCode::OK);
         Ok(())
     }
 
     #[tokio::test]
     async fn token_or_session_accepts_session() -> Result {
-        let r = send(app(session_db(valid_session), true, Accepts::TokenOrSession), "/guarded", true)
-            .await?;
+        let r = send(
+            app(
+                session_db(|| Ok(valid_session())),
+                true,
+                Accepts::TokenOrSession,
+            ),
+            "/guarded",
+            true,
+        )
+        .await?;
         assert_eq!(r.status(), StatusCode::OK);
         Ok(())
     }
@@ -428,5 +507,108 @@ mod session_and_combined_tests {
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(r.headers()["WWW-Authenticate"], "Basic, Bearer");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod errors_as_json_tests {
+    use axum::Router;
+    use axum::body::Body;
+    use axum::http::header;
+    use axum::routing::{get, post};
+    use tower::ServiceExt;
+
+    use super::*;
+    use crate::error::{ErrorDetails, PlainTextError};
+
+    async fn json_body() -> Result<(), ApiError> {
+        Err(ApiError::conflict("already there"))
+    }
+
+    async fn parse(_body: axum::Json<u32>) {}
+
+    fn app() -> Router {
+        Router::new()
+            .route("/json", get(json_body))
+            .route("/bare", get(|| async { StatusCode::NOT_FOUND }))
+            .route(
+                "/text",
+                get(|| async {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        [(header::ALLOW, "GET")],
+                        "invalid input",
+                    )
+                }),
+            )
+            .route(
+                "/plain",
+                get(|| async { PlainTextError::new(StatusCode::FORBIDDEN, "denied") }),
+            )
+            .route("/parse", post(parse))
+            .route("/ok", get(|| async { "fine" }))
+            .layer(axum::middleware::from_fn(errors_as_json))
+    }
+
+    async fn send(request: Request<Body>) -> (StatusCode, axum::http::HeaderMap, String) {
+        let response = app().oneshot(request).await.unwrap();
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, headers, String::from_utf8(body.to_vec()).unwrap())
+    }
+
+    fn detail(body: &str) -> String {
+        let details: ErrorDetails = serde_json::from_str(body).unwrap();
+        details.errors[0].detail.clone()
+    }
+
+    #[tokio::test]
+    async fn json_errors_are_kept() {
+        let (status, _, body) = send(Request::get("/json").body(Body::empty()).unwrap()).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(detail(&body), "ERROR: already there");
+    }
+
+    #[tokio::test]
+    async fn bare_status_gets_its_reason_as_detail() {
+        let (status, _, body) = send(Request::get("/bare").body(Body::empty()).unwrap()).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(detail(&body), "ERROR: Not Found");
+    }
+
+    #[tokio::test]
+    async fn text_becomes_the_detail_and_headers_are_kept() {
+        let (status, headers, body) =
+            send(Request::get("/text").body(Body::empty()).unwrap()).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(detail(&body), "ERROR: invalid input");
+        assert_eq!(headers[header::ALLOW], "GET");
+        assert_eq!(headers[CONTENT_TYPE], "application/json");
+    }
+
+    #[tokio::test]
+    async fn plain_text_errors_are_kept() {
+        let (status, _, body) = send(Request::get("/plain").body(Body::empty()).unwrap()).await;
+        assert_eq!((status, body.as_str()), (StatusCode::FORBIDDEN, "denied"));
+    }
+
+    #[tokio::test]
+    async fn extractor_rejections_become_json() {
+        let request = Request::post("/parse")
+            .header(CONTENT_TYPE, "application/json")
+            .body(Body::from("\"no number\""))
+            .unwrap();
+        let (status, _, body) = send(request).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(detail(&body).starts_with("ERROR: "), "{body}");
+    }
+
+    #[tokio::test]
+    async fn success_is_untouched() {
+        let (status, _, body) = send(Request::get("/ok").body(Body::empty()).unwrap()).await;
+        assert_eq!((status, body.as_str()), (StatusCode::OK, "fine"));
     }
 }

@@ -3,6 +3,7 @@
  */
 import axios from 'axios'
 import { apiGet, apiPut, apiDelete } from './api'
+import { errorDetail } from '../common/apiError'
 import type { ApiResult, ApiError } from '../types/api'
 import type {
   Toolchain,
@@ -60,9 +61,8 @@ export async function uploadToolchain(
   } catch (err) {
     if (axios.isAxiosError(err) && err.response) {
       const status = err.response.status
-      const responseData = err.response.data as ToolchainResponse | undefined
       const message =
-        responseData?.message ||
+        errorDetail(err.response.data) ||
         (status === 409
           ? 'Target already exists for this toolchain version.'
           : status === 403

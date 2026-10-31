@@ -20,6 +20,7 @@ use kellnr_settings::constants::COOKIE_SESSION_ID;
 use tracing::error;
 
 use crate::authz;
+use crate::error::ApiError;
 use crate::state::AppStateData;
 use crate::token::Token;
 
@@ -100,9 +101,7 @@ async fn from_session(parts: &mut Parts, state: &AppStateData) -> Result<Identit
         .extract_with_state(state)
         .await
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
-    let cookie = jar
-        .get(COOKIE_SESSION_ID)
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let cookie = jar.get(COOKIE_SESSION_ID).ok_or(StatusCode::UNAUTHORIZED)?;
     validate_session(state, cookie.value()).await
 }
 
@@ -172,18 +171,18 @@ identity_extractor!(
 );
 
 impl FromRequestParts<AppStateData> for TokenUser {
-    type Rejection = StatusCode;
+    type Rejection = ApiError;
 
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        identify(parts, state, Accepts::Token).await.map(Self)
+        Ok(Self(identify(parts, state, Accepts::Token).await?))
     }
 }
 
 impl OptionalFromRequestParts<AppStateData> for TokenUser {
-    type Rejection = StatusCode;
+    type Rejection = ApiError;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -192,24 +191,24 @@ impl OptionalFromRequestParts<AppStateData> for TokenUser {
         match identify(parts, state, Accepts::Token).await {
             Ok(identity) => Ok(Some(Self(identity))),
             Err(status) if no_credentials(status) => Ok(None),
-            Err(status) => Err(status),
+            Err(status) => Err(status.into()),
         }
     }
 }
 
 impl FromRequestParts<AppStateData> for SessionUser {
-    type Rejection = StatusCode;
+    type Rejection = ApiError;
 
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        identify(parts, state, Accepts::Session).await.map(Self)
+        Ok(Self(identify(parts, state, Accepts::Session).await?))
     }
 }
 
 impl OptionalFromRequestParts<AppStateData> for SessionUser {
-    type Rejection = StatusCode;
+    type Rejection = ApiError;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -220,29 +219,25 @@ impl OptionalFromRequestParts<AppStateData> for SessionUser {
             .await
             .map_err(|_| StatusCode::UNAUTHORIZED)?;
         match jar.get(COOKIE_SESSION_ID) {
-            Some(cookie) => validate_session(state, cookie.value())
-                .await
-                .map(|identity| Some(Self(identity))),
+            Some(cookie) => Ok(Some(Self(validate_session(state, cookie.value()).await?))),
             None => Ok(None),
         }
     }
 }
 
 impl FromRequestParts<AppStateData> for AnyUser {
-    type Rejection = StatusCode;
+    type Rejection = ApiError;
 
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
-        identify(parts, state, Accepts::TokenOrSession)
-            .await
-            .map(Self)
+        Ok(Self(identify(parts, state, Accepts::TokenOrSession).await?))
     }
 }
 
 impl OptionalFromRequestParts<AppStateData> for AnyUser {
-    type Rejection = StatusCode;
+    type Rejection = ApiError;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -256,14 +251,14 @@ impl OptionalFromRequestParts<AppStateData> for AnyUser {
 }
 
 impl FromRequestParts<AppStateData> for AdminUser {
-    type Rejection = StatusCode;
+    type Rejection = ApiError;
 
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppStateData,
     ) -> Result<Self, Self::Rejection> {
         let identity = identify(parts, state, Accepts::Session).await?;
-        authz::require_admin(&identity).map_err(|e| e.status())?;
+        authz::require_admin(&identity)?;
         Ok(Self(identity))
     }
 }
@@ -335,12 +330,12 @@ mod tests {
         db
     }
 
-    fn session(is_admin: bool) -> kellnr_db::provider::DbResult<SessionInfo> {
-        Ok(SessionInfo {
+    fn session(is_admin: bool) -> SessionInfo {
+        SessionInfo {
             name: UserName::new("user").unwrap(),
             is_admin,
             is_read_only: false,
-        })
+        }
     }
 
     fn token_db(db: &mut MockDb) {
@@ -357,7 +352,11 @@ mod tests {
             .returning(|_| Err(DbError::TokenNotFound));
     }
 
-    async fn send(app: Router, uri: &str, headers: &[(header::HeaderName, String)]) -> Result<(StatusCode, String)> {
+    async fn send(
+        app: Router,
+        uri: &str,
+        headers: &[(header::HeaderName, String)],
+    ) -> Result<(StatusCode, String)> {
         let mut request = Request::get(uri);
         for (name, value) in headers {
             request = request.header(name, value);
@@ -370,7 +369,7 @@ mod tests {
 
     #[tokio::test]
     async fn admin_session_is_admin_user() -> Result {
-        let app = app(session_db(|| session(true)));
+        let app = app(session_db(|| Ok(session(true))));
         let (status, _) = send(app, "/admin", &[(header::COOKIE, c1234())]).await?;
         assert_eq!(status, StatusCode::OK);
         Ok(())
@@ -378,7 +377,7 @@ mod tests {
 
     #[tokio::test]
     async fn normal_session_is_no_admin_user() -> Result {
-        let app = app(session_db(|| session(false)));
+        let app = app(session_db(|| Ok(session(false))));
         let (status, _) = send(app, "/admin", &[(header::COOKIE, c1234())]).await?;
         assert_eq!(status, StatusCode::FORBIDDEN);
         Ok(())
@@ -401,7 +400,7 @@ mod tests {
 
     #[tokio::test]
     async fn session_user_with_session() -> Result {
-        let app = app(session_db(|| session(false)));
+        let app = app(session_db(|| Ok(session(false))));
         let (status, _) = send(app, "/session", &[(header::COOKIE, c1234())]).await?;
         assert_eq!(status, StatusCode::OK);
         Ok(())
@@ -418,7 +417,12 @@ mod tests {
     async fn session_user_ignores_tokens() -> Result {
         let mut db = MockDb::new();
         token_db(&mut db);
-        let (status, _) = send(app(db), "/session", &[(header::AUTHORIZATION, "token".into())]).await?;
+        let (status, _) = send(
+            app(db),
+            "/session",
+            &[(header::AUTHORIZATION, "token".into())],
+        )
+        .await?;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         Ok(())
     }
@@ -457,12 +461,15 @@ mod tests {
 
     #[tokio::test]
     async fn any_user_prefers_the_token() -> Result {
-        let mut db = session_db(|| session(false));
+        let mut db = session_db(|| Ok(session(false)));
         token_db(&mut db);
         let (status, body) = send(
             app(db),
             "/any",
-            &[(header::AUTHORIZATION, "token".into()), (header::COOKIE, c1234())],
+            &[
+                (header::AUTHORIZATION, "token".into()),
+                (header::COOKIE, c1234()),
+            ],
         )
         .await?;
         assert_eq!(status, StatusCode::OK);
@@ -472,12 +479,15 @@ mod tests {
 
     #[tokio::test]
     async fn any_user_falls_back_to_the_session_if_the_token_fails() -> Result {
-        let mut db = session_db(|| session(false));
+        let mut db = session_db(|| Ok(session(false)));
         token_db(&mut db);
         let (status, body) = send(
             app(db),
             "/any",
-            &[(header::AUTHORIZATION, "invalid".into()), (header::COOKIE, c1234())],
+            &[
+                (header::AUTHORIZATION, "invalid".into()),
+                (header::COOKIE, c1234()),
+            ],
         )
         .await?;
         assert_eq!((status, body.as_str()), (StatusCode::OK, "Session"));
@@ -495,8 +505,12 @@ mod tests {
     async fn optional_any_user_with_invalid_token_is_anonymous() -> Result {
         let mut db = MockDb::new();
         token_db(&mut db);
-        let (status, body) =
-            send(app(db), "/optional_any", &[(header::AUTHORIZATION, "invalid".into())]).await?;
+        let (status, body) = send(
+            app(db),
+            "/optional_any",
+            &[(header::AUTHORIZATION, "invalid".into())],
+        )
+        .await?;
         assert_eq!((status, body.as_str()), (StatusCode::OK, ""));
         Ok(())
     }
@@ -512,8 +526,12 @@ mod tests {
     async fn optional_token_user_with_invalid_token_is_rejected() -> Result {
         let mut db = MockDb::new();
         token_db(&mut db);
-        let (status, _) =
-            send(app(db), "/optional_token", &[(header::AUTHORIZATION, "invalid".into())]).await?;
+        let (status, _) = send(
+            app(db),
+            "/optional_token",
+            &[(header::AUTHORIZATION, "invalid".into())],
+        )
+        .await?;
         assert_eq!(status, StatusCode::FORBIDDEN);
         Ok(())
     }
@@ -522,8 +540,12 @@ mod tests {
     async fn optional_token_user_with_token() -> Result {
         let mut db = MockDb::new();
         token_db(&mut db);
-        let (status, body) =
-            send(app(db), "/optional_token", &[(header::AUTHORIZATION, "token".into())]).await?;
+        let (status, body) = send(
+            app(db),
+            "/optional_token",
+            &[(header::AUTHORIZATION, "token".into())],
+        )
+        .await?;
         assert_eq!((status, body.as_str()), (StatusCode::OK, "token_user"));
         Ok(())
     }

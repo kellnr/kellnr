@@ -4,6 +4,7 @@
 import axios, { type AxiosRequestConfig, type AxiosError } from 'axios'
 import type { ApiResult, ApiError } from '../types/api'
 import router from '../router'
+import { errorDetail } from '../common/apiError'
 
 /**
  * Standard error messages for common HTTP status codes
@@ -29,9 +30,9 @@ function getErrorMessage(error: AxiosError, customMessages?: Record<number, stri
   const status = error.response.status
 
   // Validation errors carry a message that tells the user what to fix
-  const body = error.response.data
-  if (status === 400 && typeof body === 'string' && body.length > 0) {
-    return body
+  const detail = errorDetail(error.response.data)
+  if (status === 400 && detail) {
+    return detail
   }
 
   // Check custom messages first

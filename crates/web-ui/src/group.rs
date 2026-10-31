@@ -1,13 +1,12 @@
 use axum::Json;
 use axum::extract::{Path, State};
-use kellnr_http::state::DbState;
 use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_db::{self, Group, UserId};
+use kellnr_http::error::ApiError;
+use kellnr_http::identity::AdminUser;
+use kellnr_http::state::DbState;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-
-use crate::error::RouteError;
-use kellnr_http::identity::AdminUser;
 
 /// List all groups (admin only)
 #[utoipa::path(
@@ -23,7 +22,7 @@ use kellnr_http::identity::AdminUser;
 pub async fn list_groups(
     _user: AdminUser,
     State(db): DbState,
-) -> Result<Json<Vec<Group>>, RouteError> {
+) -> Result<Json<Vec<Group>>, ApiError> {
     Ok(Json(db.get_groups().await?))
 }
 
@@ -45,7 +44,7 @@ pub async fn delete(
     _user: AdminUser,
     Path(name): Path<GroupName>,
     State(db): DbState,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     Ok(db.delete_group(&name).await?)
 }
 
@@ -56,7 +55,7 @@ pub struct NewGroup {
 
 impl NewGroup {
     /// Returns the name of the new group.
-    pub fn validate(&self) -> Result<GroupName, RouteError> {
+    pub fn validate(&self) -> Result<GroupName, ApiError> {
         Ok(GroupName::for_new_group(self.name.as_str())?)
     }
 }
@@ -78,7 +77,7 @@ pub async fn add(
     _user: AdminUser,
     State(db): DbState,
     Json(new_group): Json<NewGroup>,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     let name = new_group.validate()?;
 
     Ok(db.add_group(&name).await?)
@@ -119,7 +118,7 @@ pub async fn list_users(
     _user: AdminUser,
     Path(group_name): Path<GroupName>,
     State(db): DbState,
-) -> Result<Json<GroupUserList>, RouteError> {
+) -> Result<Json<GroupUserList>, ApiError> {
     let users: Vec<GroupUser> = db
         .get_group_users(&group_name)
         .await?
@@ -152,7 +151,7 @@ pub async fn add_user(
     _user: AdminUser,
     Path((group_name, name)): Path<(GroupName, UserName)>,
     State(db): DbState,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     if !db.is_group_user(&group_name, &name).await? {
         db.add_group_user(&group_name, &name).await?;
     }
@@ -179,7 +178,7 @@ pub async fn delete_user(
     _user: AdminUser,
     Path((group_name, name)): Path<(GroupName, UserName)>,
     State(db): DbState,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     Ok(db.delete_group_user(&group_name, &name).await?)
 }
 
@@ -187,6 +186,7 @@ pub async fn delete_user(
 mod tests {
     use std::sync::Arc;
 
+    use axum::http::StatusCode;
     use kellnr_db::mock::MockDb;
 
     use super::*;
@@ -203,7 +203,12 @@ mod tests {
             )
             .await;
 
-            assert!(matches!(result, Err(RouteError::BadRequest(_))), "{name:?}");
+            assert!(
+                result
+                    .as_ref()
+                    .is_err_and(|e| e.status() == StatusCode::BAD_REQUEST),
+                "{name:?}"
+            );
         }
     }
 }

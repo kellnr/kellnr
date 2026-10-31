@@ -1,8 +1,10 @@
 // Allow needless_for_each in generated code from utoipa derive macro
 #![allow(clippy::needless_for_each)]
 
+use kellnr_http::error::ErrorDetails;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
-use utoipa::{Modify, OpenApi};
+use utoipa::openapi::{Content, Ref, RefOr};
+use utoipa::{Modify, OpenApi, PartialSchema, ToSchema};
 
 pub struct SecurityAddon;
 
@@ -19,6 +21,40 @@ impl Modify for SecurityAddon {
             );
         }
     }
+}
+
+/// Documents the JSON body of [`ErrorDetails`] for every error response.
+/// Kellnr answers all errors in this format, so the single annotations only
+/// name the status codes.
+pub fn add_error_bodies(mut api: utoipa::openapi::OpenApi) -> utoipa::openapi::OpenApi {
+    let components = api.components.get_or_insert_with(Default::default);
+    let mut schemas = vec![(ErrorDetails::name().into_owned(), ErrorDetails::schema())];
+    ErrorDetails::schemas(&mut schemas);
+    components.schemas.extend(schemas);
+
+    let error_body = Content::new(Some(Ref::from_schema_name(ErrorDetails::name())));
+    for item in api.paths.paths.values_mut() {
+        let operations = [
+            &mut item.get,
+            &mut item.put,
+            &mut item.post,
+            &mut item.delete,
+            &mut item.patch,
+        ];
+        for operation in operations.into_iter().flatten() {
+            for (status, response) in &mut operation.responses.responses {
+                if let RefOr::T(response) = response
+                    && (status.starts_with('4') || status.starts_with('5'))
+                    && response.content.is_empty()
+                {
+                    response
+                        .content
+                        .insert("application/json".to_string(), RefOr::T(error_body.clone()));
+                }
+            }
+        }
+    }
+    api
 }
 
 #[derive(OpenApi)]

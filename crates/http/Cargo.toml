@@ -43,6 +43,7 @@ kellnr-db = { workspace = true, features = ["mock"] }
 hyper.workspace = true
 mockall.workspace = true
 sea-orm.workspace = true
+serde_json.workspace = true
 tower.workspace = true
 
 [lints]

@@ -12,10 +12,11 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::put;
 use axum::{Json, Router};
 use bytes::Bytes;
-use kellnr_http::identity::AdminUser;
-use kellnr_http::state::{AppStateData, DbState, SettingsState, ToolchainStorageState};
 use kellnr_db::error::DbError;
 use kellnr_db::{ChannelInfo, ToolchainTargetInfo, ToolchainTargetStatus, ToolchainWithTargets};
+use kellnr_http::error::{ApiError, ApiResult};
+use kellnr_http::identity::AdminUser;
+use kellnr_http::state::{AppStateData, DbState, SettingsState, ToolchainStorageState};
 use kellnr_storage::storage_error::StorageError;
 use kellnr_storage::storage_key::StorageKey;
 use kellnr_storage::toolchain_storage::{ToolchainArchiveId, ToolchainStorage};
@@ -61,28 +62,16 @@ pub struct UploadQuery {
     pub channel: Option<String>,
 }
 
-type ErrorResponse = (StatusCode, Json<ToolchainResponse>);
-
-fn error_response(status: StatusCode, message: impl Into<String>) -> ErrorResponse {
-    (
-        status,
-        Json(ToolchainResponse {
-            success: false,
-            message: Some(message.into()),
-        }),
-    )
-}
-
 /// Logs the error and answers with a 500 that does not reveal its details.
-fn internal_error(message: &str, error: impl std::fmt::Display) -> ErrorResponse {
+fn internal_error(message: &str, error: impl std::fmt::Display) -> ApiError {
     tracing::error!("{message}: {error}");
-    error_response(StatusCode::INTERNAL_SERVER_ERROR, message)
+    ApiError::new(message, StatusCode::INTERNAL_SERVER_ERROR)
 }
 
-fn storage_not_configured() -> ErrorResponse {
-    error_response(
-        StatusCode::SERVICE_UNAVAILABLE,
+fn storage_not_configured() -> ApiError {
+    ApiError::new(
         "Toolchain storage not configured",
+        StatusCode::SERVICE_UNAVAILABLE,
     )
 }
 
@@ -133,12 +122,12 @@ pub fn create_dist_routes(_state: AppStateData) -> OpenApiRouter<AppStateData> {
 async fn list_toolchains(
     _user: AdminUser,
     State(db): DbState,
-) -> Result<Json<Vec<ToolchainWithTargets>>, StatusCode> {
+) -> ApiResult<Json<Vec<ToolchainWithTargets>>> {
     trace!("Listing toolchains");
     db.list_toolchains()
         .await
         .map(Json)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        .map_err(|e| internal_error("Failed to load toolchains", e))
 }
 
 async fn upload_toolchain(
@@ -147,7 +136,7 @@ async fn upload_toolchain(
     State(storage): ToolchainStorageState,
     Query(params): Query<UploadQuery>,
     body: Bytes,
-) -> Result<Json<ToolchainResponse>, (StatusCode, Json<ToolchainResponse>)> {
+) -> ApiResult<Json<ToolchainResponse>> {
     trace!(
         name = %params.name,
         version = %params.version,
@@ -165,13 +154,10 @@ async fn upload_toolchain(
     if let Some(tc) = &toolchain
         && tc.targets.iter().any(|t| t.target == params.target)
     {
-        return Err(error_response(
-            StatusCode::CONFLICT,
-            format!(
-                "Target {} already exists for {}-{}",
-                params.target, params.name, params.version
-            ),
-        ));
+        return Err(ApiError::conflict(format!(
+            "Target {} already exists for {}-{}",
+            params.target, params.name, params.version
+        )));
     }
 
     let size = body.len() as i64;
@@ -185,9 +171,7 @@ async fn upload_toolchain(
         target: &params.target,
     };
     let (path, hash) = storage.put(&archive_id, body).await.map_err(|e| match e {
-        StorageError::ToolchainArchiveExists { .. } => {
-            error_response(StatusCode::CONFLICT, e.to_string())
-        }
+        StorageError::ToolchainArchiveExists { .. } => ApiError::conflict(e.to_string()),
         e => internal_error("Failed to store archive", e),
     })?;
 
@@ -327,7 +311,7 @@ async fn add_target_to_db(
     path: &StorageKey,
     hash: &str,
     size: i64,
-) -> Result<i64, ErrorResponse> {
+) -> ApiResult<i64> {
     let toolchain_id = match toolchain {
         Some(tc) => tc.id,
         None => db
@@ -387,7 +371,7 @@ async fn delete_toolchain(
     State(db): DbState,
     State(storage): ToolchainStorageState,
     Path((name, version)): Path<(String, String)>,
-) -> Result<Json<ToolchainResponse>, (StatusCode, Json<ToolchainResponse>)> {
+) -> ApiResult<Json<ToolchainResponse>> {
     trace!(name = %name, version = %version, "Deleting toolchain");
 
     let storage = storage.as_ref().ok_or_else(storage_not_configured)?;
@@ -398,10 +382,9 @@ async fn delete_toolchain(
         .map_err(|e| internal_error("Failed to load toolchain", e))?;
 
     let Some(tc) = toolchain else {
-        return Err(error_response(
-            StatusCode::NOT_FOUND,
-            format!("Toolchain {name}-{version} not found"),
-        ));
+        return Err(ApiError::not_found(format!(
+            "Toolchain {name}-{version} not found"
+        )));
     };
 
     // Delete from the database first (cascades to targets and components), so
@@ -451,7 +434,7 @@ async fn delete_toolchain_target(
     State(db): DbState,
     State(storage): ToolchainStorageState,
     Path((name, version, target)): Path<(String, String, String)>,
-) -> Result<Json<ToolchainResponse>, (StatusCode, Json<ToolchainResponse>)> {
+) -> ApiResult<Json<ToolchainResponse>> {
     trace!(
         name = %name,
         version = %version,
@@ -467,17 +450,15 @@ async fn delete_toolchain_target(
         .map_err(|e| internal_error("Failed to load toolchain", e))?;
 
     let Some(tc) = toolchain else {
-        return Err(error_response(
-            StatusCode::NOT_FOUND,
-            format!("Toolchain {name}-{version} not found"),
-        ));
+        return Err(ApiError::not_found(format!(
+            "Toolchain {name}-{version} not found"
+        )));
     };
 
     let Some(t) = tc.targets.iter().find(|t| t.target == target) else {
-        return Err(error_response(
-            StatusCode::NOT_FOUND,
-            format!("Target {target} of {name}-{version} not found"),
-        ));
+        return Err(ApiError::not_found(format!(
+            "Target {target} of {name}-{version} not found"
+        )));
     };
 
     // Delete from the database first, so a failure does not leave a target
@@ -544,15 +525,12 @@ async fn delete_target_archives(storage: &ToolchainStorage, target: &ToolchainTa
     ),
     security(("session_cookie" = []))
 )]
-async fn list_channels(
-    _user: AdminUser,
-    State(db): DbState,
-) -> Result<Json<Vec<ChannelInfo>>, StatusCode> {
+async fn list_channels(_user: AdminUser, State(db): DbState) -> ApiResult<Json<Vec<ChannelInfo>>> {
     trace!("Listing channels");
     db.get_channels()
         .await
         .map(Json)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        .map_err(|e| internal_error("Failed to load channels", e))
 }
 
 /// Set a channel to point to a specific toolchain version
@@ -580,7 +558,7 @@ async fn set_channel(
     State(db): DbState,
     Path(channel): Path<String>,
     Json(req): Json<SetChannelRequest>,
-) -> Result<Json<ToolchainResponse>, (StatusCode, Json<ToolchainResponse>)> {
+) -> ApiResult<Json<ToolchainResponse>> {
     trace!(
         channel = %channel,
         name = %req.name,
@@ -591,7 +569,7 @@ async fn set_channel(
     db.set_channel(&channel, &req.name, &req.version)
         .await
         .map_err(|e| match e {
-            DbError::ToolchainNotFound(..) => error_response(StatusCode::NOT_FOUND, e.to_string()),
+            DbError::ToolchainNotFound(..) => ApiError::not_found(e.to_string()),
             e => internal_error("Failed to set channel", e),
         })?;
 
@@ -627,7 +605,7 @@ async fn get_channel_manifest(
     State(db): DbState,
     State(settings): SettingsState,
     Path(manifest_file): Path<String>,
-) -> Result<Response, StatusCode> {
+) -> ApiResult<Response> {
     trace!(manifest_file = %manifest_file, "Getting channel manifest");
 
     // Parse the manifest filename:
@@ -647,13 +625,13 @@ async fn get_channel_manifest(
     let toolchain = match db
         .get_toolchain_by_channel(channel)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|e| internal_error("Failed to load toolchains", e))?
     {
         Some(tc) => tc,
         None => db
             .get_toolchain_by_version("rust", channel)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|e| internal_error("Failed to load toolchains", e))?
             .ok_or(StatusCode::NOT_FOUND)?,
     };
 
@@ -669,9 +647,9 @@ async fn get_channel_manifest(
             .iter()
             .any(|t| t.status == ToolchainTargetStatus::Processing);
         if has_processing {
-            return Err(StatusCode::SERVICE_UNAVAILABLE);
+            return Err(StatusCode::SERVICE_UNAVAILABLE.into());
         }
-        return Err(StatusCode::NOT_FOUND);
+        return Err(StatusCode::NOT_FOUND.into());
     }
 
     let manifest = generate_manifest(&toolchain, &settings);
@@ -710,7 +688,7 @@ async fn get_channel_manifest(
 async fn download_archive(
     State(storage): ToolchainStorageState,
     Path((date, filename)): Path<(String, String)>,
-) -> Result<Response, StatusCode> {
+) -> ApiResult<Response> {
     trace!(date = %date, filename = %filename, "Downloading toolchain archive");
 
     let storage = storage.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
@@ -1136,14 +1114,15 @@ mod tests {
     use axum::routing::{delete, get, put};
     use axum_extra::extract::cookie::Key;
     use bytes::Bytes;
-    use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{
         DbProvider, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
     };
+    use kellnr_http::error::ErrorDetails;
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
@@ -1209,6 +1188,11 @@ mod tests {
     async fn parse_response<T: DeserializeOwned>(response: Response<Body>) -> T {
         let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         serde_json::from_slice(&bytes).unwrap()
+    }
+
+    async fn error_detail(response: Response<Body>) -> String {
+        let details: ErrorDetails = parse_response(response).await;
+        details.errors[0].detail.clone()
     }
 
     fn sample_archive() -> Bytes {
@@ -1904,9 +1888,7 @@ mod tests {
 
         assert_eq!(StatusCode::NOT_FOUND, response.status());
 
-        let result: ToolchainResponse = parse_response(response).await;
-        assert!(!result.success);
-        assert!(result.message.unwrap().contains("not found"));
+        assert!(error_detail(response).await.contains("not found"));
     }
 
     #[tokio::test]
@@ -1974,9 +1956,7 @@ mod tests {
 
         assert_eq!(StatusCode::SERVICE_UNAVAILABLE, response.status());
 
-        let result: ToolchainResponse = parse_response(response).await;
-        assert!(!result.success);
-        assert!(result.message.unwrap().contains("not configured"));
+        assert!(error_detail(response).await.contains("not configured"));
     }
 
     #[tokio::test]
@@ -2039,9 +2019,7 @@ mod tests {
 
         assert_eq!(StatusCode::CONFLICT, response.status());
 
-        let result: ToolchainResponse = parse_response(response).await;
-        assert!(!result.success);
-        assert!(result.message.unwrap().contains("already exists"));
+        assert!(error_detail(response).await.contains("already exists"));
     }
 
     #[tokio::test]
@@ -2085,9 +2063,7 @@ mod tests {
 
         assert_eq!(StatusCode::NOT_FOUND, response.status());
 
-        let result: ToolchainResponse = parse_response(response).await;
-        assert!(!result.success);
-        assert!(result.message.unwrap().contains("not found"));
+        assert!(error_detail(response).await.contains("not found"));
     }
 
     #[tokio::test]
@@ -2771,10 +2747,10 @@ mod tests {
     const ARCHIVE_PATH: &str = "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz";
     const UPLOAD_URL: &str = "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15";
 
-    async fn send(state: AppStateData, request: Request<Body>) -> (StatusCode, ToolchainResponse) {
+    async fn send(state: AppStateData, request: Request<Body>) -> (StatusCode, String) {
         let response = create_test_router(state).oneshot(request).await.unwrap();
         let status = response.status();
-        (status, parse_response(response).await)
+        (status, error_detail(response).await)
     }
 
     fn upload_request() -> Request<Body> {
@@ -2841,7 +2817,7 @@ mod tests {
         .await;
 
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
-        assert!(!result.message.unwrap().contains("secret detail"));
+        assert!(!result.contains("secret detail"));
         assert!(!storage.exists(&stored(ARCHIVE_PATH)).await.unwrap());
     }
 
@@ -2868,7 +2844,7 @@ mod tests {
         .await;
 
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
-        assert!(!result.message.unwrap().contains("secret detail"));
+        assert!(!result.contains("secret detail"));
         assert!(storage.exists(&stored(ARCHIVE_PATH)).await.unwrap());
     }
 
@@ -2916,7 +2892,7 @@ mod tests {
         .await;
 
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
-        assert!(!result.message.unwrap().contains("secret detail"));
+        assert!(!result.contains("secret detail"));
     }
 
     #[tokio::test]

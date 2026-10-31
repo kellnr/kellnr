@@ -13,17 +13,17 @@ use axum::response::Redirect;
 use axum::{Extension, Json};
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use kellnr_http::state::{AppState, AppStateData, DbState, SettingsState};
-use kellnr_oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
 use kellnr_common::account_name::UserName;
 use kellnr_db::{User, UserFlags};
+use kellnr_http::error::ApiError;
+use kellnr_http::state::{AppState, AppStateData, DbState, SettingsState};
+use kellnr_oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
 use kellnr_settings::UrlPathPrefix;
 use kellnr_settings::constants::{COOKIE_OAUTH2_STATE, COOKIE_OIDC_ID_TOKEN, OAUTH2_STATE_MAX_AGE};
 use serde::{Deserialize, Serialize};
 use tracing::{error, trace, warn};
 use utoipa::ToSchema;
 
-use crate::error::RouteError;
 use crate::session::{create_session_jar, session_cookie};
 
 /// Type alias for the `OAuth2` handler extension
@@ -140,13 +140,13 @@ pub async fn login(
     State(db): DbState,
     State(settings): SettingsState,
     Extension(oauth2_handler): OAuth2Ext,
-) -> Result<(PrivateCookieJar, Redirect), RouteError> {
+) -> Result<(PrivateCookieJar, Redirect), ApiError> {
     trace!("OAuth2 login initiated");
 
     // Check if OAuth2 is enabled
     let handler = oauth2_handler.as_ref().ok_or_else(|| {
         warn!("OAuth2 login attempted but OAuth2 is not enabled");
-        RouteError::Status(StatusCode::NOT_FOUND)
+        ApiError::from(StatusCode::NOT_FOUND)
     })?;
 
     // Generate authorization URL with PKCE
@@ -161,7 +161,7 @@ pub async fn login(
     .await
     .map_err(|e| {
         error!("Failed to store OAuth2 state: {}", e);
-        RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+        ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
     })?;
 
     let jar = cookies.add(state_cookie(
@@ -193,13 +193,13 @@ fn state_cookie(state: String, secure: bool) -> Cookie<'static> {
 fn take_state_cookie(
     jar: PrivateCookieJar,
     query_state: &str,
-) -> Result<PrivateCookieJar, RouteError> {
+) -> Result<PrivateCookieJar, ApiError> {
     let matches = jar
         .get(COOKIE_OAUTH2_STATE)
         .is_some_and(|c| c.value() == query_state);
     if !matches {
         warn!("OAuth2 callback state does not match the state cookie of this browser");
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        return Err(ApiError::from(StatusCode::BAD_REQUEST));
     }
     Ok(jar.remove(Cookie::build((COOKIE_OAUTH2_STATE, "")).path("/")))
 }
@@ -231,7 +231,7 @@ pub async fn callback(
     Query(query): Query<CallbackQuery>,
     State(app_state): AppState,
     Extension(oauth2_handler): OAuth2Ext,
-) -> Result<(PrivateCookieJar, Redirect), RouteError> {
+) -> Result<(PrivateCookieJar, Redirect), ApiError> {
     let (code, query_state) = match query {
         CallbackQuery::Success { code, state } => {
             trace!(state = ?state, "OAuth2 callback received");
@@ -257,7 +257,7 @@ pub async fn callback(
     // Check if OAuth2 is enabled
     let handler = oauth2_handler.as_ref().ok_or_else(|| {
         warn!("OAuth2 callback received but OAuth2 is not enabled");
-        RouteError::Status(StatusCode::NOT_FOUND)
+        ApiError::from(StatusCode::NOT_FOUND)
     })?;
 
     let cookies = take_state_cookie(cookies, &query_state)?;
@@ -269,11 +269,11 @@ pub async fn callback(
         .await
         .map_err(|e| {
             error!("Failed to retrieve OAuth2 state: {}", e);
-            RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
         })?
         .ok_or_else(|| {
             warn!("OAuth2 callback with invalid or expired state: {query_state}");
-            RouteError::Status(StatusCode::BAD_REQUEST)
+            ApiError::from(StatusCode::BAD_REQUEST)
         })?;
 
     // Exchange code for tokens and validate
@@ -282,7 +282,7 @@ pub async fn callback(
         .await
         .map_err(|e| {
             error!("Failed to exchange OAuth2 code: {}", e);
-            RouteError::Status(StatusCode::UNAUTHORIZED)
+            ApiError::from(StatusCode::UNAUTHORIZED)
         })?;
 
     // Extract user information from token
@@ -302,7 +302,7 @@ pub async fn callback(
         .await
         .map_err(|e| {
             error!("Failed to look up OAuth2 identity: {}", e);
-            RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
         })? {
         Some(user) => {
             trace!("Found existing user '{}' for OAuth2 identity", user.name);
@@ -327,7 +327,7 @@ pub async fn callback(
                     "OAuth2 user not found and auto-provisioning is disabled: {}",
                     user_info.subject
                 );
-                return Err(RouteError::Status(StatusCode::FORBIDDEN));
+                return Err(ApiError::from(StatusCode::FORBIDDEN));
             }
 
             // Generate unique username
@@ -341,7 +341,7 @@ pub async fn callback(
             .await
             .map_err(|e| {
                 error!("Failed to check if a user name is available: {e}");
-                RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
             })?;
             let username = UserName::from_unchecked(username);
 
@@ -366,7 +366,7 @@ pub async fn callback(
                 .await
                 .map_err(|e| {
                     error!("Failed to create OAuth2 user: {}", e);
-                    RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                    ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
                 })?
         }
     };
@@ -401,7 +401,7 @@ async fn sync_oauth2_privileges(
     read_only_governed: bool,
     mut user: User,
     user_info: &UserInfo,
-) -> Result<User, RouteError> {
+) -> Result<User, ApiError> {
     let mut changed = false;
 
     if admin_governed && user.is_admin != user_info.is_admin {
@@ -414,7 +414,7 @@ async fn sync_oauth2_privileges(
                     "Failed to sync OAuth2 admin state for '{}': {}",
                     user.name, e
                 );
-                RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
             })?;
         user.is_admin = user_info.is_admin;
         changed = true;
@@ -430,7 +430,7 @@ async fn sync_oauth2_privileges(
                     "Failed to sync OAuth2 read-only state for '{}': {}",
                     user.name, e
                 );
-                RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
             })?;
         user.is_read_only = user_info.is_read_only;
         changed = true;
@@ -662,20 +662,22 @@ mod state_cookie_tests {
     fn mismatching_state_is_rejected() {
         let result = take_state_cookie(jar_with_state("abc"), "attacker");
 
-        assert!(matches!(
-            result,
-            Err(RouteError::Status(StatusCode::BAD_REQUEST))
-        ));
+        assert!(
+            result
+                .as_ref()
+                .is_err_and(|e| e.status() == StatusCode::BAD_REQUEST)
+        );
     }
 
     #[test]
     fn missing_state_cookie_is_rejected() {
         let result = take_state_cookie(empty_jar(), "abc");
 
-        assert!(matches!(
-            result,
-            Err(RouteError::Status(StatusCode::BAD_REQUEST))
-        ));
+        assert!(
+            result
+                .as_ref()
+                .is_err_and(|e| e.status() == StatusCode::BAD_REQUEST)
+        );
     }
 }
 

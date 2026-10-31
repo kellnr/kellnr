@@ -5,9 +5,6 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use kellnr_http::state::{AppState, DbState, ProxyClientState, SettingsProvState, SettingsState};
-use kellnr_http::authz::{self, can_read_crate, crate_visibility};
-use kellnr_http::identity::{AdminUser, AnyUser, Identity, SessionUser};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CRATESIO_INDEX, CrateData};
 use kellnr_common::crate_dependents::CrateDependents;
@@ -18,6 +15,10 @@ use kellnr_common::version::Version;
 use kellnr_db::error::DbError;
 use kellnr_db::{CrateSort, CrateTagFilter, DbProvider};
 use kellnr_docs::upload::upload_dir_and_prune;
+use kellnr_http::authz::{self, can_read_crate, crate_visibility};
+use kellnr_http::error::ApiError;
+use kellnr_http::identity::{AdminUser, AnyUser, Identity, SessionUser};
+use kellnr_http::state::{AppState, DbState, ProxyClientState, SettingsProvState, SettingsState};
 use kellnr_settings::{
     ConfigSource, Provenance, Settings, SettingsProv, SourceMap, cli_flag_map, compile_time_config,
     erased_serde, leaf_label, sources_from_prov,
@@ -27,7 +28,6 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 use utoipa::ToSchema;
 
-use crate::error::RouteError;
 use crate::pagination::{PageParams, PageRequest};
 
 /// Settings response, the flattened `Settings`, the per-leaf source map
@@ -210,16 +210,16 @@ pub async fn settings(
     _user: AdminUser,
     State(settings): SettingsState,
     State(prov): SettingsProvState,
-) -> Result<Json<SettingsResponse>, RouteError> {
+) -> Result<Json<SettingsResponse>, ApiError> {
     let leaves = build_leaves(&prov);
     let serialization_error = |e: serde_json::Error| {
         error!("Failed to serialize settings: {e}");
-        RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+        ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
     };
     let serde_json::Value::Object(settings) =
         redacted_settings_json(&settings, &leaves).map_err(serialization_error)?
     else {
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        return Err(ApiError::from(StatusCode::INTERNAL_SERVER_ERROR));
     };
     let defaults =
         redacted_settings_json(&Settings::default(), &leaves).map_err(serialization_error)?;
@@ -308,9 +308,9 @@ pub struct CratesParams {
 }
 
 /// Logs a failed database query and returns a 500.
-fn db_error(e: &DbError) -> RouteError {
+fn db_error(e: &DbError) -> ApiError {
     error!("Database query failed: {e}");
-    RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+    ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema)]
@@ -339,7 +339,7 @@ pub async fn crates(
     page: PageRequest,
     State(db): DbState,
     user: Option<AnyUser>,
-) -> Result<Json<Pagination>, RouteError> {
+) -> Result<Json<Pagination>, ApiError> {
     let cache = params.cache.unwrap_or(false);
     let visibility = crate_visibility(user.as_deref());
     let sort = params.sort.unwrap_or_default();
@@ -393,7 +393,7 @@ pub async fn search(
     page: PageRequest,
     State(db): DbState,
     user: Option<AnyUser>,
-) -> Result<Json<Pagination>, RouteError> {
+) -> Result<Json<Pagination>, ApiError> {
     let cache = params.cache.unwrap_or(false);
     let visibility = crate_visibility(user.as_deref());
     let crates = db
@@ -439,15 +439,15 @@ pub async fn crate_data(
     Query(params): Query<CrateDataParams>,
     State(db): DbState,
     user: Option<AnyUser>,
-) -> Result<Json<CrateData>, StatusCode> {
+) -> Result<Json<CrateData>, ApiError> {
     let index_name = CanonicalName::from(params.name);
     // Same response as a missing crate to not reveal that a restricted crate exists.
     match can_read_crate(&index_name, user.as_deref(), &db).await {
         Ok(true) => {}
-        Ok(false) => return Err(StatusCode::NOT_FOUND),
+        Ok(false) => return Err(StatusCode::NOT_FOUND.into()),
         Err(e) => {
             error!("Failed to check access to crate {index_name}: {e}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
         }
     }
     let mut cd = db.get_crate_data(&index_name).await.map_err(|e| match e {
@@ -520,15 +520,15 @@ pub async fn crate_dependents(
     Query(params): Query<CrateDependentsParams>,
     State(db): DbState,
     user: Option<AnyUser>,
-) -> Result<Json<CrateDependents>, StatusCode> {
+) -> Result<Json<CrateDependents>, ApiError> {
     let index_name = CanonicalName::from(params.name);
     // Same response as a missing crate to not reveal that a restricted crate exists.
     match can_read_crate(&index_name, user.as_deref(), &db).await {
         Ok(true) => {}
-        Ok(false) => return Err(StatusCode::NOT_FOUND),
+        Ok(false) => return Err(StatusCode::NOT_FOUND.into()),
         Err(e) => {
             error!("Failed to check access to crate {index_name}: {e}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
         }
     }
     let mut cd = db
@@ -592,7 +592,7 @@ pub async fn cratesio_data(
     State(settings): SettingsState,
     State(client): ProxyClientState,
     Query(params): Query<CratesIoDataParams>,
-) -> Result<String, StatusCode> {
+) -> Result<String, ApiError> {
     let url = settings
         .proxy
         .api
@@ -612,12 +612,12 @@ pub async fn cratesio_data(
     match resp.status() {
         StatusCode::OK => resp.text().await.map_err(|e| {
             error!("Failed to read crates.io data: {e}");
-            StatusCode::BAD_GATEWAY
+            StatusCode::BAD_GATEWAY.into()
         }),
-        StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND),
+        StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND.into()),
         status => {
             error!("Failed to get crates.io data: {status}");
-            Err(StatusCode::BAD_GATEWAY)
+            Err(StatusCode::BAD_GATEWAY.into())
         }
     }
 }
@@ -632,7 +632,7 @@ async fn delete_crate_versions_impl(
     state: &kellnr_http::state::AppStateData,
     name: &OriginalName,
     versions: Option<Vec<Version>>,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     let canonical_name = name.to_canonical();
     // Crate files are stored under the name the crate was first published
     // with, which may differ in case or separators from the requested name.
@@ -640,7 +640,7 @@ async fn delete_crate_versions_impl(
         .db
         .get_crate_original_name(&canonical_name)
         .await?
-        .ok_or_else(|| RouteError::NotFound(format!("Crate not found: {name}")))?;
+        .ok_or_else(|| ApiError::not_found(format!("Crate not found: {name}")))?;
 
     let versions_to_delete = if let Some(v) = versions {
         v
@@ -674,7 +674,7 @@ async fn delete_one_version(
     state: &kellnr_http::state::AppStateData,
     name: &OriginalName,
     version: &Version,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     let canonical_name = name.to_canonical();
 
     // A missing file is fine, e.g. when an earlier deletion failed after it.
@@ -684,11 +684,11 @@ async fn delete_one_version(
         .await
         .map_err(|e| {
             error!("Failed to check crate {name}-{version} in storage: {e}");
-            RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
     if exists && let Err(e) = state.crate_storage.delete(name, version).await {
         error!("Failed to delete crate {name}-{version} from storage: {e}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        return Err(ApiError::from(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     state
@@ -706,7 +706,7 @@ async fn delete_one_version(
 
     if let Err(e) = kellnr_docs::delete(name, version, &state.docs_storage).await {
         error!("Failed to delete docs of crate {name}-{version}: {e}");
-        return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        return Err(ApiError::from(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     Ok(())
@@ -732,11 +732,9 @@ pub async fn delete_crate_version(
     Path((name, version)): Path<(String, String)>,
     _user: AdminUser,
     State(state): AppState,
-) -> Result<(), RouteError> {
-    let name = OriginalName::try_from(name.as_str())
-        .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
-    let version = Version::try_from(version.as_str())
-        .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
+) -> Result<(), ApiError> {
+    let name = OriginalName::try_from(name.as_str())?;
+    let version = Version::try_from(version.as_str())?;
 
     delete_crate_versions_impl(&state, &name, Some(vec![version])).await
 }
@@ -760,9 +758,8 @@ pub async fn delete_crate_all(
     Path(name): Path<String>,
     _user: AdminUser,
     State(state): AppState,
-) -> Result<(), RouteError> {
-    let name = OriginalName::try_from(name.as_str())
-        .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
+) -> Result<(), ApiError> {
+    let name = OriginalName::try_from(name.as_str())?;
 
     delete_crate_versions_impl(&state, &name, None).await
 }
@@ -801,7 +798,7 @@ pub async fn statistic(
     State(db): DbState,
     State(settings): SettingsState,
     user: Option<AnyUser>,
-) -> Result<Json<Statistic>, RouteError> {
+) -> Result<Json<Statistic>, ApiError> {
     let num_crates = db
         .get_total_unique_crates()
         .await
@@ -883,9 +880,11 @@ pub async fn build_rustdoc(
     Query(params): Query<BuildParams>,
     State(state): AppState,
     user: SessionUser,
-) -> Result<(), StatusCode> {
+) -> Result<(), ApiError> {
     if !state.settings.docs.enabled {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(ApiError::bad_request(
+            "Documentation generation is disabled",
+        ));
     }
 
     let canonical_name = CanonicalName::from(params.package);
@@ -896,10 +895,8 @@ pub async fn build_rustdoc(
     // the build operation is allowed. This comes before the version check, so
     // that others cannot tell which crates and versions exist: they get the
     // same error for a missing crate.
-    authz::require_owner(&canonical_name, &user, &db)
-        .await
-        .map_err(|e| e.status())?;
-    authz::require_writable(&user).map_err(|e| e.status())?;
+    authz::require_owner(&canonical_name, &user, &db).await?;
+    authz::require_writable(&user)?;
 
     // Check if crate with the version exists.
     let Some(original_name) = db
@@ -907,7 +904,9 @@ pub async fn build_rustdoc(
         .await
         .map_err(internal_error)?
     else {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(ApiError::bad_request(format!(
+            "Crate with version does not exist: {canonical_name}-{version}"
+        )));
     };
 
     // Add to build queue
@@ -965,9 +964,11 @@ pub struct MigrateDocsStorageResponse {
 pub async fn migrate_docs_storage(
     State(state): AppState,
     _admin: AdminUser,
-) -> Result<(StatusCode, Json<MigrateDocsStorageResponse>), RouteError> {
+) -> Result<(StatusCode, Json<MigrateDocsStorageResponse>), ApiError> {
     if state.settings.docs_backend_is_local() {
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        return Err(ApiError::bad_request(
+            "Docs are stored locally, there is nothing to migrate",
+        ));
     }
 
     let docs_path = PathBuf::from(state.settings.docs_path());
@@ -976,7 +977,7 @@ pub async fn migrate_docs_storage(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
         Err(e) => {
             error!("Failed to read local docs directory {docs_path:?}: {e}");
-            return Err(RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+            return Err(ApiError::from(StatusCode::INTERNAL_SERVER_ERROR));
         }
     };
 
@@ -1065,8 +1066,6 @@ mod tests {
     use bytes::Bytes;
     use http_body_util::BodyExt;
     use hyper::{Request, header};
-    use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::encode_cookies;
     use kellnr_common::account_name::UserName;
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
     use kellnr_common::crate_dependents::CrateDependent;
@@ -1074,6 +1073,8 @@ mod tests {
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{CrateVisibility, User};
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::encode_cookies;
     use kellnr_settings::{Postgresql, Settings, Setup, constants};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
@@ -1279,7 +1280,11 @@ mod tests {
             delete_crate_versions_impl(&state, &OriginalName::try_from("nope").unwrap(), None)
                 .await;
 
-        assert!(matches!(result, Err(RouteError::NotFound(_))));
+        assert!(
+            result
+                .as_ref()
+                .is_err_and(|e| e.status() == StatusCode::NOT_FOUND)
+        );
     }
 
     /// A failing version must not keep the remaining versions from being
