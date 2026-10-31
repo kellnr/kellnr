@@ -11,7 +11,7 @@ pub struct DocQueueResponse {
 
 /// Entry in the documentation build queue
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, ToSchema)]
-pub struct DocQueueEntryResponse {
+pub(crate) struct DocQueueEntryResponse {
     /// Crate name
     pub(crate) name: String,
     /// Crate version

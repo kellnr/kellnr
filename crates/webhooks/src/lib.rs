@@ -12,7 +12,7 @@ mod signature;
 mod target;
 #[cfg(test)]
 mod tests;
-pub mod types;
+mod types;
 
 pub use endpoints::{
     delete_webhook, get_all_webhooks, get_webhook, register_webhook, test_webhook,

@@ -6,7 +6,7 @@ mod doc_queue_entry;
 pub mod download_counter;
 pub mod error;
 mod group;
-pub mod id;
+mod id;
 mod krate;
 pub mod password;
 pub mod provider;

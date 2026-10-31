@@ -22,12 +22,12 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// A reqwest client that implements `openidconnect`'s [`AsyncHttpClient`].
 #[derive(Clone, Debug)]
-pub struct OidcHttpClient(reqwest::Client);
+pub(crate) struct OidcHttpClient(reqwest::Client);
 
 impl OidcHttpClient {
     /// Build a client that does not follow redirects, as recommended for
     /// `OAuth2` to prevent SSRF via redirecting endpoints.
-    pub fn new() -> reqwest::Result<Self> {
+    pub(crate) fn new() -> reqwest::Result<Self> {
         Self::with_timeouts(CONNECT_TIMEOUT, REQUEST_TIMEOUT)
     }
 
@@ -68,7 +68,7 @@ impl<'c> AsyncHttpClient<'c> for OidcHttpClient {
 ///
 /// Errors from `openidconnect` only say "Request failed" at the top level; the
 /// actual cause (TLS trust, DNS, connection refused, ...) is in the sources.
-pub fn error_chain(error: &dyn Error) -> String {
+pub(crate) fn error_chain(error: &dyn Error) -> String {
     let mut message = error.to_string();
     let mut source = error.source();
     while let Some(cause) = source {

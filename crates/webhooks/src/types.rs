@@ -50,7 +50,7 @@ impl From<Webhook> for GetWebhookResponse {
 pub struct GetAllWebhooksResponse(pub Vec<GetWebhookResponse>);
 
 #[derive(Error, Debug)]
-pub enum WebhookError {
+pub(crate) enum WebhookError {
     #[error("Database error: {0}")]
     DatabaseError(#[from] kellnr_db::error::DbError),
 }

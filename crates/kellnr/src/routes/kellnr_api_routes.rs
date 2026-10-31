@@ -15,7 +15,7 @@ use utoipa_axum::routes;
 use super::apply_download_limits;
 
 /// Creates the kellnr API routes
-pub fn create_routes(
+pub(super) fn create_routes(
     state: AppStateData,
     max_crate_bytes: usize,
     download_semaphore: Option<Arc<Semaphore>>,

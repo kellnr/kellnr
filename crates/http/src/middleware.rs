@@ -167,7 +167,7 @@ mod test {
         assert_eq!(r.status(), StatusCode::OK);
     }
 
-    pub async fn ok_handler() -> StatusCode {
+    pub(super) async fn ok_handler() -> StatusCode {
         StatusCode::OK
     }
 

@@ -1,10 +1,10 @@
 pub mod api;
 mod doc_archive;
-pub mod doc_queue_response;
+mod doc_queue_response;
 pub mod docs_error;
 pub mod unpack;
 pub mod upload;
-pub mod upload_response;
+mod upload_response;
 
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;

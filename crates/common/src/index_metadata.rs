@@ -11,7 +11,10 @@ mod pubtime_format {
     const FORMAT: &str = "%Y-%m-%dT%H:%M:%SZ";
 
     #[allow(clippy::ref_option)] // signature required by serde's `with` attribute
-    pub fn serialize<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
+    pub(super) fn serialize<S>(
+        date: &Option<DateTime<Utc>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -21,7 +24,7 @@ mod pubtime_format {
         }
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+    pub(super) fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
     where
         D: Deserializer<'de>,
     {

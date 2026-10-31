@@ -38,7 +38,10 @@ mod ui_routes;
 mod user_routes;
 mod webhook_routes;
 
-pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handler>>) -> Router {
+pub(crate) fn create_router(
+    state: AppStateData,
+    oauth2_handler: Option<Arc<OAuth2Handler>>,
+) -> Router {
     let max_docs_bytes = state.settings.docs.max_bytes();
     let max_crate_bytes = state.settings.registry.max_crate_bytes();
     let max_toolchain_bytes = state.settings.toolchain.max_bytes();

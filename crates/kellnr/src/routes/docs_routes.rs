@@ -10,7 +10,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 /// Creates the docs UI routes
-pub fn create_ui_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
+pub(super) fn create_ui_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
     OpenApiRouter::new()
         .routes(routes!(api::docs_in_queue, ui::build_rustdoc))
         .routes(routes!(ui::migrate_docs_storage))
@@ -22,7 +22,7 @@ pub fn create_ui_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
 }
 
 /// Creates the docs manual routes
-pub fn create_manual_routes(max_docs_bytes: usize) -> Router<AppStateData> {
+pub(super) fn create_manual_routes(max_docs_bytes: usize) -> Router<AppStateData> {
     // Keep as regular Router due to custom layer on specific route
     Router::new().route(
         "/{package}/{version}",

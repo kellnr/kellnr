@@ -31,7 +31,7 @@ impl PageSize {
 /// Query parameters of a paginated list.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
-pub struct PageParams {
+pub(crate) struct PageParams {
     /// Number of the page, starting at 0
     page: Option<u64>,
     /// Entries per page, 10 by default, at most 100

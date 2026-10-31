@@ -19,7 +19,7 @@ use tracing::error;
 /// The docs contain the crate's source pages, so they get the same protection
 /// as the crate archive. Denied requests get a 404 to not reveal that the
 /// crate exists.
-pub async fn restrict_docs_access(
+pub(super) async fn restrict_docs_access(
     State(state): State<AppStateData>,
     Path(path): Path<String>,
     request: Request,
@@ -69,7 +69,7 @@ fn crate_name_from_doc_path(path: &str) -> Option<CanonicalName> {
         .map(|name| name.to_canonical())
 }
 
-pub async fn serve_doc_file(
+pub(super) async fn serve_doc_file(
     State(docs_storage): DocsStorageState,
     Path(path): Path<String>,
     if_none_match: Option<TypedHeader<IfNoneMatch>>,
