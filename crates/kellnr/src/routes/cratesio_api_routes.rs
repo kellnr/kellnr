@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use axum::routing::get;
 use axum::{Router, middleware};
+use kellnr_http::identity::Accepts;
+use kellnr_http::middleware::auth_when_required;
 use kellnr_http::state::AppStateData;
-use kellnr_http::auth_req_token;
 use kellnr_index::cratesio_prefetch_api;
 use kellnr_registry::cratesio_api;
 use tokio::sync::Semaphore;
@@ -40,7 +41,7 @@ pub fn create_routes(
             cratesio_api::cratesio_enabled,
         ))
         .layer(middleware::from_fn_with_state(
-            state,
-            auth_req_token::cargo_auth_when_required,
+            (state, Accepts::Token),
+            auth_when_required,
         ))
 }

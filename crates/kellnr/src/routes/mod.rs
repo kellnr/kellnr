@@ -7,11 +7,12 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router, middleware};
+use kellnr_http::identity::Accepts;
+use kellnr_http::middleware::auth_when_required;
 use kellnr_http::state::AppStateData;
 use kellnr_oauth2::OAuth2Handler;
 use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};
 use kellnr_settings::{Protocol, Registry};
-use kellnr_web_ui::session;
 use tokio::sync::Semaphore;
 use tower_http::timeout::TimeoutLayer;
 use utoipa::OpenApi;
@@ -49,8 +50,8 @@ pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handl
             docs_static::restrict_docs_access,
         ))
         .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            session::session_auth_when_required,
+            (state.clone(), Accepts::Session),
+            auth_when_required,
         ))
         // User-uploaded docs are served from the same origin as the UI and API.
         // A restrictive CSP keeps rustdoc rendering while stopping any script in

@@ -1,10 +1,11 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use kellnr_http::state::{DbState, SettingsState};
-use kellnr_http::token;
 use kellnr_common::webhook::Webhook;
+use kellnr_http::authz::require_admin_for_token_api;
 use kellnr_http::error::{ApiError, ApiResult};
+use kellnr_http::identity::TokenUser;
+use kellnr_http::state::{DbState, SettingsState};
 use tracing::{trace, warn};
 use uuid::Uuid;
 
@@ -27,15 +28,13 @@ use crate::types;
     security(("cargo_token" = []))
 )]
 pub async fn register_webhook(
-    token: token::Token,
+    user: TokenUser,
     State(db): DbState,
     State(settings): SettingsState,
     Json(input): Json<types::RegisterWebhookRequest>,
 ) -> ApiResult<Json<types::RegisterWebhookResponse>> {
-    trace!(user = %token.user, event = ?input.event, "Registering webhook");
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
-    }
+    trace!(user = %user.name, event = ?input.event, "Registering webhook");
+    require_admin_for_token_api(&user)?;
 
     let url = validate_callback_url(&input.callback_url)
         .map_err(|e| ApiError::new(&e, StatusCode::BAD_REQUEST))?;
@@ -77,14 +76,12 @@ pub async fn register_webhook(
     security(("cargo_token" = []))
 )]
 pub async fn get_webhook(
-    token: token::Token,
+    user: TokenUser,
     Path(id): Path<String>,
     State(db): DbState,
 ) -> ApiResult<Json<types::GetWebhookResponse>> {
-    trace!(user = %token.user, webhook_id = %id, "Getting webhook");
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
-    }
+    trace!(user = %user.name, webhook_id = %id, "Getting webhook");
+    require_admin_for_token_api(&user)?;
 
     Ok(Json(db.get_webhook(&id).await?.into()))
 }
@@ -101,13 +98,11 @@ pub async fn get_webhook(
     security(("cargo_token" = []))
 )]
 pub async fn get_all_webhooks(
-    token: token::Token,
+    user: TokenUser,
     State(db): DbState,
 ) -> ApiResult<Json<types::GetAllWebhooksResponse>> {
-    trace!(user = %token.user, "Listing all webhooks");
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
-    }
+    trace!(user = %user.name, "Listing all webhooks");
+    require_admin_for_token_api(&user)?;
 
     let w = db.get_all_webhooks().await?;
     Ok(Json(types::GetAllWebhooksResponse(
@@ -130,14 +125,12 @@ pub async fn get_all_webhooks(
     security(("cargo_token" = []))
 )]
 pub async fn delete_webhook(
-    token: token::Token,
+    user: TokenUser,
     Path(id): Path<String>,
     State(db): DbState,
 ) -> ApiResult<()> {
-    trace!(user = %token.user, webhook_id = %id, "Deleting webhook");
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
-    }
+    trace!(user = %user.name, webhook_id = %id, "Deleting webhook");
+    require_admin_for_token_api(&user)?;
 
     db.delete_webhook(&id).await?;
     Ok(())
@@ -161,15 +154,13 @@ pub async fn delete_webhook(
     security(("cargo_token" = []))
 )]
 pub async fn test_webhook(
-    token: token::Token,
+    user: TokenUser,
     Path(id): Path<String>,
     State(db): DbState,
     State(settings): SettingsState,
 ) -> ApiResult<()> {
-    trace!(user = %token.user, webhook_id = %id, "Testing webhook");
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
-    }
+    trace!(user = %user.name, webhook_id = %id, "Testing webhook");
+    require_admin_for_token_api(&user)?;
 
     let w = db.get_webhook(&id).await?;
     let client = WebhookClient::new(&settings.webhooks)
@@ -232,11 +223,11 @@ mod endpoint_tests {
     use axum::response::Response;
     use axum::routing::{delete, get, post};
     use hyper::header;
-    use kellnr_http::state::AppStateData;
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_common::webhook::WebhookEvent;
     use kellnr_db::{ConString, Database, DbProvider, SqliteConString, UserFlags};
+    use kellnr_http::state::AppStateData;
     use serde::de::DeserializeOwned;
     use tower::ServiceExt;
 

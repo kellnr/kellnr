@@ -2,17 +2,15 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::Redirect;
-use kellnr_http::state::{AppState, DbState, DocsStorageState, SettingsState};
-use kellnr_http::authz::{can_read_crate, check_can_modify, check_ownership};
-use kellnr_http::maybe_user::MaybeUser;
-use kellnr_http::token::Token;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
+use kellnr_http::authz::{can_read_crate, require_owner, require_writable_for_upload};
 use kellnr_http::error::ApiResult;
+use kellnr_http::identity::{AnyUser, Identity, TokenUser};
+use kellnr_http::state::{AppState, DbState, DocsStorageState, SettingsState};
 use kellnr_storage::docs_storage::DocsName;
 use tracing::error;
 
@@ -37,16 +35,15 @@ use crate::{compute_doc_url, doc_exists};
     security(("session_cookie" = []))
 )]
 pub async fn docs_in_queue(
-    user: Result<MaybeUser, StatusCode>,
+    user: Option<AnyUser>,
     State(db): DbState,
 ) -> ApiResult<Json<DocQueueResponse>> {
-    let user = user.ok();
     let mut visible = Vec::new();
     for entry in db.get_doc_queue().await? {
         let Ok(name) = entry.canonical_name() else {
             continue;
         };
-        if can_read_docs(&name, user.as_ref(), &db).await {
+        if can_read_docs(&name, user.as_deref(), &db).await {
             visible.push(entry);
         }
     }
@@ -70,7 +67,7 @@ pub async fn docs_in_queue(
 )]
 pub async fn latest_docs(
     Path(package): Path<OriginalName>,
-    user: Result<MaybeUser, StatusCode>,
+    user: Option<AnyUser>,
     State(settings): SettingsState,
     State(docs_storage): DocsStorageState,
     State(db): DbState,
@@ -78,7 +75,7 @@ pub async fn latest_docs(
     let name = package.to_canonical();
 
     // Same response as "no docs" to not reveal that a restricted crate exists.
-    if !can_read_docs(&name, user.ok().as_ref(), &db).await {
+    if !can_read_docs(&name, user.as_deref(), &db).await {
         return Redirect::temporary("/");
     }
 
@@ -99,7 +96,7 @@ pub async fn latest_docs(
 /// Whether `user` may read the docs of a crate, honoring its download restriction.
 async fn can_read_docs(
     crate_name: &CanonicalName,
-    user: Option<&MaybeUser>,
+    user: Option<&Identity>,
     db: &Arc<dyn DbProvider>,
 ) -> bool {
     can_read_crate(crate_name, user, db)
@@ -133,7 +130,7 @@ async fn can_read_docs(
 )]
 pub async fn publish_docs(
     Path((package, version)): Path<(OriginalName, Version)>,
-    token: Token,
+    user: TokenUser,
     State(state): AppState,
     mut docs: DocArchive,
 ) -> ApiResult<Json<DocUploadResponse>> {
@@ -146,9 +143,8 @@ pub async fn publish_docs(
     // If not, he is not allowed to push the docs. This comes before the
     // version check, so that others cannot tell which crates and versions
     // exist: they get the same error for a missing crate.
-    let user = MaybeUser::from_token(token);
-    check_can_modify(&user)?;
-    check_ownership(&canonical_name, &user, &db).await?;
+    require_writable_for_upload(&user)?;
+    require_owner(&canonical_name, &user, &db).await?;
 
     let Some(original_name) = db.get_original_name(&canonical_name, &version).await? else {
         return crate_does_not_exist(&package, &version);
@@ -203,12 +199,12 @@ mod tests {
     use axum::http::{Request, StatusCode, header};
     use axum::routing::{get, put};
     use http_body_util::BodyExt;
-    use kellnr_http::state::AppStateData;
     use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{DbProvider, DocQueueEntry, User};
+    use kellnr_http::state::AppStateData;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;

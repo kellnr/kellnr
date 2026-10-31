@@ -5,6 +5,7 @@ use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
 use kellnr_http::state::{AppState, DbState, LoginThrottleState, SettingsState, TokenCacheState};
 use kellnr_http::password::{PasswordAuthError, authenticate_password};
+use kellnr_http::identity::{AdminUser, SessionUser};
 use kellnr_http::token;
 use kellnr_common::account_name::{UserName, validate_token_name};
 use kellnr_common::plain_token::PlainToken;
@@ -17,7 +18,7 @@ use utoipa::ToSchema;
 
 use crate::error::RouteError;
 use crate::oauth2::OAuth2Ext;
-use crate::session::{AdminUser, MaybeUser, create_session_jar};
+use crate::session::create_session_jar;
 
 /// Reject local password operations when SSO is enforced.
 fn ensure_local_auth_enabled(settings: &Settings) -> Result<(), RouteError> {
@@ -65,14 +66,14 @@ pub struct NewTokenResponse {
     security(("session_cookie" = []))
 )]
 pub async fn add_token(
-    user: MaybeUser,
+    user: SessionUser,
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(auth_token): Json<token::NewTokenReqData>,
 ) -> Result<Json<NewTokenResponse>, RouteError> {
     validate_token_name(&auth_token.name)?;
     let token = token::generate_token();
-    db.add_auth_token(&auth_token.name, &token, user.name())
+    db.add_auth_token(&auth_token.name, &token, &user.name)
         .await?;
 
     cache.invalidate_all();
@@ -96,10 +97,10 @@ pub async fn add_token(
     security(("session_cookie" = []))
 )]
 pub async fn list_tokens(
-    user: MaybeUser,
+    user: SessionUser,
     State(db): DbState,
 ) -> Result<Json<Vec<AuthToken>>, RouteError> {
-    Ok(Json(db.get_auth_tokens(user.name()).await?))
+    Ok(Json(db.get_auth_tokens(&user.name).await?))
 }
 
 /// List all users (admin only)
@@ -136,13 +137,13 @@ pub async fn list_users(
     security(("session_cookie" = []))
 )]
 pub async fn delete_token(
-    user: MaybeUser,
+    user: SessionUser,
     Path(id): Path<AuthTokenId>,
     State(db): DbState,
     State(cache): TokenCacheState,
 ) -> Result<(), RouteError> {
     // Only deletes a token of the user
-    db.delete_auth_token(user.name(), id).await?;
+    db.delete_auth_token(&user.name, id).await?;
 
     cache.invalidate_all();
 
@@ -183,7 +184,7 @@ pub async fn reset_pwd(
     db.change_pwd(&name, &new_pwd).await?;
 
     // An admin resetting their own password stays logged in.
-    let keep_session = jar.get(COOKIE_SESSION_ID).filter(|_| *admin.name() == name);
+    let keep_session = jar.get(COOKIE_SESSION_ID).filter(|_| admin.name == name);
     revoke_sessions(db.as_ref(), &name, keep_session.as_ref().map(Cookie::value)).await?;
 
     // Drop cached basic auth credentials carrying the old password.
@@ -226,7 +227,7 @@ pub async fn read_only(
     Json(ro_state): Json<ReadOnlyState>,
 ) -> Result<(), RouteError> {
     // Prevent self-locking to avoid lockout
-    if *user.name() == name && ro_state.state {
+    if user.name == name && ro_state.state {
         return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
@@ -266,7 +267,7 @@ pub async fn admin(
     Json(admin_state): Json<AdminState>,
 ) -> Result<(), RouteError> {
     // Prevent self-demotion to avoid lockout
-    if *user.name() == name && !admin_state.state {
+    if user.name == name && !admin_state.state {
         return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
@@ -299,7 +300,7 @@ pub async fn delete(
     State(cache): TokenCacheState,
 ) -> Result<(), RouteError> {
     // Prevent self-deletion to avoid lockout
-    if *user.name() == name {
+    if user.name == name {
         return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
@@ -390,16 +391,11 @@ pub async fn login(
     )
 )]
 #[expect(clippy::unused_async)] // part of the router
-pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
+pub async fn login_state(user: Option<SessionUser>) -> Json<LoggedInUser> {
     match user {
-        Some(MaybeUser::Normal(user)) => LoggedInUser {
-            user: user.into_inner(),
-            is_admin: false,
-            is_logged_in: true,
-        },
-        Some(MaybeUser::Admin(user)) => LoggedInUser {
-            user: user.into_inner(),
-            is_admin: true,
+        Some(SessionUser(user)) => LoggedInUser {
+            user: user.name.into_inner(),
+            is_admin: user.is_admin,
             is_logged_in: true,
         },
         None => LoggedInUser {
@@ -495,7 +491,7 @@ impl PwdChange {
     security(("session_cookie" = []))
 )]
 pub async fn change_pwd(
-    user: MaybeUser,
+    user: SessionUser,
     jar: PrivateCookieJar,
     State(db): DbState,
     State(cache): TokenCacheState,
@@ -506,7 +502,7 @@ pub async fn change_pwd(
     ensure_local_auth_enabled(&settings)?;
     pwd_change.validate()?;
 
-    let user = authenticate_password(db.as_ref(), &throttle, user.name(), &pwd_change.old_pwd)
+    let user = authenticate_password(db.as_ref(), &throttle, &user.name, &pwd_change.old_pwd)
         .await
         .map_err(|e| match e {
             PasswordAuthError::Throttled => RouteError::Status(StatusCode::TOO_MANY_REQUESTS),
@@ -984,7 +980,7 @@ mod tests {
     async fn test_add_user_with_invalid_name_is_bad_request() {
         for name in ["", "  ", "a:b", "line\nbreak", &"a".repeat(65)] {
             let result = add(
-                AdminUser(UserName::new("admin").unwrap()),
+                AdminUser(kellnr_http::test_support::session_identity("admin", true)),
                 State(Arc::new(MockDb::new())),
                 State(Arc::new(TokenCacheManager::new(
                     false,
@@ -1007,7 +1003,7 @@ mod tests {
     async fn test_add_token_with_invalid_name_is_bad_request() {
         for name in [String::new(), "a".repeat(129)] {
             let result = add_token(
-                MaybeUser::Normal(UserName::new("user").unwrap()),
+                SessionUser(kellnr_http::test_support::session_identity("user", false)),
                 State(Arc::new(MockDb::new())),
                 State(Arc::new(TokenCacheManager::new(
                     false,
@@ -1034,7 +1030,7 @@ mod tests {
         let settings = Arc::new(Settings::default());
         let add_bob = || {
             add(
-                AdminUser(UserName::new("admin").unwrap()),
+                AdminUser(kellnr_http::test_support::session_identity("admin", true)),
                 State(db.clone()),
                 State(cache.clone()),
                 State(settings.clone()),

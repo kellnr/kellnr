@@ -3,8 +3,9 @@ use std::sync::Arc;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, put};
 use axum::{Router, middleware};
+use kellnr_http::identity::Accepts;
+use kellnr_http::middleware::auth_when_required;
 use kellnr_http::state::AppStateData;
-use kellnr_http::auth_req_token;
 use kellnr_index::kellnr_prefetch_api;
 use kellnr_registry::kellnr_api;
 use tokio::sync::Semaphore;
@@ -80,7 +81,7 @@ pub fn create_routes(
         .routes(routes!(kellnr_api::unyank))
         // Accept either cargo token auth (cargo CLI) or session cookie auth (web UI)
         .layer(middleware::from_fn_with_state(
-            state,
-            auth_req_token::token_or_session_auth_when_required,
+            (state, Accepts::TokenOrSession),
+            auth_when_required,
         ))
 }
