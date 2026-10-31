@@ -140,6 +140,24 @@ impl OAuth2 {
         Ok(())
     }
 
+    /// The claim that grants admin rights, if both `admin_group_claim` and
+    /// `admin_group_value` are set.
+    pub fn admin_claim(&self) -> Option<ClaimMatch<'_>> {
+        ClaimMatch::new(
+            self.admin_group_claim.as_deref(),
+            self.admin_group_value.as_deref(),
+        )
+    }
+
+    /// The claim that makes a user read-only, if both
+    /// `read_only_group_claim` and `read_only_group_value` are set.
+    pub fn read_only_claim(&self) -> Option<ClaimMatch<'_>> {
+        ClaimMatch::new(
+            self.read_only_group_claim.as_deref(),
+            self.read_only_group_value.as_deref(),
+        )
+    }
+
     /// Configuration that is accepted but most likely a mistake, for
     /// example a group claim without its value, which grants nothing.
     pub fn warnings(&self) -> Vec<String> {
@@ -162,6 +180,24 @@ impl OAuth2 {
             );
         }
         warnings
+    }
+}
+
+/// A value that an ID token claim has to contain to grant a privilege.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClaimMatch<'a> {
+    /// Name of the claim, e.g. `groups`
+    pub claim: &'a str,
+    /// Value the claim has to contain, e.g. `kellnr-admins`
+    pub value: &'a str,
+}
+
+impl<'a> ClaimMatch<'a> {
+    fn new(claim: Option<&'a str>, value: Option<&'a str>) -> Option<Self> {
+        Some(Self {
+            claim: claim?,
+            value: value?,
+        })
     }
 }
 
@@ -303,6 +339,31 @@ mod tests {
             assert_eq!(1, warnings.len());
             assert!(warnings[0].contains("set together"));
         }
+    }
+
+    #[test]
+    fn claim_matches_need_claim_and_value() {
+        let oauth2 = OAuth2 {
+            admin_group_claim: Some("groups".to_string()),
+            admin_group_value: Some("admins".to_string()),
+            read_only_group_claim: Some("roles".to_string()),
+            ..OAuth2::default()
+        };
+        assert_eq!(
+            oauth2.admin_claim(),
+            Some(ClaimMatch {
+                claim: "groups",
+                value: "admins"
+            })
+        );
+        assert_eq!(oauth2.read_only_claim(), None);
+
+        let oauth2 = OAuth2 {
+            read_only_group_value: Some("readers".to_string()),
+            ..OAuth2::default()
+        };
+        assert_eq!(oauth2.admin_claim(), None);
+        assert_eq!(oauth2.read_only_claim(), None);
     }
 
     #[test]

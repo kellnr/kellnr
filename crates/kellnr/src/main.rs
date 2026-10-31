@@ -275,8 +275,7 @@ async fn run_server(resolved: ResolvedSettings) {
     // OAuth2 identity. Warn when neither holds, rather than fail: the registry
     // itself still works, only admin access is unreachable.
     if settings.oauth2.enforced
-        && (settings.oauth2.admin_group_claim.is_none()
-            || settings.oauth2.admin_group_value.is_none())
+        && settings.oauth2.admin_claim().is_none()
         && !db.has_oauth2_admin().await.unwrap_or(false)
     {
         warn!(
