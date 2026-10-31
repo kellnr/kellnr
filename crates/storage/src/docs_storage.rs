@@ -7,6 +7,7 @@ use kellnr_common::version::Version;
 use crate::cached_crate_storage::DynStorage;
 use crate::storage::ObjectWithMeta;
 use crate::storage_error::StorageError;
+use crate::storage_key::StorageKey;
 
 /// Name of the folder that holds the docs of a crate: the name the crate was
 /// published with, in lowercase. Docs links point to it, so it must not change.
@@ -43,15 +44,15 @@ impl DocsStorage {
 
     /// Key for one file under a crate+version's doc tree, e.g.
     /// `my-crate/1.0.0/doc/my_crate/index.html`.
-    pub fn file_key(crate_name: &DocsName, version: &Version, relative_path: &str) -> String {
-        format!("{crate_name}/{version}/{relative_path}")
+    pub fn file_key(crate_name: &DocsName, version: &Version, relative_path: &str) -> StorageKey {
+        StorageKey::docs_file(crate_name, version, relative_path)
     }
 
     pub fn version_prefix(crate_name: &DocsName, version: &Version) -> String {
         format!("{crate_name}/{version}/")
     }
 
-    pub async fn put(&self, key: &str, data: Bytes) -> Result<(), StorageError> {
+    pub async fn put(&self, key: &StorageKey, data: Bytes) -> Result<(), StorageError> {
         self.storage
             .put_overwrite(key, data)
             .await
@@ -61,7 +62,7 @@ impl DocsStorage {
             })
     }
 
-    pub async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
+    pub async fn get(&self, key: &StorageKey) -> Result<Bytes, StorageError> {
         self.storage.get(key).await.map_err(|e| {
             if e.is_not_found() {
                 return StorageError::DocsNotFound {
@@ -75,7 +76,7 @@ impl DocsStorage {
         })
     }
 
-    pub async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
+    pub async fn get_with_meta(&self, key: &StorageKey) -> Result<ObjectWithMeta, StorageError> {
         self.storage.get_with_meta(key).await.map_err(|e| {
             if e.is_not_found() {
                 return StorageError::DocsNotFound {
@@ -89,11 +90,11 @@ impl DocsStorage {
         })
     }
 
-    pub async fn exists(&self, key: &str) -> Result<bool, StorageError> {
+    pub async fn exists(&self, key: &StorageKey) -> Result<bool, StorageError> {
         self.storage.exists(key).await
     }
 
-    pub async fn delete(&self, key: &str) -> Result<(), StorageError> {
+    pub async fn delete(&self, key: &StorageKey) -> Result<(), StorageError> {
         self.storage
             .delete(key)
             .await
@@ -103,7 +104,7 @@ impl DocsStorage {
             })
     }
 
-    pub async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+    pub async fn list(&self, prefix: &str) -> Result<Vec<StorageKey>, StorageError> {
         self.storage
             .list(prefix)
             .await

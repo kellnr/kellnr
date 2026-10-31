@@ -10,6 +10,7 @@ use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::gcs_storage::GCSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+use kellnr_storage::storage_key::StorageKey;
 #[path = "gcs_image.rs"]
 mod image;
 
@@ -177,13 +178,20 @@ async fn docs_list_returns_keys_with_special_characters_as_stored() {
         "my-crate/x y.html",
     ];
     for key in keys {
-        docs.put(key, bytes::Bytes::from(key)).await.unwrap();
+        docs.put(
+            &StorageKey::from_stored(key.to_string()),
+            bytes::Bytes::from(key),
+        )
+        .await
+        .unwrap();
     }
 
     let mut listed = docs.list("my-crate/").await.unwrap();
     listed.sort_unstable();
 
-    let mut expected = keys.map(String::from).to_vec();
+    let mut expected = keys
+        .map(|k| StorageKey::from_stored(k.to_string()))
+        .to_vec();
     expected.sort_unstable();
     assert_eq!(listed, expected);
 }

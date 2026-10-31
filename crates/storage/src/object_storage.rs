@@ -8,6 +8,7 @@ use percent_encoding::percent_decode_str;
 
 use crate::storage::{ObjectWithMeta, Storage};
 use crate::storage_error::StorageError;
+use crate::storage_key::StorageKey;
 
 /// [`Storage`] on top of an `object_store` backend.
 pub struct ObjectStorage<S>(pub(crate) S);
@@ -36,25 +37,32 @@ fn object_path(key: &str) -> Path {
 
 /// The key of an object path, the inverse of [`object_path`]. Keys returned
 /// by [`Storage::list`] are therefore equal to the keys they were stored with.
-fn object_key(path: &Path) -> String {
-    path.parts()
+fn object_key(path: &Path) -> StorageKey {
+    let key = path
+        .parts()
         .map(|part| {
             percent_decode_str(part.as_ref())
                 .decode_utf8_lossy()
                 .into_owned()
         })
         .collect::<Vec<_>>()
-        .join("/")
+        .join("/");
+    StorageKey::from_stored(key)
 }
 
 #[async_trait]
 impl<S: ObjectStore> Storage for ObjectStorage<S> {
-    async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
-        Ok(self.0.get(&object_path(key)).await?.bytes().await?)
+    async fn get(&self, key: &StorageKey) -> Result<Bytes, StorageError> {
+        Ok(self
+            .0
+            .get(&object_path(key.as_str()))
+            .await?
+            .bytes()
+            .await?)
     }
 
-    async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
-        let result = self.0.get(&object_path(key)).await?;
+    async fn get_with_meta(&self, key: &StorageKey) -> Result<ObjectWithMeta, StorageError> {
+        let result = self.0.get(&object_path(key.as_str())).await?;
         let e_tag = result.meta.e_tag.clone();
         let last_modified = result.meta.last_modified;
         let bytes = result.bytes().await?;
@@ -65,38 +73,46 @@ impl<S: ObjectStore> Storage for ObjectStorage<S> {
         })
     }
 
-    async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+    async fn put(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
         self.0
-            .put_opts(&object_path(key), object.into(), PutMode::Create.into())
+            .put_opts(
+                &object_path(key.as_str()),
+                object.into(),
+                PutMode::Create.into(),
+            )
             .await?;
         Ok(())
     }
 
-    async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+    async fn put_overwrite(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
         self.0
-            .put_opts(&object_path(key), object.into(), PutMode::Overwrite.into())
+            .put_opts(
+                &object_path(key.as_str()),
+                object.into(),
+                PutMode::Overwrite.into(),
+            )
             .await?;
         Ok(())
     }
 
-    async fn delete(&self, key: &str) -> Result<(), StorageError> {
-        self.0.delete(&object_path(key)).await?;
+    async fn delete(&self, key: &StorageKey) -> Result<(), StorageError> {
+        self.0.delete(&object_path(key.as_str())).await?;
         Ok(())
     }
 
-    async fn exists(&self, key: &str) -> Result<bool, StorageError> {
-        match self.0.head(&object_path(key)).await {
+    async fn exists(&self, key: &StorageKey) -> Result<bool, StorageError> {
+        match self.0.head(&object_path(key.as_str())).await {
             Ok(_) => Ok(true),
             Err(object_store::Error::NotFound { .. }) => Ok(false),
             Err(e) => Err(e.into()),
         }
     }
 
-    async fn size(&self, key: &str) -> Result<u64, StorageError> {
-        Ok(self.0.head(&object_path(key)).await?.size)
+    async fn size(&self, key: &StorageKey) -> Result<u64, StorageError> {
+        Ok(self.0.head(&object_path(key.as_str())).await?.size)
     }
 
-    async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+    async fn list(&self, prefix: &str) -> Result<Vec<StorageKey>, StorageError> {
         let prefix = (!prefix.is_empty()).then(|| object_path(prefix));
         let mut stream = self.0.list(prefix.as_ref());
         let mut keys = Vec::new();

@@ -16,7 +16,8 @@ use kellnr_appstate::{AppStateData, DbState, SettingsState, ToolchainStorageStat
 use kellnr_db::error::DbError;
 use kellnr_db::{ChannelInfo, ToolchainTargetInfo, ToolchainWithTargets};
 use kellnr_storage::storage_error::StorageError;
-use kellnr_storage::toolchain_storage::ToolchainStorage;
+use kellnr_storage::storage_key::StorageKey;
+use kellnr_storage::toolchain_storage::{ToolchainArchiveId, ToolchainStorage};
 use kellnr_web_ui::session::AdminUser;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
@@ -177,21 +178,18 @@ async fn upload_toolchain(
 
     // Store the archive before it is added to the database, so a failed store
     // does not leave a toolchain or target without archive behind.
-    let (path, hash) = storage
-        .put(
-            &params.date,
-            &params.name,
-            &params.version,
-            &params.target,
-            body,
-        )
-        .await
-        .map_err(|e| match e {
-            StorageError::ToolchainArchiveExists { .. } => {
-                error_response(StatusCode::CONFLICT, e.to_string())
-            }
-            e => internal_error("Failed to store archive", e),
-        })?;
+    let archive_id = ToolchainArchiveId {
+        name: &params.name,
+        version: &params.version,
+        date: &params.date,
+        target: &params.target,
+    };
+    let (path, hash) = storage.put(&archive_id, body).await.map_err(|e| match e {
+        StorageError::ToolchainArchiveExists { .. } => {
+            error_response(StatusCode::CONFLICT, e.to_string())
+        }
+        e => internal_error("Failed to store archive", e),
+    })?;
 
     let target_id =
         match add_target_to_db(&db, toolchain.as_ref(), &params, &path, &hash, size).await {
@@ -249,14 +247,17 @@ async fn upload_toolchain(
             bytes
         };
 
+        let archive_id = ToolchainArchiveId {
+            name: &bg_name,
+            version: &bg_version,
+            date: &bg_date,
+            target: &bg_target,
+        };
         match extract_and_store_components(
             &bg_storage,
             &bg_db,
             target_id,
-            &bg_name,
-            &bg_version,
-            &bg_target,
-            &bg_date,
+            &archive_id,
             archive_bytes,
         )
         .await
@@ -313,7 +314,7 @@ async fn add_target_to_db(
     db: &Arc<dyn kellnr_db::DbProvider>,
     toolchain: Option<&ToolchainWithTargets>,
     params: &UploadQuery,
-    path: &str,
+    path: &StorageKey,
     hash: &str,
     size: i64,
 ) -> Result<i64, ErrorResponse> {
@@ -331,7 +332,7 @@ async fn add_target_to_db(
     };
 
     match db
-        .add_toolchain_target(toolchain_id, &params.target, path, hash, size)
+        .add_toolchain_target(toolchain_id, &params.target, path.as_str(), hash, size)
         .await
     {
         Ok(target_id) => Ok(target_id),
@@ -501,11 +502,17 @@ async fn delete_toolchain_target(
 /// Deletes the archive of a target and its component archives. Failures are
 /// only logged, the target is already removed from the database.
 async fn delete_target_archives(storage: &ToolchainStorage, target: &ToolchainTargetInfo) {
-    if let Err(e) = storage.delete(&target.storage_path).await {
+    if let Err(e) = storage
+        .delete(&StorageKey::from_stored(target.storage_path.clone()))
+        .await
+    {
         tracing::warn!("Failed to delete archive from storage: {e}");
     }
     for component in &target.components {
-        if let Err(e) = storage.delete(&component.storage_path).await {
+        if let Err(e) = storage
+            .delete(&StorageKey::from_stored(component.storage_path.clone()))
+            .await
+        {
             tracing::warn!("Failed to delete component archive from storage: {e}");
         }
     }
@@ -692,7 +699,7 @@ async fn download_archive(
 
     let storage = storage.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
-    let path = format!("{date}/{filename}");
+    let path = StorageKey::toolchain_file(&date, &filename);
     let archive = storage.get(&path).await.map_err(|e| {
         tracing::warn!("Failed to get toolchain archive {}: {}", path, e);
         StatusCode::NOT_FOUND
@@ -735,15 +742,11 @@ static EXTRACTION_PERMITS: Semaphore = Semaphore::const_new(1);
 /// The decompressed components are written to temporary files and compressed
 /// one by one, so only the archive and one compressed component are held in
 /// memory. The CPU heavy work runs on the blocking thread pool.
-#[expect(clippy::too_many_arguments)]
 async fn extract_and_store_components(
     storage: &Arc<ToolchainStorage>,
     db: &Arc<dyn kellnr_db::DbProvider>,
     target_id: i64,
-    name: &str,
-    version: &str,
-    target: &str,
-    date: &str,
+    archive_id: &ToolchainArchiveId<'_>,
     archive_bytes: Bytes,
 ) -> Result<(), String> {
     let _permit = EXTRACTION_PERMITS
@@ -752,7 +755,11 @@ async fn extract_and_store_components(
         .map_err(|e| format!("Failed to wait for component extraction: {e}"))?;
 
     let components = {
-        let (name, version, target) = (name.to_string(), version.to_string(), target.to_string());
+        let (name, version, target) = (
+            archive_id.name.to_string(),
+            archive_id.version.to_string(),
+            archive_id.target.to_string(),
+        );
         tokio::task::spawn_blocking(move || {
             split_components(&archive_bytes, &name, &version, &target)
         })
@@ -768,7 +775,7 @@ async fn extract_and_store_components(
     // Compress and store each component archive.
     // Track stored paths so we can clean up on failure (e.g. if the target
     // was deleted concurrently and the DB insert fails with an FK violation).
-    let mut stored_paths: Vec<String> = Vec::new();
+    let mut stored_paths: Vec<StorageKey> = Vec::new();
 
     for (component_name, component_tar) in components {
         let component_xz = tokio::task::spawn_blocking(move || compress_component(component_tar))
@@ -778,13 +785,12 @@ async fn extract_and_store_components(
 
         let component_hash = sha256::digest(&component_xz[..]);
         let component_size = component_xz.len() as i64;
-        let component_storage_path =
-            ToolchainStorage::component_storage_path(date, &component_name, version, target);
+        let component_storage_path = StorageKey::toolchain_component(archive_id, &component_name);
 
         // A file no target refers to is left over, e.g. from a target whose
         // archives could not all be deleted, and would block the target.
         let in_use = db
-            .is_toolchain_component_stored_at(&component_storage_path)
+            .is_toolchain_component_stored_at(component_storage_path.as_str())
             .await
             .map_err(|e| format!("Failed to check component {component_name}: {e}"))?;
         let component_xz = Bytes::from(component_xz);
@@ -802,7 +808,7 @@ async fn extract_and_store_components(
             .add_toolchain_component(
                 target_id,
                 &component_name,
-                &component_storage_path,
+                component_storage_path.as_str(),
                 &component_hash,
                 component_size,
             )
@@ -820,7 +826,7 @@ async fn extract_and_store_components(
 
         tracing::debug!(
             component = component_name,
-            path = component_storage_path,
+            path = component_storage_path.as_str(),
             size = component_size,
             "Stored component archive"
         );
@@ -2455,10 +2461,12 @@ mod tests {
             &storage,
             &db,
             1,
-            "rust",
-            "1.0.0",
-            "x86_64-unknown-linux-gnu",
-            "2024-01-15",
+            &ToolchainArchiveId {
+                name: "rust",
+                version: "1.0.0",
+                date: "2024-01-15",
+                target: "x86_64-unknown-linux-gnu",
+            },
             Bytes::from(xz_data),
         )
         .await;
@@ -2467,20 +2475,26 @@ mod tests {
 
         // Verify component archives were stored
         let rustc_exists = storage
-            .exists("2024-01-15/rustc-1.0.0-x86_64-unknown-linux-gnu.tar.xz")
+            .exists(&stored(
+                "2024-01-15/rustc-1.0.0-x86_64-unknown-linux-gnu.tar.xz",
+            ))
             .await
             .unwrap();
         assert!(rustc_exists, "rustc component archive not found in storage");
 
         let cargo_exists = storage
-            .exists("2024-01-15/cargo-1.0.0-x86_64-unknown-linux-gnu.tar.xz")
+            .exists(&stored(
+                "2024-01-15/cargo-1.0.0-x86_64-unknown-linux-gnu.tar.xz",
+            ))
             .await
             .unwrap();
         assert!(cargo_exists, "cargo component archive not found in storage");
 
         // Verify the component archive contains rust-installer-version and components files
         let rustc_archive = storage
-            .get("2024-01-15/rustc-1.0.0-x86_64-unknown-linux-gnu.tar.xz")
+            .get(&stored(
+                "2024-01-15/rustc-1.0.0-x86_64-unknown-linux-gnu.tar.xz",
+            ))
             .await
             .unwrap();
         let mut xz_dec = xz2::read::XzDecoder::new(&rustc_archive[..]);
@@ -2524,7 +2538,7 @@ mod tests {
         in_use: bool,
     ) -> Result<(), String> {
         storage
-            .put_raw(RUSTC_COMPONENT, Bytes::from_static(b"leftover"))
+            .put_raw(&stored(RUSTC_COMPONENT), Bytes::from_static(b"leftover"))
             .await
             .unwrap();
         let mut mock_db = MockDb::new();
@@ -2540,10 +2554,12 @@ mod tests {
             storage,
             &db,
             1,
-            "rust",
-            "1.0.0",
-            "x86_64-unknown-linux-gnu",
-            "2024-01-15",
+            &ToolchainArchiveId {
+                name: "rust",
+                version: "1.0.0",
+                date: "2024-01-15",
+                target: "x86_64-unknown-linux-gnu",
+            },
             Bytes::from(two_component_archive()),
         )
         .await
@@ -2557,7 +2573,7 @@ mod tests {
         let result = extract_over_leftover(&storage, false).await;
 
         assert!(result.is_ok(), "extraction failed: {result:?}");
-        let stored = storage.get(RUSTC_COMPONENT).await.unwrap();
+        let stored = storage.get(&stored(RUSTC_COMPONENT)).await.unwrap();
         assert_ne!(Bytes::from_static(b"leftover"), stored);
     }
 
@@ -2569,7 +2585,7 @@ mod tests {
         let result = extract_over_leftover(&storage, true).await;
 
         assert!(result.is_err());
-        let stored = storage.get(RUSTC_COMPONENT).await.unwrap();
+        let stored = storage.get(&stored(RUSTC_COMPONENT)).await.unwrap();
         assert_eq!(Bytes::from_static(b"leftover"), stored);
     }
 
@@ -2692,6 +2708,10 @@ mod tests {
         mock_db
     }
 
+    fn stored(path: &str) -> StorageKey {
+        StorageKey::from_stored(path.to_string())
+    }
+
     fn fs_toolchain_storage(dir: &TempDir) -> Arc<ToolchainStorage> {
         let storage: DynStorage = Box::new(FSStorage::new(dir.path().to_str().unwrap()).unwrap());
         Arc::new(ToolchainStorage::new(storage))
@@ -2758,7 +2778,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let storage = fs_toolchain_storage(&temp_dir);
         storage
-            .put_raw(ARCHIVE_PATH, Bytes::from_static(b"orphan"))
+            .put_raw(&stored(ARCHIVE_PATH), Bytes::from_static(b"orphan"))
             .await
             .unwrap();
         let mut mock_db = admin_db();
@@ -2803,7 +2823,7 @@ mod tests {
 
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
         assert!(!result.message.unwrap().contains("secret detail"));
-        assert!(!storage.exists(ARCHIVE_PATH).await.unwrap());
+        assert!(!storage.exists(&stored(ARCHIVE_PATH)).await.unwrap());
     }
 
     #[tokio::test]
@@ -2811,7 +2831,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let storage = fs_toolchain_storage(&temp_dir);
         storage
-            .put_raw(ARCHIVE_PATH, Bytes::from_static(b"archive"))
+            .put_raw(&stored(ARCHIVE_PATH), Bytes::from_static(b"archive"))
             .await
             .unwrap();
         let mut mock_db = admin_db();
@@ -2830,7 +2850,7 @@ mod tests {
 
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
         assert!(!result.message.unwrap().contains("secret detail"));
-        assert!(storage.exists(ARCHIVE_PATH).await.unwrap());
+        assert!(storage.exists(&stored(ARCHIVE_PATH)).await.unwrap());
     }
 
     #[tokio::test]
@@ -2838,7 +2858,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let storage = fs_toolchain_storage(&temp_dir);
         storage
-            .put_raw(ARCHIVE_PATH, Bytes::from_static(b"archive"))
+            .put_raw(&stored(ARCHIVE_PATH), Bytes::from_static(b"archive"))
             .await
             .unwrap();
         let mut mock_db = admin_db();
@@ -2859,7 +2879,7 @@ mod tests {
         .await;
 
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
-        assert!(storage.exists(ARCHIVE_PATH).await.unwrap());
+        assert!(storage.exists(&stored(ARCHIVE_PATH)).await.unwrap());
     }
 
     #[tokio::test]

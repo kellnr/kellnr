@@ -9,6 +9,7 @@ use moka::future::Cache;
 
 use crate::storage::Storage;
 use crate::storage_error::StorageError;
+use crate::storage_key::StorageKey;
 
 pub type CrateCache = Cache<String, Bytes>;
 pub type DynStorage = Box<dyn Storage + Send + Sync>;
@@ -28,12 +29,8 @@ impl CachedCrateStorage {
         }
     }
 
-    fn file_name(name: &OriginalName, version: &Version) -> String {
-        format!("{name}-{version}.crate")
-    }
-
     pub async fn delete(&self, name: &OriginalName, version: &Version) -> Result<(), StorageError> {
-        let crate_file = Self::file_name(name, version);
+        let crate_file = StorageKey::crate_file(name, version);
         self.storage.delete(&crate_file).await?;
         self.invalidate_path(&crate_file).await;
         Ok(())
@@ -45,7 +42,7 @@ impl CachedCrateStorage {
         version: &Version,
         crate_data: Bytes,
     ) -> Result<String, StorageError> {
-        let crate_file = Self::file_name(name, version);
+        let crate_file = StorageKey::crate_file(name, version);
         self.storage
             .put(&crate_file, crate_data.clone())
             .await
@@ -70,13 +67,16 @@ impl CachedCrateStorage {
         name: &OriginalName,
         version: &Version,
     ) -> Result<Option<Bytes>, StorageError> {
-        let file_name = Self::file_name(name, version);
+        let file_name = StorageKey::crate_file(name, version);
         let result = match self.cache {
             Some(ref cache) => {
                 let storage = &self.storage;
                 let key = file_name.clone();
                 cache
-                    .try_get_with(file_name, async move { storage.get(&key).await })
+                    .try_get_with(
+                        file_name.into_inner(),
+                        async move { storage.get(&key).await },
+                    )
                     .await
                     .map_err(|e| Arc::try_unwrap(e).unwrap_or_else(StorageError::Shared))
             }
@@ -89,22 +89,22 @@ impl CachedCrateStorage {
         }
     }
 
-    async fn invalidate_path(&self, file_path: &str) {
+    async fn invalidate_path(&self, file_path: &StorageKey) {
         if let Some(cache) = &self.cache {
-            cache.invalidate(file_path).await;
+            cache.invalidate(file_path.as_str()).await;
         }
     }
 
     pub fn cache_has_path(&self, name: &OriginalName, version: &Version) -> bool {
-        let file_name = Self::file_name(name, version);
+        let file_name = StorageKey::crate_file(name, version);
         self.cache
             .as_ref()
-            .is_some_and(|cache| cache.contains_key(&file_name))
+            .is_some_and(|cache| cache.contains_key(file_name.as_str()))
     }
 
     /// Size of a crate file in bytes, read from the storage and not the cache.
     pub async fn size(&self, name: &OriginalName, version: &Version) -> Result<u64, StorageError> {
-        let file_name = Self::file_name(name, version);
+        let file_name = StorageKey::crate_file(name, version);
         self.storage.size(&file_name).await
     }
 
@@ -114,7 +114,7 @@ impl CachedCrateStorage {
         name: &OriginalName,
         version: &Version,
     ) -> Result<bool, StorageError> {
-        let file_name = Self::file_name(name, version);
+        let file_name = StorageKey::crate_file(name, version);
         self.storage.exists(&file_name).await
     }
 }
@@ -179,24 +179,24 @@ mod tests {
 
     #[async_trait]
     impl Storage for CountingStorage {
-        async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
+        async fn get(&self, key: &StorageKey) -> Result<Bytes, StorageError> {
             self.metrics.get_count.fetch_add(1, Ordering::SeqCst);
             // Wait until the test signals readiness
             while !self.metrics.ready.load(Ordering::SeqCst) {
                 tokio::task::yield_now().await;
             }
-            if key.starts_with("broken") {
+            if key.as_str().starts_with("broken") {
                 return Err(StorageError::GenericError(
                     "storage unavailable".to_string(),
                 ));
             }
             self.data
-                .get(key)
+                .get(key.as_str())
                 .cloned()
-                .ok_or_else(|| StorageError::ObjectStore(not_found(key)))
+                .ok_or_else(|| StorageError::ObjectStore(not_found(key.as_str())))
         }
 
-        async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
+        async fn get_with_meta(&self, key: &StorageKey) -> Result<ObjectWithMeta, StorageError> {
             let bytes = self.get(key).await?;
             Ok(ObjectWithMeta {
                 bytes,
@@ -205,35 +205,40 @@ mod tests {
             })
         }
 
-        async fn put(&self, _key: &str, _object: Bytes) -> Result<(), StorageError> {
+        async fn put(&self, _key: &StorageKey, _object: Bytes) -> Result<(), StorageError> {
             Ok(())
         }
 
-        async fn put_overwrite(&self, _key: &str, _object: Bytes) -> Result<(), StorageError> {
+        async fn put_overwrite(
+            &self,
+            _key: &StorageKey,
+            _object: Bytes,
+        ) -> Result<(), StorageError> {
             Ok(())
         }
 
-        async fn delete(&self, _key: &str) -> Result<(), StorageError> {
+        async fn delete(&self, _key: &StorageKey) -> Result<(), StorageError> {
             Ok(())
         }
 
-        async fn exists(&self, key: &str) -> Result<bool, StorageError> {
-            Ok(self.data.contains_key(key))
+        async fn exists(&self, key: &StorageKey) -> Result<bool, StorageError> {
+            Ok(self.data.contains_key(key.as_str()))
         }
 
-        async fn size(&self, key: &str) -> Result<u64, StorageError> {
+        async fn size(&self, key: &StorageKey) -> Result<u64, StorageError> {
             self.data
-                .get(key)
+                .get(key.as_str())
                 .map(|v| v.len() as u64)
                 .ok_or_else(|| StorageError::GenericError(format!("not found: {key}")))
         }
 
-        async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+        async fn list(&self, prefix: &str) -> Result<Vec<StorageKey>, StorageError> {
             Ok(self
                 .data
                 .keys()
                 .filter(|k| k.starts_with(prefix))
                 .cloned()
+                .map(StorageKey::from_stored)
                 .collect())
         }
     }
@@ -248,35 +253,35 @@ mod tests {
     /// Wrapper to make `CountingStorage` usable through `Arc` (needed for concurrent test)
     #[async_trait]
     impl Storage for Arc<CountingStorage> {
-        async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
+        async fn get(&self, key: &StorageKey) -> Result<Bytes, StorageError> {
             (**self).get(key).await
         }
 
-        async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
+        async fn get_with_meta(&self, key: &StorageKey) -> Result<ObjectWithMeta, StorageError> {
             (**self).get_with_meta(key).await
         }
 
-        async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+        async fn put(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
             (**self).put(key, object).await
         }
 
-        async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+        async fn put_overwrite(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
             (**self).put_overwrite(key, object).await
         }
 
-        async fn delete(&self, key: &str) -> Result<(), StorageError> {
+        async fn delete(&self, key: &StorageKey) -> Result<(), StorageError> {
             (**self).delete(key).await
         }
 
-        async fn exists(&self, key: &str) -> Result<bool, StorageError> {
+        async fn exists(&self, key: &StorageKey) -> Result<bool, StorageError> {
             (**self).exists(key).await
         }
 
-        async fn size(&self, key: &str) -> Result<u64, StorageError> {
+        async fn size(&self, key: &StorageKey) -> Result<u64, StorageError> {
             (**self).size(key).await
         }
 
-        async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+        async fn list(&self, prefix: &str) -> Result<Vec<StorageKey>, StorageError> {
             (**self).list(prefix).await
         }
     }

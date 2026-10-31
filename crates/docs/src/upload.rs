@@ -270,10 +270,17 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(keys.len(), 20, "{keys:?}");
-            let prefix = keys[0].split('/').nth(2).unwrap().chars().next().unwrap();
+            let prefix = keys[0]
+                .as_str()
+                .split('/')
+                .nth(2)
+                .unwrap()
+                .chars()
+                .next()
+                .unwrap();
             assert!(
                 keys.iter()
-                    .all(|k| k.split('/').nth(2).unwrap().starts_with(prefix)),
+                    .all(|k| k.as_str().split('/').nth(2).unwrap().starts_with(prefix)),
                 "{keys:?}"
             );
         }
