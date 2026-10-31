@@ -117,12 +117,12 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
 
     let v1 = DocsStorage::file_key(
         &docs_name("my-crate"),
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
         "doc/my_crate/index.html",
     );
     let v2 = DocsStorage::file_key(
         &docs_name("my-crate"),
-        &Version::from_unchecked_str("2.0.0"),
+        &Version::try_from("2.0.0").unwrap(),
         "doc/my_crate/index.html",
     );
     docs.put(&v1, bytes::Bytes::from_static(b"a"))
@@ -134,7 +134,7 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
 
     docs.delete_prefix(&DocsStorage::version_prefix(
         &docs_name("my-crate"),
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
     ))
     .await
     .unwrap();
@@ -151,7 +151,7 @@ async fn get_with_meta_returns_bytes_etag_and_last_modified() {
     let docs = test_docs_storage("test_docs_get_with_meta_gcs", &url);
     let key = DocsStorage::file_key(
         &docs_name("my-crate"),
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
         "doc/my_crate/index.html",
     );
     docs.put(&key, bytes::Bytes::from_static(b"hello"))

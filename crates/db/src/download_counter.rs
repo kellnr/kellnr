@@ -166,7 +166,7 @@ mod tests {
     fn key(name: &str) -> (CanonicalName, Version) {
         (
             CanonicalName::try_from(name).unwrap(),
-            Version::from_unchecked_str("1.0.0"),
+            Version::try_from("1.0.0").unwrap(),
         )
     }
 

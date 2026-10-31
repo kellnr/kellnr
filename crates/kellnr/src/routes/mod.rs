@@ -316,7 +316,7 @@ mod tests {
     async fn put_secret_docs(state: &AppStateData) -> String {
         let key = DocsStorage::file_key(
             &DocsName::from_folder("secret".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "src/secret/lib.rs.html",
         );
         state
@@ -451,7 +451,7 @@ mod tests {
         let state = docs_test_state(restricted_db());
         let key = DocsStorage::file_key(
             &DocsName::from_folder("Secret".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "src/secret/lib.rs.html",
         );
         state
@@ -520,7 +520,7 @@ mod tests {
         let state = docs_test_state(unrestricted_db());
         let key = DocsStorage::file_key(
             &DocsName::from_folder("routes-test-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/routes_test_crate/index.html",
         );
         state
@@ -639,7 +639,7 @@ mod tests {
         let state = docs_test_state(unrestricted_db());
         let key = DocsStorage::file_key(
             &DocsName::from_folder("routes-test-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             file,
         );
         state
@@ -685,7 +685,7 @@ mod tests {
         let state = docs_test_state(unrestricted_db());
         let key = DocsStorage::file_key(
             &DocsName::from_folder("routes-test-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/routes_test_crate/index.html",
         );
         state

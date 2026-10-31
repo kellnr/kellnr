@@ -24,7 +24,7 @@ use kellnr_settings::{
 };
 use kellnr_storage::docs_storage::DocsName;
 use serde::{Deserialize, Serialize};
-use tracing::error;
+use tracing::{error, warn};
 use utoipa::ToSchema;
 
 use crate::error::RouteError;
@@ -669,7 +669,13 @@ async fn delete_crate_versions_impl(
             .get_crate_meta_list(&canonical_name)
             .await?
             .iter()
-            .map(|cm| Version::from_unchecked_str(&cm.version))
+            .filter_map(|cm| {
+                Version::try_from(cm.version.as_str())
+                    .inspect_err(|_| {
+                        warn!("Skipping invalid version {} of crate {name}", cm.version);
+                    })
+                    .ok()
+            })
             .collect()
     };
 
@@ -1022,7 +1028,6 @@ pub async fn migrate_docs_storage(
         for (crate_name, version, dir) in crate_versions {
             // Keep the folder names, the docs links in the database point to them.
             let name = DocsName::from_folder(crate_name.clone());
-            let version = Version::from_unchecked_str(&version);
             match upload_dir_and_prune(&dir, "", &name, &version, &docs_storage).await {
                 Ok(()) => {
                     tracing::info!(
@@ -1054,7 +1059,7 @@ pub async fn migrate_docs_storage(
 /// only lists directory entries, doesn't read any doc file contents.
 async fn list_local_crate_versions(
     docs_path: &std::path::Path,
-) -> std::io::Result<Vec<(String, String, PathBuf)>> {
+) -> std::io::Result<Vec<(String, Version, PathBuf)>> {
     let mut result = Vec::new();
     let mut crate_dirs = tokio::fs::read_dir(docs_path).await?;
     while let Some(crate_entry) = crate_dirs.next_entry().await? {
@@ -1068,7 +1073,11 @@ async fn list_local_crate_versions(
             if !version_entry.file_type().await?.is_dir() {
                 continue;
             }
-            let version = version_entry.file_name().to_string_lossy().into_owned();
+            let folder = version_entry.file_name().to_string_lossy().into_owned();
+            let Ok(version) = Version::try_from(folder.as_str()) else {
+                warn!("Skipping local docs of {crate_name} {folder}, the version is invalid");
+                continue;
+            };
             result.push((crate_name.clone(), version, version_entry.path()));
         }
     }
@@ -2361,12 +2370,12 @@ mod tests {
 
         let key_a = DocsStorage::file_key(
             &DocsName::from_folder("crate-a".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/index.html",
         );
         let key_b = DocsStorage::file_key(
             &DocsName::from_folder("crate-b".to_string()),
-            &Version::from_unchecked_str("2.0.0"),
+            &Version::try_from("2.0.0").unwrap(),
             "doc/nested/page.html",
         );
         for _ in 0..50 {

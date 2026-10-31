@@ -1076,8 +1076,7 @@ impl DbProvider for Database {
         if let Some(krate) = krate {
             // SAFETY: Unchecked is ok, as only valid crate names are inserted into the database
             let name = OriginalName::from_unchecked(krate.original_name);
-            // SAFETY: Unchecked is ok, as only valid versions are inserted into the database
-            let version = Version::from_unchecked_str(&krate.max_version);
+            let version = parse_db_version(&krate.max_version)?;
             Ok(Some((name, version)))
         } else {
             Ok(None)
@@ -1313,7 +1312,7 @@ impl DbProvider for Database {
             .await?;
 
         Ok(u.into_iter()
-            .map(|meta| Version::from_unchecked_str(&meta.version))
+            .filter_map(|meta| valid_version(&meta.version, crate_name.as_str()))
             .collect())
     }
 
@@ -1373,7 +1372,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn crate_version_exists(&self, crate_id: i64, version: &str) -> DbResult<bool> {
+    async fn crate_version_exists(&self, crate_id: i64, version: &Version) -> DbResult<bool> {
         let cm = crate_meta::Entity::find()
             .filter(
                 Cond::all()
@@ -1720,7 +1719,18 @@ impl DbProvider for Database {
     async fn get_doc_queue(&self) -> DbResult<Vec<DocQueueEntry>> {
         let entities = DocQueue::find().all(&self.db_con).await?;
 
-        Ok(entities.into_iter().map(DocQueueEntry::from).collect())
+        let mut entries = Vec::with_capacity(entities.len());
+        for entity in entities {
+            let (id, krate, version) = (entity.id, entity.krate.clone(), entity.version.clone());
+            if let Ok(entry) = DocQueueEntry::try_from(entity) {
+                entries.push(entry);
+            } else {
+                // The docs of an invalid version can never be built.
+                warn!("Removing docs build of {krate} {version}, the version is invalid");
+                DocQueue::delete_by_id(id).exec(&self.db_con).await?;
+            }
+        }
+        Ok(entries)
     }
 
     async fn delete_crate(&self, krate: &CanonicalName, version: &Version) -> DbResult<()> {
@@ -1775,7 +1785,7 @@ impl DbProvider for Database {
                     .filter_map(|cm| valid_version(&cm.version, krate.as_str()))
                     .max()
                     .ok_or(DbError::FailedToGetMaxVersionById(crate_id))?;
-                c.max_version = Set(new_max_version.into_inner());
+                c.max_version = Set(new_max_version.to_string());
             }
             // Update the ETag value of the crate index.
             let etag = operations::compute_etag(&txn, krate.as_str(), crate_id).await?;
@@ -2176,7 +2186,7 @@ impl DbProvider for Database {
             let mut krate: krate::ActiveModel = krate.into();
             krate.last_updated = Set(created.clone());
             if is_newest {
-                krate.max_version = Set(version.into_inner());
+                krate.max_version = Set(version.to_string());
                 krate.homepage = Set(pub_metadata.homepage.clone());
                 krate.description = Set(pub_metadata.description.clone());
                 krate.repository = Set(pub_metadata.repository.clone());
@@ -2189,7 +2199,7 @@ impl DbProvider for Database {
                 id: ActiveValue::default(),
                 name: Set(canonical_name.into_inner()),
                 original_name: Set(pub_metadata.name.clone()),
-                max_version: Set(version.into_inner()),
+                max_version: Set(version.to_string()),
                 last_updated: Set(created.clone()),
                 total_downloads: Set(0),
                 homepage: Set(pub_metadata.homepage.clone()),
@@ -2386,7 +2396,7 @@ impl DbProvider for Database {
             if let Some(description) = description {
                 krate.description = Set(Some(description));
             }
-            krate.max_version = Set(max_version.into_inner());
+            krate.max_version = Set(max_version.to_string());
             krate.update(&txn).await?
         } else {
             let krate = cratesio_crate::ActiveModel {

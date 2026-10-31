@@ -173,7 +173,7 @@ async fn docs_storage_put_overwrites_and_gets() {
     let (_dir, docs) = docs_storage();
     let key = DocsStorage::file_key(
         &docs_name("my-crate"),
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
         "doc/my_crate/index.html",
     );
 
@@ -189,12 +189,12 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
     let (_dir, docs) = docs_storage();
     let v1 = DocsStorage::file_key(
         &docs_name("my-crate"),
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
         "doc/my_crate/index.html",
     );
     let v2 = DocsStorage::file_key(
         &docs_name("my-crate"),
-        &Version::from_unchecked_str("2.0.0"),
+        &Version::try_from("2.0.0").unwrap(),
         "doc/my_crate/index.html",
     );
 
@@ -203,7 +203,7 @@ async fn docs_storage_delete_prefix_removes_only_matching_version() {
 
     docs.delete_prefix(&DocsStorage::version_prefix(
         &docs_name("my-crate"),
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
     ))
     .await
     .unwrap();

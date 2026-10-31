@@ -27,8 +27,8 @@ use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
 use kellnr_entity::{
-    auth_token, crate_dependency, crate_index, crate_meta, cratesio_crate, krate, oauth2_state,
-    session, user,
+    auth_token, crate_dependency, crate_index, crate_meta, cratesio_crate, doc_queue, krate,
+    oauth2_state, session, user,
 };
 use sea_orm::sea_query::Expr;
 use sea_orm::{
@@ -454,6 +454,34 @@ pub async fn test_add_crate_meta(
 
     cm.insert(&db.db_con).await?;
 
+    Ok(())
+}
+
+/// Set the stored max version of a crate without any checks.
+pub async fn test_set_max_version(db: &Database, crate_id: i64, version: &str) -> DbResult<()> {
+    krate::Entity::update_many()
+        .col_expr(krate::Column::MaxVersion, Expr::value(version))
+        .filter(krate::Column::Id.eq(crate_id))
+        .exec(&db.db_con)
+        .await?;
+    Ok(())
+}
+
+/// Add a docs build to the queue without any checks.
+pub async fn test_add_doc_queue_entry(
+    db: &Database,
+    krate: &str,
+    version: &str,
+    path: &str,
+) -> DbResult<()> {
+    doc_queue::ActiveModel {
+        krate: Set(krate.to_string()),
+        version: Set(version.to_string()),
+        path: Set(path.to_string()),
+        ..Default::default()
+    }
+    .insert(&db.db_con)
+    .await?;
     Ok(())
 }
 

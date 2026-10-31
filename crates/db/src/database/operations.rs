@@ -277,7 +277,9 @@ pub async fn find_version_ignoring_build<C: ConnectionTrait>(
         .await?
         .into_iter()
         .map(|meta| meta.version)
-        .find(|existing| Version::from_unchecked_str(existing).eq_ignoring_build(version)))
+        .find(|existing| {
+            Version::try_from(existing.as_str()).is_ok_and(|v| v.eq_ignoring_build(version))
+        }))
 }
 
 pub async fn add_owner_if_not_exists<C: ConnectionTrait>(

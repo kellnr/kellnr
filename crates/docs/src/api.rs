@@ -228,13 +228,13 @@ mod tests {
                 DocQueueEntry {
                     id: 0,
                     name: "crate1".to_string(),
-                    version: "0.0.1".to_string(),
+                    version: Version::try_from("0.0.1").unwrap(),
                     path: PathBuf::default(),
                 },
                 DocQueueEntry {
                     id: 1,
                     name: "crate2".to_string(),
-                    version: "0.0.2".to_string(),
+                    version: Version::try_from("0.0.2").unwrap(),
                     path: PathBuf::default(),
                 },
             ])
@@ -269,7 +269,7 @@ mod tests {
         DocQueueEntry {
             id,
             name: name.to_string(),
-            version: "1.0.0".to_string(),
+            version: Version::try_from("1.0.0").unwrap(),
             path: PathBuf::default(),
         }
     }
@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(r.status(), StatusCode::OK);
         let key = DocsStorage::file_key(
             &docs_name("my-crate"),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/My_Crate/index.html",
         );
         assert!(docs_storage.exists(&key).await.unwrap());
@@ -472,7 +472,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(r.status(), StatusCode::OK);
-        let version = Version::from_unchecked_str("1.0.0");
+        let version = Version::try_from("1.0.0").unwrap();
         let key =
             DocsStorage::file_key(&docs_name("my-crate"), &version, "doc/My_Crate/index.html");
         assert!(docs_storage.exists(&key).await.unwrap());
@@ -519,7 +519,7 @@ mod tests {
 
         let key = DocsStorage::file_key(
             &docs_name("test-crate"),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/test_crate/index.html",
         );
         let stored = docs_storage.get(&key).await.unwrap();
@@ -563,7 +563,7 @@ mod tests {
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
         let key = DocsStorage::file_key(
             &docs_name("test-crate"),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/test_crate/index.html",
         );
         assert!(!docs_storage.exists(&key).await.unwrap());
@@ -660,7 +660,7 @@ mod tests {
         ) as DynStorage));
         let key = DocsStorage::file_key(
             &docs_name("secret"),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/secret/index.html",
         );
         docs_storage
@@ -723,7 +723,7 @@ mod tests {
         ));
         let key = DocsStorage::file_key(
             &docs_name("my-crate"),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/My_Crate/index.html",
         );
         docs_storage

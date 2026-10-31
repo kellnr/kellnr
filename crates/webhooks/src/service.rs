@@ -172,7 +172,7 @@ mod service_tests {
             WebhookEvent::CrateAdd,
             &Utc::now(),
             &CanonicalName::try_from("Test-Crate").unwrap(),
-            &Version::from_unchecked_str("0.1.0"),
+            &Version::try_from("0.1.0").unwrap(),
             &db,
         )
         .await;
@@ -206,7 +206,7 @@ mod service_tests {
             WebhookEvent::CrateAdd,
             &Utc::now(),
             &CanonicalName::try_from("Test-Crate").unwrap(),
-            &Version::from_unchecked_str("0.1.0"),
+            &Version::try_from("0.1.0").unwrap(),
             &db,
         )
         .await;
@@ -241,7 +241,7 @@ mod service_tests {
             WebhookEvent::CrateAdd,
             &Utc::now(),
             &CanonicalName::try_from("Test-Crate").unwrap(),
-            &Version::from_unchecked_str("0.1.0"),
+            &Version::try_from("0.1.0").unwrap(),
             &db,
         )
         .await;
@@ -302,7 +302,7 @@ mod service_tests {
             WebhookEvent::CrateAdd,
             &Utc::now(),
             &CanonicalName::try_from("Test-Crate").unwrap(),
-            &Version::from_unchecked_str("0.1.0"),
+            &Version::try_from("0.1.0").unwrap(),
             &db,
         )
         .await;
@@ -351,7 +351,7 @@ mod service_tests {
             WebhookEvent::CrateAdd,
             &Utc::now(),
             &CanonicalName::try_from("Test-Crate").unwrap(),
-            &Version::from_unchecked_str("0.1.0"),
+            &Version::try_from("0.1.0").unwrap(),
             &db,
         )
         .await;
@@ -390,7 +390,7 @@ mod service_tests {
             WebhookEvent::CrateYank,
             &Utc::now(),
             &CanonicalName::try_from("test-crate").unwrap(),
-            &Version::from_unchecked_str("0.1.0"),
+            &Version::try_from("0.1.0").unwrap(),
             &db,
         )
         .await;
@@ -416,7 +416,7 @@ mod service_tests {
             WebhookEvent::CrateAdd,
             &Utc::now(),
             &CanonicalName::try_from("Test-Crate").unwrap(),
-            &Version::from_unchecked_str("0.1.0"),
+            &Version::try_from("0.1.0").unwrap(),
             &db,
         )
         .await;

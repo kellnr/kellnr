@@ -177,7 +177,7 @@ pub async fn download(
         let crate_data = download_crate(
             &state.proxy_client,
             &name,
-            &version,
+            &version.to_string(),
             &state.settings.proxy.url,
         )
         .await

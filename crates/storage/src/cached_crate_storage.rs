@@ -28,7 +28,7 @@ impl CachedCrateStorage {
         }
     }
 
-    fn file_name(name: &str, version: &str) -> String {
+    fn file_name(name: &OriginalName, version: &Version) -> String {
         format!("{name}-{version}.crate")
     }
 

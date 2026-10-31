@@ -112,58 +112,40 @@ async fn get_total_downloads_returns_number_of_total_downloads(test_db: &kellnr_
     )
     .await
     .unwrap();
-    test_add_crate_meta(
-        test_db,
-        id1,
-        &Version::try_from("1.1.0").unwrap(),
-        &created,
-        None,
-    )
-    .await
-    .unwrap();
-    test_add_crate_meta(
-        test_db,
-        id1,
-        &Version::try_from("2.0.0").unwrap(),
-        &created,
-        None,
-    )
-    .await
-    .unwrap();
-    test_add_crate_meta(
-        test_db,
-        id2,
-        &Version::try_from("1.1.0").unwrap(),
-        &created,
-        None,
-    )
-    .await
-    .unwrap();
+    test_add_crate_meta(test_db, id1, "1.1.0", &created, None)
+        .await
+        .unwrap();
+    test_add_crate_meta(test_db, id1, "2.0.0", &created, None)
+        .await
+        .unwrap();
+    test_add_crate_meta(test_db, id2, "1.1.0", &created, None)
+        .await
+        .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate1").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate1").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate1").unwrap(),
-            &Version::from_unchecked_str("2.0.0"),
+            &Version::try_from("2.0.0").unwrap(),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate2").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
@@ -186,27 +168,21 @@ async fn get_top_crates_downloads_returns_top_crates_with_downloads(test_db: &ke
     .await
     .unwrap();
 
-    test_add_crate_meta(
-        test_db,
-        crate_id,
-        &Version::try_from("0.1.0").unwrap(),
-        &created1,
-        None,
-    )
-    .await
-    .unwrap();
+    test_add_crate_meta(test_db, crate_id, "0.1.0", &created1, None)
+        .await
+        .unwrap();
 
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("mycrate").unwrap(),
-            &Version::from_unchecked_str("0.1.0"),
+            &Version::try_from("0.1.0").unwrap(),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("mycrate").unwrap(),
-            &Version::from_unchecked_str("0.1.0"),
+            &Version::try_from("0.1.0").unwrap(),
         )
         .await
         .unwrap();
@@ -273,42 +249,42 @@ async fn increase_download_counter_works(test_db: &kellnr_db::Database) {
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate1").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate1").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate1").unwrap(),
-            &Version::from_unchecked_str("2.0.0"),
+            &Version::try_from("2.0.0").unwrap(),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate2").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate3").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
     test_db
         .increase_download_counter(
             &CanonicalName::try_from("crate3").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
@@ -552,7 +528,7 @@ async fn get_crate_versions_with_yanked_version(test_db: &kellnr_db::Database) {
     test_db
         .yank_crate(
             &CanonicalName::try_from("crate").unwrap(),
-            &Version::from_unchecked_str("2.0.0"),
+            &Version::try_from("2.0.0").unwrap(),
         )
         .await
         .unwrap();
@@ -1317,7 +1293,12 @@ async fn crate_version_exists_with_no_existing_version(test_db: &kellnr_db::Data
     .await
     .unwrap();
 
-    assert!(!test_db.crate_version_exists(id, "2.0.0").await.unwrap());
+    assert!(
+        !test_db
+            .crate_version_exists(id, &Version::try_from("2.0.0").unwrap())
+            .await
+            .unwrap()
+    );
 }
 
 #[db_test]
@@ -1370,7 +1351,7 @@ async fn add_and_get_doc_queue_entries(test_db: &kellnr_db::Database) {
         DocQueueEntry {
             id: 1,
             name: "my_crate".to_string(),
-            version: "1.0.0".to_string(),
+            version: Version::try_from("1.0.0").unwrap(),
             path: PathBuf::from("/tmp/foo")
         },
         queue_entries[0]
@@ -1380,7 +1361,7 @@ async fn add_and_get_doc_queue_entries(test_db: &kellnr_db::Database) {
         DocQueueEntry {
             id: 2,
             name: "my-crate2".to_string(),
-            version: "2.0.0".to_string(),
+            version: Version::try_from("2.0.0").unwrap(),
             path: PathBuf::from("/tmp/bar")
         },
         queue_entries[1]
@@ -1439,7 +1420,7 @@ async fn delete_doc_queue_entry(test_db: &kellnr_db::Database) {
         DocQueueEntry {
             id: 2,
             name: "my-crate2".to_string(),
-            version: "2.0.0".to_string(),
+            version: Version::try_from("2.0.0").unwrap(),
             path: PathBuf::from("/tmp/bar")
         },
         queue_entries[0]
@@ -2291,7 +2272,7 @@ async fn get_crate_data_returns_latest_version_of_dependencies(test_db: &kellnr_
     test_db
         .yank_crate(
             &CanonicalName::try_from("dep-lib").unwrap(),
-            &Version::from_unchecked_str("3.0.0"),
+            &Version::try_from("3.0.0").unwrap(),
         )
         .await
         .unwrap();
@@ -2839,7 +2820,7 @@ async fn get_prefetch_data_with_minimal_data(test_db: &kellnr_db::Database) {
         test_db,
         "crate",
         "admin",
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
         &created1,
     )
     .await
@@ -2848,7 +2829,7 @@ async fn get_prefetch_data_with_minimal_data(test_db: &kellnr_db::Database) {
         test_db,
         "crate",
         "admin",
-        &Version::from_unchecked_str("2.0.0"),
+        &Version::try_from("2.0.0").unwrap(),
         &created2,
     )
     .await
@@ -3097,7 +3078,7 @@ async fn delete_updates_etag(test_db: &kellnr_db::Database) {
     test_db
         .delete_crate(
             &CanonicalName::try_from("crate").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
@@ -3329,7 +3310,7 @@ async fn un_yank_crate(test_db: &kellnr_db::Database) {
         test_db,
         "crate",
         "admin",
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
         &created,
     )
     .await
@@ -3339,7 +3320,7 @@ async fn un_yank_crate(test_db: &kellnr_db::Database) {
     test_db
         .yank_crate(
             &CanonicalName::try_from("crate").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
@@ -3361,7 +3342,7 @@ async fn un_yank_crate(test_db: &kellnr_db::Database) {
     test_db
         .unyank_crate(
             &CanonicalName::try_from("crate").unwrap(),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         )
         .await
         .unwrap();
@@ -3389,7 +3370,7 @@ async fn test_get_last_updated_crate_works(test_db: &kellnr_db::Database) {
         test_db,
         "my_crate",
         "admin",
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
         &created1,
     )
     .await
@@ -3402,7 +3383,7 @@ async fn test_get_last_updated_crate_works(test_db: &kellnr_db::Database) {
         test_db,
         "my_crate",
         "admin",
-        &Version::from_unchecked_str("2.0.0"),
+        &Version::try_from("2.0.0").unwrap(),
         &created2,
     )
     .await
@@ -3415,7 +3396,7 @@ async fn test_get_last_updated_crate_works(test_db: &kellnr_db::Database) {
         test_db,
         "my_crate2",
         "admin",
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
         &created3,
     )
     .await
@@ -3733,7 +3714,7 @@ async fn pubtime_stored_and_serialized_correctly(test_db: &kellnr_db::Database) 
         test_db,
         "testcrate",
         "admin",
-        &Version::from_unchecked_str("1.0.0"),
+        &Version::try_from("1.0.0").unwrap(),
         &created,
     )
     .await
@@ -4698,7 +4679,7 @@ async fn get_crate_dependents_uses_latest_version_of_dependents(test_db: &kellnr
     test_db
         .yank_crate(
             &CanonicalName::try_from("app-yanked").unwrap(),
-            &Version::from_unchecked_str("2.0.0"),
+            &Version::try_from("2.0.0").unwrap(),
         )
         .await
         .unwrap();
@@ -4814,7 +4795,7 @@ async fn get_crate_dependents_follows_deleted_and_yanked_versions(test_db: &kell
 
     // With the latest version yanked, the one before counts again
     let bar = CanonicalName::try_from("bar").unwrap();
-    let v2 = Version::from_unchecked_str("2.0.0");
+    let v2 = Version::try_from("2.0.0").unwrap();
     test_db.yank_crate(&bar, &v2).await.unwrap();
     assert_eq!(
         vec![("bar".to_string(), "1.0.0".to_string())],
@@ -4831,7 +4812,7 @@ async fn get_crate_dependents_follows_deleted_and_yanked_versions(test_db: &kell
 
     // Deleting the version removes its dependencies
     test_db
-        .delete_crate(&bar, &Version::from_unchecked_str("1.0.0"))
+        .delete_crate(&bar, &Version::try_from("1.0.0").unwrap())
         .await
         .unwrap();
     assert!(dependents_of_foo(test_db).await.is_empty());
@@ -5652,4 +5633,67 @@ async fn get_original_name_of_existing_version(test_db: &kellnr_db::Database) {
     assert_eq!(found.map(|n| n.to_string()), Some("My-Crate".to_string()));
     assert_eq!(missing_version, None);
     assert_eq!(missing_crate, None);
+}
+
+#[db_test]
+async fn get_crate_versions_skips_invalid_versions(test_db: &kellnr_db::Database) {
+    let created = Utc::now();
+    let crate_id = test_add_crate(
+        test_db,
+        "invalid_meta",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &created,
+    )
+    .await
+    .unwrap();
+    test_add_crate_meta(test_db, crate_id, "not-a-version", &created, None)
+        .await
+        .unwrap();
+
+    let versions = test_db
+        .get_crate_versions(&CanonicalName::try_from("invalid_meta").unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(vec![Version::try_from("1.0.0").unwrap()], versions);
+}
+
+#[db_test]
+async fn get_last_updated_crate_fails_for_an_invalid_max_version(test_db: &kellnr_db::Database) {
+    let crate_id = test_add_crate(
+        test_db,
+        "invalid_max",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &Utc::now(),
+    )
+    .await
+    .unwrap();
+    test_set_max_version(test_db, crate_id, "not-a-version")
+        .await
+        .unwrap();
+
+    let result = test_db.get_last_updated_crate(&CrateVisibility::All).await;
+
+    assert!(matches!(
+        result,
+        Err(kellnr_db::error::DbError::InvalidVersion(v)) if v == "not-a-version"
+    ));
+}
+
+#[db_test]
+async fn get_doc_queue_removes_entries_with_invalid_versions(test_db: &kellnr_db::Database) {
+    test_add_doc_queue_entry(test_db, "my_crate", "not-a-version", "/tmp/foo")
+        .await
+        .unwrap();
+    test_add_doc_queue_entry(test_db, "my_crate", "1.0.0", "/tmp/bar")
+        .await
+        .unwrap();
+
+    let entries = test_db.get_doc_queue().await.unwrap();
+
+    assert_eq!(1, entries.len());
+    assert_eq!(Version::try_from("1.0.0").unwrap(), entries[0].version);
+    assert_eq!(1, test_db.get_doc_queue().await.unwrap().len());
 }

@@ -151,7 +151,7 @@ mod tests {
     fn check_crate(filter: &LicenseFilter, name: &str, license: Option<&str>) -> Verdict {
         filter.check(&CrateInfo {
             name: &OriginalName::try_from(name).unwrap(),
-            version: &Version::from_unchecked_str("1.0.0"),
+            version: &Version::try_from("1.0.0").unwrap(),
             license,
         })
     }
