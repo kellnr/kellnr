@@ -1,3 +1,5 @@
+use std::fmt;
+
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 
@@ -57,17 +59,15 @@ impl Origin {
             .unwrap_or(self.protocol == Protocol::Https)
     }
 
-    /// Brings `path` into the form `/prefix`, or empty for the root: no
-    /// surrounding whitespace, one leading slash and no trailing slash.
-    /// Applied once when the settings are loaded, so callers can append
-    /// `/...` to it.
+    /// The URL path below which Kellnr is served.
+    pub fn path_prefix(&self) -> UrlPathPrefix {
+        UrlPathPrefix::new(&self.path)
+    }
+
+    /// Brings `path` into the form of [`UrlPathPrefix`]. Applied once when
+    /// the settings are loaded, so the settings show the path in use.
     pub fn normalize(&mut self) {
-        let path = self.path.trim().trim_matches('/');
-        self.path = if path.is_empty() {
-            String::new()
-        } else {
-            format!("/{path}")
-        };
+        self.path = self.path_prefix().0;
     }
 
     /// External URL of Kellnr without a trailing slash. The port is left out
@@ -77,14 +77,45 @@ impl Origin {
             Protocol::Http => 80,
             Protocol::Https => 443,
         };
+        let path = self.path_prefix();
         if self.port == default_port {
-            format!("{}://{}{}", self.protocol, self.hostname, self.path)
+            format!("{}://{}{path}", self.protocol, self.hostname)
         } else {
-            format!(
-                "{}://{}:{}{}",
-                self.protocol, self.hostname, self.port, self.path
-            )
+            format!("{}://{}:{}{path}", self.protocol, self.hostname, self.port)
         }
+    }
+}
+
+/// URL path prefix of Kellnr: empty for the root, otherwise `/prefix` with
+/// one leading and no trailing slash, so callers can append `/...` to it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UrlPathPrefix(String);
+
+impl UrlPathPrefix {
+    /// Accepts the path with or without leading and trailing slashes and
+    /// surrounding whitespace.
+    pub fn new(path: &str) -> Self {
+        let path = path.trim().trim_matches('/');
+        if path.is_empty() {
+            Self::default()
+        } else {
+            Self(format!("/{path}"))
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Whether Kellnr is served at the root, without a prefix.
+    pub fn is_root(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl fmt::Display for UrlPathPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
@@ -165,6 +196,35 @@ mod tests {
         let mut http = origin(443, "");
         http.protocol = Protocol::Http;
         assert_eq!(http.base_url(), "http://kellnr.example.com:443");
+    }
+
+    #[test]
+    fn path_prefix_has_one_leading_and_no_trailing_slash() {
+        for (path, expected) in [
+            ("", ""),
+            ("/", ""),
+            ("//", ""),
+            ("  /  ", ""),
+            ("registry", "/registry"),
+            ("/registry", "/registry"),
+            ("/registry/", "/registry"),
+            (" registry// ", "/registry"),
+            ("/a/b/", "/a/b"),
+        ] {
+            let prefix = UrlPathPrefix::new(path);
+            assert_eq!(prefix.as_str(), expected, "path {path:?}");
+            assert_eq!(prefix.to_string(), expected, "path {path:?}");
+            assert_eq!(prefix.is_root(), expected.is_empty(), "path {path:?}");
+            assert_eq!(origin(443, path).path_prefix(), prefix, "path {path:?}");
+        }
+    }
+
+    #[test]
+    fn base_url_normalizes_path_that_was_not_normalized() {
+        assert_eq!(
+            origin(443, "registry/").base_url(),
+            "https://kellnr.example.com/registry"
+        );
     }
 
     #[test]

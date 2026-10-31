@@ -14,7 +14,7 @@ use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::{DbProvider, DocQueueEntry};
-use kellnr_settings::Settings;
+use kellnr_settings::{Settings, UrlPathPrefix};
 use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use tokio::fs::remove_dir_all;
@@ -52,7 +52,7 @@ pub fn doc_extraction_queue(
         db,
         cs,
         docs_storage,
-        path_prefix: settings.origin.path.clone(),
+        path_prefix: settings.origin.path_prefix(),
         builder,
         limits: ExtractLimits::from_max_docs_size(settings.docs.max_size),
         processed: Mutex::default(),
@@ -73,7 +73,7 @@ struct DocQueueWorker {
     db: Arc<dyn DbProvider>,
     cs: Arc<KellnrCrateStorage>,
     docs_storage: Arc<DocsStorage>,
-    path_prefix: String,
+    path_prefix: UrlPathPrefix,
     builder: DocBuilder,
     limits: ExtractLimits,
     /// Queue entries that were processed but could not be removed from the
@@ -514,7 +514,7 @@ mod tests {
             db: Arc::new(db),
             cs: Arc::new(cs),
             docs_storage: Arc::new(DocsStorage::new(Box::new(MemoryStorage::new()))),
-            path_prefix: String::new(),
+            path_prefix: UrlPathPrefix::default(),
             builder,
             limits: ExtractLimits::from_max_docs_size(1),
             processed: Mutex::default(),

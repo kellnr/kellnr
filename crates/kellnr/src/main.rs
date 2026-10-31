@@ -21,7 +21,7 @@ use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
 use kellnr_settings::{
-    CliResult, LogFormat, ResolvedSettings, Settings, ShowConfigOptions, parse_cli,
+    CliResult, LogFormat, ResolvedSettings, Settings, ShowConfigOptions, UrlPathPrefix, parse_cli,
 };
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
@@ -233,7 +233,7 @@ async fn run_server(resolved: ResolvedSettings) {
     init_webhook_service(&settings, db.clone());
 
     let signing_key = init_cookie_signing_key(&settings);
-    let route_path_prefix = settings.origin.path.clone();
+    let route_path_prefix = settings.origin.path_prefix();
     let token_cache = Arc::new(TokenCacheManager::new(
         settings.registry.token_cache_enabled,
         settings.registry.token_cache_ttl_seconds,
@@ -367,7 +367,7 @@ async fn run_server(resolved: ResolvedSettings) {
 
     // Create router using the route module
     let mut app = routes::create_router(state, oauth2_handler);
-    if !route_path_prefix.is_empty() {
+    if !route_path_prefix.is_root() {
         app = nest_under_path_prefix(app, &route_path_prefix);
     }
 
@@ -390,12 +390,12 @@ async fn run_server(resolved: ResolvedSettings) {
     trace!("Download counters flushed. Shutting down.");
 }
 
-/// Serves `app` under `path_prefix`, the normalized `origin.path`, and
+/// Serves `app` under `path_prefix`, which must not be the root, and
 /// redirects the bare prefix to the prefix with a trailing slash.
-fn nest_under_path_prefix(app: Router, path_prefix: &str) -> Router {
+fn nest_under_path_prefix(app: Router, path_prefix: &UrlPathPrefix) -> Router {
     let path_prefix_with_trailing = format!("{path_prefix}/");
     Router::new().nest(&path_prefix_with_trailing, app).route(
-        path_prefix,
+        path_prefix.as_str(),
         get(move || async move { Redirect::permanent(path_prefix_with_trailing.as_str()) }),
     )
 }
@@ -723,7 +723,7 @@ mod tests {
 
         let app = nest_under_path_prefix(
             routes::create_router(kellnr_appstate::test_state(), None),
-            "/registry",
+            &UrlPathPrefix::new("/registry"),
         );
         let status = |uri: &'static str| {
             let app = app.clone();
