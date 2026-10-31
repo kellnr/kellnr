@@ -1,7 +1,7 @@
 use axum::extract::DefaultBodyLimit;
 use axum::routing::put;
 use axum::{Router, middleware};
-use kellnr_appstate::AppStateData;
+use kellnr_http::state::AppStateData;
 use kellnr_docs::api;
 use kellnr_web_ui::{session, ui};
 use utoipa_axum::router::OpenApiRouter;

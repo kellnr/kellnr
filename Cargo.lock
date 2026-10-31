@@ -4171,8 +4171,6 @@ dependencies = [
  "bytes",
  "flume",
  "hyper",
- "kellnr-appstate",
- "kellnr-auth",
  "kellnr-common",
  "kellnr-cratesio-sync",
  "kellnr-db",
@@ -4180,7 +4178,9 @@ dependencies = [
  "kellnr-docs",
  "kellnr-embedded-resources",
  "kellnr-filter",
+ "kellnr-http",
  "kellnr-index",
+ "kellnr-oauth2",
  "kellnr-registry",
  "kellnr-settings",
  "kellnr-storage",
@@ -4205,52 +4205,6 @@ dependencies = [
  "utoipa-axum",
  "utoipa-swagger-ui",
  "xz2",
-]
-
-[[package]]
-name = "kellnr-appstate"
-version = "6.13.0"
-dependencies = [
- "axum",
- "axum-extra",
- "cookie",
- "flume",
- "kellnr-common",
- "kellnr-cratesio-sync",
- "kellnr-db",
- "kellnr-filter",
- "kellnr-settings",
- "kellnr-storage",
- "provcfg",
- "reqwest",
-]
-
-[[package]]
-name = "kellnr-auth"
-version = "6.13.0"
-dependencies = [
- "axum",
- "axum-extra",
- "base64 0.23.1",
- "chrono",
- "hyper",
- "kellnr-appstate",
- "kellnr-common",
- "kellnr-db",
- "kellnr-settings",
- "mockall",
- "openidconnect",
- "rand 0.10.3",
- "reqwest",
- "sea-orm",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tower",
- "tracing",
- "url",
- "utoipa",
 ]
 
 [[package]]
@@ -4353,11 +4307,9 @@ dependencies = [
  "bytes",
  "http-body-util",
  "hyper",
- "kellnr-appstate",
- "kellnr-auth",
  "kellnr-common",
  "kellnr-db",
- "kellnr-error",
+ "kellnr-http",
  "kellnr-registry",
  "kellnr-settings",
  "kellnr-storage",
@@ -4395,20 +4347,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kellnr-error"
-version = "6.13.0"
-dependencies = [
- "axum",
- "kellnr-common",
- "kellnr-db",
- "kellnr-storage",
- "sea-orm",
- "serde",
- "tracing",
- "zip",
-]
-
-[[package]]
 name = "kellnr-fakegcs-testcontainer"
 version = "6.13.0"
 dependencies = [
@@ -4429,6 +4367,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "kellnr-http"
+version = "6.13.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "base64 0.23.1",
+ "cookie",
+ "flume",
+ "hyper",
+ "kellnr-common",
+ "kellnr-cratesio-sync",
+ "kellnr-db",
+ "kellnr-filter",
+ "kellnr-settings",
+ "kellnr-storage",
+ "mockall",
+ "provcfg",
+ "rand 0.10.3",
+ "reqwest",
+ "sea-orm",
+ "serde",
+ "tokio",
+ "tower",
+ "tracing",
+ "utoipa",
+ "zip",
+]
+
+[[package]]
 name = "kellnr-index"
 version = "6.13.0"
 dependencies = [
@@ -4437,12 +4404,11 @@ dependencies = [
  "flume",
  "http-body-util",
  "hyper",
- "kellnr-appstate",
- "kellnr-auth",
  "kellnr-common",
  "kellnr-cratesio-sync",
  "kellnr-db",
  "kellnr-filter",
+ "kellnr-http",
  "kellnr-settings",
  "kellnr-storage",
  "mockall",
@@ -4477,6 +4443,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "kellnr-oauth2"
+version = "6.13.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "chrono",
+ "kellnr-common",
+ "kellnr-settings",
+ "openidconnect",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "kellnr-registry"
 version = "6.13.0"
 dependencies = [
@@ -4487,13 +4472,11 @@ dependencies = [
  "cookie",
  "http-body-util",
  "hyper",
- "kellnr-appstate",
- "kellnr-auth",
  "kellnr-common",
  "kellnr-cratesio-sync",
  "kellnr-db",
- "kellnr-error",
  "kellnr-filter",
+ "kellnr-http",
  "kellnr-settings",
  "kellnr-storage",
  "kellnr-test-db",
@@ -4586,12 +4569,12 @@ dependencies = [
  "flume",
  "http-body-util",
  "hyper",
- "kellnr-appstate",
- "kellnr-auth",
  "kellnr-common",
  "kellnr-db",
  "kellnr-docs",
  "kellnr-filter",
+ "kellnr-http",
+ "kellnr-oauth2",
  "kellnr-settings",
  "kellnr-storage",
  "kellnr-test-db",
@@ -4618,11 +4601,9 @@ dependencies = [
  "futures-util",
  "hmac 0.13.0",
  "hyper",
- "kellnr-appstate",
- "kellnr-auth",
  "kellnr-common",
  "kellnr-db",
- "kellnr-error",
+ "kellnr-http",
  "kellnr-settings",
  "reqwest",
  "serde",

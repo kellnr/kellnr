@@ -5,9 +5,9 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use kellnr_appstate::{AppState, DbState, ProxyClientState, SettingsProvState, SettingsState};
-use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
-use kellnr_auth::maybe_user::MaybeUser as MaybeUserOrToken;
+use kellnr_http::state::{AppState, DbState, ProxyClientState, SettingsProvState, SettingsState};
+use kellnr_http::crate_access::{can_read_crate, crate_visibility};
+use kellnr_http::maybe_user::MaybeUser as MaybeUserOrToken;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CRATESIO_INDEX, CrateData};
 use kellnr_common::crate_dependents::CrateDependents;
@@ -632,7 +632,7 @@ pub async fn cratesio_data(
 /// cannot leave a file behind that no database entry refers to. A failed
 /// version does not stop the deletion of the others.
 async fn delete_crate_versions_impl(
-    state: &kellnr_appstate::AppStateData,
+    state: &kellnr_http::state::AppStateData,
     name: &OriginalName,
     versions: Option<Vec<Version>>,
 ) -> Result<(), RouteError> {
@@ -674,7 +674,7 @@ async fn delete_crate_versions_impl(
 }
 
 async fn delete_one_version(
-    state: &kellnr_appstate::AppStateData,
+    state: &kellnr_http::state::AppStateData,
     name: &OriginalName,
     version: &Version,
 ) -> Result<(), RouteError> {
@@ -1081,7 +1081,8 @@ mod tests {
     use bytes::Bytes;
     use http_body_util::BodyExt;
     use hyper::{Request, header};
-    use kellnr_appstate::{AppStateData, encode_cookies};
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::encode_cookies;
     use kellnr_common::account_name::UserName;
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
     use kellnr_common::crate_dependents::CrateDependent;
@@ -1126,7 +1127,7 @@ mod tests {
             settings: Arc::new(settings),
             crate_storage: crate_storage.clone(),
             docs_storage,
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
         let name = OriginalName::try_from("licensed").unwrap();
         let version = Version::try_from("1.0.0").unwrap();
@@ -1166,7 +1167,7 @@ mod tests {
             crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
             settings: Arc::new(settings),
             docs_storage,
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         }
     }
 
@@ -1452,7 +1453,7 @@ mod tests {
                 settings: Arc::new(settings.clone()),
                 settings_prov: Arc::new(prov),
                 crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             });
 
         let r = app
@@ -1561,7 +1562,7 @@ mod tests {
                 settings: Arc::new(settings.clone()),
                 settings_prov: Arc::new(prov),
                 crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             });
 
         let r = app
@@ -2180,7 +2181,7 @@ mod tests {
                 signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings),
                 docs_storage: Arc::new(docs_storage),
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             })
     }
 
@@ -3725,7 +3726,7 @@ mod tests {
                 signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings),
                 crate_storage: Arc::new(crate_storage),
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             })
     }
 }

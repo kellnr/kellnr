@@ -7,8 +7,8 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router, middleware};
-use kellnr_appstate::AppStateData;
-use kellnr_auth::oauth2::OAuth2Handler;
+use kellnr_http::state::AppStateData;
+use kellnr_oauth2::OAuth2Handler;
 use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};
 use kellnr_settings::{Protocol, Registry};
 use kellnr_web_ui::session;
@@ -268,7 +268,7 @@ mod tests {
     use axum::http::{Request, StatusCode, header};
     use axum_extra::extract::cookie::Key;
     use bytes::Bytes;
-    use kellnr_appstate::{TEST_KEY, encode_cookies};
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_common::plain_token::PlainToken;
@@ -287,7 +287,7 @@ mod tests {
         AppStateData {
             db: Arc::new(db),
             signing_key: Key::from(TEST_KEY),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         }
     }
 
@@ -578,7 +578,7 @@ mod tests {
 
     #[tokio::test]
     async fn ui_responses_have_security_headers() {
-        let r = get_response(kellnr_appstate::test_state(), "/").await;
+        let r = get_response(kellnr_http::test_support::test_state(), "/").await;
 
         assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], UI_CSP);
         assert_eq!(r.headers()["cross-origin-opener-policy"], "same-origin");
@@ -589,14 +589,14 @@ mod tests {
 
     #[tokio::test]
     async fn api_responses_have_ui_csp() {
-        let r = get_response(kellnr_appstate::test_state(), "/api/v1/health").await;
+        let r = get_response(kellnr_http::test_support::test_state(), "/api/v1/health").await;
 
         assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], UI_CSP);
     }
 
     #[tokio::test]
     async fn swagger_ui_has_ui_csp() {
-        let r = get_response(kellnr_appstate::test_state(), "/api/docs/").await;
+        let r = get_response(kellnr_http::test_support::test_state(), "/api/docs/").await;
 
         assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], UI_CSP);
     }
@@ -617,7 +617,7 @@ mod tests {
 
     #[tokio::test]
     async fn hsts_is_sent_when_origin_uses_https() {
-        let mut state = kellnr_appstate::test_state();
+        let mut state = kellnr_http::test_support::test_state();
         let mut settings = (*state.settings).clone();
         settings.origin.protocol = Protocol::Https;
         state.settings = Arc::new(settings);

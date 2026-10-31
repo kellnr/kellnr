@@ -2,7 +2,7 @@
 //!
 //! These routes handle OAuth2/OpenID Connect authentication flow.
 
-use kellnr_appstate::AppStateData;
+use kellnr_http::state::AppStateData;
 use kellnr_web_ui::oauth2;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;

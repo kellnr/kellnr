@@ -13,8 +13,8 @@ use axum::response::Redirect;
 use axum::{Extension, Json};
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use kellnr_appstate::{AppState, AppStateData, DbState, SettingsState};
-use kellnr_auth::oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
+use kellnr_http::state::{AppState, AppStateData, DbState, SettingsState};
+use kellnr_oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
 use kellnr_common::account_name::UserName;
 use kellnr_db::{User, UserFlags};
 use kellnr_settings::UrlPathPrefix;
@@ -524,7 +524,7 @@ mod sync_tests {
     fn state(db: MockDb) -> AppStateData {
         AppStateData {
             db: Arc::new(db),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         }
     }
 
@@ -610,7 +610,7 @@ mod sync_tests {
 mod state_cookie_tests {
     use axum::http::{HeaderMap, header};
     use axum_extra::extract::cookie::Key;
-    use kellnr_appstate::{TEST_KEY, encode_cookies};
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
 
     use super::*;
 
@@ -684,17 +684,17 @@ mod callback_tests {
     use axum::http::{HeaderMap, header};
     use axum::response::IntoResponse;
     use axum_extra::extract::cookie::Key;
-    use kellnr_appstate::TEST_KEY;
+    use kellnr_http::test_support::TEST_KEY;
     use kellnr_settings::Settings;
 
     use super::*;
 
     fn state_with_origin_path(path: &str) -> AppStateData {
-        let mut settings = Settings::clone(&kellnr_appstate::test_state().settings);
+        let mut settings = Settings::clone(&kellnr_http::test_support::test_state().settings);
         settings.origin.path = path.to_string();
         AppStateData {
             settings: Arc::new(settings),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         }
     }
 

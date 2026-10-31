@@ -7,8 +7,8 @@ use axum::Router;
 use axum::response::Redirect;
 use axum::routing::get;
 use axum_extra::extract::cookie::Key;
-use kellnr_appstate::AppStateData;
-use kellnr_auth::oauth2::{OAuth2Error, OAuth2Handler};
+use kellnr_http::state::AppStateData;
+use kellnr_oauth2::{OAuth2Error, OAuth2Handler};
 use kellnr_common::cratesio_downloader::build_client;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::login_throttle::LoginThrottle;
@@ -723,7 +723,7 @@ mod tests {
         use tower::ServiceExt;
 
         let app = nest_under_path_prefix(
-            routes::create_router(kellnr_appstate::test_state(), None),
+            routes::create_router(kellnr_http::test_support::test_state(), None),
             &UrlPathPrefix::new("/registry"),
         );
         let status = |uri: &'static str| {

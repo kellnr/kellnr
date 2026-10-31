@@ -1,5 +1,5 @@
 use hyper::StatusCode;
-use kellnr_error::api_error::ApiError;
+use kellnr_http::error::ApiError;
 use kellnr_storage::storage_error::StorageError;
 use thiserror::Error;
 

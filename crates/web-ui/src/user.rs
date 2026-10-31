@@ -3,9 +3,9 @@ use axum::http::StatusCode;
 use axum::{Extension, Json};
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
-use kellnr_appstate::{AppState, DbState, LoginThrottleState, SettingsState, TokenCacheState};
-use kellnr_auth::password::{PasswordAuthError, authenticate_password};
-use kellnr_auth::token;
+use kellnr_http::state::{AppState, DbState, LoginThrottleState, SettingsState, TokenCacheState};
+use kellnr_http::password::{PasswordAuthError, authenticate_password};
+use kellnr_http::token;
 use kellnr_common::account_name::{UserName, validate_token_name};
 use kellnr_common::plain_token::PlainToken;
 use kellnr_common::util::generate_rand_string;
@@ -600,7 +600,8 @@ mod tests {
     use axum::routing::{post, put};
     use axum_extra::extract::cookie::Key;
     use hyper::{Request, header};
-    use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_common::login_throttle::LoginThrottle;
     use kellnr_common::token_cache::{CachedTokenData, TokenCacheManager};
     use kellnr_db::error::DbError;
@@ -616,7 +617,7 @@ mod tests {
             db: Arc::new(mock_db),
             signing_key: Key::from(TEST_KEY),
             token_cache: cache,
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         }
     }
 
@@ -890,7 +891,7 @@ mod tests {
         );
         let app = Router::new()
             .route("/logout", post(logout))
-            .layer(Extension::<Option<Arc<kellnr_auth::oauth2::OAuth2Handler>>>(None))
+            .layer(Extension::<Option<Arc<kellnr_oauth2::OAuth2Handler>>>(None))
             .with_state(state);
 
         let response = app
@@ -932,7 +933,7 @@ mod tests {
         );
         let app = Router::new()
             .route("/logout", post(logout))
-            .layer(Extension::<Option<Arc<kellnr_auth::oauth2::OAuth2Handler>>>(None))
+            .layer(Extension::<Option<Arc<kellnr_oauth2::OAuth2Handler>>>(None))
             .with_state(state);
 
         let response = app

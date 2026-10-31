@@ -4,8 +4,8 @@ use std::path::Path;
 use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
 use axum::http::Request;
-use kellnr_appstate::AppStateData;
-use kellnr_error::api_error::{ApiError, ApiResult};
+use kellnr_http::state::AppStateData;
+use kellnr_http::error::{ApiError, ApiResult};
 use kellnr_registry::registry_error::RegistryError;
 use tracing::warn;
 use zip::ZipArchive;
@@ -118,7 +118,7 @@ mod tests {
         settings.docs.max_size = 0;
         let state = AppStateData {
             settings: std::sync::Arc::new(settings),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
         let request = Request::builder().body(Body::from("zip")).unwrap();
 

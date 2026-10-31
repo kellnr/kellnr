@@ -1,10 +1,10 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use kellnr_appstate::{DbState, SettingsState};
-use kellnr_auth::token;
+use kellnr_http::state::{DbState, SettingsState};
+use kellnr_http::token;
 use kellnr_common::webhook::Webhook;
-use kellnr_error::api_error::{ApiError, ApiResult};
+use kellnr_http::error::{ApiError, ApiResult};
 use tracing::{trace, warn};
 use uuid::Uuid;
 
@@ -232,7 +232,7 @@ mod endpoint_tests {
     use axum::response::Response;
     use axum::routing::{delete, get, post};
     use hyper::header;
-    use kellnr_appstate::AppStateData;
+    use kellnr_http::state::AppStateData;
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_common::webhook::WebhookEvent;
@@ -707,7 +707,7 @@ mod endpoint_tests {
 
         let state = AppStateData {
             db: db.clone(),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
 
         let routes = Router::new()
