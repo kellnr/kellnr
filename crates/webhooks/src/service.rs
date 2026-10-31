@@ -434,7 +434,7 @@ mod service_tests {
             std::path::Path::new(":memory:"),
             "admin",
             Some("token".to_string()),
-            std::time::Duration::from_secs(10),
+            kellnr_settings::SessionAge::from_secs(10),
         ));
         let db = Database::new(&con_string, 1).await.unwrap();
         Arc::new(db)

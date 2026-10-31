@@ -91,10 +91,14 @@ pub fn test_state() -> AppStateData {
         FSStorage::new(&settings.docs_path()).unwrap(),
     ) as DynStorage));
     let (cratesio_prefetch_sender, _) = flume::unbounded();
-    let token_cache = Arc::new(TokenCacheManager::new(false, 60, 1000));
+    let token_cache = Arc::new(TokenCacheManager::new(
+        false,
+        std::time::Duration::from_secs(60),
+        1000,
+    ));
     let login_throttle = Arc::new(LoginThrottle::new(
         settings.registry.auth_max_failed_attempts,
-        std::time::Duration::from_secs(settings.registry.auth_failed_attempts_window_seconds),
+        settings.registry.auth_failed_attempts_window(),
     ));
     let download_counter = Arc::new(DownloadCounter::new(db.clone(), 30));
     let proxy_client = kellnr_common::cratesio_downloader::CLIENT.clone();

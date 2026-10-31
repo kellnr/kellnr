@@ -1,3 +1,4 @@
+use std::num::NonZeroU64;
 use std::time::Duration;
 
 use provcfg::{ClapArgs, Configurable};
@@ -102,14 +103,67 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// The lifetime of a session. Zero (sessions never expire) and values
-    /// above [`MAX_SESSION_AGE`] resolve to [`MAX_SESSION_AGE`].
-    pub fn session_max_age(&self) -> Duration {
-        if self.session_age_seconds == 0 {
-            MAX_SESSION_AGE
-        } else {
-            Duration::from_secs(self.session_age_seconds).min(MAX_SESSION_AGE)
+    pub fn session_age(&self) -> SessionAge {
+        SessionAge::from_secs(self.session_age_seconds)
+    }
+
+    pub fn token_cache_ttl(&self) -> Duration {
+        Duration::from_secs(self.token_cache_ttl_seconds)
+    }
+
+    pub fn auth_failed_attempts_window(&self) -> Duration {
+        Duration::from_secs(self.auth_failed_attempts_window_seconds)
+    }
+
+    /// `max_crate_size` in bytes.
+    pub fn max_crate_bytes(&self) -> usize {
+        mb_to_bytes(self.max_crate_size)
+    }
+
+    /// `cache_max_size` in bytes, `None` if the size of the crate cache is
+    /// not limited.
+    pub fn cache_max_bytes(&self) -> Option<u64> {
+        (self.cache_max_size > 0).then(|| self.cache_max_size.saturating_mul(1_000_000))
+    }
+}
+
+/// Converts a size in MB from the settings to bytes, saturating instead of
+/// overflowing.
+pub(crate) fn mb_to_bytes(mb: impl TryInto<usize>) -> usize {
+    mb.try_into()
+        .unwrap_or(usize::MAX)
+        .saturating_mul(1_000_000)
+}
+
+/// Lifetime of a session, counted from the login.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SessionAge {
+    /// Sessions never expire, configured as zero seconds.
+    Never,
+    /// Sessions expire after the given number of seconds.
+    For(NonZeroU64),
+}
+
+impl SessionAge {
+    /// Zero seconds means sessions never expire.
+    pub fn from_secs(secs: u64) -> Self {
+        NonZeroU64::new(secs).map_or(Self::Never, Self::For)
+    }
+
+    /// The time after which a session is expired, `None` if sessions never
+    /// expire. At most [`MAX_SESSION_AGE`], so it can be subtracted from a
+    /// timestamp without overflow.
+    pub fn expiry(self) -> Option<Duration> {
+        match self {
+            Self::Never => None,
+            Self::For(secs) => Some(Duration::from_secs(secs.get()).min(MAX_SESSION_AGE)),
         }
+    }
+
+    /// `Max-Age` of the session cookie. A cookie needs one, so sessions
+    /// that never expire use [`MAX_SESSION_AGE`].
+    pub fn cookie_max_age(self) -> Duration {
+        self.expiry().unwrap_or(MAX_SESSION_AGE)
     }
 }
 
@@ -154,13 +208,58 @@ mod tests {
     }
 
     #[test]
-    fn session_max_age_is_the_configured_age() {
-        assert_eq!(registry(60).session_max_age(), Duration::from_mins(1));
+    fn session_age_of_zero_never_expires() {
+        let age = registry(0).session_age();
+        assert_eq!(age, SessionAge::Never);
+        assert_eq!(age.expiry(), None);
+        assert_eq!(age.cookie_max_age(), MAX_SESSION_AGE);
     }
 
     #[test]
-    fn session_max_age_is_bounded() {
-        assert_eq!(registry(0).session_max_age(), MAX_SESSION_AGE);
-        assert_eq!(registry(u64::MAX).session_max_age(), MAX_SESSION_AGE);
+    fn session_age_is_the_configured_age() {
+        let age = registry(60).session_age();
+        assert_eq!(age, SessionAge::For(NonZeroU64::new(60).unwrap()));
+        assert_eq!(age.expiry(), Some(Duration::from_mins(1)));
+        assert_eq!(age.cookie_max_age(), Duration::from_mins(1));
+    }
+
+    #[test]
+    fn session_age_is_bounded() {
+        let age = registry(u64::MAX).session_age();
+        assert_eq!(age.expiry(), Some(MAX_SESSION_AGE));
+        assert_eq!(age.cookie_max_age(), MAX_SESSION_AGE);
+    }
+
+    #[test]
+    fn durations_are_read_in_seconds() {
+        let registry = Registry {
+            token_cache_ttl_seconds: 90,
+            auth_failed_attempts_window_seconds: 300,
+            ..Registry::default()
+        };
+        assert_eq!(registry.token_cache_ttl(), Duration::from_secs(90));
+        assert_eq!(
+            registry.auth_failed_attempts_window(),
+            Duration::from_mins(5)
+        );
+    }
+
+    #[test]
+    fn sizes_are_read_in_mb_and_saturate() {
+        let mut registry = Registry {
+            max_crate_size: 10,
+            cache_max_size: 0,
+            ..Registry::default()
+        };
+        assert_eq!(registry.max_crate_bytes(), 10_000_000);
+        assert_eq!(registry.cache_max_bytes(), None);
+
+        registry.max_crate_size = u64::MAX;
+        registry.cache_max_size = u64::MAX;
+        assert_eq!(registry.max_crate_bytes(), usize::MAX);
+        assert_eq!(registry.cache_max_bytes(), Some(u64::MAX));
+
+        registry.cache_max_size = 2;
+        assert_eq!(registry.cache_max_bytes(), Some(2_000_000));
     }
 }

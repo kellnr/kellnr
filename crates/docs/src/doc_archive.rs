@@ -59,7 +59,7 @@ impl FromRequest<AppStateData, Body> for DocArchive {
             .map_err(RegistryError::ExtractBytesFailed)?
             .to_vec();
 
-        let max_docs_size = state.settings.docs.max_size * 1_000_000;
+        let max_docs_size = state.settings.docs.max_bytes();
         if data_bytes.len() > max_docs_size {
             return Err(RegistryError::TooLarge(data_bytes.len(), max_docs_size).into());
         }

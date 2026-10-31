@@ -39,7 +39,7 @@ pub use protocol::Protocol;
 // referenced without a direct provcfg dep.
 pub use provcfg::{Category, Config, Provenance, erased_serde};
 pub use proxy::Proxy;
-pub use registry::Registry;
+pub use registry::{Registry, SessionAge};
 pub use settings::{
     Settings, SettingsError, SettingsProv, build_prov_with_cli, settings_from_prov,
     sources_from_prov, test_settings,

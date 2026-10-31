@@ -78,24 +78,15 @@ fn escape_like_pattern(input: &str) -> String {
         .replace('_', "\\_")
 }
 
-// Upper bound on the configured session age. Clamping to this keeps cutoff
-// arithmetic well within `chrono::Duration`/`DateTime` range, avoiding
-// overflow panics for absurd configuration values. The session cookie uses
-// the same bound.
-use kellnr_settings::constants::MAX_SESSION_AGE;
+use kellnr_settings::SessionAge;
 
-/// Resolve a configured session age into the internal expiry duration.
-///
-/// A value of zero means sessions never expire ([`None`]). Any positive value
-/// is clamped to [`MAX_SESSION_AGE`] so cutoff calculations cannot overflow.
-fn session_age_to_duration(d: std::time::Duration) -> Option<chrono::Duration> {
-    if d.is_zero() {
-        return None;
-    }
-    let clamped = d.min(MAX_SESSION_AGE);
-    // `clamped` is at most MAX_SESSION_AGE, which fits comfortably in a
+/// Resolve a configured session age into the internal expiry duration,
+/// [`None`] if sessions never expire.
+fn session_age_to_duration(age: SessionAge) -> Option<chrono::Duration> {
+    // The expiry is at most `MAX_SESSION_AGE`, which fits comfortably in a
     // `chrono::Duration`, so the conversion cannot fail.
-    Some(chrono::Duration::from_std(clamped).expect("clamped session age fits chrono::Duration"))
+    age.expiry()
+        .map(|d| chrono::Duration::from_std(d).expect("bounded session age fits chrono::Duration"))
 }
 
 #[derive(Debug, PartialEq, FromQueryResult)]
@@ -3169,17 +3160,19 @@ mod like_escape_tests {
 
 #[cfg(test)]
 mod session_age_tests {
-    use super::{MAX_SESSION_AGE, session_age_to_duration};
+    use kellnr_settings::constants::MAX_SESSION_AGE;
+
+    use super::{SessionAge, session_age_to_duration};
 
     #[test]
     fn zero_means_never_expire() {
-        assert_eq!(session_age_to_duration(std::time::Duration::ZERO), None);
+        assert_eq!(session_age_to_duration(SessionAge::from_secs(0)), None);
     }
 
     #[test]
     fn positive_age_is_preserved() {
         assert_eq!(
-            session_age_to_duration(std::time::Duration::from_hours(1)),
+            session_age_to_duration(SessionAge::from_secs(3600)),
             Some(chrono::Duration::seconds(3600))
         );
     }
@@ -3187,7 +3180,7 @@ mod session_age_tests {
     #[test]
     fn absurd_age_is_clamped_without_panicking() {
         // u64::MAX seconds would overflow chrono::Duration if not clamped.
-        let resolved = session_age_to_duration(std::time::Duration::from_secs(u64::MAX))
+        let resolved = session_age_to_duration(SessionAge::from_secs(u64::MAX))
             .expect("non-zero age yields Some");
         assert_eq!(
             resolved,

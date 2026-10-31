@@ -55,3 +55,10 @@ impl Default for Docs {
         }
     }
 }
+
+impl Docs {
+    /// `max_size` in bytes.
+    pub fn max_bytes(&self) -> usize {
+        crate::registry::mb_to_bytes(self.max_size)
+    }
+}

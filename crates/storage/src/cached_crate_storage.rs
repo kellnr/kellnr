@@ -125,10 +125,9 @@ fn build_cache(registry: &Registry) -> Option<CrateCache> {
     if registry.cache_size == 0 {
         return None;
     }
-    if registry.cache_max_size == 0 {
+    let Some(max_bytes) = registry.cache_max_bytes() else {
         return Some(Cache::builder().max_capacity(registry.cache_size).build());
-    }
-    let max_bytes = registry.cache_max_size.saturating_mul(1_000_000);
+    };
     // Every crate weighs at least its share of the size limit, so the cache
     // also never holds more than `cache_size` crates.
     let min_weight = max_bytes.div_ceil(registry.cache_size);

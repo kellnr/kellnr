@@ -16,7 +16,7 @@ use super::apply_download_limits;
 /// Creates the kellnr API routes
 pub fn create_routes(
     state: AppStateData,
-    max_crate_size: usize,
+    max_crate_bytes: usize,
     download_semaphore: Option<Arc<Semaphore>>,
 ) -> OpenApiRouter<AppStateData> {
     let settings = &state.settings.registry;
@@ -25,7 +25,7 @@ pub fn create_routes(
     let publish_router: OpenApiRouter<AppStateData> = Router::new()
         .route(
             "/new",
-            put(kellnr_api::publish).layer(DefaultBodyLimit::max(max_crate_size * 1_000_000)),
+            put(kellnr_api::publish).layer(DefaultBodyLimit::max(max_crate_bytes)),
         )
         .into();
 

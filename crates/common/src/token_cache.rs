@@ -26,12 +26,12 @@ impl TokenCacheManager {
     /// * `ttl_seconds` - Time-to-live for cached tokens. Lower values provide
     ///   better security (revoked tokens expire faster) but increase database load.
     /// * `max_capacity` - Maximum number of tokens to cache
-    pub fn new(enabled: bool, ttl_seconds: u64, max_capacity: u64) -> Self {
+    pub fn new(enabled: bool, ttl: Duration, max_capacity: u64) -> Self {
         let cache = if enabled {
             Some(
                 Cache::builder()
                     .max_capacity(max_capacity)
-                    .time_to_live(Duration::from_secs(ttl_seconds))
+                    .time_to_live(ttl)
                     .build(),
             )
         } else {
@@ -109,7 +109,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_disabled() {
-        let cache = TokenCacheManager::new(false, 60, 100);
+        let cache = TokenCacheManager::new(false, Duration::from_secs(60), 100);
         assert!(!cache.is_enabled());
 
         cache
@@ -124,7 +124,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_enabled() {
-        let cache = TokenCacheManager::new(true, 60, 100);
+        let cache = TokenCacheManager::new(true, Duration::from_secs(60), 100);
         assert!(cache.is_enabled());
 
         cache
@@ -145,13 +145,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_miss() {
-        let cache = TokenCacheManager::new(true, 60, 100);
+        let cache = TokenCacheManager::new(true, Duration::from_secs(60), 100);
         assert!(cache.get("nonexistent").await.is_none());
     }
 
     #[tokio::test]
     async fn test_invalidate_all() {
-        let cache = TokenCacheManager::new(true, 60, 100);
+        let cache = TokenCacheManager::new(true, Duration::from_secs(60), 100);
 
         let generation = cache.generation();
         cache
@@ -174,7 +174,7 @@ mod tests {
     /// its result afterwards.
     #[tokio::test]
     async fn insert_after_invalidation_is_dropped() {
-        let cache = TokenCacheManager::new(true, 60, 100);
+        let cache = TokenCacheManager::new(true, Duration::from_secs(60), 100);
 
         let generation = cache.generation();
         cache.invalidate_all();
@@ -187,7 +187,7 @@ mod tests {
 
     #[tokio::test]
     async fn invalidate_all_bumps_generation() {
-        let cache = TokenCacheManager::new(false, 60, 100);
+        let cache = TokenCacheManager::new(false, Duration::from_secs(60), 100);
         let before = cache.generation();
 
         cache.invalidate_all();

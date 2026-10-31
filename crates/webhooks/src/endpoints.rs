@@ -680,7 +680,7 @@ mod endpoint_tests {
             std::path::Path::new(":memory:"),
             "admin",
             Some("token".to_string()),
-            std::time::Duration::from_secs(10),
+            kellnr_settings::SessionAge::from_secs(10),
         ));
         let db = Arc::new(Database::new(&con_string, 1).await.unwrap());
 
