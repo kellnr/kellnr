@@ -39,7 +39,7 @@ use sea_orm::{
 
 use super::{DB_DATE_FORMAT, Database, parse_db_version};
 use crate::error::DbError;
-use crate::provider::{DbProvider, DbResult};
+use crate::provider::DbResult;
 use crate::{CrateId, CrateMeta, UserFlags};
 
 /// Returns a standard test date for consistent test data.
