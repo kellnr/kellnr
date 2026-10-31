@@ -1,9 +1,10 @@
+use kellnr_db::UserId;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateUser {
-    pub id: i32,
+    pub id: UserId,
     pub login: String,
     pub name: Option<String>,
 }

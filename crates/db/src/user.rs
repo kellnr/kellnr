@@ -2,10 +2,12 @@ use kellnr_entity::user;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::UserId;
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct User {
     #[serde(skip_serializing)]
-    pub id: i32,
+    pub id: UserId,
     pub name: String,
     #[serde(skip_serializing)]
     pub pwd: String,
@@ -19,7 +21,7 @@ pub struct User {
 impl From<user::Model> for User {
     fn from(u: user::Model) -> Self {
         Self {
-            id: u.id as i32,
+            id: UserId::new(u.id),
             name: u.name,
             pwd: u.pwd,
             salt: u.salt,

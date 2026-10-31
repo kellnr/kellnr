@@ -37,9 +37,9 @@ use sea_orm::{
 };
 
 use super::{DB_DATE_FORMAT, Database, parse_db_version};
-use crate::CrateMeta;
 use crate::error::DbError;
 use crate::provider::{DbProvider, DbResult};
+use crate::{CrateId, CrateMeta};
 
 /// Returns a standard test date for consistent test data.
 ///
@@ -78,7 +78,7 @@ pub async fn add_multiple_versions(
     name: &str,
     owner: &str,
     versions: &[&str],
-) -> DbResult<Vec<i64>> {
+) -> DbResult<Vec<CrateId>> {
     let created = default_created();
     let mut ids = Vec::with_capacity(versions.len());
     for version in versions {
@@ -187,7 +187,7 @@ impl<'a> TestCrateBuilder<'a> {
     /// # Returns
     ///
     /// The crate ID on success.
-    pub async fn build(self) -> DbResult<i64> {
+    pub async fn build(self) -> DbResult<CrateId> {
         let name = self.name.ok_or_else(|| {
             DbError::InvalidCrateName("TestCrateBuilder: name is required".to_string())
         })?;
@@ -273,7 +273,7 @@ pub async fn test_add_crate(
     owner: &str,
     version: &Version,
     created: &DateTime<Utc>,
-) -> DbResult<i64> {
+) -> DbResult<CrateId> {
     let pm = PublishMetadata {
         name: name.to_string(),
         vers: version.to_string(),
@@ -297,7 +297,7 @@ fn canonical(name: &str) -> CanonicalName {
 
 /// Insert an empty crate like Kellnr versions before canonical crate names
 /// did: with the lowercase name and without any name checks.
-pub async fn test_insert_legacy_crate(db: &Database, name: &str) -> DbResult<i64> {
+pub async fn test_insert_legacy_crate(db: &Database, name: &str) -> DbResult<CrateId> {
     let krate = krate::ActiveModel {
         id: ActiveValue::default(),
         name: Set(name.to_lowercase()),
@@ -311,7 +311,7 @@ pub async fn test_insert_legacy_crate(db: &Database, name: &str) -> DbResult<i64
         e_tag: Set(String::new()),
         restricted_download: Set(false),
     };
-    Ok(krate.insert(&db.db_con).await?.id)
+    Ok(CrateId::new(krate.insert(&db.db_con).await?.id))
 }
 
 /// Stores the names of all crates in lowercase with the separators they were
@@ -398,7 +398,7 @@ pub async fn test_add_crate_with_downloads(
     description: Option<&str>,
     created: &DateTime<Utc>,
     downloads: Option<i64>,
-) -> DbResult<i64> {
+) -> DbResult<CrateId> {
     let pm = PublishMetadata {
         name: name.to_string(),
         vers: version.to_string(),
@@ -425,7 +425,7 @@ pub async fn test_add_crate_with_downloads(
     let mut cm: crate_meta::ActiveModel = cm.into();
 
     let current_downloads = krate.as_ref().unwrap().total_downloads;
-    let crate_id = krate.as_ref().unwrap().id;
+    let crate_id = CrateId::new(krate.as_ref().unwrap().id);
 
     let mut krate: krate::ActiveModel = krate.unwrap().into();
     krate.total_downloads = Set(current_downloads + downloads.unwrap_or(0));
@@ -438,7 +438,7 @@ pub async fn test_add_crate_with_downloads(
 /// Add test crate metadata.
 pub async fn test_add_crate_meta(
     db: &Database,
-    crate_id: i64,
+    crate_id: CrateId,
     version: &str,
     created: &DateTime<Utc>,
     downloads: Option<i64>,
@@ -448,7 +448,7 @@ pub async fn test_add_crate_meta(
         version: Set(version.to_string()),
         created: Set(created.to_string()),
         downloads: Set(downloads.unwrap_or_default()),
-        crate_fk: Set(crate_id),
+        crate_fk: Set(crate_id.get()),
         ..Default::default()
     };
 
@@ -458,7 +458,7 @@ pub async fn test_add_crate_meta(
 }
 
 /// Set the stored max version of a crate without any checks.
-pub async fn test_set_max_version(db: &Database, crate_id: i64, version: &str) -> DbResult<()> {
+pub async fn test_set_max_version(db: &Database, crate_id: CrateId, version: &str) -> DbResult<()> {
     krate::Entity::update_many()
         .col_expr(krate::Column::MaxVersion, Expr::value(version))
         .filter(krate::Column::Id.eq(crate_id))
@@ -486,7 +486,7 @@ pub async fn test_add_doc_queue_entry(
 }
 
 /// Delete crate index entries for testing.
-pub async fn test_delete_crate_index(db: &Database, crate_id: i64) -> DbResult<()> {
+pub async fn test_delete_crate_index(db: &Database, crate_id: CrateId) -> DbResult<()> {
     crate_index::Entity::delete_many()
         .filter(crate_index::Column::CrateFk.eq(crate_id))
         .exec(&db.db_con)
@@ -621,7 +621,7 @@ pub async fn add_aged_session(
 }
 
 /// Get crate meta list by crate ID.
-pub async fn get_crate_meta_list(db: &Database, crate_id: i64) -> DbResult<Vec<CrateMeta>> {
+pub async fn get_crate_meta_list(db: &Database, crate_id: CrateId) -> DbResult<Vec<CrateMeta>> {
     let cm: Vec<(crate_meta::Model, Option<krate::Model>)> = crate_meta::Entity::find()
         .find_also_related(krate::Entity)
         .filter(crate_meta::Column::CrateFk.eq(crate_id))

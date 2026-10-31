@@ -52,8 +52,8 @@ use crate::provider::{
 };
 use crate::tables::init_database;
 use crate::{
-    AuthToken, ConString, CrateMeta, CrateSummary, DbProvider, DocQueueEntry, Group,
-    ToolchainTargetStatus, User,
+    AuthToken, AuthTokenId, ConString, CrateId, CrateMeta, CrateSummary, DbProvider, DocQueueEntry,
+    Group, ToolchainTargetStatus, User, UserId,
 };
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
@@ -134,7 +134,7 @@ impl Database {
         user::Entity::update_many()
             .col_expr(user::Column::Pwd, Expr::value(hashed))
             .col_expr(user::Column::Salt, Expr::value(String::new()))
-            .filter(user::Column::Id.eq(i64::from(user.id)))
+            .filter(user::Column::Id.eq(user.id))
             .filter(user::Column::Pwd.eq(user.pwd.as_str()))
             .exec(&self.db_con)
             .await?;
@@ -1117,7 +1117,7 @@ impl DbProvider for Database {
         let s = session::ActiveModel {
             token: Set(hash_token(session_token)),
             created: Set(created),
-            user_fk: Set(user.id as i64),
+            user_fk: Set(user.id.get()),
             ..Default::default()
         };
 
@@ -1242,12 +1242,12 @@ impl DbProvider for Database {
         Ok(owner.is_some())
     }
 
-    async fn get_crate_id(&self, crate_name: &CanonicalName) -> DbResult<Option<i64>> {
+    async fn get_crate_id(&self, crate_name: &CanonicalName) -> DbResult<Option<CrateId>> {
         let id = krate::Entity::find()
             .filter(krate::Column::Name.eq(crate_name))
             .one(&self.db_con)
             .await?
-            .map(|model| model.id);
+            .map(|model| CrateId::new(model.id));
 
         Ok(id)
     }
@@ -1364,7 +1364,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn crate_version_exists(&self, crate_id: i64, version: &Version) -> DbResult<bool> {
+    async fn crate_version_exists(&self, crate_id: CrateId, version: &Version) -> DbResult<bool> {
         let cm = crate_meta::Entity::find()
             .filter(
                 Cond::all()
@@ -1377,8 +1377,8 @@ impl DbProvider for Database {
         Ok(cm.is_some())
     }
 
-    async fn get_max_version_from_id(&self, crate_id: i64) -> DbResult<Version> {
-        operations::get_max_version_from_id(&self.db_con, crate_id).await
+    async fn get_max_version_from_id(&self, crate_id: CrateId) -> DbResult<Version> {
+        operations::get_max_version_from_id(&self.db_con, crate_id.get()).await
     }
 
     async fn get_max_version_from_name(&self, crate_name: &CanonicalName) -> DbResult<Version> {
@@ -1388,11 +1388,11 @@ impl DbProvider for Database {
         Ok(v)
     }
 
-    async fn update_max_version(&self, crate_id: i64, version: &Version) -> DbResult<()> {
-        let krate = krate::Entity::find_by_id(crate_id)
+    async fn update_max_version(&self, crate_id: CrateId, version: &Version) -> DbResult<()> {
+        let krate = krate::Entity::find_by_id(crate_id.get())
             .one(&self.db_con)
             .await?
-            .ok_or(DbError::CrateNotFoundWithId(crate_id))?;
+            .ok_or(DbError::CrateNotFoundWithId(crate_id.get()))?;
 
         let mut k: krate::ActiveModel = krate.into();
         k.max_version = Set(version.to_string());
@@ -1477,9 +1477,9 @@ impl DbProvider for Database {
         Ok(at.into_iter().map(AuthToken::from).collect())
     }
 
-    async fn delete_auth_token(&self, user_name: &str, id: i32) -> DbResult<()> {
+    async fn delete_auth_token(&self, user_name: &str, id: AuthTokenId) -> DbResult<()> {
         let deleted = auth_token::Entity::delete_many()
-            .filter(auth_token::Column::Id.eq(i64::from(id)))
+            .filter(auth_token::Column::Id.eq(id))
             .filter(auth_token::Column::UserFk.in_subquery(Self::user_id_by_name(user_name)))
             .exec(&self.db_con)
             .await?;
@@ -1819,11 +1819,11 @@ impl DbProvider for Database {
         Ok(crate_meta)
     }
 
-    async fn update_last_updated(&self, id: i64, last_updated: &DateTime<Utc>) -> DbResult<()> {
-        let krate = krate::Entity::find_by_id(id)
+    async fn update_last_updated(&self, id: CrateId, last_updated: &DateTime<Utc>) -> DbResult<()> {
+        let krate = krate::Entity::find_by_id(id.get())
             .one(&self.db_con)
             .await?
-            .ok_or(DbError::CrateNotFoundWithId(id))?;
+            .ok_or(DbError::CrateNotFoundWithId(id.get()))?;
 
         let date = last_updated.format(DB_DATE_FORMAT).to_string();
 
@@ -2096,7 +2096,7 @@ impl DbProvider for Database {
         })
     }
 
-    async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64> {
+    async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<CrateId> {
         let created = created.format(DB_DATE_FORMAT).to_string();
         let original_name = OriginalName::try_from(name)
             .map_err(|_| DbError::InvalidCrateName(name.to_string()))?;
@@ -2115,7 +2115,7 @@ impl DbProvider for Database {
             restricted_download: Set(false),
         };
         match krate.insert(&self.db_con).await {
-            Ok(krate) => Ok(krate.id),
+            Ok(krate) => Ok(CrateId::new(krate.id)),
             Err(e) if operations::is_unique_violation(&e) => {
                 Err(self.concurrent_name_conflict(&original_name).await)
             }
@@ -2131,7 +2131,7 @@ impl DbProvider for Database {
         created: &DateTime<Utc>,
         owner: &str,
         token_name: Option<String>,
-    ) -> DbResult<i64> {
+    ) -> DbResult<CrateId> {
         let created = created.format(DB_DATE_FORMAT).to_string();
         let original_name = OriginalName::try_from(&pub_metadata.name)
             .map_err(|_| DbError::InvalidCrateName(pub_metadata.name.clone()))?;
@@ -2231,7 +2231,7 @@ impl DbProvider for Database {
         }
 
         txn.commit().await?;
-        Ok(crate_id)
+        Ok(CrateId::new(crate_id))
     }
 
     async fn update_docs_link(
@@ -2262,14 +2262,14 @@ impl DbProvider for Database {
         pub_metadata: &PublishMetadata,
         size: i64,
         created: &str,
-        crate_id: i64,
+        crate_id: CrateId,
     ) -> DbResult<()> {
         operations::add_crate_metadata(
             &self.db_con,
             pub_metadata,
             size,
             created,
-            crate_id,
+            crate_id.get(),
             None,
             None,
         )
@@ -2780,7 +2780,7 @@ impl DbProvider for Database {
         txn.commit().await?;
 
         Ok(User {
-            id: user_id as i32,
+            id: UserId::new(user_id),
             name: username.to_string(),
             pwd: String::new(),  // Don't expose password hash
             salt: String::new(), // Don't expose salt
@@ -2792,14 +2792,14 @@ impl DbProvider for Database {
 
     async fn link_oauth2_identity(
         &self,
-        user_id: i64,
+        user_id: UserId,
         issuer: &str,
         subject: &str,
         email: Option<String>,
     ) -> DbResult<()> {
         let created = Utc::now().format(DB_DATE_FORMAT).to_string();
         let identity = oauth2_identity::ActiveModel {
-            user_fk: Set(user_id),
+            user_fk: Set(user_id.get()),
             provider_issuer: Set(issuer.to_string()),
             subject: Set(subject.to_string()),
             email: Set(email),

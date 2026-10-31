@@ -2,7 +2,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use kellnr_appstate::DbState;
 use kellnr_common::account_name::validate_group_name;
-use kellnr_db::{self, Group};
+use kellnr_db::{self, Group, UserId};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -85,7 +85,7 @@ pub async fn add(
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct GroupUser {
-    pub id: i32,
+    pub id: UserId,
     pub name: String,
 }
 
