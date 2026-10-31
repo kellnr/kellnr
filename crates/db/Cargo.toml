@@ -12,7 +12,6 @@ documentation.workspace = true
 [dependencies]
 # Internal dependencies from Kellnr
 kellnr-common.workspace = true
-kellnr-db-testcontainer.workspace = true
 kellnr-entity.workspace = true
 kellnr-migration.workspace = true
 kellnr-settings.workspace = true
@@ -33,13 +32,14 @@ tokio = { workspace = true, features = ["rt"] }
 tracing.workspace = true
 
 [features]
-# Cheap password hashing for tests. Only enable it from dev-dependencies.
+# Cheap password hashing and test_utils for tests. Only enable it from dev-dependencies.
 test-support = []
 # The generated `MockDb`. Only enable it from dev-dependencies.
 mock = ["dep:mockall"]
 
 [dev-dependencies]
 kellnr-db = { workspace = true, features = ["mock", "test-support"] }
+kellnr-db-testcontainer.workspace = true
 kellnr-test-db.workspace = true
 url.workspace = true
 

@@ -31,4 +31,6 @@ pub use provider::{
 pub use toolchain_target_status::ToolchainTargetStatus;
 pub use user::{User, UserFlags};
 
-pub use crate::database::{Database, test_utils};
+pub use crate::database::Database;
+#[cfg(feature = "test-support")]
+pub use crate::database::test_utils;
