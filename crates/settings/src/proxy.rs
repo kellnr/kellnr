@@ -1,3 +1,4 @@
+use kellnr_common::base_url::{BaseUrl, BaseUrlError};
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -83,18 +84,33 @@ impl Proxy {
         }
     }
 
+    /// Base URL of the crate downloads, `proxy.url`.
+    pub fn download_url(&self) -> Result<BaseUrl, BaseUrlError> {
+        BaseUrl::new(self.url.clone())
+    }
+
+    /// Base URL of the sparse index, `proxy.index`.
+    pub fn index_url(&self) -> Result<BaseUrl, BaseUrlError> {
+        BaseUrl::new(self.index.clone())
+    }
+
+    /// Base URL of the crates API, `proxy.api`.
+    pub fn api_url(&self) -> Result<BaseUrl, BaseUrlError> {
+        BaseUrl::new(self.api.clone())
+    }
+
+    /// Checks the upstream URLs of an enabled proxy, so the accessors of
+    /// them cannot fail later.
     pub fn validate(&self) -> Result<(), String> {
         if !self.enabled {
             return Ok(());
         }
         for (key, url) in [
-            ("proxy.url", &self.url),
-            ("proxy.index", &self.index),
-            ("proxy.api", &self.api),
+            ("proxy.url", self.download_url()),
+            ("proxy.index", self.index_url()),
+            ("proxy.api", self.api_url()),
         ] {
-            if !matches!(url.scheme(), "http" | "https") {
-                return Err(format!("{key} must be an http or https URL, got {url}"));
-            }
+            url.map_err(|e| format!("{key} {e}"))?;
         }
         Ok(())
     }
@@ -154,6 +170,48 @@ mod tests {
         assert_eq!(
             proxy.api.as_str(),
             "https://mirror.example.com/api/v1/crates/"
+        );
+    }
+
+    #[test]
+    fn accessors_return_base_urls_that_keep_the_last_segment() {
+        let proxy: Proxy = toml::from_str(
+            r#"
+            url = "https://mirror.example.com/crates"
+            index = "https://mirror.example.com/index"
+            api = "https://mirror.example.com/api/v1/crates"
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            proxy
+                .download_url()
+                .unwrap()
+                .join("serde/1.0.0/download")
+                .as_str(),
+            "https://mirror.example.com/crates/serde/1.0.0/download"
+        );
+        assert_eq!(
+            proxy.index_url().unwrap().join("se/rd/serde").as_str(),
+            "https://mirror.example.com/index/se/rd/serde"
+        );
+        assert_eq!(
+            proxy.api_url().unwrap().join("serde").as_str(),
+            "https://mirror.example.com/api/v1/crates/serde"
+        );
+    }
+
+    #[test]
+    fn validate_names_the_key_of_an_invalid_url() {
+        let proxy = Proxy {
+            enabled: true,
+            index: Url::parse("sparse+https://index.crates.io/").unwrap(),
+            ..Proxy::default()
+        };
+        assert_eq!(
+            proxy.validate().unwrap_err(),
+            "proxy.index must be an http or https URL, got sparse+https://index.crates.io/"
         );
     }
 

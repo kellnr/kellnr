@@ -7,6 +7,7 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_db::mock::MockDb;
+use reqwest::Url;
 
 use super::*;
 

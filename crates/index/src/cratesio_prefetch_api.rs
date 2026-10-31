@@ -6,6 +6,7 @@ use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use hyper::StatusCode;
 use kellnr_appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
+use kellnr_common::base_url::BaseUrl;
 use kellnr_common::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use kellnr_common::index_metadata::IndexMetadata;
@@ -18,7 +19,7 @@ use kellnr_db::provider::PrefetchState;
 use kellnr_filter::{CrateInfo, FilterChain, Verdict};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use moka::future::Cache;
-use reqwest::{Client, Url};
+use reqwest::Client;
 use tracing::{error, trace, warn};
 
 use super::config_json::ConfigJson;
@@ -83,15 +84,7 @@ pub async fn prefetch_cratesio(
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
 ) -> Result<Prefetch, StatusCode> {
-    internal_prefetch_cratesio(
-        name,
-        headers,
-        &db,
-        &settings.proxy.index,
-        &sender,
-        &settings.proxy,
-    )
-    .await
+    internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await
 }
 
 /// Prefetch crate metadata from crates.io (1-2 char names)
@@ -121,15 +114,7 @@ pub async fn prefetch_len2_cratesio(
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
 ) -> Result<Prefetch, StatusCode> {
-    internal_prefetch_cratesio(
-        name,
-        headers,
-        &db,
-        &settings.proxy.index,
-        &sender,
-        &settings.proxy,
-    )
-    .await
+    internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await
 }
 
 pub fn init_cratesio_prefetch_thread(
@@ -167,7 +152,6 @@ async fn internal_prefetch_cratesio(
     name: OriginalName,
     headers: HeaderMap,
     db: &Arc<dyn DbProvider>,
-    index_url: &Url,
     sender: &flume::Sender<CratesioPrefetchMsg>,
     proxy_settings: &kellnr_settings::Proxy,
 ) -> Result<Prefetch, StatusCode> {
@@ -214,7 +198,11 @@ async fn internal_prefetch_cratesio(
             Err(StatusCode::NOT_MODIFIED)
         }
         PrefetchState::NotFound => {
-            Ok(fetch_cratesio_prefetch(name, index_url, sender, proxy_settings).await?)
+            let index_url = proxy_settings.index_url().map_err(|e| {
+                error!("Invalid proxy.index: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+            Ok(fetch_cratesio_prefetch(name, &index_url, sender, proxy_settings).await?)
         }
     }
 }
@@ -281,7 +269,7 @@ pub struct CratesIoPrefetchArgs {
     pub cache: Cache<OriginalName, String>,
     pub recv: flume::Receiver<CratesioPrefetchMsg>,
     pub download_on_update: bool,
-    pub url: Url,
+    pub url: BaseUrl,
     pub storage: Arc<CratesIoCrateStorage>,
     pub proxy_settings: Arc<kellnr_settings::Proxy>,
     pub sync: CratesioSync,
@@ -461,13 +449,11 @@ async fn handle_cratesio_prefetch_msg(args: &CratesIoPrefetchArgs) -> Synced {
 
 async fn fetch_cratesio_prefetch(
     name: OriginalName,
-    index_url: &Url,
+    index_url: &BaseUrl,
     sender: &flume::Sender<CratesioPrefetchMsg>,
     proxy_settings: &kellnr_settings::Proxy,
 ) -> Result<Prefetch, StatusCode> {
-    let url = index_url
-        .join(&crate_sub_path(&name))
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let url = index_url.join(&crate_sub_path(&name));
 
     let response = get_client(proxy_settings).get(url).send().await;
 
@@ -542,6 +528,7 @@ mod tests {
     use kellnr_appstate::AppStateData;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::{Protocol, Settings};
+    use reqwest::Url;
     use tower::ServiceExt;
 
     use super::*;
@@ -588,7 +575,7 @@ mod tests {
         let (sender, _receiver) = flume::unbounded::<CratesioPrefetchMsg>();
         let proxy = kellnr_settings::Proxy::default();
         // Nothing listens on port 1, so the connection is refused.
-        let index_url = Url::parse("http://127.0.0.1:1/").unwrap();
+        let index_url = BaseUrl::new(Url::parse("http://127.0.0.1:1/").unwrap()).unwrap();
 
         let result = fetch_cratesio_prefetch(
             OriginalName::try_from("rocket").unwrap(),
@@ -652,7 +639,6 @@ mod tests {
             OriginalName::try_from("rocket").unwrap(),
             conditional_headers(),
             &db,
-            &proxy.index,
             &sender,
             &proxy,
         )
@@ -899,7 +885,7 @@ mod tests {
                 cache: Cache::builder().build(),
                 recv,
                 download_on_update: true,
-                url: proxy.url.clone(),
+                url: proxy.download_url().unwrap(),
                 storage: Arc::new(CratesIoCrateStorage::new(&settings, storage)),
                 proxy_settings: Arc::new(proxy.clone()),
                 sync: CratesioSync::new(db, Client::new(), proxy),

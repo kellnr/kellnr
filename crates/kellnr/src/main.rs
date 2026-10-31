@@ -198,21 +198,23 @@ async fn run_server(resolved: ResolvedSettings) {
     );
     let cratesio_sync = CratesioSync::new(db.clone(), proxy_client.clone(), &settings.proxy);
 
-    let prefetch_args = CratesIoPrefetchArgs {
-        db: db.clone(),
-        cache: Cache::builder()
-            .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
-            .build(),
-        recv: cratesio_prefetch_receiver.clone(),
-        download_on_update: settings.proxy.download_on_update,
-        storage: cratesio_storage.clone(),
-        url: settings.proxy.url.clone(),
-        proxy_settings: Arc::new(settings.proxy.clone()),
-        sync: cratesio_sync.clone(),
-        filters: download_filters.cratesio.clone(),
-    };
-
     if settings.proxy.enabled {
+        let prefetch_args = CratesIoPrefetchArgs {
+            db: db.clone(),
+            cache: Cache::builder()
+                .time_to_live(Duration::from_secs(UPDATE_CACHE_TIMEOUT_SECS))
+                .build(),
+            recv: cratesio_prefetch_receiver.clone(),
+            download_on_update: settings.proxy.download_on_update,
+            storage: cratesio_storage.clone(),
+            url: settings
+                .proxy
+                .download_url()
+                .expect("Proxy::validate checked proxy.url"),
+            proxy_settings: Arc::new(settings.proxy.clone()),
+            sync: cratesio_sync.clone(),
+            filters: download_filters.cratesio.clone(),
+        };
         init_cratesio_prefetch_thread(
             cratesio_prefetch_sender.clone(),
             settings.proxy.num_threads,
