@@ -4219,6 +4219,9 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
  "url",
  "utoipa",
 ]
@@ -4293,6 +4296,7 @@ dependencies = [
  "tar",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 
@@ -7877,6 +7881,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]
