@@ -15,7 +15,7 @@ use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use kellnr_appstate::{AppState, AppStateData, DbState, SettingsState};
 use kellnr_auth::oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
-use kellnr_db::User;
+use kellnr_db::{User, UserFlags};
 use kellnr_settings::UrlPathPrefix;
 use kellnr_settings::constants::{COOKIE_OAUTH2_STATE, COOKIE_OIDC_ID_TOKEN, OAUTH2_STATE_MAX_AGE};
 use serde::{Deserialize, Serialize};
@@ -353,8 +353,10 @@ pub async fn callback(
                     issuer,
                     &user_info.subject,
                     user_info.email.clone(),
-                    user_info.is_admin,
-                    user_info.is_read_only,
+                    UserFlags {
+                        admin: user_info.is_admin,
+                        read_only: user_info.is_read_only,
+                    },
                 )
                 .await
                 .map_err(|e| {

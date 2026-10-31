@@ -53,7 +53,7 @@ use crate::provider::{
 use crate::tables::init_database;
 use crate::{
     AuthToken, AuthTokenId, ConString, CrateId, CrateMeta, CrateSummary, DbProvider, DocQueueEntry,
-    Group, ToolchainTargetStatus, User, UserId,
+    Group, ToolchainTargetStatus, User, UserFlags, UserId,
 };
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
@@ -1559,13 +1559,7 @@ impl DbProvider for Database {
             .await
     }
 
-    async fn add_user(
-        &self,
-        name: &str,
-        pwd: &str,
-        is_admin: bool,
-        is_read_only: bool,
-    ) -> DbResult<()> {
+    async fn add_user(&self, name: &str, pwd: &str, flags: UserFlags) -> DbResult<()> {
         let hashed_pwd = hash_pwd(pwd).await;
         let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
@@ -1573,8 +1567,8 @@ impl DbProvider for Database {
             name: Set(name.to_owned()),
             pwd: Set(hashed_pwd),
             salt: Set(String::new()),
-            is_admin: Set(is_admin),
-            is_read_only: Set(is_read_only),
+            is_admin: Set(flags.admin),
+            is_read_only: Set(flags.read_only),
             created: Set(created),
             ..Default::default()
         };
@@ -2739,8 +2733,7 @@ impl DbProvider for Database {
         issuer: &str,
         subject: &str,
         email: Option<String>,
-        is_admin: bool,
-        is_read_only: bool,
+        flags: UserFlags,
     ) -> DbResult<User> {
         // OAuth2 users do not use password auth, but the column needs a
         // valid hash. Hash before opening the transaction to keep it short.
@@ -2756,8 +2749,8 @@ impl DbProvider for Database {
             name: Set(username.to_string()),
             pwd: Set(hashed_pwd),
             salt: Set(String::new()),
-            is_admin: Set(is_admin),
-            is_read_only: Set(is_read_only),
+            is_admin: Set(flags.admin),
+            is_read_only: Set(flags.read_only),
             created: Set(created.clone()),
             ..Default::default()
         };
@@ -2784,8 +2777,8 @@ impl DbProvider for Database {
             name: username.to_string(),
             pwd: String::new(),  // Don't expose password hash
             salt: String::new(), // Don't expose salt
-            is_admin,
-            is_read_only,
+            is_admin: flags.admin,
+            is_read_only: flags.read_only,
             created,
         })
     }

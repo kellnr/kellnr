@@ -234,7 +234,7 @@ mod endpoint_tests {
     use hyper::header;
     use kellnr_appstate::AppStateData;
     use kellnr_common::webhook::WebhookEvent;
-    use kellnr_db::{ConString, Database, DbProvider, SqliteConString};
+    use kellnr_db::{ConString, Database, DbProvider, SqliteConString, UserFlags};
     use serde::de::DeserializeOwned;
     use tower::ServiceExt;
 
@@ -684,7 +684,7 @@ mod endpoint_tests {
         db.add_auth_token("wh_test_admin", ADMIN_TOKEN, "admin")
             .await
             .unwrap();
-        db.add_user("wh_non_admin", "na", false, false)
+        db.add_user("wh_non_admin", "na", UserFlags::normal())
             .await
             .unwrap();
         db.add_auth_token("wh_non_admin", NON_ADMIN_TOKEN, "wh_non_admin")

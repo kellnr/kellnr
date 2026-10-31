@@ -8,7 +8,7 @@ use kellnr_auth::password::{PasswordAuthError, authenticate_password};
 use kellnr_auth::token;
 use kellnr_common::account_name::{validate_token_name, validate_user_name};
 use kellnr_common::util::generate_rand_string;
-use kellnr_db::{self, AuthToken, AuthTokenId, DbProvider, User};
+use kellnr_db::{self, AuthToken, AuthTokenId, DbProvider, User, UserFlags};
 use kellnr_settings::Settings;
 use kellnr_settings::constants::{COOKIE_OIDC_ID_TOKEN, COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 use serde::{Deserialize, Serialize};
@@ -569,8 +569,10 @@ pub async fn add(
     db.add_user(
         &new_user.name,
         &new_user.pwd1,
-        new_user.is_admin,
-        new_user.is_read_only,
+        UserFlags {
+            admin: new_user.is_admin,
+            read_only: new_user.is_read_only,
+        },
     )
     .await?;
 
@@ -1702,7 +1704,7 @@ mod tests {
         mock_db
             .expect_add_user()
             .times(1)
-            .returning(|_, _, _, _| Ok(()));
+            .returning(|_, _, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
         let app = Router::new().route("/add", post(add)).with_state(state);

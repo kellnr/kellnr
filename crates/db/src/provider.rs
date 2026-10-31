@@ -19,8 +19,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::DbError;
 use crate::{
-    AuthToken, AuthTokenId, CrateId, CrateSummary, DocQueueEntry, Group, ToolchainTargetStatus, User,
-    UserId, crate_meta,
+    AuthToken, AuthTokenId, CrateId, CrateSummary, DocQueueEntry, Group, ToolchainTargetStatus,
+    User, UserFlags, UserId, crate_meta,
 };
 
 pub type DbResult<T> = Result<T, DbError>;
@@ -264,13 +264,7 @@ pub trait DbProvider: Send + Sync {
         allow_ownerless: bool,
     ) -> DbResult<()>;
     async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()>;
-    async fn add_user(
-        &self,
-        name: &str,
-        pwd: &str,
-        is_admin: bool,
-        is_read_only: bool,
-    ) -> DbResult<()>;
+    async fn add_user(&self, name: &str, pwd: &str, flags: UserFlags) -> DbResult<()>;
     async fn get_users(&self) -> DbResult<Vec<User>>;
     async fn add_group(&self, name: &str) -> DbResult<()>;
     async fn get_group(&self, name: &str) -> DbResult<Group>;
@@ -448,8 +442,7 @@ pub trait DbProvider: Send + Sync {
         issuer: &str,
         subject: &str,
         email: Option<String>,
-        is_admin: bool,
-        is_read_only: bool,
+        flags: UserFlags,
     ) -> DbResult<User>;
 
     /// Link an `OAuth2` identity to an existing user
@@ -762,7 +755,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_user(&self, _name: &str, _pwd: &str, _is_admin: bool, _is_read_only: bool) -> DbResult<()> {
+            async fn add_user(&self, _name: &str, _pwd: &str, _flags: UserFlags) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -994,8 +987,7 @@ pub mod mock {
                 issuer: &str,
                 subject: &str,
                 email: Option<String>,
-                is_admin: bool,
-                is_read_only: bool,
+                flags: UserFlags,
             ) -> DbResult<User> {
                 unimplemented!()
             }
