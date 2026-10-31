@@ -4,6 +4,7 @@ use axum::extract::{Request, State};
 use axum::http::HeaderValue;
 use axum::middleware::Next;
 use axum::response::Response;
+use kellnr_common::plain_token::PlainToken;
 use tracing::warn;
 
 use crate::token::Token;
@@ -82,7 +83,12 @@ pub async fn token_or_session_auth_when_required(
         return unauthorized_www_authenticate();
     };
 
-    if state.db.validate_session(cookie.value()).await.is_ok() {
+    if state
+        .db
+        .validate_session(&PlainToken::from(cookie.value()))
+        .await
+        .is_ok()
+    {
         let request = Request::from_parts(parts, body);
         return next.run(request).await;
     }
@@ -193,7 +199,7 @@ mod test {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("token"))
+            .with(eq(PlainToken::from("token")))
             .returning(move |_| {
                 Ok(User {
                     id: kellnr_db::UserId::new(0),
@@ -207,7 +213,7 @@ mod test {
             });
         mock_db
             .expect_get_user_from_token()
-            .with(eq("wrong_token"))
+            .with(eq(PlainToken::from("wrong_token")))
             .returning(move |_| Err(DbError::UserNotFound("user".to_string())));
 
         let state = AppStateData {
@@ -287,7 +293,7 @@ mod auth_middleware_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| Err(DbError::UserNotFound("1234".to_owned())));
 
         let r = app_required_auth(Arc::new(mock_db))

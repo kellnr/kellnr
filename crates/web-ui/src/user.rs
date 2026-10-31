@@ -7,6 +7,7 @@ use kellnr_appstate::{AppState, DbState, LoginThrottleState, SettingsState, Toke
 use kellnr_auth::password::{PasswordAuthError, authenticate_password};
 use kellnr_auth::token;
 use kellnr_common::account_name::{validate_token_name, validate_user_name};
+use kellnr_common::plain_token::PlainToken;
 use kellnr_common::util::generate_rand_string;
 use kellnr_db::{self, AuthToken, AuthTokenId, DbProvider, User, UserFlags};
 use kellnr_settings::Settings;
@@ -35,7 +36,10 @@ async fn revoke_sessions(
     keep_session_token: Option<&str>,
 ) -> Result<(), RouteError> {
     match keep_session_token {
-        Some(token) => db.delete_other_user_sessions(user_name, token).await?,
+        Some(token) => {
+            db.delete_other_user_sessions(user_name, &PlainToken::from(token))
+                .await?
+        }
         None => db.delete_user_sessions(user_name).await?,
     };
     Ok(())
@@ -75,7 +79,7 @@ pub async fn add_token(
 
     Ok(NewTokenResponse {
         name: auth_token.name.clone(),
-        token,
+        token: token.into_secret(),
     }
     .into())
 }
@@ -445,7 +449,11 @@ pub async fn logout(
 
     // The browser drops the cookie even if the session cannot be deleted, so
     // the jar must still be returned.
-    if let Err(e) = state.db.delete_session_token(&session_id).await {
+    if let Err(e) = state
+        .db
+        .delete_session_token(&PlainToken::from(session_id))
+        .await
+    {
         tracing::error!("Failed to delete session on logout: {e}");
     }
     Ok((jar, Json(LogoutResponse { logout_url })))
@@ -867,7 +875,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_delete_session_token()
-            .with(eq("session"))
+            .with(eq(PlainToken::from("session")))
             .times(1)
             .returning(|_| Ok(()));
 
@@ -1157,7 +1165,7 @@ mod tests {
         let mut mock_db = change_pwd_db();
         mock_db
             .expect_delete_other_user_sessions()
-            .with(eq("user"), eq("session"))
+            .with(eq("user"), eq(PlainToken::from("session")))
             .times(1)
             .returning(|_, _| Ok(2));
         mock_db.expect_delete_user_sessions().never();
@@ -1208,7 +1216,7 @@ mod tests {
         let mut mock_db = reset_pwd_db();
         mock_db
             .expect_delete_other_user_sessions()
-            .with(eq("admin"), eq("session"))
+            .with(eq("admin"), eq(PlainToken::from("session")))
             .times(1)
             .returning(|_, _| Ok(0));
         mock_db.expect_delete_user_sessions().never();

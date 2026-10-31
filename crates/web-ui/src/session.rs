@@ -8,6 +8,7 @@ use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
 use cookie::{SameSite, time};
 use kellnr_appstate::AppStateData;
+use kellnr_common::plain_token::PlainToken;
 use kellnr_common::util::generate_rand_string;
 use kellnr_db::SessionInfo;
 use kellnr_db::error::DbError;
@@ -26,7 +27,7 @@ pub(crate) async fn create_session_jar(
 ) -> Result<PrivateCookieJar, RouteError> {
     // 32 alphanumeric chars (~190 bits) to match the API token length, well
     // above the ~128-bit session-id recommendation.
-    let session_token = generate_rand_string(32);
+    let session_token = PlainToken::from(generate_rand_string(32));
     app_state
         .db
         .add_session_token(username, &session_token)
@@ -40,7 +41,7 @@ pub(crate) async fn create_session_jar(
     let secure = app_state.settings.origin.secure_cookies();
     Ok(cookies.add(session_cookie(
         COOKIE_SESSION_ID,
-        session_token,
+        session_token.into_secret(),
         app_state.settings.registry.session_age().cookie_max_age(),
         secure,
     )))
@@ -71,7 +72,7 @@ async fn validate_session(
 ) -> Result<SessionInfo, RouteError> {
     state
         .db
-        .validate_session(session_token)
+        .validate_session(&PlainToken::from(session_token))
         .await
         .map_err(|e| match e {
             DbError::SessionNotFound => RouteError::Status(StatusCode::UNAUTHORIZED),
@@ -237,7 +238,7 @@ mod session_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
                     name: "admin".to_string(),
@@ -266,7 +267,7 @@ mod session_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
                     name: "admin".to_string(),
@@ -304,7 +305,7 @@ mod session_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| Err(DbError::SessionNotFound));
 
         let r = app(Arc::new(mock_db))
@@ -326,7 +327,7 @@ mod session_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
                     name: "guest".to_string(),
@@ -352,7 +353,7 @@ mod session_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
                     name: "guest".to_string(),
@@ -389,7 +390,7 @@ mod session_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| Err(DbError::FailedToCountCrates));
 
         let r = app(Arc::new(mock_db))
@@ -409,7 +410,7 @@ mod session_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| Err(DbError::SessionNotFound));
 
         let r = app(Arc::new(mock_db))
@@ -497,7 +498,7 @@ mod auth_middleware_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
                     name: "guest".to_string(),
@@ -523,7 +524,7 @@ mod auth_middleware_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| Err(DbError::SessionNotFound));
 
         let r = app_required_auth(Arc::new(mock_db))
@@ -544,7 +545,7 @@ mod auth_middleware_tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("1234"))
+            .with(eq(PlainToken::from("1234")))
             .returning(|_st| Err(DbError::FailedToCountCrates));
 
         let r = app_required_auth(Arc::new(mock_db))

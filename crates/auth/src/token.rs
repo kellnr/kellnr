@@ -8,6 +8,7 @@ use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use kellnr_appstate::AppStateData;
+use kellnr_common::plain_token::PlainToken;
 use kellnr_common::token_cache::CachedTokenData;
 use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
@@ -24,7 +25,7 @@ use crate::password::{PasswordAuthError, authenticate_password};
 #[derive(Debug)]
 pub struct Token {
     /// The auth token, `None` for basic auth with a password
-    pub value: Option<String>,
+    pub value: Option<PlainToken>,
     pub user: String,
     pub is_admin: bool,
     pub is_read_only: bool,
@@ -37,13 +38,14 @@ pub enum OptionToken {
     Some(Token),
 }
 
-pub fn generate_token() -> String {
+pub fn generate_token() -> PlainToken {
     let mut rng = rng();
     iter::repeat(())
         .map(|()| rng.sample(Alphanumeric))
         .map(char::from)
         .take(32)
         .collect::<String>()
+        .into()
 }
 
 impl Token {
@@ -86,7 +88,7 @@ impl Token {
         // Check cache first
         if let Some(cached) = cache.get(token).await {
             return Ok(Token {
-                value: Some(token.to_string()),
+                value: Some(PlainToken::from(token)),
                 user: cached.user,
                 is_admin: cached.is_admin,
                 is_read_only: cached.is_read_only,
@@ -99,7 +101,7 @@ impl Token {
         let generation = cache.generation();
         let Ok(user) = get_user_with_retry(
             db,
-            token,
+            &PlainToken::from(token),
             state.settings.registry.token_db_retry_count,
             state.settings.registry.token_db_retry_delay_ms,
         )
@@ -122,7 +124,7 @@ impl Token {
             .await;
 
         Ok(Token {
-            value: Some(token.to_string()),
+            value: Some(PlainToken::from(token)),
             user: user.name,
             is_admin: user.is_admin,
             is_read_only: user.is_read_only,
@@ -188,7 +190,7 @@ async fn authenticate_basic(
 
 async fn get_user_with_retry(
     db: &Arc<dyn DbProvider>,
-    token: &str,
+    token: &PlainToken,
     max_retries: u32,
     delay_ms: u64,
 ) -> Result<kellnr_db::User, DbError> {
@@ -342,12 +344,12 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("valid_token"))
+            .with(eq(PlainToken::from("valid_token")))
             .times(1)
             .returning(|_| Ok(test_user()));
 
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let result = get_user_with_retry(&db, "valid_token", 3, 10).await;
+        let result = get_user_with_retry(&db, &PlainToken::from("valid_token"), 3, 10).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().name, "test_user");
@@ -362,7 +364,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("token"))
+            .with(eq(PlainToken::from("token")))
             .times(2)
             .returning(move |_| {
                 let count = call_count_clone.fetch_add(1, Ordering::SeqCst);
@@ -376,7 +378,7 @@ mod tests {
             });
 
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let result = get_user_with_retry(&db, "token", 3, 1).await;
+        let result = get_user_with_retry(&db, &PlainToken::from("token"), 3, 1).await;
 
         assert!(result.is_ok());
         assert_eq!(call_count.load(Ordering::SeqCst), 2);
@@ -388,12 +390,12 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("invalid_token"))
+            .with(eq(PlainToken::from("invalid_token")))
             .times(1) // Should only be called once
             .returning(|_| Err(DbError::TokenNotFound));
 
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let result = get_user_with_retry(&db, "invalid_token", 3, 10).await;
+        let result = get_user_with_retry(&db, &PlainToken::from("invalid_token"), 3, 10).await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), DbError::TokenNotFound));
@@ -405,12 +407,12 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("orphan_token"))
+            .with(eq(PlainToken::from("orphan_token")))
             .times(1)
             .returning(|_| Err(DbError::UserNotFound("orphan".to_string())));
 
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let result = get_user_with_retry(&db, "orphan_token", 3, 10).await;
+        let result = get_user_with_retry(&db, &PlainToken::from("orphan_token"), 3, 10).await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), DbError::UserNotFound(_)));
@@ -425,7 +427,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("token"))
+            .with(eq(PlainToken::from("token")))
             .times(4) // 1 initial + 3 retries
             .returning(move |_| {
                 call_count_clone.fetch_add(1, Ordering::SeqCst);
@@ -435,7 +437,7 @@ mod tests {
             });
 
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let result = get_user_with_retry(&db, "token", 3, 1).await;
+        let result = get_user_with_retry(&db, &PlainToken::from("token"), 3, 1).await;
 
         assert!(result.is_err());
         assert_eq!(call_count.load(Ordering::SeqCst), 4);
@@ -483,7 +485,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("new_token"))
+            .with(eq(PlainToken::from("new_token")))
             .times(1)
             .returning(|_| {
                 Ok(User {
@@ -526,7 +528,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("racy_token"))
+            .with(eq(PlainToken::from("racy_token")))
             .times(1)
             .returning(move |_| {
                 cache_in_db.invalidate_all();
@@ -552,7 +554,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("bad_token"))
+            .with(eq(PlainToken::from("bad_token")))
             .times(1) // Should not retry on TokenNotFound
             .returning(|_| Err(DbError::TokenNotFound));
 
@@ -625,7 +627,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("valid_token"))
+            .with(eq(PlainToken::from("valid_token")))
             .times(1)
             .returning(|_| Ok(test_user()));
 
@@ -868,7 +870,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("token"))
+            .with(eq(PlainToken::from("token")))
             .times(2) // Called twice
             .returning(move |_| {
                 call_count_clone.fetch_add(1, Ordering::SeqCst);
@@ -897,7 +899,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("lowercase_token"))
+            .with(eq(PlainToken::from("lowercase_token")))
             .times(1)
             .returning(|_| Ok(test_user()));
 
@@ -933,7 +935,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_get_user_from_token()
-            .with(eq("token"))
+            .with(eq(PlainToken::from("token")))
             .times(1)
             .returning(move |_| {
                 call_count_clone.fetch_add(1, Ordering::SeqCst);
@@ -943,7 +945,7 @@ mod tests {
             });
 
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let result = get_user_with_retry(&db, "token", 0, 1).await;
+        let result = get_user_with_retry(&db, &PlainToken::from("token"), 0, 1).await;
 
         assert!(result.is_err());
         assert_eq!(call_count.load(Ordering::SeqCst), 1);

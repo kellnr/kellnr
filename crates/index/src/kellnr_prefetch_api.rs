@@ -138,6 +138,7 @@ mod tests {
     use axum::routing::get;
     use http_body_util::BodyExt;
     use kellnr_appstate::AppStateData;
+    use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::{Protocol, Settings};
     use mockall::predicate::*;
@@ -327,7 +328,7 @@ mod tests {
             .returning(move |name| Ok(*name == restricted));
         mock_db
             .expect_get_user_from_token()
-            .with(eq("crate-user-token"))
+            .with(eq(PlainToken::from("crate-user-token")))
             .returning(|_| {
                 Ok(kellnr_db::User {
                     name: "crate_user".to_string(),

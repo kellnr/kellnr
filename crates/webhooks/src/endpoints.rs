@@ -233,6 +233,7 @@ mod endpoint_tests {
     use axum::routing::{delete, get, post};
     use hyper::header;
     use kellnr_appstate::AppStateData;
+    use kellnr_common::plain_token::PlainToken;
     use kellnr_common::webhook::WebhookEvent;
     use kellnr_db::{ConString, Database, DbProvider, SqliteConString, UserFlags};
     use serde::de::DeserializeOwned;
@@ -681,15 +682,19 @@ mod endpoint_tests {
         ));
         let db = Arc::new(Database::new(&con_string, 1).await.unwrap());
 
-        db.add_auth_token("wh_test_admin", ADMIN_TOKEN, "admin")
+        db.add_auth_token("wh_test_admin", &PlainToken::from(ADMIN_TOKEN), "admin")
             .await
             .unwrap();
         db.add_user("wh_non_admin", "na", UserFlags::normal())
             .await
             .unwrap();
-        db.add_auth_token("wh_non_admin", NON_ADMIN_TOKEN, "wh_non_admin")
-            .await
-            .unwrap();
+        db.add_auth_token(
+            "wh_non_admin",
+            &PlainToken::from(NON_ADMIN_TOKEN),
+            "wh_non_admin",
+        )
+        .await
+        .unwrap();
 
         let state = AppStateData {
             db: db.clone(),

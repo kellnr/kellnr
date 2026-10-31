@@ -10,6 +10,7 @@ use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::original_name::OriginalName;
+use kellnr_common::plain_token::PlainToken;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::Version;
@@ -204,11 +205,11 @@ pub trait DbProvider: Send + Sync {
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()>;
-    async fn validate_session(&self, session_token: &str) -> DbResult<SessionInfo>;
+    async fn validate_session(&self, session_token: &PlainToken) -> DbResult<SessionInfo>;
     /// Delete all sessions that have outlived the configured session age.
     /// Returns the number of rows removed.
     async fn delete_expired_sessions(&self) -> DbResult<u64>;
-    async fn add_session_token(&self, name: &str, session_token: &str) -> DbResult<()>;
+    async fn add_session_token(&self, name: &str, session_token: &PlainToken) -> DbResult<()>;
     /// Delete all sessions of a user. Returns the number of rows removed.
     async fn delete_user_sessions(&self, user_name: &str) -> DbResult<u64>;
     /// Delete all sessions of a user except `keep_session_token`. Returns the
@@ -216,7 +217,7 @@ pub trait DbProvider: Send + Sync {
     async fn delete_other_user_sessions(
         &self,
         user_name: &str,
-        keep_session_token: &str,
+        keep_session_token: &PlainToken,
     ) -> DbResult<u64>;
     async fn add_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()>;
     /// Adds `owner` to the owners of the crate. Adding an existing owner
@@ -234,7 +235,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_crate_owners(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>>;
     async fn get_crate_users(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>>;
     async fn get_crate_versions(&self, crate_name: &CanonicalName) -> DbResult<Vec<Version>>;
-    async fn delete_session_token(&self, session_token: &str) -> DbResult<()>;
+    async fn delete_session_token(&self, session_token: &PlainToken) -> DbResult<()>;
     async fn delete_user(&self, user_name: &str) -> DbResult<()>;
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()>;
     async fn change_read_only_state(&self, user_name: &str, state: bool) -> DbResult<()>;
@@ -243,10 +244,10 @@ pub trait DbProvider: Send + Sync {
     async fn get_max_version_from_id(&self, crate_id: CrateId) -> DbResult<Version>;
     async fn get_max_version_from_name(&self, crate_name: &CanonicalName) -> DbResult<Version>;
     async fn update_max_version(&self, crate_id: CrateId, version: &Version) -> DbResult<()>;
-    async fn add_auth_token(&self, name: &str, token: &str, user: &str) -> DbResult<()>;
-    async fn get_user_from_token(&self, token: &str) -> DbResult<User>;
+    async fn add_auth_token(&self, name: &str, token: &PlainToken, user: &str) -> DbResult<()>;
+    async fn get_user_from_token(&self, token: &PlainToken) -> DbResult<User>;
     /// Name of the auth token, `None` if there is no such token.
-    async fn get_auth_token_name(&self, token: &str) -> DbResult<Option<String>>;
+    async fn get_auth_token_name(&self, token: &PlainToken) -> DbResult<Option<String>>;
     async fn get_user(&self, name: &str) -> DbResult<User>;
     async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>>;
     /// Deletes the token `id` of the user, [`DbError::TokenNotFound`] if the
@@ -619,7 +620,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn validate_session(&self, _session_token: &str) -> DbResult<SessionInfo> {
+            async fn validate_session(&self, _session_token: &PlainToken) -> DbResult<SessionInfo> {
                 unimplemented!()
             }
 
@@ -627,7 +628,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_session_token(&self, _name: &str, _session_token: &str) -> DbResult<()> {
+            async fn add_session_token(&self, _name: &str, _session_token: &PlainToken) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -635,7 +636,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn delete_other_user_sessions(&self, _user_name: &str, _keep_session_token: &str) -> DbResult<u64> {
+            async fn delete_other_user_sessions(&self, _user_name: &str, _keep_session_token: &PlainToken) -> DbResult<u64> {
                 unimplemented!()
             }
 
@@ -683,7 +684,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn delete_session_token(&self, _session_token: &str) -> DbResult<()> {
+            async fn delete_session_token(&self, _session_token: &PlainToken) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -719,15 +720,15 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_auth_token(&self, _name: &str, _token: &str, _user: &str) -> DbResult<()> {
+            async fn add_auth_token(&self, _name: &str, _token: &PlainToken, _user: &str) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn get_auth_token_name(&self, token: &str) -> DbResult<Option<String>> {
+            async fn get_auth_token_name(&self, token: &PlainToken) -> DbResult<Option<String>> {
                 unimplemented!()
             }
 
-            async fn get_user_from_token(&self, _token: &str) -> DbResult<User> {
+            async fn get_user_from_token(&self, _token: &PlainToken) -> DbResult<User> {
                 unimplemented!()
             }
 

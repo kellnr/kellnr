@@ -1084,6 +1084,7 @@ mod tests {
     use kellnr_appstate::{AppStateData, encode_cookies};
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
     use kellnr_common::crate_dependents::CrateDependent;
+    use kellnr_common::plain_token::PlainToken;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{CrateVisibility, User};
@@ -1733,7 +1734,7 @@ mod tests {
             .returning(move |_, _| Ok(None));
         mock_db
             .expect_validate_session()
-            .with(eq("cookie"))
+            .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1772,7 +1773,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("cookie"))
+            .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1813,7 +1814,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("cookie"))
+            .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1875,7 +1876,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("cookie"))
+            .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1937,7 +1938,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("cookie"))
+            .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -2009,7 +2010,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("cookie"))
+            .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -2081,7 +2082,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("cookie"))
+            .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
