@@ -67,7 +67,7 @@ async fn main() {
             cratesio_index,
         } => {
             if let Err(e) =
-                kellnr_docs::doc_queue::generate_docs(&crate_path, cratesio_index.as_deref())
+                kellnr_docgen::doc_queue::generate_docs(&crate_path, cratesio_index.as_deref())
             {
                 eprintln!("{e}");
                 std::process::exit(1);
@@ -526,7 +526,7 @@ fn init_docs_hosting(
     db: Arc<dyn DbProvider + 'static>,
 ) {
     if settings.docs.enabled {
-        kellnr_docs::doc_queue::doc_extraction_queue(db, cs, docs_storage, settings);
+        kellnr_docgen::doc_queue::doc_extraction_queue(db, cs, docs_storage, settings);
     }
 }
 

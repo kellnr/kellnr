@@ -14,6 +14,10 @@ use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::{DbProvider, DocQueueEntry};
+use kellnr_docs::docs_error::DocsError;
+use kellnr_docs::unpack::{ExtractLimits, unpack_crate};
+use kellnr_docs::upload::upload_dir_and_prune;
+use kellnr_docs::{compute_doc_url, crate_name_to_docs_name};
 use kellnr_settings::{Settings, UrlPathPrefix};
 use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
@@ -21,10 +25,6 @@ use tokio::fs::remove_dir_all;
 use tracing::{debug, error, warn};
 
 use crate::build_process::DocBuilder;
-use crate::docs_error::DocsError;
-use crate::unpack::{ExtractLimits, unpack_crate};
-use crate::upload::upload_dir_and_prune;
-use crate::{compute_doc_url, crate_name_to_docs_name};
 
 pub fn doc_extraction_queue(
     db: Arc<dyn DbProvider>,

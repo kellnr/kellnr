@@ -24,6 +24,7 @@ kellnr-cratesio-sync = { version = "6.13.0", path = "./crates/cratesio-sync" }
 kellnr-db = { version = "6.13.0", path = "./crates/db" }
 kellnr-db-testcontainer = { version = "6.13.0", path = "./crates/db/db-testcontainer" }
 kellnr-docs = { version = "6.13.0", path = "./crates/docs" }
+kellnr-docgen = { version = "6.13.0", path = "./crates/docgen" }
 kellnr-entity = { version = "6.13.0", path = "./crates/db/entity" }
 kellnr-error = { version = "6.13.0", path = "./crates/error" }
 kellnr-filter = { version = "6.13.0", path = "./crates/filter" }

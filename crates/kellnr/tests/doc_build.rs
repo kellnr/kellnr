@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use kellnr_docs::build_process::DocBuilder;
+use kellnr_docgen::build_process::DocBuilder;
 
 fn write_crate(dir: &Path) {
     std::fs::write(
