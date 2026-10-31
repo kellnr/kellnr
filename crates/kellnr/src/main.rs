@@ -778,7 +778,7 @@ mod tests {
         let docs_storage = init_docs_storage(&settings);
         let key = DocsStorage::file_key(
             &DocsName::from(&OriginalName::try_from("my-crate").unwrap()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/index.html",
         );
         docs_storage

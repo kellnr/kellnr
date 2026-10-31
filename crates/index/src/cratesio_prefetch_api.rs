@@ -305,27 +305,33 @@ async fn cratesio_prefetch_thread(args: CratesIoPrefetchArgs) -> ! {
 /// Download the versions into the cache, except for those the filters deny.
 async fn predownload_crates(metadata: &[IndexMetadata], args: &CratesIoPrefetchArgs) {
     for idx in metadata {
-        if is_denied(idx, args).await {
+        let Ok(version) = Version::try_from(idx.vers.as_str()) else {
+            warn!(
+                "Skipping download of crate {} with the invalid version {}",
+                idx.name, idx.vers
+            );
+            continue;
+        };
+        if is_denied(idx, &version, args).await {
             trace!(
                 "Crate {} version {} is denied by the filters, skipping download",
                 idx.name, idx.vers
             );
         } else {
-            predownload_crate(idx, args).await;
+            predownload_crate(idx, &version, args).await;
         }
     }
 }
 
 /// Whether the crates.io filters deny the download of the version.
-async fn is_denied(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) -> bool {
+async fn is_denied(idx: &IndexMetadata, version: &Version, args: &CratesIoPrefetchArgs) -> bool {
     if args.filters.is_empty() {
         return false;
     }
     let name = OriginalName::from_unchecked(idx.name.clone());
-    let version = Version::from_unchecked_str(&idx.vers);
     let license = match args
         .db
-        .get_cratesio_version_meta(&name.to_canonical(), &version)
+        .get_cratesio_version_meta(&name.to_canonical(), version)
         .await
     {
         Ok(meta) => meta.and_then(|m| m.license),
@@ -339,17 +345,16 @@ async fn is_denied(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) -> bool {
     };
     let verdict = args.filters.check(&CrateInfo {
         name: &name,
-        version: &version,
+        version,
         license: license.as_deref(),
     });
     verdict != Verdict::Allow
 }
 
-async fn predownload_crate(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) {
+async fn predownload_crate(idx: &IndexMetadata, version: &Version, args: &CratesIoPrefetchArgs) {
     let name = OriginalName::from_unchecked(idx.name.clone());
-    let version = Version::from_unchecked_str(&idx.vers);
 
-    match args.storage.exists(&name, &version).await {
+    match args.storage.exists(&name, version).await {
         Ok(true) => {
             trace!(
                 "Crate {} version {} already exists in storage, skipping download",
@@ -373,15 +378,7 @@ async fn predownload_crate(idx: &IndexMetadata, args: &CratesIoPrefetchArgs) {
                     );
                 }
                 Ok(crate_data) => {
-                    if let Err(e) = args
-                        .storage
-                        .put(
-                            &OriginalName::from_unchecked(idx.name.clone()),
-                            &Version::from_unchecked_str(&idx.vers),
-                            crate_data,
-                        )
-                        .await
-                    {
+                    if let Err(e) = args.storage.put(&name, version, crate_data).await {
                         warn!(
                             "Could not save crate {} version {}: {e}",
                             idx.name, idx.vers
@@ -930,7 +927,7 @@ mod tests {
             worker
                 .args
                 .storage
-                .exists(&upstream_name(), &Version::from_unchecked_str(version))
+                .exists(&upstream_name(), &Version::try_from(version).unwrap())
                 .await
                 .unwrap()
         }

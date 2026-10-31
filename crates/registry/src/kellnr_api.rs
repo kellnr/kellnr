@@ -68,7 +68,9 @@ async fn find_same_version(
         .await?
         .into_iter()
         .map(|meta| meta.version)
-        .find(|existing| Version::from_unchecked_str(existing).eq_ignoring_build(version)))
+        .find(|existing| {
+            Version::try_from(existing.as_str()).is_ok_and(|v| v.eq_ignoring_build(version))
+        }))
 }
 
 pub fn check_can_modify(user: &maybe_user::MaybeUser) -> Result<(), ApiError> {
@@ -3107,7 +3109,7 @@ mod reg_api_tests {
             .unwrap()
             .unwrap();
         assert_eq!(
-            Version::from_unchecked_str("0.0.0"),
+            Version::try_from("0.0.0").unwrap(),
             kellnr.db.get_max_version_from_id(crate_id).await.unwrap()
         );
     }

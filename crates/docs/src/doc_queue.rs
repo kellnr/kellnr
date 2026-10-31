@@ -119,7 +119,7 @@ impl DocQueueWorker {
     /// could not be read is retried, failed builds are not, as every build
     /// runs untrusted code.
     async fn process_entry(&self, entry: &DocQueueEntry) -> Outcome {
-        let version = Version::from_unchecked_str(&entry.version);
+        let version = &entry.version;
         let Ok(name) = entry.canonical_name() else {
             warn!(
                 "Skipping the docs build of {} {version}, the crate name is invalid",
@@ -128,7 +128,7 @@ impl DocQueueWorker {
             return Outcome::Done;
         };
         let name = &name;
-        let (original_name, contents) = match self.read_crate(name, &version).await {
+        let (original_name, contents) = match self.read_crate(name, version).await {
             Ok(Some(krate)) => krate,
             Ok(None) => {
                 warn!("Skipping the docs build of {name} {version}, the crate does not exist");
@@ -141,7 +141,7 @@ impl DocQueueWorker {
         };
 
         let result = self
-            .build_docs(entry, name, &original_name, &version, contents)
+            .build_docs(entry, name, &original_name, version, contents)
             .await;
         // A failure afterwards must not trigger another build.
         self.processed.lock().unwrap().insert(entry.id);
@@ -150,8 +150,8 @@ impl DocQueueWorker {
             return Outcome::Done;
         }
 
-        let docs_link = compute_doc_url(&original_name, &version, &self.path_prefix);
-        if let Err(e) = self.db.update_docs_link(name, &version, &docs_link).await {
+        let docs_link = compute_doc_url(&original_name, version, &self.path_prefix);
+        if let Err(e) = self.db.update_docs_link(name, version, &docs_link).await {
             error!("Failed to update the docs link of {name} {version}: {e}");
         }
         Outcome::Done
@@ -470,7 +470,7 @@ mod tests {
         DocQueueEntry {
             id,
             name: name.to_string(),
-            version: "1.0.0".to_string(),
+            version: Version::try_from("1.0.0").unwrap(),
             path,
         }
     }
@@ -503,7 +503,7 @@ mod tests {
         for name in names {
             cs.put(
                 &OriginalName::from_unchecked((*name).to_string()),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 crate_tarball(name, "1.0.0").into(),
             )
             .await
@@ -593,7 +593,7 @@ mod tests {
 
         let key = DocsStorage::file_key(
             &DocsName::from(&OriginalName::try_from("my-crate").unwrap()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/My_Crate/index.html",
         );
         assert!(worker.docs_storage.exists(&key).await.unwrap());
@@ -708,7 +708,7 @@ mod tests {
         assert_eq!(build_count(&build_log), 1);
         let prefix = DocsStorage::version_prefix(
             &DocsName::from(&OriginalName::try_from("a").unwrap()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         );
         assert!(worker.docs_storage.list(&prefix).await.unwrap().is_empty());
     }
@@ -732,7 +732,7 @@ mod tests {
 
         let prefix = DocsStorage::version_prefix(
             &DocsName::from(&OriginalName::try_from("a").unwrap()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
         );
         let mut keys = worker.docs_storage.list(&prefix).await.unwrap();
         keys.sort_unstable();

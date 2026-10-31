@@ -70,7 +70,7 @@ mod tests {
     fn key() -> (CanonicalName, Version) {
         (
             CanonicalName::try_from("foo").unwrap(),
-            Version::from_unchecked_str("1.0.0"),
+            Version::try_from("1.0.0").unwrap(),
         )
     }
 
@@ -78,7 +78,7 @@ mod tests {
     fn remembers_licenses_and_declared_no_license() {
         let known = KnownLicenses::default();
         let (name, version) = key();
-        let other = Version::from_unchecked_str("2.0.0");
+        let other = Version::try_from("2.0.0").unwrap();
 
         known.insert(&name, &version, KnownLicense::Declared("MIT".to_string()));
         known.insert(&name, &other, KnownLicense::Undeclared);
@@ -88,10 +88,7 @@ mod tests {
             known.get(&name, &version)
         );
         assert_eq!(Some(KnownLicense::Undeclared), known.get(&name, &other));
-        assert_eq!(
-            None,
-            known.get(&name, &Version::from_unchecked_str("3.0.0"))
-        );
+        assert_eq!(None, known.get(&name, &Version::try_from("3.0.0").unwrap()));
     }
 
     #[test]

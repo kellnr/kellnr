@@ -1,16 +1,26 @@
-use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
-use std::hash::{Hash, Hasher};
-use std::ops::Deref;
+use std::str::FromStr;
 
 use sea_orm::Value;
 use thiserror::Error;
 use utoipa::ToSchema;
 
-#[derive(Debug, Eq, Clone, serde::Serialize, ToSchema)]
+/// A crate version. It is always a valid `SemVer` version and is compared,
+/// ordered and hashed like one, including build metadata. It is displayed,
+/// serialized and stored as the version string it was parsed from.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, ToSchema)]
 #[schema(value_type = String)]
-pub struct Version(String);
+pub struct Version(semver::Version);
+
+impl serde::Serialize for Version {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(&self.0)
+    }
+}
 
 impl<'de> serde::Deserialize<'de> for Version {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -18,9 +28,7 @@ impl<'de> serde::Deserialize<'de> for Version {
         D: serde::Deserializer<'de>,
     {
         let s = <String as serde::Deserialize>::deserialize(deserializer)?;
-        semver::Version::parse(&s)
-            .map(|sv| Version(sv.to_string()))
-            .map_err(|e| serde::de::Error::custom(e.to_string()))
+        Version::try_from(s.as_str()).map_err(serde::de::Error::custom)
     }
 }
 
@@ -31,35 +39,24 @@ pub enum VersionError {
 }
 
 impl Version {
-    pub fn from_unchecked_str(version: &str) -> Self {
-        Self(version.to_string())
-    }
-    pub fn into_inner(self) -> String {
-        self.0
-    }
-
     /// Whether both versions are equal when build metadata is ignored. Cargo
     /// does not distinguish `1.0.0+a` from `1.0.0+b`, so a registry must not
     /// host both.
     pub fn eq_ignoring_build(&self, other: &Version) -> bool {
-        match (semver::Version::parse(self), semver::Version::parse(other)) {
-            (Ok(a), Ok(b)) => {
-                (a.major, a.minor, a.patch, a.pre) == (b.major, b.minor, b.patch, b.pre)
-            }
-            _ => self.0 == other.0,
-        }
+        let (a, b) = (&self.0, &other.0);
+        (a.major, a.minor, a.patch, &a.pre) == (b.major, b.minor, b.patch, &b.pre)
     }
 }
 
 impl From<Version> for Value {
     fn from(value: Version) -> Self {
-        Value::String(Some(value.0))
+        Value::String(Some(value.to_string()))
     }
 }
 
 impl From<&Version> for Value {
     fn from(value: &Version) -> Self {
-        Value::String(Some(value.0.clone()))
+        Value::String(Some(value.to_string()))
     }
 }
 
@@ -67,7 +64,9 @@ impl TryFrom<&str> for Version {
     type Error = VersionError;
 
     fn try_from(version: &str) -> Result<Self, Self::Error> {
-        Version::try_from(&version.to_string())
+        semver::Version::parse(version)
+            .map(Version)
+            .map_err(|_| VersionError::InvalidSemVer)
     }
 }
 
@@ -75,10 +74,23 @@ impl TryFrom<&String> for Version {
     type Error = VersionError;
 
     fn try_from(version: &String) -> Result<Self, Self::Error> {
-        match semver::Version::parse(version) {
-            Ok(sv) => Ok(Version(sv.to_string())),
-            Err(_) => Err(VersionError::InvalidSemVer),
-        }
+        Version::try_from(version.as_str())
+    }
+}
+
+impl TryFrom<String> for Version {
+    type Error = VersionError;
+
+    fn try_from(version: String) -> Result<Self, Self::Error> {
+        Version::try_from(version.as_str())
+    }
+}
+
+impl FromStr for Version {
+    type Err = VersionError;
+
+    fn from_str(version: &str) -> Result<Self, Self::Err> {
+        Version::try_from(version)
     }
 }
 
@@ -88,52 +100,21 @@ impl AsRef<Version> for Version {
     }
 }
 
-impl Deref for Version {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl Default for Version {
     fn default() -> Self {
-        Version(semver::Version::new(0, 0, 0).to_string())
+        Version(semver::Version::new(0, 0, 0))
     }
 }
 
-impl Ord for Version {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let sv1 = semver::Version::parse(&self.to_string()).unwrap();
-        let sv2 = semver::Version::parse(&other.to_string()).unwrap();
-        sv1.cmp(&sv2)
-    }
-}
-
-impl PartialOrd for Version {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for Version {
-    fn eq(&self, other: &Self) -> bool {
-        let sv1 = semver::Version::parse(&self.to_string()).unwrap();
-        let sv2 = semver::Version::parse(&other.to_string()).unwrap();
-        sv1 == sv2
-    }
-}
-
-impl Hash for Version {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let sv = semver::Version::parse(&self.to_string()).unwrap();
-        sv.hash(state);
+impl fmt::Debug for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Version").field(&self.to_string()).finish()
     }
 }
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
@@ -216,5 +197,68 @@ mod tests {
             Version::try_from("5.3.2.3").unwrap_err(),
             VersionError::InvalidSemVer
         );
+    }
+
+    #[test]
+    fn versions_are_ordered_like_semver() {
+        let v = |s: &str| Version::try_from(s).unwrap();
+
+        assert!(v("1.0.0-alpha") < v("1.0.0-alpha.1"));
+        assert!(v("1.0.0-alpha.1") < v("1.0.0-beta"));
+        assert!(v("1.0.0-rc.1") < v("1.0.0"));
+        assert!(v("1.0.0") < v("1.0.1"));
+        assert!(v("1.9.0") < v("1.10.0"));
+        assert!(v("1.0.0") < v("1.0.0+build"));
+        assert!(v("1.0.0+a") < v("1.0.0+b"));
+    }
+
+    #[test]
+    fn versions_with_different_build_metadata_are_not_equal() {
+        let v = |s: &str| Version::try_from(s).unwrap();
+
+        assert_eq!(v("1.0.0+a"), v("1.0.0+a"));
+        assert_ne!(v("1.0.0+a"), v("1.0.0+b"));
+        assert_ne!(v("1.0.0"), v("1.0.0+a"));
+        assert_ne!(v("1.0.0"), v("1.0.0-rc.1"));
+    }
+
+    #[test]
+    fn equal_versions_have_equal_hashes() {
+        use std::collections::HashSet;
+
+        let v = |s: &str| Version::try_from(s).unwrap();
+        let set: HashSet<Version> = [v("1.0.0"), v("1.0.0"), v("1.0.0+a"), v("1.0.0-rc.1")]
+            .into_iter()
+            .collect();
+
+        assert_eq!(set.len(), 3);
+        assert!(set.contains(&v("1.0.0+a")));
+        assert!(!set.contains(&v("1.0.0+b")));
+    }
+
+    #[test]
+    fn version_keeps_its_string_form() {
+        for s in [
+            "0.0.0",
+            "1.2.3",
+            "1.0.0-alpha.1",
+            "1.0.0+build",
+            "1.0.0-rc.1+build.5",
+            "2.43.3-alpha34",
+            "1.0.0+001",
+        ] {
+            let version = Version::try_from(s).unwrap();
+            assert_eq!(version.to_string(), s);
+            let json = serde_json::to_string(&version).unwrap();
+            assert_eq!(json, format!("\"{s}\""));
+            assert_eq!(serde_json::from_str::<Version>(&json).unwrap(), version);
+            assert_eq!(Value::from(&version), Value::String(Some(s.to_string())));
+        }
+    }
+
+    #[test]
+    fn deserializing_an_invalid_version_fails() {
+        assert!(serde_json::from_str::<Version>("\"1.0\"").is_err());
+        assert!(serde_json::from_str::<Version>("\"invalid\"").is_err());
     }
 }

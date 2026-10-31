@@ -87,12 +87,13 @@ async fn fill_sizes(db: &SchemaManagerConnection<'_>) -> Result<(), DbErr> {
         let id: i64 = row.try_get("", "id")?;
         let version: String = row.try_get("", "version")?;
         let name: String = row.try_get("", "name")?;
+        let Ok(parsed_version) = Version::try_from(version.as_str()) else {
+            warn!("Size of crate {name} {version} stays unknown, the version is invalid");
+            continue;
+        };
 
         let size = match storage
-            .size(
-                &OriginalName::from_unchecked(name.clone()),
-                &Version::from_unchecked_str(&version),
-            )
+            .size(&OriginalName::from_unchecked(name.clone()), &parsed_version)
             .await
         {
             Ok(size) => <i64 as TryFrom<u64>>::try_from(size).unwrap_or(i64::MAX),

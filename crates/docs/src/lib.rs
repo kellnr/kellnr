@@ -115,7 +115,7 @@ mod tests {
         let (_dir, docs) = docs_storage();
         let key = DocsStorage::file_key(
             &DocsName::from(&original("my-crate")),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/my_crate/index.html",
         );
         docs.put(&key, Bytes::from_static(b"x")).await.unwrap();
@@ -123,7 +123,7 @@ mod tests {
         assert!(
             doc_exists(
                 &original("my-crate"),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 &docs
             )
             .await
@@ -136,7 +136,7 @@ mod tests {
         assert!(
             !doc_exists(
                 &original("my-crate"),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 &docs
             )
             .await
@@ -148,7 +148,7 @@ mod tests {
         let docs = DocsStorage::new(Box::new(MemoryStorage::new()));
         let key = DocsStorage::file_key(
             &DocsName::from(&original("my-crate")),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/My_Crate/index.html",
         );
         docs.put(&key, Bytes::from_static(b"x")).await.unwrap();
@@ -156,7 +156,7 @@ mod tests {
         assert!(
             doc_exists(
                 &original("My-Crate"),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 &docs
             )
             .await
@@ -168,12 +168,12 @@ mod tests {
         let (_dir, docs) = docs_storage();
         let v1 = DocsStorage::file_key(
             &DocsName::from(&original("my-crate")),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "doc/my_crate/index.html",
         );
         let v2 = DocsStorage::file_key(
             &DocsName::from(&original("my-crate")),
-            &Version::from_unchecked_str("2.0.0"),
+            &Version::try_from("2.0.0").unwrap(),
             "doc/my_crate/index.html",
         );
         docs.put(&v1, Bytes::from_static(b"a")).await.unwrap();
@@ -181,7 +181,7 @@ mod tests {
 
         delete(
             &original("my-crate"),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             &docs,
         )
         .await

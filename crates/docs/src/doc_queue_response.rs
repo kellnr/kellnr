@@ -25,7 +25,7 @@ impl From<Vec<DocQueueEntry>> for DocQueueResponse {
                 .into_iter()
                 .map(|e| DocQueueEntryResponse {
                     name: e.name,
-                    version: e.version,
+                    version: e.version.to_string(),
                 })
                 .collect(),
         }
@@ -36,6 +36,8 @@ impl From<Vec<DocQueueEntry>> for DocQueueResponse {
 mod tests {
     use std::path::PathBuf;
 
+    use kellnr_common::version::Version;
+
     use super::*;
 
     #[test]
@@ -44,13 +46,13 @@ mod tests {
             DocQueueEntry {
                 id: 0,
                 name: "crate1".to_string(),
-                version: "0.0.1".to_string(),
+                version: Version::try_from("0.0.1").unwrap(),
                 path: PathBuf::default(),
             },
             DocQueueEntry {
                 id: 1,
                 name: "crate2".to_string(),
-                version: "0.0.2".to_string(),
+                version: Version::try_from("0.0.2").unwrap(),
                 path: PathBuf::default(),
             },
         ];

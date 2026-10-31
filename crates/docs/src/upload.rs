@@ -138,7 +138,7 @@ mod tests {
             local.path(),
             "",
             &DocsName::from_folder("my-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             &docs,
         )
         .await
@@ -147,7 +147,7 @@ mod tests {
         assert_eq!(
             docs.get(&DocsStorage::file_key(
                 &DocsName::from_folder("my-crate".to_string()),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 "index.html"
             ))
             .await
@@ -157,7 +157,7 @@ mod tests {
         assert_eq!(
             docs.get(&DocsStorage::file_key(
                 &DocsName::from_folder("my-crate".to_string()),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 "nested/page.html"
             ))
             .await
@@ -171,7 +171,7 @@ mod tests {
         let (_storage_dir, docs) = docs_storage();
         let stale_key = DocsStorage::file_key(
             &DocsName::from_folder("my-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             "removed.html",
         );
         docs.put(&stale_key, Bytes::from_static(b"old"))
@@ -187,7 +187,7 @@ mod tests {
             local.path(),
             "",
             &DocsName::from_folder("my-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             &docs,
         )
         .await
@@ -197,7 +197,7 @@ mod tests {
         assert!(
             docs.exists(&DocsStorage::file_key(
                 &DocsName::from_folder("my-crate".to_string()),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 "index.html"
             ))
             .await
@@ -219,7 +219,7 @@ mod tests {
             local.path(),
             "",
             &DocsName::from_folder("my-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             &docs,
         )
         .await
@@ -228,7 +228,7 @@ mod tests {
         for file in ["a~b.html", "x%20y.html"] {
             let key = DocsStorage::file_key(
                 &DocsName::from_folder("my-crate".to_string()),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 file,
             );
             assert_eq!(docs.get(&key).await.unwrap(), Bytes::from(file), "{file}");
@@ -248,7 +248,7 @@ mod tests {
         let (_storage_dir, docs) = docs_storage();
         let docs = Arc::new(docs);
         let name = DocsName::from_folder("my-crate".to_string());
-        let version = Version::from_unchecked_str("1.0.0");
+        let version = Version::try_from("1.0.0").unwrap();
         let first = local_docs("a", 20);
         let second = local_docs("b", 20);
 
@@ -284,7 +284,7 @@ mod tests {
         let (_storage_dir, docs) = docs_storage();
         let other_version_key = DocsStorage::file_key(
             &DocsName::from_folder("my-crate".to_string()),
-            &Version::from_unchecked_str("2.0.0"),
+            &Version::try_from("2.0.0").unwrap(),
             "index.html",
         );
         docs.put(&other_version_key, Bytes::from_static(b"kept"))
@@ -300,7 +300,7 @@ mod tests {
             local.path(),
             "",
             &DocsName::from_folder("my-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             &docs,
         )
         .await
@@ -321,7 +321,7 @@ mod tests {
             local.path(),
             "doc",
             &DocsName::from_folder("my-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             &docs,
         )
         .await
@@ -330,7 +330,7 @@ mod tests {
         assert_eq!(
             docs.get(&DocsStorage::file_key(
                 &DocsName::from_folder("my-crate".to_string()),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 "doc/index.html"
             ))
             .await
@@ -363,7 +363,7 @@ mod tests {
             local.path(),
             "",
             &DocsName::from_folder("my-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             &docs,
         )
         .await
@@ -372,7 +372,7 @@ mod tests {
         let keys = docs
             .list(&DocsStorage::version_prefix(
                 &DocsName::from_folder("my-crate".to_string()),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
             ))
             .await
             .unwrap();
@@ -380,7 +380,7 @@ mod tests {
             keys,
             vec![DocsStorage::file_key(
                 &DocsName::from_folder("my-crate".to_string()),
-                &Version::from_unchecked_str("1.0.0"),
+                &Version::try_from("1.0.0").unwrap(),
                 "index.html"
             )]
         );
@@ -402,7 +402,7 @@ mod tests {
             &root,
             "",
             &DocsName::from_folder("my-crate".to_string()),
-            &Version::from_unchecked_str("1.0.0"),
+            &Version::try_from("1.0.0").unwrap(),
             &docs,
         )
         .await;

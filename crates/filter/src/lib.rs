@@ -166,7 +166,7 @@ mod tests {
     fn check(chain: &FilterChain) -> Verdict {
         chain.check(&CrateInfo {
             name: &OriginalName::try_from("foo").unwrap(),
-            version: &Version::from_unchecked_str("1.2.3"),
+            version: &Version::try_from("1.2.3").unwrap(),
             license: None,
         })
     }
@@ -192,7 +192,7 @@ mod tests {
     fn deny_message_names_crate_and_filter() {
         let krate = CrateInfo {
             name: &OriginalName::try_from("foo").unwrap(),
-            version: &Version::from_unchecked_str("1.2.3"),
+            version: &Version::try_from("1.2.3").unwrap(),
             license: Some("GPL-3.0"),
         };
         let verdict = Verdict::Deny {
