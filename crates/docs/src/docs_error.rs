@@ -21,6 +21,8 @@ pub enum DocsError {
     ArchiveTooLarge,
     #[error("Docs build timed out after {0} seconds")]
     BuildTimeout(u64),
+    #[error("Docs build stopped on shutdown")]
+    BuildStopped,
     #[error("Path {path} is not inside {root}")]
     PathPrefixMismatch { path: String, root: String },
     #[error("Failed to extract bytes from request: {0}")]
@@ -41,9 +43,9 @@ impl From<DocsError> for ApiError {
             }
             DocsError::StorageError(error) => ApiError::from(error),
             DocsError::ArchiveTooLarge => ApiError::from_err(&e, StatusCode::BAD_REQUEST),
-            DocsError::BuildTimeout(_) | DocsError::PathPrefixMismatch { .. } => {
-                ApiError::internal(&e)
-            }
+            DocsError::BuildTimeout(_)
+            | DocsError::BuildStopped
+            | DocsError::PathPrefixMismatch { .. } => ApiError::internal(&e),
             // E.g. 413 if the body is larger than the configured maximum.
             DocsError::ExtractBytesFailed(ref rejection) => {
                 let status = rejection.status();

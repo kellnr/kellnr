@@ -5,6 +5,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use hyper::StatusCode;
+use kellnr_common::background_tasks::BackgroundTasks;
 use kellnr_common::base_url::BaseUrl;
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use kellnr_common::index_metadata::IndexMetadata;
@@ -127,30 +128,40 @@ pub fn init_cratesio_prefetch_thread(
     sender: flume::Sender<CratesioPrefetchMsg>,
     num_threads: usize,
     args: CratesIoPrefetchArgs,
+    tasks: &BackgroundTasks,
 ) {
-    // Tasks that take messages to update the crates.io index. A task that
-    // panics is logged and started again.
-    for worker in 0..num_threads {
+    let args = Arc::new(args);
+    // Workers that take messages to update the crates.io index, one message
+    // per round.
+    for _ in 0..num_threads {
         let args = args.clone();
-
-        tokio::spawn(async move {
-            loop {
-                let args = args.clone();
-                let task = tokio::spawn(async move {
-                    cratesio_prefetch_thread(args).await;
-                });
-                // The worker never returns, it can only panic.
-                let Err(e) = task.await;
-                error!("crates.io prefetch worker {worker} stopped, restarting it: {e}");
-                tokio::time::sleep(Duration::from_secs(1)).await;
+        let shutdown = tasks.shutdown_token();
+        tasks.spawn_loop("crates.io prefetch worker", move || {
+            let (args, shutdown) = (args.clone(), shutdown.clone());
+            async move {
+                tokio::select! {
+                    biased;
+                    () = shutdown.cancelled() => {}
+                    msg = args.recv.recv_async() => process_prefetch_msg(msg, &args).await,
+                }
+                Duration::ZERO
             }
         });
     }
 
-    // Thread that periodically checks if the crates.io index needs to be updated.
-    // It sends an update message to the threads above which then updates the index.
-    tokio::spawn(async move {
-        background_update_thread(args.db.clone(), sender).await;
+    spawn_index_update(args.db.clone(), sender, tasks);
+}
+
+/// Periodically checks if the crates.io index needs to be updated and sends
+/// update messages to the prefetch workers.
+fn spawn_index_update(
+    db: Arc<dyn DbProvider>,
+    sender: flume::Sender<CratesioPrefetchMsg>,
+    tasks: &BackgroundTasks,
+) {
+    tasks.spawn_loop("crates.io index update", move || {
+        let (db, sender) = (db.clone(), sender.clone());
+        async move { Duration::from_secs(queue_update_round(db.as_ref(), &sender).await) }
     });
 }
 
@@ -228,16 +239,6 @@ fn background_update(
     }
 }
 
-async fn background_update_thread(
-    db: Arc<dyn DbProvider>,
-    sender: flume::Sender<CratesioPrefetchMsg>,
-) {
-    loop {
-        let next_run_secs = queue_update_round(db.as_ref(), &sender).await;
-        tokio::time::sleep(Duration::from_secs(next_run_secs)).await;
-    }
-}
-
 /// Queues an update of all cached crates and returns the seconds until the
 /// next round. While messages are still queued, the round is postponed, so
 /// rounds do not pile up if the workers cannot keep up.
@@ -282,17 +283,18 @@ pub struct CratesIoPrefetchArgs {
     pub filters: FilterChain,
 }
 
-async fn cratesio_prefetch_thread(args: CratesIoPrefetchArgs) -> ! {
-    loop {
-        let synced = handle_cratesio_prefetch_msg(&args).await;
+async fn process_prefetch_msg(
+    msg: Result<CratesioPrefetchMsg, flume::RecvError>,
+    args: &CratesIoPrefetchArgs,
+) {
+    let synced = handle_cratesio_prefetch_msg(msg, args).await;
 
-        // If the download_on_update flag is set, do not only update the prefetch data in
-        // the database, but also download the crates.
-        if let Some(metadata) = synced
-            && args.download_on_update
-        {
-            predownload_crates(&metadata, &args).await;
-        }
+    // If the download_on_update flag is set, do not only update the prefetch data in
+    // the database, but also download the crates.
+    if let Some(metadata) = synced
+        && args.download_on_update
+    {
+        predownload_crates(&metadata, args).await;
     }
 }
 
@@ -396,10 +398,13 @@ async fn predownload_crate(idx: &IndexMetadata, version: &Version, args: &Crates
     }
 }
 
-/// Handle the next message. Returns the index metadata if the crate was
+/// Handle a received message. Returns the index metadata if the crate was
 /// synced.
-async fn handle_cratesio_prefetch_msg(args: &CratesIoPrefetchArgs) -> Option<Arc<[IndexMetadata]>> {
-    match args.recv.recv_async().await {
+async fn handle_cratesio_prefetch_msg(
+    msg: Result<CratesioPrefetchMsg, flume::RecvError>,
+    args: &CratesIoPrefetchArgs,
+) -> Option<Arc<[IndexMetadata]>> {
+    match msg {
         Ok(CratesioPrefetchMsg::Insert(msg)) => {
             trace!("Inserting prefetch data from crates.io for {}", msg.name);
             let date = chrono::Utc::now().to_rfc3339();
@@ -677,7 +682,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn background_update_thread_backs_off_on_db_error() {
+    async fn index_update_backs_off_on_db_error() {
         let calls = Arc::new(AtomicUsize::new(0));
         let mut mock_db = MockDb::new();
         mock_db.expect_get_cratesio_index_update_list().returning({
@@ -689,9 +694,8 @@ mod tests {
         });
         let (sender, _receiver) = flume::unbounded::<CratesioPrefetchMsg>();
 
-        let run = background_update_thread(Arc::new(mock_db), sender);
-        let window = Duration::from_secs(UPDATE_LIST_RETRY_SECS * 2 + 1);
-        assert!(tokio::time::timeout(window, run).await.is_err());
+        spawn_index_update(Arc::new(mock_db), sender, &BackgroundTasks::new());
+        tokio::time::sleep(Duration::from_secs(UPDATE_LIST_RETRY_SECS * 2 + 1)).await;
 
         // Calls at t=0, t=retry and t=2*retry. Without a delay the loop would spin.
         assert_eq!(3, calls.load(Ordering::SeqCst));
@@ -975,7 +979,9 @@ mod tests {
                     data: index(),
                 }))
                 .unwrap();
-            let synced = handle_cratesio_prefetch_msg(&worker.args).await;
+            let synced =
+                handle_cratesio_prefetch_msg(worker.args.recv.recv_async().await, &worker.args)
+                    .await;
 
             assert_eq!(2, synced.unwrap().len());
             // The index came with the message, only the API is called
@@ -1002,9 +1008,13 @@ mod tests {
             };
 
             worker.sender.send(update()).unwrap();
-            let first = handle_cratesio_prefetch_msg(&worker.args).await;
+            let first =
+                handle_cratesio_prefetch_msg(worker.args.recv.recv_async().await, &worker.args)
+                    .await;
             worker.sender.send(update()).unwrap();
-            let second = handle_cratesio_prefetch_msg(&worker.args).await;
+            let second =
+                handle_cratesio_prefetch_msg(worker.args.recv.recv_async().await, &worker.args)
+                    .await;
 
             assert_eq!(2, first.unwrap().len());
             assert!(second.is_none());

@@ -7,6 +7,7 @@ use axum::Router;
 use axum::response::Redirect;
 use axum::routing::get;
 use axum_extra::extract::cookie::Key;
+use kellnr_common::background_tasks::{BackgroundTasks, FirstRound};
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_cratesio_sync::CratesioSync;
 use kellnr_cratesio_sync::cratesio_downloader::build_client;
@@ -186,6 +187,7 @@ async fn run_server(resolved: ResolvedSettings) {
         .await
         .expect("Failed to create database");
     let db = Arc::new(db) as Arc<dyn DbProvider>;
+    let tasks = BackgroundTasks::new();
 
     // Crates.io Proxy
     let cratesio_storage: Arc<CratesIoCrateStorage> = init_cratesio_storage(&settings).into();
@@ -220,6 +222,7 @@ async fn run_server(resolved: ResolvedSettings) {
             cratesio_prefetch_sender.clone(),
             settings.proxy.num_threads,
             prefetch_args,
+            &tasks,
         );
     }
 
@@ -230,10 +233,11 @@ async fn run_server(resolved: ResolvedSettings) {
         crate_storage.clone(),
         docs_storage.clone(),
         db.clone(),
+        &tasks,
     );
 
     // Webhook support
-    init_webhook_service(&settings, db.clone());
+    init_webhook_service(&settings, db.clone(), &tasks);
 
     let signing_key = init_cookie_signing_key(&settings);
     let route_path_prefix = settings.origin.path_prefix();
@@ -292,15 +296,15 @@ async fn run_server(resolved: ResolvedSettings) {
     if flush_interval > 0 {
         let counter = download_counter.clone();
         trace!("Starting download counter flush task (interval: {flush_interval}s)");
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(flush_interval));
-            // First tick completes immediately, skip it
-            interval.tick().await;
-            loop {
-                interval.tick().await;
-                counter.flush().await;
-            }
-        });
+        tasks.spawn_periodic(
+            "download counter flush",
+            Duration::from_secs(flush_interval),
+            FirstRound::AfterInterval,
+            move || {
+                let counter = counter.clone();
+                async move { counter.flush().await }
+            },
+        );
     }
 
     // Periodically remove sessions that have outlived `session_age_seconds`.
@@ -313,17 +317,21 @@ async fn run_server(resolved: ResolvedSettings) {
         let session_cleanup_interval = session_age_seconds.get().clamp(60, 3600);
         let session_cleanup_db = db.clone();
         trace!("Starting session cleanup task (interval: {session_cleanup_interval}s)");
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(session_cleanup_interval));
-            loop {
-                interval.tick().await;
-                match session_cleanup_db.delete_expired_sessions().await {
-                    Ok(n) if n > 0 => trace!("Removed {n} expired session(s)"),
-                    Ok(_) => {}
-                    Err(e) => warn!("Failed to delete expired sessions: {e}"),
+        tasks.spawn_periodic(
+            "session cleanup",
+            Duration::from_secs(session_cleanup_interval),
+            FirstRound::Immediately,
+            move || {
+                let db = session_cleanup_db.clone();
+                async move {
+                    match db.delete_expired_sessions().await {
+                        Ok(n) if n > 0 => trace!("Removed {n} expired session(s)"),
+                        Ok(_) => {}
+                        Err(e) => warn!("Failed to delete expired sessions: {e}"),
+                    }
                 }
-            }
-        });
+            },
+        );
     }
 
     // OAuth2 login attempts that were never completed leave their state rows
@@ -333,17 +341,21 @@ async fn run_server(resolved: ResolvedSettings) {
     // it was enabled.
     let oauth2_cleanup_db = db.clone();
     trace!("Starting OAuth2 state cleanup task");
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_mins(5));
-        loop {
-            interval.tick().await;
-            match oauth2_cleanup_db.cleanup_expired_oauth2_states().await {
-                Ok(n) if n > 0 => trace!("Removed {n} expired OAuth2 state(s)"),
-                Ok(_) => {}
-                Err(e) => warn!("Failed to delete expired OAuth2 states: {e}"),
+    tasks.spawn_periodic(
+        "OAuth2 state cleanup",
+        Duration::from_mins(5),
+        FirstRound::Immediately,
+        move || {
+            let db = oauth2_cleanup_db.clone();
+            async move {
+                match db.cleanup_expired_oauth2_states().await {
+                    Ok(n) if n > 0 => trace!("Removed {n} expired OAuth2 state(s)"),
+                    Ok(_) => {}
+                    Err(e) => warn!("Failed to delete expired OAuth2 states: {e}"),
+                }
             }
-        }
-    });
+        },
+    );
 
     let download_counter_for_shutdown = download_counter.clone();
     let sponsor_links_enabled = settings.registry.sponsor_links_enabled;
@@ -384,9 +396,24 @@ async fn run_server(resolved: ResolvedSettings) {
         );
     }
 
-    serve(listener, app, shutdown_signal(), SHUTDOWN_DRAIN_TIMEOUT).await;
+    // On shutdown, open requests and running background task rounds finish
+    // in parallel, each within the drain timeout.
+    let server = async {
+        let shutdown = {
+            let tasks = tasks.clone();
+            async move {
+                shutdown_signal().await;
+                tasks.request_shutdown();
+            }
+        };
+        serve(listener, app, shutdown, SHUTDOWN_DRAIN_TIMEOUT).await;
+        // Also stop the background tasks if the server stopped on an error.
+        tasks.request_shutdown();
+    };
+    tokio::join!(server, tasks.wait_for_shutdown(SHUTDOWN_DRAIN_TIMEOUT));
 
-    // Flush any accumulated download counts before exiting
+    // Flush the download counts of the requests that finished during the
+    // drain, after the periodic flush stopped.
     download_counter_for_shutdown.flush().await;
     trace!("Download counters flushed. Shutting down.");
 }
@@ -524,9 +551,10 @@ fn init_docs_hosting(
     cs: Arc<KellnrCrateStorage>,
     docs_storage: Arc<DocsStorage>,
     db: Arc<dyn DbProvider + 'static>,
+    tasks: &BackgroundTasks,
 ) {
     if settings.docs.enabled {
-        kellnr_docgen::doc_queue::doc_extraction_queue(db, cs, docs_storage, settings);
+        kellnr_docgen::doc_queue::doc_extraction_queue(db, cs, docs_storage, settings, tasks);
     }
 }
 
@@ -571,8 +599,12 @@ fn init_storage(folder: &str, settings: &Settings) -> DynStorage {
     kellnr_storage::init_storage(folder, settings).expect("Failed to create storage.")
 }
 
-fn init_webhook_service(settings: &Settings, db: Arc<dyn DbProvider + 'static>) {
-    kellnr_webhooks::run_webhook_service(db, &settings.webhooks);
+fn init_webhook_service(
+    settings: &Settings,
+    db: Arc<dyn DbProvider + 'static>,
+    tasks: &BackgroundTasks,
+) {
+    kellnr_webhooks::run_webhook_service(db, &settings.webhooks, tasks);
 }
 
 fn init_toolchain_storage(settings: &Arc<Settings>) -> Option<Arc<ToolchainStorage>> {
