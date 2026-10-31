@@ -12,7 +12,7 @@ use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
 use tracing::error;
 
-use super::config_json::ConfigJson;
+use super::config_json::{ConfigJson, IndexKind};
 
 /// Get registry configuration
 ///
@@ -28,7 +28,7 @@ use super::config_json::ConfigJson;
 )]
 #[allow(clippy::unused_async)] // part of the router
 pub async fn config_kellnr(State(settings): SettingsState) -> Json<ConfigJson> {
-    Json(ConfigJson::from((&(*settings), "crates", true)))
+    Json(ConfigJson::new(&settings, IndexKind::Kellnr))
 }
 
 /// Prefetch crate index data
@@ -144,7 +144,6 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::config_json::ConfigJson;
 
     #[tokio::test]
     async fn config_returns_config_json() {
@@ -158,19 +157,9 @@ mod tests {
             .unwrap();
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
-
         assert_eq!(
-            ConfigJson::new(
-                Protocol::Http,
-                "test.api.com",
-                1234,
-                None,
-                "crates",
-                true,
-                false
-            ),
-            actual
+            r#"{"dl":"http://test.api.com:1234/api/v1/crates/dl","api":"http://test.api.com:1234","auth-required":false}"#,
+            std::str::from_utf8(&result_msg).unwrap()
         );
     }
 
