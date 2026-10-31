@@ -19,7 +19,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::DbError;
 use crate::{
-    AuthToken, CrateSummary, DocQueueEntry, Group, ToolchainTargetStatus, User, crate_meta,
+    AuthToken, AuthTokenId, CrateId, CrateSummary, DocQueueEntry, Group, ToolchainTargetStatus, User,
+    UserId, crate_meta,
 };
 
 pub type DbResult<T> = Result<T, DbError>;
@@ -229,7 +230,7 @@ pub trait DbProvider: Send + Sync {
     ) -> DbResult<()>;
     async fn is_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>;
     async fn is_owner(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>;
-    async fn get_crate_id(&self, crate_name: &CanonicalName) -> DbResult<Option<i64>>;
+    async fn get_crate_id(&self, crate_name: &CanonicalName) -> DbResult<Option<CrateId>>;
     async fn get_crate_owners(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>>;
     async fn get_crate_users(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>>;
     async fn get_crate_versions(&self, crate_name: &CanonicalName) -> DbResult<Vec<Version>>;
@@ -238,10 +239,10 @@ pub trait DbProvider: Send + Sync {
     async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()>;
     async fn change_read_only_state(&self, user_name: &str, state: bool) -> DbResult<()>;
     async fn change_admin_state(&self, user_name: &str, state: bool) -> DbResult<()>;
-    async fn crate_version_exists(&self, crate_id: i64, version: &Version) -> DbResult<bool>;
-    async fn get_max_version_from_id(&self, crate_id: i64) -> DbResult<Version>;
+    async fn crate_version_exists(&self, crate_id: CrateId, version: &Version) -> DbResult<bool>;
+    async fn get_max_version_from_id(&self, crate_id: CrateId) -> DbResult<Version>;
     async fn get_max_version_from_name(&self, crate_name: &CanonicalName) -> DbResult<Version>;
-    async fn update_max_version(&self, crate_id: i64, version: &Version) -> DbResult<()>;
+    async fn update_max_version(&self, crate_id: CrateId, version: &Version) -> DbResult<()>;
     async fn add_auth_token(&self, name: &str, token: &str, user: &str) -> DbResult<()>;
     async fn get_user_from_token(&self, token: &str) -> DbResult<User>;
     /// Name of the auth token, `None` if there is no such token.
@@ -250,7 +251,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>>;
     /// Deletes the token `id` of the user, [`DbError::TokenNotFound`] if the
     /// user has no such token.
-    async fn delete_auth_token(&self, user_name: &str, id: i32) -> DbResult<()>;
+    async fn delete_auth_token(&self, user_name: &str, id: AuthTokenId) -> DbResult<()>;
     async fn delete_owner(&self, crate_name: &CanonicalName, owner: &str) -> DbResult<()>;
     /// Removes all `owners` from the crate in one transaction. Nothing is
     /// removed if one of them is not an owner ([`DbError::OwnerNotFound`]) or
@@ -306,7 +307,7 @@ pub trait DbProvider: Send + Sync {
     async fn get_doc_queue(&self) -> DbResult<Vec<DocQueueEntry>>;
     async fn delete_crate(&self, krate: &CanonicalName, version: &Version) -> DbResult<()>;
     async fn get_crate_meta_list(&self, crate_name: &CanonicalName) -> DbResult<Vec<CrateMeta>>;
-    async fn update_last_updated(&self, id: i64, last_updated: &DateTime<Utc>) -> DbResult<()>;
+    async fn update_last_updated(&self, id: CrateId, last_updated: &DateTime<Utc>) -> DbResult<()>;
     async fn search_in_crate_name_and_description(
         &self,
         contains: &str,
@@ -341,7 +342,7 @@ pub trait DbProvider: Send + Sync {
     /// latest version of the crate. `restricted` is always 0, the caller
     /// decides which dependents to hide.
     async fn get_crate_dependents(&self, crate_name: &CanonicalName) -> DbResult<CrateDependents>;
-    async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64>;
+    async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<CrateId>;
     /// Adds a published crate version. `owner` is the publishing user, who
     /// becomes the owner of a new crate. `token_name` is the name of the auth
     /// token used to publish, `None` if unknown.
@@ -353,7 +354,7 @@ pub trait DbProvider: Send + Sync {
         created: &DateTime<Utc>,
         owner: &str,
         token_name: Option<String>,
-    ) -> DbResult<i64>;
+    ) -> DbResult<CrateId>;
     async fn update_docs_link(
         &self,
         crate_name: &CanonicalName,
@@ -365,7 +366,7 @@ pub trait DbProvider: Send + Sync {
         pub_metadata: &PublishMetadata,
         size: i64,
         created: &str,
-        crate_id: i64,
+        crate_id: CrateId,
     ) -> DbResult<()>;
     async fn get_prefetch_data(&self, crate_name: &OriginalName) -> DbResult<Prefetch>;
     async fn is_cratesio_cache_up_to_date(
@@ -454,7 +455,7 @@ pub trait DbProvider: Send + Sync {
     /// Link an `OAuth2` identity to an existing user
     async fn link_oauth2_identity(
         &self,
-        user_id: i64,
+        user_id: UserId,
         issuer: &str,
         subject: &str,
         email: Option<String>,
@@ -673,7 +674,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_crate_id(&self, _crate_name: &CanonicalName) -> DbResult<Option<i64>> {
+            async fn get_crate_id(&self, _crate_name: &CanonicalName) -> DbResult<Option<CrateId>> {
                 unimplemented!()
             }
 
@@ -709,11 +710,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn crate_version_exists(&self, _crate_id: i64, _version: &Version) -> DbResult<bool> {
+            async fn crate_version_exists(&self, _crate_id: CrateId, _version: &Version) -> DbResult<bool> {
                 unimplemented!()
             }
 
-            async fn get_max_version_from_id(&self, crate_id: i64) -> DbResult<Version>  {
+            async fn get_max_version_from_id(&self, crate_id: CrateId) -> DbResult<Version>  {
                 unimplemented!()
             }
 
@@ -721,7 +722,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn update_max_version(&self, crate_id: i64, version: &Version) -> DbResult<()> {
+            async fn update_max_version(&self, crate_id: CrateId, version: &Version) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -745,7 +746,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn delete_auth_token(&self, _user_name: &str, _id: i32) -> DbResult<()> {
+            async fn delete_auth_token(&self, _user_name: &str, _id: AuthTokenId) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -821,7 +822,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn update_last_updated(&self, id: i64, last_updated: &DateTime<Utc>) -> DbResult<()>{
+            async fn update_last_updated(&self, id: CrateId, last_updated: &DateTime<Utc>) -> DbResult<()>{
                 unimplemented!()
             }
 
@@ -849,11 +850,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<i64> {
+            async fn add_empty_crate(&self, name: &str, created: &DateTime<Utc>) -> DbResult<CrateId> {
                 unimplemented!()
             }
 
-            async fn add_crate(&self, pub_metadata: &PublishMetadata, sha256: &str, size: i64, created: &DateTime<Utc>, owner: &str, token_name: Option<String>) -> DbResult<i64> {
+            async fn add_crate(&self, pub_metadata: &PublishMetadata, sha256: &str, size: i64, created: &DateTime<Utc>, owner: &str, token_name: Option<String>) -> DbResult<CrateId> {
                 unimplemented!()
             }
 
@@ -861,7 +862,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_crate_metadata(&self, pub_metadata: &PublishMetadata, size: i64, created: &str, crate_id: i64,) -> DbResult<()> {
+            async fn add_crate_metadata(&self, pub_metadata: &PublishMetadata, size: i64, created: &str, crate_id: CrateId,) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -1001,7 +1002,7 @@ pub mod mock {
 
             async fn link_oauth2_identity(
                 &self,
-                user_id: i64,
+                user_id: UserId,
                 issuer: &str,
                 subject: &str,
                 email: Option<String>,

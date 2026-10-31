@@ -2,9 +2,11 @@ use kellnr_entity::auth_token;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::AuthTokenId;
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct AuthToken {
-    pub id: i32,
+    pub id: AuthTokenId,
     pub name: String,
     #[serde(skip_serializing)]
     token: String,
@@ -16,7 +18,7 @@ pub struct AuthToken {
 }
 
 impl AuthToken {
-    pub fn new(id: i32, name: String, token: String) -> Self {
+    pub fn new(id: AuthTokenId, name: String, token: String) -> Self {
         Self {
             id,
             name,
@@ -30,7 +32,7 @@ impl AuthToken {
 impl From<auth_token::Model> for AuthToken {
     fn from(m: auth_token::Model) -> Self {
         Self {
-            id: m.id as i32,
+            id: AuthTokenId::new(m.id),
             name: m.name,
             token: m.token,
             created: m.created,

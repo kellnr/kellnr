@@ -1,9 +1,10 @@
+use kellnr_db::GroupId;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateGroup {
-    pub id: i32,
+    pub id: GroupId,
     pub name: String,
 }
 

@@ -2695,9 +2695,9 @@ mod reg_api_tests {
     fn restricted_crate_mock_db() -> MockDb {
         let secret = CanonicalName::try_from("secret").unwrap();
         let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_crate_id()
-            .returning(|name| Ok((name.as_str() == "secret").then_some(1)));
+        mock_db.expect_get_crate_id().returning(|name| {
+            Ok((name.as_str() == "secret").then_some(kellnr_db::CrateId::new(1)))
+        });
         mock_db
             .expect_is_download_restricted()
             .with(eq(secret.clone()))
@@ -3226,14 +3226,14 @@ mod reg_api_tests {
         );
         assert_eq!(
             1,
-            test_utils::get_crate_meta_list(&kellnr.db, 1)
+            test_utils::get_crate_meta_list(&kellnr.db, kellnr_db::CrateId::new(1))
                 .await
                 .unwrap()
                 .len()
         );
         assert_eq!(
             "0.2.0",
-            test_utils::get_crate_meta_list(&kellnr.db, 1)
+            test_utils::get_crate_meta_list(&kellnr.db, kellnr_db::CrateId::new(1))
                 .await
                 .unwrap()[0]
                 .version
@@ -3311,14 +3311,14 @@ mod reg_api_tests {
         );
         assert_eq!(
             1,
-            test_utils::get_crate_meta_list(&kellnr.db, 1)
+            test_utils::get_crate_meta_list(&kellnr.db, kellnr_db::CrateId::new(1))
                 .await
                 .unwrap()
                 .len()
         );
         assert_eq!(
             "0.2.0",
-            test_utils::get_crate_meta_list(&kellnr.db, 1)
+            test_utils::get_crate_meta_list(&kellnr.db, kellnr_db::CrateId::new(1))
                 .await
                 .unwrap()[0]
                 .version
@@ -3778,7 +3778,7 @@ mod reg_api_tests {
 
         // The publish must still finish, otherwise the stored crate file is orphaned.
         tokio::time::timeout(Duration::from_secs(5), async {
-            while test_utils::get_crate_meta_list(&kellnr.db, 1)
+            while test_utils::get_crate_meta_list(&kellnr.db, kellnr_db::CrateId::new(1))
                 .await
                 .map_or(true, |m| m.is_empty())
             {

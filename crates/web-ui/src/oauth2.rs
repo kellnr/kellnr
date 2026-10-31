@@ -491,7 +491,7 @@ mod sync_tests {
 
     fn user(is_admin: bool, is_read_only: bool) -> User {
         User {
-            id: 1,
+            id: kellnr_db::UserId::new(1),
             name: "alice".to_string(),
             pwd: String::new(),
             salt: String::new(),

@@ -280,7 +280,7 @@ mod tests {
 
     fn test_user() -> User {
         User {
-            id: 1,
+            id: kellnr_db::UserId::new(1),
             name: "test_user".to_string(),
             pwd: String::new(),
             salt: String::new(),
@@ -487,7 +487,7 @@ mod tests {
             .times(1)
             .returning(|_| {
                 Ok(User {
-                    id: 1,
+                    id: kellnr_db::UserId::new(1),
                     name: "db_user".to_string(),
                     pwd: String::new(),
                     salt: String::new(),

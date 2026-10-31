@@ -1830,7 +1830,7 @@ mod tests {
             .with(eq("user"))
             .returning(move |_| {
                 Ok(User {
-                    id: 0,
+                    id: kellnr_db::UserId::new(0),
                     name: "user".to_string(),
                     pwd: String::new(),
                     salt: String::new(),
@@ -1899,7 +1899,7 @@ mod tests {
             .with(eq("user"))
             .returning(move |_| {
                 Ok(User {
-                    id: 0,
+                    id: kellnr_db::UserId::new(0),
                     name: "user".to_string(),
                     pwd: String::new(),
                     salt: String::new(),
@@ -1961,7 +1961,7 @@ mod tests {
             .with(eq("user"))
             .returning(move |_| {
                 Ok(User {
-                    id: 0,
+                    id: kellnr_db::UserId::new(0),
                     name: "user".to_string(),
                     pwd: String::new(),
                     salt: String::new(),
@@ -2033,7 +2033,7 @@ mod tests {
             .with(eq("user"))
             .returning(move |_| {
                 Ok(User {
-                    id: 0,
+                    id: kellnr_db::UserId::new(0),
                     name: "user".to_string(),
                     pwd: String::new(),
                     salt: String::new(),
@@ -2105,7 +2105,7 @@ mod tests {
             .with(eq("user"))
             .returning(move |_| {
                 Ok(User {
-                    id: 0,
+                    id: kellnr_db::UserId::new(0),
                     name: "user".to_string(),
                     pwd: String::new(),
                     salt: String::new(),

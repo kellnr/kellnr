@@ -8,7 +8,7 @@ use kellnr_auth::password::{PasswordAuthError, authenticate_password};
 use kellnr_auth::token;
 use kellnr_common::account_name::{validate_token_name, validate_user_name};
 use kellnr_common::util::generate_rand_string;
-use kellnr_db::{self, AuthToken, DbProvider, User};
+use kellnr_db::{self, AuthToken, AuthTokenId, DbProvider, User};
 use kellnr_settings::Settings;
 use kellnr_settings::constants::{COOKIE_OIDC_ID_TOKEN, COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 use serde::{Deserialize, Serialize};
@@ -122,7 +122,7 @@ pub async fn list_users(
     path = "/me/tokens/{id}",
     tag = "users",
     params(
-        ("id" = i32, Path, description = "Token ID to delete")
+        ("id" = i64, Path, description = "Token ID to delete")
     ),
     responses(
         (status = 200, description = "Token deleted successfully"),
@@ -133,7 +133,7 @@ pub async fn list_users(
 )]
 pub async fn delete_token(
     user: MaybeUser,
-    Path(id): Path<i32>,
+    Path(id): Path<AuthTokenId>,
     State(db): DbState,
     State(cache): TokenCacheState,
 ) -> Result<(), RouteError> {
@@ -1324,7 +1324,7 @@ mod tests {
         mock_db
             .expect_delete_auth_token()
             .times(1)
-            .with(eq("test_user"), eq(1))
+            .with(eq("test_user"), eq(AuthTokenId::new(1)))
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -1368,7 +1368,7 @@ mod tests {
         mock_db
             .expect_delete_auth_token()
             .times(1)
-            .with(eq("test_user"), eq(1))
+            .with(eq("test_user"), eq(AuthTokenId::new(1)))
             .returning(|_, _| Err(DbError::TokenNotFound));
 
         let state = test_state_with_cache(

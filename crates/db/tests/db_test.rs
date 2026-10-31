@@ -14,7 +14,10 @@ use kellnr_common::version::Version;
 use kellnr_common::webhook::{Webhook, WebhookEvent};
 use kellnr_db::provider::PrefetchState;
 use kellnr_db::test_utils::*;
-use kellnr_db::{CrateSort, CrateTagFilter, CrateVisibility, DbProvider, DocQueueEntry};
+use kellnr_db::{
+    AuthTokenId, CrateId, CrateSort, CrateTagFilter, CrateVisibility, DbProvider, DocQueueEntry,
+    UserId,
+};
 use kellnr_db_testcontainer::db_test;
 use serde_json::json;
 mod image;
@@ -813,7 +816,10 @@ async fn auth_token_insert_and_delete(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    test_db.delete_auth_token("admin", 2).await.unwrap();
+    test_db
+        .delete_auth_token("admin", AuthTokenId::new(2))
+        .await
+        .unwrap();
 
     assert!(test_db.get_user_from_token("mytoken").await.is_err());
 }
@@ -829,7 +835,9 @@ async fn delete_auth_token_of_other_user_fails(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    let result = test_db.delete_auth_token("other", 2).await;
+    let result = test_db
+        .delete_auth_token("other", AuthTokenId::new(2))
+        .await;
 
     assert!(matches!(
         result,
@@ -840,7 +848,9 @@ async fn delete_auth_token_of_other_user_fails(test_db: &kellnr_db::Database) {
         test_db.get_user_from_token("mytoken").await.unwrap().name
     );
     assert!(matches!(
-        test_db.delete_auth_token("admin", 99).await,
+        test_db
+            .delete_auth_token("admin", AuthTokenId::new(99))
+            .await,
         Err(kellnr_db::error::DbError::TokenNotFound)
     ));
 }
@@ -884,7 +894,7 @@ async fn add_user_works(test_db: &kellnr_db::Database) {
 
     let user = test_db.get_user("user").await.unwrap();
     // Compare fields individually since created is dynamic
-    assert_eq!(2, user.id);
+    assert_eq!(UserId::new(2), user.id);
     assert_eq!("user", user.name);
     assert!(user.pwd.starts_with("$argon2id$"), "{}", user.pwd);
     assert!(user.salt.is_empty());
@@ -1240,7 +1250,7 @@ async fn validate_session_returns_read_only_and_admin_flags(test_db: &kellnr_db:
 #[db_test]
 async fn bootstrap_db_inserts_admin(test_db: &kellnr_db::Database) {
     let admin = test_db.get_user("admin").await.unwrap();
-    assert_eq!(1, admin.id);
+    assert_eq!(UserId::new(1), admin.id);
     assert_eq!("admin", admin.name);
     assert!(admin.pwd.starts_with("$argon2id$"), "{}", admin.pwd);
     assert!(admin.salt.is_empty());
@@ -1467,7 +1477,7 @@ async fn delete_crate_one_of_multiple_versions(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    let summaries = get_crate_meta_list(test_db, 1).await.unwrap();
+    let summaries = get_crate_meta_list(test_db, CrateId::new(1)).await.unwrap();
     let krate = test_db
         .get_crate_id(&CanonicalName::try_from("crate").unwrap())
         .await
@@ -1476,7 +1486,7 @@ async fn delete_crate_one_of_multiple_versions(test_db: &kellnr_db::Database) {
     assert_eq!(2, summaries.len());
     assert_eq!("1.0.0", summaries[0].version);
     assert_eq!("3.0.0", summaries[1].version);
-    assert_eq!(1, krate.unwrap());
+    assert_eq!(CrateId::new(1), krate.unwrap());
 }
 
 #[db_test]
@@ -1519,7 +1529,7 @@ async fn delete_crate_max_version(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    let crate_metas = get_crate_meta_list(test_db, 1).await.unwrap();
+    let crate_metas = get_crate_meta_list(test_db, CrateId::new(1)).await.unwrap();
     let krate = test_db
         .get_crate_id(&CanonicalName::try_from("crate").unwrap())
         .await
@@ -1531,7 +1541,7 @@ async fn delete_crate_max_version(test_db: &kellnr_db::Database) {
     assert_eq!("1.0.0", crate_metas[0].version);
     assert_eq!("2.0.0", crate_metas[1].version);
     assert_eq!("2.0.0", max_version.to_string());
-    assert_eq!(1, krate);
+    assert_eq!(CrateId::new(1), krate);
 }
 
 #[db_test]
@@ -1556,7 +1566,7 @@ async fn delete_crate_only_versions(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    let summaries = get_crate_meta_list(test_db, 1).await.unwrap();
+    let summaries = get_crate_meta_list(test_db, CrateId::new(1)).await.unwrap();
     let krate = test_db
         .get_crate_id(&CanonicalName::try_from("crate").unwrap())
         .await
@@ -5021,7 +5031,7 @@ async fn publish_with_metadata(
     test_db: &kellnr_db::Database,
     version: &str,
     text: &str,
-) -> Result<i64, kellnr_db::error::DbError> {
+) -> Result<CrateId, kellnr_db::error::DbError> {
     let pm = PublishMetadata {
         description: Some(text.to_string()),
         homepage: Some(format!("https://{text}.example.com")),
