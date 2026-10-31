@@ -2,6 +2,8 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{ItemFn, parse_macro_input};
 
+/// Runs the test once on SQLite and once on PostgreSQL, each time with a
+/// fresh, fully migrated database from `kellnr_test_db`.
 #[proc_macro_attribute]
 pub fn db_test(_attr: TokenStream, stream: TokenStream) -> TokenStream {
     let input = parse_macro_input!(stream as ItemFn);
@@ -19,8 +21,6 @@ pub fn db_test(_attr: TokenStream, stream: TokenStream) -> TokenStream {
     let fn_name = &sig.ident;
     let sqlite_fn_name = quote::format_ident!("sqlite_{fn_name}");
     let postgres_fn_name = quote::format_ident!("postgres_{fn_name}");
-    let _test_impl_name = quote::format_ident!("{fn_name}_impl");
-    let _stmts = &block.stmts;
 
     let output = quote! {
         // Keep the original function as the implementation
@@ -30,40 +30,14 @@ pub fn db_test(_attr: TokenStream, stream: TokenStream) -> TokenStream {
         // SQLite version of the test
         #[tokio::test]
         #vis async fn #sqlite_fn_name() {
-            use std::path;
-            use std::ops::Add;
-            use kellnr_common::util::generate_rand_string;
-
-            let path = path::PathBuf::from("/tmp").join(generate_rand_string(8).add(".db"));
-            let con_string = kellnr_db::SqliteConString {
-                path: path.to_owned(),
-                admin_pwd: "123".to_string(),
-                admin_token: Some("token".to_string()),
-                session_age: kellnr_settings::SessionAge::from_secs(3600),
-            };
-            let con_string = kellnr_db::ConString::Sqlite(con_string);
-            let test_db = kellnr_db::Database::new(&con_string, 10).await.unwrap();
-
-            // Run the test with SQLite
+            let test_db = kellnr_test_db::TestDb::sqlite().await;
             #fn_name(&test_db).await;
-
-            // Clean up
-            rm_rf::remove(&path).expect("Cannot remove test db");
         }
 
         // PostgreSQL version of the test
         #[tokio::test]
         #vis async fn #postgres_fn_name() {
-            use testcontainers::runners::AsyncRunner;
-
-            let pg_container = image::Postgres::default().start().await.expect("Failed to start postgres container");
-            let port = pg_container.get_host_port_ipv4(image::Postgres::PG_PORT).await.expect("Failed to get port");
-            let admin = kellnr_db::AdminUser::new("123".to_string(), Some("token".to_string()));
-            let pg_db = kellnr_db::PgConString::new("localhost", port, "kellnr", "admin", "admin", admin, kellnr_settings::SessionAge::from_secs(3600));
-            let pg_db = kellnr_db::ConString::Postgres(pg_db);
-            let test_db = kellnr_db::Database::new(&pg_db, 10).await.unwrap();
-
-            // Run the test with PostgreSQL
+            let test_db = kellnr_test_db::TestDb::postgres().await;
             #fn_name(&test_db).await;
         }
     };

@@ -41,6 +41,7 @@ sha256.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 cookie.workspace = true
+kellnr-test-db.workspace = true
 mockall.workspace = true
 rand.workspace = true
 rm_rf.workspace = true

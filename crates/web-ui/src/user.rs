@@ -964,6 +964,7 @@ mod tests {
             ..Settings::default()
         };
         let con = kellnr_db::ConString::Sqlite(kellnr_db::SqliteConString::from(&settings));
+        kellnr_test_db::copy_sqlite_template(&con).await;
         Arc::new(kellnr_db::Database::new(&con, 1).await.unwrap())
     }
 

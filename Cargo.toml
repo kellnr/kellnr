@@ -33,6 +33,7 @@ kellnr-rustfs-testcontainer = { version = "6.13.0", path = "./crates/storage/rus
 kellnr-registry = { version = "6.13.0", path = "./crates/registry" }
 kellnr-settings = { version = "6.13.0", path = "./crates/settings" }
 kellnr-storage = { version = "6.13.0", path = "./crates/storage" }
+kellnr-test-db = { version = "6.13.0", path = "./crates/db/test-db" }
 kellnr-web-ui = { version = "6.13.0", path = "./crates/web-ui" }
 kellnr-webhooks = { version = "6.13.0", path = "./crates/webhooks" }
 kellnr-embedded-resources = { version = "6.13.0", path = "./crates/embedded-resources" }

@@ -3870,6 +3870,7 @@ mod reg_api_tests {
         async fn new(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
+            kellnr_test_db::copy_sqlite_template(&con_string).await;
             let db = Database::new(&con_string, 10).await.unwrap();
             TestKellnr {
                 path: PathBuf::from(&settings.registry.data_dir),
@@ -3881,6 +3882,7 @@ mod reg_api_tests {
         async fn with_storage(settings: Settings, storage: DynStorage) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
+            kellnr_test_db::copy_sqlite_template(&con_string).await;
             let db = Database::new(&con_string, 10).await.unwrap();
             TestKellnr {
                 path: PathBuf::from(&settings.registry.data_dir),
@@ -3892,6 +3894,7 @@ mod reg_api_tests {
         async fn fake(settings: Settings) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
+            kellnr_test_db::copy_sqlite_template(&con_string).await;
             let db = Database::new(&con_string, 10).await.unwrap();
 
             TestKellnr {

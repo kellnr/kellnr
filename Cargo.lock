@@ -4301,15 +4301,14 @@ dependencies = [
  "kellnr-entity",
  "kellnr-migration",
  "kellnr-settings",
+ "kellnr-test-db",
  "mockall",
  "percent-encoding",
- "rm_rf",
  "sea-orm",
  "serde",
  "serde_json",
  "sha256",
  "subtle",
- "testcontainers",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -4479,6 +4478,7 @@ dependencies = [
  "kellnr-filter",
  "kellnr-settings",
  "kellnr-storage",
+ "kellnr-test-db",
  "kellnr-webhooks",
  "mockall",
  "rand 0.10.3",
@@ -4543,6 +4543,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "kellnr-test-db"
+version = "6.13.0"
+dependencies = [
+ "kellnr-db",
+ "kellnr-settings",
+ "sea-orm",
+ "sha256",
+ "tempfile",
+ "testcontainers",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "kellnr-web-ui"
 version = "6.13.0"
 dependencies = [
@@ -4562,6 +4576,7 @@ dependencies = [
  "kellnr-filter",
  "kellnr-settings",
  "kellnr-storage",
+ "kellnr-test-db",
  "mockall",
  "reqwest",
  "serde",

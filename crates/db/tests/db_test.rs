@@ -22,7 +22,6 @@ use kellnr_db::{
 };
 use kellnr_db_testcontainer::db_test;
 use serde_json::json;
-mod image;
 
 #[db_test]
 async fn get_total_unique_crates_returns_number_of_unique_crates(test_db: &kellnr_db::Database) {
@@ -5196,24 +5195,7 @@ async fn migration_fails_without_changes_on_crates_with_the_same_canonical_name(
 /// "database is locked".
 #[tokio::test]
 async fn postgres_concurrent_first_publishes_of_two_spellings_conflict() {
-    use testcontainers::runners::AsyncRunner;
-
-    let pg_container = image::Postgres::default().start().await.unwrap();
-    let port = pg_container
-        .get_host_port_ipv4(image::Postgres::PG_PORT)
-        .await
-        .unwrap();
-    let admin = kellnr_db::AdminUser::new("123".to_string(), Some("token".to_string()));
-    let con = kellnr_db::ConString::Postgres(kellnr_db::PgConString::new(
-        "localhost",
-        port,
-        "kellnr",
-        "admin",
-        "admin",
-        admin,
-        kellnr_settings::SessionAge::from_secs(3600),
-    ));
-    let test_db = &kellnr_db::Database::new(&con, 10).await.unwrap();
+    let test_db = &kellnr_test_db::TestDb::postgres().await;
 
     let publish = |name: String| async move {
         test_db
@@ -5842,24 +5824,7 @@ async fn migration_removes_duplicate_crate_tag_links(test_db: &kellnr_db::Databa
 /// "database is locked" before they get to the keywords.
 #[tokio::test]
 async fn postgres_concurrent_publishes_share_new_keywords() {
-    use testcontainers::runners::AsyncRunner;
-
-    let pg_container = image::Postgres::default().start().await.unwrap();
-    let port = pg_container
-        .get_host_port_ipv4(image::Postgres::PG_PORT)
-        .await
-        .unwrap();
-    let admin = kellnr_db::AdminUser::new("123".to_string(), Some("token".to_string()));
-    let con = kellnr_db::ConString::Postgres(kellnr_db::PgConString::new(
-        "localhost",
-        port,
-        "kellnr",
-        "admin",
-        "admin",
-        admin,
-        kellnr_settings::SessionAge::from_secs(3600),
-    ));
-    let test_db = &kellnr_db::Database::new(&con, 10).await.unwrap();
+    let test_db = &kellnr_test_db::TestDb::postgres().await;
 
     let publish = |name: &'static str| async move {
         let pm = PublishMetadata {

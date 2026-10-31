@@ -6,9 +6,9 @@ use testcontainers::core::WaitFor;
 
 const NAME: &str = "postgres";
 const TAG: &str = "17-alpine";
-const POSTGRES_PASSWORD: &str = "admin";
-const POSTGRES_USER: &str = "admin";
-const POSTGRES_DB: &str = "kellnr";
+pub const POSTGRES_PASSWORD: &str = "admin";
+pub const POSTGRES_USER: &str = "admin";
+pub const POSTGRES_DB: &str = "kellnr";
 
 #[derive(Debug, Clone)]
 pub struct Postgres {
