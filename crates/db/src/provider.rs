@@ -18,7 +18,9 @@ use sea_orm::prelude::async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::error::DbError;
-use crate::{AuthToken, CrateSummary, DocQueueEntry, Group, User, crate_meta};
+use crate::{
+    AuthToken, CrateSummary, DocQueueEntry, Group, ToolchainTargetStatus, User, crate_meta,
+};
 
 pub type DbResult<T> = Result<T, DbError>;
 
@@ -136,8 +138,8 @@ pub struct ToolchainTargetInfo {
     pub hash: String,
     /// Archive size in bytes
     pub size: i64,
-    /// Processing status: "processing", "ready", or "failed"
-    pub status: String,
+    /// Processing status
+    pub status: ToolchainTargetStatus,
     /// Individual components extracted from the combined archive
     pub components: Vec<ToolchainComponentInfo>,
 }
@@ -510,9 +512,13 @@ pub trait DbProvider: Send + Sync {
     async fn is_toolchain_component_stored_at(&self, storage_path: &str) -> DbResult<bool>;
 
     /// Update the processing status of a toolchain target
-    async fn set_target_status(&self, target_id: i64, status: &str) -> DbResult<()>;
+    async fn set_target_status(
+        &self,
+        target_id: i64,
+        status: ToolchainTargetStatus,
+    ) -> DbResult<()>;
 
-    /// Mark all toolchain targets that are still "processing" as "failed".
+    /// Mark all toolchain targets that are still processing as failed.
     /// Returns the number of marked targets.
     async fn fail_processing_toolchain_targets(&self) -> DbResult<u64>;
 
@@ -1063,7 +1069,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn set_target_status(&self, target_id: i64, status: &str) -> DbResult<()> {
+            async fn set_target_status(&self, target_id: i64, status: ToolchainTargetStatus) -> DbResult<()> {
                 unimplemented!()
             }
 
