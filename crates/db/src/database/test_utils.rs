@@ -556,7 +556,7 @@ pub async fn test_insert_admin_credentials_again(db: &Database) -> DbResult<()> 
         path: std::path::PathBuf::new(),
         admin_pwd: "other".to_string(),
         admin_token: Some("other_token".to_string()),
-        session_age: std::time::Duration::from_secs(3600),
+        session_age: kellnr_settings::SessionAge::from_secs(3600),
     });
     super::operations::insert_admin_credentials(&db.db_con, &con).await
 }

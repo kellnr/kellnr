@@ -87,12 +87,12 @@ fn storage_not_configured() -> ErrorResponse {
 }
 
 /// Creates the toolchain API routes (management endpoints)
-pub fn create_api_routes(_state: AppStateData, max_size: usize) -> OpenApiRouter<AppStateData> {
+pub fn create_api_routes(_state: AppStateData, max_bytes: usize) -> OpenApiRouter<AppStateData> {
     // Upload route needs custom body limit, so we merge it as a regular Router
     let upload_router: OpenApiRouter<AppStateData> = Router::new()
         .route(
             "/",
-            put(upload_toolchain).layer(DefaultBodyLimit::max(max_size * 1_000_000)),
+            put(upload_toolchain).layer(DefaultBodyLimit::max(max_bytes)),
         )
         .into();
 

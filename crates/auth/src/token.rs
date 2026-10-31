@@ -448,7 +448,7 @@ mod tests {
     #[tokio::test]
     async fn test_cache_hit_returns_cached_token() {
         // Pre-populate cache, DB should NOT be called
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
         cache
             .insert(
                 "cached_token".to_string(),
@@ -478,7 +478,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_miss_queries_db_and_caches() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -520,7 +520,7 @@ mod tests {
     /// the cache, otherwise it would stay usable for the whole TTL.
     #[tokio::test]
     async fn test_invalidation_during_lookup_is_not_cached() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
         let cache_in_db = cache.clone();
 
         let mut mock_db = MockDb::new();
@@ -547,7 +547,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_miss_with_invalid_token_returns_forbidden() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -581,7 +581,7 @@ mod tests {
     /// consulted, which is what stops a valid password from being accepted.
     #[tokio::test]
     async fn test_basic_auth_rejected_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_get_user().never();
@@ -599,7 +599,7 @@ mod tests {
     /// The lowercase spelling of the scheme must not slip past the check.
     #[tokio::test]
     async fn test_lowercase_basic_auth_rejected_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_get_user().never();
@@ -620,7 +620,7 @@ mod tests {
     /// login method and must keep working so publishing does not break.
     #[tokio::test]
     async fn test_bearer_token_still_works_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -643,7 +643,7 @@ mod tests {
     /// Without enforcement, basic auth keeps authenticating against the DB.
     #[tokio::test]
     async fn test_basic_auth_allowed_when_sso_not_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -670,7 +670,7 @@ mod tests {
     /// credentials must not verify the password again.
     #[tokio::test]
     async fn test_basic_auth_success_is_cached() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -691,7 +691,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_basic_auth_failure_is_not_cached() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -712,7 +712,7 @@ mod tests {
     /// A different password for a cached user must still be verified.
     #[tokio::test]
     async fn test_basic_auth_cache_is_keyed_by_password() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -742,7 +742,7 @@ mod tests {
     /// credentials must be verified against the DB again.
     #[tokio::test]
     async fn test_basic_auth_cache_respects_invalidation() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -770,7 +770,7 @@ mod tests {
     /// username, and the password is no longer checked once locked.
     #[tokio::test]
     async fn test_basic_auth_failures_are_throttled() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -797,7 +797,7 @@ mod tests {
     /// so an attacker cannot lock out CI that uses basic auth.
     #[tokio::test]
     async fn test_cached_basic_auth_bypasses_throttle() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db
@@ -844,7 +844,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_authorization_header_returns_unauthorized() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
         let mock_db = MockDb::new();
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
         let settings = test_settings();
@@ -860,7 +860,7 @@ mod tests {
     #[tokio::test]
     async fn test_disabled_cache_always_queries_db() {
         // Cache is disabled - should always query DB
-        let cache = Arc::new(TokenCacheManager::new(false, 60, 100)); // Disabled
+        let cache = Arc::new(TokenCacheManager::new(false, Duration::from_secs(60), 100)); // Disabled
 
         let call_count = Arc::new(AtomicU32::new(0));
         let call_count_clone = call_count.clone();
@@ -892,7 +892,7 @@ mod tests {
     #[tokio::test]
     async fn test_lowercase_bearer_prefix_works() {
         // Verifies case-insensitive handling of "bearer" prefix
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
 
         let mut mock_db = MockDb::new();
         mock_db

@@ -20,10 +20,10 @@ pub fn create_ui_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
 }
 
 /// Creates the docs manual routes
-pub fn create_manual_routes(max_docs_size: usize) -> Router<AppStateData> {
+pub fn create_manual_routes(max_docs_bytes: usize) -> Router<AppStateData> {
     // Keep as regular Router due to custom layer on specific route
     Router::new().route(
         "/{package}/{version}",
-        put(api::publish_docs).layer(DefaultBodyLimit::max(max_docs_size * 1_000_000)),
+        put(api::publish_docs).layer(DefaultBodyLimit::max(max_docs_bytes)),
     )
 }

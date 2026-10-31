@@ -41,7 +41,7 @@ pub(crate) async fn create_session_jar(
     Ok(cookies.add(session_cookie(
         COOKIE_SESSION_ID,
         session_token,
-        app_state.settings.registry.session_max_age(),
+        app_state.settings.registry.session_age().cookie_max_age(),
         secure,
     )))
 }

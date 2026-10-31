@@ -4559,7 +4559,7 @@ async fn postgres_concurrent_first_publishes_of_two_spellings_conflict() {
         "admin",
         "admin",
         admin,
-        std::time::Duration::from_secs(3600),
+        kellnr_settings::SessionAge::from_secs(3600),
     ));
     let test_db = &kellnr_db::Database::new(&con, 10).await.unwrap();
 
@@ -5160,7 +5160,7 @@ async fn postgres_concurrent_publishes_share_new_keywords() {
         "admin",
         "admin",
         admin,
-        std::time::Duration::from_secs(3600),
+        kellnr_settings::SessionAge::from_secs(3600),
     ));
     let test_db = &kellnr_db::Database::new(&con, 10).await.unwrap();
 

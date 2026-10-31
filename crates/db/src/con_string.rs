@@ -1,8 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
-use kellnr_settings::Settings;
+use kellnr_settings::{SessionAge, Settings};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -37,7 +36,7 @@ impl ConString {
     }
 
     /// Maximum lifetime of a session before it is considered expired.
-    pub fn session_age(&self) -> Duration {
+    pub fn session_age(&self) -> SessionAge {
         match self {
             ConString::Postgres(p) => p.session_age,
             ConString::Sqlite(s) => s.session_age,
@@ -75,7 +74,7 @@ pub enum PgConStringInner {
 pub struct PgConString {
     inner: PgConStringInner,
     admin: AdminUser,
-    pub session_age: Duration,
+    pub session_age: SessionAge,
 }
 
 impl PgConString {
@@ -86,7 +85,7 @@ impl PgConString {
         user: &str,
         pwd: &str,
         admin: AdminUser,
-        session_age: Duration,
+        session_age: SessionAge,
     ) -> Self {
         Self {
             inner: PgConStringInner::Structured {
@@ -122,7 +121,7 @@ impl From<&Settings> for PgConString {
                 pwd: s.setup.admin_pwd.clone(),
                 token: s.setup.admin_token.clone(),
             },
-            session_age: Duration::from_secs(s.registry.session_age_seconds),
+            session_age: s.registry.session_age(),
         }
     }
 }
@@ -165,7 +164,7 @@ pub struct SqliteConString {
     pub path: PathBuf,
     pub admin_pwd: String,
     pub admin_token: Option<String>,
-    pub session_age: Duration,
+    pub session_age: SessionAge,
 }
 
 impl SqliteConString {
@@ -173,7 +172,7 @@ impl SqliteConString {
         path: &Path,
         admin_pwd: &str,
         admin_token: Option<String>,
-        session_age: Duration,
+        session_age: SessionAge,
     ) -> Self {
         Self {
             path: path.to_owned(),
@@ -190,7 +189,7 @@ impl From<&Settings> for SqliteConString {
             path: settings.sqlite_path(),
             admin_pwd: settings.setup.admin_pwd.clone(),
             admin_token: settings.setup.admin_token.clone(),
-            session_age: Duration::from_secs(settings.registry.session_age_seconds),
+            session_age: settings.registry.session_age(),
         }
     }
 }
@@ -223,7 +222,7 @@ mod tests {
             user,
             pwd,
             AdminUser::new("admin".to_string(), None),
-            Duration::from_mins(1),
+            SessionAge::from_secs(60),
         )
     }
 

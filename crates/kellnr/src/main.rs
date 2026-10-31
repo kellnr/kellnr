@@ -21,7 +21,8 @@ use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
 use kellnr_settings::{
-    CliResult, LogFormat, ResolvedSettings, Settings, ShowConfigOptions, UrlPathPrefix, parse_cli,
+    CliResult, LogFormat, ResolvedSettings, SessionAge, Settings, ShowConfigOptions, UrlPathPrefix,
+    parse_cli,
 };
 use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
@@ -238,12 +239,12 @@ async fn run_server(resolved: ResolvedSettings) {
     let route_path_prefix = settings.origin.path_prefix();
     let token_cache = Arc::new(TokenCacheManager::new(
         settings.registry.token_cache_enabled,
-        settings.registry.token_cache_ttl_seconds,
+        settings.registry.token_cache_ttl(),
         settings.registry.token_cache_max_capacity,
     ));
     let login_throttle = Arc::new(LoginThrottle::new(
         settings.registry.auth_max_failed_attempts,
-        Duration::from_secs(settings.registry.auth_failed_attempts_window_seconds),
+        settings.registry.auth_failed_attempts_window(),
     ));
 
     // Initialize toolchain storage if enabled
@@ -309,9 +310,8 @@ async fn run_server(resolved: ResolvedSettings) {
     // expiry, so the cleanup task is not started. Otherwise run at most hourly,
     // at least every minute, and once immediately on startup to clear sessions
     // left by a previous run.
-    let session_age_seconds = settings.registry.session_age_seconds;
-    if session_age_seconds > 0 {
-        let session_cleanup_interval = session_age_seconds.clamp(60, 3600);
+    if let SessionAge::For(session_age_seconds) = settings.registry.session_age() {
+        let session_cleanup_interval = session_age_seconds.get().clamp(60, 3600);
         let session_cleanup_db = db.clone();
         trace!("Starting session cleanup task (interval: {session_cleanup_interval}s)");
         tokio::spawn(async move {

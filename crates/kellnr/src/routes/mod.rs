@@ -35,9 +35,9 @@ mod user_routes;
 mod webhook_routes;
 
 pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handler>>) -> Router {
-    let max_docs_size = state.settings.docs.max_size;
-    let max_crate_size = state.settings.registry.max_crate_size as usize;
-    let max_toolchain_size = state.settings.toolchain.max_size;
+    let max_docs_bytes = state.settings.docs.max_bytes();
+    let max_crate_bytes = state.settings.registry.max_crate_bytes();
+    let max_toolchain_bytes = state.settings.toolchain.max_bytes();
 
     // Docs are served from the pluggable Storage backend, not embedded assets.
     let docs_service: Router<AppStateData> = Router::new()
@@ -82,7 +82,11 @@ pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handl
             )
             .nest(
                 "/api/v1/crates",
-                kellnr_api_routes::create_routes(state.clone(), max_crate_size, download_semaphore),
+                kellnr_api_routes::create_routes(
+                    state.clone(),
+                    max_crate_bytes,
+                    download_semaphore,
+                ),
             )
             .nest("/api/v1", health_routes::create_routes());
 
@@ -91,7 +95,7 @@ pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handl
         api_router = api_router
             .nest(
                 "/api/v1/toolchains",
-                toolchain_routes::create_api_routes(state.clone(), max_toolchain_size),
+                toolchain_routes::create_api_routes(state.clone(), max_toolchain_bytes),
             )
             .nest(
                 "/api/v1/toolchains/dist",
@@ -106,7 +110,7 @@ pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handl
     let router = router
         .nest(
             "/api/v1/docs",
-            docs_routes::create_manual_routes(max_docs_size),
+            docs_routes::create_manual_routes(max_docs_bytes),
         )
         .nest("/docs", docs_service)
         // Serve Swagger UI at /api/docs with OpenAPI spec at /api/openapi.json

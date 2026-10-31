@@ -644,7 +644,11 @@ mod tests {
     /// that a still-valid local password cannot be used to bypass SSO.
     #[tokio::test]
     async fn test_login_forbidden_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         let mut mock_db = MockDb::new();
         mock_db.expect_authenticate_user().never();
 
@@ -668,7 +672,11 @@ mod tests {
     /// a new hash to the DB.
     #[tokio::test]
     async fn test_change_pwd_forbidden_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         let mut mock_db = session_db(false);
         mock_db.expect_authenticate_user().never();
         mock_db.expect_change_pwd().never();
@@ -698,7 +706,11 @@ mod tests {
     /// local credential while SSO is the only permitted login method.
     #[tokio::test]
     async fn test_reset_pwd_forbidden_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         let mut mock_db = session_db(true);
         mock_db.expect_change_pwd().never();
 
@@ -724,7 +736,11 @@ mod tests {
     /// password-backed account must be refused.
     #[tokio::test]
     async fn test_add_user_forbidden_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         let mut mock_db = session_db(true);
         mock_db.expect_add_user().never();
 
@@ -772,7 +788,14 @@ mod tests {
 
         let state = AppStateData {
             login_throttle: Arc::new(LoginThrottle::new(2, std::time::Duration::from_mins(5))),
-            ..test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100)))
+            ..test_state_with_cache(
+                mock_db,
+                Arc::new(TokenCacheManager::new(
+                    false,
+                    std::time::Duration::from_secs(60),
+                    100,
+                )),
+            )
         };
         let app = Router::new().route("/login", post(login)).with_state(state);
 
@@ -798,7 +821,14 @@ mod tests {
 
         let state = AppStateData {
             login_throttle: Arc::new(LoginThrottle::new(1, std::time::Duration::from_mins(5))),
-            ..test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100)))
+            ..test_state_with_cache(
+                mock_db,
+                Arc::new(TokenCacheManager::new(
+                    false,
+                    std::time::Duration::from_secs(60),
+                    100,
+                )),
+            )
         };
         let app = Router::new()
             .route("/me/password", put(change_pwd))
@@ -839,8 +869,14 @@ mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        let state =
-            test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100)));
+        let state = test_state_with_cache(
+            mock_db,
+            Arc::new(TokenCacheManager::new(
+                false,
+                std::time::Duration::from_secs(60),
+                100,
+            )),
+        );
         let app = Router::new()
             .route("/logout", post(logout))
             .layer(Extension::<Option<Arc<kellnr_auth::oauth2::OAuth2Handler>>>(None))
@@ -875,8 +911,14 @@ mod tests {
             .expect_delete_session_token()
             .returning(|_| Err(DbError::FailedToCountCrates));
 
-        let state =
-            test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100)));
+        let state = test_state_with_cache(
+            mock_db,
+            Arc::new(TokenCacheManager::new(
+                false,
+                std::time::Duration::from_secs(60),
+                100,
+            )),
+        );
         let app = Router::new()
             .route("/logout", post(logout))
             .layer(Extension::<Option<Arc<kellnr_auth::oauth2::OAuth2Handler>>>(None))
@@ -931,7 +973,11 @@ mod tests {
             let result = add(
                 AdminUser("admin".to_string()),
                 State(Arc::new(MockDb::new())),
-                State(Arc::new(TokenCacheManager::new(false, 60, 100))),
+                State(Arc::new(TokenCacheManager::new(
+                    false,
+                    std::time::Duration::from_secs(60),
+                    100,
+                ))),
                 State(Arc::new(Settings::default())),
                 Json(new_user(name)),
             )
@@ -950,7 +996,11 @@ mod tests {
             let result = add_token(
                 MaybeUser::Normal("user".to_string()),
                 State(Arc::new(MockDb::new())),
-                State(Arc::new(TokenCacheManager::new(false, 60, 100))),
+                State(Arc::new(TokenCacheManager::new(
+                    false,
+                    std::time::Duration::from_secs(60),
+                    100,
+                ))),
                 Json(token::NewTokenReqData { name }),
             )
             .await;
@@ -963,7 +1013,11 @@ mod tests {
     async fn test_add_existing_user_is_conflict() {
         let data_dir = tempfile::tempdir().unwrap();
         let db = sqlite_db(data_dir.path()).await;
-        let cache = Arc::new(TokenCacheManager::new(false, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            false,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         let settings = Arc::new(Settings::default());
         let add_bob = || {
             add(
@@ -999,7 +1053,11 @@ mod tests {
     /// survive a password change.
     #[tokio::test]
     async fn test_change_pwd_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         insert_cached_credentials(&cache).await;
 
         let mut mock_db = change_pwd_db();
@@ -1015,7 +1073,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_reset_pwd_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         insert_cached_credentials(&cache).await;
 
         let mut mock_db = reset_pwd_db();
@@ -1100,7 +1162,11 @@ mod tests {
 
         let status = put_change_pwd(test_state_with_cache(
             mock_db,
-            Arc::new(TokenCacheManager::new(false, 60, 100)),
+            Arc::new(TokenCacheManager::new(
+                false,
+                std::time::Duration::from_secs(60),
+                100,
+            )),
         ))
         .await;
 
@@ -1120,7 +1186,14 @@ mod tests {
         mock_db.expect_delete_other_user_sessions().never();
 
         let status = put_reset_pwd(
-            test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100))),
+            test_state_with_cache(
+                mock_db,
+                Arc::new(TokenCacheManager::new(
+                    false,
+                    std::time::Duration::from_secs(60),
+                    100,
+                )),
+            ),
             "user",
         )
         .await;
@@ -1139,7 +1212,14 @@ mod tests {
         mock_db.expect_delete_user_sessions().never();
 
         let status = put_reset_pwd(
-            test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(false, 60, 100))),
+            test_state_with_cache(
+                mock_db,
+                Arc::new(TokenCacheManager::new(
+                    false,
+                    std::time::Duration::from_secs(60),
+                    100,
+                )),
+            ),
             "admin",
         )
         .await;
@@ -1150,7 +1230,11 @@ mod tests {
     #[tokio::test]
     async fn test_add_token_invalidates_cache() {
         // Pre-populate cache with a token
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         cache
             .insert(
                 "existing_token".to_string(),
@@ -1210,7 +1294,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_token_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         cache
             .insert(
                 "token_to_keep".to_string(),
@@ -1283,7 +1371,14 @@ mod tests {
             .with(eq("test_user"), eq(1))
             .returning(|_, _| Err(DbError::TokenNotFound));
 
-        let state = test_state_with_cache(mock_db, Arc::new(TokenCacheManager::new(true, 60, 100)));
+        let state = test_state_with_cache(
+            mock_db,
+            Arc::new(TokenCacheManager::new(
+                true,
+                std::time::Duration::from_secs(60),
+                100,
+            )),
+        );
         let app = Router::new()
             .route("/delete_token/{id}", axum::routing::delete(delete_token))
             .with_state(state);
@@ -1306,7 +1401,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_user_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         cache
             .insert(
                 "user_token".to_string(),
@@ -1365,7 +1464,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_only_change_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         cache
             .insert(
                 "user_token".to_string(),
@@ -1425,7 +1528,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_admin_self_locking_prevented() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
@@ -1469,7 +1576,11 @@ mod tests {
     async fn test_admin_self_unlocking_allowed() {
         // An admin unlocking themselves (state=false) should be allowed
         // Only self-locking (state=true) is blocked
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
@@ -1513,7 +1624,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_admin_locking_other_user_works() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
@@ -1557,7 +1672,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_user_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         cache
             .insert(
                 "existing_token".to_string(),
@@ -1612,7 +1731,11 @@ mod tests {
     #[tokio::test]
     async fn test_cache_not_invalidated_on_db_failure() {
         // Verify cache is NOT invalidated when DB operation fails
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         cache
             .insert(
                 "existing_token".to_string(),
@@ -1672,7 +1795,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_admin_change_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
         cache
             .insert(
                 "user_token".to_string(),
@@ -1732,7 +1859,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_admin_self_demotion_prevented() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
@@ -1774,7 +1905,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_non_admin_cannot_change_admin_status() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
@@ -1815,7 +1950,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_admin_demotion_works() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
@@ -1859,7 +1998,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_admin_nonexistent_user_returns_error() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
@@ -1907,7 +2050,11 @@ mod tests {
     async fn test_admin_self_promotion_allowed() {
         // An admin promoting themselves (state=true) should be allowed
         // Only self-demotion (state=false) is blocked
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
@@ -1951,7 +2098,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_admin_self_deletion_prevented() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
@@ -1992,7 +2143,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_admin_deletion_of_other_user_works() {
-        let cache = Arc::new(TokenCacheManager::new(true, 60, 100));
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
 
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
