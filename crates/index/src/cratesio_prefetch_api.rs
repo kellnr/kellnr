@@ -22,7 +22,7 @@ use moka::future::Cache;
 use reqwest::Client;
 use tracing::{error, trace, warn};
 
-use super::config_json::ConfigJson;
+use super::config_json::{ConfigJson, IndexKind};
 
 pub static UPDATE_INTERVAL_SECS: u64 = 60 * 120; // 2h background update interval
 pub static UPDATE_CACHE_TIMEOUT_SECS: u64 = 60 * 30; // 30 min cache timeout
@@ -53,7 +53,7 @@ fn get_client(settings: &kellnr_settings::Proxy) -> &'static Client {
 )]
 #[allow(clippy::unused_async)] // part of the router
 pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson> {
-    Json(ConfigJson::from((&(*settings), "cratesio", false)))
+    Json(ConfigJson::new(&settings, IndexKind::CratesIo))
 }
 
 /// Prefetch crate metadata from crates.io (3+ char names)
@@ -532,7 +532,6 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::config_json::ConfigJson;
 
     #[tokio::test]
     async fn fetch_cratesio_prefetch_works() {
@@ -600,19 +599,9 @@ mod tests {
             .unwrap();
 
         let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let actual = serde_json::from_slice::<ConfigJson>(&result_msg).unwrap();
-
         assert_eq!(
-            ConfigJson::new(
-                Protocol::Http,
-                "test.api.com",
-                1234,
-                None,
-                "cratesio",
-                false,
-                false
-            ),
-            actual
+            r#"{"dl":"http://test.api.com:1234/api/v1/cratesio/dl","auth-required":false}"#,
+            std::str::from_utf8(&result_msg).unwrap()
         );
     }
 

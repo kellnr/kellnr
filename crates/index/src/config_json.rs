@@ -1,5 +1,32 @@
-use kellnr_settings::{Protocol, Settings};
+use kellnr_settings::Settings;
 use serde::{Deserialize, Serialize};
+
+/// The two registries Kellnr serves an index for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexKind {
+    /// The crates published to Kellnr.
+    Kellnr,
+    /// The crates.io proxy, which only serves downloads.
+    CratesIo,
+}
+
+impl IndexKind {
+    /// Path segment of the API below `/api/v1`.
+    fn api_path(self) -> &'static str {
+        match self {
+            Self::Kellnr => "crates",
+            Self::CratesIo => "cratesio",
+        }
+    }
+
+    /// Whether cargo may use the web API of the registry, e.g. to publish.
+    fn has_api(self) -> bool {
+        match self {
+            Self::Kellnr => true,
+            Self::CratesIo => false,
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct ConfigJson {
@@ -15,115 +42,99 @@ impl ConfigJson {
         serde_json::to_string(&self)
     }
 
-    pub fn new(
-        protocol: Protocol,
-        api_address: &str,
-        api_port: u16,
-        api_url_path: Option<&str>,
-        api_path: &str,
-        api_available: bool,
-        auth_required: bool,
-    ) -> Self {
-        let url = format!("{protocol}://{api_address}:{api_port}");
-        let url_end = format!("/api/v1/{api_path}/dl");
-        let url = match api_url_path {
-            Some(api_url_path) => {
-                let api_url_path = api_url_path.trim_matches('/');
-                if !api_url_path.is_empty() {
-                    format!("{url}/{api_url_path}")
-                } else {
-                    url
-                }
-            }
-            None => url,
-        };
+    /// The `config.json` of the index of `kind`.
+    pub fn new(settings: &Settings, kind: IndexKind) -> Self {
+        let origin = &settings.origin;
+        let url = format!(
+            "{}://{}:{}{}",
+            origin.protocol,
+            origin.hostname,
+            origin.port,
+            origin.path_prefix()
+        );
         Self {
-            dl: format!("{url}{url_end}"),
-            api: if api_available { Some(url) } else { None },
-            auth_required,
+            dl: format!("{url}/api/v1/{}/dl", kind.api_path()),
+            api: kind.has_api().then_some(url),
+            auth_required: settings.registry.auth_required,
         }
-    }
-}
-
-impl From<(&Settings, &str, bool)> for ConfigJson {
-    fn from(value: (&Settings, &str, bool)) -> Self {
-        let path_prefix = value.0.origin.path_prefix();
-        let api_url_path = (!path_prefix.is_root()).then_some(path_prefix.as_str());
-        Self::new(
-            value.0.origin.protocol,
-            &value.0.origin.hostname,
-            value.0.origin.port,
-            api_url_path,
-            value.1,
-            value.2,
-            value.0.registry.auth_required,
-        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use kellnr_settings::Protocol;
+    use kellnr_settings::{Origin, Protocol, Registry};
 
     use super::*;
 
-    #[test]
-    fn test_config_json_to_json_http() {
-        let config = ConfigJson::new(Protocol::Http, "localhost", 8080, None, "path", true, false);
-        let json = config.to_json().unwrap();
+    fn settings(protocol: Protocol, port: u16, path: &str, auth_required: bool) -> Settings {
+        Settings {
+            origin: Origin {
+                hostname: "localhost".to_string(),
+                port,
+                protocol,
+                path: path.to_string(),
+                cookie_secure: None,
+            },
+            registry: Registry {
+                auth_required,
+                ..Registry::default()
+            },
+            ..Settings::default()
+        }
+    }
 
+    fn json(settings: &Settings, kind: IndexKind) -> String {
+        ConfigJson::new(settings, kind).to_json().unwrap()
+    }
+
+    #[test]
+    fn kellnr_config_json_http() {
         assert_eq!(
-            json,
-            r#"{"dl":"http://localhost:8080/api/v1/path/dl","api":"http://localhost:8080","auth-required":false}"#
+            json(
+                &settings(Protocol::Http, 8080, "", false),
+                IndexKind::Kellnr
+            ),
+            r#"{"dl":"http://localhost:8080/api/v1/crates/dl","api":"http://localhost:8080","auth-required":false}"#
         );
     }
 
     #[test]
-    fn test_config_json_to_json_http_with_url_path() {
-        let config = ConfigJson::new(
-            Protocol::Http,
-            "localhost",
-            8080,
-            Some("/kellnring/"),
-            "path",
-            true,
-            false,
-        );
-        let json = config.to_json().unwrap();
+    fn kellnr_config_json_with_url_path() {
+        for path in ["/kellnring/", "kellnring", "/kellnring"] {
+            assert_eq!(
+                json(
+                    &settings(Protocol::Http, 8080, path, false),
+                    IndexKind::Kellnr
+                ),
+                r#"{"dl":"http://localhost:8080/kellnring/api/v1/crates/dl","api":"http://localhost:8080/kellnring","auth-required":false}"#,
+                "path {path:?}"
+            );
+        }
+    }
 
+    #[test]
+    fn kellnr_config_json_https_keeps_default_port() {
         assert_eq!(
-            json,
-            r#"{"dl":"http://localhost:8080/kellnring/api/v1/path/dl","api":"http://localhost:8080/kellnring","auth-required":false}"#
+            json(&settings(Protocol::Https, 443, "", true), IndexKind::Kellnr),
+            r#"{"dl":"https://localhost:443/api/v1/crates/dl","api":"https://localhost:443","auth-required":true}"#
         );
     }
 
     #[test]
-    fn test_config_json_to_json_https() {
-        let config = ConfigJson::new(Protocol::Https, "localhost", 8081, None, "path", true, true);
-        let json = config.to_json().unwrap();
-
+    fn cratesio_config_json_has_no_api() {
         assert_eq!(
-            json,
-            r#"{"dl":"https://localhost:8081/api/v1/path/dl","api":"https://localhost:8081","auth-required":true}"#
+            json(
+                &settings(Protocol::Https, 8081, "", true),
+                IndexKind::CratesIo
+            ),
+            r#"{"dl":"https://localhost:8081/api/v1/cratesio/dl","auth-required":true}"#
         );
-    }
-
-    #[test]
-    fn test_config_json_no_api() {
-        let config = ConfigJson::new(
-            Protocol::Https,
-            "localhost",
-            8081,
-            None,
-            "path",
-            false,
-            true,
-        );
-        let json = config.to_json().unwrap();
-
         assert_eq!(
-            json,
-            r#"{"dl":"https://localhost:8081/api/v1/path/dl","auth-required":true}"#
+            json(
+                &settings(Protocol::Http, 8080, "/kellnr", false),
+                IndexKind::CratesIo
+            ),
+            r#"{"dl":"http://localhost:8080/kellnr/api/v1/cratesio/dl","auth-required":false}"#
         );
     }
 }
