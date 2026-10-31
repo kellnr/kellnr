@@ -28,6 +28,8 @@ mod docs_static;
 mod group_routes;
 mod health_routes;
 mod kellnr_api_routes;
+#[cfg(test)]
+mod login_methods_tests;
 mod oauth2_routes;
 mod toolchain_routes;
 mod ui_routes;
