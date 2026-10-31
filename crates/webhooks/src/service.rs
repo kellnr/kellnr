@@ -1,7 +1,9 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use futures_util::{StreamExt, stream};
+use kellnr_common::background_tasks::{BackgroundTasks, FirstRound};
 use kellnr_common::webhook::WebhookQueue;
 use kellnr_db::DbProvider;
 use kellnr_settings::Webhooks;
@@ -11,7 +13,7 @@ use crate::types::WebhookError;
 
 const MAX_CONCURRENT_DELIVERIES: usize = 8;
 
-pub fn run_webhook_service(db: Arc<dyn DbProvider>, settings: &Webhooks) {
+pub fn run_webhook_service(db: Arc<dyn DbProvider>, settings: &Webhooks, tasks: &BackgroundTasks) {
     let proxy_in_env = ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"]
         .iter()
         .any(|var| std::env::var_os(var).is_some());
@@ -29,14 +31,20 @@ pub fn run_webhook_service(db: Arc<dyn DbProvider>, settings: &Webhooks) {
             return;
         }
     };
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            if let Err(err) = handle_queue(&db, &http_client).await {
-                tracing::error!("Webhook queue failed. Reason {err}");
+    let http_client = Arc::new(http_client);
+    tasks.spawn_periodic(
+        "webhook delivery",
+        Duration::from_secs(5),
+        FirstRound::AfterInterval,
+        move || {
+            let (db, http_client) = (db.clone(), http_client.clone());
+            async move {
+                if let Err(err) = handle_queue(&db, &http_client).await {
+                    tracing::error!("Webhook queue failed. Reason {err}");
+                }
             }
-        }
-    });
+        },
+    );
 }
 
 async fn handle_queue(
@@ -204,7 +212,7 @@ mod service_tests {
     async fn test_handle_queue_delivers_concurrently() {
         let db = get_db().await;
         let deliveries = 8;
-        let delay = std::time::Duration::from_secs(1);
+        let delay = Duration::from_secs(1);
 
         for _ in 0..deliveries {
             db.register_webhook(sample_webhook(WebhookEvent::CrateAdd, 9989))
@@ -274,10 +282,7 @@ mod service_tests {
 
     /// Listener that answers every connection with 200 after `delay`,
     /// handling connections in parallel.
-    async fn spawn_slow_listener(
-        port: u16,
-        delay: std::time::Duration,
-    ) -> tokio::task::JoinHandle<()> {
+    async fn spawn_slow_listener(port: u16, delay: Duration) -> tokio::task::JoinHandle<()> {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))

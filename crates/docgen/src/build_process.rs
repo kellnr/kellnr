@@ -1,12 +1,13 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
 use kellnr_docs::docs_error::DocsError;
 use kellnr_settings::cli::{DOC_BUILD_CRATESIO_INDEX_ARG, DOC_BUILD_SUBCOMMAND};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::{Child, Command};
+use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 /// Environment variables passed on to the docs build process. Everything else,
@@ -66,6 +67,14 @@ pub struct DocBuilder {
     wrapper: Vec<String>,
     cratesio_index: Option<String>,
     timeout: Option<Duration>,
+    shutdown: CancellationToken,
+}
+
+/// How waiting for the build process ended.
+enum Waited {
+    Exited(std::io::Result<ExitStatus>),
+    TimedOut(Duration),
+    ShutDown,
 }
 
 impl DocBuilder {
@@ -75,7 +84,16 @@ impl DocBuilder {
             wrapper,
             cratesio_index,
             timeout: None,
+            shutdown: CancellationToken::new(),
         }
+    }
+
+    /// Kill running builds, including all processes they started, when
+    /// `shutdown` is cancelled.
+    #[must_use]
+    pub fn with_shutdown(mut self, shutdown: CancellationToken) -> Self {
+        self.shutdown = shutdown;
+        self
     }
 
     /// Kill builds that run longer than `timeout`, including all processes
@@ -96,15 +114,17 @@ impl DocBuilder {
             OUTPUT_TAIL_BYTES,
         ));
 
-        let status = match self.timeout {
-            None => child.wait().await?,
-            Some(timeout) => {
-                let Ok(status) = tokio::time::timeout(timeout, child.wait()).await else {
-                    kill_build(&mut child).await;
-                    output.abort();
-                    return Err(DocsError::BuildTimeout(timeout.as_secs()));
-                };
-                status?
+        let status = match self.wait(&mut child).await {
+            Waited::Exited(status) => status?,
+            Waited::TimedOut(timeout) => {
+                kill_build(&mut child).await;
+                output.abort();
+                return Err(DocsError::BuildTimeout(timeout.as_secs()));
+            }
+            Waited::ShutDown => {
+                kill_build(&mut child).await;
+                output.abort();
+                return Err(DocsError::BuildStopped);
             }
         };
         let output = match tokio::time::timeout(OUTPUT_GRACE_PERIOD, output).await {
@@ -117,6 +137,20 @@ impl DocBuilder {
             Err(DocsError::CargoError(format!(
                 "docs build failed ({status}): {output}"
             )))
+        }
+    }
+
+    async fn wait(&self, child: &mut Child) -> Waited {
+        let timed_out = async {
+            match self.timeout {
+                Some(timeout) => tokio::time::sleep(timeout).await,
+                None => std::future::pending().await,
+            }
+        };
+        tokio::select! {
+            status = child.wait() => Waited::Exited(status),
+            () = timed_out => Waited::TimedOut(self.timeout.unwrap_or_default()),
+            () = self.shutdown.cancelled() => Waited::ShutDown,
         }
     }
 
@@ -139,8 +173,8 @@ impl DocBuilder {
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
-        // Run the build in its own process group, so a timeout kills the
-        // compiler and build scripts started by cargo as well.
+        // Run the build in its own process group, so a timeout or shutdown
+        // kills the compiler and build scripts started by cargo as well.
         #[cfg(unix)]
         command.process_group(0);
         command
@@ -320,13 +354,49 @@ mod tests {
 
         assert!(matches!(err, DocsError::BuildTimeout(_)));
         assert!(started.elapsed() < Duration::from_secs(10));
-        let pid = std::fs::read_to_string(&pid_file).unwrap();
+        assert_process_stops(&pid_file).await;
+    }
+
+    #[cfg(unix)]
+    async fn assert_process_stops(pid_file: &Path) {
+        let pid = std::fs::read_to_string(pid_file).unwrap();
         // The killed process may need a moment to be reaped.
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while process_is_alive(pid.trim()) && std::time::Instant::now() < deadline {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         assert!(!process_is_alive(pid.trim()));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shutdown_kills_build_and_its_child_processes() {
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("pid");
+        let shutdown = CancellationToken::new();
+        let builder = DocBuilder::new(
+            PathBuf::from("unused"),
+            vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "sleep 30 & echo $! > \"$0\"; wait".to_string(),
+                pid_file.display().to_string(),
+            ],
+            None,
+        )
+        .with_shutdown(shutdown.clone());
+
+        let started = std::time::Instant::now();
+        let build = tokio::spawn(async move { builder.build(Path::new("/tmp/my-crate")).await });
+        while std::fs::read_to_string(&pid_file).map_or(true, |pid| pid.trim().is_empty()) {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        shutdown.cancel();
+        let err = build.await.unwrap().unwrap_err();
+
+        assert!(matches!(err, DocsError::BuildStopped));
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert_process_stops(&pid_file).await;
     }
 
     #[test]

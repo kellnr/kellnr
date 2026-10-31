@@ -10,6 +10,7 @@ use cargo::core::compiler::UserIntent;
 use cargo::core::resolver::CliFeatures;
 use cargo::ops::{self, CompileOptions, DocOptions, OutputFormat};
 use flate2::read::GzDecoder;
+use kellnr_common::background_tasks::{BackgroundTasks, FirstRound};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
@@ -22,7 +23,8 @@ use kellnr_settings::{Settings, UrlPathPrefix};
 use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use tokio::fs::remove_dir_all;
-use tracing::{debug, error, warn};
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, warn};
 
 use crate::build_process::DocBuilder;
 
@@ -31,6 +33,7 @@ pub fn doc_extraction_queue(
     cs: Arc<KellnrCrateStorage>,
     docs_storage: Arc<DocsStorage>,
     settings: &Settings,
+    tasks: &BackgroundTasks,
 ) {
     let program = match std::env::current_exe() {
         Ok(program) => program,
@@ -47,8 +50,9 @@ pub fn doc_extraction_queue(
             .cratesio_index_override()
             .map(ToString::to_string),
     )
-    .with_timeout(Duration::from_secs(settings.docs.build_timeout_seconds));
-    let worker = DocQueueWorker {
+    .with_timeout(Duration::from_secs(settings.docs.build_timeout_seconds))
+    .with_shutdown(tasks.shutdown_token());
+    let worker = Arc::new(DocQueueWorker {
         db,
         cs,
         docs_storage,
@@ -56,16 +60,22 @@ pub fn doc_extraction_queue(
         builder,
         limits: ExtractLimits::from_max_docs_size(settings.docs.max_size),
         processed: Mutex::default(),
-    };
-
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(10)).await;
-            if let Err(e) = worker.process_queue().await {
-                error!("Rustdoc generation loop failed: {e}");
-            }
-        }
+        shutdown: tasks.shutdown_token(),
     });
+
+    tasks.spawn_periodic(
+        "docs build queue",
+        Duration::from_secs(10),
+        FirstRound::AfterInterval,
+        move || {
+            let worker = worker.clone();
+            async move {
+                if let Err(e) = worker.process_queue().await {
+                    error!("Rustdoc generation loop failed: {e}");
+                }
+            }
+        },
+    );
 }
 
 /// Turns queued crates into hosted rustdoc, one crate at a time.
@@ -79,6 +89,8 @@ struct DocQueueWorker {
     /// Queue entries that were processed but could not be removed from the
     /// queue. They are only removed, but not built again.
     processed: Mutex<HashSet<i64>>,
+    /// Stops the queue after the current entry and kills a running build.
+    shutdown: CancellationToken,
 }
 
 /// Whether a queue entry is done or should be processed again later.
@@ -94,6 +106,9 @@ impl DocQueueWorker {
         let mut built = HashSet::new();
 
         for entry in entries {
+            if self.shutdown.is_cancelled() {
+                break;
+            }
             // A crate version queued several times is only built once.
             let is_first = built.insert((entry.name.clone(), entry.version.clone()));
             let outcome = if is_first && !self.is_processed(entry.id) {
@@ -143,6 +158,12 @@ impl DocQueueWorker {
         let result = self
             .build_docs(entry, name, &original_name, version, contents)
             .await;
+        if matches!(result, Err(DocsError::BuildStopped)) {
+            info!(
+                "Stopped the docs build of {name} {version} on shutdown, it runs again after the restart"
+            );
+            return Outcome::Retry;
+        }
         // A failure afterwards must not trigger another build.
         self.processed.lock().unwrap().insert(entry.id);
         if let Err(e) = result {
@@ -518,6 +539,7 @@ mod tests {
             builder,
             limits: ExtractLimits::from_max_docs_size(1),
             processed: Mutex::default(),
+            shutdown: CancellationToken::new(),
         }
     }
 
@@ -563,6 +585,41 @@ mod tests {
         let builds = std::fs::read_to_string(&build_log).unwrap();
         assert_eq!(builds.lines().count(), 2, "builds: {builds}");
         assert!(paths.iter().all(|p| !p.exists()));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shutdown_stops_the_queue_and_keeps_the_stopped_build_queued() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let build_log = data_dir.path().join("builds.log");
+        let path = data_dir.path().join("queue");
+        std::fs::create_dir(&path).unwrap();
+        let queued = path.clone();
+        let mut db = MockDb::new();
+        db.expect_get_doc_queue().returning(move || {
+            Ok(vec![
+                queue_entry(0, "a", queued.clone()),
+                queue_entry(1, "b", queued.clone()),
+            ])
+        });
+        expect_original_names(&mut db);
+        db.expect_delete_doc_queue().never();
+        let shutdown = CancellationToken::new();
+        let builder = shell_builder("echo \"$3\" >> \"$0\"; sleep 30", &build_log)
+            .with_shutdown(shutdown.clone());
+        let mut worker = worker(db, data_dir.path(), &["a", "b"], builder).await;
+        worker.shutdown = shutdown.clone();
+
+        let run = tokio::spawn(async move { worker.process_queue().await });
+        while !build_log.exists() {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        shutdown.cancel();
+        run.await.unwrap().unwrap();
+
+        let builds = std::fs::read_to_string(&build_log).unwrap();
+        assert_eq!(builds.lines().count(), 1, "builds: {builds}");
+        assert!(!path.exists());
     }
 
     #[cfg(unix)]
