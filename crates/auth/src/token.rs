@@ -8,6 +8,7 @@ use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use kellnr_appstate::AppStateData;
+use kellnr_common::account_name::UserName;
 use kellnr_common::plain_token::PlainToken;
 use kellnr_common::token_cache::CachedTokenData;
 use kellnr_db::DbProvider;
@@ -26,7 +27,7 @@ use crate::password::{PasswordAuthError, authenticate_password};
 pub struct Token {
     /// The auth token, `None` for basic auth with a password
     pub value: Option<PlainToken>,
-    pub user: String,
+    pub user: UserName,
     pub is_admin: bool,
     pub is_read_only: bool,
 }
@@ -160,8 +161,10 @@ async fn authenticate_basic(
         });
     }
 
+    // An empty user name cannot exist, so it fails like a wrong password.
+    let user = UserName::new(user).map_err(|_| StatusCode::FORBIDDEN)?;
     let generation = cache.generation();
-    let user = authenticate_password(state.db.as_ref(), &state.login_throttle, user, pwd)
+    let user = authenticate_password(state.db.as_ref(), &state.login_throttle, &user, pwd)
         .await
         .map_err(|e| match e {
             PasswordAuthError::Throttled => StatusCode::TOO_MANY_REQUESTS,
@@ -283,7 +286,7 @@ mod tests {
     fn test_user() -> User {
         User {
             id: kellnr_db::UserId::new(1),
-            name: "test_user".to_string(),
+            name: UserName::new("test_user").unwrap(),
             pwd: String::new(),
             salt: String::new(),
             is_admin: false,
@@ -455,7 +458,7 @@ mod tests {
             .insert(
                 "cached_token".to_string(),
                 CachedTokenData {
-                    user: "cached_user".to_string(),
+                    user: UserName::new("cached_user").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 },
@@ -490,7 +493,7 @@ mod tests {
             .returning(|_| {
                 Ok(User {
                     id: kellnr_db::UserId::new(1),
-                    name: "db_user".to_string(),
+                    name: UserName::new("db_user").unwrap(),
                     pwd: String::new(),
                     salt: String::new(),
                     is_admin: false,
@@ -650,7 +653,10 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_authenticate_user()
-            .with(eq("test_user"), eq("correct_password"))
+            .with(
+                eq(UserName::new("test_user").unwrap()),
+                eq("correct_password"),
+            )
             .times(1)
             .returning(|_, _| Ok(test_user()));
 
@@ -719,12 +725,18 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_authenticate_user()
-            .with(eq("test_user"), eq("correct_password"))
+            .with(
+                eq(UserName::new("test_user").unwrap()),
+                eq("correct_password"),
+            )
             .times(1)
             .returning(|_, _| Ok(test_user()));
         mock_db
             .expect_authenticate_user()
-            .with(eq("test_user"), eq("wrong_password"))
+            .with(
+                eq(UserName::new("test_user").unwrap()),
+                eq("wrong_password"),
+            )
             .times(1)
             .returning(|_, _| Err(DbError::PasswordMismatch));
 
@@ -804,12 +816,15 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_authenticate_user()
-            .with(eq("test_user"), eq("correct_password"))
+            .with(
+                eq(UserName::new("test_user").unwrap()),
+                eq("correct_password"),
+            )
             .times(1)
             .returning(|_, _| Ok(test_user()));
         mock_db
             .expect_authenticate_user()
-            .with(eq("test_user"), eq("guess"))
+            .with(eq(UserName::new("test_user").unwrap()), eq("guess"))
             .times(1)
             .returning(|_, _| Err(DbError::PasswordMismatch));
 

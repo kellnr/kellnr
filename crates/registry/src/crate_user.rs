@@ -1,3 +1,4 @@
+use kellnr_common::account_name::UserName;
 use kellnr_db::UserId;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -5,7 +6,7 @@ use utoipa::ToSchema;
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateUser {
     pub id: UserId,
-    pub login: String,
+    pub login: UserName,
     pub name: Option<String>,
 }
 
@@ -22,7 +23,7 @@ impl From<Vec<CrateUser>> for CrateUserList {
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateUserRequest {
-    pub users: Vec<String>,
+    pub users: Vec<UserName>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

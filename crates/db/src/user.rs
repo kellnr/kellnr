@@ -1,3 +1,4 @@
+use kellnr_common::account_name::UserName;
 use kellnr_entity::user;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -8,7 +9,7 @@ use crate::UserId;
 pub struct User {
     #[serde(skip_serializing)]
     pub id: UserId,
-    pub name: String,
+    pub name: UserName,
     #[serde(skip_serializing)]
     pub pwd: String,
     #[serde(skip_serializing)]
@@ -53,7 +54,7 @@ impl From<user::Model> for User {
     fn from(u: user::Model) -> Self {
         Self {
             id: UserId::new(u.id),
-            name: u.name,
+            name: UserName::from_unchecked(u.name),
             pwd: u.pwd,
             salt: u.salt,
             is_admin: u.is_admin,

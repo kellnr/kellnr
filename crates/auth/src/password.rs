@@ -1,3 +1,4 @@
+use kellnr_common::account_name::UserName;
 use kellnr_common::login_throttle::LoginThrottle;
 use kellnr_db::{DbProvider, User};
 
@@ -15,10 +16,10 @@ pub enum PasswordAuthError {
 pub async fn authenticate_password(
     db: &dyn DbProvider,
     throttle: &LoginThrottle,
-    user: &str,
+    user: &UserName,
     pwd: &str,
 ) -> Result<User, PasswordAuthError> {
-    if !throttle.try_attempt(user).await {
+    if !throttle.try_attempt(user.as_str()).await {
         return Err(PasswordAuthError::Throttled);
     }
 
@@ -26,7 +27,7 @@ pub async fn authenticate_password(
         .authenticate_user(user, pwd)
         .await
         .map_err(|_| PasswordAuthError::Invalid)?;
-    throttle.succeeded(&user.name).await;
+    throttle.succeeded(user.name.as_str()).await;
     Ok(user)
 }
 
@@ -45,7 +46,7 @@ mod tests {
 
     fn user() -> User {
         User {
-            name: "user".to_string(),
+            name: UserName::new("user").unwrap(),
             ..User::default()
         }
     }
@@ -55,7 +56,8 @@ mod tests {
         let mut db = MockDb::new();
         db.expect_authenticate_user().returning(|_, _| Ok(user()));
 
-        let result = authenticate_password(&db, &throttle(3), "user", "pwd").await;
+        let result =
+            authenticate_password(&db, &throttle(3), &UserName::new("user").unwrap(), "pwd").await;
 
         assert_eq!(result.unwrap().name, "user");
     }
@@ -71,10 +73,13 @@ mod tests {
         let throttle = throttle(2);
 
         for _ in 0..2 {
-            let result = authenticate_password(&db, &throttle, "user", "wrong").await;
+            let result =
+                authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "wrong")
+                    .await;
             assert_eq!(result.unwrap_err(), PasswordAuthError::Invalid);
         }
-        let result = authenticate_password(&db, &throttle, "user", "right").await;
+        let result =
+            authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "right").await;
         assert_eq!(result.unwrap_err(), PasswordAuthError::Throttled);
     }
 
@@ -86,8 +91,10 @@ mod tests {
             .returning(|name, _| Err(DbError::UserNotFound(name.to_string())));
         let throttle = throttle(1);
 
-        let first = authenticate_password(&db, &throttle, "ghost", "pwd").await;
-        let second = authenticate_password(&db, &throttle, "ghost", "pwd").await;
+        let first =
+            authenticate_password(&db, &throttle, &UserName::new("ghost").unwrap(), "pwd").await;
+        let second =
+            authenticate_password(&db, &throttle, &UserName::new("ghost").unwrap(), "pwd").await;
 
         assert_eq!(first.unwrap_err(), PasswordAuthError::Invalid);
         assert_eq!(second.unwrap_err(), PasswordAuthError::Throttled);
@@ -104,14 +111,17 @@ mod tests {
             .returning(|_, _| Err(DbError::PasswordMismatch));
         let throttle = throttle(2);
 
-        let _ = authenticate_password(&db, &throttle, "user", "wrong").await;
-        authenticate_password(&db, &throttle, "user", "right")
+        let _ =
+            authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "wrong").await;
+        authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "right")
             .await
             .unwrap();
 
         // Both attempts are available again after the successful login.
         for _ in 0..2 {
-            let result = authenticate_password(&db, &throttle, "user", "wrong").await;
+            let result =
+                authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "wrong")
+                    .await;
             assert_eq!(result.unwrap_err(), PasswordAuthError::Invalid);
         }
     }

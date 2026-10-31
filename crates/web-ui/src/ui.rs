@@ -1082,6 +1082,7 @@ mod tests {
     use http_body_util::BodyExt;
     use hyper::{Request, header};
     use kellnr_appstate::{AppStateData, encode_cookies};
+    use kellnr_common::account_name::UserName;
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
     use kellnr_common::crate_dependents::CrateDependent;
     use kellnr_common::plain_token::PlainToken;
@@ -1336,7 +1337,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1360,7 +1361,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1424,7 +1425,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1546,7 +1547,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1737,7 +1738,7 @@ mod tests {
             .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1776,14 +1777,17 @@ mod tests {
             .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
             });
         mock_db
             .expect_is_owner()
-            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(UserName::new("user").unwrap()),
+            )
             .returning(move |_, _| Ok(false));
         let (mut settings, storage) = test_deps();
         settings.docs.enabled = true;
@@ -1817,22 +1821,25 @@ mod tests {
             .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
             });
         mock_db
             .expect_is_owner()
-            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(UserName::new("user").unwrap()),
+            )
             .returning(move |_, _| Ok(true));
         mock_db
             .expect_get_user()
-            .with(eq("user"))
+            .with(eq(UserName::new("user").unwrap()))
             .returning(move |_| {
                 Ok(User {
                     id: kellnr_db::UserId::new(0),
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     pwd: String::new(),
                     salt: String::new(),
                     is_admin: false,
@@ -1879,7 +1886,7 @@ mod tests {
             .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -1893,15 +1900,18 @@ mod tests {
             .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
         mock_db
             .expect_is_owner()
-            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(UserName::new("user").unwrap()),
+            )
             .returning(move |_, _| Ok(false));
         mock_db
             .expect_get_user()
-            .with(eq("user"))
+            .with(eq(UserName::new("user").unwrap()))
             .returning(move |_| {
                 Ok(User {
                     id: kellnr_db::UserId::new(0),
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     pwd: String::new(),
                     salt: String::new(),
                     is_admin: false,
@@ -1941,7 +1951,7 @@ mod tests {
             .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -1955,15 +1965,18 @@ mod tests {
             .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
         mock_db
             .expect_is_owner()
-            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(UserName::new("user").unwrap()),
+            )
             .returning(move |_, _| Ok(true));
         mock_db
             .expect_get_user()
-            .with(eq("user"))
+            .with(eq(UserName::new("user").unwrap()))
             .returning(move |_| {
                 Ok(User {
                     id: kellnr_db::UserId::new(0),
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     pwd: String::new(),
                     salt: String::new(),
                     is_admin: false,
@@ -2013,7 +2026,7 @@ mod tests {
             .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -2027,15 +2040,18 @@ mod tests {
             .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
         mock_db
             .expect_is_owner()
-            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(UserName::new("user").unwrap()),
+            )
             .returning(move |_, _| Ok(true));
         mock_db
             .expect_get_user()
-            .with(eq("user"))
+            .with(eq(UserName::new("user").unwrap()))
             .returning(move |_| {
                 Ok(User {
                     id: kellnr_db::UserId::new(0),
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     pwd: String::new(),
                     salt: String::new(),
                     is_admin: false,
@@ -2085,7 +2101,7 @@ mod tests {
             .with(eq(PlainToken::from("cookie")))
             .returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -2099,15 +2115,18 @@ mod tests {
             .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
         mock_db
             .expect_is_owner()
-            .with(eq(CanonicalName::try_from("foobar").unwrap()), eq("user"))
+            .with(
+                eq(CanonicalName::try_from("foobar").unwrap()),
+                eq(UserName::new("user").unwrap()),
+            )
             .returning(move |_, _| Ok(false));
         mock_db
             .expect_get_user()
-            .with(eq("user"))
+            .with(eq(UserName::new("user").unwrap()))
             .returning(move |_| {
                 Ok(User {
                     id: kellnr_db::UserId::new(0),
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     pwd: String::new(),
                     salt: String::new(),
                     is_admin: true,
@@ -2185,7 +2204,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -2216,7 +2235,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "user".to_string(),
+                name: UserName::new("user").unwrap(),
                 is_admin: false,
                 is_read_only: false,
             })
@@ -3018,11 +3037,14 @@ mod tests {
             .returning(|name| Ok(name.as_str() == "secret"));
         mock_db
             .expect_is_crate_user()
-            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("user"))
+            .with(
+                eq(CanonicalName::try_from("secret").unwrap()),
+                eq(UserName::new("user").unwrap()),
+            )
             .returning(|_, _| Ok(true));
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
         let user = MaybeUserOrToken {
-            name: "user".to_string(),
+            name: UserName::new("user").unwrap(),
             is_admin: false,
             is_read_only: false,
         };
@@ -3141,7 +3163,7 @@ mod tests {
         if let Some((name, is_admin)) = session_user {
             mock_db.expect_validate_session().returning(move |_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: name.to_string(),
+                    name: UserName::new(name).unwrap(),
                     is_admin,
                     is_read_only: false,
                 })
@@ -3198,7 +3220,10 @@ mod tests {
         let mut mock_db = restricted_crate_mock(Some(("user", false)));
         mock_db
             .expect_is_crate_user()
-            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("user"))
+            .with(
+                eq(CanonicalName::try_from("secret").unwrap()),
+                eq(UserName::new("user").unwrap()),
+            )
             .returning(|_, _| Ok(true));
         assert_eq!(StatusCode::OK, get_secret_crate_data(mock_db, true).await);
     }
@@ -3217,7 +3242,7 @@ mod tests {
     ) -> StatusCode {
         mock_db.expect_validate_session().returning(move |_| {
             Ok(kellnr_db::SessionInfo {
-                name: name.to_string(),
+                name: UserName::new(name).unwrap(),
                 is_admin,
                 is_read_only: false,
             })
@@ -3251,7 +3276,7 @@ mod tests {
                 eq(10),
                 eq(0),
                 eq(false),
-                eq(CrateVisibility::User("user".to_string())),
+                eq(CrateVisibility::User(UserName::new("user").unwrap())),
                 eq(CrateSort::Name),
                 eq(CrateTagFilter::default()),
             )
@@ -3289,7 +3314,7 @@ mod tests {
 
     #[tokio::test]
     async fn statistic_user_session_hides_inaccessible_crate_names() {
-        let visibility = CrateVisibility::User("user".to_string());
+        let visibility = CrateVisibility::User(UserName::new("user").unwrap());
         let mut mock_db = MockDb::new();
         mock_db.expect_get_total_unique_crates().returning(|| Ok(0));
         mock_db

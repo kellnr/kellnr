@@ -1137,6 +1137,7 @@ mod tests {
     use axum_extra::extract::cookie::Key;
     use bytes::Bytes;
     use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
+    use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{
@@ -1224,7 +1225,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1255,7 +1256,7 @@ mod tests {
             .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -1304,7 +1305,7 @@ mod tests {
             .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -1337,7 +1338,7 @@ mod tests {
             .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -1367,7 +1368,7 @@ mod tests {
             .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -1397,7 +1398,7 @@ mod tests {
             .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -1432,7 +1433,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1488,7 +1489,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1535,7 +1536,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1588,7 +1589,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1647,7 +1648,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1725,7 +1726,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1799,7 +1800,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1877,7 +1878,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1915,7 +1916,7 @@ mod tests {
             .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -1947,7 +1948,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -1990,7 +1991,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -2050,7 +2051,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -2717,7 +2718,7 @@ mod tests {
             .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })

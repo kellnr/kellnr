@@ -4,6 +4,7 @@ use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum_extra::extract::PrivateCookieJar;
 use kellnr_appstate::AppStateData;
+use kellnr_common::account_name::UserName;
 use kellnr_common::plain_token::PlainToken;
 use kellnr_db::SessionInfo;
 use kellnr_db::error::DbError;
@@ -14,7 +15,7 @@ use crate::token;
 
 #[derive(Debug, Clone)]
 pub struct MaybeUser {
-    pub name: String,
+    pub name: UserName,
     pub is_admin: bool,
     pub is_read_only: bool,
 }

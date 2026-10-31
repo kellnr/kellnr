@@ -4,6 +4,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use kellnr_appstate::DbState;
 use kellnr_auth::maybe_user::MaybeUser;
+use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_db::DbProvider;
@@ -100,7 +101,7 @@ pub async fn list_users(
 )]
 pub async fn add_user(
     user: MaybeUser,
-    Path((crate_name, name)): Path<(OriginalName, String)>,
+    Path((crate_name, name)): Path<(OriginalName, UserName)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
     let crate_name = crate_name.to_canonical();
@@ -133,7 +134,7 @@ pub async fn add_user(
 )]
 pub async fn delete_user(
     user: MaybeUser,
-    Path((crate_name, name)): Path<(OriginalName, String)>,
+    Path((crate_name, name)): Path<(OriginalName, UserName)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
     let crate_name = crate_name.to_canonical();
@@ -192,7 +193,7 @@ pub async fn list_groups(
 )]
 pub async fn add_group(
     user: MaybeUser,
-    Path((crate_name, name)): Path<(OriginalName, String)>,
+    Path((crate_name, name)): Path<(OriginalName, GroupName)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
     let crate_name = crate_name.to_canonical();
@@ -221,7 +222,7 @@ pub async fn add_group(
 )]
 pub async fn delete_group(
     user: MaybeUser,
-    Path((crate_name, name)): Path<(OriginalName, String)>,
+    Path((crate_name, name)): Path<(OriginalName, GroupName)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
     let crate_name = crate_name.to_canonical();
@@ -315,19 +316,19 @@ mod tests {
         let mut db = MockDb::new();
         db.expect_validate_session().returning(move |_| {
             Ok(SessionInfo {
-                name: name.to_string(),
+                name: UserName::new(name).unwrap(),
                 is_admin,
                 is_read_only,
             })
         });
         db.expect_is_owner()
-            .with(eq(crate_name()), eq(name))
+            .with(eq(crate_name()), eq(UserName::new(name).unwrap()))
             .returning(move |_, _| Ok(is_owner));
         db.expect_get_crate_users().returning(|_| Ok(vec![]));
         db.expect_get_crate_groups().returning(|_| Ok(vec![]));
         db.expect_get_user().returning(|name| {
             Ok(User {
-                name: name.to_string(),
+                name: name.clone(),
                 ..User::default()
             })
         });

@@ -3,6 +3,7 @@ use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use crate_meta::CrateMeta;
+use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::CrateData;
 use kellnr_common::crate_dependents::CrateDependents;
@@ -54,7 +55,7 @@ pub enum CrateVisibility {
     All,
     /// Unrestricted crates and the restricted crates the user owns or may
     /// access as crate user or crate group member.
-    User(String),
+    User(UserName),
     /// Unrestricted crates only, used for anonymous callers.
     Unrestricted,
 }
@@ -90,7 +91,7 @@ impl CrateTagFilter {
 /// Authenticated user and privileges resolved from a valid session cookie.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionInfo {
-    pub name: String,
+    pub name: UserName,
     pub is_admin: bool,
     pub is_read_only: bool,
 }
@@ -182,7 +183,7 @@ pub trait DbProvider: Send + Sync {
         &self,
         visibility: &CrateVisibility,
     ) -> DbResult<Option<(OriginalName, Version)>>;
-    async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User>;
+    async fn authenticate_user(&self, name: &UserName, pwd: &str) -> DbResult<User>;
     async fn increase_download_counter(
         &self,
         crate_name: &CanonicalName,
@@ -209,51 +210,52 @@ pub trait DbProvider: Send + Sync {
     /// Delete all sessions that have outlived the configured session age.
     /// Returns the number of rows removed.
     async fn delete_expired_sessions(&self) -> DbResult<u64>;
-    async fn add_session_token(&self, name: &str, session_token: &PlainToken) -> DbResult<()>;
+    async fn add_session_token(&self, name: &UserName, session_token: &PlainToken) -> DbResult<()>;
     /// Delete all sessions of a user. Returns the number of rows removed.
-    async fn delete_user_sessions(&self, user_name: &str) -> DbResult<u64>;
+    async fn delete_user_sessions(&self, user_name: &UserName) -> DbResult<u64>;
     /// Delete all sessions of a user except `keep_session_token`. Returns the
     /// number of rows removed.
     async fn delete_other_user_sessions(
         &self,
-        user_name: &str,
+        user_name: &UserName,
         keep_session_token: &PlainToken,
     ) -> DbResult<u64>;
-    async fn add_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()>;
+    async fn add_crate_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<()>;
     /// Adds `owner` to the owners of the crate. Adding an existing owner
     /// succeeds without a change.
-    async fn add_owner(&self, crate_name: &CanonicalName, owner: &str) -> DbResult<()>;
+    async fn add_owner(&self, crate_name: &CanonicalName, owner: &UserName) -> DbResult<()>;
     async fn is_download_restricted(&self, crate_name: &CanonicalName) -> DbResult<bool>;
     async fn change_download_restricted(
         &self,
         crate_name: &CanonicalName,
         restricted: bool,
     ) -> DbResult<()>;
-    async fn is_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>;
-    async fn is_owner(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>;
+    async fn is_crate_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<bool>;
+    async fn is_owner(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<bool>;
     async fn get_crate_id(&self, crate_name: &CanonicalName) -> DbResult<Option<CrateId>>;
     async fn get_crate_owners(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>>;
     async fn get_crate_users(&self, crate_name: &CanonicalName) -> DbResult<Vec<User>>;
     async fn get_crate_versions(&self, crate_name: &CanonicalName) -> DbResult<Vec<Version>>;
     async fn delete_session_token(&self, session_token: &PlainToken) -> DbResult<()>;
-    async fn delete_user(&self, user_name: &str) -> DbResult<()>;
-    async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()>;
-    async fn change_read_only_state(&self, user_name: &str, state: bool) -> DbResult<()>;
-    async fn change_admin_state(&self, user_name: &str, state: bool) -> DbResult<()>;
+    async fn delete_user(&self, user_name: &UserName) -> DbResult<()>;
+    async fn change_pwd(&self, user_name: &UserName, new_pwd: &str) -> DbResult<()>;
+    async fn change_read_only_state(&self, user_name: &UserName, state: bool) -> DbResult<()>;
+    async fn change_admin_state(&self, user_name: &UserName, state: bool) -> DbResult<()>;
     async fn crate_version_exists(&self, crate_id: CrateId, version: &Version) -> DbResult<bool>;
     async fn get_max_version_from_id(&self, crate_id: CrateId) -> DbResult<Version>;
     async fn get_max_version_from_name(&self, crate_name: &CanonicalName) -> DbResult<Version>;
     async fn update_max_version(&self, crate_id: CrateId, version: &Version) -> DbResult<()>;
-    async fn add_auth_token(&self, name: &str, token: &PlainToken, user: &str) -> DbResult<()>;
+    async fn add_auth_token(&self, name: &str, token: &PlainToken, user: &UserName)
+    -> DbResult<()>;
     async fn get_user_from_token(&self, token: &PlainToken) -> DbResult<User>;
     /// Name of the auth token, `None` if there is no such token.
     async fn get_auth_token_name(&self, token: &PlainToken) -> DbResult<Option<String>>;
-    async fn get_user(&self, name: &str) -> DbResult<User>;
-    async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>>;
+    async fn get_user(&self, name: &UserName) -> DbResult<User>;
+    async fn get_auth_tokens(&self, user_name: &UserName) -> DbResult<Vec<AuthToken>>;
     /// Deletes the token `id` of the user, [`DbError::TokenNotFound`] if the
     /// user has no such token.
-    async fn delete_auth_token(&self, user_name: &str, id: AuthTokenId) -> DbResult<()>;
-    async fn delete_owner(&self, crate_name: &CanonicalName, owner: &str) -> DbResult<()>;
+    async fn delete_auth_token(&self, user_name: &UserName, id: AuthTokenId) -> DbResult<()>;
+    async fn delete_owner(&self, crate_name: &CanonicalName, owner: &UserName) -> DbResult<()>;
     /// Removes all `owners` from the crate in one transaction. Nothing is
     /// removed if one of them is not an owner ([`DbError::OwnerNotFound`]) or
     /// if no owner would remain and `allow_ownerless` is false
@@ -261,25 +263,34 @@ pub trait DbProvider: Send + Sync {
     async fn delete_owners(
         &self,
         crate_name: &CanonicalName,
-        owners: &[String],
+        owners: &[UserName],
         allow_ownerless: bool,
     ) -> DbResult<()>;
-    async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()>;
-    async fn add_user(&self, name: &str, pwd: &str, flags: UserFlags) -> DbResult<()>;
+    async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<()>;
+    async fn add_user(&self, name: &UserName, pwd: &str, flags: UserFlags) -> DbResult<()>;
     async fn get_users(&self) -> DbResult<Vec<User>>;
-    async fn add_group(&self, name: &str) -> DbResult<()>;
-    async fn get_group(&self, name: &str) -> DbResult<Group>;
+    async fn add_group(&self, name: &GroupName) -> DbResult<()>;
+    async fn get_group(&self, name: &GroupName) -> DbResult<Group>;
     async fn get_groups(&self) -> DbResult<Vec<Group>>;
-    async fn delete_group(&self, name: &str) -> DbResult<()>;
-    async fn add_group_user(&self, group_name: &str, user: &str) -> DbResult<()>;
-    async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()>;
-    async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>>;
-    async fn is_group_user(&self, group_name: &str, user: &str) -> DbResult<bool>;
-    async fn add_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()>;
-    async fn delete_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()>;
+    async fn delete_group(&self, name: &GroupName) -> DbResult<()>;
+    async fn add_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<()>;
+    async fn delete_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<()>;
+    async fn get_group_users(&self, group_name: &GroupName) -> DbResult<Vec<User>>;
+    async fn is_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<bool>;
+    async fn add_crate_group(&self, crate_name: &CanonicalName, group: &GroupName) -> DbResult<()>;
+    async fn delete_crate_group(
+        &self,
+        crate_name: &CanonicalName,
+        group: &GroupName,
+    ) -> DbResult<()>;
     async fn get_crate_groups(&self, crate_name: &CanonicalName) -> DbResult<Vec<Group>>;
-    async fn is_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<bool>;
-    async fn is_crate_group_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>;
+    async fn is_crate_group(&self, crate_name: &CanonicalName, group: &GroupName)
+    -> DbResult<bool>;
+    async fn is_crate_group_user(
+        &self,
+        crate_name: &CanonicalName,
+        user: &UserName,
+    ) -> DbResult<bool>;
     async fn get_total_unique_crates(&self) -> DbResult<u64>;
     async fn get_total_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_downloads(&self) -> DbResult<u64>;
@@ -347,7 +358,7 @@ pub trait DbProvider: Send + Sync {
         cksum: &str,
         size: i64,
         created: &DateTime<Utc>,
-        owner: &str,
+        owner: &UserName,
         token_name: Option<String>,
     ) -> DbResult<CrateId>;
     async fn update_docs_link(
@@ -439,7 +450,7 @@ pub trait DbProvider: Send + Sync {
     /// Create a new user from `OAuth2` authentication and link their identity
     async fn create_oauth2_user(
         &self,
-        username: &str,
+        username: &UserName,
         issuer: &str,
         subject: &str,
         email: Option<String>,
@@ -471,7 +482,7 @@ pub trait DbProvider: Send + Sync {
     async fn cleanup_expired_oauth2_states(&self) -> DbResult<u64>;
 
     /// Check if username is available (for `OAuth2` auto-provisioning)
-    async fn is_username_available(&self, username: &str) -> DbResult<bool>;
+    async fn is_username_available(&self, username: &UserName) -> DbResult<bool>;
 
     // Toolchain distribution methods
     /// Add a new toolchain release
@@ -582,7 +593,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn authenticate_user(&self, _name: &str, _pwd: &str) -> DbResult<User> {
+            async fn authenticate_user(&self, _name: &UserName, _pwd: &str) -> DbResult<User> {
                 unimplemented!()
             }
 
@@ -628,23 +639,23 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_session_token(&self, _name: &str, _session_token: &PlainToken) -> DbResult<()> {
+            async fn add_session_token(&self, _name: &UserName, _session_token: &PlainToken) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn delete_user_sessions(&self, _user_name: &str) -> DbResult<u64> {
+            async fn delete_user_sessions(&self, _user_name: &UserName) -> DbResult<u64> {
                 unimplemented!()
             }
 
-            async fn delete_other_user_sessions(&self, _user_name: &str, _keep_session_token: &PlainToken) -> DbResult<u64> {
+            async fn delete_other_user_sessions(&self, _user_name: &UserName, _keep_session_token: &PlainToken) -> DbResult<u64> {
                 unimplemented!()
             }
 
-            async fn add_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()> {
+            async fn add_crate_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn add_owner(&self, _crate_name: &CanonicalName, _owner: &str) -> DbResult<()> {
+            async fn add_owner(&self, _crate_name: &CanonicalName, _owner: &UserName) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -660,11 +671,11 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn is_crate_user(&self, _crate_name: &CanonicalName, _user: &str) -> DbResult<bool> {
+            async fn is_crate_user(&self, _crate_name: &CanonicalName, _user: &UserName) -> DbResult<bool> {
                 unimplemented!()
             }
 
-            async fn is_owner(&self, _crate_name: &CanonicalName, _user: &str) -> DbResult<bool> {
+            async fn is_owner(&self, _crate_name: &CanonicalName, _user: &UserName) -> DbResult<bool> {
                 unimplemented!()
             }
 
@@ -688,19 +699,19 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn delete_user(&self, _user_name: &str) -> DbResult<()> {
+            async fn delete_user(&self, _user_name: &UserName) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn change_pwd(&self, _user_name: &str, _new_pwd: &str) -> DbResult<()> {
+            async fn change_pwd(&self, _user_name: &UserName, _new_pwd: &str) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn change_read_only_state(&self, _user_name: &str, _state: bool) -> DbResult<()> {
+            async fn change_read_only_state(&self, _user_name: &UserName, _state: bool) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn change_admin_state(&self, _user_name: &str, _state: bool) -> DbResult<()> {
+            async fn change_admin_state(&self, _user_name: &UserName, _state: bool) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -720,7 +731,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_auth_token(&self, _name: &str, _token: &PlainToken, _user: &str) -> DbResult<()> {
+            async fn add_auth_token(&self, _name: &str, _token: &PlainToken, _user: &UserName) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -732,31 +743,31 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn get_user(&self, _name: &str) -> DbResult<User> {
+            async fn get_user(&self, _name: &UserName) -> DbResult<User> {
                 unimplemented!()
             }
 
-            async fn get_auth_tokens(&self, _user_name: &str) -> DbResult<Vec<AuthToken>> {
+            async fn get_auth_tokens(&self, _user_name: &UserName) -> DbResult<Vec<AuthToken>> {
                 unimplemented!()
             }
 
-            async fn delete_auth_token(&self, _user_name: &str, _id: AuthTokenId) -> DbResult<()> {
+            async fn delete_auth_token(&self, _user_name: &UserName, _id: AuthTokenId) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn delete_owner(&self, _crate_name: &CanonicalName, _owner: &str) -> DbResult<()> {
+            async fn delete_owner(&self, _crate_name: &CanonicalName, _owner: &UserName) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn delete_owners(&self, _crate_name: &CanonicalName, _owners: &[String], _allow_ownerless: bool) -> DbResult<()> {
+            async fn delete_owners(&self, _crate_name: &CanonicalName, _owners: &[UserName], _allow_ownerless: bool) -> DbResult<()> {
                 unimplemented!()
             }
 
-            async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()>{
+            async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<()>{
                 unimplemented!()
             }
 
-            async fn add_user(&self, _name: &str, _pwd: &str, _flags: UserFlags) -> DbResult<()> {
+            async fn add_user(&self, _name: &UserName, _pwd: &str, _flags: UserFlags) -> DbResult<()> {
                 unimplemented!()
             }
 
@@ -848,7 +859,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_crate(&self, pub_metadata: &PublishMetadata, sha256: &str, size: i64, created: &DateTime<Utc>, owner: &str, token_name: Option<String>) -> DbResult<CrateId> {
+            async fn add_crate(&self, pub_metadata: &PublishMetadata, sha256: &str, size: i64, created: &DateTime<Utc>, owner: &UserName, token_name: Option<String>) -> DbResult<CrateId> {
                 unimplemented!()
             }
 
@@ -900,45 +911,45 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn add_group(&self, name: &str) -> DbResult<()> {
+            async fn add_group(&self, name: &GroupName) -> DbResult<()> {
                         unimplemented!()
             }
-            async fn get_group(&self, name: &str) -> DbResult<Group>{
+            async fn get_group(&self, name: &GroupName) -> DbResult<Group>{
                         unimplemented!()
             }
             async fn get_groups(&self) -> DbResult<Vec<Group>>{
                         unimplemented!()
             }
-            async fn delete_group(&self, name: &str) -> DbResult<()>{
+            async fn delete_group(&self, name: &GroupName) -> DbResult<()>{
                         unimplemented!()
             }
-            async fn add_group_user(&self, group_name: &str, user: &str) -> DbResult<()>{
+            async fn add_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<()>{
                         unimplemented!()
             }
-            async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()>{
+            async fn delete_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<()>{
                         unimplemented!()
             }
-            async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>> {
+            async fn get_group_users(&self, group_name: &GroupName) -> DbResult<Vec<User>> {
                 unimplemented!()
             }
-            async fn is_group_user(&self, group_name: &str, user: &str) -> DbResult<bool> {
+            async fn is_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<bool> {
                 unimplemented!()
             }
 
-            async fn add_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()>{
+            async fn add_crate_group(&self, crate_name: &CanonicalName, group: &GroupName) -> DbResult<()>{
                 unimplemented!()
             }
-            async fn delete_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()>{
+            async fn delete_crate_group(&self, crate_name: &CanonicalName, group: &GroupName) -> DbResult<()>{
                 unimplemented!()
             }
             async fn get_crate_groups(&self, crate_name: &CanonicalName) -> DbResult<Vec<Group>>{
                 unimplemented!()
             }
-            async fn is_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<bool>{
+            async fn is_crate_group(&self, crate_name: &CanonicalName, group: &GroupName) -> DbResult<bool>{
                 unimplemented!()
             }
 
-            async fn is_crate_group_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool>{
+            async fn is_crate_group_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<bool>{
                 unimplemented!()
             }
 
@@ -984,7 +995,7 @@ pub mod mock {
 
             async fn create_oauth2_user(
                 &self,
-                username: &str,
+                username: &UserName,
                 issuer: &str,
                 subject: &str,
                 email: Option<String>,
@@ -1023,7 +1034,7 @@ pub mod mock {
                 unimplemented!()
             }
 
-            async fn is_username_available(&self, username: &str) -> DbResult<bool> {
+            async fn is_username_available(&self, username: &UserName) -> DbResult<bool> {
                 unimplemented!()
             }
 

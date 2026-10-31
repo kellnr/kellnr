@@ -269,6 +269,7 @@ mod tests {
     use axum_extra::extract::cookie::Key;
     use bytes::Bytes;
     use kellnr_appstate::{TEST_KEY, encode_cookies};
+    use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_common::version::Version;
@@ -305,7 +306,7 @@ mod tests {
             .returning(|_| Ok(true));
         db.expect_get_user_from_token().returning(|token| {
             Ok(User {
-                name: token.expose_secret().to_string(),
+                name: UserName::new(token.expose_secret()).unwrap(),
                 ..User::default()
             })
         });
@@ -431,7 +432,7 @@ mod tests {
             .with(eq(PlainToken::from("admin-session")))
             .returning(|_| {
                 Ok(SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })

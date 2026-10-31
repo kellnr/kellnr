@@ -138,6 +138,7 @@ mod tests {
     use axum::routing::get;
     use http_body_util::BodyExt;
     use kellnr_appstate::AppStateData;
+    use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::{Protocol, Settings};
@@ -331,13 +332,13 @@ mod tests {
             .with(eq(PlainToken::from("crate-user-token")))
             .returning(|_| {
                 Ok(kellnr_db::User {
-                    name: "crate_user".to_string(),
+                    name: UserName::new("crate_user").unwrap(),
                     ..kellnr_db::User::default()
                 })
             });
         mock_db
             .expect_is_crate_user()
-            .with(eq(secret), eq("crate_user"))
+            .with(eq(secret), eq(UserName::new("crate_user").unwrap()))
             .returning(|_, _| Ok(true));
         mock_db
             .expect_get_prefetch_data()
