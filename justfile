@@ -137,8 +137,25 @@ test-ui-webkit:
 test-ui-headed:
     @echo "UI tests with Docker are not supported on Windows yet"
 
+# The PostgreSQL tests share one container (found via KELLNR_TEST_PG_ADDR),
+# which is removed afterwards, also if tests fail. Same image and credentials
+# as kellnr_test_db::image::Postgres.
 [unix]
 test-docker: npm-build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{ has_docker }}" = "true" ]; then
+        container=$(docker run -d --rm -e POSTGRES_DB=kellnr -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=admin -p 127.0.0.1::5432 postgres:17-alpine)
+        trap 'docker rm -f "$container" > /dev/null' EXIT
+        # Connecting over TCP only works once the server is up, not while the
+        # image initializes the database with a server on the unix socket only.
+        for attempt in $(seq 300); do
+            docker exec -e PGPASSWORD=admin "$container" psql -h 127.0.0.1 -U admin -d kellnr -c 'SELECT 1' > /dev/null 2>&1 && break
+            [ "$attempt" = 300 ] && { echo "ERROR: PostgreSQL test container did not start"; exit 1; }
+            sleep 0.2
+        done
+        export KELLNR_TEST_PG_ADDR=$(docker port "$container" 5432/tcp | head -n 1)
+    fi
     {{ test_docker }}
 
 [windows]
