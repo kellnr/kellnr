@@ -381,89 +381,6 @@ async fn get_max_version_from_name(test_db: &kellnr_db::Database) {
 }
 
 #[db_test]
-async fn get_crate_summaries_works(test_db: &kellnr_db::Database) {
-    let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
-    let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 11, 22, 12).unwrap();
-    test_add_crate(
-        test_db,
-        "acrate",
-        "admin",
-        &Version::try_from("1.1.0").unwrap(),
-        &created1,
-    )
-    .await
-    .unwrap();
-    test_add_crate(
-        test_db,
-        "bcrate",
-        "admin",
-        &Version::try_from("1.1.0").unwrap(),
-        &created2,
-    )
-    .await
-    .unwrap();
-    test_add_crate(
-        test_db,
-        "acrate",
-        "admin",
-        &Version::try_from("1.2.0").unwrap(),
-        &created2,
-    )
-    .await
-    .unwrap();
-    test_add_crate(
-        test_db,
-        "bcrate",
-        "admin",
-        &Version::try_from("1.2.0").unwrap(),
-        &created1,
-    )
-    .await
-    .unwrap();
-
-    let crates = test_db.get_crate_summaries().await.unwrap();
-
-    assert_eq!(2, crates.len());
-    assert_eq!("acrate", crates[0].name);
-    assert_eq!("1.2.0", crates[0].max_version);
-    assert_eq!(0, crates[0].total_downloads);
-    assert_eq!("2020-10-08 11:22:12", crates[0].last_updated);
-    let created1 = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
-    let created2 = Utc.with_ymd_and_hms(2020, 10, 8, 11, 22, 12).unwrap();
-    test_add_crate(
-        test_db,
-        "acrate",
-        "admin",
-        &Version::try_from("1.3.0").unwrap(),
-        &created2,
-    )
-    .await
-    .unwrap();
-    test_add_crate(
-        test_db,
-        "bcrate",
-        "admin",
-        &Version::try_from("1.3.0").unwrap(),
-        &created1,
-    )
-    .await
-    .unwrap();
-
-    let crates = test_db.get_crate_summaries().await.unwrap();
-
-    assert_eq!(2, crates.len());
-    assert_eq!("acrate", crates[0].name);
-    assert_eq!("1.3.0", crates[0].max_version);
-    assert_eq!(0, crates[0].total_downloads);
-    assert_eq!("2020-10-08 11:22:12", crates[0].last_updated);
-
-    assert_eq!("bcrate", crates[1].name);
-    assert_eq!("1.3.0", crates[1].max_version);
-    assert_eq!(0, crates[1].total_downloads);
-    assert_eq!("2020-10-07 13:18:00", crates[1].last_updated);
-}
-
-#[db_test]
 async fn get_crate_versions_returns_all_versions(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_add_crate(
@@ -635,34 +552,6 @@ async fn is_owner_false(test_db: &kellnr_db::Database) {
             )
             .await
             .unwrap()
-    );
-}
-
-#[db_test]
-async fn delete_owner_valid_owner(test_db: &kellnr_db::Database) {
-    test_add_crate(
-        test_db,
-        "mycrate",
-        "admin",
-        &Version::try_from("1.0.0").unwrap(),
-        &Utc::now(),
-    )
-    .await
-    .unwrap();
-
-    test_db
-        .delete_owner(
-            &CanonicalName::try_from("mycrate").unwrap(),
-            &UserName::new("admin").unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert!(
-        test_db
-            .get_crate_owners(&CanonicalName::try_from("mycrate").unwrap())
-            .await
-            .is_ok()
     );
 }
 

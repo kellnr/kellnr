@@ -34,8 +34,6 @@ pub enum DbError {
     FailedToCountCrateVersions,
     #[error("Failed to count total crate downloads")]
     FailedToCountTotalDownloads,
-    #[error("Failed to get crate summary for crate {0}")]
-    FailedToGetCrateSummary(String),
     #[error("Token not found")]
     TokenNotFound,
     #[error("Session not found")]

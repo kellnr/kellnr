@@ -55,8 +55,8 @@ use crate::provider::{
 };
 use crate::tables::init_database;
 use crate::{
-    AuthToken, AuthTokenId, ConString, CrateId, CrateMeta, CrateSummary, DbProvider, DocQueueEntry,
-    Group, ToolchainTargetStatus, User, UserFlags, UserId,
+    AuthToken, AuthTokenId, ConString, CrateId, CrateMeta, DbProvider, DocQueueEntry, Group,
+    ToolchainTargetStatus, User, UserFlags, UserId,
 };
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
@@ -781,24 +781,6 @@ impl Database {
             .ok_or(DbError::WebhookNotFound)
     }
 
-    async fn get_owner_by_crate_and_user(
-        &self,
-        crate_name: &CanonicalName,
-        owner_name: &UserName,
-    ) -> DbResult<Option<owner::Model>> {
-        owner::Entity::find()
-            .join(JoinType::InnerJoin, owner::Relation::Krate.def())
-            .join(JoinType::InnerJoin, owner::Relation::User.def())
-            .filter(
-                Cond::all()
-                    .add(krate::Column::Name.eq(crate_name))
-                    .add(user::Column::Name.eq(owner_name)),
-            )
-            .one(&self.db_con)
-            .await
-            .map_err(Into::into)
-    }
-
     async fn delete_or_not_found<M, A>(&self, model: Option<M>, err: DbError) -> DbResult<()>
     where
         M: ModelTrait + sea_orm::IntoActiveModel<A>,
@@ -1423,19 +1405,6 @@ impl DbProvider for Database {
         Ok(v)
     }
 
-    async fn update_max_version(&self, crate_id: CrateId, version: &Version) -> DbResult<()> {
-        let krate = krate::Entity::find_by_id(crate_id.get())
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::CrateNotFoundWithId(crate_id.get()))?;
-
-        let mut k: krate::ActiveModel = krate.into();
-        k.max_version = Set(version.to_string());
-        k.update(&self.db_con).await?;
-
-        Ok(())
-    }
-
     async fn add_auth_token(
         &self,
         name: &str,
@@ -1495,10 +1464,6 @@ impl DbProvider for Database {
         Ok(User::from(self.get_user_model(name).await?))
     }
 
-    async fn get_group(&self, name: &GroupName) -> DbResult<Group> {
-        Ok(Group::from(self.get_group_model(name).await?))
-    }
-
     async fn get_auth_token_name(&self, token: &PlainToken) -> DbResult<Option<String>> {
         Ok(auth_token::Entity::find()
             .filter(auth_token::Column::Token.eq(hash_token(token.expose_secret())))
@@ -1527,12 +1492,6 @@ impl DbProvider for Database {
             return Err(DbError::TokenNotFound);
         }
         Ok(())
-    }
-
-    async fn delete_owner(&self, crate_name: &CanonicalName, owner: &UserName) -> DbResult<()> {
-        let model = self.get_owner_by_crate_and_user(crate_name, owner).await?;
-        self.delete_or_not_found(model, DbError::OwnerNotFound(owner.to_string()))
-            .await
     }
 
     async fn delete_owners(
@@ -1712,15 +1671,6 @@ impl DbProvider for Database {
             .collect())
     }
 
-    async fn get_crate_summaries(&self) -> DbResult<Vec<CrateSummary>> {
-        let krates = krate::Entity::find()
-            .order_by(krate::Column::Name, Order::Asc)
-            .all(&self.db_con)
-            .await?;
-
-        Ok(krates.into_iter().map(CrateSummary::from).collect())
-    }
-
     async fn add_doc_queue(
         &self,
         krate: &OriginalName,
@@ -1859,21 +1809,6 @@ impl DbProvider for Database {
             .collect();
 
         Ok(crate_meta)
-    }
-
-    async fn update_last_updated(&self, id: CrateId, last_updated: &DateTime<Utc>) -> DbResult<()> {
-        let krate = krate::Entity::find_by_id(id.get())
-            .one(&self.db_con)
-            .await?
-            .ok_or(DbError::CrateNotFoundWithId(id.get()))?;
-
-        let date = last_updated.format(DB_DATE_FORMAT).to_string();
-
-        let mut krate: krate::ActiveModel = krate.into();
-        krate.last_updated = Set(date);
-        krate.update(&self.db_con).await?;
-
-        Ok(())
     }
 
     async fn search_in_crate_name_and_description(
@@ -2309,25 +2244,6 @@ impl DbProvider for Database {
         cm.documentation = Set(Some(docs_link.to_string()));
         cm.update(&self.db_con).await?;
         Ok(())
-    }
-
-    async fn add_crate_metadata(
-        &self,
-        pub_metadata: &PublishMetadata,
-        size: i64,
-        created: &str,
-        crate_id: CrateId,
-    ) -> DbResult<()> {
-        operations::add_crate_metadata(
-            &self.db_con,
-            pub_metadata,
-            size,
-            created,
-            crate_id.get(),
-            None,
-            None,
-        )
-        .await
     }
 
     async fn get_prefetch_data(&self, crate_name: &OriginalName) -> DbResult<Prefetch> {
@@ -2845,30 +2761,6 @@ impl DbProvider for Database {
             is_read_only: flags.read_only,
             created,
         })
-    }
-
-    async fn link_oauth2_identity(
-        &self,
-        user_id: UserId,
-        issuer: &str,
-        subject: &str,
-        email: Option<String>,
-    ) -> DbResult<()> {
-        let created = Utc::now().format(DB_DATE_FORMAT).to_string();
-        let identity = oauth2_identity::ActiveModel {
-            user_fk: Set(user_id.get()),
-            provider_issuer: Set(issuer.to_string()),
-            subject: Set(subject.to_string()),
-            email: Set(email),
-            created: Set(created),
-            ..Default::default()
-        };
-
-        oauth2_identity::Entity::insert(identity)
-            .exec(&self.db_con)
-            .await?;
-
-        Ok(())
     }
 
     // OAuth2 state methods (CSRF/PKCE during auth flow)
