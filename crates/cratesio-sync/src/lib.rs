@@ -90,10 +90,22 @@ struct Inner {
     index_url: Result<BaseUrl, BaseUrlError>,
     api_url: Result<BaseUrl, BaseUrlError>,
     running: Mutex<HashMap<CanonicalName, Job>>,
+    retry_base_delay: Duration,
 }
 
 impl CratesioSync {
     pub fn new(db: Arc<dyn DbProvider>, client: Client, proxy: &kellnr_settings::Proxy) -> Self {
+        Self::with_retry_base_delay(db, client, proxy, RETRY_BASE_DELAY)
+    }
+
+    /// Like [`Self::new`], with another first wait between tries, e.g. to keep
+    /// tests of failing upstreams fast.
+    pub fn with_retry_base_delay(
+        db: Arc<dyn DbProvider>,
+        client: Client,
+        proxy: &kellnr_settings::Proxy,
+        retry_base_delay: Duration,
+    ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 db,
@@ -101,6 +113,7 @@ impl CratesioSync {
                 index_url: proxy.index_url(),
                 api_url: proxy.api_url(),
                 running: Mutex::new(HashMap::new()),
+                retry_base_delay,
             }),
         }
     }
@@ -260,17 +273,18 @@ impl Inner {
             }
         };
 
-        let response = send_with_retries(&format!("index of {name}"), || {
-            let mut request = self.client.get(url.clone());
-            if let Some(etag) = etag.as_deref().filter(|e| !e.is_empty()) {
-                request = request.header("If-None-Match", etag);
-            }
-            if let Some(last_modified) = last_modified.as_deref().filter(|lm| !lm.is_empty()) {
-                request = request.header("If-Modified-Since", last_modified);
-            }
-            request
-        })
-        .await;
+        let response =
+            send_with_retries(&format!("index of {name}"), self.retry_base_delay, || {
+                let mut request = self.client.get(url.clone());
+                if let Some(etag) = etag.as_deref().filter(|e| !e.is_empty()) {
+                    request = request.header("If-None-Match", etag);
+                }
+                if let Some(last_modified) = last_modified.as_deref().filter(|lm| !lm.is_empty()) {
+                    request = request.header("If-Modified-Since", last_modified);
+                }
+                request
+            })
+            .await;
         let response = match response {
             Ok(response) => response,
             Err(e) => {
@@ -340,9 +354,11 @@ impl Inner {
             Ok(api_url) => api_url.join(name),
             Err(e) => return Err(format!("proxy.api {e}")),
         };
-        let response = send_with_retries(&format!("crate info of {name}"), || {
-            self.client.get(url.clone())
-        })
+        let response = send_with_retries(
+            &format!("crate info of {name}"),
+            self.retry_base_delay,
+            || self.client.get(url.clone()),
+        )
         .await
         .and_then(Response::error_for_status)
         .map_err(|e| e.to_string())?;
@@ -371,12 +387,14 @@ impl Inner {
 }
 
 /// Sends the request built by `request` and retries it with a backoff on
-/// transport errors, 429 and server errors. Returns the last result.
+/// transport errors, 429 and server errors. The first wait is `base_delay`.
+/// Returns the last result.
 async fn send_with_retries(
     what: &str,
+    base_delay: Duration,
     request: impl Fn() -> RequestBuilder,
 ) -> reqwest::Result<Response> {
-    let mut delay = RETRY_BASE_DELAY;
+    let mut delay = base_delay;
     let mut tries = 1;
     loop {
         let result = request().send().await;

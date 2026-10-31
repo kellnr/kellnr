@@ -25,6 +25,16 @@ const API: &str = r#"{
     ]
 }"#;
 
+/// A sync that waits only briefly between tries, so failing upstreams do not
+/// slow the tests down.
+fn test_sync(
+    db: Arc<dyn DbProvider>,
+    client: Client,
+    proxy: &kellnr_settings::Proxy,
+) -> CratesioSync {
+    CratesioSync::with_retry_base_delay(db, client, proxy, Duration::from_millis(10))
+}
+
 #[derive(Default)]
 struct Calls {
     index: AtomicUsize,
@@ -113,7 +123,7 @@ async fn fetch_stores_index_and_licenses() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
     let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
@@ -132,7 +142,7 @@ async fn api_failure_still_stores_index() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(false, calls.clone()).await;
     let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
@@ -149,7 +159,7 @@ async fn concurrent_syncs_of_a_crate_share_one_job() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
     let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     // E.g. a download that misses the checksum while the prefetch worker
     // refreshes the same crate
@@ -180,7 +190,7 @@ async fn finished_sync_is_not_cached() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
     let (db, _) = recording_db(PrefetchState::NotFound);
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     sync.sync(&upstream(), SyncSource::Fetch).await;
     sync.sync(&upstream(), SyncSource::Fetch).await;
@@ -197,7 +207,7 @@ async fn index_source_skips_stored_index() {
         etag: "etag".to_string(),
         last_modified: String::new(),
     });
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     let synced = sync
         .sync(
@@ -220,7 +230,7 @@ async fn index_source_stores_new_index_without_fetching_it() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
     let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     let synced = sync
         .sync(
@@ -244,7 +254,7 @@ async fn refresh_of_unchanged_index_writes_nothing() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
     let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     let synced = sync
         .sync(
@@ -267,7 +277,7 @@ async fn refresh_of_changed_index_writes_it() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
     let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     let synced = sync
         .sync(
@@ -289,7 +299,7 @@ async fn crate_missing_upstream_is_not_found() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
     let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     // The fake index only serves crates with more than three characters.
     let synced = sync
@@ -306,7 +316,7 @@ async fn invalid_index_url_fails() {
         index: Url::parse("ftp://index.example.com/").unwrap(),
         ..kellnr_settings::Proxy::default()
     };
-    let sync = CratesioSync::new(Arc::new(MockDb::new()), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(MockDb::new()), Client::new(), &proxy);
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
@@ -318,7 +328,7 @@ async fn panicking_sync_does_not_block_later_syncs() {
     let mut db = MockDb::new();
     db.expect_is_cratesio_cache_up_to_date()
         .returning(|_, _, _| panic!("database failure"));
-    let sync = CratesioSync::new(
+    let sync = test_sync(
         Arc::new(db),
         Client::new(),
         &kellnr_settings::Proxy::default(),
@@ -400,7 +410,7 @@ async fn server_errors_and_rate_limits_are_retried() {
     let calls = Arc::new(Calls::default());
     let proxy = flaky_cratesio(calls.clone()).await;
     let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
@@ -430,12 +440,14 @@ async fn retries_wait_with_backoff() {
     let client = Client::new();
     let start = std::time::Instant::now();
 
-    let response = send_with_retries("test", || client.get(format!("http://{addr}/")))
-        .await
-        .unwrap();
+    let response = send_with_retries("test", Duration::from_millis(50), || {
+        client.get(format!("http://{addr}/"))
+    })
+    .await
+    .unwrap();
 
     assert_eq!(StatusCode::BAD_GATEWAY, response.status());
     assert_eq!(MAX_TRIES as usize, tries.load(Ordering::SeqCst));
-    // 0.5s before the second and 1s before the third try
-    assert!(start.elapsed() >= Duration::from_millis(1500));
+    // 50ms before the second and 100ms before the third try
+    assert!(start.elapsed() >= Duration::from_millis(150));
 }

@@ -1272,21 +1272,20 @@ async fn is_crate_group_user_works(test_db: &kellnr_db::Database) {
 
 #[db_test]
 async fn clean_db_after_time(test_db: &kellnr_db::Database) {
-    test_db
-        .add_session_token(
-            &UserName::new("admin").unwrap(),
-            &PlainToken::from("session_token"),
-        )
-        .await
-        .unwrap();
+    add_aged_session(
+        test_db,
+        "admin",
+        "session_token",
+        std::time::Duration::from_secs(2),
+    )
+    .await
+    .unwrap();
     let session = test_db
         .validate_session(&PlainToken::from("session_token"))
         .await
         .unwrap();
     assert_eq!("admin", session.name);
 
-    let duration = std::time::Duration::from_secs(2);
-    std::thread::sleep(duration);
     clean_db(test_db, std::time::Duration::from_secs(1))
         .await
         .unwrap();
