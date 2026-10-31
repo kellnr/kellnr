@@ -47,11 +47,8 @@ impl ConfigJson {
 
 impl From<(&Settings, &str, bool)> for ConfigJson {
     fn from(value: (&Settings, &str, bool)) -> Self {
-        let api_url_path: Option<&str> = if value.0.origin.path.is_empty() {
-            None
-        } else {
-            Some(&value.0.origin.path)
-        };
+        let path_prefix = value.0.origin.path_prefix();
+        let api_url_path = (!path_prefix.is_root()).then_some(path_prefix.as_str());
         Self::new(
             value.0.origin.protocol,
             &value.0.origin.hostname,

@@ -1,5 +1,6 @@
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
+use kellnr_settings::UrlPathPrefix;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -23,7 +24,7 @@ impl DocUploadResponse {
         message: String,
         crate_name: &OriginalName,
         crate_version: &Version,
-        path_prefix: &str,
+        path_prefix: &UrlPathPrefix,
     ) -> Self {
         Self {
             message,
@@ -46,7 +47,7 @@ mod tests {
         let version = Version::try_from("1.0.0-beta2").unwrap();
         let msg = "Hello, this is the message.".to_string();
 
-        let dur = DocUploadResponse::new(msg, &name, &version, "");
+        let dur = DocUploadResponse::new(msg, &name, &version, &UrlPathPrefix::default());
 
         assert_eq!(
             DocUploadResponse {
@@ -65,7 +66,7 @@ mod tests {
         let version = Version::try_from("1.0.0").unwrap();
         let msg = "Hello, this is the message.".to_string();
 
-        let dur = DocUploadResponse::new(msg, &name, &version, "");
+        let dur = DocUploadResponse::new(msg, &name, &version, &UrlPathPrefix::default());
 
         assert_eq!(
             DocUploadResponse {
@@ -84,7 +85,7 @@ mod tests {
         let version = Version::try_from("1.0.0").unwrap();
         let msg = "Hello, this is the message.".to_string();
 
-        let dur = DocUploadResponse::new(msg, &name, &version, "/kellnr");
+        let dur = DocUploadResponse::new(msg, &name, &version, &UrlPathPrefix::new("/kellnr"));
 
         assert_eq!(
             DocUploadResponse {

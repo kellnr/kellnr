@@ -90,7 +90,7 @@ pub async fn latest_docs(
         return Redirect::temporary(&compute_doc_url(
             &original_name,
             &version,
-            &settings.origin.path,
+            &settings.origin.path_prefix(),
         ));
     }
 
@@ -174,7 +174,7 @@ pub async fn publish_docs(
     db.update_docs_link(
         &canonical_name,
         &version,
-        &compute_doc_url(&original_name, &version, &settings.origin.path),
+        &compute_doc_url(&original_name, &version, &settings.origin.path_prefix()),
     )
     .await?;
 
@@ -182,7 +182,7 @@ pub async fn publish_docs(
         "Successfully published docs.".to_string(),
         &original_name,
         &version,
-        &settings.origin.path,
+        &settings.origin.path_prefix(),
     )))
 }
 

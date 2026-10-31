@@ -29,7 +29,7 @@ pub use leaf_labels::leaf_label;
 pub use local::Local;
 pub use log::{LogFormat, LogLevel};
 pub use oauth2::OAuth2;
-pub use origin::Origin;
+pub use origin::{Origin, UrlPathPrefix};
 pub use postgresql::Postgresql;
 pub use protocol::Protocol;
 // Re-export the provcfg-generated Prov type and the Provenance trait so

@@ -16,6 +16,7 @@ use axum_extra::extract::cookie::{Cookie, SameSite};
 use kellnr_appstate::{AppState, AppStateData, DbState, SettingsState};
 use kellnr_auth::oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
 use kellnr_db::User;
+use kellnr_settings::UrlPathPrefix;
 use kellnr_settings::constants::{COOKIE_OAUTH2_STATE, COOKIE_OIDC_ID_TOKEN, OAUTH2_STATE_MAX_AGE};
 use serde::{Deserialize, Serialize};
 use tracing::{error, trace, warn};
@@ -199,7 +200,7 @@ pub async fn callback(
         );
         let cookies = cookies.remove(Cookie::build((COOKIE_OAUTH2_STATE, "")).path("/"));
         let redirect = login_error_redirect(
-            &app_state.settings.origin.path,
+            &app_state.settings.origin.path_prefix(),
             query.error_description.as_deref().unwrap_or(error),
         );
         return Ok((cookies, redirect));
@@ -331,7 +332,7 @@ pub async fn callback(
     trace!("Created session for OAuth2 user: {}", user.name);
 
     // Redirect to UI root
-    let base_path = format!("{}/", app_state.settings.origin.path);
+    let base_path = format!("{}/", app_state.settings.origin.path_prefix());
     Ok((jar, Redirect::to(&base_path)))
 }
 
@@ -428,13 +429,13 @@ pub async fn error_callback(
     );
 
     let error_msg = query.error_description.as_deref().unwrap_or(&query.error);
-    login_error_redirect(&settings.origin.path, error_msg)
+    login_error_redirect(&settings.origin.path_prefix(), error_msg)
 }
 
 /// Redirect to the login page of the UI, which shows `error`.
-fn login_error_redirect(origin_path: &str, error: &str) -> Redirect {
+fn login_error_redirect(path_prefix: &UrlPathPrefix, error: &str) -> Redirect {
     let encoded_error = urlencoding::encode(error);
-    Redirect::to(&format!("{origin_path}/login?error={encoded_error}"))
+    Redirect::to(&format!("{path_prefix}/login?error={encoded_error}"))
 }
 
 #[cfg(test)]
