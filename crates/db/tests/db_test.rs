@@ -6243,6 +6243,32 @@ async fn delete_owners_removes_nothing_when_no_owner_would_remain(test_db: &kell
 }
 
 #[db_test]
+async fn failed_transaction_does_not_lock_the_next_one(test_db: &kellnr_db::Database) {
+    test_add_crate(
+        test_db,
+        "crate",
+        "admin",
+        &Version::try_from("1.0.0").unwrap(),
+        &Utc::now(),
+    )
+    .await
+    .unwrap();
+    let name = CanonicalName::try_from("crate").unwrap();
+    let owners = [UserName::new("admin").unwrap()];
+
+    // Each call deletes the owner before it fails. Unless the failed call
+    // rolled back, the next call finds the database locked on SQLite.
+    for _ in 0..200 {
+        let result = test_db.delete_owners(&name, &owners, false).await;
+        assert!(
+            matches!(result, Err(kellnr_db::error::DbError::LastOwner)),
+            "{result:?}"
+        );
+    }
+    assert_eq!(1, test_db.get_crate_owners(&name).await.unwrap().len());
+}
+
+#[db_test]
 async fn prefetch_data_puts_new_feature_syntax_into_features2(test_db: &kellnr_db::Database) {
     let mut features = BTreeMap::new();
     features.insert("default".to_string(), vec!["std".to_string()]);
