@@ -43,7 +43,15 @@ async fn handle_queue(
     db: &Arc<dyn DbProvider>,
     client: &WebhookClient,
 ) -> Result<(), WebhookError> {
-    let now = Utc::now();
+    handle_queue_at(db, client, Utc::now()).await
+}
+
+/// Delivers the entries that are due at `now`.
+async fn handle_queue_at(
+    db: &Arc<dyn DbProvider>,
+    client: &WebhookClient,
+    now: DateTime<Utc>,
+) -> Result<(), WebhookError> {
     let pending = db.get_pending_webhook_queue_entries(now).await?;
 
     // Deliver concurrently, so a few slow callback hosts cannot delay all
@@ -324,11 +332,11 @@ mod service_tests {
             pending[0].last_attempt.unwrap() + TimeDelta::seconds(5)
         );
 
-        // Try again to check the increasing interval
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        handle_queue(&db, &http_client).await.unwrap();
+        // Try again once the retry is due to check the increasing interval
+        let due = pending[0].next_attempt + TimeDelta::seconds(1);
+        handle_queue_at(&db, &http_client, due).await.unwrap();
 
-        let ts = Utc::now() + TimeDelta::minutes(5);
+        let ts = due + TimeDelta::minutes(5);
         let pending = db.get_pending_webhook_queue_entries(ts).await.unwrap();
         assert_eq!(pending.len(), 1);
         assert_eq!(

@@ -589,7 +589,13 @@ mod tests {
         let download_filters = Arc::new(DownloadFilters::from_settings(&settings).unwrap());
         let proxy_client = kellnr_common::cratesio_downloader::CLIENT.clone();
         let state = AppStateData {
-            cratesio_sync: CratesioSync::new(db.clone(), proxy_client.clone(), &settings.proxy),
+            // Short waits between tries, so tests of a failing upstream stay fast.
+            cratesio_sync: CratesioSync::with_retry_base_delay(
+                db.clone(),
+                proxy_client.clone(),
+                &settings.proxy,
+                std::time::Duration::from_millis(10),
+            ),
             download_filters,
             proxy_client,
             settings: settings.into(),
