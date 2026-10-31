@@ -2,15 +2,14 @@ use axum::http::StatusCode;
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
 use cookie::{SameSite, time};
-use kellnr_http::state::AppStateData;
 use kellnr_common::account_name::UserName;
 use kellnr_common::plain_token::PlainToken;
 use kellnr_common::util::generate_rand_string;
+use kellnr_http::error::ApiError;
+use kellnr_http::state::AppStateData;
 use kellnr_settings::constants::COOKIE_SESSION_ID;
 use time::Duration;
 use tracing::error;
-
-use crate::error::RouteError;
 
 /// Creates a new session for the user and returns a cookie jar with the session cookie set.
 /// Generates a token, persists it via db, and adds the cookie using `app_state` settings.
@@ -18,7 +17,7 @@ pub(crate) async fn create_session_jar(
     cookies: PrivateCookieJar,
     app_state: &AppStateData,
     username: &UserName,
-) -> Result<PrivateCookieJar, RouteError> {
+) -> Result<PrivateCookieJar, ApiError> {
     // 32 alphanumeric chars (~190 bits) to match the API token length, well
     // above the ~128-bit session-id recommendation.
     let session_token = PlainToken::from(generate_rand_string(32));
@@ -28,7 +27,7 @@ pub(crate) async fn create_session_jar(
         .await
         .map_err(|e| {
             error!("Failed to create session: {e}");
-            RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
     // `Secure` follows `origin.protocol` unless `origin.cookie_secure` forces
     // it, since browsers drop secure cookies on plain-HTTP deployments.

@@ -3,21 +3,26 @@ use std::fmt::Display;
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use kellnr_common::account_name::AccountNameError;
 use kellnr_common::original_name::NameError;
 use kellnr_common::version::VersionError;
 use kellnr_db::error::DbError;
 use kellnr_storage::storage_error::StorageError;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use zip::result::ZipError;
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
+/// An error response of every Kellnr endpoint, in the format of the cargo
+/// registry API: `{"errors":[{"detail":"..."}]}`.
+#[derive(Debug)]
 pub struct ApiError {
     status: StatusCode,
     details: ErrorDetails,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ErrorDetails {
     pub errors: Vec<ErrorDetail>,
 }
@@ -31,7 +36,7 @@ impl From<String> for ErrorDetails {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ErrorDetail {
     pub detail: String,
 }
@@ -47,6 +52,26 @@ impl ApiError {
             status,
             details: ErrorDetails::from(format!("ERROR: {e}")),
         }
+    }
+
+    pub fn bad_request(msg: impl Display) -> Self {
+        Self::from_str(&msg.to_string(), StatusCode::BAD_REQUEST)
+    }
+
+    pub fn unauthorized(msg: impl Display) -> Self {
+        Self::from_str(&msg.to_string(), StatusCode::UNAUTHORIZED)
+    }
+
+    pub fn forbidden(msg: impl Display) -> Self {
+        Self::from_str(&msg.to_string(), StatusCode::FORBIDDEN)
+    }
+
+    pub fn not_found(msg: impl Display) -> Self {
+        Self::from_str(&msg.to_string(), StatusCode::NOT_FOUND)
+    }
+
+    pub fn conflict(msg: impl Display) -> Self {
+        Self::from_str(&msg.to_string(), StatusCode::CONFLICT)
     }
 
     pub fn status(&self) -> StatusCode {
@@ -78,6 +103,48 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         (self.status, Json(self.details)).into_response()
+    }
+}
+
+/// An error with a plain text body, for responses whose body cargo shows as
+/// it is, like a denied crate download. It stays plain text, see
+/// [`errors_as_json`](crate::middleware::errors_as_json).
+pub struct PlainTextError {
+    status: StatusCode,
+    message: String,
+}
+
+impl PlainTextError {
+    pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
+        Self {
+            status,
+            message: message.into(),
+        }
+    }
+}
+
+/// Marks a response of [`PlainTextError`].
+#[derive(Clone, Copy)]
+pub(crate) struct KeepPlainText;
+
+impl IntoResponse for PlainTextError {
+    fn into_response(self) -> Response {
+        let mut response = (self.status, self.message).into_response();
+        response.extensions_mut().insert(KeepPlainText);
+        response
+    }
+}
+
+/// An error without further details than its status code.
+impl From<StatusCode> for ApiError {
+    fn from(status: StatusCode) -> Self {
+        Self::from_str(status.canonical_reason().unwrap_or("Error"), status)
+    }
+}
+
+impl From<AccountNameError> for ApiError {
+    fn from(e: AccountNameError) -> Self {
+        ApiError::from_err(&e, StatusCode::BAD_REQUEST)
     }
 }
 

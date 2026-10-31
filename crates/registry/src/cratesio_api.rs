@@ -5,15 +5,15 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
-use kellnr_http::state::{AppState, ProxyClientState, SettingsState};
-use kellnr_cratesio_sync::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
+use kellnr_cratesio_sync::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_cratesio_sync::{CratesioSync, SyncSource};
 use kellnr_db::DbProvider;
 use kellnr_db::provider::CratesioVersionMeta;
-use kellnr_http::error::ApiResult;
 use kellnr_filter::{CrateInfo, KnownLicense};
+use kellnr_http::error::{ApiResult, PlainTextError};
+use kellnr_http::state::{AppState, ProxyClientState, SettingsState};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::storage_error::StorageError;
 use reqwest::Url;
@@ -28,11 +28,11 @@ pub async fn cratesio_enabled(
     State(settings): SettingsState,
     request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> ApiResult<Response> {
     if settings.proxy.enabled {
         Ok(next.run(request).await)
     } else {
-        Err(StatusCode::NOT_FOUND)
+        Err(StatusCode::NOT_FOUND.into())
     }
 }
 
@@ -107,7 +107,7 @@ pub async fn search(
 pub async fn download(
     State(state): AppState,
     Path((name, version)): Path<(OriginalName, Version)>,
-) -> Result<Bytes, DownloadError> {
+) -> ApiResult<Response> {
     trace!("Downloading crate: {name} ({version})");
 
     let canonical_name = name.to_canonical();
@@ -167,7 +167,7 @@ pub async fn download(
         };
         if let Some(message) = filters.check(&krate).deny_message(&krate) {
             warn!("{message}");
-            return Err(DownloadError::Denied(message));
+            return Ok(PlainTextError::new(StatusCode::FORBIDDEN, message).into_response());
         }
     }
 
@@ -196,29 +196,7 @@ pub async fn download(
         .increment_cached_and_maybe_flush(canonical_name, version.clone())
         .await;
 
-    Ok(file)
-}
-
-/// Error of a download from the crates.io proxy.
-pub enum DownloadError {
-    Status(StatusCode),
-    /// Denied by a filter, with the message for the client.
-    Denied(String),
-}
-
-impl From<StatusCode> for DownloadError {
-    fn from(status: StatusCode) -> Self {
-        Self::Status(status)
-    }
-}
-
-impl IntoResponse for DownloadError {
-    fn into_response(self) -> Response {
-        match self {
-            Self::Status(status) => status.into_response(),
-            Self::Denied(message) => (StatusCode::FORBIDDEN, message).into_response(),
-        }
-    }
+    Ok(file.into_response())
 }
 
 /// Checksum and license of the version from the cached index. If the checksum
@@ -331,10 +309,10 @@ mod tests {
     use axum::routing::get;
     use axum::{Router, middleware};
     use http_body_util::BodyExt;
-    use kellnr_http::state::AppStateData;
     use kellnr_common::util::generate_rand_string;
     use kellnr_db::{ConString, Database, SqliteConString};
     use kellnr_filter::DownloadFilters;
+    use kellnr_http::state::AppStateData;
     use kellnr_settings::{CratesioFilter, LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;

@@ -22,7 +22,7 @@ use kellnr_http::authz::{
     can_read_crate, crate_visibility, has_restricted_crate_access, require_admin_for_token_api,
     require_owner, require_writable, require_writable_for_upload,
 };
-use kellnr_http::error::{ApiError, ApiResult};
+use kellnr_http::error::{ApiError, ApiResult, PlainTextError};
 use kellnr_http::identity::{AnyUser, Identity, Source, TokenUser};
 use kellnr_http::state::{AppState, DbState};
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
@@ -680,7 +680,7 @@ pub async fn download(
         };
         if let Some(message) = filters.check(&krate).deny_message(&krate) {
             warn!("{message}");
-            return Ok((StatusCode::FORBIDDEN, message).into_response());
+            return Ok(PlainTextError::new(StatusCode::FORBIDDEN, message).into_response());
         }
     }
 

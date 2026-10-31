@@ -7,11 +7,12 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router, middleware};
+use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};
+use kellnr_http::error::ApiError;
 use kellnr_http::identity::Accepts;
-use kellnr_http::middleware::auth_when_required;
+use kellnr_http::middleware::{auth_when_required, errors_as_json};
 use kellnr_http::state::AppStateData;
 use kellnr_oauth2::OAuth2Handler;
-use kellnr_embedded_resources::{embedded_static_handler, embedded_static_root_handler};
 use kellnr_settings::{Protocol, Registry};
 use tokio::sync::Semaphore;
 use tower_http::timeout::TimeoutLayer;
@@ -19,7 +20,7 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::openapi::ApiDoc;
+use crate::openapi::{ApiDoc, add_error_bodies};
 
 mod auth_routes;
 mod crate_access_routes;
@@ -108,6 +109,7 @@ pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handl
 
     // Split into router and OpenAPI spec
     let (router, api): (Router<AppStateData>, _) = api_router.split_for_parts();
+    let api = add_error_bodies(api);
 
     // Add routes that don't have OpenAPI annotations and static services
     let router = router
@@ -115,6 +117,9 @@ pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handl
             "/api/v1/docs",
             docs_routes::create_manual_routes(max_docs_bytes),
         )
+        // Every API error has the same JSON format, also the rejections of
+        // axum's extractors.
+        .layer(middleware::from_fn(errors_as_json))
         .nest("/docs", docs_service)
         // Serve Swagger UI at /api/docs with OpenAPI spec at /api/openapi.json
         .merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", api));
@@ -234,6 +239,7 @@ pub(crate) fn apply_download_limits(
                             "Download request timed out after {timeout_secs}s. \
                              Consider increasing registry.download_timeout_seconds"
                         );
+                        return ApiError::from(StatusCode::GATEWAY_TIMEOUT).into_response();
                     }
                     response
                 },
@@ -254,7 +260,7 @@ pub(crate) fn apply_download_limits(
                         Ok(_permit) => next.run(req).await,
                         Err(error) => {
                             tracing::error!("Download semaphore closed unexpectedly: {error}");
-                            StatusCode::SERVICE_UNAVAILABLE.into_response()
+                            ApiError::from(StatusCode::SERVICE_UNAVAILABLE).into_response()
                         }
                     }
                 }
@@ -271,7 +277,6 @@ mod tests {
     use axum::http::{Request, StatusCode, header};
     use axum_extra::extract::cookie::Key;
     use bytes::Bytes;
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_common::plain_token::PlainToken;
@@ -279,6 +284,7 @@ mod tests {
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{SessionInfo, User};
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use kellnr_storage::docs_storage::{DocsName, DocsStorage};
     use mockall::predicate::eq;
@@ -588,6 +594,22 @@ mod tests {
         assert_eq!(r.headers()[header::X_FRAME_OPTIONS], "SAMEORIGIN");
         assert_eq!(r.headers()[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
         assert!(!r.headers().contains_key(header::STRICT_TRANSPORT_SECURITY));
+    }
+
+    #[tokio::test]
+    async fn openapi_documents_the_error_body() {
+        let r = get_response(kellnr_http::test_support::test_state(), "/api/openapi.json").await;
+        let body = axum::body::to_bytes(r.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let api: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+        let response = &api["paths"]["/api/v1/users/me/tokens"]["get"]["responses"]["401"];
+        assert_eq!(
+            response["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ErrorDetails"
+        );
+        assert!(api["components"]["schemas"]["ErrorDetail"].is_object());
     }
 
     #[tokio::test]

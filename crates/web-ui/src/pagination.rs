@@ -1,9 +1,8 @@
 use axum::extract::{FromRequestParts, Query};
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
+use kellnr_http::error::ApiError;
 use serde::Deserialize;
-
-use crate::error::RouteError;
 
 /// Default number of crates per page.
 const DEFAULT_PAGE_SIZE: u64 = 10;
@@ -50,13 +49,13 @@ pub struct PageRequest {
 
 impl PageRequest {
     /// Rejects a page whose offset does not fit the database with 400.
-    pub fn new(page: Option<u64>, page_size: Option<u64>) -> Result<Self, RouteError> {
+    pub fn new(page: Option<u64>, page_size: Option<u64>) -> Result<Self, ApiError> {
         let size = PageSize::new(page_size);
         let page = page.unwrap_or(0);
         let offset = page
             .checked_mul(size.get())
             .filter(|o| i64::try_from(*o).is_ok())
-            .ok_or_else(|| RouteError::BadRequest(format!("Page {page} is out of range")))?;
+            .ok_or_else(|| ApiError::bad_request(format!("Page {page} is out of range")))?;
         Ok(Self { page, size, offset })
     }
 

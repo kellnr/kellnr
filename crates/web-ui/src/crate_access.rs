@@ -1,14 +1,12 @@
-
 use axum::Json;
 use axum::extract::{Path, State};
-use kellnr_http::state::DbState;
-use kellnr_http::authz;
-use kellnr_http::identity::{AdminUser, AnyUser};
 use kellnr_common::original_name::OriginalName;
+use kellnr_http::authz;
+use kellnr_http::error::ApiError;
+use kellnr_http::identity::{AdminUser, AnyUser};
+use kellnr_http::state::DbState;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-
-use crate::error::RouteError;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct AccessData {
@@ -33,13 +31,11 @@ pub async fn get_access_data(
     user: AnyUser,
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
-) -> Result<Json<AccessData>, RouteError> {
+) -> Result<Json<AccessData>, ApiError> {
     let crate_name = crate_name.to_canonical();
     // Admins and crate owners, also read-only ones, may read the access
     // settings of a crate.
-    authz::require_owner(&crate_name, &user, &db)
-        .await
-        .map_err(|e| RouteError::Status(e.status()))?;
+    authz::require_owner(&crate_name, &user, &db).await?;
     Ok(Json(AccessData {
         download_restricted: db.is_download_restricted(&crate_name).await?,
     }))
@@ -65,7 +61,7 @@ pub async fn set_access_data(
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<AccessData>,
-) -> Result<Json<AccessData>, RouteError> {
+) -> Result<Json<AccessData>, ApiError> {
     let crate_name = crate_name.to_canonical();
     db.change_download_restricted(&crate_name, input.download_restricted)
         .await?;
@@ -77,23 +73,22 @@ pub async fn set_access_data(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use axum::routing::get;
     use axum_extra::extract::cookie::Key;
-    use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_common::account_name::UserName;
+    use kellnr_common::canonical_name::CanonicalName;
     use kellnr_db::SessionInfo;
     use kellnr_db::mock::MockDb;
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use mockall::predicate::eq;
     use tower::ServiceExt;
-
-    use std::sync::Arc;
-
-    use kellnr_common::canonical_name::CanonicalName;
 
     use super::*;
 

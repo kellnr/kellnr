@@ -3,27 +3,28 @@ use axum::http::StatusCode;
 use axum::{Extension, Json};
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
-use kellnr_http::state::{AppState, DbState, LoginThrottleState, SettingsState, TokenCacheState};
-use kellnr_http::password::{PasswordAuthError, authenticate_password};
-use kellnr_http::identity::{AdminUser, SessionUser};
-use kellnr_http::token;
 use kellnr_common::account_name::{UserName, validate_token_name};
 use kellnr_common::plain_token::PlainToken;
 use kellnr_common::util::generate_rand_string;
 use kellnr_db::{self, AuthToken, AuthTokenId, DbProvider, User, UserFlags};
+use kellnr_http::error::ApiError;
+use kellnr_http::identity::{AdminUser, SessionUser};
+use kellnr_http::password::{PasswordAuthError, authenticate_password};
+use kellnr_http::state::{AppState, DbState, LoginThrottleState, SettingsState, TokenCacheState};
+use kellnr_http::token;
 use kellnr_settings::Settings;
 use kellnr_settings::constants::{COOKIE_OIDC_ID_TOKEN, COOKIE_SESSION_ID, COOKIE_SESSION_USER};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 use utoipa::ToSchema;
 
-use crate::error::RouteError;
 use crate::oauth2::OAuth2Ext;
 use crate::session::create_session_jar;
 
 /// Reject local password operations when SSO is enforced.
-fn ensure_local_auth_enabled(settings: &Settings) -> Result<(), RouteError> {
+fn ensure_local_auth_enabled(settings: &Settings) -> Result<(), ApiError> {
     if settings.oauth2.enforced {
-        return Err(RouteError::Status(StatusCode::FORBIDDEN));
+        return Err(ApiError::from(StatusCode::FORBIDDEN));
     }
     Ok(())
 }
@@ -35,7 +36,7 @@ async fn revoke_sessions(
     db: &dyn DbProvider,
     user_name: &UserName,
     keep_session_token: Option<&str>,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     match keep_session_token {
         Some(token) => {
             db.delete_other_user_sessions(user_name, &PlainToken::from(token))
@@ -70,7 +71,7 @@ pub async fn add_token(
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(auth_token): Json<token::NewTokenReqData>,
-) -> Result<Json<NewTokenResponse>, RouteError> {
+) -> Result<Json<NewTokenResponse>, ApiError> {
     validate_token_name(&auth_token.name)?;
     let token = token::generate_token();
     db.add_auth_token(&auth_token.name, &token, &user.name)
@@ -99,7 +100,7 @@ pub async fn add_token(
 pub async fn list_tokens(
     user: SessionUser,
     State(db): DbState,
-) -> Result<Json<Vec<AuthToken>>, RouteError> {
+) -> Result<Json<Vec<AuthToken>>, ApiError> {
     Ok(Json(db.get_auth_tokens(&user.name).await?))
 }
 
@@ -114,10 +115,7 @@ pub async fn list_tokens(
     ),
     security(("session_cookie" = []))
 )]
-pub async fn list_users(
-    _user: AdminUser,
-    State(db): DbState,
-) -> Result<Json<Vec<User>>, RouteError> {
+pub async fn list_users(_user: AdminUser, State(db): DbState) -> Result<Json<Vec<User>>, ApiError> {
     Ok(Json(db.get_users().await?))
 }
 
@@ -141,7 +139,7 @@ pub async fn delete_token(
     Path(id): Path<AuthTokenId>,
     State(db): DbState,
     State(cache): TokenCacheState,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     // Only deletes a token of the user
     db.delete_auth_token(&user.name, id).await?;
 
@@ -177,7 +175,7 @@ pub async fn reset_pwd(
     State(db): DbState,
     State(cache): TokenCacheState,
     State(settings): SettingsState,
-) -> Result<Json<ResetPwd>, RouteError> {
+) -> Result<Json<ResetPwd>, ApiError> {
     ensure_local_auth_enabled(&settings)?;
 
     let new_pwd = generate_rand_string(12);
@@ -225,10 +223,10 @@ pub async fn read_only(
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(ro_state): Json<ReadOnlyState>,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     // Prevent self-locking to avoid lockout
     if user.name == name && ro_state.state {
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        return Err(ApiError::bad_request("You cannot make yourself read-only"));
     }
 
     db.change_read_only_state(&name, ro_state.state).await?;
@@ -265,10 +263,12 @@ pub async fn admin(
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(admin_state): Json<AdminState>,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     // Prevent self-demotion to avoid lockout
     if user.name == name && !admin_state.state {
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        return Err(ApiError::bad_request(
+            "You cannot remove your own admin rights",
+        ));
     }
 
     db.change_admin_state(&name, admin_state.state).await?;
@@ -298,10 +298,10 @@ pub async fn delete(
     Path(name): Path<UserName>,
     State(db): DbState,
     State(cache): TokenCacheState,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     // Prevent self-deletion to avoid lockout
     if user.name == name {
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+        return Err(ApiError::bad_request("You cannot delete yourself"));
     }
 
     db.delete_user(&name).await?;
@@ -326,11 +326,10 @@ pub struct Credentials {
 
 impl Credentials {
     /// Returns the name of the user to log in.
-    pub fn validate(&self) -> Result<UserName, RouteError> {
-        let name = UserName::new(self.user.as_str())
-            .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
+    pub fn validate(&self) -> Result<UserName, ApiError> {
+        let name = UserName::new(self.user.as_str())?;
         if self.pwd.is_empty() {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+            return Err(ApiError::bad_request("The password must not be empty"));
         }
         Ok(name)
     }
@@ -352,7 +351,7 @@ pub async fn login(
     cookies: PrivateCookieJar,
     State(state): AppState,
     Json(credentials): Json<Credentials>,
-) -> Result<(PrivateCookieJar, Json<LoggedInUser>), RouteError> {
+) -> Result<(PrivateCookieJar, Json<LoggedInUser>), ApiError> {
     ensure_local_auth_enabled(&state.settings)?;
     let name = credentials.validate()?;
 
@@ -364,8 +363,11 @@ pub async fn login(
     )
     .await
     .map_err(|e| match e {
-        PasswordAuthError::Throttled => RouteError::Status(StatusCode::TOO_MANY_REQUESTS),
-        PasswordAuthError::Invalid => RouteError::AuthenticationFailure,
+        PasswordAuthError::Throttled => ApiError::from(StatusCode::TOO_MANY_REQUESTS),
+        PasswordAuthError::Invalid => {
+            warn!("Login with wrong username or password");
+            ApiError::unauthorized("Wrong username or password")
+        }
     })?;
 
     let jar = create_session_jar(cookies, &state, &name).await?;
@@ -425,7 +427,7 @@ pub async fn logout(
     mut jar: PrivateCookieJar,
     State(state): AppState,
     Extension(oauth2_handler): OAuth2Ext,
-) -> Result<(PrivateCookieJar, Json<LogoutResponse>), RouteError> {
+) -> Result<(PrivateCookieJar, Json<LogoutResponse>), ApiError> {
     let session_id = match jar.get(COOKIE_SESSION_ID) {
         Some(c) => c.value().to_owned(),
         None => return Ok((jar, Json(LogoutResponse { logout_url: None }))),
@@ -463,15 +465,15 @@ pub struct PwdChange {
 }
 
 impl PwdChange {
-    pub fn validate(&self) -> Result<(), RouteError> {
+    pub fn validate(&self) -> Result<(), ApiError> {
         if self.old_pwd.is_empty() {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+            return Err(ApiError::bad_request("The old password must not be empty"));
         }
         if self.new_pwd1.is_empty() || self.new_pwd2.is_empty() {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+            return Err(ApiError::bad_request("The new password must not be empty"));
         }
         if self.new_pwd1 != self.new_pwd2 {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+            return Err(ApiError::bad_request("The new passwords do not match"));
         }
         Ok(())
     }
@@ -498,15 +500,15 @@ pub async fn change_pwd(
     State(throttle): LoginThrottleState,
     State(settings): SettingsState,
     Json(pwd_change): Json<PwdChange>,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     ensure_local_auth_enabled(&settings)?;
     pwd_change.validate()?;
 
     let user = authenticate_password(db.as_ref(), &throttle, &user.name, &pwd_change.old_pwd)
         .await
         .map_err(|e| match e {
-            PasswordAuthError::Throttled => RouteError::Status(StatusCode::TOO_MANY_REQUESTS),
-            PasswordAuthError::Invalid => RouteError::Status(StatusCode::BAD_REQUEST),
+            PasswordAuthError::Throttled => ApiError::from(StatusCode::TOO_MANY_REQUESTS),
+            PasswordAuthError::Invalid => ApiError::bad_request("The old password is wrong"),
         })?;
 
     db.change_pwd(&user.name, &pwd_change.new_pwd1).await?;
@@ -536,13 +538,13 @@ pub struct NewUser {
 
 impl NewUser {
     /// Returns the name of the new user.
-    pub fn validate(&self) -> Result<UserName, RouteError> {
+    pub fn validate(&self) -> Result<UserName, ApiError> {
         let name = UserName::for_new_user(self.name.as_str())?;
         if self.pwd1.is_empty() || self.pwd2.is_empty() {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+            return Err(ApiError::bad_request("The password must not be empty"));
         }
         if self.pwd1 != self.pwd2 {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+            return Err(ApiError::bad_request("The passwords do not match"));
         }
         Ok(name)
     }
@@ -567,7 +569,7 @@ pub async fn add(
     State(cache): TokenCacheState,
     State(settings): SettingsState,
     Json(new_user): Json<NewUser>,
-) -> Result<(), RouteError> {
+) -> Result<(), ApiError> {
     ensure_local_auth_enabled(&settings)?;
     let name = new_user.validate()?;
 
@@ -596,12 +598,12 @@ mod tests {
     use axum::routing::{post, put};
     use axum_extra::extract::cookie::Key;
     use hyper::{Request, header};
-    use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
-    use kellnr_http::login_throttle::LoginThrottle;
-    use kellnr_http::token_cache::{CachedTokenData, TokenCacheManager};
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
+    use kellnr_http::login_throttle::LoginThrottle;
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
+    use kellnr_http::token_cache::{CachedTokenData, TokenCacheManager};
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use mockall::predicate::*;
     use tower::ServiceExt;
@@ -993,7 +995,9 @@ mod tests {
             .await;
 
             assert!(
-                matches!(result, Err(RouteError::BadRequest(_))),
+                result
+                    .as_ref()
+                    .is_err_and(|e| e.status() == StatusCode::BAD_REQUEST),
                 "{name:?}: {result:?}"
             );
         }
@@ -1014,7 +1018,11 @@ mod tests {
             )
             .await;
 
-            assert!(matches!(result, Err(RouteError::BadRequest(_))));
+            assert!(
+                result
+                    .as_ref()
+                    .is_err_and(|e| e.status() == StatusCode::BAD_REQUEST)
+            );
         }
     }
 
