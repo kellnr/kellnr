@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -16,11 +17,11 @@ pub enum FirstRound {
     AfterInterval,
 }
 
-/// Background tasks that run in rounds until shutdown.
+/// Background tasks that run in rounds until shutdown, or once.
 ///
 /// Every round runs as its own tokio task. A round that panics is logged and
-/// the task continues. On shutdown no new round starts, a running round is
-/// not interrupted.
+/// the task continues. On shutdown no new round starts, a running round or
+/// one-off task is not interrupted.
 #[derive(Debug, Clone, Default)]
 pub struct BackgroundTasks {
     shutdown: CancellationToken,
@@ -77,6 +78,28 @@ impl BackgroundTasks {
         Fut: Future<Output = Duration> + Send + 'static,
     {
         self.spawn_rounds(name, Duration::ZERO, PANIC_PAUSE, round);
+    }
+
+    /// Run `task` once. Shutdown waits for it like for a running round.
+    pub fn spawn_tracked<Fut>(&self, task: Fut) -> JoinHandle<Fut::Output>
+    where
+        Fut: Future + Send + 'static,
+        Fut::Output: Send + 'static,
+    {
+        self.tracker.spawn(task)
+    }
+
+    /// Run `task` once and log it if it panics. Shutdown waits for it like
+    /// for a running round.
+    pub fn spawn_once<Fut>(&self, name: &'static str, task: Fut) -> JoinHandle<()>
+    where
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        self.spawn_tracked(async move {
+            if let Err(e) = tokio::spawn(task).await {
+                error!("Background task {name} stopped: {e}");
+            }
+        })
     }
 
     fn spawn_rounds<F, Fut>(
@@ -262,6 +285,33 @@ mod tests {
         assert_eq!(1, finished.load(Ordering::SeqCst));
         sleep_secs(60).await;
         assert_eq!(1, started.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_waits_for_a_task_spawned_once() {
+        let tasks = BackgroundTasks::new();
+        let finished = Arc::new(AtomicUsize::new(0));
+        let finished_in_task = finished.clone();
+
+        tasks.spawn_once("test", async move {
+            sleep_secs(5).await;
+            finished_in_task.fetch_add(1, Ordering::SeqCst);
+        });
+
+        tasks.request_shutdown();
+        tasks.wait_for_shutdown(Duration::from_secs(30)).await;
+
+        assert_eq!(1, finished.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn task_spawned_once_logs_a_panic_instead_of_passing_it_on() {
+        let tasks = BackgroundTasks::new();
+
+        tasks
+            .spawn_once("test", async { panic!("task panics") })
+            .await
+            .unwrap();
     }
 
     #[tokio::test(start_paused = true)]

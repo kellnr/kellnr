@@ -376,6 +376,7 @@ async fn run_server(resolved: ResolvedSettings) {
         proxy_client,
         cratesio_sync,
         download_filters,
+        background_tasks: tasks.clone(),
     };
 
     // Create router using the route module

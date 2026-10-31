@@ -11,6 +11,7 @@ documentation.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
+kellnr-common.workspace = true
 kellnr-db.workspace = true
 kellnr-http.workspace = true
 kellnr-settings.workspace = true
@@ -29,7 +30,6 @@ utoipa.workspace = true
 xz2.workspace = true
 
 [dev-dependencies]
-kellnr-common.workspace = true
 kellnr-db = { workspace = true, features = ["mock"] }
 kellnr-http = { workspace = true, features = ["test-support"] }
 axum-extra.workspace = true

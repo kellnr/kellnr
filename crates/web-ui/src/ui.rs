@@ -993,7 +993,7 @@ pub async fn migrate_docs_storage(
 
     let crate_versions_found = crate_versions.len();
     let docs_storage = state.docs_storage.clone();
-    tokio::spawn(async move {
+    state.background_tasks.spawn_once("docs storage migration", async move {
         for (crate_name, version, dir) in crate_versions {
             // Keep the folder names, the docs links in the database point to them.
             let name = DocsName::from_folder(crate_name.clone());
@@ -1067,6 +1067,7 @@ mod tests {
     use http_body_util::BodyExt;
     use hyper::{Request, header};
     use kellnr_common::account_name::UserName;
+    use kellnr_common::background_tasks::BackgroundTasks;
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
     use kellnr_common::crate_dependents::CrateDependent;
     use kellnr_common::plain_token::PlainToken;
@@ -2149,6 +2150,15 @@ mod tests {
         settings: Settings,
         docs_storage: DocsStorage,
     ) -> Router {
+        migrate_storage_app_with_tasks(mock_db, settings, docs_storage, BackgroundTasks::new())
+    }
+
+    fn migrate_storage_app_with_tasks(
+        mock_db: MockDb,
+        settings: Settings,
+        docs_storage: DocsStorage,
+        background_tasks: BackgroundTasks,
+    ) -> Router {
         Router::new()
             .route("/migrate-storage", post(migrate_docs_storage))
             .with_state(AppStateData {
@@ -2156,6 +2166,7 @@ mod tests {
                 signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings),
                 docs_storage: Arc::new(docs_storage),
+                background_tasks,
                 ..kellnr_http::test_support::test_state()
             })
     }
@@ -2326,7 +2337,8 @@ mod tests {
         .unwrap();
 
         let target_docs_storage = fs_docs_storage(target.path());
-        let r = migrate_storage_app(
+        let tasks = BackgroundTasks::new();
+        let r = migrate_storage_app_with_tasks(
             admin_session_mock_db(),
             settings,
             // `migrate_storage_app` wraps this in the `Arc` the handler needs,
@@ -2334,6 +2346,7 @@ mod tests {
             // to assert on afterwards, so build a second `DocsStorage` on top
             // of the same `target` directory rather than reusing the moved value.
             fs_docs_storage(target.path()),
+            tasks.clone(),
         )
         .oneshot(
             Request::post("/migrate-storage")
@@ -2363,14 +2376,9 @@ mod tests {
             &Version::try_from("2.0.0").unwrap(),
             "doc/nested/page.html",
         );
-        for _ in 0..50 {
-            if target_docs_storage.exists(&key_a).await.unwrap()
-                && target_docs_storage.exists(&key_b).await.unwrap()
-            {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        // Shutdown waits for the migration to finish.
+        tasks.request_shutdown();
+        tasks.wait_for_shutdown(Duration::from_secs(30)).await;
 
         assert_eq!(
             target_docs_storage.get(&key_a).await.unwrap(),
