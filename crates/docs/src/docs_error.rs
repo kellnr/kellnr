@@ -23,6 +23,10 @@ pub enum DocsError {
     BuildTimeout(u64),
     #[error("Path {path} is not inside {root}")]
     PathPrefixMismatch { path: String, root: String },
+    #[error("Failed to extract bytes from request: {0}")]
+    ExtractBytesFailed(#[from] axum::extract::rejection::BytesRejection),
+    #[error("Body of {0} bytes exceeds the maximum of {1} bytes")]
+    TooLarge(usize, usize),
 }
 
 impl From<DocsError> for ApiError {
@@ -40,6 +44,12 @@ impl From<DocsError> for ApiError {
             DocsError::BuildTimeout(_) | DocsError::PathPrefixMismatch { .. } => {
                 ApiError::internal(&e)
             }
+            // E.g. 413 if the body is larger than the configured maximum.
+            DocsError::ExtractBytesFailed(ref rejection) => {
+                let status = rejection.status();
+                ApiError::from_err(&e, status)
+            }
+            DocsError::TooLarge(_, _) => ApiError::from_err(&e, StatusCode::PAYLOAD_TOO_LARGE),
         }
     }
 }

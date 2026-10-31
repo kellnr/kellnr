@@ -7,10 +7,10 @@ use axum::response::{IntoResponse, Response};
 use axum_extra::TypedHeader;
 use axum_extra::headers::{ETag, HeaderMapExt, IfModifiedSince, IfNoneMatch, LastModified};
 use kellnr_http::state::{AppStateData, DocsStorageState};
+use kellnr_http::authz::has_restricted_crate_access;
 use kellnr_http::maybe_user::MaybeUser;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
-use kellnr_registry::kellnr_api::has_restricted_crate_access;
 use kellnr_storage::storage_key::StorageKey;
 use tracing::error;
 

@@ -5,7 +5,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Redirect;
 use kellnr_http::state::{AppState, DbState, DocsStorageState, SettingsState};
-use kellnr_http::crate_access::can_read_crate;
+use kellnr_http::authz::{can_read_crate, check_can_modify, check_ownership};
 use kellnr_http::maybe_user::MaybeUser;
 use kellnr_http::token::Token;
 use kellnr_common::canonical_name::CanonicalName;
@@ -13,7 +13,6 @@ use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
 use kellnr_http::error::ApiResult;
-use kellnr_registry::kellnr_api::{check_can_modify, check_ownership};
 use kellnr_storage::docs_storage::DocsName;
 use tracing::error;
 

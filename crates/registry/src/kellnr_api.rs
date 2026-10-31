@@ -8,8 +8,9 @@ use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use chrono::Utc;
 use kellnr_http::state::{AppState, DbState};
-pub use kellnr_http::crate_access::has_restricted_crate_access;
-use kellnr_http::crate_access::{can_read_crate, crate_visibility};
+use kellnr_http::authz::{
+    can_read_crate, check_can_modify, check_ownership, crate_visibility, has_restricted_crate_access,
+};
 use kellnr_http::{maybe_user, token};
 use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_common::canonical_name::CanonicalName;
@@ -33,18 +34,6 @@ use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
 use crate::yank_success::YankSuccess;
 use crate::{crate_group, crate_user, crate_version};
-
-pub async fn check_ownership(
-    crate_name: &CanonicalName,
-    user: &maybe_user::MaybeUser,
-    db: &Arc<dyn DbProvider>,
-) -> Result<(), ApiError> {
-    if user.is_admin || db.is_owner(crate_name, &user.name).await? {
-        Ok(())
-    } else {
-        Err(RegistryError::NotOwner.into())
-    }
-}
 
 /// Fail like the database does if `name` is spelled with other separators
 /// than the existing crate `existing` of the same canonical name. Checked
@@ -72,14 +61,6 @@ async fn find_same_version(
         .find(|existing| {
             Version::try_from(existing.as_str()).is_ok_and(|v| v.eq_ignoring_build(version))
         }))
-}
-
-pub fn check_can_modify(user: &maybe_user::MaybeUser) -> Result<(), ApiError> {
-    if !user.is_admin && user.is_read_only {
-        Err(RegistryError::ReadOnlyModify.into())
-    } else {
-        Ok(())
-    }
 }
 
 /// Fail with "crate not found" unless the crate exists and `user` may see it.

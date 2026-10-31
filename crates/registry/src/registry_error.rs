@@ -31,14 +31,10 @@ pub enum RegistryError {
         "A different crate file of {0} {1} exists in the storage without being published. An administrator must remove the file {0}-{1}.crate from the crate storage"
     )]
     OrphanedCrateFile(String, String),
-    #[error("Not the owner of the crate")]
-    NotOwner,
     #[error("Crate not found")]
     CrateNotFound,
     #[error("Required field(s) not defined for crate {0}, missing: {1:?}, requires: {2:?}")]
     MissingRequiredFields(String, Vec<String>, Vec<String>),
-    #[error("Read-only users cannot modify the registry")]
-    ReadOnlyModify,
     #[error("New crates publishing has been restricted")]
     NewCratesRestricted,
     #[error("{0}")]
@@ -55,7 +51,6 @@ impl From<RegistryError> for ApiError {
             }
             RegistryError::CrateNotFound => ApiError::from_err(&e, StatusCode::NOT_FOUND),
             RegistryError::TooLarge(_, _) => ApiError::from_err(&e, StatusCode::PAYLOAD_TOO_LARGE),
-            RegistryError::NotOwner => ApiError::from_err(&e, StatusCode::FORBIDDEN),
             RegistryError::RequestError(_) | RegistryError::UpstreamStatus(_) => {
                 ApiError::from_err(&e, StatusCode::BAD_GATEWAY)
             }

@@ -4307,7 +4307,6 @@ dependencies = [
  "kellnr-common",
  "kellnr-db",
  "kellnr-http",
- "kellnr-registry",
  "kellnr-settings",
  "kellnr-storage",
  "mockall",
