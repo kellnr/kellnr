@@ -33,7 +33,7 @@ mod kellnr_api_routes;
 #[cfg(test)]
 mod login_methods_tests;
 mod oauth2_routes;
-mod toolchain_routes;
+mod toolchain_api_routes;
 mod ui_routes;
 mod user_routes;
 mod webhook_routes;
@@ -99,11 +99,11 @@ pub fn create_router(state: AppStateData, oauth2_handler: Option<Arc<OAuth2Handl
         api_router = api_router
             .nest(
                 "/api/v1/toolchains",
-                toolchain_routes::create_api_routes(state.clone(), max_toolchain_bytes),
+                toolchain_api_routes::create_api_routes(max_toolchain_bytes),
             )
             .nest(
                 "/api/v1/toolchains/dist",
-                toolchain_routes::create_dist_routes(state.clone()),
+                toolchain_api_routes::create_dist_routes(),
             );
     }
 

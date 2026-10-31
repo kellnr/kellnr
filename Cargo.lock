@@ -4186,6 +4186,7 @@ dependencies = [
  "kellnr-settings",
  "kellnr-storage",
  "kellnr-test-db",
+ "kellnr-toolchain",
  "kellnr-web-ui",
  "kellnr-webhooks",
  "mime_guess",
@@ -4194,8 +4195,6 @@ dependencies = [
  "openssl",
  "serde",
  "serde_json",
- "sha256",
- "tar",
  "tempfile",
  "tokio",
  "toml 1.1.6+spec-1.1.0",
@@ -4206,7 +4205,6 @@ dependencies = [
  "utoipa",
  "utoipa-axum",
  "utoipa-swagger-ui",
- "xz2",
 ]
 
 [[package]]
@@ -4555,6 +4553,31 @@ dependencies = [
  "testcontainers",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "kellnr-toolchain"
+version = "6.13.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "bytes",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-http",
+ "kellnr-settings",
+ "kellnr-storage",
+ "mockall",
+ "serde",
+ "serde_json",
+ "sha256",
+ "tar",
+ "tempfile",
+ "tokio",
+ "tower",
+ "tracing",
+ "utoipa",
+ "xz2",
 ]
 
 [[package]]

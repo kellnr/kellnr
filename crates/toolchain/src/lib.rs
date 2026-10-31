@@ -5,18 +5,17 @@ use std::io::{BufWriter, Read as _, Seek as _, Write};
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::Json;
 use axum::body::Body;
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::put;
-use axum::{Json, Router};
 use bytes::Bytes;
 use kellnr_db::error::DbError;
 use kellnr_db::{ChannelInfo, ToolchainTargetInfo, ToolchainTargetStatus, ToolchainWithTargets};
 use kellnr_http::error::{ApiError, ApiResult};
 use kellnr_http::identity::AdminUser;
-use kellnr_http::state::{AppStateData, DbState, SettingsState, ToolchainStorageState};
+use kellnr_http::state::{DbState, SettingsState, ToolchainStorageState};
 use kellnr_storage::storage_error::StorageError;
 use kellnr_storage::storage_key::StorageKey;
 use kellnr_storage::toolchain_storage::{ToolchainArchiveId, ToolchainStorage};
@@ -24,8 +23,6 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 use tracing::trace;
 use utoipa::ToSchema;
-use utoipa_axum::router::OpenApiRouter;
-use utoipa_axum::routes;
 
 /// Response for toolchain operations
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -75,35 +72,6 @@ fn storage_not_configured() -> ApiError {
     )
 }
 
-/// Creates the toolchain API routes (management endpoints)
-pub fn create_api_routes(_state: AppStateData, max_bytes: usize) -> OpenApiRouter<AppStateData> {
-    // Upload route needs custom body limit, so we merge it as a regular Router
-    let upload_router: OpenApiRouter<AppStateData> = Router::new()
-        .route(
-            "/",
-            put(upload_toolchain).layer(DefaultBodyLimit::max(max_bytes)),
-        )
-        .into();
-
-    OpenApiRouter::new()
-        .routes(routes!(list_toolchains))
-        .merge(upload_router)
-        .routes(routes!(delete_toolchain))
-        .routes(routes!(delete_toolchain_target))
-        .routes(routes!(list_channels))
-        .routes(routes!(set_channel))
-}
-
-/// Creates the toolchain distribution routes (download endpoints)
-pub fn create_dist_routes(_state: AppStateData) -> OpenApiRouter<AppStateData> {
-    // No authentication on dist routes, rustup does not support HTTP authentication
-    OpenApiRouter::new()
-        // Use a full segment parameter and parse the manifest filename in the handler
-        // because Axum doesn't allow parameters in the middle of a path segment
-        .routes(routes!(get_channel_manifest))
-        .routes(routes!(download_archive))
-}
-
 /// List all toolchains
 ///
 /// Returns all toolchains with their available targets.
@@ -119,7 +87,7 @@ pub fn create_dist_routes(_state: AppStateData) -> OpenApiRouter<AppStateData> {
     ),
     security(("session_cookie" = []))
 )]
-async fn list_toolchains(
+pub async fn list_toolchains(
     _user: AdminUser,
     State(db): DbState,
 ) -> ApiResult<Json<Vec<ToolchainWithTargets>>> {
@@ -130,7 +98,7 @@ async fn list_toolchains(
         .map_err(|e| internal_error("Failed to load toolchains", e))
 }
 
-async fn upload_toolchain(
+pub async fn upload_toolchain(
     _user: AdminUser,
     State(db): DbState,
     State(storage): ToolchainStorageState,
@@ -366,7 +334,7 @@ async fn add_target_to_db(
     ),
     security(("session_cookie" = []))
 )]
-async fn delete_toolchain(
+pub async fn delete_toolchain(
     _user: AdminUser,
     State(db): DbState,
     State(storage): ToolchainStorageState,
@@ -429,7 +397,7 @@ async fn delete_toolchain(
     ),
     security(("session_cookie" = []))
 )]
-async fn delete_toolchain_target(
+pub async fn delete_toolchain_target(
     _user: AdminUser,
     State(db): DbState,
     State(storage): ToolchainStorageState,
@@ -525,7 +493,10 @@ async fn delete_target_archives(storage: &ToolchainStorage, target: &ToolchainTa
     ),
     security(("session_cookie" = []))
 )]
-async fn list_channels(_user: AdminUser, State(db): DbState) -> ApiResult<Json<Vec<ChannelInfo>>> {
+pub async fn list_channels(
+    _user: AdminUser,
+    State(db): DbState,
+) -> ApiResult<Json<Vec<ChannelInfo>>> {
     trace!("Listing channels");
     db.get_channels()
         .await
@@ -553,7 +524,7 @@ async fn list_channels(_user: AdminUser, State(db): DbState) -> ApiResult<Json<V
     ),
     security(("session_cookie" = []))
 )]
-async fn set_channel(
+pub async fn set_channel(
     _user: AdminUser,
     State(db): DbState,
     Path(channel): Path<String>,
@@ -601,7 +572,7 @@ async fn set_channel(
     ),
     security(("session_cookie" = []))
 )]
-async fn get_channel_manifest(
+pub async fn get_channel_manifest(
     State(db): DbState,
     State(settings): SettingsState,
     Path(manifest_file): Path<String>,
@@ -685,7 +656,7 @@ async fn get_channel_manifest(
     ),
     security(("session_cookie" = []))
 )]
-async fn download_archive(
+pub async fn download_archive(
     State(storage): ToolchainStorageState,
     Path((date, filename)): Path<(String, String)>,
 ) -> ApiResult<Response> {
