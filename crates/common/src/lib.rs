@@ -1,4 +1,5 @@
 pub mod account_name;
+pub mod base_url;
 pub mod canonical_name;
 pub mod crate_data;
 pub mod crate_dependents;

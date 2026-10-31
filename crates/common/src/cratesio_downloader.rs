@@ -1,8 +1,10 @@
 use std::time::Duration;
 
 use axum::body::Bytes;
-use reqwest::{Client, ClientBuilder, StatusCode, Url};
+use reqwest::{Client, ClientBuilder, StatusCode};
 use tracing::error;
+
+use crate::base_url::BaseUrl;
 
 /// Default user-agent sent with requests to crates.io. This is the single source
 /// of truth for the default user-agent across the whole codebase.
@@ -54,9 +56,6 @@ pub enum DownloadCrateError {
 
     #[error("Failed to parse response: {0}")]
     CannotParseResponse(reqwest::Error),
-
-    #[error("Failed to parse URL: {0}")]
-    CannotParseUrl(#[from] url::ParseError),
 }
 
 impl From<DownloadCrateError> for StatusCode {
@@ -64,9 +63,9 @@ impl From<DownloadCrateError> for StatusCode {
         match error {
             DownloadCrateError::NotFound => StatusCode::NOT_FOUND,
             DownloadCrateError::NotOk(status) => status,
-            DownloadCrateError::Unexpected(_)
-            | DownloadCrateError::CannotParseResponse(_)
-            | DownloadCrateError::CannotParseUrl(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            DownloadCrateError::Unexpected(_) | DownloadCrateError::CannotParseResponse(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         }
     }
 }
@@ -80,10 +79,9 @@ pub async fn download_crate(
     client: &Client,
     name: &str,
     version: &str,
-    url: &Url,
+    url: &BaseUrl,
 ) -> Result<Bytes, DownloadCrateError> {
-    let path = format!("{name}/{version}/download");
-    let target = url.join(&path)?;
+    let target = url.join(&format!("{name}/{version}/download"));
 
     let res = match client.get(target).send().await {
         Ok(resp) if resp.status() == 404 => Err(DownloadCrateError::NotFound),

@@ -174,14 +174,13 @@ pub async fn download(
     let file = if let Some(file) = cached {
         file
     } else {
-        let crate_data = download_crate(
-            &state.proxy_client,
-            &name,
-            &version.to_string(),
-            &state.settings.proxy.url,
-        )
-        .await
-        .map_err(StatusCode::from)?;
+        let url = state.settings.proxy.download_url().map_err(|e| {
+            error!("Invalid proxy.url: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        let crate_data = download_crate(&state.proxy_client, &name, &version.to_string(), &url)
+            .await
+            .map_err(StatusCode::from)?;
 
         let cksum = meta.as_ref().map(|m| m.cksum.as_str());
         if is_verified_upstream_crate(&name, &version, cksum, &crate_data)? {

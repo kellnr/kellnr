@@ -13,13 +13,14 @@ use std::time::Duration;
 
 use futures_util::FutureExt;
 use futures_util::future::{BoxFuture, Shared};
+use kellnr_common::base_url::{BaseUrl, BaseUrlError};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::license::UNKNOWN_LICENSE;
 use kellnr_common::original_name::OriginalName;
 use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
-use reqwest::{Client, RequestBuilder, Response, StatusCode, Url};
+use reqwest::{Client, RequestBuilder, Response, StatusCode};
 use serde::Deserialize;
 use tracing::{error, trace, warn};
 
@@ -65,8 +66,9 @@ pub struct CratesioSync {
 struct Inner {
     db: Arc<dyn DbProvider>,
     client: Client,
-    index_url: Url,
-    api_url: Url,
+    /// An error only if the proxy is disabled, see [`kellnr_settings::Proxy::validate`].
+    index_url: Result<BaseUrl, BaseUrlError>,
+    api_url: Result<BaseUrl, BaseUrlError>,
     running: Mutex<HashMap<CanonicalName, Job>>,
 }
 
@@ -76,8 +78,8 @@ impl CratesioSync {
             inner: Arc::new(Inner {
                 db,
                 client,
-                index_url: proxy.index.clone(),
-                api_url: proxy.api.clone(),
+                index_url: proxy.index_url(),
+                api_url: proxy.api_url(),
                 running: Mutex::new(HashMap::new()),
             }),
         }
@@ -218,10 +220,10 @@ impl Inner {
         etag: Option<String>,
         last_modified: Option<String>,
     ) -> Option<IndexData> {
-        let url = match self.index_url.join(&crate_sub_path(name)) {
-            Ok(url) => url,
+        let url = match &self.index_url {
+            Ok(index_url) => index_url.join(&crate_sub_path(name)),
             Err(e) => {
-                error!("Could not parse crates.io url for {name}: {e}");
+                error!("Could not build crates.io url for {name}: proxy.index {e}");
                 return None;
             }
         };
@@ -302,7 +304,10 @@ impl Inner {
             versions: Vec<ApiVersion>,
         }
 
-        let url = self.api_url.join(name).map_err(|e| e.to_string())?;
+        let url = match &self.api_url {
+            Ok(api_url) => api_url.join(name),
+            Err(e) => return Err(format!("proxy.api {e}")),
+        };
         let response = send_with_retries(&format!("crate info of {name}"), || {
             self.client.get(url.clone())
         })
