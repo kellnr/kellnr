@@ -39,6 +39,7 @@ bytes.workspace = true
 sha256.workspace = true
 
 [dev-dependencies]
+kellnr-db = { workspace = true, features = ["test-support"] }
 async-trait.workspace = true
 cookie.workspace = true
 kellnr-test-db.workspace = true

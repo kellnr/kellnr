@@ -2980,7 +2980,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn search_verify_page_out_of_range() {
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -2998,7 +2998,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn search_verify_per_page_out_of_range() {
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3016,7 +3016,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn yank_success() {
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         // Use valid crate publish data to test.
         let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
@@ -3053,7 +3053,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn yank_error() {
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
 
         let r = kellnr
             .client
@@ -3074,7 +3074,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn unyank_success() {
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         // Use valid crate publish data to test.
         let valid_pub_package = read("../../tests/fixtures/test-data/pub_data.bin")
             .await
@@ -3111,7 +3111,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn unyank_error() {
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
 
         let r = kellnr
             .client
@@ -3132,7 +3132,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn add_empty_package() {
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3169,7 +3169,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn add_empty_non_admin() {
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3247,7 +3247,7 @@ mod reg_api_tests {
             .await
             .expect("Cannot open valid package file.");
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3298,7 +3298,7 @@ mod reg_api_tests {
             .await
             .expect("Cannot open valid package file.");
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3332,7 +3332,7 @@ mod reg_api_tests {
             .await
             .expect("Cannot open valid package file.");
         let settings = get_settings();
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3384,7 +3384,7 @@ mod reg_api_tests {
             .expect("Cannot open valid package file.");
         let mut settings = get_settings();
         settings.registry.new_crates_restricted = true;
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3415,7 +3415,7 @@ mod reg_api_tests {
     async fn try_publish_with_restricted_added_empty() {
         let mut settings = get_settings();
         settings.registry.new_crates_restricted = true;
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
 
         // add empty crate placeholder
         let created = Utc::now();
@@ -3487,7 +3487,7 @@ mod reg_api_tests {
     async fn try_publish_with_restricted_added_empty_non_owner() {
         let mut settings = get_settings();
         settings.registry.new_crates_restricted = true;
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
 
         let created = Utc::now();
         kellnr
@@ -3531,7 +3531,7 @@ mod reg_api_tests {
         let mut settings = get_settings();
         settings.registry.required_crate_fields = vec!["repository".to_string()];
 
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3568,7 +3568,7 @@ mod reg_api_tests {
         settings.registry.required_crate_fields =
             vec!["repository".to_string(), "license".to_string()];
 
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3606,7 +3606,7 @@ mod reg_api_tests {
         settings.registry.required_crate_fields =
             vec!["repository".to_string(), "authors".to_string()];
 
-        let kellnr = TestKellnr::fake(settings).await;
+        let kellnr = TestKellnr::new(settings).await;
         let r = kellnr
             .client
             .clone()
@@ -3843,7 +3843,7 @@ mod reg_api_tests {
     struct TestKellnr {
         path: PathBuf,
         client: Router,
-        db: Database,
+        db: Arc<Database>,
     }
 
     fn get_settings() -> Settings {
@@ -3868,39 +3868,19 @@ mod reg_api_tests {
 
     impl TestKellnr {
         async fn new(settings: Settings) -> Self {
-            std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
-            let con_string = ConString::Sqlite(SqliteConString::from(&settings));
-            kellnr_test_db::copy_sqlite_template(&con_string).await;
-            let db = Database::new(&con_string, 10).await.unwrap();
-            TestKellnr {
-                path: PathBuf::from(&settings.registry.data_dir),
-                db,
-                client: app(settings).await,
-            }
+            let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
+            Self::with_storage(settings, storage).await
         }
 
         async fn with_storage(settings: Settings, storage: DynStorage) -> Self {
             std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             kellnr_test_db::copy_sqlite_template(&con_string).await;
-            let db = Database::new(&con_string, 10).await.unwrap();
+            let db = Arc::new(Database::new(&con_string, 10).await.unwrap());
             TestKellnr {
                 path: PathBuf::from(&settings.registry.data_dir),
+                client: Box::pin(app_with_storage(settings, storage, db.clone())).await,
                 db,
-                client: Box::pin(app_with_storage(settings, storage)).await,
-            }
-        }
-
-        async fn fake(settings: Settings) -> Self {
-            std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
-            let con_string = ConString::Sqlite(SqliteConString::from(&settings));
-            kellnr_test_db::copy_sqlite_template(&con_string).await;
-            let db = Database::new(&con_string, 10).await.unwrap();
-
-            TestKellnr {
-                path: PathBuf::from(&settings.registry.data_dir),
-                db,
-                client: app(settings).await,
             }
         }
     }
@@ -3913,14 +3893,11 @@ mod reg_api_tests {
         }
     }
 
-    async fn app(settings: Settings) -> Router {
-        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
-        Box::pin(app_with_storage(settings, storage)).await
-    }
-
-    async fn app_with_storage(settings: Settings, storage: DynStorage) -> Router {
-        let con_string = ConString::Sqlite(SqliteConString::from(&settings));
-        let db = Database::new(&con_string, 10).await.unwrap();
+    async fn app_with_storage(
+        settings: Settings,
+        storage: DynStorage,
+        db: Arc<Database>,
+    ) -> Router {
         let cs = KellnrCrateStorage::new(&settings, storage);
         db.add_auth_token(
             "test",
@@ -3975,7 +3952,7 @@ mod reg_api_tests {
         .await
         .unwrap();
 
-        let db: Arc<dyn DbProvider> = Arc::new(db);
+        let db: Arc<dyn DbProvider> = db;
         let state = AppStateData {
             download_counter: Arc::new(DownloadCounter::new(db.clone(), 0)),
             db,

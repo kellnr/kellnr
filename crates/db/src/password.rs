@@ -13,8 +13,28 @@ pub enum PwdVerification {
 }
 
 fn argon2() -> Argon2<'static> {
-    // argon2id with the OWASP recommended minimum (19 MiB, 2 iterations).
-    Argon2::new(Algorithm::Argon2id, Version::V0x13, Params::default())
+    Argon2::new(Algorithm::Argon2id, Version::V0x13, params())
+}
+
+/// argon2id with the OWASP recommended minimum (19 MiB, 2 iterations).
+#[cfg(not(all(feature = "test-support", debug_assertions)))]
+fn params() -> Params {
+    Params::default()
+}
+
+/// The cheapest valid parameters, so tests that create many users stay fast.
+/// The `test-support` feature is only enabled by dev-dependencies, and release
+/// builds never use these parameters. Verification reads the parameters from
+/// the stored hash, so hashes created with either parameters verify.
+#[cfg(all(feature = "test-support", debug_assertions))]
+fn params() -> Params {
+    Params::new(
+        Params::MIN_M_COST,
+        Params::MIN_T_COST,
+        Params::MIN_P_COST,
+        None,
+    )
+    .expect("minimal argon2 parameters are valid")
 }
 
 /// Hashes a password with argon2id and returns it in PHC string format. The
@@ -49,7 +69,7 @@ fn hash_pwd_sync(pwd: &str) -> String {
     // Generates a random salt with the OS random number generator.
     argon2()
         .hash_password(pwd.as_bytes())
-        .expect("argon2 hashing with default parameters cannot fail")
+        .expect("argon2 hashing with valid parameters cannot fail")
         .to_string()
 }
 

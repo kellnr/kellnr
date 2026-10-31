@@ -32,7 +32,12 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 tracing.workspace = true
 
+[features]
+# Cheap password hashing for tests. Only enable it from dev-dependencies.
+test-support = []
+
 [dev-dependencies]
+kellnr-db = { workspace = true, features = ["test-support"] }
 kellnr-test-db.workspace = true
 url.workspace = true
 
