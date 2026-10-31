@@ -26,12 +26,12 @@ import {
   CRATE_DELETE_VERSION,
   STATISTICS,
   CRATE_ACL,
-  CRATE_ACL_USERS,
-  CRATE_ACL_USER,
-  CRATE_ACL_GROUPS,
-  CRATE_ACL_GROUP,
   CRATE_OWNERS,
   CRATE_OWNER,
+  CRATE_USERS,
+  CRATE_USER,
+  CRATE_GROUPS,
+  CRATE_GROUP,
   DOCS_BUILDS,
 } from '../remote-routes'
 import type { DocQueueItem } from '../types/doc_queue_item'
@@ -132,7 +132,7 @@ export async function getStatistics(): Promise<ApiResult<Statistics>> {
  * Get users with access to a crate
  */
 export async function getCrateUsers(crateName: string): Promise<ApiResult<CrateUsersResponse>> {
-  return apiGet<CrateUsersResponse>(CRATE_ACL_USERS(crateName))
+  return apiGet<CrateUsersResponse>(CRATE_USERS(crateName))
 }
 
 /**
@@ -142,7 +142,7 @@ export async function addCrateUser(
   crateName: string,
   userName: string
 ): Promise<ApiResult<void>> {
-  return apiPut<void>(CRATE_ACL_USER(crateName, userName), null, {
+  return apiPut<void>(CRATE_USER(crateName, userName), null, {
     customErrors: {
       404: 'User not found. Did you provide an existing user name?',
     },
@@ -156,7 +156,7 @@ export async function removeCrateUser(
   crateName: string,
   userName: string
 ): Promise<ApiResult<void>> {
-  return apiDelete<void>(CRATE_ACL_USER(crateName, userName))
+  return apiDelete<void>(CRATE_USER(crateName, userName))
 }
 
 // Alias for consistency
@@ -168,7 +168,7 @@ export const deleteCrateUser = removeCrateUser
 export async function getCrateGroups(
   crateName: string
 ): Promise<ApiResult<CrateGroupsResponse>> {
-  return apiGet<CrateGroupsResponse>(CRATE_ACL_GROUPS(crateName))
+  return apiGet<CrateGroupsResponse>(CRATE_GROUPS(crateName))
 }
 
 /**
@@ -178,7 +178,7 @@ export async function addCrateGroup(
   crateName: string,
   groupName: string
 ): Promise<ApiResult<void>> {
-  return apiPut<void>(CRATE_ACL_GROUP(crateName, groupName), null, {
+  return apiPut<void>(CRATE_GROUP(crateName, groupName), null, {
     customErrors: {
       404: 'Group not found. Did you provide an existing group name?',
     },
@@ -192,7 +192,7 @@ export async function removeCrateGroup(
   crateName: string,
   groupName: string
 ): Promise<ApiResult<void>> {
-  return apiDelete<void>(CRATE_ACL_GROUP(crateName, groupName))
+  return apiDelete<void>(CRATE_GROUP(crateName, groupName))
 }
 
 // Alias for consistency

@@ -231,7 +231,7 @@ pub async fn remove_owner_single(
         (status = 200, description = "User removed", body = crate_user::CrateUserResponse),
         (status = 403, description = "Not an owner")
     ),
-    security(("cargo_token" = []))
+    security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn remove_crate_user(
     user: maybe_user::MaybeUser,
@@ -267,7 +267,7 @@ pub async fn remove_crate_user(
         (status = 200, description = "Group removed", body = crate_group::CrateGroupResponse),
         (status = 403, description = "Not an owner")
     ),
-    security(("cargo_token" = []))
+    security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn remove_crate_group(
     user: maybe_user::MaybeUser,
@@ -415,7 +415,7 @@ pub async fn list_owners(
         (status = 200, description = "User added", body = crate_user::CrateUserResponse),
         (status = 403, description = "Not an owner")
     ),
-    security(("cargo_token" = []))
+    security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn add_crate_user(
     user: maybe_user::MaybeUser,
@@ -453,7 +453,7 @@ pub async fn add_crate_user(
         (status = 200, description = "List of users", body = crate_user::CrateUserList),
         (status = 403, description = "Not an owner")
     ),
-    security(("cargo_token" = []))
+    security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn list_crate_users(
     user: maybe_user::MaybeUser,
@@ -492,7 +492,7 @@ pub async fn list_crate_users(
         (status = 200, description = "Group added", body = crate_group::CrateGroupResponse),
         (status = 403, description = "Not an owner")
     ),
-    security(("cargo_token" = []))
+    security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn add_crate_group(
     user: maybe_user::MaybeUser,
@@ -530,7 +530,7 @@ pub async fn add_crate_group(
         (status = 200, description = "List of groups", body = crate_group::CrateGroupList),
         (status = 403, description = "Not an owner")
     ),
-    security(("cargo_token" = []))
+    security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn list_crate_groups(
     user: maybe_user::MaybeUser,
@@ -4012,5 +4012,162 @@ mod reg_api_tests {
                 db,
                 ..kellnr_appstate::test_state()
             })
+    }
+}
+
+#[cfg(test)]
+mod crate_access_tests {
+    use axum::Router;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode, header};
+    use axum::routing::{get, put};
+    use cookie::Key;
+    use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
+    use kellnr_db::SessionInfo;
+    use kellnr_db::mock::MockDb;
+    use kellnr_settings::constants::COOKIE_SESSION_ID;
+    use mockall::predicate::eq;
+    use tower::ServiceExt;
+
+    use super::*;
+
+    fn crate_name() -> CanonicalName {
+        CanonicalName::try_from("mycrate").unwrap()
+    }
+
+    /// Mock with a session for `name` who owns "mycrate" if `is_owner`.
+    fn session_db(
+        name: &'static str,
+        is_admin: bool,
+        is_read_only: bool,
+        is_owner: bool,
+    ) -> MockDb {
+        let mut db = MockDb::new();
+        db.expect_validate_session().returning(move |_| {
+            Ok(SessionInfo {
+                name: UserName::new(name).unwrap(),
+                is_admin,
+                is_read_only,
+            })
+        });
+        db.expect_is_owner()
+            .with(eq(crate_name()), eq(UserName::new(name).unwrap()))
+            .returning(move |_, _| Ok(is_owner));
+        db.expect_get_crate_users().returning(|_| Ok(vec![]));
+        db.expect_get_crate_groups().returning(|_| Ok(vec![]));
+        db.expect_is_crate_user().returning(|_, _| Ok(false));
+        db.expect_add_crate_user().returning(|_, _| Ok(()));
+        db.expect_delete_crate_user().returning(|_, _| Ok(()));
+        db.expect_is_crate_group().returning(|_, _| Ok(false));
+        db.expect_add_crate_group().returning(|_, _| Ok(()));
+        db.expect_delete_crate_group().returning(|_, _| Ok(()));
+        db
+    }
+
+    async fn status(db: MockDb, method: &str, uri: &str) -> StatusCode {
+        let app = Router::new()
+            .route("/{crate_name}/crate_users", get(list_crate_users))
+            .route(
+                "/{crate_name}/crate_users/{user}",
+                put(add_crate_user).delete(remove_crate_user),
+            )
+            .route("/{crate_name}/crate_groups", get(list_crate_groups))
+            .route(
+                "/{crate_name}/crate_groups/{group}",
+                put(add_crate_group).delete(remove_crate_group),
+            )
+            .with_state(AppStateData {
+                db: Arc::new(db),
+                signing_key: Key::from(TEST_KEY),
+                ..kellnr_appstate::test_state()
+            });
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(
+                header::COOKIE,
+                encode_cookies([(COOKIE_SESSION_ID, "cookie")]),
+            )
+            .body(Body::empty())
+            .unwrap();
+        app.oneshot(request).await.unwrap().status()
+    }
+
+    const ACL_REQUESTS: [(&str, &str); 6] = [
+        ("GET", "/mycrate/crate_users"),
+        ("PUT", "/mycrate/crate_users/someone"),
+        ("DELETE", "/mycrate/crate_users/someone"),
+        ("GET", "/mycrate/crate_groups"),
+        ("PUT", "/mycrate/crate_groups/somegroup"),
+        ("DELETE", "/mycrate/crate_groups/somegroup"),
+    ];
+
+    #[tokio::test]
+    async fn owner_can_manage_crate_users_and_groups_with_a_session() {
+        for (method, uri) in ACL_REQUESTS {
+            let db = session_db("owner", false, false, true);
+            assert_eq!(
+                StatusCode::OK,
+                status(db, method, uri).await,
+                "{method} {uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn admin_can_manage_crate_users_and_groups_with_a_session() {
+        for (method, uri) in ACL_REQUESTS {
+            let db = session_db("admin", true, false, false);
+            assert_eq!(
+                StatusCode::OK,
+                status(db, method, uri).await,
+                "{method} {uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn non_owner_cannot_manage_crate_users_and_groups() {
+        for (method, uri) in ACL_REQUESTS {
+            let db = session_db("user", false, false, false);
+            assert_eq!(
+                StatusCode::FORBIDDEN,
+                status(db, method, uri).await,
+                "{method} {uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn read_only_owner_can_only_list_crate_users_and_groups() {
+        for (method, uri) in ACL_REQUESTS {
+            let db = session_db("owner", false, true, true);
+            // ReadOnlyModify maps to 400 Bad Request
+            let expected = if method == "GET" {
+                StatusCode::OK
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+            assert_eq!(expected, status(db, method, uri).await, "{method} {uri}");
+        }
+    }
+
+    #[tokio::test]
+    async fn adding_an_unknown_crate_user_is_not_found() {
+        let mut db = MockDb::new();
+        db.expect_validate_session().returning(|_| {
+            Ok(SessionInfo {
+                name: UserName::new("admin").unwrap(),
+                is_admin: true,
+                is_read_only: false,
+            })
+        });
+        db.expect_is_crate_user().returning(|_, _| Ok(false));
+        db.expect_add_crate_user()
+            .returning(|_, user| Err(DbError::UserNotFound(user.to_string())));
+        assert_eq!(
+            StatusCode::NOT_FOUND,
+            status(db, "PUT", "/mycrate/crate_users/nobody").await
+        );
     }
 }

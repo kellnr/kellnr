@@ -16,7 +16,6 @@ kellnr-auth.workspace = true
 kellnr-common.workspace = true
 kellnr-db.workspace = true
 kellnr-docs.workspace = true
-kellnr-registry.workspace = true
 kellnr-settings.workspace = true
 kellnr-storage.workspace = true
 

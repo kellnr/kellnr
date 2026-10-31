@@ -222,7 +222,7 @@ test.describe("Crate Settings UI Tests", () => {
     await cratePage.addCrateUser(reader.name);
     await expect(cratePage.accessBadge).toHaveText("Restricted: 1 user, 0 groups");
 
-    expect(await apiCall(page, "PUT", "/api/v1/acl/foo-bar/groups/badge-group")).toBe(200);
+    expect(await apiCall(page, "PUT", "/api/v1/crates/foo-bar/crate_groups/badge-group")).toBe(200);
     await page.reload();
     await cratePage.waitForCrateData();
     await expect(cratePage.accessBadge).toHaveText("Restricted: 1 user, 1 group");
