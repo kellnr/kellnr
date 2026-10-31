@@ -6,7 +6,7 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use kellnr_http::state::{AppState, DbState, ProxyClientState, SettingsProvState, SettingsState};
-use kellnr_http::crate_access::{can_read_crate, crate_visibility};
+use kellnr_http::authz::{can_read_crate, crate_visibility};
 use kellnr_http::maybe_user::MaybeUser as MaybeUserOrToken;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CRATESIO_INDEX, CrateData};

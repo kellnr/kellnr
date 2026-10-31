@@ -1,11 +1,41 @@
 use std::sync::Arc;
 
+use axum::http::StatusCode;
 use kellnr_common::account_name::UserName;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_db::provider::DbResult;
 use kellnr_db::{CrateVisibility, DbProvider};
 
+use crate::error::ApiError;
 use crate::maybe_user::MaybeUser;
+
+/// Fail unless `user` owns the crate or is an admin.
+pub async fn check_ownership(
+    crate_name: &CanonicalName,
+    user: &MaybeUser,
+    db: &Arc<dyn DbProvider>,
+) -> Result<(), ApiError> {
+    if user.is_admin || db.is_owner(crate_name, &user.name).await? {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            "Not the owner of the crate",
+            StatusCode::FORBIDDEN,
+        ))
+    }
+}
+
+/// Fail if `user` is read-only. Admins can always modify.
+pub fn check_can_modify(user: &MaybeUser) -> Result<(), ApiError> {
+    if !user.is_admin && user.is_read_only {
+        Err(ApiError::new(
+            "Read-only users cannot modify the registry",
+            StatusCode::BAD_REQUEST,
+        ))
+    } else {
+        Ok(())
+    }
+}
 
 /// Whether `user` may read the content of a download-restricted crate,
 /// i.e. the crate archive and its hosted rustdoc.

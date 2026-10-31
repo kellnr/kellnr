@@ -1,5 +1,5 @@
 pub mod auth_req_token;
-pub mod crate_access;
+pub mod authz;
 pub mod error;
 pub mod login_throttle;
 pub mod maybe_user;

@@ -4,7 +4,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use kellnr_http::state::{DbState, SettingsState};
-use kellnr_http::crate_access::can_read_crate;
+use kellnr_http::authz::can_read_crate;
 use kellnr_http::maybe_user::MaybeUser;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::{Prefetch, db_date_to_http_date, is_not_modified, quote_etag};

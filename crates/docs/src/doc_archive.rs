@@ -4,13 +4,13 @@ use std::path::Path;
 use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
 use axum::http::Request;
-use kellnr_http::state::AppStateData;
 use kellnr_http::error::{ApiError, ApiResult};
-use kellnr_registry::registry_error::RegistryError;
+use kellnr_http::state::AppStateData;
 use tracing::warn;
 use zip::ZipArchive;
 use zip::result::ZipError;
 
+use crate::docs_error::DocsError;
 use crate::unpack::ExtractLimits;
 
 type Zip = ZipArchive<Cursor<Vec<u8>>>;
@@ -56,12 +56,12 @@ impl FromRequest<AppStateData, Body> for DocArchive {
     ) -> Result<Self, Self::Rejection> {
         let data_bytes: Vec<u8> = Bytes::from_request(req, state)
             .await
-            .map_err(RegistryError::ExtractBytesFailed)?
+            .map_err(DocsError::ExtractBytesFailed)?
             .to_vec();
 
         let max_docs_size = state.settings.docs.max_bytes();
         if data_bytes.len() > max_docs_size {
-            return Err(RegistryError::TooLarge(data_bytes.len(), max_docs_size).into());
+            return Err(DocsError::TooLarge(data_bytes.len(), max_docs_size).into());
         }
 
         let reader = Cursor::new(data_bytes);
