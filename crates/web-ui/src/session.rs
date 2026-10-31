@@ -8,6 +8,7 @@ use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
 use cookie::{SameSite, time};
 use kellnr_appstate::AppStateData;
+use kellnr_common::account_name::UserName;
 use kellnr_common::plain_token::PlainToken;
 use kellnr_common::util::generate_rand_string;
 use kellnr_db::SessionInfo;
@@ -23,7 +24,7 @@ use crate::error::RouteError;
 pub(crate) async fn create_session_jar(
     cookies: PrivateCookieJar,
     app_state: &AppStateData,
-    username: &str,
+    username: &UserName,
 ) -> Result<PrivateCookieJar, RouteError> {
     // 32 alphanumeric chars (~190 bits) to match the API token length, well
     // above the ~128-bit session-id recommendation.
@@ -83,10 +84,10 @@ async fn validate_session(
         })
 }
 
-pub struct AdminUser(pub String);
+pub struct AdminUser(pub UserName);
 
 impl AdminUser {
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &UserName {
         &self.0
     }
 }
@@ -112,12 +113,12 @@ impl FromRequestParts<AppStateData> for AdminUser {
 
 #[derive(Debug)]
 pub enum MaybeUser {
-    Normal(String),
-    Admin(String),
+    Normal(UserName),
+    Admin(UserName),
 }
 
 impl MaybeUser {
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &UserName {
         match self {
             Self::Normal(name) | Self::Admin(name) => name,
         }
@@ -241,7 +242,7 @@ mod session_tests {
             .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -270,7 +271,7 @@ mod session_tests {
             .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
-                    name: "admin".to_string(),
+                    name: UserName::new("admin").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -330,7 +331,7 @@ mod session_tests {
             .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
-                    name: "guest".to_string(),
+                    name: UserName::new("guest").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -356,7 +357,7 @@ mod session_tests {
             .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
-                    name: "guest".to_string(),
+                    name: UserName::new("guest").unwrap(),
                     is_admin: true,
                     is_read_only: false,
                 })
@@ -501,7 +502,7 @@ mod auth_middleware_tests {
             .with(eq(PlainToken::from("1234")))
             .returning(|_st| {
                 Ok(SessionInfo {
-                    name: "guest".to_string(),
+                    name: UserName::new("guest").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 })
@@ -619,7 +620,9 @@ mod session_cookie_tests {
         };
         let jar = PrivateCookieJar::from_headers(&HeaderMap::new(), Key::generate());
 
-        let jar = create_session_jar(jar, &state, "user").await.unwrap();
+        let jar = create_session_jar(jar, &state, &UserName::new("user").unwrap())
+            .await
+            .unwrap();
 
         jar.get(COOKIE_SESSION_ID).unwrap()
     }

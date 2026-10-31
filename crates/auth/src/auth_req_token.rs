@@ -118,6 +118,7 @@ mod test {
     use axum::routing::get;
     use axum::{Router, middleware};
     use kellnr_appstate::AppStateData;
+    use kellnr_common::account_name::UserName;
     use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -203,7 +204,7 @@ mod test {
             .returning(move |_| {
                 Ok(User {
                     id: kellnr_db::UserId::new(0),
-                    name: "user".to_string(),
+                    name: UserName::new("user").unwrap(),
                     pwd: String::new(),
                     salt: String::new(),
                     is_admin: false,

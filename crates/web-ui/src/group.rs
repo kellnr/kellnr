@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use kellnr_appstate::DbState;
-use kellnr_common::account_name::validate_group_name;
+use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_db::{self, Group, UserId};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -43,7 +43,7 @@ pub async fn list_groups(
 )]
 pub async fn delete(
     _user: AdminUser,
-    Path(name): Path<String>,
+    Path(name): Path<GroupName>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
     Ok(db.delete_group(&name).await?)
@@ -55,8 +55,9 @@ pub struct NewGroup {
 }
 
 impl NewGroup {
-    pub fn validate(&self) -> Result<(), RouteError> {
-        Ok(validate_group_name(&self.name)?)
+    /// Returns the name of the new group.
+    pub fn validate(&self) -> Result<GroupName, RouteError> {
+        Ok(GroupName::for_new_group(self.name.as_str())?)
     }
 }
 
@@ -78,15 +79,15 @@ pub async fn add(
     State(db): DbState,
     Json(new_group): Json<NewGroup>,
 ) -> Result<(), RouteError> {
-    new_group.validate()?;
+    let name = new_group.validate()?;
 
-    Ok(db.add_group(&new_group.name).await?)
+    Ok(db.add_group(&name).await?)
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct GroupUser {
     pub id: UserId,
-    pub name: String,
+    pub name: UserName,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -116,7 +117,7 @@ impl From<Vec<GroupUser>> for GroupUserList {
 )]
 pub async fn list_users(
     _user: AdminUser,
-    Path(group_name): Path<String>,
+    Path(group_name): Path<GroupName>,
     State(db): DbState,
 ) -> Result<Json<GroupUserList>, RouteError> {
     let users: Vec<GroupUser> = db
@@ -149,7 +150,7 @@ pub async fn list_users(
 )]
 pub async fn add_user(
     _user: AdminUser,
-    Path((group_name, name)): Path<(String, String)>,
+    Path((group_name, name)): Path<(GroupName, UserName)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
     if !db.is_group_user(&group_name, &name).await? {
@@ -176,7 +177,7 @@ pub async fn add_user(
 )]
 pub async fn delete_user(
     _user: AdminUser,
-    Path((group_name, name)): Path<(String, String)>,
+    Path((group_name, name)): Path<(GroupName, UserName)>,
     State(db): DbState,
 ) -> Result<(), RouteError> {
     Ok(db.delete_group_user(&group_name, &name).await?)
@@ -194,7 +195,7 @@ mod tests {
     async fn add_group_with_invalid_name_is_bad_request() {
         for name in ["", " ", "dev\tteam", &"a".repeat(65)] {
             let result = add(
-                AdminUser("admin".to_string()),
+                AdminUser(UserName::new("admin").unwrap()),
                 State(Arc::new(MockDb::new())),
                 Json(NewGroup {
                     name: name.to_string(),

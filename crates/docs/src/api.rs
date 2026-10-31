@@ -205,6 +205,7 @@ mod tests {
     use axum::routing::{get, put};
     use http_body_util::BodyExt;
     use kellnr_appstate::AppStateData;
+    use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -370,7 +371,7 @@ mod tests {
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
                 is_admin: true,
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 ..User::default()
             })
         });
@@ -393,7 +394,7 @@ mod tests {
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
                 is_admin: true,
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 ..User::default()
             })
         });
@@ -443,7 +444,7 @@ mod tests {
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
                 is_admin: true,
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 ..User::default()
             })
         });
@@ -533,7 +534,7 @@ mod tests {
         expect_original_name(&mut db, &canonical, "test-crate");
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
-                name: "reader".to_string(),
+                name: UserName::new("reader").unwrap(),
                 is_read_only: true,
                 ..User::default()
             })
@@ -582,7 +583,7 @@ mod tests {
         });
         db.expect_get_user_from_token().returning(|_| {
             Ok(User {
-                name: "other".to_string(),
+                name: UserName::new("other").unwrap(),
                 ..User::default()
             })
         });
@@ -682,7 +683,7 @@ mod tests {
     fn expect_token_user(db: &mut MockDb, name: &'static str) {
         db.expect_get_user_from_token().returning(move |_| {
             Ok(User {
-                name: name.to_string(),
+                name: UserName::new(name).unwrap(),
                 ..User::default()
             })
         });
@@ -788,7 +789,10 @@ mod tests {
         expect_restricted_crate(&mut db, true);
         expect_token_user(&mut db, "alice");
         db.expect_is_crate_user()
-            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("alice"))
+            .with(
+                eq(CanonicalName::try_from("secret").unwrap()),
+                eq(UserName::new("alice").unwrap()),
+            )
             .returning(|_, _| Ok(true));
 
         let location = latest_location(db, docs_storage, Some("token")).await;
@@ -805,7 +809,10 @@ mod tests {
         db.expect_is_crate_user().returning(|_, _| Ok(false));
         db.expect_is_crate_group_user().returning(|_, _| Ok(false));
         db.expect_is_owner()
-            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("olivia"))
+            .with(
+                eq(CanonicalName::try_from("secret").unwrap()),
+                eq(UserName::new("olivia").unwrap()),
+            )
             .returning(|_, _| Ok(true));
 
         let location = latest_location(db, docs_storage, Some("token")).await;
@@ -821,7 +828,10 @@ mod tests {
         expect_token_user(&mut db, "greg");
         db.expect_is_crate_user().returning(|_, _| Ok(false));
         db.expect_is_crate_group_user()
-            .with(eq(CanonicalName::try_from("secret").unwrap()), eq("greg"))
+            .with(
+                eq(CanonicalName::try_from("secret").unwrap()),
+                eq(UserName::new("greg").unwrap()),
+            )
             .returning(|_, _| Ok(true));
 
         let location = latest_location(db, docs_storage, Some("token")).await;

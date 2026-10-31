@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
+use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use kellnr_common::crate_overview::CrateOverview;
@@ -606,7 +607,10 @@ async fn is_owner_true(test_db: &kellnr_db::Database) {
 
     assert!(
         test_db
-            .is_owner(&CanonicalName::try_from("mycrate").unwrap(), "admin")
+            .is_owner(
+                &CanonicalName::try_from("mycrate").unwrap(),
+                &UserName::new("admin").unwrap()
+            )
             .await
             .unwrap()
     );
@@ -626,7 +630,10 @@ async fn is_owner_false(test_db: &kellnr_db::Database) {
 
     assert!(
         !test_db
-            .is_owner(&CanonicalName::try_from("mycrate").unwrap(), "user")
+            .is_owner(
+                &CanonicalName::try_from("mycrate").unwrap(),
+                &UserName::new("user").unwrap()
+            )
             .await
             .unwrap()
     );
@@ -645,7 +652,10 @@ async fn delete_owner_valid_owner(test_db: &kellnr_db::Database) {
     .unwrap();
 
     test_db
-        .delete_owner(&CanonicalName::try_from("mycrate").unwrap(), "admin")
+        .delete_owner(
+            &CanonicalName::try_from("mycrate").unwrap(),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
 
@@ -689,19 +699,33 @@ async fn test_add_crate_duplicate(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn test_add_crate_different_user(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("user", "123", UserFlags::normal())
+        .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
         .await
         .unwrap();
     let pm = PublishMetadata::minimal("mycrate", "1.0.0");
     let created = Utc::now();
 
     test_db
-        .add_crate(&pm, "cksum", 1024, &created, "admin", None)
+        .add_crate(
+            &pm,
+            "cksum",
+            1024,
+            &created,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
     assert!(
         test_db
-            .add_crate(&pm, "cksum", 1024, &created, "user", None)
+            .add_crate(
+                &pm,
+                "cksum",
+                1024,
+                &created,
+                &UserName::new("user").unwrap(),
+                None
+            )
             .await
             .is_err()
     );
@@ -741,7 +765,11 @@ async fn test_add_empty_crate_exists(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_user_from_token_works(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test1", &PlainToken::from("mytoken1"), "admin")
+        .add_auth_token(
+            "test1",
+            &PlainToken::from("mytoken1"),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
 
@@ -756,13 +784,22 @@ async fn get_user_from_token_works(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("dated", &PlainToken::from("dated-token"), "admin")
+        .add_auth_token(
+            "dated",
+            &PlainToken::from("dated-token"),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
     let token =
         |tokens: Vec<kellnr_db::AuthToken>| tokens.into_iter().find(|t| t.name == "dated").unwrap();
 
-    let created = token(test_db.get_auth_tokens("admin").await.unwrap());
+    let created = token(
+        test_db
+            .get_auth_tokens(&UserName::new("admin").unwrap())
+            .await
+            .unwrap(),
+    );
     assert!(created.created.is_some());
     assert_eq!(None, created.last_used);
 
@@ -770,7 +807,12 @@ async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) 
         .get_user_from_token(&PlainToken::from("dated-token"))
         .await
         .unwrap();
-    let used = token(test_db.get_auth_tokens("admin").await.unwrap());
+    let used = token(
+        test_db
+            .get_auth_tokens(&UserName::new("admin").unwrap())
+            .await
+            .unwrap(),
+    );
     assert!(used.last_used.is_some());
 
     // A recent use is not written again, an old one is
@@ -781,7 +823,12 @@ async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) 
         .get_user_from_token(&PlainToken::from("dated-token"))
         .await
         .unwrap();
-    let recent = token(test_db.get_auth_tokens("admin").await.unwrap());
+    let recent = token(
+        test_db
+            .get_auth_tokens(&UserName::new("admin").unwrap())
+            .await
+            .unwrap(),
+    );
     assert_eq!(Some("2999-01-01 00:00:00".to_string()), recent.last_used);
 
     set_auth_token_last_used(test_db, "dated", "2000-01-01 00:00:00")
@@ -791,22 +838,38 @@ async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) 
         .get_user_from_token(&PlainToken::from("dated-token"))
         .await
         .unwrap();
-    let old = token(test_db.get_auth_tokens("admin").await.unwrap());
+    let old = token(
+        test_db
+            .get_auth_tokens(&UserName::new("admin").unwrap())
+            .await
+            .unwrap(),
+    );
     assert_ne!(Some("2000-01-01 00:00:00".to_string()), old.last_used);
 }
 
 #[db_test]
 async fn get_auth_tokens_returns_all_tokens(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test1", &PlainToken::from("mytoken1"), "admin")
+        .add_auth_token(
+            "test1",
+            &PlainToken::from("mytoken1"),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
     test_db
-        .add_auth_token("test2", &PlainToken::from("mytoken2"), "admin")
+        .add_auth_token(
+            "test2",
+            &PlainToken::from("mytoken2"),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
 
-    let tokens = test_db.get_auth_tokens("admin").await.unwrap();
+    let tokens = test_db
+        .get_auth_tokens(&UserName::new("admin").unwrap())
+        .await
+        .unwrap();
 
     assert_eq!(3, tokens.len());
     assert_eq!("admin", tokens[0].name);
@@ -817,7 +880,11 @@ async fn get_auth_tokens_returns_all_tokens(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn auth_token_insert_and_read(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test", &PlainToken::from("mytoken"), "admin")
+        .add_auth_token(
+            "test",
+            &PlainToken::from("mytoken"),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
     let user = test_db
@@ -831,12 +898,16 @@ async fn auth_token_insert_and_read(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn auth_token_insert_and_delete(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test", &PlainToken::from("mytoken"), "admin")
+        .add_auth_token(
+            "test",
+            &PlainToken::from("mytoken"),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
 
     test_db
-        .delete_auth_token("admin", AuthTokenId::new(2))
+        .delete_auth_token(&UserName::new("admin").unwrap(), AuthTokenId::new(2))
         .await
         .unwrap();
 
@@ -851,16 +922,20 @@ async fn auth_token_insert_and_delete(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn delete_auth_token_of_other_user_fails(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("other", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("other").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
     test_db
-        .add_auth_token("test", &PlainToken::from("mytoken"), "admin")
+        .add_auth_token(
+            "test",
+            &PlainToken::from("mytoken"),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
 
     let result = test_db
-        .delete_auth_token("other", AuthTokenId::new(2))
+        .delete_auth_token(&UserName::new("other").unwrap(), AuthTokenId::new(2))
         .await;
 
     assert!(matches!(
@@ -877,7 +952,7 @@ async fn delete_auth_token_of_other_user_fails(test_db: &kellnr_db::Database) {
     );
     assert!(matches!(
         test_db
-            .delete_auth_token("admin", AuthTokenId::new(99))
+            .delete_auth_token(&UserName::new("admin").unwrap(), AuthTokenId::new(99))
             .await,
         Err(kellnr_db::error::DbError::TokenNotFound)
     ));
@@ -886,7 +961,11 @@ async fn delete_auth_token_of_other_user_fails(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_user_from_token_no_token(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test", &PlainToken::from("mytoken"), "admin")
+        .add_auth_token(
+            "test",
+            &PlainToken::from("mytoken"),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
 
@@ -902,7 +981,11 @@ async fn get_user_from_token_no_token(test_db: &kellnr_db::Database) {
 async fn add_auth_token_no_user(test_db: &kellnr_db::Database) {
     assert!(
         test_db
-            .add_auth_token("test", &PlainToken::from("mytoken"), "nouser")
+            .add_auth_token(
+                "test",
+                &PlainToken::from("mytoken"),
+                &UserName::new("nouser").unwrap()
+            )
             .await
             .is_err()
     );
@@ -911,19 +994,22 @@ async fn add_auth_token_no_user(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn delete_user_with_sessions(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("user", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("user").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
     test_db
-        .add_session_token("user", &PlainToken::from("123"))
+        .add_session_token(&UserName::new("user").unwrap(), &PlainToken::from("123"))
         .await
         .unwrap();
     test_db
-        .add_session_token("user", &PlainToken::from("abc"))
+        .add_session_token(&UserName::new("user").unwrap(), &PlainToken::from("abc"))
         .await
         .unwrap();
 
-    test_db.delete_user("user").await.unwrap();
+    test_db
+        .delete_user(&UserName::new("user").unwrap())
+        .await
+        .unwrap();
 
     assert!(
         test_db
@@ -937,17 +1023,25 @@ async fn delete_user_with_sessions(test_db: &kellnr_db::Database) {
             .await
             .is_err()
     );
-    assert!(test_db.get_user("user").await.is_err());
+    assert!(
+        test_db
+            .get_user(&UserName::new("user").unwrap())
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
 async fn add_user_works(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("user", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("user").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
 
-    let user = test_db.get_user("user").await.unwrap();
+    let user = test_db
+        .get_user(&UserName::new("user").unwrap())
+        .await
+        .unwrap();
     // Compare fields individually since created is dynamic
     assert_eq!(UserId::new(2), user.id);
     assert_eq!("user", user.name);
@@ -975,23 +1069,48 @@ async fn add_user_stores_the_flags_in_their_columns(test_db: &kellnr_db::Databas
         ),
     ];
     for (name, flags, is_admin, is_read_only) in cases {
-        test_db.add_user(name, "pwd", flags).await.unwrap();
+        test_db
+            .add_user(&UserName::new(name).unwrap(), "pwd", flags)
+            .await
+            .unwrap();
 
-        let user = test_db.get_user(name).await.unwrap();
+        let user = test_db
+            .get_user(&UserName::new(name).unwrap())
+            .await
+            .unwrap();
         assert_eq!((is_admin, is_read_only), (user.is_admin, user.is_read_only));
     }
+}
+
+/// Kellnr versions before the name rules stored names that new users may
+/// not have anymore. Such users must still work.
+#[db_test]
+async fn users_with_names_against_the_rules_still_work(test_db: &kellnr_db::Database) {
+    let name = UserName::new("legacy:user").unwrap();
+    assert!(UserName::for_new_user(name.as_str()).is_err());
+    test_db
+        .add_user(&name, "pwd", UserFlags::normal())
+        .await
+        .unwrap();
+
+    let user = test_db.authenticate_user(&name, "pwd").await.unwrap();
+    assert_eq!(name, user.name);
+    let users = test_db.get_users().await.unwrap();
+    assert!(users.iter().any(|u| u.name == name));
+    test_db.delete_user(&name).await.unwrap();
+    assert!(test_db.get_user(&name).await.is_err());
 }
 
 #[db_test]
 async fn add_user_duplicate(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("user", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("user").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
 
     assert!(
         test_db
-            .add_user("user", "pwd", UserFlags::normal())
+            .add_user(&UserName::new("user").unwrap(), "pwd", UserFlags::normal())
             .await
             .is_err()
     );
@@ -1000,7 +1119,7 @@ async fn add_user_duplicate(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_users_works(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("user", "123", UserFlags::normal())
+        .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
         .await
         .unwrap();
 
@@ -1013,51 +1132,101 @@ async fn get_users_works(test_db: &kellnr_db::Database) {
 
 #[db_test]
 async fn get_user_existing_user(test_db: &kellnr_db::Database) {
-    let users = test_db.get_user("admin").await.unwrap();
+    let users = test_db
+        .get_user(&UserName::new("admin").unwrap())
+        .await
+        .unwrap();
 
     assert_eq!("admin", users.name);
 }
 
 #[db_test]
 async fn get_user_no_user(test_db: &kellnr_db::Database) {
-    assert!(test_db.get_user("no_user").await.is_err());
+    assert!(
+        test_db
+            .get_user(&UserName::new("no_user").unwrap())
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
 async fn change_pwd_works(test_db: &kellnr_db::Database) {
-    test_db.change_pwd("admin", "abc").await.unwrap();
+    test_db
+        .change_pwd(&UserName::new("admin").unwrap(), "abc")
+        .await
+        .unwrap();
 
-    assert!(test_db.authenticate_user("admin", "abc").await.is_ok());
-    assert!(test_db.authenticate_user("admin", "123").await.is_err());
-    let admin = test_db.get_user("admin").await.unwrap();
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("admin").unwrap(), "abc")
+            .await
+            .is_ok()
+    );
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("admin").unwrap(), "123")
+            .await
+            .is_err()
+    );
+    let admin = test_db
+        .get_user(&UserName::new("admin").unwrap())
+        .await
+        .unwrap();
     assert!(admin.pwd.starts_with("$argon2id$"), "{}", admin.pwd);
 }
 
 #[db_test]
 async fn authenticate_user_upgrades_legacy_hash(test_db: &kellnr_db::Database) {
-    set_legacy_pwd(test_db, "admin", "legacy", "salt")
+    set_legacy_pwd(test_db, &UserName::new("admin").unwrap(), "legacy", "salt")
         .await
         .unwrap();
 
-    assert!(test_db.authenticate_user("admin", "legacy").await.is_ok());
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("admin").unwrap(), "legacy")
+            .await
+            .is_ok()
+    );
 
-    let admin = test_db.get_user("admin").await.unwrap();
+    let admin = test_db
+        .get_user(&UserName::new("admin").unwrap())
+        .await
+        .unwrap();
     assert!(admin.pwd.starts_with("$argon2id$"), "{}", admin.pwd);
     assert!(admin.salt.is_empty());
     // The upgraded hash keeps accepting the same password.
-    assert!(test_db.authenticate_user("admin", "legacy").await.is_ok());
-    assert!(test_db.authenticate_user("admin", "wrong").await.is_err());
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("admin").unwrap(), "legacy")
+            .await
+            .is_ok()
+    );
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("admin").unwrap(), "wrong")
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
 async fn authenticate_user_keeps_legacy_hash_on_wrong_pwd(test_db: &kellnr_db::Database) {
-    set_legacy_pwd(test_db, "admin", "legacy", "salt")
+    set_legacy_pwd(test_db, &UserName::new("admin").unwrap(), "legacy", "salt")
         .await
         .unwrap();
 
-    assert!(test_db.authenticate_user("admin", "wrong").await.is_err());
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("admin").unwrap(), "wrong")
+            .await
+            .is_err()
+    );
 
-    let admin = test_db.get_user("admin").await.unwrap();
+    let admin = test_db
+        .get_user(&UserName::new("admin").unwrap())
+        .await
+        .unwrap();
     assert!(!admin.pwd.starts_with('$'));
     assert_eq!("salt", admin.salt);
 }
@@ -1067,11 +1236,20 @@ async fn is_crate_group_user_works(test_db: &kellnr_db::Database) {
     let group = "group";
     let user = "user";
     test_db
-        .add_user(user, "pwd", UserFlags::normal())
+        .add_user(&UserName::new(user).unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
-    test_db.add_group(group).await.unwrap();
-    test_db.add_group_user(group, user).await.unwrap();
+    test_db
+        .add_group(&GroupName::new(group).unwrap())
+        .await
+        .unwrap();
+    test_db
+        .add_group_user(
+            &GroupName::new(group).unwrap(),
+            &UserName::new(user).unwrap(),
+        )
+        .await
+        .unwrap();
     let id = test_add_crate(
         test_db,
         "foobar",
@@ -1083,18 +1261,23 @@ async fn is_crate_group_user_works(test_db: &kellnr_db::Database) {
     .unwrap();
     let crate_name_norm = CanonicalName::try_from("foobar").unwrap();
     test_db
-        .add_crate_group(&crate_name_norm, group)
+        .add_crate_group(&crate_name_norm, &GroupName::new(group).unwrap())
         .await
         .unwrap();
 
-    let res = test_db.is_crate_group_user(&crate_name_norm, user).await;
+    let res = test_db
+        .is_crate_group_user(&crate_name_norm, &UserName::new(user).unwrap())
+        .await;
     assert!(res.is_ok_and(|user_is_in_crate_group| user_is_in_crate_group));
 }
 
 #[db_test]
 async fn clean_db_after_time(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", &PlainToken::from("session_token"))
+        .add_session_token(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("session_token"),
+        )
         .await
         .unwrap();
     let session = test_db
@@ -1122,7 +1305,10 @@ async fn clean_db_after_time(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn session_token_is_stored_hashed(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", &PlainToken::from("plain_session_token"))
+        .add_session_token(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("plain_session_token"),
+        )
         .await
         .unwrap();
 
@@ -1150,23 +1336,32 @@ async fn session_token_is_stored_hashed(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn delete_user_sessions_removes_all_sessions_of_user(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("user", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("user").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
     test_db
-        .add_session_token("admin", &PlainToken::from("admin_1"))
+        .add_session_token(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("admin_1"),
+        )
         .await
         .unwrap();
     test_db
-        .add_session_token("admin", &PlainToken::from("admin_2"))
+        .add_session_token(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("admin_2"),
+        )
         .await
         .unwrap();
     test_db
-        .add_session_token("user", &PlainToken::from("user_1"))
+        .add_session_token(&UserName::new("user").unwrap(), &PlainToken::from("user_1"))
         .await
         .unwrap();
 
-    let removed = test_db.delete_user_sessions("admin").await.unwrap();
+    let removed = test_db
+        .delete_user_sessions(&UserName::new("admin").unwrap())
+        .await
+        .unwrap();
 
     assert_eq!(removed, 2);
     assert!(
@@ -1192,16 +1387,22 @@ async fn delete_user_sessions_removes_all_sessions_of_user(test_db: &kellnr_db::
 #[db_test]
 async fn delete_user_sessions_keeps_given_session(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", &PlainToken::from("current"))
+        .add_session_token(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("current"),
+        )
         .await
         .unwrap();
     test_db
-        .add_session_token("admin", &PlainToken::from("other"))
+        .add_session_token(&UserName::new("admin").unwrap(), &PlainToken::from("other"))
         .await
         .unwrap();
 
     let removed = test_db
-        .delete_other_user_sessions("admin", &PlainToken::from("current"))
+        .delete_other_user_sessions(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("current"),
+        )
         .await
         .unwrap();
 
@@ -1223,7 +1424,10 @@ async fn delete_user_sessions_keeps_given_session(test_db: &kellnr_db::Database)
 #[db_test]
 async fn delete_session_token_works(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", &PlainToken::from("session_token"))
+        .add_session_token(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("session_token"),
+        )
         .await
         .unwrap();
     let session = test_db
@@ -1246,7 +1450,10 @@ async fn delete_session_token_works(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn delete_session_token_no_token(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", &PlainToken::from("session_token"))
+        .add_session_token(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("session_token"),
+        )
         .await
         .unwrap();
     let session = test_db
@@ -1265,7 +1472,10 @@ async fn delete_session_token_no_token(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_name_valid_user_and_token(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", &PlainToken::from("session_token"))
+        .add_session_token(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("session_token"),
+        )
         .await
         .unwrap();
     let session = test_db
@@ -1414,11 +1624,18 @@ async fn delete_expired_sessions_removes_only_old(test_db: &kellnr_db::Database)
 async fn validate_session_returns_read_only_and_admin_flags(test_db: &kellnr_db::Database) {
     // read-only, non-admin user
     test_db
-        .add_user("rouser", "pwd", UserFlags::read_only())
+        .add_user(
+            &UserName::new("rouser").unwrap(),
+            "pwd",
+            UserFlags::read_only(),
+        )
         .await
         .unwrap();
     test_db
-        .add_session_token("rouser", &PlainToken::from("ro_session"))
+        .add_session_token(
+            &UserName::new("rouser").unwrap(),
+            &PlainToken::from("ro_session"),
+        )
         .await
         .unwrap();
 
@@ -1432,7 +1649,10 @@ async fn validate_session_returns_read_only_and_admin_flags(test_db: &kellnr_db:
 
     // default admin user is an admin and not read-only
     test_db
-        .add_session_token("admin", &PlainToken::from("admin_session"))
+        .add_session_token(
+            &UserName::new("admin").unwrap(),
+            &PlainToken::from("admin_session"),
+        )
         .await
         .unwrap();
     let admin = test_db
@@ -1445,28 +1665,51 @@ async fn validate_session_returns_read_only_and_admin_flags(test_db: &kellnr_db:
 
 #[db_test]
 async fn bootstrap_db_inserts_admin(test_db: &kellnr_db::Database) {
-    let admin = test_db.get_user("admin").await.unwrap();
+    let admin = test_db
+        .get_user(&UserName::new("admin").unwrap())
+        .await
+        .unwrap();
     assert_eq!(UserId::new(1), admin.id);
     assert_eq!("admin", admin.name);
     assert!(admin.pwd.starts_with("$argon2id$"), "{}", admin.pwd);
     assert!(admin.salt.is_empty());
-    assert!(test_db.authenticate_user("admin", "123").await.is_ok());
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("admin").unwrap(), "123")
+            .await
+            .is_ok()
+    );
     assert!(admin.is_admin);
 }
 
 #[db_test]
 async fn authenticate_user_valid(test_db: &kellnr_db::Database) {
-    assert!(test_db.authenticate_user("admin", "123").await.is_ok());
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("admin").unwrap(), "123")
+            .await
+            .is_ok()
+    );
 }
 
 #[db_test]
 async fn authenticate_user_unknown_user(test_db: &kellnr_db::Database) {
-    assert!(test_db.authenticate_user("unknown", "123").await.is_err());
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("unknown").unwrap(), "123")
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
 async fn authenticate_user_wrong_pwd(test_db: &kellnr_db::Database) {
-    assert!(test_db.authenticate_user("admin", "abc").await.is_err());
+    assert!(
+        test_db
+            .authenticate_user(&UserName::new("admin").unwrap(), "abc")
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
@@ -2335,7 +2578,14 @@ async fn get_crate_overview_list_filters_by_keyword_and_category(test_db: &kelln
             ..PublishMetadata::minimal(name, "1.0.0")
         };
         test_db
-            .add_crate(&pm, "cksum", 1024, &created, "admin", None)
+            .add_crate(
+                &pm,
+                "cksum",
+                1024,
+                &created,
+                &UserName::new("admin").unwrap(),
+                None,
+            )
             .await
             .unwrap();
     }
@@ -2393,7 +2643,14 @@ async fn get_crate_data_returns_size_and_rust_version(test_db: &kellnr_db::Datab
         ..PublishMetadata::minimal("sized", "1.0.0")
     };
     test_db
-        .add_crate(&pm, "cksum", 4711, &created, "admin", None)
+        .add_crate(
+            &pm,
+            "cksum",
+            4711,
+            &created,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -2415,7 +2672,7 @@ async fn get_crate_data_returns_publisher(test_db: &kellnr_db::Database) {
             "cksum",
             1024,
             &created,
-            "admin",
+            &UserName::new("admin").unwrap(),
             Some("ci".to_string()),
         )
         .await
@@ -2426,7 +2683,7 @@ async fn get_crate_data_returns_publisher(test_db: &kellnr_db::Database) {
             "cksum",
             1024,
             &created,
-            "admin",
+            &UserName::new("admin").unwrap(),
             None,
         )
         .await
@@ -2447,7 +2704,11 @@ async fn get_crate_data_returns_publisher(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_auth_token_name_finds_the_token(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("deploy", &PlainToken::from("secret-token"), "admin")
+        .add_auth_token(
+            "deploy",
+            &PlainToken::from("secret-token"),
+            &UserName::new("admin").unwrap(),
+        )
         .await
         .unwrap();
 
@@ -2476,7 +2737,14 @@ async fn get_crate_data_returns_latest_version_of_dependencies(test_db: &kellnr_
             ..PublishMetadata::minimal("dep-lib", version)
         };
         test_db
-            .add_crate(&pm, "cksum", 1024, &created, "admin", None)
+            .add_crate(
+                &pm,
+                "cksum",
+                1024,
+                &created,
+                &UserName::new("admin").unwrap(),
+                None,
+            )
             .await
             .unwrap();
     }
@@ -2512,7 +2780,14 @@ async fn get_crate_data_returns_latest_version_of_dependencies(test_db: &kellnr_
         ..PublishMetadata::minimal("app", "1.0.0")
     };
     test_db
-        .add_crate(&pm, "cksum", 1024, &created, "admin", None)
+        .add_crate(
+            &pm,
+            "cksum",
+            1024,
+            &created,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -2707,21 +2982,39 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
         ..Default::default()
     };
     test_db
-        .add_user("owner1", "pwd1", UserFlags::normal())
+        .add_user(
+            &UserName::new("owner1").unwrap(),
+            "pwd1",
+            UserFlags::normal(),
+        )
         .await
         .unwrap();
     test_db
-        .add_user("owner2", "pwd2", UserFlags::normal())
+        .add_user(
+            &UserName::new("owner2").unwrap(),
+            "pwd2",
+            UserFlags::normal(),
+        )
         .await
         .unwrap();
 
     // Test, if adding a new crate with multiple versions works as expected
     test_db
-        .add_crate(&pm1_v1, "cksum1_1", 1024, &created, "owner1", None)
+        .add_crate(
+            &pm1_v1,
+            "cksum1_1",
+            1024,
+            &created,
+            &UserName::new("owner1").unwrap(),
+            None,
+        )
         .await
         .unwrap();
     test_db
-        .add_owner(&CanonicalName::try_from("crate1").unwrap(), "owner2")
+        .add_owner(
+            &CanonicalName::try_from("crate1").unwrap(),
+            &UserName::new("owner2").unwrap(),
+        )
         .await
         .unwrap();
 
@@ -2777,7 +3070,14 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
     );
 
     test_db
-        .add_crate(&pm1_v2, "cksum1_2", 1024, &created, "owner1", None)
+        .add_crate(
+            &pm1_v2,
+            "cksum1_2",
+            1024,
+            &created,
+            &UserName::new("owner1").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -2860,7 +3160,14 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
     assert_ne!(etag1_v1, etag1_v2);
 
     test_db
-        .add_crate(&pm2_v1, "cksum2_1", 1024, &created, "owner2", None)
+        .add_crate(
+            &pm2_v1,
+            "cksum2_1",
+            1024,
+            &created,
+            &UserName::new("owner2").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -2911,7 +3218,14 @@ async fn add_crate_and_get_crate_data(test_db: &kellnr_db::Database) {
     );
 
     test_db
-        .add_crate(&pm2_v2, "cksum2_2", 1024, &created, "owner2", None)
+        .add_crate(
+            &pm2_v2,
+            "cksum2_2",
+            1024,
+            &created,
+            &UserName::new("owner2").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -2991,11 +3305,22 @@ async fn update_docs_link(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     let pm = PublishMetadata::minimal("crate1", "1.0.0");
     test_db
-        .add_user("owner1", "pwd", UserFlags::normal())
+        .add_user(
+            &UserName::new("owner1").unwrap(),
+            "pwd",
+            UserFlags::normal(),
+        )
         .await
         .unwrap();
     test_db
-        .add_crate(&pm, "cksum1_1", 1024, &created, "owner1", None)
+        .add_crate(
+            &pm,
+            "cksum1_1",
+            1024,
+            &created,
+            &UserName::new("owner1").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -3170,15 +3495,36 @@ async fn get_prefetch_data_with_full_data(test_db: &kellnr_db::Database) {
     };
 
     test_db
-        .add_crate(&pm1, "cksum1_1", 1024, &created1, "admin", None)
+        .add_crate(
+            &pm1,
+            "cksum1_1",
+            1024,
+            &created1,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
     test_db
-        .add_crate(&pm2, "cksum2_1", 1024, &created2, "admin", None)
+        .add_crate(
+            &pm2,
+            "cksum2_1",
+            1024,
+            &created2,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
     test_db
-        .add_crate(&pm3, "cksum3_1", 1024, &created3, "admin", None)
+        .add_crate(
+            &pm3,
+            "cksum3_1",
+            1024,
+            &created3,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -3274,11 +3620,25 @@ async fn delete_updates_etag(test_db: &kellnr_db::Database) {
         rust_version: None,
     };
     test_db
-        .add_crate(&pm1, "cksum1_1", 1024, &created1, "admin", None)
+        .add_crate(
+            &pm1,
+            "cksum1_1",
+            1024,
+            &created1,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
     test_db
-        .add_crate(&pm2, "cksum2_1", 1024, &created2, "admin", None)
+        .add_crate(
+            &pm2,
+            "cksum2_1",
+            1024,
+            &created2,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
     let prefetch_data = test_db
@@ -4024,7 +4384,14 @@ async fn crate_index_keeps_rust_version(test_db: &kellnr_db::Database) {
     let mut pm = PublishMetadata::minimal("crate", "1.0.0");
     pm.rust_version = Some("1.85".to_string());
     test_db
-        .add_crate(&pm, "cksum", 1024, &created, "admin", None)
+        .add_crate(
+            &pm,
+            "cksum",
+            1024,
+            &created,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -4106,7 +4473,11 @@ async fn has_oauth2_admin_requires_an_admin_with_a_linked_identity(test_db: &kel
     // A local-only admin does not count. It cannot log in once SSO is enforced,
     // which is exactly the lockout this check exists to detect.
     test_db
-        .add_user("local_admin", "pwd", UserFlags::admin())
+        .add_user(
+            &UserName::new("local_admin").unwrap(),
+            "pwd",
+            UserFlags::admin(),
+        )
         .await
         .unwrap();
     assert!(!test_db.has_oauth2_admin().await.unwrap());
@@ -4114,7 +4485,7 @@ async fn has_oauth2_admin_requires_an_admin_with_a_linked_identity(test_db: &kel
     // An SSO user without admin rights does not count either.
     test_db
         .create_oauth2_user(
-            "sso_user",
+            &UserName::new("sso_user").unwrap(),
             "https://idp",
             "sub-1",
             None,
@@ -4127,7 +4498,7 @@ async fn has_oauth2_admin_requires_an_admin_with_a_linked_identity(test_db: &kel
     // An admin with a linked identity is what makes the deployment usable.
     test_db
         .create_oauth2_user(
-            "sso_admin",
+            &UserName::new("sso_admin").unwrap(),
             "https://idp",
             "sub-2",
             None,
@@ -4143,15 +4514,24 @@ async fn has_oauth2_admin_requires_an_admin_with_a_linked_identity(test_db: &kel
 /// accessible to `user` through a different path except `restricted_other`.
 async fn add_crates_with_restrictions(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("user", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("user").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
     test_db
-        .add_user("other", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("other").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
-    test_db.add_group("group").await.unwrap();
-    test_db.add_group_user("group", "user").await.unwrap();
+    test_db
+        .add_group(&GroupName::new("group").unwrap())
+        .await
+        .unwrap();
+    test_db
+        .add_group_user(
+            &GroupName::new("group").unwrap(),
+            &UserName::new("user").unwrap(),
+        )
+        .await
+        .unwrap();
 
     let crates = [
         ("public", "admin", 1),
@@ -4187,13 +4567,16 @@ async fn add_crates_with_restrictions(test_db: &kellnr_db::Database) {
         }
     }
     test_db
-        .add_crate_user(&CanonicalName::try_from("restricted_user").unwrap(), "user")
+        .add_crate_user(
+            &CanonicalName::try_from("restricted_user").unwrap(),
+            &UserName::new("user").unwrap(),
+        )
         .await
         .unwrap();
     test_db
         .add_crate_group(
             &CanonicalName::try_from("restricted_group").unwrap(),
-            "group",
+            &GroupName::new("group").unwrap(),
         )
         .await
         .unwrap();
@@ -4234,15 +4617,27 @@ async fn crate_overview_list_respects_visibility(test_db: &kellnr_db::Database) 
             "restricted_owned",
             "restricted_user"
         ],
-        overview_names(test_db, &CrateVisibility::User("user".to_string())).await
+        overview_names(
+            test_db,
+            &CrateVisibility::User(UserName::new("user").unwrap())
+        )
+        .await
     );
     assert_eq!(
         vec!["public", "restricted_other"],
-        overview_names(test_db, &CrateVisibility::User("other".to_string())).await
+        overview_names(
+            test_db,
+            &CrateVisibility::User(UserName::new("other").unwrap())
+        )
+        .await
     );
     assert_eq!(
         vec!["public"],
-        overview_names(test_db, &CrateVisibility::User("unknown".to_string())).await
+        overview_names(
+            test_db,
+            &CrateVisibility::User(UserName::new("unknown").unwrap())
+        )
+        .await
     );
     assert_eq!(
         5,
@@ -4253,7 +4648,7 @@ async fn crate_overview_list_respects_visibility(test_db: &kellnr_db::Database) 
 #[db_test]
 async fn search_and_count_respect_visibility(test_db: &kellnr_db::Database) {
     add_crates_with_restrictions(test_db).await;
-    let user = CrateVisibility::User("user".to_string());
+    let user = CrateVisibility::User(UserName::new("user").unwrap());
 
     let found: Vec<String> = test_db
         .search_in_crate_name_and_description("restricted", 100, 0, false, &user)
@@ -4303,7 +4698,7 @@ async fn statistics_respect_visibility(test_db: &kellnr_db::Database) {
         .unwrap();
     assert_eq!(vec![("public".to_string(), 10)], top);
     let top = test_db
-        .get_top_crates_downloads(1, &CrateVisibility::User("user".to_string()))
+        .get_top_crates_downloads(1, &CrateVisibility::User(UserName::new("user").unwrap()))
         .await
         .unwrap();
     assert_eq!(vec![("restricted_group".to_string(), 40)], top);
@@ -4450,12 +4845,26 @@ async fn get_crate_license_returns_license_of_version(test_db: &kellnr_db::Datab
     let mut pm = PublishMetadata::minimal("licensed", "1.0.0");
     pm.license = Some("MIT".to_string());
     test_db
-        .add_crate(&pm, "cksum", 1, &created, "admin", None)
+        .add_crate(
+            &pm,
+            "cksum",
+            1,
+            &created,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
     let pm = PublishMetadata::minimal("licensed", "2.0.0");
     test_db
-        .add_crate(&pm, "cksum", 1, &created, "admin", None)
+        .add_crate(
+            &pm,
+            "cksum",
+            1,
+            &created,
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -4484,7 +4893,7 @@ async fn add_crate_adds_version_to_mixed_case_crate(test_db: &kellnr_db::Databas
                 "cksum",
                 1024,
                 &created,
-                "admin",
+                &UserName::new("admin").unwrap(),
                 None,
             )
             .await
@@ -4503,7 +4912,11 @@ async fn add_crate_adds_version_to_mixed_case_crate(test_db: &kellnr_db::Databas
 async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Database) {
     let created = Utc::now();
     test_db
-        .add_user("mallory", "pwd", UserFlags::normal())
+        .add_user(
+            &UserName::new("mallory").unwrap(),
+            "pwd",
+            UserFlags::normal(),
+        )
         .await
         .unwrap();
     test_db
@@ -4512,7 +4925,7 @@ async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Data
             "cksum",
             1024,
             &created,
-            "admin",
+            &UserName::new("admin").unwrap(),
             None,
         )
         .await
@@ -4524,7 +4937,7 @@ async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Data
             "cksum",
             1024,
             &created,
-            "mallory",
+            &UserName::new("mallory").unwrap(),
             None,
         )
         .await;
@@ -4534,7 +4947,12 @@ async fn add_crate_rejects_non_owner_of_existing_crate(test_db: &kellnr_db::Data
         Err(kellnr_db::error::DbError::NotOwner(_))
     ));
     let name = CanonicalName::try_from("taken").unwrap();
-    assert!(!test_db.is_owner(&name, "mallory").await.unwrap());
+    assert!(
+        !test_db
+            .is_owner(&name, &UserName::new("mallory").unwrap())
+            .await
+            .unwrap()
+    );
     assert_eq!(1, test_db.get_crate_meta_list(&name).await.unwrap().len());
 }
 
@@ -4549,7 +4967,7 @@ async fn add_crate_rejects_name_differing_only_in_dash_and_underscore(
             "cksum",
             1024,
             &created,
-            "admin",
+            &UserName::new("admin").unwrap(),
             None,
         )
         .await
@@ -4562,7 +4980,7 @@ async fn add_crate_rejects_name_differing_only_in_dash_and_underscore(
                 "cksum",
                 1024,
                 &created,
-                "admin",
+                &UserName::new("admin").unwrap(),
                 None,
             )
             .await;
@@ -4604,7 +5022,7 @@ async fn crates_are_found_under_any_spelling_of_their_name(test_db: &kellnr_db::
             "cksum",
             1024,
             &Utc::now(),
-            "admin",
+            &UserName::new("admin").unwrap(),
             None,
         )
         .await
@@ -4636,7 +5054,7 @@ async fn index_file_is_only_found_under_the_published_separators(test_db: &kelln
             "cksum",
             1024,
             &Utc::now(),
-            "admin",
+            &UserName::new("admin").unwrap(),
             None,
         )
         .await
@@ -4694,7 +5112,14 @@ async fn migration_stores_canonical_crate_names(test_db: &kellnr_db::Database) {
         },
     ] {
         test_db
-            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .add_crate(
+                &pm,
+                "cksum",
+                1024,
+                &Utc::now(),
+                &UserName::new("admin").unwrap(),
+                None,
+            )
             .await
             .unwrap();
     }
@@ -4797,7 +5222,7 @@ async fn postgres_concurrent_first_publishes_of_two_spellings_conflict() {
                 "cksum",
                 1024,
                 &Utc::now(),
-                "admin",
+                &UserName::new("admin").unwrap(),
                 None,
             )
             .await
@@ -4823,11 +5248,11 @@ async fn postgres_concurrent_first_publishes_of_two_spellings_conflict() {
 async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database) {
     let created = Utc::now();
     test_db
-        .add_user("alice", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("alice").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
     test_db
-        .add_user("root", "pwd", UserFlags::admin())
+        .add_user(&UserName::new("root").unwrap(), "pwd", UserFlags::admin())
         .await
         .unwrap();
     test_db
@@ -4836,7 +5261,7 @@ async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database)
             "cksum",
             1024,
             &created,
-            "alice",
+            &UserName::new("alice").unwrap(),
             None,
         )
         .await
@@ -4848,7 +5273,7 @@ async fn add_crate_allows_admin_on_existing_crate(test_db: &kellnr_db::Database)
             "cksum",
             1024,
             &created,
-            "root",
+            &UserName::new("root").unwrap(),
             None,
         )
         .await
@@ -4867,7 +5292,14 @@ async fn get_crate_dependents_uses_latest_version_of_dependents(test_db: &kellnr
             ..PublishMetadata::minimal(name, version)
         };
         test_db
-            .add_crate(&pm, "cksum", 1024, &created, "admin", None)
+            .add_crate(
+                &pm,
+                "cksum",
+                1024,
+                &created,
+                &UserName::new("admin").unwrap(),
+                None,
+            )
             .await
             .unwrap();
     };
@@ -4999,7 +5431,14 @@ async fn publish_with_foo_dep(
         ..PublishMetadata::minimal(name, version)
     };
     test_db
-        .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+        .add_crate(
+            &pm,
+            "cksum",
+            1024,
+            &Utc::now(),
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 }
@@ -5227,7 +5666,14 @@ async fn get_crate_data_with_more_dependencies_than_bind_parameters(test_db: &ke
             ..PublishMetadata::minimal("many_deps", version)
         };
         test_db
-            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .add_crate(
+                &pm,
+                "cksum",
+                1024,
+                &Utc::now(),
+                &UserName::new("admin").unwrap(),
+                None,
+            )
             .await
             .unwrap();
     }
@@ -5262,7 +5708,14 @@ async fn publish_with_metadata(
         ..PublishMetadata::minimal("meta", version)
     };
     test_db
-        .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+        .add_crate(
+            &pm,
+            "cksum",
+            1024,
+            &Utc::now(),
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
 }
 
@@ -5323,7 +5776,14 @@ async fn add_crate_with_duplicate_keywords_categories_and_authors(test_db: &kell
             ..PublishMetadata::minimal(name, "1.0.0")
         };
         test_db
-            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .add_crate(
+                &pm,
+                "cksum",
+                1024,
+                &Utc::now(),
+                &UserName::new("admin").unwrap(),
+                None,
+            )
             .await
             .unwrap();
     }
@@ -5354,7 +5814,14 @@ async fn migration_removes_duplicate_crate_tag_links(test_db: &kellnr_db::Databa
         ..PublishMetadata::minimal("tagged", "1.0.0")
     };
     test_db
-        .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+        .add_crate(
+            &pm,
+            "cksum",
+            1024,
+            &Utc::now(),
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -5402,7 +5869,14 @@ async fn postgres_concurrent_publishes_share_new_keywords() {
             ..PublishMetadata::minimal(name, "1.0.0")
         };
         test_db
-            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .add_crate(
+                &pm,
+                "cksum",
+                1024,
+                &Utc::now(),
+                &UserName::new("admin").unwrap(),
+                None,
+            )
             .await
     };
 
@@ -5427,7 +5901,14 @@ async fn yank_and_unyank_update_etag_of_crate_index(test_db: &kellnr_db::Databas
     for vers in ["1.0.0", "2.0.0"] {
         let pm = PublishMetadata::minimal("Yankee", vers);
         test_db
-            .add_crate(&pm, "cksum", 1024, &Utc::now(), "admin", None)
+            .add_crate(
+                &pm,
+                "cksum",
+                1024,
+                &Utc::now(),
+                &UserName::new("admin").unwrap(),
+                None,
+            )
             .await
             .unwrap();
     }
@@ -5573,7 +6054,10 @@ async fn admin_created_by_concurrent_start_is_kept(test_db: &kellnr_db::Database
     test_insert_admin_credentials_again(test_db).await.unwrap();
 
     assert_eq!(1, test_db.get_users().await.unwrap().len());
-    test_db.authenticate_user("admin", "123").await.unwrap();
+    test_db
+        .authenticate_user(&UserName::new("admin").unwrap(), "123")
+        .await
+        .unwrap();
     test_db
         .get_user_from_token(&PlainToken::from("token"))
         .await
@@ -5655,7 +6139,7 @@ async fn delete_crate_skips_invalid_versions_for_max_version(test_db: &kellnr_db
 #[db_test]
 async fn adding_a_crate_user_twice_is_a_unique_violation(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("user", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("user").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
     test_add_crate(
@@ -5668,9 +6152,15 @@ async fn adding_a_crate_user_twice_is_a_unique_violation(test_db: &kellnr_db::Da
     .await
     .unwrap();
     let name = CanonicalName::try_from("crate").unwrap();
-    test_db.add_crate_user(&name, "user").await.unwrap();
+    test_db
+        .add_crate_user(&name, &UserName::new("user").unwrap())
+        .await
+        .unwrap();
 
-    let e = test_db.add_crate_user(&name, "user").await.unwrap_err();
+    let e = test_db
+        .add_crate_user(&name, &UserName::new("user").unwrap())
+        .await
+        .unwrap_err();
 
     assert!(e.is_unique_violation(), "{e}");
 }
@@ -5679,12 +6169,26 @@ async fn adding_a_crate_user_twice_is_a_unique_violation(test_db: &kellnr_db::Da
 async fn add_crate_rejects_version_differing_only_in_build_metadata(test_db: &kellnr_db::Database) {
     let publish = |vers: &str| PublishMetadata::minimal("crate", vers);
     test_db
-        .add_crate(&publish("1.0.0+a"), "cksum", 1, &Utc::now(), "admin", None)
+        .add_crate(
+            &publish("1.0.0+a"),
+            "cksum",
+            1,
+            &Utc::now(),
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
     let result = test_db
-        .add_crate(&publish("1.0.0+b"), "cksum", 1, &Utc::now(), "admin", None)
+        .add_crate(
+            &publish("1.0.0+b"),
+            "cksum",
+            1,
+            &Utc::now(),
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await;
 
     assert!(
@@ -5705,7 +6209,7 @@ async fn add_crate_rejects_other_spelling_of_existing_crate(test_db: &kellnr_db:
             "cksum",
             1,
             &Utc::now(),
-            "admin",
+            &UserName::new("admin").unwrap(),
             None,
         )
         .await
@@ -5717,7 +6221,7 @@ async fn add_crate_rejects_other_spelling_of_existing_crate(test_db: &kellnr_db:
             "cksum",
             1,
             &Utc::now(),
-            "admin",
+            &UserName::new("admin").unwrap(),
             None,
         )
         .await;
@@ -5737,7 +6241,7 @@ async fn add_crate_rejects_other_spelling_of_existing_crate(test_db: &kellnr_db:
 #[db_test]
 async fn delete_owners_removes_nothing_when_no_owner_would_remain(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("user", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("user").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
     test_add_crate(
@@ -5750,9 +6254,18 @@ async fn delete_owners_removes_nothing_when_no_owner_would_remain(test_db: &kell
     .await
     .unwrap();
     let name = CanonicalName::try_from("crate").unwrap();
-    test_db.add_owner(&name, "user").await.unwrap();
-    test_db.add_owner(&name, "user").await.unwrap();
-    let owners = ["admin".to_string(), "user".to_string()];
+    test_db
+        .add_owner(&name, &UserName::new("user").unwrap())
+        .await
+        .unwrap();
+    test_db
+        .add_owner(&name, &UserName::new("user").unwrap())
+        .await
+        .unwrap();
+    let owners = [
+        UserName::new("admin").unwrap(),
+        UserName::new("user").unwrap(),
+    ];
 
     let result = test_db.delete_owners(&name, &owners, false).await;
 
@@ -5775,7 +6288,14 @@ async fn prefetch_data_puts_new_feature_syntax_into_features2(test_db: &kellnr_d
         ..PublishMetadata::minimal("crate", "1.0.0")
     };
     test_db
-        .add_crate(&metadata, "cksum", 1, &Utc::now(), "admin", None)
+        .add_crate(
+            &metadata,
+            "cksum",
+            1,
+            &Utc::now(),
+            &UserName::new("admin").unwrap(),
+            None,
+        )
         .await
         .unwrap();
 
@@ -5807,7 +6327,7 @@ async fn get_crate_original_name_returns_the_published_spelling(test_db: &kellnr
             "cksum",
             1,
             &Utc::now(),
-            "admin",
+            &UserName::new("admin").unwrap(),
             None,
         )
         .await
@@ -5832,20 +6352,39 @@ async fn get_crate_original_name_returns_the_published_spelling(test_db: &kellnr
 #[db_test]
 async fn is_username_available_ignores_case(test_db: &kellnr_db::Database) {
     test_db
-        .add_user("Alice", "pwd", UserFlags::normal())
+        .add_user(&UserName::new("Alice").unwrap(), "pwd", UserFlags::normal())
         .await
         .unwrap();
 
-    assert!(!test_db.is_username_available("alice").await.unwrap());
-    assert!(!test_db.is_username_available("Alice").await.unwrap());
-    assert!(test_db.is_username_available("bob").await.unwrap());
+    assert!(
+        !test_db
+            .is_username_available(&UserName::new("alice").unwrap())
+            .await
+            .unwrap()
+    );
+    assert!(
+        !test_db
+            .is_username_available(&UserName::new("Alice").unwrap())
+            .await
+            .unwrap()
+    );
+    assert!(
+        test_db
+            .is_username_available(&UserName::new("bob").unwrap())
+            .await
+            .unwrap()
+    );
 }
 
 #[db_test]
 async fn get_original_name_of_existing_version(test_db: &kellnr_db::Database) {
     let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
     test_db
-        .add_user("owner1", "pwd", UserFlags::normal())
+        .add_user(
+            &UserName::new("owner1").unwrap(),
+            "pwd",
+            UserFlags::normal(),
+        )
         .await
         .unwrap();
     test_db
@@ -5854,7 +6393,7 @@ async fn get_original_name_of_existing_version(test_db: &kellnr_db::Database) {
             "cksum",
             1024,
             &created,
-            "owner1",
+            &UserName::new("owner1").unwrap(),
             None,
         )
         .await

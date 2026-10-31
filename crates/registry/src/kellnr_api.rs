@@ -11,6 +11,7 @@ use kellnr_appstate::{AppState, DbState};
 pub use kellnr_auth::crate_access::has_restricted_crate_access;
 use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
 use kellnr_auth::{maybe_user, token};
+use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::search_result;
@@ -193,7 +194,7 @@ pub async fn remove_owner(
 pub async fn remove_owner_single(
     user: maybe_user::MaybeUser,
     state: AppState,
-    Path((crate_name, removed_user)): Path<(OriginalName, String)>,
+    Path((crate_name, removed_user)): Path<(OriginalName, UserName)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     check_can_modify(&user)?;
 
@@ -235,7 +236,7 @@ pub async fn remove_owner_single(
 pub async fn remove_crate_user(
     user: maybe_user::MaybeUser,
     State(db): DbState,
-    Path((crate_name, name)): Path<(OriginalName, String)>,
+    Path((crate_name, name)): Path<(OriginalName, UserName)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     // Check if user is read-only and can't remove a crate user.
     // Admin users bypass this check as they can modify
@@ -271,7 +272,7 @@ pub async fn remove_crate_user(
 pub async fn remove_crate_group(
     user: maybe_user::MaybeUser,
     State(db): DbState,
-    Path((crate_name, name)): Path<(OriginalName, String)>,
+    Path((crate_name, name)): Path<(OriginalName, GroupName)>,
 ) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
     // Check if user is read-only and can't remove a crate group.
     // Admin users bypass this check as they can modify
@@ -347,7 +348,7 @@ pub async fn add_owner(
 pub async fn add_owner_single(
     user: maybe_user::MaybeUser,
     State(db): DbState,
-    Path((crate_name, added_user)): Path<(OriginalName, String)>,
+    Path((crate_name, added_user)): Path<(OriginalName, UserName)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     check_can_modify(&user)?;
 
@@ -419,7 +420,7 @@ pub async fn list_owners(
 pub async fn add_crate_user(
     user: maybe_user::MaybeUser,
     State(db): DbState,
-    Path((crate_name, name)): Path<(OriginalName, String)>,
+    Path((crate_name, name)): Path<(OriginalName, UserName)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     // Check if user is read-only and can't add a crate user.
     // Admin users bypass this check as they can modify
@@ -496,7 +497,7 @@ pub async fn list_crate_users(
 pub async fn add_crate_group(
     user: maybe_user::MaybeUser,
     State(db): DbState,
-    Path((crate_name, name)): Path<(OriginalName, String)>,
+    Path((crate_name, name)): Path<(OriginalName, GroupName)>,
 ) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
     // Check if user is read-only and can't add a crate group.
     // Admin users bypass this check as they can modify
@@ -1551,7 +1552,7 @@ mod reg_api_tests {
 
     async fn change_owners(kellnr: &TestKellnr, add: bool, users: &[&str]) -> (StatusCode, String) {
         let request = crate_user::CrateUserRequest {
-            users: users.iter().map(ToString::to_string).collect(),
+            users: users.iter().map(|u| UserName::new(*u).unwrap()).collect(),
         };
         let builder = if add {
             Request::put("/api/v1/crates/owned/owners")
@@ -1585,7 +1586,7 @@ mod reg_api_tests {
             .await
             .unwrap()
             .into_iter()
-            .map(|u| u.name)
+            .map(|u| u.name.into_inner())
             .collect();
         names.sort();
         names
@@ -1654,7 +1655,7 @@ mod reg_api_tests {
             .await
             .expect("Cannot open valid package file.");
         let del_owner = crate_user::CrateUserRequest {
-            users: vec!["admin".to_string()],
+            users: vec![UserName::new("admin").unwrap()],
         };
         let _ = kellnr
             .client
@@ -1716,7 +1717,7 @@ mod reg_api_tests {
             .await
             .expect("Cannot open valid package file.");
         let del_owner = crate_user::CrateUserRequest {
-            users: vec!["admin".to_string()],
+            users: vec![UserName::new("admin").unwrap()],
         };
         let _ = kellnr
             .client
@@ -1780,11 +1781,11 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_user("user", "123", UserFlags::normal())
+            .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
             .await
             .unwrap();
         let add_owner = crate_user::CrateUserRequest {
-            users: vec!["user".to_string()],
+            users: vec![UserName::new("user").unwrap()],
         };
 
         let r = kellnr
@@ -1828,7 +1829,7 @@ mod reg_api_tests {
 
         kellnr
             .db
-            .add_user("user", "123", UserFlags::normal())
+            .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
             .await
             .unwrap();
 
@@ -1962,12 +1963,16 @@ mod reg_api_tests {
         // create regular user and token
         kellnr
             .db
-            .add_user("user", "123", UserFlags::normal())
+            .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
             .await
             .unwrap();
         kellnr
             .db
-            .add_auth_token("user token", &PlainToken::from("user_token"), "user")
+            .add_auth_token(
+                "user token",
+                &PlainToken::from("user_token"),
+                &UserName::new("user").unwrap(),
+            )
             .await
             .unwrap();
 
@@ -2012,12 +2017,16 @@ mod reg_api_tests {
         // create regular user and token
         kellnr
             .db
-            .add_user("user", "123", UserFlags::normal())
+            .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
             .await
             .unwrap();
         kellnr
             .db
-            .add_auth_token("user token", &PlainToken::from("user_token"), "user")
+            .add_auth_token(
+                "user token",
+                &PlainToken::from("user_token"),
+                &UserName::new("user").unwrap(),
+            )
             .await
             .unwrap();
 
@@ -2062,17 +2071,21 @@ mod reg_api_tests {
         // create regular user and token
         kellnr
             .db
-            .add_user("user", "123", UserFlags::normal())
+            .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
             .await
             .unwrap();
         kellnr
             .db
-            .add_auth_token("user token", &PlainToken::from("user_token"), "user")
+            .add_auth_token(
+                "user token",
+                &PlainToken::from("user_token"),
+                &UserName::new("user").unwrap(),
+            )
             .await
             .unwrap();
 
         let add_owner = crate_user::CrateUserRequest {
-            users: vec!["admin".to_string()],
+            users: vec![UserName::new("admin").unwrap()],
         };
 
         let r = kellnr
@@ -2116,17 +2129,21 @@ mod reg_api_tests {
         // create regular user and token
         kellnr
             .db
-            .add_user("user", "123", UserFlags::normal())
+            .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
             .await
             .unwrap();
         kellnr
             .db
-            .add_auth_token("user token", &PlainToken::from("user_token"), "user")
+            .add_auth_token(
+                "user token",
+                &PlainToken::from("user_token"),
+                &UserName::new("user").unwrap(),
+            )
             .await
             .unwrap();
 
         let del_owner = crate_user::CrateUserRequest {
-            users: vec!["admin".to_string()],
+            users: vec![UserName::new("admin").unwrap()],
         };
 
         let r = kellnr
@@ -2170,14 +2187,14 @@ mod reg_api_tests {
         // create regular user
         kellnr
             .db
-            .add_user("user", "123", UserFlags::normal())
+            .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
             .await
             .unwrap();
 
         // create a session token and store it in DB
         kellnr
             .db
-            .add_session_token("user", &PlainToken::from("1234"))
+            .add_session_token(&UserName::new("user").unwrap(), &PlainToken::from("1234"))
             .await
             .unwrap();
 
@@ -2233,19 +2250,26 @@ mod reg_api_tests {
         // create a read-only user and make them an owner of the crate
         kellnr
             .db
-            .add_user("rouser", "123", UserFlags::read_only())
+            .add_user(
+                &UserName::new("rouser").unwrap(),
+                "123",
+                UserFlags::read_only(),
+            )
             .await
             .unwrap();
         kellnr
             .db
-            .add_owner(&CanonicalName::try_from("test_lib").unwrap(), "rouser")
+            .add_owner(
+                &CanonicalName::try_from("test_lib").unwrap(),
+                &UserName::new("rouser").unwrap(),
+            )
             .await
             .unwrap();
 
         // create a session for the read-only owner
         kellnr
             .db
-            .add_session_token("rouser", &PlainToken::from("1234"))
+            .add_session_token(&UserName::new("rouser").unwrap(), &PlainToken::from("1234"))
             .await
             .unwrap();
         let cookie_header = kellnr_appstate::encode_cookies([(
@@ -2297,24 +2321,38 @@ mod reg_api_tests {
         // a writable owner and a target user to be added as owner
         kellnr
             .db
-            .add_user("rwowner", "123", UserFlags::normal())
+            .add_user(
+                &UserName::new("rwowner").unwrap(),
+                "123",
+                UserFlags::normal(),
+            )
             .await
             .unwrap();
         kellnr
             .db
-            .add_owner(&CanonicalName::try_from("test_lib").unwrap(), "rwowner")
+            .add_owner(
+                &CanonicalName::try_from("test_lib").unwrap(),
+                &UserName::new("rwowner").unwrap(),
+            )
             .await
             .unwrap();
         kellnr
             .db
-            .add_user("target", "123", UserFlags::normal())
+            .add_user(
+                &UserName::new("target").unwrap(),
+                "123",
+                UserFlags::normal(),
+            )
             .await
             .unwrap();
 
         // create a session for the writable owner
         kellnr
             .db
-            .add_session_token("rwowner", &PlainToken::from("1234"))
+            .add_session_token(
+                &UserName::new("rwowner").unwrap(),
+                &PlainToken::from("1234"),
+            )
             .await
             .unwrap();
         let cookie_header = kellnr_appstate::encode_cookies([(
@@ -2362,14 +2400,14 @@ mod reg_api_tests {
         // create regular user
         kellnr
             .db
-            .add_user("user", "123", UserFlags::normal())
+            .add_user(&UserName::new("user").unwrap(), "123", UserFlags::normal())
             .await
             .unwrap();
 
         // create a session token and store it in DB
         kellnr
             .db
-            .add_session_token("user", &PlainToken::from("1234"))
+            .add_session_token(&UserName::new("user").unwrap(), &PlainToken::from("1234"))
             .await
             .unwrap();
 
@@ -2677,7 +2715,7 @@ mod reg_api_tests {
                 eq(10),
                 eq(0),
                 eq(false),
-                eq(CrateVisibility::User("crate_user".to_string())),
+                eq(CrateVisibility::User(UserName::new("crate_user").unwrap())),
             )
             .returning(|_, _, _, _, _| Ok(vec![]));
         mock_db
@@ -2685,7 +2723,7 @@ mod reg_api_tests {
             .with(
                 eq("foo"),
                 eq(false),
-                eq(CrateVisibility::User("crate_user".to_string())),
+                eq(CrateVisibility::User(UserName::new("crate_user").unwrap())),
             )
             .returning(|_, _, _| Ok(0));
 
@@ -2724,14 +2762,14 @@ mod reg_api_tests {
                 .with(eq(PlainToken::from(token)))
                 .returning(move |_| {
                     Ok(kellnr_db::User {
-                        name: user.to_string(),
+                        name: UserName::new(user).unwrap(),
                         ..kellnr_db::User::default()
                     })
                 });
         }
         mock_db
             .expect_is_crate_user()
-            .with(eq(secret), eq("crate_user"))
+            .with(eq(secret), eq(UserName::new("crate_user").unwrap()))
             .returning(|_, _| Ok(true));
         mock_db.expect_is_crate_user().returning(|_, _| Ok(false));
         mock_db
@@ -3390,7 +3428,7 @@ mod reg_api_tests {
         let canonical_name = OriginalName::try_from("test_lib").unwrap().to_canonical();
         kellnr
             .db
-            .add_owner(&canonical_name, "non_admin")
+            .add_owner(&canonical_name, &UserName::new("non_admin").unwrap())
             .await
             .unwrap();
 
@@ -3881,17 +3919,29 @@ mod reg_api_tests {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
         let db = Database::new(&con_string, 10).await.unwrap();
         let cs = KellnrCrateStorage::new(&settings, storage);
-        db.add_auth_token("test", &PlainToken::from(TOKEN), "admin")
-            .await
-            .unwrap();
-        db.add_user("ro_dummy", "ro", UserFlags::read_only())
-            .await
-            .unwrap();
-        db.add_auth_token("test ro", &PlainToken::from(RO_TOKEN), "ro_dummy")
-            .await
-            .unwrap();
+        db.add_auth_token(
+            "test",
+            &PlainToken::from(TOKEN),
+            &UserName::new("admin").unwrap(),
+        )
+        .await
+        .unwrap();
         db.add_user(
-            "ro_dummy_admin",
+            &UserName::new("ro_dummy").unwrap(),
+            "ro",
+            UserFlags::read_only(),
+        )
+        .await
+        .unwrap();
+        db.add_auth_token(
+            "test ro",
+            &PlainToken::from(RO_TOKEN),
+            &UserName::new("ro_dummy").unwrap(),
+        )
+        .await
+        .unwrap();
+        db.add_user(
+            &UserName::new("ro_dummy_admin").unwrap(),
             "roa",
             UserFlags {
                 admin: true,
@@ -3903,17 +3953,21 @@ mod reg_api_tests {
         db.add_auth_token(
             "test admin ro",
             &PlainToken::from(RO_ADMIN_TOKEN),
-            "ro_dummy_admin",
+            &UserName::new("ro_dummy_admin").unwrap(),
         )
         .await
         .unwrap();
-        db.add_user("non_admin", "na", UserFlags::normal())
-            .await
-            .unwrap();
+        db.add_user(
+            &UserName::new("non_admin").unwrap(),
+            "na",
+            UserFlags::normal(),
+        )
+        .await
+        .unwrap();
         db.add_auth_token(
             "test non admin",
             &PlainToken::from(NON_ADMIN_TOKEN),
-            "non_admin",
+            &UserName::new("non_admin").unwrap(),
         )
         .await
         .unwrap();

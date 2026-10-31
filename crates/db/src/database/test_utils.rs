@@ -20,6 +20,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use chrono::{DateTime, TimeZone, Utc};
+use kellnr_common::account_name::UserName;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::original_name::OriginalName;
@@ -284,10 +285,17 @@ pub async fn test_add_crate(
         .one(&db.db_con)
         .await?;
     if user.is_none() {
-        db.add_user(name, "pwd", UserFlags::normal()).await?;
+        db.add_user(&test_user_name(name), "pwd", UserFlags::normal())
+            .await?;
     }
 
-    db.add_crate(&pm, "cksum", 1024, created, owner, None).await
+    db.add_crate(&pm, "cksum", 1024, created, &test_user_name(owner), None)
+        .await
+}
+
+/// A user name used in a test.
+fn test_user_name(name: &str) -> UserName {
+    UserName::from_unchecked(name.to_string())
 }
 
 /// The canonical name of a crate name used in a test.
@@ -410,10 +418,11 @@ pub async fn test_add_crate_with_downloads(
         .one(&db.db_con)
         .await?;
     if user.is_none() {
-        db.add_user(name, "pwd", UserFlags::normal()).await?;
+        db.add_user(&test_user_name(name), "pwd", UserFlags::normal())
+            .await?;
     }
 
-    db.add_crate(&pm, "cksum", 1024, created, owner, None)
+    db.add_crate(&pm, "cksum", 1024, created, &test_user_name(owner), None)
         .await?;
     let (cm, krate) = crate_meta::Entity::find()
         .find_also_related(krate::Entity)
@@ -645,7 +654,12 @@ pub async fn get_crate_meta_list(db: &Database, crate_id: CrateId) -> DbResult<V
 
 /// Stores a legacy `sha256(pwd + salt)` password hash for `user_name`, as
 /// written by Kellnr versions before the switch to argon2.
-pub async fn set_legacy_pwd(db: &Database, user_name: &str, pwd: &str, salt: &str) -> DbResult<()> {
+pub async fn set_legacy_pwd(
+    db: &Database,
+    user_name: &UserName,
+    pwd: &str,
+    salt: &str,
+) -> DbResult<()> {
     let mut u: user::ActiveModel = db.get_user_model(user_name).await?.into();
     u.pwd = Set(crate::password::legacy_hash(pwd, salt));
     u.salt = Set(salt.to_owned());

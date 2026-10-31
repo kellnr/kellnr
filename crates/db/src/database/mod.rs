@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
+use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CrateData, CrateRegistryDep, CrateVersionData};
 use kellnr_common::crate_dependents::{CrateDependent, CrateDependents};
@@ -143,12 +144,12 @@ impl Database {
     }
 
     /// Looks up a user by name; returns the entity model or [`DbError::UserNotFound`].
-    async fn get_user_model(&self, name: &str) -> DbResult<user::Model> {
+    async fn get_user_model(&self, name: &UserName) -> DbResult<user::Model> {
         user::Entity::find()
             .filter(user::Column::Name.eq(name))
             .one(&self.db_con)
             .await?
-            .ok_or_else(|| DbError::UserNotFound(name.to_owned()))
+            .ok_or_else(|| DbError::UserNotFound(name.to_string()))
     }
 
     /// Looks up a krate by canonical name; returns the entity model or [`DbError::CrateNotFound`].
@@ -175,12 +176,12 @@ impl Database {
     }
 
     /// Looks up a group by name; returns the entity model or [`DbError::GroupNotFound`].
-    async fn get_group_model(&self, name: &str) -> DbResult<group::Model> {
+    async fn get_group_model(&self, name: &GroupName) -> DbResult<group::Model> {
         group::Entity::find()
             .filter(group::Column::Name.eq(name))
             .one(&self.db_con)
             .await?
-            .ok_or_else(|| DbError::GroupNotFound(name.to_owned()))
+            .ok_or_else(|| DbError::GroupNotFound(name.to_string()))
     }
 
     /// Loads targets (with their components) for a toolchain and returns a `ToolchainWithTargets`.
@@ -268,7 +269,7 @@ impl Database {
     async fn get_crate_group_by_name_and_group(
         &self,
         crate_name: &CanonicalName,
-        group: &str,
+        group: &GroupName,
     ) -> DbResult<Option<crate_group::Model>> {
         crate_group::Entity::find()
             .join(JoinType::InnerJoin, crate_group::Relation::Krate.def())
@@ -286,8 +287,8 @@ impl Database {
     /// Looks up a `group_user` by group name and user name; returns `None` if not found.
     async fn get_group_user_by_group_and_user(
         &self,
-        group_name: &str,
-        user: &str,
+        group_name: &GroupName,
+        user: &UserName,
     ) -> DbResult<Option<group_user::Model>> {
         group_user::Entity::find()
             .join(JoinType::InnerJoin, group_user::Relation::Group.def())
@@ -306,7 +307,7 @@ impl Database {
     async fn get_crate_user_by_crate_and_user(
         &self,
         crate_name: &CanonicalName,
-        user: &str,
+        user: &UserName,
     ) -> DbResult<Option<crate_user::Model>> {
         crate_user::Entity::find()
             .join(JoinType::InnerJoin, crate_user::Relation::Krate.def())
@@ -501,7 +502,7 @@ impl Database {
             .to_owned()
     }
 
-    fn user_id_by_name(user: &str) -> SelectStatement {
+    fn user_id_by_name(user: &UserName) -> SelectStatement {
         Query::select()
             .column((user::Entity, user::Column::Id))
             .from(user::Entity)
@@ -509,7 +510,7 @@ impl Database {
             .to_owned()
     }
 
-    fn owned_crate_ids(user: &str) -> SelectStatement {
+    fn owned_crate_ids(user: &UserName) -> SelectStatement {
         Query::select()
             .column((owner::Entity, owner::Column::CrateFk))
             .from(owner::Entity)
@@ -520,7 +521,7 @@ impl Database {
             .to_owned()
     }
 
-    fn crate_user_crate_ids(user: &str) -> SelectStatement {
+    fn crate_user_crate_ids(user: &UserName) -> SelectStatement {
         Query::select()
             .column((crate_user::Entity, crate_user::Column::CrateFk))
             .from(crate_user::Entity)
@@ -531,7 +532,7 @@ impl Database {
             .to_owned()
     }
 
-    fn crate_group_crate_ids(user: &str) -> SelectStatement {
+    fn crate_group_crate_ids(user: &UserName) -> SelectStatement {
         Query::select()
             .column((crate_group::Entity, crate_group::Column::CrateFk))
             .from(crate_group::Entity)
@@ -758,7 +759,7 @@ impl Database {
     async fn get_owner_by_crate_and_user(
         &self,
         crate_name: &CanonicalName,
-        owner_name: &str,
+        owner_name: &UserName,
     ) -> DbResult<Option<owner::Model>> {
         owner::Entity::find()
             .join(JoinType::InnerJoin, owner::Relation::Krate.def())
@@ -873,7 +874,7 @@ impl DbProvider for Database {
         .await
     }
 
-    async fn authenticate_user(&self, name: &str, pwd: &str) -> DbResult<User> {
+    async fn authenticate_user(&self, name: &UserName, pwd: &str) -> DbResult<User> {
         let user = self.get_user(name).await?;
 
         match verify_pwd(pwd, &user.pwd, &user.salt).await {
@@ -1093,7 +1094,7 @@ impl DbProvider for Database {
             .ok_or(DbError::SessionNotFound)?;
 
         Ok(SessionInfo {
-            name: u.name,
+            name: UserName::from_unchecked(u.name),
             is_admin: u.is_admin,
             is_read_only: u.is_read_only,
         })
@@ -1111,7 +1112,7 @@ impl DbProvider for Database {
         Ok(res.rows_affected)
     }
 
-    async fn add_session_token(&self, name: &str, session_token: &PlainToken) -> DbResult<()> {
+    async fn add_session_token(&self, name: &UserName, session_token: &PlainToken) -> DbResult<()> {
         let user = self.get_user(name).await?;
         let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
@@ -1126,7 +1127,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn delete_user_sessions(&self, user_name: &str) -> DbResult<u64> {
+    async fn delete_user_sessions(&self, user_name: &UserName) -> DbResult<u64> {
         let user = self.get_user_model(user_name).await?;
         let res = session::Entity::delete_many()
             .filter(session::Column::UserFk.eq(user.id))
@@ -1137,7 +1138,7 @@ impl DbProvider for Database {
 
     async fn delete_other_user_sessions(
         &self,
-        user_name: &str,
+        user_name: &UserName,
         keep_session_token: &PlainToken,
     ) -> DbResult<u64> {
         let user = self.get_user_model(user_name).await?;
@@ -1149,25 +1150,25 @@ impl DbProvider for Database {
         Ok(res.rows_affected)
     }
 
-    async fn add_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()> {
+    async fn add_crate_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<()> {
         let crate_fk = self.get_krate_model(crate_name).await?.id;
         let user_fk = self.get_user_model(user).await?.id;
         self.add_crate_user_impl(crate_fk, user_fk).await
     }
 
-    async fn add_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()> {
+    async fn add_crate_group(&self, crate_name: &CanonicalName, group: &GroupName) -> DbResult<()> {
         let crate_fk = self.get_krate_model(crate_name).await?.id;
         let group_fk = self.get_group_model(group).await?.id;
         self.add_crate_group_impl(crate_fk, group_fk).await
     }
 
-    async fn add_group_user(&self, group_name: &str, user: &str) -> DbResult<()> {
+    async fn add_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<()> {
         let group_fk = self.get_group_model(group_name).await?.id;
         let user_fk = self.get_user_model(user).await?.id;
         self.add_group_user_impl(group_fk, user_fk).await
     }
 
-    async fn add_owner(&self, crate_name: &CanonicalName, owner: &str) -> DbResult<()> {
+    async fn add_owner(&self, crate_name: &CanonicalName, owner: &UserName) -> DbResult<()> {
         let crate_fk = self.get_krate_model(crate_name).await?.id;
         operations::add_owner_if_not_exists(&self.db_con, owner, crate_fk).await
     }
@@ -1191,21 +1192,29 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn is_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool> {
+    async fn is_crate_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<bool> {
         Ok(self
             .get_crate_user_by_crate_and_user(crate_name, user)
             .await?
             .is_some())
     }
 
-    async fn is_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<bool> {
+    async fn is_crate_group(
+        &self,
+        crate_name: &CanonicalName,
+        group: &GroupName,
+    ) -> DbResult<bool> {
         Ok(self
             .get_crate_group_by_name_and_group(crate_name, group)
             .await?
             .is_some())
     }
 
-    async fn is_crate_group_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool> {
+    async fn is_crate_group_user(
+        &self,
+        crate_name: &CanonicalName,
+        user: &UserName,
+    ) -> DbResult<bool> {
         let user = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::GroupUser.def())
             .join(JoinType::InnerJoin, group_user::Relation::Group.def())
@@ -1221,14 +1230,14 @@ impl DbProvider for Database {
         Ok(user.is_some())
     }
 
-    async fn is_group_user(&self, group_name: &str, user: &str) -> DbResult<bool> {
+    async fn is_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<bool> {
         Ok(self
             .get_group_user_by_group_and_user(group_name, user)
             .await?
             .is_some())
     }
 
-    async fn is_owner(&self, crate_name: &CanonicalName, user: &str) -> DbResult<bool> {
+    async fn is_owner(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<bool> {
         let owner = owner::Entity::find()
             .join(JoinType::InnerJoin, owner::Relation::Krate.def())
             .join(JoinType::InnerJoin, owner::Relation::User.def())
@@ -1286,7 +1295,7 @@ impl DbProvider for Database {
         Ok(u.into_iter().map(Group::from).collect())
     }
 
-    async fn get_group_users(&self, group_name: &str) -> DbResult<Vec<User>> {
+    async fn get_group_users(&self, group_name: &GroupName) -> DbResult<Vec<User>> {
         let u = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::GroupUser.def())
             .join(JoinType::InnerJoin, group_user::Relation::Group.def())
@@ -1321,7 +1330,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn delete_user(&self, user_name: &str) -> DbResult<()> {
+    async fn delete_user(&self, user_name: &UserName) -> DbResult<()> {
         self.get_user_model(user_name)
             .await?
             .delete(&self.db_con)
@@ -1329,7 +1338,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn delete_group(&self, group_name: &str) -> DbResult<()> {
+    async fn delete_group(&self, group_name: &GroupName) -> DbResult<()> {
         self.get_group_model(group_name)
             .await?
             .delete(&self.db_con)
@@ -1337,7 +1346,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn change_pwd(&self, user_name: &str, new_pwd: &str) -> DbResult<()> {
+    async fn change_pwd(&self, user_name: &UserName, new_pwd: &str) -> DbResult<()> {
         let hashed = hash_pwd(new_pwd).await;
 
         let mut u: user::ActiveModel = self.get_user_model(user_name).await?.into();
@@ -1349,7 +1358,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn change_read_only_state(&self, user_name: &str, state: bool) -> DbResult<()> {
+    async fn change_read_only_state(&self, user_name: &UserName, state: bool) -> DbResult<()> {
         let mut u: user::ActiveModel = self.get_user_model(user_name).await?.into();
         u.is_read_only = Set(state);
 
@@ -1357,7 +1366,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn change_admin_state(&self, user_name: &str, state: bool) -> DbResult<()> {
+    async fn change_admin_state(&self, user_name: &UserName, state: bool) -> DbResult<()> {
         let mut u: user::ActiveModel = self.get_user_model(user_name).await?.into();
         u.is_admin = Set(state);
 
@@ -1402,7 +1411,12 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn add_auth_token(&self, name: &str, token: &PlainToken, user: &str) -> DbResult<()> {
+    async fn add_auth_token(
+        &self,
+        name: &str,
+        token: &PlainToken,
+        user: &UserName,
+    ) -> DbResult<()> {
         let hashed_token = hash_token(token.expose_secret());
         let user = self.get_user_model(user).await?;
 
@@ -1452,11 +1466,11 @@ impl DbProvider for Database {
         Ok(User::from(u))
     }
 
-    async fn get_user(&self, name: &str) -> DbResult<User> {
+    async fn get_user(&self, name: &UserName) -> DbResult<User> {
         Ok(User::from(self.get_user_model(name).await?))
     }
 
-    async fn get_group(&self, name: &str) -> DbResult<Group> {
+    async fn get_group(&self, name: &GroupName) -> DbResult<Group> {
         Ok(Group::from(self.get_group_model(name).await?))
     }
 
@@ -1468,7 +1482,7 @@ impl DbProvider for Database {
             .map(|at| at.name))
     }
 
-    async fn get_auth_tokens(&self, user_name: &str) -> DbResult<Vec<AuthToken>> {
+    async fn get_auth_tokens(&self, user_name: &UserName) -> DbResult<Vec<AuthToken>> {
         let at: Vec<auth_token::Model> = auth_token::Entity::find()
             .join(JoinType::InnerJoin, auth_token::Relation::User.def())
             .filter(user::Column::Name.eq(user_name))
@@ -1478,7 +1492,7 @@ impl DbProvider for Database {
         Ok(at.into_iter().map(AuthToken::from).collect())
     }
 
-    async fn delete_auth_token(&self, user_name: &str, id: AuthTokenId) -> DbResult<()> {
+    async fn delete_auth_token(&self, user_name: &UserName, id: AuthTokenId) -> DbResult<()> {
         let deleted = auth_token::Entity::delete_many()
             .filter(auth_token::Column::Id.eq(id))
             .filter(auth_token::Column::UserFk.in_subquery(Self::user_id_by_name(user_name)))
@@ -1490,7 +1504,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn delete_owner(&self, crate_name: &CanonicalName, owner: &str) -> DbResult<()> {
+    async fn delete_owner(&self, crate_name: &CanonicalName, owner: &UserName) -> DbResult<()> {
         let model = self.get_owner_by_crate_and_user(crate_name, owner).await?;
         self.delete_or_not_found(model, DbError::OwnerNotFound(owner.to_string()))
             .await
@@ -1499,7 +1513,7 @@ impl DbProvider for Database {
     async fn delete_owners(
         &self,
         crate_name: &CanonicalName,
-        owners: &[String],
+        owners: &[UserName],
         allow_ownerless: bool,
     ) -> DbResult<()> {
         let txn = self.db_con.begin().await?;
@@ -1512,7 +1526,7 @@ impl DbProvider for Database {
             .await?
             .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
 
-        let owners: HashSet<&String> = owners.iter().collect();
+        let owners: HashSet<&UserName> = owners.iter().collect();
         for name in owners {
             let owner = owner::Entity::find()
                 .join(JoinType::InnerJoin, owner::Relation::User.def())
@@ -1520,7 +1534,7 @@ impl DbProvider for Database {
                 .filter(user::Column::Name.eq(name.as_str()))
                 .one(&txn)
                 .await?
-                .ok_or_else(|| DbError::OwnerNotFound(name.clone()))?;
+                .ok_or_else(|| DbError::OwnerNotFound(name.to_string()))?;
             owner.delete(&txn).await?;
         }
 
@@ -1536,7 +1550,7 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &str) -> DbResult<()> {
+    async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<()> {
         let model = self
             .get_crate_user_by_crate_and_user(crate_name, user)
             .await?;
@@ -1544,7 +1558,11 @@ impl DbProvider for Database {
             .await
     }
 
-    async fn delete_crate_group(&self, crate_name: &CanonicalName, group: &str) -> DbResult<()> {
+    async fn delete_crate_group(
+        &self,
+        crate_name: &CanonicalName,
+        group: &GroupName,
+    ) -> DbResult<()> {
         let model = self
             .get_crate_group_by_name_and_group(crate_name, group)
             .await?;
@@ -1552,7 +1570,7 @@ impl DbProvider for Database {
             .await
     }
 
-    async fn delete_group_user(&self, group_name: &str, user: &str) -> DbResult<()> {
+    async fn delete_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<()> {
         let model = self
             .get_group_user_by_group_and_user(group_name, user)
             .await?;
@@ -1560,12 +1578,12 @@ impl DbProvider for Database {
             .await
     }
 
-    async fn add_user(&self, name: &str, pwd: &str, flags: UserFlags) -> DbResult<()> {
+    async fn add_user(&self, name: &UserName, pwd: &str, flags: UserFlags) -> DbResult<()> {
         let hashed_pwd = hash_pwd(pwd).await;
         let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         let u = user::ActiveModel {
-            name: Set(name.to_owned()),
+            name: Set(name.as_str().to_owned()),
             pwd: Set(hashed_pwd),
             salt: Set(String::new()),
             is_admin: Set(flags.admin),
@@ -1578,9 +1596,9 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn add_group(&self, name: &str) -> DbResult<()> {
+    async fn add_group(&self, name: &GroupName) -> DbResult<()> {
         let g = group::ActiveModel {
-            name: Set(name.to_owned()),
+            name: Set(name.as_str().to_owned()),
             ..Default::default()
         };
 
@@ -2124,7 +2142,7 @@ impl DbProvider for Database {
         cksum: &str,
         size: i64,
         created: &DateTime<Utc>,
-        owner: &str,
+        owner: &UserName,
         token_name: Option<String>,
     ) -> DbResult<CrateId> {
         let created = created.format(DB_DATE_FORMAT).to_string();
@@ -2213,7 +2231,7 @@ impl DbProvider for Database {
             size,
             &created,
             crate_id,
-            Some(owner),
+            Some(owner.as_str()),
             token_name.as_deref(),
         )
         .await?;
@@ -2730,7 +2748,7 @@ impl DbProvider for Database {
 
     async fn create_oauth2_user(
         &self,
-        username: &str,
+        username: &UserName,
         issuer: &str,
         subject: &str,
         email: Option<String>,
@@ -2775,7 +2793,7 @@ impl DbProvider for Database {
 
         Ok(User {
             id: UserId::new(user_id),
-            name: username.to_string(),
+            name: username.clone(),
             pwd: String::new(),  // Don't expose password hash
             salt: String::new(), // Don't expose salt
             is_admin: flags.admin,
@@ -2866,10 +2884,10 @@ impl DbProvider for Database {
         Ok(result.rows_affected)
     }
 
-    async fn is_username_available(&self, username: &str) -> DbResult<bool> {
+    async fn is_username_available(&self, username: &UserName) -> DbResult<bool> {
         // Names that only differ in case are too easy to confuse.
         let existing = user::Entity::find()
-            .filter(Func::lower(Expr::col(user::Column::Name)).eq(username.to_lowercase()))
+            .filter(Func::lower(Expr::col(user::Column::Name)).eq(username.as_str().to_lowercase()))
             .one(&self.db_con)
             .await?;
 

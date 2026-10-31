@@ -1,3 +1,4 @@
+use kellnr_common::account_name::GroupName;
 use kellnr_db::GroupId;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -5,7 +6,7 @@ use utoipa::ToSchema;
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateGroup {
     pub id: GroupId,
-    pub name: String,
+    pub name: GroupName,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -21,7 +22,7 @@ impl From<Vec<CrateGroup>> for CrateGroupList {
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateGroupRequest {
-    pub groups: Vec<String>,
+    pub groups: Vec<GroupName>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

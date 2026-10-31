@@ -6,7 +6,7 @@ use axum_extra::extract::cookie::Cookie;
 use kellnr_appstate::{AppState, DbState, LoginThrottleState, SettingsState, TokenCacheState};
 use kellnr_auth::password::{PasswordAuthError, authenticate_password};
 use kellnr_auth::token;
-use kellnr_common::account_name::{validate_token_name, validate_user_name};
+use kellnr_common::account_name::{UserName, validate_token_name};
 use kellnr_common::plain_token::PlainToken;
 use kellnr_common::util::generate_rand_string;
 use kellnr_db::{self, AuthToken, AuthTokenId, DbProvider, User, UserFlags};
@@ -32,7 +32,7 @@ fn ensure_local_auth_enabled(settings: &Settings) -> Result<(), RouteError> {
 /// pipelines keep working.
 async fn revoke_sessions(
     db: &dyn DbProvider,
-    user_name: &str,
+    user_name: &UserName,
     keep_session_token: Option<&str>,
 ) -> Result<(), RouteError> {
     match keep_session_token {
@@ -152,7 +152,7 @@ pub async fn delete_token(
 #[derive(Serialize, ToSchema)]
 pub struct ResetPwd {
     new_pwd: String,
-    user: String,
+    user: UserName,
 }
 
 /// Reset a user's password (admin only)
@@ -172,7 +172,7 @@ pub struct ResetPwd {
 pub async fn reset_pwd(
     admin: AdminUser,
     jar: PrivateCookieJar,
-    Path(name): Path<String>,
+    Path(name): Path<UserName>,
     State(db): DbState,
     State(cache): TokenCacheState,
     State(settings): SettingsState,
@@ -183,7 +183,7 @@ pub async fn reset_pwd(
     db.change_pwd(&name, &new_pwd).await?;
 
     // An admin resetting their own password stays logged in.
-    let keep_session = jar.get(COOKIE_SESSION_ID).filter(|_| admin.name() == name);
+    let keep_session = jar.get(COOKIE_SESSION_ID).filter(|_| *admin.name() == name);
     revoke_sessions(db.as_ref(), &name, keep_session.as_ref().map(Cookie::value)).await?;
 
     // Drop cached basic auth credentials carrying the old password.
@@ -220,13 +220,13 @@ pub struct ReadOnlyState {
 )]
 pub async fn read_only(
     user: AdminUser,
-    Path(name): Path<String>,
+    Path(name): Path<UserName>,
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(ro_state): Json<ReadOnlyState>,
 ) -> Result<(), RouteError> {
     // Prevent self-locking to avoid lockout
-    if user.name() == name && ro_state.state {
+    if *user.name() == name && ro_state.state {
         return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
@@ -260,13 +260,13 @@ pub struct AdminState {
 )]
 pub async fn admin(
     user: AdminUser,
-    Path(name): Path<String>,
+    Path(name): Path<UserName>,
     State(db): DbState,
     State(cache): TokenCacheState,
     Json(admin_state): Json<AdminState>,
 ) -> Result<(), RouteError> {
     // Prevent self-demotion to avoid lockout
-    if user.name() == name && !admin_state.state {
+    if *user.name() == name && !admin_state.state {
         return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
@@ -294,12 +294,12 @@ pub async fn admin(
 )]
 pub async fn delete(
     user: AdminUser,
-    Path(name): Path<String>,
+    Path(name): Path<UserName>,
     State(db): DbState,
     State(cache): TokenCacheState,
 ) -> Result<(), RouteError> {
     // Prevent self-deletion to avoid lockout
-    if user.name() == name {
+    if *user.name() == name {
         return Err(RouteError::Status(StatusCode::BAD_REQUEST));
     }
 
@@ -324,14 +324,14 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    pub fn validate(&self) -> Result<(), RouteError> {
-        if self.user.is_empty() {
-            return Err(RouteError::Status(StatusCode::BAD_REQUEST));
-        }
+    /// Returns the name of the user to log in.
+    pub fn validate(&self) -> Result<UserName, RouteError> {
+        let name = UserName::new(self.user.as_str())
+            .map_err(|_| RouteError::Status(StatusCode::BAD_REQUEST))?;
         if self.pwd.is_empty() {
             return Err(RouteError::Status(StatusCode::BAD_REQUEST));
         }
-        Ok(())
+        Ok(name)
     }
 }
 
@@ -353,12 +353,12 @@ pub async fn login(
     Json(credentials): Json<Credentials>,
 ) -> Result<(PrivateCookieJar, Json<LoggedInUser>), RouteError> {
     ensure_local_auth_enabled(&state.settings)?;
-    credentials.validate()?;
+    let name = credentials.validate()?;
 
     let user = authenticate_password(
         state.db.as_ref(),
         &state.login_throttle,
-        &credentials.user,
+        &name,
         &credentials.pwd,
     )
     .await
@@ -367,7 +367,7 @@ pub async fn login(
         PasswordAuthError::Invalid => RouteError::AuthenticationFailure,
     })?;
 
-    let jar = create_session_jar(cookies, &state, &credentials.user).await?;
+    let jar = create_session_jar(cookies, &state, &name).await?;
 
     Ok((
         jar,
@@ -393,12 +393,12 @@ pub async fn login(
 pub async fn login_state(user: Option<MaybeUser>) -> Json<LoggedInUser> {
     match user {
         Some(MaybeUser::Normal(user)) => LoggedInUser {
-            user,
+            user: user.into_inner(),
             is_admin: false,
             is_logged_in: true,
         },
         Some(MaybeUser::Admin(user)) => LoggedInUser {
-            user,
+            user: user.into_inner(),
             is_admin: true,
             is_logged_in: true,
         },
@@ -539,15 +539,16 @@ pub struct NewUser {
 }
 
 impl NewUser {
-    pub fn validate(&self) -> Result<(), RouteError> {
-        validate_user_name(&self.name)?;
+    /// Returns the name of the new user.
+    pub fn validate(&self) -> Result<UserName, RouteError> {
+        let name = UserName::for_new_user(self.name.as_str())?;
         if self.pwd1.is_empty() || self.pwd2.is_empty() {
             return Err(RouteError::Status(StatusCode::BAD_REQUEST));
         }
         if self.pwd1 != self.pwd2 {
             return Err(RouteError::Status(StatusCode::BAD_REQUEST));
         }
-        Ok(())
+        Ok(name)
     }
 }
 
@@ -572,10 +573,10 @@ pub async fn add(
     Json(new_user): Json<NewUser>,
 ) -> Result<(), RouteError> {
     ensure_local_auth_enabled(&settings)?;
-    new_user.validate()?;
+    let name = new_user.validate()?;
 
     db.add_user(
-        &new_user.name,
+        &name,
         &new_user.pwd1,
         UserFlags {
             admin: new_user.is_admin,
@@ -634,7 +635,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().returning(move |_| {
             Ok(kellnr_db::SessionInfo {
-                name: if is_admin { "admin" } else { "user" }.to_string(),
+                name: UserName::new(if is_admin { "admin" } else { "user" }.to_string()).unwrap(),
                 is_admin,
                 is_read_only: false,
             })
@@ -981,7 +982,7 @@ mod tests {
     async fn test_add_user_with_invalid_name_is_bad_request() {
         for name in ["", "  ", "a:b", "line\nbreak", &"a".repeat(65)] {
             let result = add(
-                AdminUser("admin".to_string()),
+                AdminUser(UserName::new("admin").unwrap()),
                 State(Arc::new(MockDb::new())),
                 State(Arc::new(TokenCacheManager::new(
                     false,
@@ -1004,7 +1005,7 @@ mod tests {
     async fn test_add_token_with_invalid_name_is_bad_request() {
         for name in [String::new(), "a".repeat(129)] {
             let result = add_token(
-                MaybeUser::Normal("user".to_string()),
+                MaybeUser::Normal(UserName::new("user").unwrap()),
                 State(Arc::new(MockDb::new())),
                 State(Arc::new(TokenCacheManager::new(
                     false,
@@ -1031,7 +1032,7 @@ mod tests {
         let settings = Arc::new(Settings::default());
         let add_bob = || {
             add(
-                AdminUser("admin".to_string()),
+                AdminUser(UserName::new("admin").unwrap()),
                 State(db.clone()),
                 State(cache.clone()),
                 State(settings.clone()),
@@ -1050,7 +1051,7 @@ mod tests {
             .insert(
                 "basic:credentials".to_string(),
                 CachedTokenData {
-                    user: "user".to_string(),
+                    user: UserName::new("user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 },
@@ -1104,7 +1105,7 @@ mod tests {
         let mut mock_db = session_db(false);
         mock_db.expect_authenticate_user().returning(|name, _| {
             Ok(User {
-                name: name.to_string(),
+                name: name.clone(),
                 ..User::default()
             })
         });
@@ -1165,7 +1166,10 @@ mod tests {
         let mut mock_db = change_pwd_db();
         mock_db
             .expect_delete_other_user_sessions()
-            .with(eq("user"), eq(PlainToken::from("session")))
+            .with(
+                eq(UserName::new("user").unwrap()),
+                eq(PlainToken::from("session")),
+            )
             .times(1)
             .returning(|_, _| Ok(2));
         mock_db.expect_delete_user_sessions().never();
@@ -1190,7 +1194,7 @@ mod tests {
         let mut mock_db = reset_pwd_db();
         mock_db
             .expect_delete_user_sessions()
-            .with(eq("user"))
+            .with(eq(UserName::new("user").unwrap()))
             .times(1)
             .returning(|_| Ok(1));
         mock_db.expect_delete_other_user_sessions().never();
@@ -1216,7 +1220,10 @@ mod tests {
         let mut mock_db = reset_pwd_db();
         mock_db
             .expect_delete_other_user_sessions()
-            .with(eq("admin"), eq(PlainToken::from("session")))
+            .with(
+                eq(UserName::new("admin").unwrap()),
+                eq(PlainToken::from("session")),
+            )
             .times(1)
             .returning(|_, _| Ok(0));
         mock_db.expect_delete_user_sessions().never();
@@ -1249,7 +1256,7 @@ mod tests {
             .insert(
                 "existing_token".to_string(),
                 CachedTokenData {
-                    user: "test_user".to_string(),
+                    user: UserName::new("test_user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 },
@@ -1263,7 +1270,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "test_user".to_string(),
+                name: UserName::new("test_user").unwrap(),
                 is_admin: false,
                 is_read_only: false,
             })
@@ -1313,7 +1320,7 @@ mod tests {
             .insert(
                 "token_to_keep".to_string(),
                 CachedTokenData {
-                    user: "test_user".to_string(),
+                    user: UserName::new("test_user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 },
@@ -1326,7 +1333,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "test_user".to_string(),
+                name: UserName::new("test_user").unwrap(),
                 is_admin: false,
                 is_read_only: false,
             })
@@ -1334,7 +1341,10 @@ mod tests {
         mock_db
             .expect_delete_auth_token()
             .times(1)
-            .with(eq("test_user"), eq(AuthTokenId::new(1)))
+            .with(
+                eq(UserName::new("test_user").unwrap()),
+                eq(AuthTokenId::new(1)),
+            )
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -1370,7 +1380,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "test_user".to_string(),
+                name: UserName::new("test_user").unwrap(),
                 is_admin: false,
                 is_read_only: false,
             })
@@ -1378,7 +1388,10 @@ mod tests {
         mock_db
             .expect_delete_auth_token()
             .times(1)
-            .with(eq("test_user"), eq(AuthTokenId::new(1)))
+            .with(
+                eq(UserName::new("test_user").unwrap()),
+                eq(AuthTokenId::new(1)),
+            )
             .returning(|_, _| Err(DbError::TokenNotFound));
 
         let state = test_state_with_cache(
@@ -1420,7 +1433,7 @@ mod tests {
             .insert(
                 "user_token".to_string(),
                 CachedTokenData {
-                    user: "user_to_delete".to_string(),
+                    user: UserName::new("user_to_delete").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 },
@@ -1433,7 +1446,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1441,7 +1454,7 @@ mod tests {
         mock_db
             .expect_delete_user()
             .times(1)
-            .with(eq("user_to_delete"))
+            .with(eq(UserName::new("user_to_delete").unwrap()))
             .returning(|_| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -1483,7 +1496,7 @@ mod tests {
             .insert(
                 "user_token".to_string(),
                 CachedTokenData {
-                    user: "target_user".to_string(),
+                    user: UserName::new("target_user").unwrap(),
                     is_admin: false,
                     is_read_only: false, // Currently NOT read-only
                 },
@@ -1496,7 +1509,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1504,7 +1517,7 @@ mod tests {
         mock_db
             .expect_change_read_only_state()
             .times(1)
-            .with(eq("target_user"), eq(true))
+            .with(eq(UserName::new("target_user").unwrap()), eq(true))
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -1547,7 +1560,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1595,7 +1608,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1603,7 +1616,7 @@ mod tests {
         mock_db
             .expect_change_read_only_state()
             .times(1)
-            .with(eq("admin"), eq(false)) // Self-unlocking
+            .with(eq(UserName::new("admin").unwrap()), eq(false)) // Self-unlocking
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -1643,7 +1656,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1651,7 +1664,7 @@ mod tests {
         mock_db
             .expect_change_read_only_state()
             .times(1)
-            .with(eq("other_user"), eq(true))
+            .with(eq(UserName::new("other_user").unwrap()), eq(true))
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -1691,7 +1704,7 @@ mod tests {
             .insert(
                 "existing_token".to_string(),
                 CachedTokenData {
-                    user: "existing_user".to_string(),
+                    user: UserName::new("existing_user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 },
@@ -1704,7 +1717,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1750,7 +1763,7 @@ mod tests {
             .insert(
                 "existing_token".to_string(),
                 CachedTokenData {
-                    user: "test_user".to_string(),
+                    user: UserName::new("test_user").unwrap(),
                     is_admin: false,
                     is_read_only: false,
                 },
@@ -1763,7 +1776,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "test_user".to_string(),
+                name: UserName::new("test_user").unwrap(),
                 is_admin: false,
                 is_read_only: false,
             })
@@ -1814,7 +1827,7 @@ mod tests {
             .insert(
                 "user_token".to_string(),
                 CachedTokenData {
-                    user: "target_user".to_string(),
+                    user: UserName::new("target_user").unwrap(),
                     is_admin: false, // Currently NOT admin
                     is_read_only: false,
                 },
@@ -1827,7 +1840,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1835,7 +1848,7 @@ mod tests {
         mock_db
             .expect_change_admin_state()
             .times(1)
-            .with(eq("target_user"), eq(true))
+            .with(eq(UserName::new("target_user").unwrap()), eq(true))
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -1878,7 +1891,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1924,7 +1937,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "regular_user".to_string(),
+                name: UserName::new("regular_user").unwrap(),
                 is_admin: false,
                 is_read_only: false,
             })
@@ -1969,7 +1982,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -1977,7 +1990,7 @@ mod tests {
         mock_db
             .expect_change_admin_state()
             .times(1)
-            .with(eq("other_admin"), eq(false)) // Demoting other_admin
+            .with(eq(UserName::new("other_admin").unwrap()), eq(false)) // Demoting other_admin
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -2017,7 +2030,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -2025,7 +2038,7 @@ mod tests {
         mock_db
             .expect_change_admin_state()
             .times(1)
-            .with(eq("nonexistent"), eq(true))
+            .with(eq(UserName::new("nonexistent").unwrap()), eq(true))
             .returning(|_, _| Err(DbError::UserNotFound("nonexistent".to_string())));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -2069,7 +2082,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -2077,7 +2090,7 @@ mod tests {
         mock_db
             .expect_change_admin_state()
             .times(1)
-            .with(eq("admin"), eq(true)) // Self-promotion (no-op but allowed)
+            .with(eq(UserName::new("admin").unwrap()), eq(true)) // Self-promotion (no-op but allowed)
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -2117,7 +2130,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -2162,7 +2175,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db.expect_validate_session().times(1).returning(|_| {
             Ok(kellnr_db::SessionInfo {
-                name: "admin".to_string(),
+                name: UserName::new("admin").unwrap(),
                 is_admin: true,
                 is_read_only: false,
             })
@@ -2170,7 +2183,7 @@ mod tests {
         mock_db
             .expect_delete_user()
             .times(1)
-            .with(eq("other_user"))
+            .with(eq(UserName::new("other_user").unwrap()))
             .returning(|_| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
@@ -2196,5 +2209,40 @@ mod tests {
             "Expected success but got {}",
             response.status()
         );
+    }
+
+    /// Names stored before the name rules existed must still be usable.
+    #[tokio::test]
+    async fn test_admin_deletion_of_user_with_name_against_the_rules_works() {
+        let legacy_name = "legacy:user";
+        assert!(UserName::for_new_user(legacy_name).is_err());
+        let cache = Arc::new(TokenCacheManager::new(
+            true,
+            std::time::Duration::from_secs(60),
+            100,
+        ));
+        let mut mock_db = session_db(true);
+        mock_db
+            .expect_delete_user()
+            .times(1)
+            .with(eq(UserName::new(legacy_name).unwrap()))
+            .returning(|_| Ok(()));
+
+        let state = test_state_with_cache(mock_db, cache);
+        let app = Router::new()
+            .route("/delete/{name}", axum::routing::delete(delete))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::delete(format!("/delete/{legacy_name}"))
+                    .header(header::COOKIE, session_cookie_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

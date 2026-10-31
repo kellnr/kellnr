@@ -147,6 +147,7 @@ mod service_tests {
     use std::sync::Arc;
 
     use chrono::Utc;
+    use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_common::version::Version;
@@ -374,7 +375,7 @@ mod service_tests {
         db.register_webhook(sample_webhook(WebhookEvent::CrateYank, 9995))
             .await
             .unwrap();
-        db.add_user("owner", "pwd", UserFlags::normal())
+        db.add_user(&UserName::new("owner").unwrap(), "pwd", UserFlags::normal())
             .await
             .unwrap();
         db.add_crate(
@@ -382,7 +383,7 @@ mod service_tests {
             "cksum",
             1,
             &Utc::now(),
-            "owner",
+            &UserName::new("owner").unwrap(),
             None,
         )
         .await

@@ -1,3 +1,4 @@
+use kellnr_common::account_name::GroupName;
 use kellnr_entity::group;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -8,14 +9,14 @@ use crate::GroupId;
 pub struct Group {
     #[serde(skip_serializing)]
     pub id: GroupId,
-    pub name: String,
+    pub name: GroupName,
 }
 
 impl From<group::Model> for Group {
     fn from(g: group::Model) -> Self {
         Self {
             id: GroupId::new(g.id),
-            name: g.name,
+            name: GroupName::from_unchecked(g.name),
         }
     }
 }

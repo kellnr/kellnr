@@ -6,6 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use kellnr_common::account_name::UserName;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::CRATESIO_INDEX;
 use kellnr_common::crate_dependents::LocalDependency;
@@ -236,7 +237,7 @@ pub fn is_unique_violation(err: &DbErr) -> bool {
 /// Fail with [`DbError::NotOwner`] unless `user_name` owns the crate or is an admin.
 pub async fn ensure_owner_or_admin<C: ConnectionTrait>(
     db_con: &C,
-    user_name: &str,
+    user_name: &UserName,
     crate_name: &str,
     crate_id: i64,
 ) -> DbResult<()> {
@@ -284,7 +285,7 @@ pub async fn find_version_ignoring_build<C: ConnectionTrait>(
 
 pub async fn add_owner_if_not_exists<C: ConnectionTrait>(
     db_con: &C,
-    owner_name: &str,
+    owner_name: &UserName,
     crate_id: i64,
 ) -> DbResult<()> {
     let user_fk = user::Entity::find()

@@ -15,6 +15,7 @@ use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use kellnr_appstate::{AppState, AppStateData, DbState, SettingsState};
 use kellnr_auth::oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
+use kellnr_common::account_name::UserName;
 use kellnr_db::{User, UserFlags};
 use kellnr_settings::UrlPathPrefix;
 use kellnr_settings::constants::{COOKIE_OAUTH2_STATE, COOKIE_OIDC_ID_TOKEN, OAUTH2_STATE_MAX_AGE};
@@ -332,13 +333,17 @@ pub async fn callback(
             // Generate unique username
             let username = generate_unique_username(&user_info, |name| {
                 let db = app_state.db.clone();
-                async move { db.is_username_available(&name).await }
+                async move {
+                    db.is_username_available(&UserName::from_unchecked(name))
+                        .await
+                }
             })
             .await
             .map_err(|e| {
                 error!("Failed to check if a user name is available: {e}");
                 RouteError::Status(StatusCode::INTERNAL_SERVER_ERROR)
             })?;
+            let username = UserName::from_unchecked(username);
 
             trace!(
                 "Creating new OAuth2 user '{}' (admin: {}, read_only: {})",
@@ -494,7 +499,7 @@ mod sync_tests {
     fn user(is_admin: bool, is_read_only: bool) -> User {
         User {
             id: kellnr_db::UserId::new(1),
-            name: "alice".to_string(),
+            name: UserName::new("alice").unwrap(),
             pwd: String::new(),
             salt: String::new(),
             is_admin,
@@ -527,7 +532,7 @@ mod sync_tests {
     async fn read_only_governed_promotes_user() {
         let mut db = MockDb::new();
         db.expect_change_read_only_state()
-            .with(eq("alice"), eq(true))
+            .with(eq(UserName::new("alice").unwrap()), eq(true))
             .times(1)
             .returning(|_, _| Ok(()));
 
@@ -548,7 +553,7 @@ mod sync_tests {
     async fn admin_governed_demotes_user() {
         let mut db = MockDb::new();
         db.expect_change_admin_state()
-            .with(eq("alice"), eq(false))
+            .with(eq(UserName::new("alice").unwrap()), eq(false))
             .times(1)
             .returning(|_, _| Ok(()));
 

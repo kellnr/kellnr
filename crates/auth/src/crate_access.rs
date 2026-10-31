@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use kellnr_common::account_name::UserName;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_db::provider::DbResult;
 use kellnr_db::{CrateVisibility, DbProvider};
@@ -10,7 +11,7 @@ use crate::maybe_user::MaybeUser;
 /// i.e. the crate archive and its hosted rustdoc.
 pub async fn has_restricted_crate_access(
     crate_name: &CanonicalName,
-    user: &str,
+    user: &UserName,
     is_admin: bool,
     db: &Arc<dyn DbProvider>,
 ) -> DbResult<bool> {
@@ -58,7 +59,7 @@ mod tests {
 
     fn user(is_admin: bool) -> MaybeUser {
         MaybeUser {
-            name: "user".to_string(),
+            name: UserName::new("user").unwrap(),
             is_admin,
             is_read_only: false,
         }
@@ -77,7 +78,7 @@ mod tests {
         assert_eq!(CrateVisibility::Unrestricted, crate_visibility(None));
         assert_eq!(CrateVisibility::All, crate_visibility(Some(&user(true))));
         assert_eq!(
-            CrateVisibility::User("user".to_string()),
+            CrateVisibility::User(UserName::new("user").unwrap()),
             crate_visibility(Some(&user(false)))
         );
     }
@@ -122,7 +123,7 @@ mod tests {
     async fn restricted_crate_is_readable_by_crate_user() {
         let mut db = restricted_db(true);
         db.expect_is_crate_user()
-            .with(eq(name()), eq("user"))
+            .with(eq(name()), eq(UserName::new("user").unwrap()))
             .returning(|_, _| Ok(true));
         let db: Arc<dyn DbProvider> = Arc::new(db);
         assert!(

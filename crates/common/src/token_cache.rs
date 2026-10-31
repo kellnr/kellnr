@@ -3,9 +3,11 @@ use std::time::Duration;
 
 use moka::future::Cache;
 
+use crate::account_name::UserName;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CachedTokenData {
-    pub user: String,
+    pub user: UserName,
     pub is_admin: bool,
     pub is_read_only: bool,
 }
@@ -101,7 +103,7 @@ mod tests {
 
     fn data(is_admin: bool, is_read_only: bool) -> CachedTokenData {
         CachedTokenData {
-            user: "test_user".to_string(),
+            user: UserName::new("test_user").unwrap(),
             is_admin,
             is_read_only,
         }

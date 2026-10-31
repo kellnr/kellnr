@@ -233,6 +233,7 @@ mod endpoint_tests {
     use axum::routing::{delete, get, post};
     use hyper::header;
     use kellnr_appstate::AppStateData;
+    use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_common::webhook::WebhookEvent;
     use kellnr_db::{ConString, Database, DbProvider, SqliteConString, UserFlags};
@@ -682,16 +683,24 @@ mod endpoint_tests {
         ));
         let db = Arc::new(Database::new(&con_string, 1).await.unwrap());
 
-        db.add_auth_token("wh_test_admin", &PlainToken::from(ADMIN_TOKEN), "admin")
-            .await
-            .unwrap();
-        db.add_user("wh_non_admin", "na", UserFlags::normal())
-            .await
-            .unwrap();
+        db.add_auth_token(
+            "wh_test_admin",
+            &PlainToken::from(ADMIN_TOKEN),
+            &UserName::new("admin").unwrap(),
+        )
+        .await
+        .unwrap();
+        db.add_user(
+            &UserName::new("wh_non_admin").unwrap(),
+            "na",
+            UserFlags::normal(),
+        )
+        .await
+        .unwrap();
         db.add_auth_token(
             "wh_non_admin",
             &PlainToken::from(NON_ADMIN_TOKEN),
-            "wh_non_admin",
+            &UserName::new("wh_non_admin").unwrap(),
         )
         .await
         .unwrap();
