@@ -8,6 +8,7 @@ use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::license::UNKNOWN_LICENSE;
 use kellnr_common::original_name::OriginalName;
+use kellnr_common::plain_token::PlainToken;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::publish_metadata::{PublishMetadata, RegistryDep};
 use kellnr_common::version::Version;
@@ -740,11 +741,14 @@ async fn test_add_empty_crate_exists(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_user_from_token_works(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test1", "mytoken1", "admin")
+        .add_auth_token("test1", &PlainToken::from("mytoken1"), "admin")
         .await
         .unwrap();
 
-    let user = test_db.get_user_from_token("mytoken1").await.unwrap();
+    let user = test_db
+        .get_user_from_token(&PlainToken::from("mytoken1"))
+        .await
+        .unwrap();
 
     assert_eq!("admin", user.name);
 }
@@ -752,7 +756,7 @@ async fn get_user_from_token_works(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("dated", "dated-token", "admin")
+        .add_auth_token("dated", &PlainToken::from("dated-token"), "admin")
         .await
         .unwrap();
     let token =
@@ -762,7 +766,10 @@ async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) 
     assert!(created.created.is_some());
     assert_eq!(None, created.last_used);
 
-    test_db.get_user_from_token("dated-token").await.unwrap();
+    test_db
+        .get_user_from_token(&PlainToken::from("dated-token"))
+        .await
+        .unwrap();
     let used = token(test_db.get_auth_tokens("admin").await.unwrap());
     assert!(used.last_used.is_some());
 
@@ -770,14 +777,20 @@ async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) 
     set_auth_token_last_used(test_db, "dated", "2999-01-01 00:00:00")
         .await
         .unwrap();
-    test_db.get_user_from_token("dated-token").await.unwrap();
+    test_db
+        .get_user_from_token(&PlainToken::from("dated-token"))
+        .await
+        .unwrap();
     let recent = token(test_db.get_auth_tokens("admin").await.unwrap());
     assert_eq!(Some("2999-01-01 00:00:00".to_string()), recent.last_used);
 
     set_auth_token_last_used(test_db, "dated", "2000-01-01 00:00:00")
         .await
         .unwrap();
-    test_db.get_user_from_token("dated-token").await.unwrap();
+    test_db
+        .get_user_from_token(&PlainToken::from("dated-token"))
+        .await
+        .unwrap();
     let old = token(test_db.get_auth_tokens("admin").await.unwrap());
     assert_ne!(Some("2000-01-01 00:00:00".to_string()), old.last_used);
 }
@@ -785,11 +798,11 @@ async fn auth_token_stores_creation_and_last_use(test_db: &kellnr_db::Database) 
 #[db_test]
 async fn get_auth_tokens_returns_all_tokens(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test1", "mytoken1", "admin")
+        .add_auth_token("test1", &PlainToken::from("mytoken1"), "admin")
         .await
         .unwrap();
     test_db
-        .add_auth_token("test2", "mytoken2", "admin")
+        .add_auth_token("test2", &PlainToken::from("mytoken2"), "admin")
         .await
         .unwrap();
 
@@ -804,10 +817,13 @@ async fn get_auth_tokens_returns_all_tokens(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn auth_token_insert_and_read(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test", "mytoken", "admin")
+        .add_auth_token("test", &PlainToken::from("mytoken"), "admin")
         .await
         .unwrap();
-    let user = test_db.get_user_from_token("mytoken").await.unwrap();
+    let user = test_db
+        .get_user_from_token(&PlainToken::from("mytoken"))
+        .await
+        .unwrap();
 
     assert_eq!("admin", user.name);
 }
@@ -815,7 +831,7 @@ async fn auth_token_insert_and_read(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn auth_token_insert_and_delete(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test", "mytoken", "admin")
+        .add_auth_token("test", &PlainToken::from("mytoken"), "admin")
         .await
         .unwrap();
 
@@ -824,7 +840,12 @@ async fn auth_token_insert_and_delete(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    assert!(test_db.get_user_from_token("mytoken").await.is_err());
+    assert!(
+        test_db
+            .get_user_from_token(&PlainToken::from("mytoken"))
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
@@ -834,7 +855,7 @@ async fn delete_auth_token_of_other_user_fails(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
     test_db
-        .add_auth_token("test", "mytoken", "admin")
+        .add_auth_token("test", &PlainToken::from("mytoken"), "admin")
         .await
         .unwrap();
 
@@ -848,7 +869,11 @@ async fn delete_auth_token_of_other_user_fails(test_db: &kellnr_db::Database) {
     ));
     assert_eq!(
         "admin",
-        test_db.get_user_from_token("mytoken").await.unwrap().name
+        test_db
+            .get_user_from_token(&PlainToken::from("mytoken"))
+            .await
+            .unwrap()
+            .name
     );
     assert!(matches!(
         test_db
@@ -861,18 +886,23 @@ async fn delete_auth_token_of_other_user_fails(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_user_from_token_no_token(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("test", "mytoken", "admin")
+        .add_auth_token("test", &PlainToken::from("mytoken"), "admin")
         .await
         .unwrap();
 
-    assert!(test_db.get_user_from_token("wrong_token").await.is_err());
+    assert!(
+        test_db
+            .get_user_from_token(&PlainToken::from("wrong_token"))
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
 async fn add_auth_token_no_user(test_db: &kellnr_db::Database) {
     assert!(
         test_db
-            .add_auth_token("test", "mytoken", "nouser")
+            .add_auth_token("test", &PlainToken::from("mytoken"), "nouser")
             .await
             .is_err()
     );
@@ -884,13 +914,29 @@ async fn delete_user_with_sessions(test_db: &kellnr_db::Database) {
         .add_user("user", "pwd", UserFlags::normal())
         .await
         .unwrap();
-    test_db.add_session_token("user", "123").await.unwrap();
-    test_db.add_session_token("user", "abc").await.unwrap();
+    test_db
+        .add_session_token("user", &PlainToken::from("123"))
+        .await
+        .unwrap();
+    test_db
+        .add_session_token("user", &PlainToken::from("abc"))
+        .await
+        .unwrap();
 
     test_db.delete_user("user").await.unwrap();
 
-    assert!(test_db.validate_session("123").await.is_err());
-    assert!(test_db.validate_session("abc").await.is_err());
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("123"))
+            .await
+            .is_err()
+    );
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("abc"))
+            .await
+            .is_err()
+    );
     assert!(test_db.get_user("user").await.is_err());
 }
 
@@ -1048,10 +1094,13 @@ async fn is_crate_group_user_works(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn clean_db_after_time(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", "session_token")
+        .add_session_token("admin", &PlainToken::from("session_token"))
         .await
         .unwrap();
-    let session = test_db.validate_session("session_token").await.unwrap();
+    let session = test_db
+        .validate_session(&PlainToken::from("session_token"))
+        .await
+        .unwrap();
     assert_eq!("admin", session.name);
 
     let duration = std::time::Duration::from_secs(2);
@@ -1060,7 +1109,12 @@ async fn clean_db_after_time(test_db: &kellnr_db::Database) {
         .await
         .unwrap();
 
-    assert!(test_db.validate_session("session_token").await.is_err());
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("session_token"))
+            .await
+            .is_err()
+    );
 }
 
 /// A leaked database must not hand out usable session cookies, so only a
@@ -1068,7 +1122,7 @@ async fn clean_db_after_time(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn session_token_is_stored_hashed(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", "plain_session_token")
+        .add_session_token("admin", &PlainToken::from("plain_session_token"))
         .await
         .unwrap();
 
@@ -1079,10 +1133,15 @@ async fn session_token_is_stored_hashed(test_db: &kellnr_db::Database) {
     );
 
     // The stored hash itself is not a valid session token.
-    assert!(test_db.validate_session(&stored[0]).await.is_err());
     assert!(
         test_db
-            .validate_session("plain_session_token")
+            .validate_session(&PlainToken::from(stored[0].as_str()))
+            .await
+            .is_err()
+    );
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("plain_session_token"))
             .await
             .is_ok()
     );
@@ -1094,58 +1153,111 @@ async fn delete_user_sessions_removes_all_sessions_of_user(test_db: &kellnr_db::
         .add_user("user", "pwd", UserFlags::normal())
         .await
         .unwrap();
-    test_db.add_session_token("admin", "admin_1").await.unwrap();
-    test_db.add_session_token("admin", "admin_2").await.unwrap();
-    test_db.add_session_token("user", "user_1").await.unwrap();
+    test_db
+        .add_session_token("admin", &PlainToken::from("admin_1"))
+        .await
+        .unwrap();
+    test_db
+        .add_session_token("admin", &PlainToken::from("admin_2"))
+        .await
+        .unwrap();
+    test_db
+        .add_session_token("user", &PlainToken::from("user_1"))
+        .await
+        .unwrap();
 
     let removed = test_db.delete_user_sessions("admin").await.unwrap();
 
     assert_eq!(removed, 2);
-    assert!(test_db.validate_session("admin_1").await.is_err());
-    assert!(test_db.validate_session("admin_2").await.is_err());
-    assert!(test_db.validate_session("user_1").await.is_ok());
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("admin_1"))
+            .await
+            .is_err()
+    );
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("admin_2"))
+            .await
+            .is_err()
+    );
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("user_1"))
+            .await
+            .is_ok()
+    );
 }
 
 #[db_test]
 async fn delete_user_sessions_keeps_given_session(test_db: &kellnr_db::Database) {
-    test_db.add_session_token("admin", "current").await.unwrap();
-    test_db.add_session_token("admin", "other").await.unwrap();
+    test_db
+        .add_session_token("admin", &PlainToken::from("current"))
+        .await
+        .unwrap();
+    test_db
+        .add_session_token("admin", &PlainToken::from("other"))
+        .await
+        .unwrap();
 
     let removed = test_db
-        .delete_other_user_sessions("admin", "current")
+        .delete_other_user_sessions("admin", &PlainToken::from("current"))
         .await
         .unwrap();
 
     assert_eq!(removed, 1);
-    assert!(test_db.validate_session("current").await.is_ok());
-    assert!(test_db.validate_session("other").await.is_err());
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("current"))
+            .await
+            .is_ok()
+    );
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("other"))
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
 async fn delete_session_token_works(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", "session_token")
+        .add_session_token("admin", &PlainToken::from("session_token"))
         .await
         .unwrap();
-    let session = test_db.validate_session("session_token").await.unwrap();
+    let session = test_db
+        .validate_session(&PlainToken::from("session_token"))
+        .await
+        .unwrap();
     assert_eq!("admin", session.name);
 
-    test_db.delete_session_token("session_token").await.unwrap();
+    test_db
+        .delete_session_token(&PlainToken::from("session_token"))
+        .await
+        .unwrap();
 
-    let r = test_db.validate_session("session_token");
-    assert!(r.await.is_err());
+    let r = test_db
+        .validate_session(&PlainToken::from("session_token"))
+        .await;
+    assert!(r.is_err());
 }
 
 #[db_test]
 async fn delete_session_token_no_token(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", "session_token")
+        .add_session_token("admin", &PlainToken::from("session_token"))
         .await
         .unwrap();
-    let session = test_db.validate_session("session_token").await.unwrap();
+    let session = test_db
+        .validate_session(&PlainToken::from("session_token"))
+        .await
+        .unwrap();
     assert_eq!("admin", session.name);
 
-    let r = test_db.delete_session_token("no_token").await;
+    let r = test_db
+        .delete_session_token(&PlainToken::from("no_token"))
+        .await;
 
     assert!(r.is_ok());
 }
@@ -1153,10 +1265,13 @@ async fn delete_session_token_no_token(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_name_valid_user_and_token(test_db: &kellnr_db::Database) {
     test_db
-        .add_session_token("admin", "session_token")
+        .add_session_token("admin", &PlainToken::from("session_token"))
         .await
         .unwrap();
-    let session = test_db.validate_session("session_token").await.unwrap();
+    let session = test_db
+        .validate_session(&PlainToken::from("session_token"))
+        .await
+        .unwrap();
 
     assert_eq!("admin", session.name);
 }
@@ -1223,7 +1338,12 @@ async fn cleanup_expired_oauth2_states_removes_only_old(test_db: &kellnr_db::Dat
 
 #[db_test]
 async fn get_session_no_session_in_db(test_db: &kellnr_db::Database) {
-    assert!(test_db.validate_session("no_session_token").await.is_err());
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("no_session_token"))
+            .await
+            .is_err()
+    );
 }
 
 // Test harness configures a 3600s session age (see db-testcontainer).
@@ -1242,10 +1362,20 @@ async fn validate_session_rejects_expired(test_db: &kellnr_db::Database) {
     .unwrap();
 
     // A session within the age window validates.
-    assert!(test_db.validate_session("fresh").await.is_ok());
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("fresh"))
+            .await
+            .is_ok()
+    );
     // An expired session is rejected (treated as not found), even though the
     // row still exists in the DB.
-    assert!(test_db.validate_session("stale").await.is_err());
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("stale"))
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
@@ -1266,8 +1396,18 @@ async fn delete_expired_sessions_removes_only_old(test_db: &kellnr_db::Database)
     assert_eq!(removed, 1);
 
     // The fresh session survived; the expired one was removed.
-    assert!(test_db.validate_session("fresh").await.is_ok());
-    assert!(test_db.validate_session("stale").await.is_err());
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("fresh"))
+            .await
+            .is_ok()
+    );
+    assert!(
+        test_db
+            .validate_session(&PlainToken::from("stale"))
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]
@@ -1278,21 +1418,27 @@ async fn validate_session_returns_read_only_and_admin_flags(test_db: &kellnr_db:
         .await
         .unwrap();
     test_db
-        .add_session_token("rouser", "ro_session")
+        .add_session_token("rouser", &PlainToken::from("ro_session"))
         .await
         .unwrap();
 
-    let session = test_db.validate_session("ro_session").await.unwrap();
+    let session = test_db
+        .validate_session(&PlainToken::from("ro_session"))
+        .await
+        .unwrap();
     assert_eq!("rouser", session.name);
     assert!(!session.is_admin);
     assert!(session.is_read_only);
 
     // default admin user is an admin and not read-only
     test_db
-        .add_session_token("admin", "admin_session")
+        .add_session_token("admin", &PlainToken::from("admin_session"))
         .await
         .unwrap();
-    let admin = test_db.validate_session("admin_session").await.unwrap();
+    let admin = test_db
+        .validate_session(&PlainToken::from("admin_session"))
+        .await
+        .unwrap();
     assert!(admin.is_admin);
     assert!(!admin.is_read_only);
 }
@@ -2301,17 +2447,23 @@ async fn get_crate_data_returns_publisher(test_db: &kellnr_db::Database) {
 #[db_test]
 async fn get_auth_token_name_finds_the_token(test_db: &kellnr_db::Database) {
     test_db
-        .add_auth_token("deploy", "secret-token", "admin")
+        .add_auth_token("deploy", &PlainToken::from("secret-token"), "admin")
         .await
         .unwrap();
 
     assert_eq!(
         Some("deploy".to_string()),
-        test_db.get_auth_token_name("secret-token").await.unwrap()
+        test_db
+            .get_auth_token_name(&PlainToken::from("secret-token"))
+            .await
+            .unwrap()
     );
     assert_eq!(
         None,
-        test_db.get_auth_token_name("other-token").await.unwrap()
+        test_db
+            .get_auth_token_name(&PlainToken::from("other-token"))
+            .await
+            .unwrap()
     );
 }
 
@@ -5422,8 +5574,16 @@ async fn admin_created_by_concurrent_start_is_kept(test_db: &kellnr_db::Database
 
     assert_eq!(1, test_db.get_users().await.unwrap().len());
     test_db.authenticate_user("admin", "123").await.unwrap();
-    test_db.get_user_from_token("token").await.unwrap();
-    assert!(test_db.get_user_from_token("other_token").await.is_err());
+    test_db
+        .get_user_from_token(&PlainToken::from("token"))
+        .await
+        .unwrap();
+    assert!(
+        test_db
+            .get_user_from_token(&PlainToken::from("other_token"))
+            .await
+            .is_err()
+    );
 }
 
 #[db_test]

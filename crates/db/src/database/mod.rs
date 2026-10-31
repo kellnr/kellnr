@@ -13,6 +13,7 @@ use kellnr_common::crate_overview::CrateOverview;
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
 use kellnr_common::index_metadata::{IndexDep, IndexMetadata};
 use kellnr_common::original_name::OriginalName;
+use kellnr_common::plain_token::PlainToken;
 use kellnr_common::prefetch::{Prefetch, is_not_modified};
 use kellnr_common::publish_metadata::PublishMetadata;
 use kellnr_common::version::{Version, latest_version};
@@ -1075,13 +1076,13 @@ impl DbProvider for Database {
         }
     }
 
-    async fn validate_session(&self, session_token: &str) -> DbResult<SessionInfo> {
+    async fn validate_session(&self, session_token: &PlainToken) -> DbResult<SessionInfo> {
         // An expired session is treated like a missing one: the age filter
         // makes it invisible here so callers get the same SessionNotFound.
         // With expiry disabled (no cutoff) the filter is omitted.
         let mut query = user::Entity::find()
             .join(JoinType::InnerJoin, user::Relation::Session.def())
-            .filter(session::Column::Token.eq(hash_token(session_token)));
+            .filter(session::Column::Token.eq(hash_token(session_token.expose_secret())));
         if let Some(cutoff) = self.session_expiry_cutoff() {
             query = query.filter(session::Column::Created.gte(cutoff));
         }
@@ -1110,12 +1111,12 @@ impl DbProvider for Database {
         Ok(res.rows_affected)
     }
 
-    async fn add_session_token(&self, name: &str, session_token: &str) -> DbResult<()> {
+    async fn add_session_token(&self, name: &str, session_token: &PlainToken) -> DbResult<()> {
         let user = self.get_user(name).await?;
         let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         let s = session::ActiveModel {
-            token: Set(hash_token(session_token)),
+            token: Set(hash_token(session_token.expose_secret())),
             created: Set(created),
             user_fk: Set(user.id.get()),
             ..Default::default()
@@ -1137,12 +1138,12 @@ impl DbProvider for Database {
     async fn delete_other_user_sessions(
         &self,
         user_name: &str,
-        keep_session_token: &str,
+        keep_session_token: &PlainToken,
     ) -> DbResult<u64> {
         let user = self.get_user_model(user_name).await?;
         let res = session::Entity::delete_many()
             .filter(session::Column::UserFk.eq(user.id))
-            .filter(session::Column::Token.ne(hash_token(keep_session_token)))
+            .filter(session::Column::Token.ne(hash_token(keep_session_token.expose_secret())))
             .exec(&self.db_con)
             .await?;
         Ok(res.rows_affected)
@@ -1308,9 +1309,9 @@ impl DbProvider for Database {
             .collect())
     }
 
-    async fn delete_session_token(&self, session_token: &str) -> DbResult<()> {
+    async fn delete_session_token(&self, session_token: &PlainToken) -> DbResult<()> {
         if let Some(s) = session::Entity::find()
-            .filter(session::Column::Token.eq(hash_token(session_token)))
+            .filter(session::Column::Token.eq(hash_token(session_token.expose_secret())))
             .one(&self.db_con)
             .await?
         {
@@ -1401,8 +1402,8 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn add_auth_token(&self, name: &str, token: &str, user: &str) -> DbResult<()> {
-        let hashed_token = hash_token(token);
+    async fn add_auth_token(&self, name: &str, token: &PlainToken, user: &str) -> DbResult<()> {
+        let hashed_token = hash_token(token.expose_secret());
         let user = self.get_user_model(user).await?;
 
         let at = auth_token::ActiveModel {
@@ -1418,8 +1419,8 @@ impl DbProvider for Database {
         Ok(())
     }
 
-    async fn get_user_from_token(&self, token: &str) -> DbResult<User> {
-        let token = hash_token(token);
+    async fn get_user_from_token(&self, token: &PlainToken) -> DbResult<User> {
+        let token = hash_token(token.expose_secret());
 
         let (at, u) = auth_token::Entity::find()
             .filter(Expr::col((AuthTokenIden::Table, AuthTokenIden::Token)).eq(token))
@@ -1459,9 +1460,9 @@ impl DbProvider for Database {
         Ok(Group::from(self.get_group_model(name).await?))
     }
 
-    async fn get_auth_token_name(&self, token: &str) -> DbResult<Option<String>> {
+    async fn get_auth_token_name(&self, token: &PlainToken) -> DbResult<Option<String>> {
         Ok(auth_token::Entity::find()
-            .filter(auth_token::Column::Token.eq(hash_token(token)))
+            .filter(auth_token::Column::Token.eq(hash_token(token.expose_secret())))
             .one(&self.db_con)
             .await?
             .map(|at| at.name))

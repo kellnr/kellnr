@@ -11,6 +11,7 @@ pub mod license;
 pub mod login_throttle;
 pub mod name_or_description;
 pub mod original_name;
+pub mod plain_token;
 pub mod prefetch;
 pub mod publish_metadata;
 pub mod search_result;

@@ -4,6 +4,7 @@ use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum_extra::extract::PrivateCookieJar;
 use kellnr_appstate::AppStateData;
+use kellnr_common::plain_token::PlainToken;
 use kellnr_db::SessionInfo;
 use kellnr_db::error::DbError;
 use kellnr_settings::constants;
@@ -60,7 +61,7 @@ impl FromRequestParts<AppStateData> for MaybeUser {
 
         let session = state
             .db
-            .validate_session(session_cookie.value())
+            .validate_session(&PlainToken::from(session_cookie.value()))
             .await
             .map_err(|e| match e {
                 DbError::SessionNotFound => StatusCode::UNAUTHORIZED,

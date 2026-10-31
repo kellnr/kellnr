@@ -1109,6 +1109,7 @@ mod reg_api_tests {
     use http_body_util::BodyExt;
     use hyper::header;
     use kellnr_appstate::AppStateData;
+    use kellnr_common::plain_token::PlainToken;
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_db::download_counter::DownloadCounter;
     use kellnr_db::mock::MockDb;
@@ -1966,7 +1967,7 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_auth_token("user token", "user_token", "user")
+            .add_auth_token("user token", &PlainToken::from("user_token"), "user")
             .await
             .unwrap();
 
@@ -2016,7 +2017,7 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_auth_token("user token", "user_token", "user")
+            .add_auth_token("user token", &PlainToken::from("user_token"), "user")
             .await
             .unwrap();
 
@@ -2066,7 +2067,7 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_auth_token("user token", "user_token", "user")
+            .add_auth_token("user token", &PlainToken::from("user_token"), "user")
             .await
             .unwrap();
 
@@ -2120,7 +2121,7 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_auth_token("user token", "user_token", "user")
+            .add_auth_token("user token", &PlainToken::from("user_token"), "user")
             .await
             .unwrap();
 
@@ -2174,7 +2175,11 @@ mod reg_api_tests {
             .unwrap();
 
         // create a session token and store it in DB
-        kellnr.db.add_session_token("user", "1234").await.unwrap();
+        kellnr
+            .db
+            .add_session_token("user", &PlainToken::from("1234"))
+            .await
+            .unwrap();
 
         // create signed cookie header
         let cookie_header = kellnr_appstate::encode_cookies([(
@@ -2238,7 +2243,11 @@ mod reg_api_tests {
             .unwrap();
 
         // create a session for the read-only owner
-        kellnr.db.add_session_token("rouser", "1234").await.unwrap();
+        kellnr
+            .db
+            .add_session_token("rouser", &PlainToken::from("1234"))
+            .await
+            .unwrap();
         let cookie_header = kellnr_appstate::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
             "1234",
@@ -2305,7 +2314,7 @@ mod reg_api_tests {
         // create a session for the writable owner
         kellnr
             .db
-            .add_session_token("rwowner", "1234")
+            .add_session_token("rwowner", &PlainToken::from("1234"))
             .await
             .unwrap();
         let cookie_header = kellnr_appstate::encode_cookies([(
@@ -2358,7 +2367,11 @@ mod reg_api_tests {
             .unwrap();
 
         // create a session token and store it in DB
-        kellnr.db.add_session_token("user", "1234").await.unwrap();
+        kellnr
+            .db
+            .add_session_token("user", &PlainToken::from("1234"))
+            .await
+            .unwrap();
 
         let cookie_header = kellnr_appstate::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
@@ -2708,7 +2721,7 @@ mod reg_api_tests {
         for (token, user) in [("crate-user-token", "crate_user"), ("other-token", "other")] {
             mock_db
                 .expect_get_user_from_token()
-                .with(eq(token))
+                .with(eq(PlainToken::from(token)))
                 .returning(move |_| {
                     Ok(kellnr_db::User {
                         name: user.to_string(),
@@ -3868,11 +3881,13 @@ mod reg_api_tests {
         let con_string = ConString::Sqlite(SqliteConString::from(&settings));
         let db = Database::new(&con_string, 10).await.unwrap();
         let cs = KellnrCrateStorage::new(&settings, storage);
-        db.add_auth_token("test", TOKEN, "admin").await.unwrap();
+        db.add_auth_token("test", &PlainToken::from(TOKEN), "admin")
+            .await
+            .unwrap();
         db.add_user("ro_dummy", "ro", UserFlags::read_only())
             .await
             .unwrap();
-        db.add_auth_token("test ro", RO_TOKEN, "ro_dummy")
+        db.add_auth_token("test ro", &PlainToken::from(RO_TOKEN), "ro_dummy")
             .await
             .unwrap();
         db.add_user(
@@ -3885,15 +3900,23 @@ mod reg_api_tests {
         )
         .await
         .unwrap();
-        db.add_auth_token("test admin ro", RO_ADMIN_TOKEN, "ro_dummy_admin")
-            .await
-            .unwrap();
+        db.add_auth_token(
+            "test admin ro",
+            &PlainToken::from(RO_ADMIN_TOKEN),
+            "ro_dummy_admin",
+        )
+        .await
+        .unwrap();
         db.add_user("non_admin", "na", UserFlags::normal())
             .await
             .unwrap();
-        db.add_auth_token("test non admin", NON_ADMIN_TOKEN, "non_admin")
-            .await
-            .unwrap();
+        db.add_auth_token(
+            "test non admin",
+            &PlainToken::from(NON_ADMIN_TOKEN),
+            "non_admin",
+        )
+        .await
+        .unwrap();
 
         let db: Arc<dyn DbProvider> = Arc::new(db);
         let state = AppStateData {

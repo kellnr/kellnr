@@ -1137,6 +1137,7 @@ mod tests {
     use axum_extra::extract::cookie::Key;
     use bytes::Bytes;
     use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
+    use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{
         DbProvider, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
@@ -1220,7 +1221,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1251,7 +1252,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("user_session"))
+            .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1300,7 +1301,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("user_session"))
+            .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1333,7 +1334,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("user_session"))
+            .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1363,7 +1364,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("user_session"))
+            .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1393,7 +1394,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("user_session"))
+            .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1428,7 +1429,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1484,7 +1485,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1531,7 +1532,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1584,7 +1585,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1643,7 +1644,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1721,7 +1722,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1795,7 +1796,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1873,7 +1874,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1911,7 +1912,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("user_session"))
+            .with(eq(PlainToken::from("user_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "user".to_string(),
@@ -1943,7 +1944,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -1986,7 +1987,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -2046,7 +2047,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),
@@ -2713,7 +2714,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
-            .with(eq("admin_session"))
+            .with(eq(PlainToken::from("admin_session")))
             .returning(|_| {
                 Ok(kellnr_db::SessionInfo {
                     name: "admin".to_string(),

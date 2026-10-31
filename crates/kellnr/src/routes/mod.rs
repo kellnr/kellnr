@@ -270,6 +270,7 @@ mod tests {
     use bytes::Bytes;
     use kellnr_appstate::{TEST_KEY, encode_cookies};
     use kellnr_common::canonical_name::CanonicalName;
+    use kellnr_common::plain_token::PlainToken;
     use kellnr_common::version::Version;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -304,7 +305,7 @@ mod tests {
             .returning(|_| Ok(true));
         db.expect_get_user_from_token().returning(|token| {
             Ok(User {
-                name: token.to_string(),
+                name: token.expose_secret().to_string(),
                 ..User::default()
             })
         });
@@ -427,7 +428,7 @@ mod tests {
         let mut db = MockDb::new();
         db.expect_is_download_restricted().returning(|_| Ok(true));
         db.expect_validate_session()
-            .with(eq("admin-session"))
+            .with(eq(PlainToken::from("admin-session")))
             .returning(|_| {
                 Ok(SessionInfo {
                     name: "admin".to_string(),
