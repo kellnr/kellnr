@@ -28,7 +28,7 @@ pub use gcs::Gcs;
 pub use leaf_labels::leaf_label;
 pub use local::Local;
 pub use log::{LogFormat, LogLevel};
-pub use oauth2::OAuth2;
+pub use oauth2::{ClaimMatch, OAuth2};
 pub use origin::{Origin, UrlPathPrefix};
 pub use postgresql::Postgresql;
 pub use protocol::Protocol;

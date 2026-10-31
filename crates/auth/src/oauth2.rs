@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use kellnr_common::account_name::MAX_NAME_LEN;
 use kellnr_settings::OAuth2 as OAuth2Settings;
+use kellnr_settings::oauth2::ClaimMatch;
 use openidconnect::core::{
     CoreAuthDisplay, CoreAuthPrompt, CoreAuthenticationFlow, CoreClient, CoreErrorResponseType,
     CoreGenderClaim, CoreIdTokenClaims, CoreIdTokenVerifier, CoreJsonWebKey,
@@ -424,16 +425,8 @@ impl OAuth2Handler {
 
         // Privileges are only derived from the configured claims, never from
         // the fallback group claims above.
-        let is_admin = claim_contains(
-            &result.raw_payload,
-            self.settings.admin_group_claim.as_deref(),
-            self.settings.admin_group_value.as_deref(),
-        );
-        let is_read_only = claim_contains(
-            &result.raw_payload,
-            self.settings.read_only_group_claim.as_deref(),
-            self.settings.read_only_group_value.as_deref(),
-        );
+        let is_admin = claim_contains(&result.raw_payload, self.settings.admin_claim());
+        let is_read_only = claim_contains(&result.raw_payload, self.settings.read_only_claim());
 
         UserInfo {
             subject,
@@ -512,7 +505,7 @@ impl OAuth2Handler {
     /// extracted `is_admin` is always `false` and must not be used to
     /// overwrite an existing user's state.
     pub fn admin_claim_configured(&self) -> bool {
-        self.settings.admin_group_claim.is_some() && self.settings.admin_group_value.is_some()
+        self.settings.admin_claim().is_some()
     }
 
     /// Whether read-only status is governed by an `IdP` group claim.
@@ -520,8 +513,7 @@ impl OAuth2Handler {
     /// See [`Self::admin_claim_configured`]; the same source-of-truth rule
     /// applies to the read-only flag.
     pub fn read_only_claim_configured(&self) -> bool {
-        self.settings.read_only_group_claim.is_some()
-            && self.settings.read_only_group_value.is_some()
+        self.settings.read_only_claim().is_some()
     }
 }
 
@@ -545,16 +537,17 @@ fn extract_jwt_payload(jwt: &str) -> Result<serde_json::Value, OAuth2Error> {
         .map_err(|e| OAuth2Error::TokenVerificationError(format!("JSON parse error: {e}")))
 }
 
-/// Whether the claim `claim_name` grants `claim_value`. The claim may be a
-/// string, a string array or a boolean (matched against `"true"`). Only the
-/// named claim is consulted: falling back to other claims such as `groups`
-/// would let any group of that name grant the privilege.
-fn claim_contains(
-    payload: &serde_json::Value,
-    claim_name: Option<&str>,
-    claim_value: Option<&str>,
-) -> bool {
-    let (Some(claim_name), Some(claim_value)) = (claim_name, claim_value) else {
+/// Whether the claim of `claim` grants its value, `false` if no claim is
+/// configured. The claim may be a string, a string array or a boolean
+/// (matched against `"true"`). Only the named claim is consulted: falling
+/// back to other claims such as `groups` would let any group of that name
+/// grant the privilege.
+fn claim_contains(payload: &serde_json::Value, claim: Option<ClaimMatch<'_>>) -> bool {
+    let Some(ClaimMatch {
+        claim: claim_name,
+        value: claim_value,
+    }) = claim
+    else {
         return false;
     };
 
@@ -685,25 +678,31 @@ mod tests {
 
     use super::*;
 
+    fn claim<'a>(claim: &'a str, value: &'a str) -> ClaimMatch<'a> {
+        ClaimMatch { claim, value }
+    }
+
     #[test]
     fn claim_contains_matches_configured_array_claim() {
         let payload = json!({ "kellnr_roles": ["dev", "admin"] });
 
         assert!(claim_contains(
             &payload,
-            Some("kellnr_roles"),
-            Some("admin")
+            Some(claim("kellnr_roles", "admin"))
         ));
-        assert!(!claim_contains(&payload, Some("kellnr_roles"), Some("ops")));
+        assert!(!claim_contains(
+            &payload,
+            Some(claim("kellnr_roles", "ops"))
+        ));
     }
 
     #[test]
     fn claim_contains_matches_string_and_bool_claims() {
         let payload = json!({ "role": "admin", "is_admin": true, "is_ro": false });
 
-        assert!(claim_contains(&payload, Some("role"), Some("admin")));
-        assert!(claim_contains(&payload, Some("is_admin"), Some("true")));
-        assert!(!claim_contains(&payload, Some("is_ro"), Some("true")));
+        assert!(claim_contains(&payload, Some(claim("role", "admin"))));
+        assert!(claim_contains(&payload, Some(claim("is_admin", "true"))));
+        assert!(!claim_contains(&payload, Some(claim("is_ro", "true"))));
     }
 
     /// The privilege must come from the configured claim only. A group of the
@@ -718,8 +717,7 @@ mod tests {
 
         assert!(!claim_contains(
             &payload,
-            Some("kellnr_roles"),
-            Some("kellnr-admins")
+            Some(claim("kellnr_roles", "kellnr-admins"))
         ));
     }
 
@@ -731,18 +729,16 @@ mod tests {
 
         assert!(!claim_contains(
             &payload,
-            Some("admin_groups"),
-            Some("kellnr-admins")
+            Some(claim("admin_groups", "kellnr-admins"))
         ));
     }
 
     #[test]
-    fn claim_contains_requires_claim_and_value() {
+    fn claim_contains_requires_a_configured_claim() {
         let payload = json!({ "groups": ["admin"] });
 
-        assert!(!claim_contains(&payload, None, Some("admin")));
-        assert!(!claim_contains(&payload, Some("groups"), None));
-        assert!(claim_contains(&payload, Some("groups"), Some("admin")));
+        assert!(!claim_contains(&payload, None));
+        assert!(claim_contains(&payload, Some(claim("groups", "admin"))));
     }
 
     #[test]
