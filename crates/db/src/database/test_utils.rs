@@ -39,7 +39,7 @@ use sea_orm::{
 use super::{DB_DATE_FORMAT, Database, parse_db_version};
 use crate::error::DbError;
 use crate::provider::{DbProvider, DbResult};
-use crate::{CrateId, CrateMeta};
+use crate::{CrateId, CrateMeta, UserFlags};
 
 /// Returns a standard test date for consistent test data.
 ///
@@ -284,7 +284,7 @@ pub async fn test_add_crate(
         .one(&db.db_con)
         .await?;
     if user.is_none() {
-        db.add_user(name, "pwd", false, false).await?;
+        db.add_user(name, "pwd", UserFlags::normal()).await?;
     }
 
     db.add_crate(&pm, "cksum", 1024, created, owner, None).await
@@ -410,7 +410,7 @@ pub async fn test_add_crate_with_downloads(
         .one(&db.db_con)
         .await?;
     if user.is_none() {
-        db.add_user(name, "pwd", false, false).await?;
+        db.add_user(name, "pwd", UserFlags::normal()).await?;
     }
 
     db.add_crate(&pm, "cksum", 1024, created, owner, None)

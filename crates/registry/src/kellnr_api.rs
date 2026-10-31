@@ -1112,7 +1112,7 @@ mod reg_api_tests {
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_db::download_counter::DownloadCounter;
     use kellnr_db::mock::MockDb;
-    use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, test_utils};
+    use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, UserFlags, test_utils};
     use kellnr_error::api_error::ErrorDetails;
     use kellnr_settings::{LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
@@ -1779,7 +1779,7 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_user("user", "123", false, false)
+            .add_user("user", "123", UserFlags::normal())
             .await
             .unwrap();
         let add_owner = crate_user::CrateUserRequest {
@@ -1827,7 +1827,7 @@ mod reg_api_tests {
 
         kellnr
             .db
-            .add_user("user", "123", false, false)
+            .add_user("user", "123", UserFlags::normal())
             .await
             .unwrap();
 
@@ -1961,7 +1961,7 @@ mod reg_api_tests {
         // create regular user and token
         kellnr
             .db
-            .add_user("user", "123", false, false)
+            .add_user("user", "123", UserFlags::normal())
             .await
             .unwrap();
         kellnr
@@ -2011,7 +2011,7 @@ mod reg_api_tests {
         // create regular user and token
         kellnr
             .db
-            .add_user("user", "123", false, false)
+            .add_user("user", "123", UserFlags::normal())
             .await
             .unwrap();
         kellnr
@@ -2061,7 +2061,7 @@ mod reg_api_tests {
         // create regular user and token
         kellnr
             .db
-            .add_user("user", "123", false, false)
+            .add_user("user", "123", UserFlags::normal())
             .await
             .unwrap();
         kellnr
@@ -2115,7 +2115,7 @@ mod reg_api_tests {
         // create regular user and token
         kellnr
             .db
-            .add_user("user", "123", false, false)
+            .add_user("user", "123", UserFlags::normal())
             .await
             .unwrap();
         kellnr
@@ -2169,7 +2169,7 @@ mod reg_api_tests {
         // create regular user
         kellnr
             .db
-            .add_user("user", "123", false, false)
+            .add_user("user", "123", UserFlags::normal())
             .await
             .unwrap();
 
@@ -2228,7 +2228,7 @@ mod reg_api_tests {
         // create a read-only user and make them an owner of the crate
         kellnr
             .db
-            .add_user("rouser", "123", false, true)
+            .add_user("rouser", "123", UserFlags::read_only())
             .await
             .unwrap();
         kellnr
@@ -2288,7 +2288,7 @@ mod reg_api_tests {
         // a writable owner and a target user to be added as owner
         kellnr
             .db
-            .add_user("rwowner", "123", false, false)
+            .add_user("rwowner", "123", UserFlags::normal())
             .await
             .unwrap();
         kellnr
@@ -2298,7 +2298,7 @@ mod reg_api_tests {
             .unwrap();
         kellnr
             .db
-            .add_user("target", "123", false, false)
+            .add_user("target", "123", UserFlags::normal())
             .await
             .unwrap();
 
@@ -2353,7 +2353,7 @@ mod reg_api_tests {
         // create regular user
         kellnr
             .db
-            .add_user("user", "123", false, false)
+            .add_user("user", "123", UserFlags::normal())
             .await
             .unwrap();
 
@@ -3869,17 +3869,28 @@ mod reg_api_tests {
         let db = Database::new(&con_string, 10).await.unwrap();
         let cs = KellnrCrateStorage::new(&settings, storage);
         db.add_auth_token("test", TOKEN, "admin").await.unwrap();
-        db.add_user("ro_dummy", "ro", false, true).await.unwrap();
+        db.add_user("ro_dummy", "ro", UserFlags::read_only())
+            .await
+            .unwrap();
         db.add_auth_token("test ro", RO_TOKEN, "ro_dummy")
             .await
             .unwrap();
-        db.add_user("ro_dummy_admin", "roa", true, true)
-            .await
-            .unwrap();
+        db.add_user(
+            "ro_dummy_admin",
+            "roa",
+            UserFlags {
+                admin: true,
+                read_only: true,
+            },
+        )
+        .await
+        .unwrap();
         db.add_auth_token("test admin ro", RO_ADMIN_TOKEN, "ro_dummy_admin")
             .await
             .unwrap();
-        db.add_user("non_admin", "na", false, false).await.unwrap();
+        db.add_user("non_admin", "na", UserFlags::normal())
+            .await
+            .unwrap();
         db.add_auth_token("test non admin", NON_ADMIN_TOKEN, "non_admin")
             .await
             .unwrap();

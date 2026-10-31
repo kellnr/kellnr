@@ -18,6 +18,37 @@ pub struct User {
     pub created: String,
 }
 
+/// The rights of a user, stored in the `is_admin` and `is_read_only`
+/// columns. An admin can be read-only as well.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserFlags {
+    pub admin: bool,
+    pub read_only: bool,
+}
+
+impl UserFlags {
+    pub const fn normal() -> Self {
+        Self {
+            admin: false,
+            read_only: false,
+        }
+    }
+
+    pub const fn admin() -> Self {
+        Self {
+            admin: true,
+            read_only: false,
+        }
+    }
+
+    pub const fn read_only() -> Self {
+        Self {
+            admin: false,
+            read_only: true,
+        }
+    }
+}
+
 impl From<user::Model> for User {
     fn from(u: user::Model) -> Self {
         Self {

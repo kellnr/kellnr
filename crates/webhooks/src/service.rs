@@ -151,7 +151,7 @@ mod service_tests {
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_common::version::Version;
     use kellnr_common::webhook::{Webhook, WebhookEvent};
-    use kellnr_db::{ConString, Database, DbProvider, SqliteConString};
+    use kellnr_db::{ConString, Database, DbProvider, SqliteConString, UserFlags};
 
     use super::*;
     use crate::notify_crate;
@@ -374,7 +374,9 @@ mod service_tests {
         db.register_webhook(sample_webhook(WebhookEvent::CrateYank, 9995))
             .await
             .unwrap();
-        db.add_user("owner", "pwd", false, false).await.unwrap();
+        db.add_user("owner", "pwd", UserFlags::normal())
+            .await
+            .unwrap();
         db.add_crate(
             &PublishMetadata::minimal("Test-Crate", "0.1.0"),
             "cksum",

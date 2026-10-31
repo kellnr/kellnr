@@ -29,6 +29,6 @@ pub use provider::{
     SessionInfo, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets, mock,
 };
 pub use toolchain_target_status::ToolchainTargetStatus;
-pub use user::User;
+pub use user::{User, UserFlags};
 
 pub use crate::database::{Database, test_utils};
