@@ -36,6 +36,7 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+kellnr-db = { workspace = true, features = ["test-support"] }
 hyper.workspace = true
 tower.workspace = true
 

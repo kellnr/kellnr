@@ -34,6 +34,7 @@ tracing.workspace = true
 urlencoding = "2"
 
 [dev-dependencies]
+kellnr-db = { workspace = true, features = ["test-support"] }
 async-trait.workspace = true
 bytes.workspace = true
 flume.workspace = true
