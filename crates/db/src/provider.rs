@@ -21,8 +21,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::DbError;
 use crate::{
-    AuthToken, AuthTokenId, CrateId, CrateSummary, DocQueueEntry, Group, ToolchainTargetStatus,
-    User, UserFlags, UserId, crate_meta,
+    AuthToken, AuthTokenId, CrateId, DocQueueEntry, Group, ToolchainTargetStatus, User, UserFlags,
+    crate_meta,
 };
 
 pub type DbResult<T> = Result<T, DbError>;
@@ -245,7 +245,6 @@ pub trait DbProvider: Send + Sync {
     async fn crate_version_exists(&self, crate_id: CrateId, version: &Version) -> DbResult<bool>;
     async fn get_max_version_from_id(&self, crate_id: CrateId) -> DbResult<Version>;
     async fn get_max_version_from_name(&self, crate_name: &CanonicalName) -> DbResult<Version>;
-    async fn update_max_version(&self, crate_id: CrateId, version: &Version) -> DbResult<()>;
     async fn add_auth_token(&self, name: &str, token: &PlainToken, user: &UserName)
     -> DbResult<()>;
     async fn get_user_from_token(&self, token: &PlainToken) -> DbResult<User>;
@@ -256,7 +255,6 @@ pub trait DbProvider: Send + Sync {
     /// Deletes the token `id` of the user, [`DbError::TokenNotFound`] if the
     /// user has no such token.
     async fn delete_auth_token(&self, user_name: &UserName, id: AuthTokenId) -> DbResult<()>;
-    async fn delete_owner(&self, crate_name: &CanonicalName, owner: &UserName) -> DbResult<()>;
     /// Removes all `owners` from the crate in one transaction. Nothing is
     /// removed if one of them is not an owner ([`DbError::OwnerNotFound`]) or
     /// if no owner would remain and `allow_ownerless` is false
@@ -271,7 +269,6 @@ pub trait DbProvider: Send + Sync {
     async fn add_user(&self, name: &UserName, pwd: &str, flags: UserFlags) -> DbResult<()>;
     async fn get_users(&self) -> DbResult<Vec<User>>;
     async fn add_group(&self, name: &GroupName) -> DbResult<()>;
-    async fn get_group(&self, name: &GroupName) -> DbResult<Group>;
     async fn get_groups(&self) -> DbResult<Vec<Group>>;
     async fn delete_group(&self, name: &GroupName) -> DbResult<()>;
     async fn add_group_user(&self, group_name: &GroupName, user: &UserName) -> DbResult<()>;
@@ -303,7 +300,6 @@ pub trait DbProvider: Send + Sync {
     async fn get_total_unique_cached_crates(&self) -> DbResult<u64>;
     async fn get_total_cached_crate_versions(&self) -> DbResult<u64>;
     async fn get_total_cached_downloads(&self) -> DbResult<u64>;
-    async fn get_crate_summaries(&self) -> DbResult<Vec<CrateSummary>>;
     async fn add_doc_queue(
         &self,
         krate: &OriginalName,
@@ -314,7 +310,6 @@ pub trait DbProvider: Send + Sync {
     async fn get_doc_queue(&self) -> DbResult<Vec<DocQueueEntry>>;
     async fn delete_crate(&self, krate: &CanonicalName, version: &Version) -> DbResult<()>;
     async fn get_crate_meta_list(&self, crate_name: &CanonicalName) -> DbResult<Vec<CrateMeta>>;
-    async fn update_last_updated(&self, id: CrateId, last_updated: &DateTime<Utc>) -> DbResult<()>;
     async fn search_in_crate_name_and_description(
         &self,
         contains: &str,
@@ -367,13 +362,6 @@ pub trait DbProvider: Send + Sync {
         crate_name: &CanonicalName,
         version: &Version,
         docs_link: &str,
-    ) -> DbResult<()>;
-    async fn add_crate_metadata(
-        &self,
-        pub_metadata: &PublishMetadata,
-        size: i64,
-        created: &str,
-        crate_id: CrateId,
     ) -> DbResult<()>;
     async fn get_prefetch_data(&self, crate_name: &OriginalName) -> DbResult<Prefetch>;
     async fn is_cratesio_cache_up_to_date(
@@ -457,15 +445,6 @@ pub trait DbProvider: Send + Sync {
         email: Option<String>,
         flags: UserFlags,
     ) -> DbResult<User>;
-
-    /// Link an `OAuth2` identity to an existing user
-    async fn link_oauth2_identity(
-        &self,
-        user_id: UserId,
-        issuer: &str,
-        subject: &str,
-        email: Option<String>,
-    ) -> DbResult<()>;
 
     // `OAuth2` state methods (CSRF/PKCE during auth flow)
     /// Store `OAuth2` state for CSRF/PKCE verification during auth flow

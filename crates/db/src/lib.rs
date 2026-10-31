@@ -1,7 +1,6 @@
 mod auth_token;
 mod con_string;
 mod crate_meta;
-mod crate_summary;
 mod database;
 mod doc_queue_entry;
 pub mod download_counter;
@@ -19,17 +18,16 @@ mod user;
 pub use auth_token::AuthToken;
 pub use con_string::{AdminUser, ConString, PgConString, SqliteConString};
 pub use crate_meta::CrateMeta;
-pub use crate_summary::CrateSummary;
 pub use doc_queue_entry::DocQueueEntry;
 pub use group::Group;
 pub use id::{AuthTokenId, CrateId, GroupId, UserId};
 pub use krate::Crate;
+#[cfg(feature = "mock")]
+pub use provider::mock;
 pub use provider::{
     ChannelInfo, CrateSort, CrateTagFilter, CrateVisibility, DbProvider, OAuth2StateData,
     SessionInfo, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
 };
-#[cfg(feature = "mock")]
-pub use provider::mock;
 pub use toolchain_target_status::ToolchainTargetStatus;
 pub use user::{User, UserFlags};
 
