@@ -40,8 +40,9 @@ use sea_orm::sea_query::{
     UnionType,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
-    FromQueryResult, ModelTrait, PaginatorTrait, QueryFilter, RelationTrait, Set, Statement,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, DatabaseTransaction,
+    EntityTrait, ExprTrait, FromQueryResult, ModelTrait, PaginatorTrait, QueryFilter,
+    RelationTrait, Set, Statement,
 };
 use tracing::warn;
 
@@ -126,6 +127,29 @@ impl Database {
     fn session_expiry_cutoff(&self) -> Option<String> {
         self.session_age
             .map(|age| (Utc::now() - age).format(DB_DATE_FORMAT).to_string())
+    }
+
+    /// Runs `f` in a transaction that is committed if `f` succeeds. If `f`
+    /// fails, the transaction is rolled back right away. A dropped transaction
+    /// is only rolled back later, so on `SQLite` the next write could still
+    /// find the database locked.
+    async fn in_transaction<T>(
+        &self,
+        f: impl AsyncFnOnce(&DatabaseTransaction) -> DbResult<T>,
+    ) -> DbResult<T> {
+        let txn = self.db_con.begin().await?;
+        match f(&txn).await {
+            Ok(value) => {
+                txn.commit().await?;
+                Ok(value)
+            }
+            Err(e) => {
+                if let Err(rollback) = txn.rollback().await {
+                    warn!("Failed to roll back transaction: {rollback}");
+                }
+                Err(e)
+            }
+        }
     }
 
     /// Replaces the legacy SHA-256 hash of `user` with an argon2 hash of `pwd`.
@@ -231,24 +255,25 @@ impl Database {
         version: &Version,
         yanked: bool,
     ) -> DbResult<()> {
-        let txn = self.db_con.begin().await?;
-        // The index stores the original name, so look it up by the crate
-        let ci = crate_index::Entity::find()
-            .inner_join(krate::Entity)
-            .filter(krate::Column::Name.eq(crate_name))
-            .filter(crate_index::Column::Vers.eq(version))
-            .one(&txn)
-            .await?
-            .ok_or_else(|| {
-                DbError::CrateIndexNotFound(crate_name.to_string(), version.to_string())
-            })?;
-        let crate_id = ci.crate_fk;
-        let mut ci: crate_index::ActiveModel = ci.into();
-        ci.yanked = Set(yanked);
-        ci.update(&txn).await?;
-        operations::update_etag(&txn, crate_name.as_str(), crate_id).await?;
-        txn.commit().await?;
-        Ok(())
+        self.in_transaction(async |txn| {
+            // The index stores the original name, so look it up by the crate
+            let ci = crate_index::Entity::find()
+                .inner_join(krate::Entity)
+                .filter(krate::Column::Name.eq(crate_name))
+                .filter(crate_index::Column::Vers.eq(version))
+                .one(txn)
+                .await?
+                .ok_or_else(|| {
+                    DbError::CrateIndexNotFound(crate_name.to_string(), version.to_string())
+                })?;
+            let crate_id = ci.crate_fk;
+            let mut ci: crate_index::ActiveModel = ci.into();
+            ci.yanked = Set(yanked);
+            ci.update(txn).await?;
+            operations::update_etag(txn, crate_name.as_str(), crate_id).await?;
+            Ok(())
+        })
+        .await
     }
 
     /// Looks up a toolchain by name and version; returns `None` if not found.
@@ -897,39 +922,39 @@ impl DbProvider for Database {
         crate_name: &CanonicalName,
         crate_version: &Version,
     ) -> DbResult<()> {
-        let txn = self.db_con.begin().await?;
+        self.in_transaction(async |txn| {
+            krate::Entity::update_many()
+                .col_expr(
+                    krate::Column::TotalDownloads,
+                    Expr::col(krate::Column::TotalDownloads).add(1),
+                )
+                .filter(krate::Column::Name.eq(crate_name))
+                .exec(txn)
+                .await?;
 
-        krate::Entity::update_many()
-            .col_expr(
-                krate::Column::TotalDownloads,
-                Expr::col(krate::Column::TotalDownloads).add(1),
-            )
-            .filter(krate::Column::Name.eq(crate_name))
-            .exec(&txn)
-            .await?;
+            let crate_id = krate::Entity::find()
+                .filter(krate::Column::Name.eq(crate_name))
+                .one(txn)
+                .await?
+                .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+                .id;
 
-        let crate_id = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name))
-            .one(&txn)
-            .await?
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
-            .id;
+            crate_meta::Entity::update_many()
+                .col_expr(
+                    crate_meta::Column::Downloads,
+                    Expr::col(crate_meta::Column::Downloads).add(1),
+                )
+                .filter(
+                    Cond::all()
+                        .add(crate_meta::Column::Version.eq(crate_version))
+                        .add(crate_meta::Column::CrateFk.eq(crate_id)),
+                )
+                .exec(txn)
+                .await?;
 
-        crate_meta::Entity::update_many()
-            .col_expr(
-                crate_meta::Column::Downloads,
-                Expr::col(crate_meta::Column::Downloads).add(1),
-            )
-            .filter(
-                Cond::all()
-                    .add(crate_meta::Column::Version.eq(crate_version))
-                    .add(crate_meta::Column::CrateFk.eq(crate_id)),
-            )
-            .exec(&txn)
-            .await?;
-
-        txn.commit().await?;
-        Ok(())
+            Ok(())
+        })
+        .await
     }
 
     async fn increase_cached_download_counter(
@@ -937,39 +962,39 @@ impl DbProvider for Database {
         crate_name: &CanonicalName,
         crate_version: &Version,
     ) -> DbResult<()> {
-        let txn = self.db_con.begin().await?;
+        self.in_transaction(async |txn| {
+            cratesio_crate::Entity::update_many()
+                .col_expr(
+                    cratesio_crate::Column::TotalDownloads,
+                    Expr::col(cratesio_crate::Column::TotalDownloads).add(1),
+                )
+                .filter(cratesio_crate::Column::Name.eq(crate_name))
+                .exec(txn)
+                .await?;
 
-        cratesio_crate::Entity::update_many()
-            .col_expr(
-                cratesio_crate::Column::TotalDownloads,
-                Expr::col(cratesio_crate::Column::TotalDownloads).add(1),
-            )
-            .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .exec(&txn)
-            .await?;
+            let crate_id = cratesio_crate::Entity::find()
+                .filter(cratesio_crate::Column::Name.eq(crate_name))
+                .one(txn)
+                .await?
+                .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+                .id;
 
-        let crate_id = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .one(&txn)
-            .await?
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
-            .id;
+            cratesio_meta::Entity::update_many()
+                .col_expr(
+                    cratesio_meta::Column::Downloads,
+                    Expr::col(cratesio_meta::Column::Downloads).add(1),
+                )
+                .filter(
+                    Cond::all()
+                        .add(cratesio_meta::Column::Version.eq(crate_version))
+                        .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
+                )
+                .exec(txn)
+                .await?;
 
-        cratesio_meta::Entity::update_many()
-            .col_expr(
-                cratesio_meta::Column::Downloads,
-                Expr::col(cratesio_meta::Column::Downloads).add(1),
-            )
-            .filter(
-                Cond::all()
-                    .add(cratesio_meta::Column::Version.eq(crate_version))
-                    .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
-            )
-            .exec(&txn)
-            .await?;
-
-        txn.commit().await?;
-        Ok(())
+            Ok(())
+        })
+        .await
     }
 
     async fn increase_download_counter_by(
@@ -978,39 +1003,39 @@ impl DbProvider for Database {
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()> {
-        let txn = self.db_con.begin().await?;
+        self.in_transaction(async |txn| {
+            krate::Entity::update_many()
+                .col_expr(
+                    krate::Column::TotalDownloads,
+                    Expr::col(krate::Column::TotalDownloads).add(saturating_i64(count)),
+                )
+                .filter(krate::Column::Name.eq(crate_name))
+                .exec(txn)
+                .await?;
 
-        krate::Entity::update_many()
-            .col_expr(
-                krate::Column::TotalDownloads,
-                Expr::col(krate::Column::TotalDownloads).add(saturating_i64(count)),
-            )
-            .filter(krate::Column::Name.eq(crate_name))
-            .exec(&txn)
-            .await?;
+            let crate_id = krate::Entity::find()
+                .filter(krate::Column::Name.eq(crate_name))
+                .one(txn)
+                .await?
+                .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+                .id;
 
-        let crate_id = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name))
-            .one(&txn)
-            .await?
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
-            .id;
+            crate_meta::Entity::update_many()
+                .col_expr(
+                    crate_meta::Column::Downloads,
+                    Expr::col(crate_meta::Column::Downloads).add(saturating_i64(count)),
+                )
+                .filter(
+                    Cond::all()
+                        .add(crate_meta::Column::Version.eq(crate_version))
+                        .add(crate_meta::Column::CrateFk.eq(crate_id)),
+                )
+                .exec(txn)
+                .await?;
 
-        crate_meta::Entity::update_many()
-            .col_expr(
-                crate_meta::Column::Downloads,
-                Expr::col(crate_meta::Column::Downloads).add(saturating_i64(count)),
-            )
-            .filter(
-                Cond::all()
-                    .add(crate_meta::Column::Version.eq(crate_version))
-                    .add(crate_meta::Column::CrateFk.eq(crate_id)),
-            )
-            .exec(&txn)
-            .await?;
-
-        txn.commit().await?;
-        Ok(())
+            Ok(())
+        })
+        .await
     }
 
     async fn increase_cached_download_counter_by(
@@ -1019,39 +1044,39 @@ impl DbProvider for Database {
         crate_version: &Version,
         count: u64,
     ) -> DbResult<()> {
-        let txn = self.db_con.begin().await?;
+        self.in_transaction(async |txn| {
+            cratesio_crate::Entity::update_many()
+                .col_expr(
+                    cratesio_crate::Column::TotalDownloads,
+                    Expr::col(cratesio_crate::Column::TotalDownloads).add(saturating_i64(count)),
+                )
+                .filter(cratesio_crate::Column::Name.eq(crate_name))
+                .exec(txn)
+                .await?;
 
-        cratesio_crate::Entity::update_many()
-            .col_expr(
-                cratesio_crate::Column::TotalDownloads,
-                Expr::col(cratesio_crate::Column::TotalDownloads).add(saturating_i64(count)),
-            )
-            .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .exec(&txn)
-            .await?;
+            let crate_id = cratesio_crate::Entity::find()
+                .filter(cratesio_crate::Column::Name.eq(crate_name))
+                .one(txn)
+                .await?
+                .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
+                .id;
 
-        let crate_id = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(crate_name))
-            .one(&txn)
-            .await?
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?
-            .id;
+            cratesio_meta::Entity::update_many()
+                .col_expr(
+                    cratesio_meta::Column::Downloads,
+                    Expr::col(cratesio_meta::Column::Downloads).add(saturating_i64(count)),
+                )
+                .filter(
+                    Cond::all()
+                        .add(cratesio_meta::Column::Version.eq(crate_version))
+                        .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
+                )
+                .exec(txn)
+                .await?;
 
-        cratesio_meta::Entity::update_many()
-            .col_expr(
-                cratesio_meta::Column::Downloads,
-                Expr::col(cratesio_meta::Column::Downloads).add(saturating_i64(count)),
-            )
-            .filter(
-                Cond::all()
-                    .add(cratesio_meta::Column::Version.eq(crate_version))
-                    .add(cratesio_meta::Column::CratesIoFk.eq(crate_id)),
-            )
-            .exec(&txn)
-            .await?;
-
-        txn.commit().await?;
-        Ok(())
+            Ok(())
+        })
+        .await
     }
 
     async fn get_last_updated_crate(
@@ -1516,38 +1541,39 @@ impl DbProvider for Database {
         owners: &[UserName],
         allow_ownerless: bool,
     ) -> DbResult<()> {
-        let txn = self.db_con.begin().await?;
-        // The row lock serializes concurrent removals on PostgreSQL, else each
-        // could remove a different owner and leave the crate without one.
-        let krate = krate::Entity::find()
-            .filter(krate::Column::Name.eq(crate_name))
-            .lock_exclusive()
-            .one(&txn)
-            .await?
-            .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
-
-        let owners: HashSet<&UserName> = owners.iter().collect();
-        for name in owners {
-            let owner = owner::Entity::find()
-                .join(JoinType::InnerJoin, owner::Relation::User.def())
-                .filter(owner::Column::CrateFk.eq(krate.id))
-                .filter(user::Column::Name.eq(name.as_str()))
-                .one(&txn)
+        self.in_transaction(async |txn| {
+            // The row lock serializes concurrent removals on PostgreSQL, else each
+            // could remove a different owner and leave the crate without one.
+            let krate = krate::Entity::find()
+                .filter(krate::Column::Name.eq(crate_name))
+                .lock_exclusive()
+                .one(txn)
                 .await?
-                .ok_or_else(|| DbError::OwnerNotFound(name.to_string()))?;
-            owner.delete(&txn).await?;
-        }
+                .ok_or_else(|| DbError::CrateNotFound(crate_name.to_string()))?;
 
-        let remaining = owner::Entity::find()
-            .filter(owner::Column::CrateFk.eq(krate.id))
-            .count(&txn)
-            .await?;
-        if remaining == 0 && !allow_ownerless {
-            return Err(DbError::LastOwner);
-        }
+            let owners: HashSet<&UserName> = owners.iter().collect();
+            for name in owners {
+                let owner = owner::Entity::find()
+                    .join(JoinType::InnerJoin, owner::Relation::User.def())
+                    .filter(owner::Column::CrateFk.eq(krate.id))
+                    .filter(user::Column::Name.eq(name.as_str()))
+                    .one(txn)
+                    .await?
+                    .ok_or_else(|| DbError::OwnerNotFound(name.to_string()))?;
+                owner.delete(txn).await?;
+            }
 
-        txn.commit().await?;
-        Ok(())
+            let remaining = owner::Entity::find()
+                .filter(owner::Column::CrateFk.eq(krate.id))
+                .count(txn)
+                .await?;
+            if remaining == 0 && !allow_ownerless {
+                return Err(DbError::LastOwner);
+            }
+
+            Ok(())
+        })
+        .await
     }
 
     async fn delete_crate_user(&self, crate_name: &CanonicalName, user: &UserName) -> DbResult<()> {
@@ -1739,68 +1765,71 @@ impl DbProvider for Database {
     }
 
     async fn delete_crate(&self, krate: &CanonicalName, version: &Version) -> DbResult<()> {
-        let txn = self.db_con.begin().await?;
-
-        // Delete the entry from the "crate_meta" table
-        let crate_meta_version = crate_meta::Entity::find()
-            .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
-            .filter(krate::Column::Name.eq(krate))
-            .filter(crate_meta::Column::Version.eq(version))
-            .one(&txn)
-            .await?
-            .ok_or_else(|| DbError::CrateMetaNotFound(krate.to_string(), version.to_string()))?;
-        let crate_id = crate_meta_version.crate_fk;
-        let current_max_version = operations::get_max_version_from_id(&txn, crate_id).await?;
-        crate_meta_version.delete(&txn).await?;
-
-        // Delete the crate index entry from "crate_index" table
-        let crate_index_version = crate_index::Entity::find()
-            .join(JoinType::InnerJoin, crate_index::Relation::Krate.def())
-            .filter(krate::Column::Name.eq(krate))
-            .filter(crate_index::Column::Vers.eq(version))
-            .one(&txn)
-            .await?
-            .ok_or_else(|| DbError::CrateIndexNotFound(krate.to_string(), version.to_string()))?;
-        crate_index_version.delete(&txn).await?;
-
-        // If it was the last entry in the "crate_meta" table, delete the entry
-        // in the "crate" table as well
-        let crate_meta_rows = crate_meta::Entity::find()
-            .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
-            .filter(krate::Column::Name.eq(krate))
-            .all(&txn)
-            .await?;
-
-        if crate_meta_rows.is_empty() {
-            krate::Entity::delete_many()
+        self.in_transaction(async |txn| {
+            // Delete the entry from the "crate_meta" table
+            let crate_meta_version = crate_meta::Entity::find()
+                .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
                 .filter(krate::Column::Name.eq(krate))
-                .exec(&txn)
-                .await?;
-        } else {
-            let c = krate::Entity::find_by_id(crate_id)
-                .one(&txn)
+                .filter(crate_meta::Column::Version.eq(version))
+                .one(txn)
                 .await?
-                .ok_or(DbError::CrateNotFoundWithId(crate_id))?;
-            let mut c: krate::ActiveModel = c.into();
+                .ok_or_else(|| {
+                    DbError::CrateMetaNotFound(krate.to_string(), version.to_string())
+                })?;
+            let crate_id = crate_meta_version.crate_fk;
+            let current_max_version = operations::get_max_version_from_id(txn, crate_id).await?;
+            crate_meta_version.delete(txn).await?;
 
-            // Update the max. version if the deleted version was the max. version.
-            if version == &current_max_version {
-                let new_max_version = crate_meta_rows
-                    .into_iter()
-                    .filter_map(|cm| valid_version(&cm.version, krate.as_str()))
-                    .max()
-                    .ok_or(DbError::FailedToGetMaxVersionById(crate_id))?;
-                c.max_version = Set(new_max_version.to_string());
+            // Delete the crate index entry from "crate_index" table
+            let crate_index_version = crate_index::Entity::find()
+                .join(JoinType::InnerJoin, crate_index::Relation::Krate.def())
+                .filter(krate::Column::Name.eq(krate))
+                .filter(crate_index::Column::Vers.eq(version))
+                .one(txn)
+                .await?
+                .ok_or_else(|| {
+                    DbError::CrateIndexNotFound(krate.to_string(), version.to_string())
+                })?;
+            crate_index_version.delete(txn).await?;
+
+            // If it was the last entry in the "crate_meta" table, delete the entry
+            // in the "crate" table as well
+            let crate_meta_rows = crate_meta::Entity::find()
+                .join(JoinType::InnerJoin, crate_meta::Relation::Krate.def())
+                .filter(krate::Column::Name.eq(krate))
+                .all(txn)
+                .await?;
+
+            if crate_meta_rows.is_empty() {
+                krate::Entity::delete_many()
+                    .filter(krate::Column::Name.eq(krate))
+                    .exec(txn)
+                    .await?;
+            } else {
+                let c = krate::Entity::find_by_id(crate_id)
+                    .one(txn)
+                    .await?
+                    .ok_or(DbError::CrateNotFoundWithId(crate_id))?;
+                let mut c: krate::ActiveModel = c.into();
+
+                // Update the max. version if the deleted version was the max. version.
+                if version == &current_max_version {
+                    let new_max_version = crate_meta_rows
+                        .into_iter()
+                        .filter_map(|cm| valid_version(&cm.version, krate.as_str()))
+                        .max()
+                        .ok_or(DbError::FailedToGetMaxVersionById(crate_id))?;
+                    c.max_version = Set(new_max_version.to_string());
+                }
+                // Update the ETag value of the crate index.
+                let etag = operations::compute_etag(txn, krate.as_str(), crate_id).await?;
+                c.e_tag = Set(etag);
+                c.update(txn).await?;
             }
-            // Update the ETag value of the crate index.
-            let etag = operations::compute_etag(&txn, krate.as_str(), crate_id).await?;
-            c.e_tag = Set(etag);
-            c.update(&txn).await?;
-        }
 
-        txn.commit().await?;
-
-        Ok(())
+            Ok(())
+        })
+        .await
     }
 
     async fn get_crate_meta_list(&self, crate_name: &CanonicalName) -> DbResult<Vec<CrateMeta>> {
@@ -2155,96 +2184,108 @@ impl DbProvider for Database {
         // Those fail on the unique crate name. The row lock serializes
         // publishes of an existing crate on PostgreSQL, so the version check
         // below sees concurrently published versions.
-        let txn = self.db_con.begin().await?;
-        let existing = krate::Entity::find()
-            .filter(krate::Column::Name.eq(&canonical_name))
-            .lock_exclusive()
-            .one(&txn)
-            .await?;
+        let mut name_taken = false;
+        let result = self
+            .in_transaction(async |txn| {
+                let existing = krate::Entity::find()
+                    .filter(krate::Column::Name.eq(&canonical_name))
+                    .lock_exclusive()
+                    .one(txn)
+                    .await?;
 
-        let version = parse_db_version(&pub_metadata.vers)?;
-        let (crate_id, is_newest) = if let Some(krate) = existing {
-            let krate_id = krate.id;
-            operations::ensure_same_separators(&original_name, &krate.original_name)?;
-            operations::ensure_owner_or_admin(&txn, owner, &original_name.to_lowercase(), krate_id)
+                let version = parse_db_version(&pub_metadata.vers)?;
+                let (crate_id, is_newest) = if let Some(krate) = existing {
+                    let krate_id = krate.id;
+                    operations::ensure_same_separators(&original_name, &krate.original_name)?;
+                    operations::ensure_owner_or_admin(
+                        txn,
+                        owner,
+                        &original_name.to_lowercase(),
+                        krate_id,
+                    )
+                    .await?;
+                    // Like crates.io, the name must be spelled like on the first publish,
+                    // else the index and the storage would use different spellings.
+                    if krate.original_name != pub_metadata.name {
+                        return Err(DbError::CrateNameMismatch(
+                            pub_metadata.name.clone(),
+                            krate.original_name,
+                        ));
+                    }
+                    if let Some(existing) =
+                        operations::find_version_ignoring_build(txn, krate_id, &version).await?
+                    {
+                        return Err(DbError::CrateVersionExists(
+                            pub_metadata.name.clone(),
+                            existing,
+                        ));
+                    }
+                    // The crate level metadata is the one of the newest version, so a
+                    // fix release of an older version must not overwrite it.
+                    let is_newest = version >= parse_db_version(&krate.max_version)?;
+
+                    let mut krate: krate::ActiveModel = krate.into();
+                    krate.last_updated = Set(created.clone());
+                    if is_newest {
+                        krate.max_version = Set(version.to_string());
+                        krate.homepage = Set(pub_metadata.homepage.clone());
+                        krate.description = Set(pub_metadata.description.clone());
+                        krate.repository = Set(pub_metadata.repository.clone());
+                    }
+                    krate.e_tag = Set(String::new()); // Set to empty string, as it can be computed, when the crate index is inserted
+                    krate.update(txn).await?;
+                    (krate_id, is_newest)
+                } else {
+                    let krate = krate::ActiveModel {
+                        id: ActiveValue::default(),
+                        name: Set(canonical_name.into_inner()),
+                        original_name: Set(pub_metadata.name.clone()),
+                        max_version: Set(version.to_string()),
+                        last_updated: Set(created.clone()),
+                        total_downloads: Set(0),
+                        homepage: Set(pub_metadata.homepage.clone()),
+                        description: Set(pub_metadata.description.clone()),
+                        repository: Set(pub_metadata.repository.clone()),
+                        e_tag: Set(String::new()), // Set to empty string, as it can be computed, when the crate index is inserted
+                        restricted_download: Set(false),
+                    };
+                    let krate = match krate.insert(txn).await {
+                        Ok(krate) => krate,
+                        Err(e) if operations::is_unique_violation(&e) => {
+                            name_taken = true;
+                            return Err(e.into());
+                        }
+                        Err(e) => return Err(e.into()),
+                    };
+                    (krate.id, true)
+                };
+
+                operations::add_owner_if_not_exists(txn, owner, crate_id).await?;
+                operations::add_crate_metadata(
+                    txn,
+                    pub_metadata,
+                    size,
+                    &created,
+                    crate_id,
+                    Some(owner.as_str()),
+                    token_name.as_deref(),
+                )
                 .await?;
-            // Like crates.io, the name must be spelled like on the first publish,
-            // else the index and the storage would use different spellings.
-            if krate.original_name != pub_metadata.name {
-                return Err(DbError::CrateNameMismatch(
-                    pub_metadata.name.clone(),
-                    krate.original_name,
-                ));
-            }
-            if let Some(existing) =
-                operations::find_version_ignoring_build(&txn, krate_id, &version).await?
-            {
-                return Err(DbError::CrateVersionExists(
-                    pub_metadata.name.clone(),
-                    existing,
-                ));
-            }
-            // The crate level metadata is the one of the newest version, so a
-            // fix release of an older version must not overwrite it.
-            let is_newest = version >= parse_db_version(&krate.max_version)?;
-
-            let mut krate: krate::ActiveModel = krate.into();
-            krate.last_updated = Set(created.clone());
-            if is_newest {
-                krate.max_version = Set(version.to_string());
-                krate.homepage = Set(pub_metadata.homepage.clone());
-                krate.description = Set(pub_metadata.description.clone());
-                krate.repository = Set(pub_metadata.repository.clone());
-            }
-            krate.e_tag = Set(String::new()); // Set to empty string, as it can be computed, when the crate index is inserted
-            krate.update(&txn).await?;
-            (krate_id, is_newest)
-        } else {
-            let krate = krate::ActiveModel {
-                id: ActiveValue::default(),
-                name: Set(canonical_name.into_inner()),
-                original_name: Set(pub_metadata.name.clone()),
-                max_version: Set(version.to_string()),
-                last_updated: Set(created.clone()),
-                total_downloads: Set(0),
-                homepage: Set(pub_metadata.homepage.clone()),
-                description: Set(pub_metadata.description.clone()),
-                repository: Set(pub_metadata.repository.clone()),
-                e_tag: Set(String::new()), // Set to empty string, as it can be computed, when the crate index is inserted
-                restricted_download: Set(false),
-            };
-            let krate = match krate.insert(&txn).await {
-                Ok(krate) => krate,
-                Err(e) if operations::is_unique_violation(&e) => {
-                    txn.rollback().await?;
-                    return Err(self.concurrent_name_conflict(&original_name).await);
+                operations::add_crate_index(txn, pub_metadata, cksum, crate_id).await?;
+                operations::update_etag(txn, &pub_metadata.name, crate_id).await?;
+                if is_newest {
+                    operations::update_crate_categories(txn, pub_metadata, crate_id).await?;
+                    operations::update_crate_keywords(txn, pub_metadata, crate_id).await?;
+                    operations::update_crate_authors(txn, pub_metadata, crate_id).await?;
                 }
-                Err(e) => return Err(e.into()),
-            };
-            (krate.id, true)
-        };
 
-        operations::add_owner_if_not_exists(&txn, owner, crate_id).await?;
-        operations::add_crate_metadata(
-            &txn,
-            pub_metadata,
-            size,
-            &created,
-            crate_id,
-            Some(owner.as_str()),
-            token_name.as_deref(),
-        )
-        .await?;
-        operations::add_crate_index(&txn, pub_metadata, cksum, crate_id).await?;
-        operations::update_etag(&txn, &pub_metadata.name, crate_id).await?;
-        if is_newest {
-            operations::update_crate_categories(&txn, pub_metadata, crate_id).await?;
-            operations::update_crate_keywords(&txn, pub_metadata, crate_id).await?;
-            operations::update_crate_authors(&txn, pub_metadata, crate_id).await?;
+                Ok(CrateId::new(crate_id))
+            })
+            .await;
+        if name_taken {
+            return Err(self.concurrent_name_conflict(&original_name).await);
         }
-
-        txn.commit().await?;
-        Ok(CrateId::new(crate_id))
+        result
     }
 
     async fn update_docs_link(
@@ -2380,138 +2421,140 @@ impl DbProvider for Database {
         // with the latest etag but incomplete index data, causing stale cache
         // entries that can never self-heal (the background updater would get 304
         // from crates.io because the etag matches).
-        let txn = self.db_con.begin().await?;
+        self.in_transaction(async |txn| {
+            let krate = cratesio_crate::Entity::find()
+                .filter(cratesio_crate::Column::Name.eq(&canonical_name))
+                .one(txn)
+                .await?;
 
-        let krate = cratesio_crate::Entity::find()
-            .filter(cratesio_crate::Column::Name.eq(&canonical_name))
-            .one(&txn)
-            .await?;
+            // The Last-Modified header is kept as is for conditional requests to
+            // crates.io, the date is stored separately to sort by it.
+            let last_updated = http_date_to_db_date(last_modified);
 
-        // The Last-Modified header is kept as is for conditional requests to
-        // crates.io, the date is stored separately to sort by it.
-        let last_updated = http_date_to_db_date(last_modified);
-
-        let krate = if let Some(krate) = krate {
-            let mut krate: cratesio_crate::ActiveModel = krate.into();
-            krate.e_tag = Set(etag.to_string());
-            krate.last_modified = Set(last_modified.to_string());
-            if let Some(last_updated) = last_updated {
-                krate.last_updated = Set(last_updated);
-            }
-            if let Some(description) = description {
-                krate.description = Set(Some(description));
-            }
-            krate.max_version = Set(max_version.to_string());
-            krate.update(&txn).await?
-        } else {
-            let krate = cratesio_crate::ActiveModel {
-                id: ActiveValue::default(),
-                name: Set(canonical_name.to_string()),
-                original_name: Set(crate_name.to_string()),
-                description: Set(description),
-                e_tag: Set(etag.to_string()),
-                last_modified: Set(last_modified.to_string()),
-                last_updated: Set(last_updated.unwrap_or_default()),
-                total_downloads: Set(0),
-                max_version: Set(max_version.to_string()),
-            };
-            krate.insert(&txn).await?
-        };
-
-        let current_indices = cratesio_index::Entity::find()
-            .filter(cratesio_index::Column::CratesIoFk.eq(krate.id))
-            .all(&txn)
-            .await?;
-
-        for index in indices {
-            // Refresh the mutable parts of an already cached version. "yanked"
-            // can flip upstream at any time. "rust_version" is refreshed too
-            // because caches written before the column existed hold NULL for
-            // every row, and only a refresh can heal them.
-            if let Some(current_index) = current_indices.iter().find(|ci| index.vers == ci.vers) {
-                let mut ci: cratesio_index::ActiveModel = current_index.to_owned().into();
-                let mut changed = false;
-
-                if index.yanked != current_index.yanked {
-                    ci.yanked = Set(index.yanked);
-                    changed = true;
+            let krate = if let Some(krate) = krate {
+                let mut krate: cratesio_crate::ActiveModel = krate.into();
+                krate.e_tag = Set(etag.to_string());
+                krate.last_modified = Set(last_modified.to_string());
+                if let Some(last_updated) = last_updated {
+                    krate.last_updated = Set(last_updated);
                 }
-
-                if index.rust_version != current_index.rust_version {
-                    ci.rust_version = Set(index.rust_version.clone());
-                    changed = true;
+                if let Some(description) = description {
+                    krate.description = Set(Some(description));
                 }
-
-                if changed {
-                    ci.update(&txn).await?;
-                }
+                krate.max_version = Set(max_version.to_string());
+                krate.update(txn).await?
             } else {
-                let deps = if index.deps.is_empty() {
-                    None
+                let krate = cratesio_crate::ActiveModel {
+                    id: ActiveValue::default(),
+                    name: Set(canonical_name.to_string()),
+                    original_name: Set(crate_name.to_string()),
+                    description: Set(description),
+                    e_tag: Set(etag.to_string()),
+                    last_modified: Set(last_modified.to_string()),
+                    last_updated: Set(last_updated.unwrap_or_default()),
+                    total_downloads: Set(0),
+                    max_version: Set(max_version.to_string()),
+                };
+                krate.insert(txn).await?
+            };
+
+            let current_indices = cratesio_index::Entity::find()
+                .filter(cratesio_index::Column::CratesIoFk.eq(krate.id))
+                .all(txn)
+                .await?;
+
+            for index in indices {
+                // Refresh the mutable parts of an already cached version. "yanked"
+                // can flip upstream at any time. "rust_version" is refreshed too
+                // because caches written before the column existed hold NULL for
+                // every row, and only a refresh can heal them.
+                if let Some(current_index) = current_indices.iter().find(|ci| index.vers == ci.vers)
+                {
+                    let mut ci: cratesio_index::ActiveModel = current_index.to_owned().into();
+                    let mut changed = false;
+
+                    if index.yanked != current_index.yanked {
+                        ci.yanked = Set(index.yanked);
+                        changed = true;
+                    }
+
+                    if index.rust_version != current_index.rust_version {
+                        ci.rust_version = Set(index.rust_version.clone());
+                        changed = true;
+                    }
+
+                    if changed {
+                        ci.update(txn).await?;
+                    }
                 } else {
-                    let deps = serde_json::to_value(&index.deps)
+                    let deps = if index.deps.is_empty() {
+                        None
+                    } else {
+                        let deps = serde_json::to_value(&index.deps)
+                            .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
+                        Some(deps)
+                    };
+
+                    let features = serde_json::to_value(&index.features)
                         .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
-                    Some(deps)
-                };
 
-                let features = serde_json::to_value(&index.features)
-                    .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
+                    let features2 = serde_json::to_value(&index.features2)
+                        .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
 
-                let features2 = serde_json::to_value(&index.features2)
-                    .map_err(|e| DbError::FailedToConvertToJson(e.to_string()))?;
+                    let new_index = cratesio_index::ActiveModel {
+                        id: ActiveValue::default(),
+                        name: Set(index.name.clone()),
+                        vers: Set(index.vers.clone()),
+                        deps: Set(deps),
+                        cksum: Set(index.cksum.clone()),
+                        features: Set(Some(features)),
+                        features2: Set(Some(features2)),
+                        yanked: Set(index.yanked),
+                        links: Set(index.links.clone()),
+                        pubtime: Set(index.pubtime.map(|dt| dt.naive_utc())),
+                        v: Set(index.v.unwrap_or(1) as i32),
+                        crates_io_fk: Set(krate.id),
+                        rust_version: Set(index.rust_version.clone()),
+                    };
 
-                let new_index = cratesio_index::ActiveModel {
-                    id: ActiveValue::default(),
-                    name: Set(index.name.clone()),
-                    vers: Set(index.vers.clone()),
-                    deps: Set(deps),
-                    cksum: Set(index.cksum.clone()),
-                    features: Set(Some(features)),
-                    features2: Set(Some(features2)),
-                    yanked: Set(index.yanked),
-                    links: Set(index.links.clone()),
-                    pubtime: Set(index.pubtime.map(|dt| dt.naive_utc())),
-                    v: Set(index.v.unwrap_or(1) as i32),
-                    crates_io_fk: Set(krate.id),
-                    rust_version: Set(index.rust_version.clone()),
-                };
+                    new_index.insert(txn).await?;
 
-                new_index.insert(&txn).await?;
+                    // Add the meta data for the crate version.
+                    let meta = cratesio_meta::ActiveModel {
+                        id: ActiveValue::default(),
+                        version: Set(index.vers.clone()),
+                        downloads: Set(0),
+                        crates_io_fk: Set(krate.id),
+                        documentation: Set(Some(format!(
+                            "https://docs.rs/{}/{}",
+                            crate_name.to_lowercase(),
+                            index.vers,
+                        ))),
+                        license: Set(licenses.get(&index.vers).cloned()),
+                    };
 
-                // Add the meta data for the crate version.
-                let meta = cratesio_meta::ActiveModel {
-                    id: ActiveValue::default(),
-                    version: Set(index.vers.clone()),
-                    downloads: Set(0),
-                    crates_io_fk: Set(krate.id),
-                    documentation: Set(Some(format!(
-                        "https://docs.rs/{}/{}",
-                        crate_name.to_lowercase(),
-                        index.vers,
-                    ))),
-                    license: Set(licenses.get(&index.vers).cloned()),
-                };
-
-                meta.insert(&txn).await?;
+                    meta.insert(txn).await?;
+                }
             }
-        }
 
-        // The license of a published version cannot change upstream, so only
-        // versions cached before it was fetched successfully get it here.
-        let unlicensed = cratesio_meta::Entity::find()
-            .filter(cratesio_meta::Column::CratesIoFk.eq(krate.id))
-            .filter(cratesio_meta::Column::License.is_null())
-            .all(&txn)
-            .await?;
-        for meta in unlicensed {
-            if let Some(license) = licenses.get(&meta.version) {
-                let mut meta: cratesio_meta::ActiveModel = meta.into();
-                meta.license = Set(Some(license.clone()));
-                meta.update(&txn).await?;
+            // The license of a published version cannot change upstream, so only
+            // versions cached before it was fetched successfully get it here.
+            let unlicensed = cratesio_meta::Entity::find()
+                .filter(cratesio_meta::Column::CratesIoFk.eq(krate.id))
+                .filter(cratesio_meta::Column::License.is_null())
+                .all(txn)
+                .await?;
+            for meta in unlicensed {
+                if let Some(license) = licenses.get(&meta.version) {
+                    let mut meta: cratesio_meta::ActiveModel = meta.into();
+                    meta.license = Set(Some(license.clone()));
+                    meta.update(txn).await?;
+                }
             }
-        }
 
-        txn.commit().await?;
+            Ok(())
+        })
+        .await?;
 
         Ok(Prefetch {
             data: operations::index_metadata_to_bytes(indices)?,
@@ -2761,35 +2804,37 @@ impl DbProvider for Database {
         let created = Utc::now().format(DB_DATE_FORMAT).to_string();
 
         // Use a transaction to ensure atomicity
-        let txn = self.db_con.begin().await?;
+        let user_id = self
+            .in_transaction(async |txn| {
+                // Create the user
+                let new_user = user::ActiveModel {
+                    name: Set(username.to_string()),
+                    pwd: Set(hashed_pwd),
+                    salt: Set(String::new()),
+                    is_admin: Set(flags.admin),
+                    is_read_only: Set(flags.read_only),
+                    created: Set(created.clone()),
+                    ..Default::default()
+                };
 
-        // Create the user
-        let new_user = user::ActiveModel {
-            name: Set(username.to_string()),
-            pwd: Set(hashed_pwd),
-            salt: Set(String::new()),
-            is_admin: Set(flags.admin),
-            is_read_only: Set(flags.read_only),
-            created: Set(created.clone()),
-            ..Default::default()
-        };
+                let res = user::Entity::insert(new_user).exec(txn).await?;
+                let user_id = res.last_insert_id;
 
-        let res = user::Entity::insert(new_user).exec(&txn).await?;
-        let user_id = res.last_insert_id;
+                // Link the OAuth2 identity
+                let identity = oauth2_identity::ActiveModel {
+                    user_fk: Set(user_id),
+                    provider_issuer: Set(issuer.to_string()),
+                    subject: Set(subject.to_string()),
+                    email: Set(email),
+                    created: Set(created.clone()),
+                    ..Default::default()
+                };
 
-        // Link the OAuth2 identity
-        let identity = oauth2_identity::ActiveModel {
-            user_fk: Set(user_id),
-            provider_issuer: Set(issuer.to_string()),
-            subject: Set(subject.to_string()),
-            email: Set(email),
-            created: Set(created.clone()),
-            ..Default::default()
-        };
+                oauth2_identity::Entity::insert(identity).exec(txn).await?;
 
-        oauth2_identity::Entity::insert(identity).exec(&txn).await?;
-
-        txn.commit().await?;
+                Ok(user_id)
+            })
+            .await?;
 
         Ok(User {
             id: UserId::new(user_id),
@@ -3069,31 +3114,32 @@ impl DbProvider for Database {
 
     async fn set_channel(&self, channel: &str, name: &str, version: &str) -> DbResult<()> {
         // In one transaction, so the channel is never lost or on two toolchains
-        let txn = self.db_con.begin().await?;
-        let tc = toolchain::Entity::find()
-            .filter(toolchain::Column::Name.eq(name))
-            .filter(toolchain::Column::Version.eq(version))
-            .one(&txn)
-            .await?
-            .ok_or_else(|| DbError::ToolchainNotFound(name.to_string(), version.to_string()))?;
+        self.in_transaction(async |txn| {
+            let tc = toolchain::Entity::find()
+                .filter(toolchain::Column::Name.eq(name))
+                .filter(toolchain::Column::Version.eq(version))
+                .one(txn)
+                .await?
+                .ok_or_else(|| DbError::ToolchainNotFound(name.to_string(), version.to_string()))?;
 
-        // First, clear the channel from any other toolchain that has it
-        toolchain::Entity::update_many()
-            .col_expr(
-                toolchain::Column::Channel,
-                Expr::value(Option::<String>::None),
-            )
-            .filter(toolchain::Column::Channel.eq(channel))
-            .exec(&txn)
-            .await?;
+            // First, clear the channel from any other toolchain that has it
+            toolchain::Entity::update_many()
+                .col_expr(
+                    toolchain::Column::Channel,
+                    Expr::value(Option::<String>::None),
+                )
+                .filter(toolchain::Column::Channel.eq(channel))
+                .exec(txn)
+                .await?;
 
-        // Then set the channel on the target toolchain
-        let mut model: toolchain::ActiveModel = tc.into();
-        model.channel = Set(Some(channel.to_string()));
-        model.update(&txn).await?;
+            // Then set the channel on the target toolchain
+            let mut model: toolchain::ActiveModel = tc.into();
+            model.channel = Set(Some(channel.to_string()));
+            model.update(txn).await?;
 
-        txn.commit().await?;
-        Ok(())
+            Ok(())
+        })
+        .await
     }
 
     async fn get_channels(&self) -> DbResult<Vec<ChannelInfo>> {
