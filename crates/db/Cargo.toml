@@ -20,7 +20,7 @@ kellnr-settings.workspace = true
 # External dependencies from crates.io
 argon2.workspace = true
 chrono.workspace = true
-mockall.workspace = true
+mockall = { workspace = true, optional = true }
 percent-encoding.workspace = true
 utoipa.workspace = true
 sea-orm.workspace = true
@@ -35,9 +35,11 @@ tracing.workspace = true
 [features]
 # Cheap password hashing for tests. Only enable it from dev-dependencies.
 test-support = []
+# The generated `MockDb`. Only enable it from dev-dependencies.
+mock = ["dep:mockall"]
 
 [dev-dependencies]
-kellnr-db = { workspace = true, features = ["test-support"] }
+kellnr-db = { workspace = true, features = ["mock", "test-support"] }
 kellnr-test-db.workspace = true
 url.workspace = true
 

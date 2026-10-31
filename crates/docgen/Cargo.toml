@@ -28,6 +28,7 @@ tracing.workspace = true
 rustix.workspace = true
 
 [dev-dependencies]
+kellnr-db = { workspace = true, features = ["mock"] }
 tar.workspace = true
 tempfile.workspace = true
 

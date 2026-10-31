@@ -26,8 +26,10 @@ pub use id::{AuthTokenId, CrateId, GroupId, UserId};
 pub use krate::Crate;
 pub use provider::{
     ChannelInfo, CrateSort, CrateTagFilter, CrateVisibility, DbProvider, OAuth2StateData,
-    SessionInfo, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets, mock,
+    SessionInfo, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
 };
+#[cfg(feature = "mock")]
+pub use provider::mock;
 pub use toolchain_target_status::ToolchainTargetStatus;
 pub use user::{User, UserFlags};
 

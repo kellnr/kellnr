@@ -36,6 +36,7 @@ tracing.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
+kellnr-db = { workspace = true, features = ["mock"] }
 hyper.workspace = true
 mockall.workspace = true
 tokio.workspace = true
