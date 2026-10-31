@@ -53,10 +53,30 @@ pub enum SyncSource {
     Fetch,
 }
 
-/// The index metadata written by a sync, `None` if nothing was written.
-pub type Synced = Option<Arc<[IndexMetadata]>>;
+/// The result of a sync.
+#[derive(Debug, Clone)]
+pub enum SyncOutcome {
+    /// The index metadata was written to the database.
+    Written(Arc<[IndexMetadata]>),
+    /// The stored index is up to date, nothing was written.
+    Unchanged,
+    /// The crate does not exist on crates.io.
+    NotFound,
+    /// The sync failed, the error was logged.
+    Failed,
+}
 
-type Job = Shared<BoxFuture<'static, Synced>>;
+impl SyncOutcome {
+    /// The index metadata if it was written.
+    pub fn written(self) -> Option<Arc<[IndexMetadata]>> {
+        match self {
+            Self::Written(metadata) => Some(metadata),
+            Self::Unchanged | Self::NotFound | Self::Failed => None,
+        }
+    }
+}
+
+type Job = Shared<BoxFuture<'static, SyncOutcome>>;
 
 #[derive(Clone)]
 pub struct CratesioSync {
@@ -87,7 +107,7 @@ impl CratesioSync {
 
     /// Sync the crate, or wait for the sync of it that is already running, in
     /// which case `source` is not used.
-    pub async fn sync(&self, name: &OriginalName, source: SyncSource) -> Synced {
+    pub async fn sync(&self, name: &OriginalName, source: SyncSource) -> SyncOutcome {
         let key = name.to_canonical();
         let job = {
             let mut running = self
@@ -110,7 +130,9 @@ impl CratesioSync {
                     };
                     inner.run(&name, source).await
                 });
-                let job = async move { task.await.ok().flatten() }.boxed().shared();
+                let job = async move { task.await.unwrap_or(SyncOutcome::Failed) }
+                    .boxed()
+                    .shared();
                 running.insert(key, job.clone());
                 job
             }
@@ -143,7 +165,7 @@ struct IndexData {
 }
 
 impl Inner {
-    async fn run(&self, name: &OriginalName, source: SyncSource) -> Synced {
+    async fn run(&self, name: &OriginalName, source: SyncSource) -> SyncOutcome {
         let index = match source {
             SyncSource::Index {
                 etag,
@@ -155,7 +177,7 @@ impl Inner {
                     .await
                 {
                     trace!("crates.io index of {name} is already stored");
-                    return None;
+                    return SyncOutcome::Unchanged;
                 }
                 IndexData {
                     etag,
@@ -166,11 +188,19 @@ impl Inner {
             SyncSource::Refresh {
                 etag,
                 last_modified,
-            } => self.fetch_index(name, etag, last_modified).await?,
-            SyncSource::Fetch => self.fetch_index(name, None, None).await?,
+            } => match self.fetch_index(name, etag, last_modified).await {
+                Ok(index) => index,
+                Err(outcome) => return outcome,
+            },
+            SyncSource::Fetch => match self.fetch_index(name, None, None).await {
+                Ok(index) => index,
+                Err(outcome) => return outcome,
+            },
         };
 
-        let metadata = parse_index(name, &index.data)?;
+        let Some(metadata) = parse_index(name, &index.data) else {
+            return SyncOutcome::Failed;
+        };
         // An API failure must not keep the index and checksums from being
         // written. The licenses stay unknown and are fetched on the next sync.
         let info = self.fetch_crate_info(name).await.unwrap_or_else(|e| {
@@ -190,12 +220,12 @@ impl Inner {
             )
             .await
         {
-            Ok(_) => Some(metadata.into()),
+            Ok(_) => SyncOutcome::Written(metadata.into()),
             Err(e) => {
                 error!(
                     "Could not insert prefetch data from crates.io into database for {name}: {e}"
                 );
-                None
+                SyncOutcome::Failed
             }
         }
     }
@@ -214,17 +244,19 @@ impl Inner {
         )
     }
 
+    /// The index of the crate, or the outcome of the sync if there is none
+    /// to write.
     async fn fetch_index(
         &self,
         name: &OriginalName,
         etag: Option<String>,
         last_modified: Option<String>,
-    ) -> Option<IndexData> {
+    ) -> Result<IndexData, SyncOutcome> {
         let url = match &self.index_url {
             Ok(index_url) => index_url.join(&crate_sub_path(name)),
             Err(e) => {
                 error!("Could not build crates.io url for {name}: proxy.index {e}");
-                return None;
+                return Err(SyncOutcome::Failed);
             }
         };
 
@@ -243,18 +275,18 @@ impl Inner {
             Ok(response) => response,
             Err(e) => {
                 error!("Could not fetch index from crates.io for {name}: {e}");
-                return None;
+                return Err(SyncOutcome::Failed);
             }
         };
 
         match response.status() {
             StatusCode::NOT_MODIFIED => {
                 trace!("Index not-modified for {name}");
-                None
+                Err(SyncOutcome::Unchanged)
             }
             StatusCode::NOT_FOUND => {
                 trace!("Index not found for {name}");
-                None
+                Err(SyncOutcome::NotFound)
             }
             StatusCode::OK => {
                 let headers = response.headers();
@@ -266,20 +298,20 @@ impl Inner {
                     .map(|h| h.to_str().unwrap_or_default().to_string());
 
                 match response.text().await {
-                    Ok(data) => Some(IndexData {
+                    Ok(data) => Ok(IndexData {
                         etag,
                         last_modified,
                         data,
                     }),
                     Err(e) => {
                         error!("Could not read index from crates.io for {name}: {e}");
-                        None
+                        Err(SyncOutcome::Failed)
                     }
                 }
             }
             s => {
                 error!("Unexpected status code from crates.io for {name}: {s}");
-                None
+                Err(SyncOutcome::Failed)
             }
         }
     }

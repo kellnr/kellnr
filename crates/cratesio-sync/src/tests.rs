@@ -117,7 +117,7 @@ async fn fetch_stores_index_and_licenses() {
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
-    assert_eq!(2, synced.unwrap().len());
+    assert_eq!(2, synced.written().unwrap().len());
     let stored = stored.lock().unwrap();
     assert_eq!(1, stored.len());
     let (description, versions, licenses) = &stored[0];
@@ -136,7 +136,7 @@ async fn api_failure_still_stores_index() {
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
-    assert!(synced.is_some());
+    assert!(matches!(synced, SyncOutcome::Written(_)));
     let stored = stored.lock().unwrap();
     let (description, versions, licenses) = &stored[0];
     assert_eq!(None, *description);
@@ -165,7 +165,10 @@ async fn concurrent_syncs_of_a_crate_share_one_job() {
         ),
     );
 
-    assert!(a.is_some() && b.is_some());
+    assert!(matches!(
+        (a, b),
+        (SyncOutcome::Written(_), SyncOutcome::Written(_))
+    ));
     assert_eq!(1, calls.index.load(Ordering::SeqCst));
     assert_eq!(1, calls.api.load(Ordering::SeqCst));
     assert_eq!(1, stored.lock().unwrap().len());
@@ -207,7 +210,7 @@ async fn index_source_skips_stored_index() {
         )
         .await;
 
-    assert!(synced.is_none());
+    assert!(matches!(synced, SyncOutcome::Unchanged));
     assert_eq!(0, calls.api.load(Ordering::SeqCst));
     assert!(stored.lock().unwrap().is_empty());
 }
@@ -230,7 +233,7 @@ async fn index_source_stores_new_index_without_fetching_it() {
         )
         .await;
 
-    assert!(synced.is_some());
+    assert!(matches!(synced, SyncOutcome::Written(_)));
     assert_eq!(0, calls.index.load(Ordering::SeqCst));
     assert_eq!(1, calls.api.load(Ordering::SeqCst));
     assert_eq!(1, stored.lock().unwrap().len());
@@ -253,7 +256,7 @@ async fn refresh_of_unchanged_index_writes_nothing() {
         )
         .await;
 
-    assert!(synced.is_none());
+    assert!(matches!(synced, SyncOutcome::Unchanged));
     assert_eq!(1, calls.index.load(Ordering::SeqCst));
     assert_eq!(0, calls.api.load(Ordering::SeqCst));
     assert!(stored.lock().unwrap().is_empty());
@@ -276,9 +279,38 @@ async fn refresh_of_changed_index_writes_it() {
         )
         .await;
 
-    assert_eq!(2, synced.unwrap().len());
+    assert_eq!(2, synced.written().unwrap().len());
     assert_eq!(1, calls.api.load(Ordering::SeqCst));
     assert_eq!(1, stored.lock().unwrap().len());
+}
+
+#[tokio::test]
+async fn crate_missing_upstream_is_not_found() {
+    let calls = Arc::new(Calls::default());
+    let proxy = fake_cratesio(true, calls.clone()).await;
+    let (db, stored) = recording_db(PrefetchState::NotFound);
+    let sync = CratesioSync::new(Arc::new(db), Client::new(), &proxy);
+
+    // The fake index only serves crates with more than three characters.
+    let synced = sync
+        .sync(&OriginalName::try_from("ab").unwrap(), SyncSource::Fetch)
+        .await;
+
+    assert!(matches!(synced, SyncOutcome::NotFound));
+    assert!(stored.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn invalid_index_url_fails() {
+    let proxy = kellnr_settings::Proxy {
+        index: Url::parse("ftp://index.example.com/").unwrap(),
+        ..kellnr_settings::Proxy::default()
+    };
+    let sync = CratesioSync::new(Arc::new(MockDb::new()), Client::new(), &proxy);
+
+    let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
+
+    assert!(matches!(synced, SyncOutcome::Failed));
 }
 
 #[tokio::test]
@@ -304,7 +336,7 @@ async fn panicking_sync_does_not_block_later_syncs() {
         .await;
 
     // A later sync of the crate starts a new job instead of joining this one
-    assert!(synced.is_none());
+    assert!(matches!(synced, SyncOutcome::Failed));
     assert!(sync.inner.running.lock().unwrap().is_empty());
 }
 
@@ -372,7 +404,7 @@ async fn server_errors_and_rate_limits_are_retried() {
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
-    assert_eq!(2, synced.unwrap().len());
+    assert_eq!(2, synced.written().unwrap().len());
     assert_eq!(2, calls.index.load(Ordering::SeqCst));
     assert_eq!(2, calls.api.load(Ordering::SeqCst));
     let stored = stored.lock().unwrap();

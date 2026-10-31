@@ -13,7 +13,7 @@ use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::Prefetch;
 use kellnr_common::version::Version;
-use kellnr_cratesio_sync::{CratesioSync, SyncSource, Synced, crate_sub_path};
+use kellnr_cratesio_sync::{CratesioSync, SyncSource, crate_sub_path};
 use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
 use kellnr_filter::{CrateInfo, FilterChain, Verdict};
@@ -392,7 +392,7 @@ async fn predownload_crate(idx: &IndexMetadata, version: &Version, args: &Crates
 
 /// Handle the next message. Returns the index metadata if the crate was
 /// synced.
-async fn handle_cratesio_prefetch_msg(args: &CratesIoPrefetchArgs) -> Synced {
+async fn handle_cratesio_prefetch_msg(args: &CratesIoPrefetchArgs) -> Option<Arc<[IndexMetadata]>> {
     match args.recv.recv_async().await {
         Ok(CratesioPrefetchMsg::Insert(msg)) => {
             trace!("Inserting prefetch data from crates.io for {}", msg.name);
@@ -408,6 +408,7 @@ async fn handle_cratesio_prefetch_msg(args: &CratesIoPrefetchArgs) -> Synced {
                     },
                 )
                 .await
+                .written()
         }
         Ok(CratesioPrefetchMsg::Update(msg)) => {
             trace!("Updating prefetch data for {}", msg.name);
@@ -427,6 +428,7 @@ async fn handle_cratesio_prefetch_msg(args: &CratesIoPrefetchArgs) -> Synced {
                         },
                     )
                     .await
+                    .written()
             }
         }
         Ok(CratesioPrefetchMsg::IncDownloadCnt(msg)) => {
