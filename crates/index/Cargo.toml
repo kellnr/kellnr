@@ -27,7 +27,6 @@ utoipa.workspace = true
 flume.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
-mockall.workspace = true
 moka.workspace = true
 reqwest.workspace = true
 serde.workspace = true
@@ -36,6 +35,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+mockall.workspace = true
 kellnr-db = { workspace = true, features = ["mock"] }
 sha256.workspace = true
 tempfile.workspace = true

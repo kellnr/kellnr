@@ -12,7 +12,6 @@ documentation.workspace = true
 [dependencies]
 # Internal dependencies
 kellnr-common.workspace = true
-kellnr-rustfs-testcontainer.workspace = true
 kellnr-settings.workspace = true
 
 # External dependencies
@@ -28,6 +27,7 @@ thiserror.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+kellnr-rustfs-testcontainer.workspace = true
 # Path only (no version), so cargo drops it when packaging kellnr-storage.
 # The test helper itself is never published.
 kellnr-fakegcs-testcontainer = { path = "fakegcs-testcontainer" }

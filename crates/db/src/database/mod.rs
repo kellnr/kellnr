@@ -9,6 +9,7 @@ mod operations;
 mod search;
 mod sessions;
 mod stats;
+#[cfg(feature = "test-support")]
 pub mod test_utils;
 mod toolchains;
 mod users;
