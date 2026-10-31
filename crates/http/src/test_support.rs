@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use axum_extra::extract::cookie::Key;
 use cookie::{Cookie, CookieJar};
-use kellnr_common::login_throttle::LoginThrottle;
-use kellnr_common::token_cache::TokenCacheManager;
+use crate::login_throttle::LoginThrottle;
+use crate::token_cache::TokenCacheManager;
 use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
@@ -41,7 +41,7 @@ pub fn test_state() -> AppStateData {
         settings.registry.auth_failed_attempts_window(),
     ));
     let download_counter = Arc::new(DownloadCounter::new(db.clone(), 30));
-    let proxy_client = kellnr_common::cratesio_downloader::CLIENT.clone();
+    let proxy_client = kellnr_cratesio_sync::cratesio_downloader::CLIENT.clone();
     let cratesio_sync = CratesioSync::new(db.clone(), proxy_client.clone(), &settings.proxy);
     AppStateData {
         db,

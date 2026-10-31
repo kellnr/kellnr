@@ -15,8 +15,12 @@ fn default_api_url() -> Url {
     Url::parse("https://crates.io/api/v1/crates/").unwrap()
 }
 
+/// Default user-agent sent with requests to crates.io. This is the single source
+/// of truth for the default user-agent across the whole codebase.
+pub const DEFAULT_USER_AGENT: &str = "kellnr.io/kellnr";
+
 fn default_user_agent() -> String {
-    kellnr_common::cratesio_downloader::DEFAULT_USER_AGENT.to_string()
+    DEFAULT_USER_AGENT.to_string()
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]

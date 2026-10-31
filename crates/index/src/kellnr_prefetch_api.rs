@@ -14,6 +14,8 @@ use tracing::error;
 
 use super::config_json::{ConfigJson, IndexKind};
 
+use crate::prefetch_response::PrefetchResponse;
+
 /// Get registry configuration
 ///
 /// Returns the configuration JSON for the Kellnr registry index.
@@ -55,8 +57,9 @@ pub async fn prefetch_kellnr(
     headers: HeaderMap,
     State(db): DbState,
     user: Result<MaybeUser, StatusCode>,
-) -> Result<Prefetch, StatusCode> {
+) -> Result<PrefetchResponse, StatusCode> {
     internal_kellnr_prefetch(&package, &headers, &db, user.ok().as_ref()).await
+        .map(PrefetchResponse)
 }
 
 /// Prefetch crate index data for short names
@@ -82,8 +85,9 @@ pub async fn prefetch_len2_kellnr(
     headers: HeaderMap,
     State(db): DbState,
     user: Result<MaybeUser, StatusCode>,
-) -> Result<Prefetch, StatusCode> {
+) -> Result<PrefetchResponse, StatusCode> {
     internal_kellnr_prefetch(&package, &headers, &db, user.ok().as_ref()).await
+        .map(PrefetchResponse)
 }
 
 /// Index entries of download-restricted crates are only served to callers with

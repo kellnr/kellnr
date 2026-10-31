@@ -7,6 +7,8 @@
 //! running wait for it instead of starting another one. This lets a download
 //! wait until the checksum and license of its version are known.
 
+pub mod cratesio_downloader;
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;

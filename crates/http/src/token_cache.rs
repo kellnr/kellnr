@@ -1,9 +1,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use kellnr_common::account_name::UserName;
 use moka::future::Cache;
-
-use crate::account_name::UserName;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CachedTokenData {

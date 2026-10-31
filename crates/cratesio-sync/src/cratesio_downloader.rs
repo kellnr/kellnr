@@ -1,14 +1,10 @@
 use std::time::Duration;
 
-use axum::body::Bytes;
+use bytes::Bytes;
+use kellnr_common::base_url::BaseUrl;
+use kellnr_settings::proxy::DEFAULT_USER_AGENT;
 use reqwest::{Client, ClientBuilder, StatusCode};
 use tracing::error;
-
-use crate::base_url::BaseUrl;
-
-/// Default user-agent sent with requests to crates.io. This is the single source
-/// of truth for the default user-agent across the whole codebase.
-pub const DEFAULT_USER_AGENT: &str = "kellnr.io/kellnr";
 
 /// Build a reqwest client with the given user-agent and timeouts.
 ///

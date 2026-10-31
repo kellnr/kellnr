@@ -4211,20 +4211,14 @@ dependencies = [
 name = "kellnr-common"
 version = "6.13.0"
 dependencies = [
- "axum",
  "chrono",
- "moka",
  "rand 0.10.3",
  "regex",
- "reqwest",
  "sea-orm",
  "semver",
  "serde",
  "serde_json",
- "sha256",
  "thiserror 2.0.21",
- "tokio",
- "tracing",
  "url",
  "utoipa",
 ]
@@ -4234,6 +4228,7 @@ name = "kellnr-cratesio-sync"
 version = "6.13.0"
 dependencies = [
  "axum",
+ "bytes",
  "futures-util",
  "kellnr-common",
  "kellnr-db",
@@ -4241,6 +4236,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha256",
+ "thiserror 2.0.21",
  "tokio",
  "tracing",
 ]
@@ -4383,6 +4380,7 @@ dependencies = [
  "kellnr-settings",
  "kellnr-storage",
  "mockall",
+ "moka",
  "provcfg",
  "rand 0.10.3",
  "reqwest",

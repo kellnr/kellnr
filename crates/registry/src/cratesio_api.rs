@@ -6,7 +6,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use kellnr_http::state::{AppState, ProxyClientState, SettingsState};
-use kellnr_common::cratesio_downloader::{download_crate, has_checksum};
+use kellnr_cratesio_sync::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_cratesio_sync::{CratesioSync, SyncSource};
@@ -587,7 +587,7 @@ mod tests {
         db: Arc<dyn DbProvider>,
     ) -> Router {
         let download_filters = Arc::new(DownloadFilters::from_settings(&settings).unwrap());
-        let proxy_client = kellnr_common::cratesio_downloader::CLIENT.clone();
+        let proxy_client = kellnr_cratesio_sync::cratesio_downloader::CLIENT.clone();
         let state = AppStateData {
             // Short waits between tries, so tests of a failing upstream stay fast.
             cratesio_sync: CratesioSync::with_retry_base_delay(

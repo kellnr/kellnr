@@ -4,8 +4,6 @@ use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use flume::Sender;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
-use kellnr_common::login_throttle::LoginThrottle;
-use kellnr_common::token_cache::TokenCacheManager;
 use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
@@ -16,6 +14,9 @@ use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::toolchain_storage::ToolchainStorage;
 use reqwest::Client;
+
+use crate::login_throttle::LoginThrottle;
+use crate::token_cache::TokenCacheManager;
 
 pub type AppState = axum::extract::State<AppStateData>;
 

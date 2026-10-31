@@ -602,8 +602,8 @@ mod tests {
     use hyper::{Request, header};
     use kellnr_http::state::AppStateData;
     use kellnr_http::test_support::{TEST_KEY, encode_cookies};
-    use kellnr_common::login_throttle::LoginThrottle;
-    use kellnr_common::token_cache::{CachedTokenData, TokenCacheManager};
+    use kellnr_http::login_throttle::LoginThrottle;
+    use kellnr_http::token_cache::{CachedTokenData, TokenCacheManager};
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::constants::COOKIE_SESSION_ID;

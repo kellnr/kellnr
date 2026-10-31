@@ -10,7 +10,7 @@ use base64::engine::general_purpose::STANDARD;
 use crate::state::AppStateData;
 use kellnr_common::account_name::UserName;
 use kellnr_common::plain_token::PlainToken;
-use kellnr_common::token_cache::CachedTokenData;
+use crate::token_cache::CachedTokenData;
 use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
 use kellnr_db::password::hash_token;
@@ -273,8 +273,8 @@ fn strip_scheme<'a>(value: &'a str, scheme: &str) -> Option<&'a str> {
 mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
-    use kellnr_common::login_throttle::LoginThrottle;
-    use kellnr_common::token_cache::TokenCacheManager;
+    use crate::login_throttle::LoginThrottle;
+    use crate::token_cache::TokenCacheManager;
     use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
