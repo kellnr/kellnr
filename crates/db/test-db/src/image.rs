@@ -6,17 +6,17 @@ use testcontainers::core::WaitFor;
 
 const NAME: &str = "postgres";
 const TAG: &str = "17-alpine";
-pub const POSTGRES_PASSWORD: &str = "admin";
-pub const POSTGRES_USER: &str = "admin";
-pub const POSTGRES_DB: &str = "kellnr";
+pub(crate) const POSTGRES_PASSWORD: &str = "admin";
+pub(crate) const POSTGRES_USER: &str = "admin";
+pub(crate) const POSTGRES_DB: &str = "kellnr";
 
 #[derive(Debug, Clone)]
-pub struct Postgres {
+pub(crate) struct Postgres {
     env_vars: HashMap<String, String>,
 }
 
 impl Postgres {
-    pub const PG_PORT: u16 = 5432;
+    pub(crate) const PG_PORT: u16 = 5432;
 }
 
 impl Default for Postgres {

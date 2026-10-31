@@ -15,7 +15,7 @@
 //! user and password `admin`, database `kellnr`), which `just test-docker`
 //! starts once for all tests. Without it, every test starts its own container.
 
-pub mod image;
+mod image;
 
 use std::fs::{self, File};
 use std::ops::Deref;

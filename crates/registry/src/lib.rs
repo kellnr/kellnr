@@ -1,10 +1,10 @@
-pub mod crate_group;
-pub mod crate_user;
-pub mod crate_version;
+mod crate_group;
+mod crate_user;
+mod crate_version;
 pub mod cratesio_api;
 pub mod kellnr_api;
-pub mod pub_data;
+mod pub_data;
 mod pub_success;
-pub mod registry_error;
-pub mod search_params;
+mod registry_error;
+mod search_params;
 mod yank_success;

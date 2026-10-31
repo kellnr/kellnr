@@ -21,11 +21,6 @@ impl From<Vec<CrateGroup>> for CrateGroupList {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct CrateGroupRequest {
-    pub groups: Vec<GroupName>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct CrateGroupResponse {
     pub ok: bool,
     pub msg: String,

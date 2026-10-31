@@ -57,7 +57,7 @@ impl AdminUser {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PgConStringInner {
+pub(crate) enum PgConStringInner {
     /// A connection string constructed from individual fields.
     Structured {
         addr: String,

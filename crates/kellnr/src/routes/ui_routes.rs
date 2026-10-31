@@ -7,7 +7,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 /// Creates the UI API routes (JSON endpoints used by the web frontend).
-pub fn create_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
+pub(super) fn create_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
     OpenApiRouter::new()
         .routes(routes!(ui::kellnr_version))
         .routes(routes!(ui::crates))

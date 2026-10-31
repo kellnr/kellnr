@@ -12,7 +12,7 @@ use crate::target::{GuardedResolver, is_blocked_url, validate_callback_url};
 pub(crate) const MAX_LOGGED_BODY_BYTES: usize = 512;
 
 #[derive(Error, Debug)]
-pub enum DeliveryError {
+pub(crate) enum DeliveryError {
     #[error("{0}")]
     InvalidUrl(String),
     #[error("Webhook target address is not permitted")]
@@ -36,13 +36,13 @@ pub enum DeliveryError {
 /// do not use a proxy from the environment (`HTTP_PROXY`, `HTTPS_PROXY`), as
 /// only the proxy's address can be checked then.
 #[derive(Clone)]
-pub struct WebhookClient {
+pub(crate) struct WebhookClient {
     http: reqwest::Client,
     block_private_targets: bool,
 }
 
 impl WebhookClient {
-    pub fn new(settings: &Webhooks) -> reqwest::Result<Self> {
+    pub(crate) fn new(settings: &Webhooks) -> reqwest::Result<Self> {
         let block_private_targets = settings.block_private_targets;
         let mut builder = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))

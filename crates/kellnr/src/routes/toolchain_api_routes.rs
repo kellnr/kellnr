@@ -7,7 +7,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 /// Creates the toolchain API routes (management endpoints)
-pub fn create_api_routes(max_bytes: usize) -> OpenApiRouter<AppStateData> {
+pub(super) fn create_api_routes(max_bytes: usize) -> OpenApiRouter<AppStateData> {
     // Upload route needs custom body limit, so we merge it as a regular Router
     let upload_router: OpenApiRouter<AppStateData> = Router::new()
         .route(
@@ -26,7 +26,7 @@ pub fn create_api_routes(max_bytes: usize) -> OpenApiRouter<AppStateData> {
 }
 
 /// Creates the toolchain distribution routes (download endpoints)
-pub fn create_dist_routes() -> OpenApiRouter<AppStateData> {
+pub(super) fn create_dist_routes() -> OpenApiRouter<AppStateData> {
     // No authentication on dist routes, rustup does not support HTTP authentication
     OpenApiRouter::new()
         // Use a full segment parameter and parse the manifest filename in the handler

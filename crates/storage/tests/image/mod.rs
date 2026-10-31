@@ -11,13 +11,13 @@ const RUSTFS_ACCESS_KEY: &str = "rustfsadmin";
 const RUSTFS_SECRET_KEY: &str = "rustfsadmin";
 
 #[derive(Debug, Clone)]
-pub struct RustFs {
+pub(crate) struct RustFs {
     env_vars: HashMap<String, String>,
 }
 
 impl RustFs {
-    pub const PORT: u16 = 9000;
-    pub const CONTAINER_PORT: ContainerPort = ContainerPort::Tcp(Self::PORT);
+    pub(crate) const PORT: u16 = 9000;
+    pub(crate) const CONTAINER_PORT: ContainerPort = ContainerPort::Tcp(Self::PORT);
 }
 
 impl Default for RustFs {

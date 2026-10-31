@@ -3,7 +3,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 /// Health check route
-pub fn create_routes() -> OpenApiRouter<AppStateData> {
+pub(super) fn create_routes() -> OpenApiRouter<AppStateData> {
     OpenApiRouter::new().routes(routes!(health_check))
 }
 
@@ -16,6 +16,6 @@ pub fn create_routes() -> OpenApiRouter<AppStateData> {
         (status = 200, description = "Service healthy", body = String)
     )
 )]
-pub async fn health_check() -> &'static str {
+pub(super) async fn health_check() -> &'static str {
     "OK"
 }

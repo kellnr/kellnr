@@ -12,7 +12,7 @@ use kellnr_settings::{Category, Provenance, SettingsProv, ShowConfigOptions};
 use toml::Value;
 
 /// Public entry point invoked from `main.rs`.
-pub fn print_config_with_options(prov: &SettingsProv, options: &ShowConfigOptions) {
+pub(crate) fn print_config_with_options(prov: &SettingsProv, options: &ShowConfigOptions) {
     let print = render(prov, options);
     if print.is_empty() {
         // `--no-defaults` and nothing was non-default.

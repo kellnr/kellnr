@@ -18,12 +18,12 @@ const IMAGE_NAME: &str = "kellnr-fake-gcs-server";
 const IMAGE_TAG: &str = "local";
 
 /// Build context for [`FakeGcsServer`], shared with the Playwright UI tests.
-pub struct FakeGcsServerImage {
+pub(crate) struct FakeGcsServerImage {
     host_port: u16,
 }
 
 impl FakeGcsServerImage {
-    pub fn new(host_port: u16) -> Self {
+    pub(crate) fn new(host_port: u16) -> Self {
         Self { host_port }
     }
 
@@ -63,13 +63,13 @@ impl BuildableImage for FakeGcsServerImage {
 /// baked into `-public-host`, and the container is started with that same port fixed via
 /// `ImageExt::with_mapped_port` (see `fakegcs-testcontainer`).
 #[derive(Debug, Clone)]
-pub struct FakeGcsServer {
+pub(crate) struct FakeGcsServer {
     host_port: u16,
 }
 
 impl FakeGcsServer {
-    pub const PORT: u16 = 4443;
-    pub const CONTAINER_PORT: ContainerPort = ContainerPort::Tcp(Self::PORT);
+    pub(crate) const PORT: u16 = 4443;
+    pub(crate) const CONTAINER_PORT: ContainerPort = ContainerPort::Tcp(Self::PORT);
 }
 
 impl Image for FakeGcsServer {

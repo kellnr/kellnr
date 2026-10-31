@@ -31,7 +31,7 @@ use crate::provider::DbResult;
 
 /// What Kellnr knows about a dependency of a crate.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct DepInfo {
+pub(super) struct DepInfo {
     pub description: Option<String>,
     /// Latest version that is not yanked
     pub latest_version: Option<String>,
@@ -39,14 +39,17 @@ pub struct DepInfo {
 
 /// Name a dependency is looked up by: the package name for renamed
 /// dependencies. `None` for names no crate can have.
-pub fn dep_lookup_name(dep: &IndexDep) -> Option<CanonicalName> {
+pub(super) fn dep_lookup_name(dep: &IndexDep) -> Option<CanonicalName> {
     CanonicalName::try_from(dep.package.as_deref().unwrap_or(&dep.name)).ok()
 }
 
 /// Description and latest version of the dependencies, by the canonical name
 /// [`dep_lookup_name`] returns.
 /// crates.io dependencies are only known if they are in the proxy cache.
-pub async fn get_dep_info<'a, C, D>(db_con: &C, deps: D) -> DbResult<HashMap<String, DepInfo>>
+pub(super) async fn get_dep_info<'a, C, D>(
+    db_con: &C,
+    deps: D,
+) -> DbResult<HashMap<String, DepInfo>>
 where
     C: ConnectionTrait,
     D: Iterator<Item = &'a IndexDep>,
@@ -142,7 +145,7 @@ where
     Ok(info)
 }
 
-pub async fn insert_admin_credentials<C: ConnectionTrait>(
+pub(super) async fn insert_admin_credentials<C: ConnectionTrait>(
     db_con: &C,
     con_string: &ConString,
 ) -> DbResult<()> {
@@ -184,7 +187,7 @@ pub async fn insert_admin_credentials<C: ConnectionTrait>(
     Ok(())
 }
 
-pub async fn no_user_exists<C: ConnectionTrait>(db_con: &C) -> DbResult<bool> {
+pub(super) async fn no_user_exists<C: ConnectionTrait>(db_con: &C) -> DbResult<bool> {
     let id = user::Entity::find()
         .one(db_con)
         .await?
@@ -197,7 +200,7 @@ pub async fn no_user_exists<C: ConnectionTrait>(db_con: &C) -> DbResult<bool> {
 /// name as `name` exists, like cargo and crates.io treat names that only
 /// differ in case or in `-` versus `_` as the same crate. Used before creating
 /// a new crate to prevent typosquatting.
-pub async fn ensure_no_similar_crate<C: ConnectionTrait>(
+pub(super) async fn ensure_no_similar_crate<C: ConnectionTrait>(
     db_con: &C,
     name: &OriginalName,
 ) -> DbResult<()> {
@@ -216,7 +219,7 @@ pub async fn ensure_no_similar_crate<C: ConnectionTrait>(
 /// separators than the existing crate `existing_name` of the same canonical
 /// name. Names that only differ in case are the same crate, they are rejected
 /// later with a better error for its owners.
-pub fn ensure_same_separators(name: &OriginalName, existing_name: &str) -> DbResult<()> {
+pub(super) fn ensure_same_separators(name: &OriginalName, existing_name: &str) -> DbResult<()> {
     if name.to_lowercase() == existing_name.to_lowercase() {
         Ok(())
     } else {
@@ -224,18 +227,18 @@ pub fn ensure_same_separators(name: &OriginalName, existing_name: &str) -> DbRes
     }
 }
 
-pub fn name_conflict(name: &OriginalName, existing_name: String) -> DbError {
+pub(super) fn name_conflict(name: &OriginalName, existing_name: String) -> DbError {
     DbError::CrateNameConflict(name.to_lowercase(), existing_name)
 }
 
 /// Whether the insert of a crate failed on the unique crate name, as a
 /// concurrent publish created a crate with the same canonical name.
-pub fn is_unique_violation(err: &DbErr) -> bool {
+pub(super) fn is_unique_violation(err: &DbErr) -> bool {
     matches!(err.sql_err(), Some(SqlErr::UniqueConstraintViolation(_)))
 }
 
 /// Fail with [`DbError::NotOwner`] unless `user_name` owns the crate or is an admin.
-pub async fn ensure_owner_or_admin<C: ConnectionTrait>(
+pub(super) async fn ensure_owner_or_admin<C: ConnectionTrait>(
     db_con: &C,
     user_name: &UserName,
     crate_name: &str,
@@ -267,7 +270,7 @@ pub async fn ensure_owner_or_admin<C: ConnectionTrait>(
 
 /// Find a version of the crate that equals `version` when build metadata is
 /// ignored, as cargo treats them as the same version.
-pub async fn find_version_ignoring_build<C: ConnectionTrait>(
+pub(super) async fn find_version_ignoring_build<C: ConnectionTrait>(
     db_con: &C,
     crate_id: i64,
     version: &Version,
@@ -283,7 +286,7 @@ pub async fn find_version_ignoring_build<C: ConnectionTrait>(
         }))
 }
 
-pub async fn add_owner_if_not_exists<C: ConnectionTrait>(
+pub(super) async fn add_owner_if_not_exists<C: ConnectionTrait>(
     db_con: &C,
     owner_name: &UserName,
     crate_id: i64,
@@ -313,7 +316,7 @@ pub async fn add_owner_if_not_exists<C: ConnectionTrait>(
     Ok(())
 }
 
-pub async fn add_crate_index<C: ConnectionTrait>(
+pub(super) async fn add_crate_index<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
     cksum: &str,
@@ -370,7 +373,7 @@ pub async fn add_crate_index<C: ConnectionTrait>(
     Ok(())
 }
 
-pub async fn add_crate_metadata<C: ConnectionTrait>(
+pub(super) async fn add_crate_metadata<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
     size: i64,
@@ -405,7 +408,7 @@ fn unique_values(values: &[String]) -> Vec<&String> {
     values.iter().filter(|v| seen.insert(*v)).collect()
 }
 
-pub async fn update_crate_categories<C: ConnectionTrait>(
+pub(super) async fn update_crate_categories<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
     crate_id: i64,
@@ -449,7 +452,7 @@ pub async fn update_crate_categories<C: ConnectionTrait>(
     Ok(())
 }
 
-pub async fn update_crate_keywords<C: ConnectionTrait>(
+pub(super) async fn update_crate_keywords<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
     crate_id: i64,
@@ -493,7 +496,7 @@ pub async fn update_crate_keywords<C: ConnectionTrait>(
     Ok(())
 }
 
-pub async fn update_crate_authors<C: ConnectionTrait>(
+pub(super) async fn update_crate_authors<C: ConnectionTrait>(
     db_con: &C,
     pub_metadata: &PublishMetadata,
     crate_id: i64,
@@ -541,7 +544,7 @@ pub async fn update_crate_authors<C: ConnectionTrait>(
 
 /// The index entries of all versions of a crate, in the order they were
 /// published, so the index file and its `ETag` are always the same.
-pub async fn crate_indices<C: ConnectionTrait>(
+pub(super) async fn crate_indices<C: ConnectionTrait>(
     db_con: &C,
     crate_id: i64,
 ) -> DbResult<Vec<crate_index::Model>> {
@@ -552,7 +555,7 @@ pub async fn crate_indices<C: ConnectionTrait>(
         .await?)
 }
 
-pub async fn compute_etag<C: ConnectionTrait>(
+pub(super) async fn compute_etag<C: ConnectionTrait>(
     db_con: &C,
     crate_name: &str,
     crate_id: i64,
@@ -564,13 +567,13 @@ pub async fn compute_etag<C: ConnectionTrait>(
     Ok(sha256::digest(data))
 }
 
-pub fn index_metadata_to_bytes(index_metadata: &[IndexMetadata]) -> DbResult<Vec<u8>> {
+pub(super) fn index_metadata_to_bytes(index_metadata: &[IndexMetadata]) -> DbResult<Vec<u8>> {
     IndexMetadata::serialize_indices(index_metadata)
         .map(String::into_bytes)
         .map_err(|e| DbError::FailedToConvertToJson(format!("{e}")))
 }
 
-pub fn crate_index_model_to_index_metadata(
+pub(super) fn crate_index_model_to_index_metadata(
     crate_name: &str,
     crate_indices: Vec<crate_index::Model>,
 ) -> DbResult<Vec<IndexMetadata>> {
@@ -615,7 +618,7 @@ pub fn crate_index_model_to_index_metadata(
     Ok(index_metadata)
 }
 
-pub fn cratesio_index_model_to_index_metadata(
+pub(super) fn cratesio_index_model_to_index_metadata(
     crate_name: &str,
     crate_indices: Vec<cratesio_index::Model>,
 ) -> DbResult<Vec<IndexMetadata>> {
@@ -661,7 +664,7 @@ pub fn cratesio_index_model_to_index_metadata(
     Ok(index_metadata)
 }
 
-pub async fn update_etag<C: ConnectionTrait>(
+pub(super) async fn update_etag<C: ConnectionTrait>(
     db_con: &C,
     crate_name: &str,
     crate_id: i64,
@@ -678,7 +681,7 @@ pub async fn update_etag<C: ConnectionTrait>(
     Ok(())
 }
 
-pub async fn get_max_version_from_id<C: ConnectionTrait>(
+pub(super) async fn get_max_version_from_id<C: ConnectionTrait>(
     db_con: &C,
     crate_id: i64,
 ) -> DbResult<Version> {

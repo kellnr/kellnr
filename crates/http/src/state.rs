@@ -25,15 +25,11 @@ pub type AppState = axum::extract::State<AppStateData>;
 pub type DbState = axum::extract::State<Arc<dyn DbProvider>>;
 pub type SettingsState = axum::extract::State<Arc<Settings>>;
 pub type SettingsProvState = axum::extract::State<Arc<SettingsProv>>;
-pub type CrateStorageState = axum::extract::State<Arc<KellnrCrateStorage>>;
-pub type CrateIoStorageState = axum::extract::State<Arc<CratesIoCrateStorage>>;
 pub type DocsStorageState = axum::extract::State<Arc<DocsStorage>>;
-pub type SigningKeyState = axum::extract::State<Key>;
 pub type CratesIoPrefetchSenderState = axum::extract::State<Sender<CratesioPrefetchMsg>>;
 pub type TokenCacheState = axum::extract::State<Arc<TokenCacheManager>>;
 pub type LoginThrottleState = axum::extract::State<Arc<LoginThrottle>>;
 pub type ToolchainStorageState = axum::extract::State<Option<Arc<ToolchainStorage>>>;
-pub type DownloadCounterState = axum::extract::State<Arc<DownloadCounter>>;
 pub type ProxyClientState = axum::extract::State<Client>;
 pub type BackgroundTasksState = axum::extract::State<BackgroundTasks>;
 

@@ -28,7 +28,7 @@ const OLD_MIGRATIONS: &[&str] = &[
     "m20260122_000001_add_pubtime",
 ];
 
-pub async fn init_database(
+pub(crate) async fn init_database(
     connection_string: impl ToString,
     max_con: u32,
 ) -> Result<DatabaseConnection, DbErr> {

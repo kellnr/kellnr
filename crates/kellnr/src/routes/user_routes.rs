@@ -4,7 +4,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 /// Creates the user management routes
-pub fn create_routes() -> OpenApiRouter<AppStateData> {
+pub(super) fn create_routes() -> OpenApiRouter<AppStateData> {
     OpenApiRouter::new()
         // User CRUD
         .routes(routes!(user::list_users, user::add))

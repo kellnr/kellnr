@@ -6,7 +6,7 @@ use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::{Content, Ref, RefOr};
 use utoipa::{Modify, OpenApi, PartialSchema, ToSchema};
 
-pub struct SecurityAddon;
+pub(crate) struct SecurityAddon;
 
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
@@ -26,7 +26,7 @@ impl Modify for SecurityAddon {
 /// Documents the JSON body of [`ErrorDetails`] for every error response.
 /// Kellnr answers all errors in this format, so the single annotations only
 /// name the status codes.
-pub fn add_error_bodies(mut api: utoipa::openapi::OpenApi) -> utoipa::openapi::OpenApi {
+pub(crate) fn add_error_bodies(mut api: utoipa::openapi::OpenApi) -> utoipa::openapi::OpenApi {
     let components = api.components.get_or_insert_with(Default::default);
     let mut schemas = vec![(ErrorDetails::name().into_owned(), ErrorDetails::schema())];
     ErrorDetails::schemas(&mut schemas);
@@ -81,7 +81,7 @@ pub fn add_error_bodies(mut api: utoipa::openapi::OpenApi) -> utoipa::openapi::O
     ),
     modifiers(&SecurityAddon)
 )]
-pub struct ApiDoc;
+pub(crate) struct ApiDoc;
 
 #[cfg(test)]
 mod tests {

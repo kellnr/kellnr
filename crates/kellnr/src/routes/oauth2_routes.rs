@@ -14,7 +14,7 @@ use utoipa_axum::routes;
 /// - GET /login - Initiates `OAuth2` flow, redirects to provider
 /// - GET /callback - Handles callback from provider
 /// - GET /error - Handles error responses from provider
-pub fn create_routes() -> OpenApiRouter<AppStateData> {
+pub(super) fn create_routes() -> OpenApiRouter<AppStateData> {
     OpenApiRouter::new()
         .routes(routes!(oauth2::get_config))
         .routes(routes!(oauth2::login))

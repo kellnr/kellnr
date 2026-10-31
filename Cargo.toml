@@ -127,6 +127,7 @@ strip = true
 [workspace.lints.rust]
 unsafe_code = "forbid"
 unused_qualifications = "warn"
+unreachable_pub = "warn"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

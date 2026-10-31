@@ -14,7 +14,7 @@ use utoipa_axum::routes;
 use super::apply_download_limits;
 
 /// Creates the crates.io API routes
-pub fn create_routes(
+pub(super) fn create_routes(
     state: AppStateData,
     download_semaphore: Option<Arc<Semaphore>>,
 ) -> OpenApiRouter<AppStateData> {
