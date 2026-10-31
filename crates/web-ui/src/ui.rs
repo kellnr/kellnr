@@ -1109,6 +1109,7 @@ mod tests {
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use kellnr_storage::storage_error::StorageError;
+    use kellnr_storage::storage_key::StorageKey;
     use mockall::predicate::*;
     use tower::ServiceExt;
 
@@ -1192,35 +1193,39 @@ mod tests {
 
     #[async_trait::async_trait]
     impl kellnr_storage::storage::Storage for RecordingStorage {
-        async fn get(&self, _key: &str) -> Result<Bytes, StorageError> {
+        async fn get(&self, _key: &StorageKey) -> Result<Bytes, StorageError> {
             unimplemented!()
         }
         async fn get_with_meta(
             &self,
-            _key: &str,
+            _key: &StorageKey,
         ) -> Result<kellnr_storage::storage::ObjectWithMeta, StorageError> {
             unimplemented!()
         }
-        async fn put(&self, _key: &str, _object: Bytes) -> Result<(), StorageError> {
+        async fn put(&self, _key: &StorageKey, _object: Bytes) -> Result<(), StorageError> {
             unimplemented!()
         }
-        async fn put_overwrite(&self, _key: &str, _object: Bytes) -> Result<(), StorageError> {
+        async fn put_overwrite(
+            &self,
+            _key: &StorageKey,
+            _object: Bytes,
+        ) -> Result<(), StorageError> {
             unimplemented!()
         }
-        async fn delete(&self, key: &str) -> Result<(), StorageError> {
+        async fn delete(&self, key: &StorageKey) -> Result<(), StorageError> {
             if self.fail_delete {
                 return Err(StorageError::GenericError("delete failed".to_string()));
             }
             self.deleted.lock().unwrap().push(key.to_string());
             Ok(())
         }
-        async fn exists(&self, _key: &str) -> Result<bool, StorageError> {
+        async fn exists(&self, _key: &StorageKey) -> Result<bool, StorageError> {
             Ok(true)
         }
-        async fn size(&self, _key: &str) -> Result<u64, StorageError> {
+        async fn size(&self, _key: &StorageKey) -> Result<u64, StorageError> {
             unimplemented!()
         }
-        async fn list(&self, _prefix: &str) -> Result<Vec<String>, StorageError> {
+        async fn list(&self, _prefix: &str) -> Result<Vec<StorageKey>, StorageError> {
             Ok(vec![])
         }
     }

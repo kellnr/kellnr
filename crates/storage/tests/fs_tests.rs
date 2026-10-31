@@ -4,6 +4,11 @@ use kellnr_common::version::Version;
 use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::storage::Storage;
+use kellnr_storage::storage_key::StorageKey;
+
+fn key(key: &str) -> StorageKey {
+    StorageKey::from_stored(key.to_string())
+}
 
 fn temp_storage() -> (tempfile::TempDir, FSStorage) {
     let dir = tempfile::tempdir().unwrap();
@@ -15,11 +20,11 @@ fn temp_storage() -> (tempfile::TempDir, FSStorage) {
 async fn put_then_get_roundtrips() {
     let (_dir, storage) = temp_storage();
     storage
-        .put("a/b.txt", Bytes::from_static(b"hello"))
+        .put(&key("a/b.txt"), Bytes::from_static(b"hello"))
         .await
         .unwrap();
 
-    let data = storage.get("a/b.txt").await.unwrap();
+    let data = storage.get(&key("a/b.txt")).await.unwrap();
     assert_eq!(data, Bytes::from_static(b"hello"));
 }
 
@@ -32,19 +37,19 @@ async fn list_returns_keys_with_special_characters_as_stored() {
         "a/[c] {d}#e.html",
         "a/x y.html",
     ];
-    for key in keys {
-        storage.put(key, Bytes::from(key)).await.unwrap();
+    for k in keys {
+        storage.put(&key(k), Bytes::from(k)).await.unwrap();
     }
 
     let mut listed = storage.list("a").await.unwrap();
     listed.sort_unstable();
 
-    let mut expected = keys.map(String::from).to_vec();
+    let mut expected = keys.map(key).to_vec();
     expected.sort_unstable();
     assert_eq!(listed, expected);
-    for key in listed {
-        assert_eq!(storage.get(&key).await.unwrap(), Bytes::from(key.clone()));
-        storage.delete(&key).await.unwrap();
+    for k in listed {
+        assert_eq!(storage.get(&k).await.unwrap(), Bytes::from(k.to_string()));
+        storage.delete(&k).await.unwrap();
     }
     assert!(storage.list("a").await.unwrap().is_empty());
 }
@@ -53,11 +58,11 @@ async fn list_returns_keys_with_special_characters_as_stored() {
 async fn get_with_meta_returns_bytes_etag_and_last_modified() {
     let (_dir, storage) = temp_storage();
     storage
-        .put("a/b.txt", Bytes::from_static(b"hello"))
+        .put(&key("a/b.txt"), Bytes::from_static(b"hello"))
         .await
         .unwrap();
 
-    let object = storage.get_with_meta("a/b.txt").await.unwrap();
+    let object = storage.get_with_meta(&key("a/b.txt")).await.unwrap();
 
     assert_eq!(object.bytes, Bytes::from_static(b"hello"));
     assert!(object.e_tag.is_some());
@@ -68,11 +73,13 @@ async fn get_with_meta_returns_bytes_etag_and_last_modified() {
 async fn put_fails_if_key_already_exists() {
     let (_dir, storage) = temp_storage();
     storage
-        .put("a/b.txt", Bytes::from_static(b"first"))
+        .put(&key("a/b.txt"), Bytes::from_static(b"first"))
         .await
         .unwrap();
 
-    let result = storage.put("a/b.txt", Bytes::from_static(b"second")).await;
+    let result = storage
+        .put(&key("a/b.txt"), Bytes::from_static(b"second"))
+        .await;
     assert!(result.is_err());
 }
 
@@ -80,16 +87,16 @@ async fn put_fails_if_key_already_exists() {
 async fn put_overwrite_replaces_existing_key() {
     let (_dir, storage) = temp_storage();
     storage
-        .put("a/b.txt", Bytes::from_static(b"first"))
+        .put(&key("a/b.txt"), Bytes::from_static(b"first"))
         .await
         .unwrap();
 
     storage
-        .put_overwrite("a/b.txt", Bytes::from_static(b"second"))
+        .put_overwrite(&key("a/b.txt"), Bytes::from_static(b"second"))
         .await
         .unwrap();
 
-    let data = storage.get("a/b.txt").await.unwrap();
+    let data = storage.get(&key("a/b.txt")).await.unwrap();
     assert_eq!(data, Bytes::from_static(b"second"));
 }
 
@@ -97,32 +104,38 @@ async fn put_overwrite_replaces_existing_key() {
 async fn delete_removes_key() {
     let (_dir, storage) = temp_storage();
     storage
-        .put("a/b.txt", Bytes::from_static(b"hello"))
+        .put(&key("a/b.txt"), Bytes::from_static(b"hello"))
         .await
         .unwrap();
 
-    storage.delete("a/b.txt").await.unwrap();
+    storage.delete(&key("a/b.txt")).await.unwrap();
 
-    assert!(!storage.exists("a/b.txt").await.unwrap());
+    assert!(!storage.exists(&key("a/b.txt")).await.unwrap());
 }
 
 #[tokio::test]
 async fn list_is_recursive_under_prefix() {
     let (_dir, storage) = temp_storage();
     storage
-        .put("crate/1.0.0/doc/index.html", Bytes::from_static(b"a"))
+        .put(&key("crate/1.0.0/doc/index.html"), Bytes::from_static(b"a"))
         .await
         .unwrap();
     storage
-        .put("crate/1.0.0/doc/nested/page.html", Bytes::from_static(b"b"))
+        .put(
+            &key("crate/1.0.0/doc/nested/page.html"),
+            Bytes::from_static(b"b"),
+        )
         .await
         .unwrap();
     storage
-        .put("crate/2.0.0/doc/index.html", Bytes::from_static(b"c"))
+        .put(&key("crate/2.0.0/doc/index.html"), Bytes::from_static(b"c"))
         .await
         .unwrap();
     storage
-        .put("other-crate/1.0.0/doc/index.html", Bytes::from_static(b"d"))
+        .put(
+            &key("other-crate/1.0.0/doc/index.html"),
+            Bytes::from_static(b"d"),
+        )
         .await
         .unwrap();
 
@@ -132,8 +145,8 @@ async fn list_is_recursive_under_prefix() {
     assert_eq!(
         keys,
         vec![
-            "crate/1.0.0/doc/index.html".to_string(),
-            "crate/1.0.0/doc/nested/page.html".to_string(),
+            key("crate/1.0.0/doc/index.html"),
+            key("crate/1.0.0/doc/nested/page.html"),
         ]
     );
 }
@@ -142,17 +155,17 @@ async fn list_is_recursive_under_prefix() {
 async fn list_does_not_match_sibling_prefix_with_shared_string_prefix() {
     let (_dir, storage) = temp_storage();
     storage
-        .put("foo/1.0.0/index.html", Bytes::from_static(b"a"))
+        .put(&key("foo/1.0.0/index.html"), Bytes::from_static(b"a"))
         .await
         .unwrap();
     storage
-        .put("foo-bar/1.0.0/index.html", Bytes::from_static(b"b"))
+        .put(&key("foo-bar/1.0.0/index.html"), Bytes::from_static(b"b"))
         .await
         .unwrap();
 
     let keys = storage.list("foo/").await.unwrap();
 
-    assert_eq!(keys, vec!["foo/1.0.0/index.html".to_string()]);
+    assert_eq!(keys, vec![key("foo/1.0.0/index.html")]);
 }
 
 #[tokio::test]

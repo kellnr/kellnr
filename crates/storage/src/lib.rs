@@ -8,6 +8,7 @@ pub mod object_storage;
 pub mod s3_storage;
 pub mod storage;
 pub mod storage_error;
+pub mod storage_key;
 pub mod toolchain_storage;
 
 use kellnr_settings::Settings;

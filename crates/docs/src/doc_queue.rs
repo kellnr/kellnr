@@ -443,6 +443,7 @@ mod tests {
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_storage::object_storage::MemoryStorage;
+    use kellnr_storage::storage_key::StorageKey;
 
     use super::*;
 
@@ -734,7 +735,14 @@ mod tests {
             &DocsName::from(&OriginalName::try_from("a").unwrap()),
             &Version::try_from("1.0.0").unwrap(),
         );
-        let mut keys = worker.docs_storage.list(&prefix).await.unwrap();
+        let mut keys: Vec<String> = worker
+            .docs_storage
+            .list(&prefix)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(StorageKey::into_inner)
+            .collect();
         keys.sort_unstable();
         assert_eq!(
             keys,

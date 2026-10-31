@@ -11,6 +11,7 @@ use kellnr_auth::maybe_user::MaybeUser;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_registry::kellnr_api::has_restricted_crate_access;
+use kellnr_storage::storage_key::StorageKey;
 use tracing::error;
 
 /// Middleware that applies the per-crate download restriction to hosted docs.
@@ -73,7 +74,10 @@ pub async fn serve_doc_file(
     if_none_match: Option<TypedHeader<IfNoneMatch>>,
     if_modified_since: Option<TypedHeader<IfModifiedSince>>,
 ) -> Response {
-    let Ok(object) = docs_storage.get_with_meta(&path).await else {
+    let Ok(object) = docs_storage
+        .get_with_meta(&StorageKey::from_stored(path.clone()))
+        .await
+    else {
         return StatusCode::NOT_FOUND.into_response();
     };
 

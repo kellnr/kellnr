@@ -1120,6 +1120,7 @@ mod reg_api_tests {
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use kellnr_storage::storage::{ObjectWithMeta, Storage};
     use kellnr_storage::storage_error::StorageError;
+    use kellnr_storage::storage_key::StorageKey;
     use mockall::predicate::*;
     use rand::distr::Alphanumeric;
     use rand::{RngExt, rng};
@@ -3639,38 +3640,38 @@ mod reg_api_tests {
 
     #[async_trait]
     impl Storage for GatedStorage {
-        async fn get(&self, key: &str) -> Result<Bytes, StorageError> {
+        async fn get(&self, key: &StorageKey) -> Result<Bytes, StorageError> {
             self.inner.get(key).await
         }
 
-        async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
+        async fn get_with_meta(&self, key: &StorageKey) -> Result<ObjectWithMeta, StorageError> {
             self.inner.get_with_meta(key).await
         }
 
-        async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+        async fn put(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
             self.inner.put(key, object).await?;
             self.stored.notify_one();
             self.release.notified().await;
             Ok(())
         }
 
-        async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+        async fn put_overwrite(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
             self.inner.put_overwrite(key, object).await
         }
 
-        async fn delete(&self, key: &str) -> Result<(), StorageError> {
+        async fn delete(&self, key: &StorageKey) -> Result<(), StorageError> {
             self.inner.delete(key).await
         }
 
-        async fn exists(&self, key: &str) -> Result<bool, StorageError> {
+        async fn exists(&self, key: &StorageKey) -> Result<bool, StorageError> {
             self.inner.exists(key).await
         }
 
-        async fn size(&self, key: &str) -> Result<u64, StorageError> {
+        async fn size(&self, key: &StorageKey) -> Result<u64, StorageError> {
             self.inner.size(key).await
         }
 
-        async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+        async fn list(&self, prefix: &str) -> Result<Vec<StorageKey>, StorageError> {
             self.inner.list(prefix).await
         }
     }
@@ -3680,35 +3681,35 @@ mod reg_api_tests {
 
     #[async_trait]
     impl Storage for UnreadableStorage {
-        async fn get(&self, _key: &str) -> Result<Bytes, StorageError> {
+        async fn get(&self, _key: &StorageKey) -> Result<Bytes, StorageError> {
             Err(StorageError::GenericError("timeout".to_string()))
         }
 
-        async fn get_with_meta(&self, key: &str) -> Result<ObjectWithMeta, StorageError> {
+        async fn get_with_meta(&self, key: &StorageKey) -> Result<ObjectWithMeta, StorageError> {
             self.0.get_with_meta(key).await
         }
 
-        async fn put(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+        async fn put(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
             self.0.put(key, object).await
         }
 
-        async fn put_overwrite(&self, key: &str, object: Bytes) -> Result<(), StorageError> {
+        async fn put_overwrite(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
             self.0.put_overwrite(key, object).await
         }
 
-        async fn delete(&self, key: &str) -> Result<(), StorageError> {
+        async fn delete(&self, key: &StorageKey) -> Result<(), StorageError> {
             self.0.delete(key).await
         }
 
-        async fn exists(&self, key: &str) -> Result<bool, StorageError> {
+        async fn exists(&self, key: &StorageKey) -> Result<bool, StorageError> {
             self.0.exists(key).await
         }
 
-        async fn size(&self, key: &str) -> Result<u64, StorageError> {
+        async fn size(&self, key: &StorageKey) -> Result<u64, StorageError> {
             self.0.size(key).await
         }
 
-        async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+        async fn list(&self, prefix: &str) -> Result<Vec<StorageKey>, StorageError> {
             self.0.list(prefix).await
         }
     }
