@@ -44,7 +44,7 @@ pub struct OAuth2Config {
 /// Query parameters received in the `OAuth2` callback. The provider sends
 /// either `code` on success or `error` if the login failed or was cancelled.
 #[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
-pub struct CallbackQuery {
+pub struct CallbackParams {
     /// Authorization code from the provider
     pub code: Option<String>,
     /// CSRF protection state
@@ -53,6 +53,47 @@ pub struct CallbackQuery {
     pub error: Option<String>,
     /// Human readable error from the provider
     pub error_description: Option<String>,
+}
+
+/// The `OAuth2` callback query, read from [`CallbackParams`]. An `error`
+/// wins over a `code`; a query with neither `error` nor `code` and `state`
+/// is rejected with 400.
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "CallbackParams")]
+pub enum CallbackQuery {
+    /// The user logged in at the provider.
+    Success { code: String, state: String },
+    /// The login failed or was cancelled at the provider.
+    ProviderError {
+        error: String,
+        error_description: Option<String>,
+        state: Option<String>,
+    },
+}
+
+impl TryFrom<CallbackParams> for CallbackQuery {
+    type Error = &'static str;
+
+    fn try_from(params: CallbackParams) -> Result<Self, Self::Error> {
+        match params {
+            CallbackParams {
+                error: Some(error),
+                error_description,
+                state,
+                ..
+            } => Ok(Self::ProviderError {
+                error,
+                error_description,
+                state,
+            }),
+            CallbackParams {
+                code: Some(code),
+                state: Some(state),
+                ..
+            } => Ok(Self::Success { code, state }),
+            _ => Err("OAuth2 callback without code or state"),
+        }
+    }
 }
 
 /// Get `OAuth2` configuration for the UI
@@ -175,7 +216,7 @@ fn take_state_cookie(
     get,
     path = "/callback",
     tag = "oauth2",
-    params(CallbackQuery),
+    params(CallbackParams),
     responses(
         (status = 302, description = "Redirect to UI after successful login or to the login page on a provider error"),
         (status = 400, description = "Invalid state or missing code"),
@@ -190,25 +231,26 @@ pub async fn callback(
     State(app_state): AppState,
     Extension(oauth2_handler): OAuth2Ext,
 ) -> Result<(PrivateCookieJar, Redirect), RouteError> {
-    trace!(state = ?query.state, "OAuth2 callback received");
-
-    // The login was cancelled or rejected at the provider.
-    if let Some(error) = &query.error {
-        warn!(
-            "OAuth2 provider returned an error: {} - {:?}",
-            error, query.error_description
-        );
-        let cookies = cookies.remove(Cookie::build((COOKIE_OAUTH2_STATE, "")).path("/"));
-        let redirect = login_error_redirect(
-            &app_state.settings.origin.path_prefix(),
-            query.error_description.as_deref().unwrap_or(error),
-        );
-        return Ok((cookies, redirect));
-    }
-
-    let (Some(code), Some(query_state)) = (&query.code, &query.state) else {
-        warn!("OAuth2 callback without code or state");
-        return Err(RouteError::Status(StatusCode::BAD_REQUEST));
+    let (code, query_state) = match query {
+        CallbackQuery::Success { code, state } => {
+            trace!(state = ?state, "OAuth2 callback received");
+            (code, state)
+        }
+        // The login was cancelled or rejected at the provider.
+        CallbackQuery::ProviderError {
+            error,
+            error_description,
+            state,
+        } => {
+            trace!(state = ?state, "OAuth2 callback received");
+            warn!("OAuth2 provider returned an error: {error} - {error_description:?}");
+            let cookies = cookies.remove(Cookie::build((COOKIE_OAUTH2_STATE, "")).path("/"));
+            let redirect = login_error_redirect(
+                &app_state.settings.origin.path_prefix(),
+                error_description.as_deref().unwrap_or(&error),
+            );
+            return Ok((cookies, redirect));
+        }
     };
 
     // Check if OAuth2 is enabled
@@ -217,12 +259,12 @@ pub async fn callback(
         RouteError::Status(StatusCode::NOT_FOUND)
     })?;
 
-    let cookies = take_state_cookie(cookies, query_state)?;
+    let cookies = take_state_cookie(cookies, &query_state)?;
 
     // Retrieve and validate state from database
     let state_data = app_state
         .db
-        .get_and_delete_oauth2_state(query_state)
+        .get_and_delete_oauth2_state(&query_state)
         .await
         .map_err(|e| {
             error!("Failed to retrieve OAuth2 state: {}", e);
@@ -235,7 +277,7 @@ pub async fn callback(
 
     // Exchange code for tokens and validate
     let token_result = handler
-        .exchange_and_validate(code, &state_data.pkce_verifier, &state_data.nonce)
+        .exchange_and_validate(&code, &state_data.pkce_verifier, &state_data.nonce)
         .await
         .map_err(|e| {
             error!("Failed to exchange OAuth2 code: {}", e);
@@ -656,13 +698,50 @@ mod callback_tests {
             .to_string()
     }
 
-    fn query(code: Option<&str>, error: Option<&str>) -> CallbackQuery {
-        CallbackQuery {
-            code: code.map(String::from),
-            state: Some("abc".to_string()),
-            error: error.map(String::from),
-            error_description: None,
-        }
+    fn parse_query(query: &str) -> Option<CallbackQuery> {
+        let uri: axum::http::Uri = format!("/callback?{query}").parse().unwrap();
+        Query::<CallbackQuery>::try_from_uri(&uri)
+            .ok()
+            .map(|Query(query)| query)
+    }
+
+    #[test]
+    fn callback_query_with_code_and_state_is_success() {
+        assert_eq!(
+            parse_query("code=c&state=s&unknown=x"),
+            Some(CallbackQuery::Success {
+                code: "c".to_string(),
+                state: "s".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn callback_query_with_error_is_provider_error() {
+        assert_eq!(
+            parse_query("error=access_denied&error_description=User%20cancelled&state=s"),
+            Some(CallbackQuery::ProviderError {
+                error: "access_denied".to_string(),
+                error_description: Some("User cancelled".to_string()),
+                state: Some("s".to_string()),
+            })
+        );
+        // An error wins over a code
+        assert_eq!(
+            parse_query("error=server_error&code=c"),
+            Some(CallbackQuery::ProviderError {
+                error: "server_error".to_string(),
+                error_description: None,
+                state: None,
+            })
+        );
+    }
+
+    #[test]
+    fn callback_query_without_code_or_state_is_rejected() {
+        assert_eq!(parse_query(""), None);
+        assert_eq!(parse_query("state=s"), None);
+        assert_eq!(parse_query("code=c"), None);
     }
 
     /// The provider redirects to the callback with `error` instead of `code`
@@ -673,7 +752,7 @@ mod callback_tests {
 
         let result = callback(
             jar,
-            Query(query(None, Some("access_denied"))),
+            Query(parse_query("error=access_denied&state=abc").unwrap()),
             State(state_with_origin_path("/kellnr")),
             Extension(None),
         )
@@ -683,24 +762,6 @@ mod callback_tests {
             panic!("expected a redirect");
         };
         assert_eq!(location(redirect), "/kellnr/login?error=access_denied");
-    }
-
-    #[tokio::test]
-    async fn callback_without_code_is_rejected() {
-        let jar = PrivateCookieJar::from_headers(&HeaderMap::new(), Key::from(TEST_KEY));
-
-        let result = callback(
-            jar,
-            Query(query(None, None)),
-            State(state_with_origin_path("")),
-            Extension(None),
-        )
-        .await;
-
-        assert!(matches!(
-            result,
-            Err(RouteError::Status(StatusCode::BAD_REQUEST))
-        ));
     }
 
     #[tokio::test]
