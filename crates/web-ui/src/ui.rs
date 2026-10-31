@@ -28,6 +28,7 @@ use tracing::{error, warn};
 use utoipa::ToSchema;
 
 use crate::error::RouteError;
+use crate::pagination::{PageParams, PageRequest};
 use crate::session::{AdminUser, MaybeUser};
 
 /// Settings response, the flattened `Settings`, the per-leaf source map
@@ -299,34 +300,12 @@ pub async fn kellnr_version() -> Json<KellnrVersion> {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct CratesParams {
-    page: Option<u64>,
-    page_size: Option<u64>,
     cache: Option<bool>,
     sort: Option<CrateSort>,
     /// Only crates with this keyword
     keyword: Option<String>,
     /// Only crates in this category
     category: Option<String>,
-}
-
-/// Default number of crates per page.
-const DEFAULT_PAGE_SIZE: u64 = 10;
-/// Upper bound of crates per page.
-const MAX_PAGE_SIZE: u64 = 100;
-
-/// Resolves the requested page size and page into `(page_size, page, offset)`.
-/// The page size is clamped to `1..=MAX_PAGE_SIZE`, a page whose offset does
-/// not fit the database is rejected.
-fn pagination(page_size: Option<u64>, page: Option<u64>) -> Result<(u64, u64, u64), RouteError> {
-    let page_size = page_size
-        .unwrap_or(DEFAULT_PAGE_SIZE)
-        .clamp(1, MAX_PAGE_SIZE);
-    let page = page.unwrap_or(0);
-    let offset = page
-        .checked_mul(page_size)
-        .filter(|o| i64::try_from(*o).is_ok())
-        .ok_or_else(|| RouteError::BadRequest(format!("Page {page} is out of range")))?;
-    Ok((page_size, page, offset))
 }
 
 /// Logs a failed database query and returns a 500.
@@ -350,7 +329,7 @@ pub struct Pagination {
     get,
     path = "/crates",
     tag = "ui",
-    params(CratesParams),
+    params(CratesParams, PageParams),
     responses(
         (status = 200, description = "Paginated crate list", body = Pagination),
         (status = 400, description = "Page out of range")
@@ -358,10 +337,10 @@ pub struct Pagination {
 )]
 pub async fn crates(
     Query(params): Query<CratesParams>,
+    page: PageRequest,
     State(db): DbState,
     user: Result<MaybeUserOrToken, StatusCode>,
 ) -> Result<Json<Pagination>, RouteError> {
-    let (page_size, page, offset) = pagination(params.page_size, params.page)?;
     let cache = params.cache.unwrap_or(false);
     let visibility = crate_visibility(user.ok().as_ref());
     let sort = params.sort.unwrap_or_default();
@@ -370,7 +349,14 @@ pub async fn crates(
         category: params.category.filter(|c| !c.is_empty()),
     };
     let crates = db
-        .get_crate_overview_list(page_size, offset, cache, &visibility, sort, &tags)
+        .get_crate_overview_list(
+            page.size().get(),
+            page.offset(),
+            cache,
+            &visibility,
+            sort,
+            &tags,
+        )
         .await
         .map_err(|e| db_error(&e))?;
     let total = db
@@ -380,8 +366,8 @@ pub async fn crates(
 
     Ok(Json(Pagination {
         crates,
-        page_size,
-        page,
+        page_size: page.size().get(),
+        page: page.page(),
         total,
     }))
 }
@@ -389,8 +375,6 @@ pub async fn crates(
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, utoipa::IntoParams)]
 pub struct SearchParams {
     name: NameOrDescription,
-    page: Option<u64>,
-    page_size: Option<u64>,
     cache: Option<bool>,
 }
 
@@ -399,7 +383,7 @@ pub struct SearchParams {
     get,
     path = "/search",
     tag = "ui",
-    params(SearchParams),
+    params(SearchParams, PageParams),
     responses(
         (status = 200, description = "Paginated search results", body = Pagination),
         (status = 400, description = "Page out of range")
@@ -407,17 +391,17 @@ pub struct SearchParams {
 )]
 pub async fn search(
     Query(params): Query<SearchParams>,
+    page: PageRequest,
     State(db): DbState,
     user: Result<MaybeUserOrToken, StatusCode>,
 ) -> Result<Json<Pagination>, RouteError> {
-    let (page_size, page, offset) = pagination(params.page_size, params.page)?;
     let cache = params.cache.unwrap_or(false);
     let visibility = crate_visibility(user.ok().as_ref());
     let crates = db
         .search_in_crate_name_and_description(
             params.name.as_str(),
-            page_size,
-            offset,
+            page.size().get(),
+            page.offset(),
             cache,
             &visibility,
         )
@@ -430,8 +414,8 @@ pub async fn search(
 
     Ok(Json(Pagination {
         crates,
-        page_size,
-        page,
+        page_size: page.size().get(),
+        page: page.page(),
         total,
     }))
 }
@@ -3332,25 +3316,6 @@ mod tests {
         let status = get_with_session("/statistic", mock_db, "user", false).await;
 
         assert_eq!(StatusCode::OK, status);
-    }
-
-    #[test]
-    fn pagination_bounds_the_page_size() {
-        assert_eq!(pagination(None, None).unwrap(), (10, 0, 0));
-        assert_eq!(pagination(Some(0), Some(2)).unwrap(), (1, 2, 2));
-        assert_eq!(pagination(Some(1000), Some(2)).unwrap(), (100, 2, 200));
-    }
-
-    #[test]
-    fn pagination_rejects_pages_out_of_range() {
-        assert!(matches!(
-            pagination(Some(10), Some(u64::MAX)),
-            Err(RouteError::BadRequest(_))
-        ));
-        assert!(matches!(
-            pagination(Some(1), Some(u64::MAX)),
-            Err(RouteError::BadRequest(_))
-        ));
     }
 
     /// A failing database must not look like an empty registry.
