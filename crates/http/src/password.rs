@@ -1,6 +1,7 @@
 use kellnr_common::account_name::UserName;
-use kellnr_common::login_throttle::LoginThrottle;
 use kellnr_db::{DbProvider, User};
+
+use crate::login_throttle::LoginThrottle;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PasswordAuthError {

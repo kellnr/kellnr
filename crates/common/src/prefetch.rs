@@ -1,6 +1,3 @@
-use axum::body::Body;
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::Deserialize;
 
@@ -12,19 +9,6 @@ pub struct Prefetch {
     pub data: Vec<u8>,
     pub etag: String,
     pub last_modified: String,
-}
-
-impl IntoResponse for Prefetch {
-    fn into_response(self) -> Response {
-        Response::builder()
-            .header("Content-Length", self.data.len().to_string())
-            .header("ETag", self.etag)
-            .header("Last-Modified", self.last_modified)
-            .status(StatusCode::OK)
-            .body(Body::from(self.data))
-            .unwrap()
-            .into_response()
-    }
 }
 
 #[derive(Debug)]
