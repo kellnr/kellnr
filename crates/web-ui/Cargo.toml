@@ -40,6 +40,7 @@ flume.workspace = true
 hyper.workspace = true
 mockall.workspace = true
 kellnr-filter.workspace = true
+kellnr-test-db.workspace = true
 tempfile.workspace = true
 tower.workspace = true
 

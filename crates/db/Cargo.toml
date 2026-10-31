@@ -33,8 +33,7 @@ tokio = { workspace = true, features = ["rt"] }
 tracing.workspace = true
 
 [dev-dependencies]
-rm_rf.workspace = true
-testcontainers.workspace = true
+kellnr-test-db.workspace = true
 url.workspace = true
 
 [lints]

@@ -523,6 +523,7 @@ mod tests {
                 Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
             let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
+            kellnr_test_db::copy_sqlite_template(&con_string).await;
             let db: Arc<dyn DbProvider> = Arc::new(Database::new(&con_string, 10).await.unwrap());
 
             TestKellnr {

@@ -1,0 +1,27 @@
+[package]
+name = "kellnr-test-db"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+
+# Only for tests: use it as a dev-dependency.
+[dependencies]
+# Internal dependencies from Kellnr
+kellnr-db.workspace = true
+kellnr-settings.workspace = true
+
+# External dependencies from crates.io
+sea-orm.workspace = true
+sha256.workspace = true
+tempfile.workspace = true
+testcontainers.workspace = true
+tokio = { workspace = true, features = ["rt", "time"] }
+uuid.workspace = true
+
+[lints]
+workspace = true
