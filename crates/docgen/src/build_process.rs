@@ -3,12 +3,11 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
+use kellnr_docs::docs_error::DocsError;
 use kellnr_settings::cli::{DOC_BUILD_CRATESIO_INDEX_ARG, DOC_BUILD_SUBCOMMAND};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::{Child, Command};
 use tracing::warn;
-
-use crate::docs_error::DocsError;
 
 /// Environment variables passed on to the docs build process. Everything else,
 /// especially the `KELLNR_*` settings with their secrets, is removed.

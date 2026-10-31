@@ -4176,6 +4176,7 @@ dependencies = [
  "kellnr-common",
  "kellnr-cratesio-sync",
  "kellnr-db",
+ "kellnr-docgen",
  "kellnr-docs",
  "kellnr-embedded-resources",
  "kellnr-filter",
@@ -4325,13 +4326,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "kellnr-docgen"
+version = "6.13.0"
+dependencies = [
+ "bytes",
+ "cargo",
+ "flate2",
+ "kellnr-common",
+ "kellnr-db",
+ "kellnr-docs",
+ "kellnr-settings",
+ "kellnr-storage",
+ "rustix",
+ "tar",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "kellnr-docs"
 version = "6.13.0"
 dependencies = [
  "axum",
  "bytes",
- "cargo",
- "flate2",
  "http-body-util",
  "hyper",
  "kellnr-appstate",
@@ -4343,7 +4361,6 @@ dependencies = [
  "kellnr-settings",
  "kellnr-storage",
  "mockall",
- "rustix",
  "serde",
  "serde_json",
  "tar",

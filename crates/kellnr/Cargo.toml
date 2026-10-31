@@ -17,6 +17,7 @@ kellnr-auth.workspace = true
 kellnr-common.workspace = true
 kellnr-cratesio-sync.workspace = true
 kellnr-db.workspace = true
+kellnr-docgen.workspace = true
 kellnr-docs.workspace = true
 kellnr-embedded-resources.workspace = true
 kellnr-filter.workspace = true

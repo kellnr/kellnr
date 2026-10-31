@@ -1,0 +1,35 @@
+[package]
+name = "kellnr-docgen"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+
+[dependencies]
+# Internal dependencies from Kellnr
+kellnr-common.workspace = true
+kellnr-db.workspace = true
+kellnr-docs.workspace = true
+kellnr-settings.workspace = true
+kellnr-storage.workspace = true
+
+# External dependencies from crates.io
+bytes.workspace = true
+cargo.workspace = true
+flate2.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "time"] }
+tracing.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix.workspace = true
+
+[dev-dependencies]
+tar.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

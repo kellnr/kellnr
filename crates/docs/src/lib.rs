@@ -1,10 +1,8 @@
 pub mod api;
-pub mod build_process;
 mod doc_archive;
-pub mod doc_queue;
 pub mod doc_queue_response;
 pub mod docs_error;
-mod unpack;
+pub mod unpack;
 pub mod upload;
 pub mod upload_response;
 
@@ -28,7 +26,7 @@ pub fn compute_doc_url(
     format!("{path_prefix}/docs/{folder}/{crate_version}/doc/{docs_name}/index.html")
 }
 
-fn crate_name_to_docs_name(crate_name: &OriginalName) -> String {
+pub fn crate_name_to_docs_name(crate_name: &OriginalName) -> String {
     // Cargo replaces the `-` with `_` in the crate name when
     // docs are generated. As such, the docs folder name is not "foo-bar" but "foo_bar".
     crate_name.replace('-', "_")
