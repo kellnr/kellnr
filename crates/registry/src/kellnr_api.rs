@@ -732,7 +732,7 @@ pub async fn add_empty_crate(
 ) -> ApiResult<Json<EmptyCrateSuccess>> {
     // Only admins can create empty crate placeholders
     if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
+        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
     }
     let db = state.db;
     let orig_name = OriginalName::try_from(&data.name)?;

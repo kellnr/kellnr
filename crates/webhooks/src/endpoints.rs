@@ -34,20 +34,19 @@ pub async fn register_webhook(
 ) -> ApiResult<Json<types::RegisterWebhookResponse>> {
     trace!(user = %token.user, event = ?input.event, "Registering webhook");
     if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
+        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
     }
 
     let url = validate_callback_url(&input.callback_url)
-        .map_err(|e| ApiError::new(&e, "", StatusCode::BAD_REQUEST))?;
+        .map_err(|e| ApiError::new(&e, StatusCode::BAD_REQUEST))?;
     if is_blocked_url(&url, settings.webhooks.block_private_targets) {
         return Err(ApiError::new(
             "Callback URL target address is not permitted",
-            "",
             StatusCode::BAD_REQUEST,
         ));
     }
     if let Some(secret) = &input.secret {
-        decode_secret(secret).map_err(|e| ApiError::new(&e, "", StatusCode::BAD_REQUEST))?;
+        decode_secret(secret).map_err(|e| ApiError::new(&e, StatusCode::BAD_REQUEST))?;
     }
 
     let id = db
@@ -84,7 +83,7 @@ pub async fn get_webhook(
 ) -> ApiResult<Json<types::GetWebhookResponse>> {
     trace!(user = %token.user, webhook_id = %id, "Getting webhook");
     if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
+        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
     }
 
     Ok(Json(db.get_webhook(&id).await?.into()))
@@ -107,7 +106,7 @@ pub async fn get_all_webhooks(
 ) -> ApiResult<Json<types::GetAllWebhooksResponse>> {
     trace!(user = %token.user, "Listing all webhooks");
     if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
+        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
     }
 
     let w = db.get_all_webhooks().await?;
@@ -137,7 +136,7 @@ pub async fn delete_webhook(
 ) -> ApiResult<()> {
     trace!(user = %token.user, webhook_id = %id, "Deleting webhook");
     if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
+        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
     }
 
     db.delete_webhook(&id).await?;
@@ -169,7 +168,7 @@ pub async fn test_webhook(
 ) -> ApiResult<()> {
     trace!(user = %token.user, webhook_id = %id, "Testing webhook");
     if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", "", StatusCode::UNAUTHORIZED));
+        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
     }
 
     let w = db.get_webhook(&id).await?;
@@ -202,7 +201,6 @@ pub async fn test_webhook(
     // look like a failed login to Kellnr.
     Err(ApiError::new(
         &format!("Webhook callback returned status {}", status.as_u16()),
-        "",
         StatusCode::BAD_GATEWAY,
     ))
 }
@@ -212,13 +210,12 @@ fn delivery_error_to_api_error(webhook_id: &str, err: &DeliveryError) -> ApiErro
         DeliveryError::InvalidUrl(_)
         | DeliveryError::BlockedTarget
         | DeliveryError::InvalidSecret(_) => {
-            ApiError::new(&err.to_string(), "", StatusCode::BAD_REQUEST)
+            ApiError::new(&err.to_string(), StatusCode::BAD_REQUEST)
         }
         DeliveryError::Request(_) | DeliveryError::Payload(_) => {
             warn!(webhook_id, "Webhook test callback failed: {err}");
             ApiError::new(
                 "Webhook callback request failed",
-                "",
                 StatusCode::INTERNAL_SERVER_ERROR,
             )
         }

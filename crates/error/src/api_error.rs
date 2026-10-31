@@ -37,16 +37,9 @@ pub struct ErrorDetail {
 }
 
 impl ApiError {
-    pub fn new(msg: &str, error: &str, status: StatusCode) -> Self {
-        let e = if error.is_empty() {
-            format!("ERROR: {msg}")
-        } else {
-            format!("ERROR: {msg} -> {error}")
-        };
-        Self {
-            status,
-            details: ErrorDetails::from(e),
-        }
+    /// An error with `msg` as its detail.
+    pub fn new(msg: &str, status: StatusCode) -> Self {
+        Self::from_str(msg, status)
     }
 
     fn from_str(e: &str, status: StatusCode) -> Self {
@@ -165,6 +158,15 @@ impl From<StorageError> for ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_prefixes_the_message() {
+        let e = ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED);
+
+        assert_eq!(StatusCode::UNAUTHORIZED, e.status);
+        assert_eq!(1, e.details.errors.len());
+        assert_eq!("ERROR: Unauthorized", e.to_string());
+    }
 
     #[test]
     fn database_errors_are_not_leaked() {
