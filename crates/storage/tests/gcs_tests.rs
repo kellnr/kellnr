@@ -11,7 +11,7 @@ use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::gcs_storage::GCSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::storage_key::StorageKey;
-#[path = "gcs_image.rs"]
+#[path = "gcs_image/mod.rs"]
 mod image;
 
 fn test_settings(data_dir: &str, url: &str) -> Settings {
@@ -61,7 +61,7 @@ fn test_docs_storage(data_dir: &str, url: &str) -> DocsStorage {
 async fn add_and_get_crate() {
     // `localhost`, not `container.get_host()`: the reserved port is baked into
     // fake-gcs-server's `-public-host` as `localhost:{port}`, and a mismatch makes every
-    // object route 404 (see `gcs_image.rs`).
+    // object route 404 (see `gcs_image/mod.rs`).
     let url = format!("http://localhost:{port}");
     let cratedata = bytes::Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44]);
     let metadata = PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0");

@@ -31,7 +31,7 @@ pub fn fakegcs_testcontainer(_attr: TokenStream, stream: TokenStream) -> TokenSt
                     .expect("Failed to reserve a free port for fake-gcs-server");
                 listener.local_addr().expect("Failed to read reserved port").port()
             };
-            // The image is built from `tests/fixtures/test-gcs-storage`, see `gcs_image.rs`.
+            // The image is built from `tests/fixtures/test-gcs-storage`, see `crates/storage/tests/gcs_image/mod.rs`.
             // Building is skipped once the image exists, so only the first run pays for it.
             let container = image::FakeGcsServerImage::new(port)
                 .build_image_with(BuildImageOptions::new().with_skip_if_exists(true))
