@@ -7,10 +7,10 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use chrono::Utc;
-use kellnr_appstate::{AppState, DbState};
-pub use kellnr_auth::crate_access::has_restricted_crate_access;
-use kellnr_auth::crate_access::{can_read_crate, crate_visibility};
-use kellnr_auth::{maybe_user, token};
+use kellnr_http::state::{AppState, DbState};
+pub use kellnr_http::crate_access::has_restricted_crate_access;
+use kellnr_http::crate_access::{can_read_crate, crate_visibility};
+use kellnr_http::{maybe_user, token};
 use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
@@ -21,7 +21,7 @@ use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
 use kellnr_db::provider::DbResult;
-use kellnr_error::api_error::{ApiError, ApiResult};
+use kellnr_http::error::{ApiError, ApiResult};
 use kellnr_filter::CrateInfo;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::storage_error::StorageError;
@@ -1109,13 +1109,13 @@ mod reg_api_tests {
     use bytes::Bytes;
     use http_body_util::BodyExt;
     use hyper::header;
-    use kellnr_appstate::AppStateData;
+    use kellnr_http::state::AppStateData;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_db::download_counter::DownloadCounter;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, UserFlags, test_utils};
-    use kellnr_error::api_error::ErrorDetails;
+    use kellnr_http::error::ErrorDetails;
     use kellnr_settings::{LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
@@ -2199,7 +2199,7 @@ mod reg_api_tests {
             .unwrap();
 
         // create signed cookie header
-        let cookie_header = kellnr_appstate::encode_cookies([(
+        let cookie_header = kellnr_http::test_support::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
             "1234",
         )]);
@@ -2272,7 +2272,7 @@ mod reg_api_tests {
             .add_session_token(&UserName::new("rouser").unwrap(), &PlainToken::from("1234"))
             .await
             .unwrap();
-        let cookie_header = kellnr_appstate::encode_cookies([(
+        let cookie_header = kellnr_http::test_support::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
             "1234",
         )]);
@@ -2355,7 +2355,7 @@ mod reg_api_tests {
             )
             .await
             .unwrap();
-        let cookie_header = kellnr_appstate::encode_cookies([(
+        let cookie_header = kellnr_http::test_support::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
             "1234",
         )]);
@@ -2411,7 +2411,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        let cookie_header = kellnr_appstate::encode_cookies([(
+        let cookie_header = kellnr_http::test_support::encode_cookies([(
             kellnr_settings::constants::COOKIE_SESSION_ID,
             "1234",
         )]);
@@ -2800,7 +2800,7 @@ mod reg_api_tests {
             )
             .with_state(AppStateData {
                 db: Arc::new(restricted_crate_mock_db()),
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             })
             .oneshot(request.body(Body::empty()).unwrap())
             .await
@@ -3963,8 +3963,8 @@ mod reg_api_tests {
             crate_storage: cs.into(),
             // Use a fixed signing key matching the test cookie helper so that
             // session cookies actually decrypt and session auth is exercised.
-            signing_key: cookie::Key::from(kellnr_appstate::TEST_KEY),
-            ..kellnr_appstate::test_state()
+            signing_key: cookie::Key::from(kellnr_http::test_support::TEST_KEY),
+            ..kellnr_http::test_support::test_state()
         };
 
         let routes = Router::new()
@@ -3990,7 +3990,7 @@ mod reg_api_tests {
             .route("/api/v1/crates", get(search))
             .with_state(AppStateData {
                 db,
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             })
     }
 }
@@ -4002,7 +4002,8 @@ mod crate_access_tests {
     use axum::http::{Request, StatusCode, header};
     use axum::routing::{get, put};
     use cookie::Key;
-    use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_db::SessionInfo;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::constants::COOKIE_SESSION_ID;
@@ -4059,7 +4060,7 @@ mod crate_access_tests {
             .with_state(AppStateData {
                 db: Arc::new(db),
                 signing_key: Key::from(TEST_KEY),
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             });
         let request = Request::builder()
             .method(method)

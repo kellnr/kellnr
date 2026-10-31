@@ -12,8 +12,6 @@ readme = "../../README.md"
 
 [dependencies]
 # Internal dependencies from Kellnr
-kellnr-appstate.workspace = true
-kellnr-auth.workspace = true
 kellnr-common.workspace = true
 kellnr-cratesio-sync.workspace = true
 kellnr-db.workspace = true
@@ -21,7 +19,9 @@ kellnr-docgen.workspace = true
 kellnr-docs.workspace = true
 kellnr-embedded-resources.workspace = true
 kellnr-filter.workspace = true
+kellnr-http.workspace = true
 kellnr-index.workspace = true
+kellnr-oauth2.workspace = true
 kellnr-registry.workspace = true
 kellnr-settings.workspace = true
 kellnr-storage.workspace = true
@@ -52,6 +52,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 kellnr-db = { workspace = true, features = ["mock"] }
+kellnr-http = { workspace = true, features = ["test-support"] }
 hyper.workspace = true
 mockall.workspace = true
 serde_json.workspace = true

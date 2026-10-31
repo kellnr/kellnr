@@ -7,7 +7,7 @@ use axum::response::Response;
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Cookie;
 use cookie::{SameSite, time};
-use kellnr_appstate::AppStateData;
+use kellnr_http::state::AppStateData;
 use kellnr_common::account_name::UserName;
 use kellnr_common::plain_token::PlainToken;
 use kellnr_common::util::generate_rand_string;
@@ -195,7 +195,7 @@ mod session_tests {
     use axum::http::header;
     use axum::routing::get;
     use cookie::Key;
-    use kellnr_appstate::encode_cookies;
+    use kellnr_http::test_support::encode_cookies;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -221,10 +221,10 @@ mod session_tests {
             .route("/any", get(any_endpoint))
             .with_state(AppStateData {
                 db,
-                signing_key: Key::from(kellnr_appstate::TEST_KEY),
+                signing_key: Key::from(kellnr_http::test_support::TEST_KEY),
                 crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
                 settings: Arc::new(settings),
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             })
     }
 
@@ -437,7 +437,7 @@ mod auth_middleware_tests {
     use axum::middleware::from_fn_with_state;
     use axum::routing::get;
     use cookie::Key;
-    use kellnr_appstate::encode_cookies;
+    use kellnr_http::test_support::encode_cookies;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -451,7 +451,7 @@ mod auth_middleware_tests {
         let settings = Settings::default();
         let state = AppStateData {
             db,
-            signing_key: Key::from(kellnr_appstate::TEST_KEY),
+            signing_key: Key::from(kellnr_http::test_support::TEST_KEY),
             settings: Arc::new(Settings {
                 registry: kellnr_settings::Registry {
                     auth_required: true,
@@ -459,7 +459,7 @@ mod auth_middleware_tests {
                 },
                 ..settings
             }),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))
@@ -475,9 +475,9 @@ mod auth_middleware_tests {
         let settings = Settings::default();
         let state = AppStateData {
             db,
-            signing_key: Key::from(kellnr_appstate::TEST_KEY),
+            signing_key: Key::from(kellnr_http::test_support::TEST_KEY),
             settings: Arc::new(settings),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))
@@ -616,7 +616,7 @@ mod session_cookie_tests {
         let state = AppStateData {
             db: Arc::new(db),
             settings: Arc::new(settings),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
         let jar = PrivateCookieJar::from_headers(&HeaderMap::new(), Key::generate());
 
@@ -628,14 +628,14 @@ mod session_cookie_tests {
     }
 
     async fn session_cookie_secure(protocol: Protocol, cookie_secure: Option<bool>) -> bool {
-        let mut settings = Settings::clone(&kellnr_appstate::test_state().settings);
+        let mut settings = Settings::clone(&kellnr_http::test_support::test_state().settings);
         settings.origin.protocol = protocol;
         settings.origin.cookie_secure = cookie_secure;
         new_session_cookie(settings).await.secure().unwrap_or(false)
     }
 
     async fn session_cookie_max_age(session_age_seconds: u64) -> Option<Duration> {
-        let mut settings = Settings::clone(&kellnr_appstate::test_state().settings);
+        let mut settings = Settings::clone(&kellnr_http::test_support::test_state().settings);
         settings.registry.session_age_seconds = session_age_seconds;
         new_session_cookie(settings).await.max_age()
     }

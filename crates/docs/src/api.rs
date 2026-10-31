@@ -4,15 +4,15 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Redirect;
-use kellnr_appstate::{AppState, DbState, DocsStorageState, SettingsState};
-use kellnr_auth::crate_access::can_read_crate;
-use kellnr_auth::maybe_user::MaybeUser;
-use kellnr_auth::token::Token;
+use kellnr_http::state::{AppState, DbState, DocsStorageState, SettingsState};
+use kellnr_http::crate_access::can_read_crate;
+use kellnr_http::maybe_user::MaybeUser;
+use kellnr_http::token::Token;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
-use kellnr_error::api_error::ApiResult;
+use kellnr_http::error::ApiResult;
 use kellnr_registry::kellnr_api::{check_can_modify, check_ownership};
 use kellnr_storage::docs_storage::DocsName;
 use tracing::error;
@@ -204,7 +204,7 @@ mod tests {
     use axum::http::{Request, StatusCode, header};
     use axum::routing::{get, put};
     use http_body_util::BodyExt;
-    use kellnr_appstate::AppStateData;
+    use kellnr_http::state::AppStateData;
     use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_db::error::DbError;
@@ -340,7 +340,7 @@ mod tests {
             .route("/queue", get(docs_in_queue))
             .with_state(AppStateData {
                 db,
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             })
     }
 
@@ -362,7 +362,7 @@ mod tests {
             .with_state(AppStateData {
                 db,
                 docs_storage,
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             })
     }
 
@@ -650,7 +650,7 @@ mod tests {
             .with_state(AppStateData {
                 db,
                 docs_storage,
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             })
     }
 

@@ -7,7 +7,7 @@ use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use kellnr_appstate::AppStateData;
+use crate::state::AppStateData;
 use kellnr_common::account_name::UserName;
 use kellnr_common::plain_token::PlainToken;
 use kellnr_common::token_cache::CachedTokenData;
@@ -318,7 +318,7 @@ mod tests {
             db: db.clone(),
             token_cache: cache.clone(),
             settings: settings.clone(),
-            ..kellnr_appstate::test_state()
+            ..crate::test_support::test_state()
         }
     }
 

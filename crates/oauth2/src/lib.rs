@@ -1,7 +1,9 @@
 //! OAuth2/OpenID Connect authentication handler
 //!
-//! This module provides OAuth2/OIDC authentication support using the authorization
+//! This crate provides OAuth2/OIDC authentication support using the authorization
 //! code flow with PKCE.
+
+mod oidc_http;
 
 use std::future::Future;
 use std::sync::{Arc, Mutex};

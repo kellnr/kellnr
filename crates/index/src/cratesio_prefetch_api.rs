@@ -5,7 +5,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use hyper::StatusCode;
-use kellnr_appstate::{CratesIoPrefetchSenderState, DbState, SettingsState};
+use kellnr_http::state::{CratesIoPrefetchSenderState, DbState, SettingsState};
 use kellnr_common::base_url::BaseUrl;
 use kellnr_common::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
@@ -527,7 +527,7 @@ mod tests {
     use axum::http::{Request, header};
     use axum::routing::get;
     use http_body_util::BodyExt;
-    use kellnr_appstate::AppStateData;
+    use kellnr_http::state::AppStateData;
     use kellnr_db::mock::MockDb;
     use kellnr_settings::{Protocol, Settings};
     use reqwest::Url;
@@ -733,7 +733,7 @@ mod tests {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
             cratesio_prefetch_sender: sender,
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
 
         Router::new()

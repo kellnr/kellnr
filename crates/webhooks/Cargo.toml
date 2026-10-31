@@ -11,11 +11,9 @@ documentation.workspace = true
 
 [dependencies]
 # Internal dependencies
-kellnr-appstate.workspace = true
-kellnr-auth.workspace = true
 kellnr-common.workspace = true
 kellnr-db.workspace = true
-kellnr-error.workspace = true
+kellnr-http.workspace = true
 kellnr-settings.workspace = true
 
 # External dependencies
@@ -36,6 +34,7 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+kellnr-http = { workspace = true, features = ["test-support"] }
 kellnr-db = { workspace = true, features = ["test-support"] }
 hyper.workspace = true
 tower.workspace = true

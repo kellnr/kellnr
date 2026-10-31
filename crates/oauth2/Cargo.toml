@@ -1,5 +1,5 @@
 [package]
-name = "kellnr-auth"
+name = "kellnr-oauth2"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,34 +11,23 @@ documentation.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
-kellnr-appstate.workspace = true
 kellnr-common.workspace = true
-kellnr-db.workspace = true
 kellnr-settings.workspace = true
 
 # External dependencies from crates.io
-axum-extra.workspace = true
-axum.workspace = true
 base64.workspace = true
 openidconnect.workspace = true
-rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-utoipa.workspace = true
-tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
 
-
 [dev-dependencies]
-kellnr-db = { workspace = true, features = ["mock"] }
+axum.workspace = true
 chrono.workspace = true
-hyper.workspace = true
-mockall.workspace = true
-sea-orm.workspace = true
-tower.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

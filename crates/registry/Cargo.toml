@@ -11,13 +11,11 @@ documentation.workspace = true
 
 [dependencies]
 # Internal dependencies from Kellnr
-kellnr-appstate.workspace = true
-kellnr-auth.workspace = true
 kellnr-common.workspace = true
 kellnr-cratesio-sync.workspace = true
 kellnr-db.workspace = true
-kellnr-error.workspace = true
 kellnr-filter.workspace = true
+kellnr-http.workspace = true
 kellnr-settings.workspace = true
 kellnr-storage.workspace = true
 kellnr-webhooks.workspace = true
@@ -40,6 +38,7 @@ sha256.workspace = true
 
 [dev-dependencies]
 kellnr-db = { workspace = true, features = ["mock", "test-support"] }
+kellnr-http = { workspace = true, features = ["test-support"] }
 async-trait.workspace = true
 cookie.workspace = true
 kellnr-test-db.workspace = true

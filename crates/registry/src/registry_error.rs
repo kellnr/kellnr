@@ -1,6 +1,6 @@
 use hyper::StatusCode;
 use kellnr_common::publish_metadata::InvalidUrl;
-use kellnr_error::api_error::ApiError;
+use kellnr_http::error::ApiError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

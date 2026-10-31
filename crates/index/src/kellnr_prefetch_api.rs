@@ -3,9 +3,9 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
-use kellnr_appstate::{DbState, SettingsState};
-use kellnr_auth::crate_access::can_read_crate;
-use kellnr_auth::maybe_user::MaybeUser;
+use kellnr_http::state::{DbState, SettingsState};
+use kellnr_http::crate_access::can_read_crate;
+use kellnr_http::maybe_user::MaybeUser;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::{Prefetch, db_date_to_http_date, is_not_modified, quote_etag};
 use kellnr_db::DbProvider;
@@ -137,7 +137,7 @@ mod tests {
     use axum::http::{Request, header};
     use axum::routing::get;
     use http_body_util::BodyExt;
-    use kellnr_appstate::AppStateData;
+    use kellnr_http::state::AppStateData;
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
@@ -377,7 +377,7 @@ mod tests {
         let state = AppStateData {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
 
         Router::new()

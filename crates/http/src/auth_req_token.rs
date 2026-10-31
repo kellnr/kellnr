@@ -16,7 +16,7 @@ use crate::token::Token;
 /// Note: For endpoints that should accept both cargo tokens (CLI) and session cookies (Web UI),
 /// use `token_or_session_auth_when_required` instead.
 pub async fn cargo_auth_when_required(
-    State(state): State<kellnr_appstate::AppStateData>,
+    State(state): State<crate::state::AppStateData>,
     request: Request,
     next: Next,
 ) -> Response {
@@ -56,7 +56,7 @@ pub async fn cargo_auth_when_required(
 ///
 /// This is intended for endpoints that are used by both the cargo CLI and the web UI.
 pub async fn token_or_session_auth_when_required(
-    State(state): State<kellnr_appstate::AppStateData>,
+    State(state): State<crate::state::AppStateData>,
     request: Request,
     next: Next,
 ) -> Response {
@@ -117,7 +117,7 @@ mod test {
     use axum::http::{Request, StatusCode, header};
     use axum::routing::get;
     use axum::{Router, middleware};
-    use kellnr_appstate::AppStateData;
+    use crate::state::AppStateData;
     use kellnr_common::account_name::UserName;
     use kellnr_db::User;
     use kellnr_db::error::DbError;
@@ -220,7 +220,7 @@ mod test {
         let state = AppStateData {
             db: Arc::new(mock_db),
             settings: Arc::new(settings),
-            ..kellnr_appstate::test_state()
+            ..crate::test_support::test_state()
         };
 
         Router::new()
@@ -243,7 +243,7 @@ mod auth_middleware_tests {
     use axum::middleware::from_fn_with_state;
     use axum::routing::get;
     use hyper::{Request, header};
-    use kellnr_appstate::AppStateData;
+    use crate::state::AppStateData;
     use kellnr_db::DbProvider;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -264,7 +264,7 @@ mod auth_middleware_tests {
                 },
                 ..settings
             }),
-            ..kellnr_appstate::test_state()
+            ..crate::test_support::test_state()
         };
 
         Router::new()
@@ -279,7 +279,7 @@ mod auth_middleware_tests {
         let state = AppStateData {
             db,
             settings: Arc::new(settings),
-            ..kellnr_appstate::test_state()
+            ..crate::test_support::test_state()
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))

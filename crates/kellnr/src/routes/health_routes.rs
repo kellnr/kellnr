@@ -1,4 +1,4 @@
-use kellnr_appstate::AppStateData;
+use kellnr_http::state::AppStateData;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 

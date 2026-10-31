@@ -12,7 +12,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::put;
 use axum::{Json, Router};
 use bytes::Bytes;
-use kellnr_appstate::{AppStateData, DbState, SettingsState, ToolchainStorageState};
+use kellnr_http::state::{AppStateData, DbState, SettingsState, ToolchainStorageState};
 use kellnr_db::error::DbError;
 use kellnr_db::{ChannelInfo, ToolchainTargetInfo, ToolchainTargetStatus, ToolchainWithTargets};
 use kellnr_storage::storage_error::StorageError;
@@ -1136,7 +1136,8 @@ mod tests {
     use axum::routing::{delete, get, put};
     use axum_extra::extract::cookie::Key;
     use bytes::Bytes;
-    use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
@@ -1178,7 +1179,7 @@ mod tests {
             crate_storage: Arc::new(KellnrCrateStorage::new(&settings, kellnr_storage)),
             settings: Arc::new(settings),
             toolchain_storage,
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         }
     }
 

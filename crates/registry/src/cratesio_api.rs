@@ -5,14 +5,14 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
-use kellnr_appstate::{AppState, ProxyClientState, SettingsState};
+use kellnr_http::state::{AppState, ProxyClientState, SettingsState};
 use kellnr_common::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_cratesio_sync::{CratesioSync, SyncSource};
 use kellnr_db::DbProvider;
 use kellnr_db::provider::CratesioVersionMeta;
-use kellnr_error::api_error::ApiResult;
+use kellnr_http::error::ApiResult;
 use kellnr_filter::{CrateInfo, KnownLicense};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::storage_error::StorageError;
@@ -331,7 +331,7 @@ mod tests {
     use axum::routing::get;
     use axum::{Router, middleware};
     use http_body_util::BodyExt;
-    use kellnr_appstate::AppStateData;
+    use kellnr_http::state::AppStateData;
     use kellnr_common::util::generate_rand_string;
     use kellnr_db::{ConString, Database, SqliteConString};
     use kellnr_filter::DownloadFilters;
@@ -350,7 +350,7 @@ mod tests {
         let state = AppStateData {
             settings: settings.into(),
             proxy_client: reqwest::Client::new(),
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
         let app = Router::new().route("/", get(search)).with_state(state);
 
@@ -601,7 +601,7 @@ mod tests {
             settings: settings.into(),
             cratesio_storage: storage,
             db,
-            ..kellnr_appstate::test_state()
+            ..kellnr_http::test_support::test_state()
         };
 
         let routes = Router::new()

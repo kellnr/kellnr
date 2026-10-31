@@ -1,9 +1,9 @@
 use axum::body::{Body, Bytes};
 use axum::extract::FromRequest;
 use axum::http::Request;
-use kellnr_appstate::AppStateData;
 use kellnr_common::publish_metadata::PublishMetadata;
-use kellnr_error::api_error::ApiError;
+use kellnr_http::error::ApiError;
+use kellnr_http::state::AppStateData;
 use kellnr_settings::constants::MIN_BODY_CRATE_AND_DOC_BYTES;
 use serde::Deserialize;
 use utoipa::ToSchema;

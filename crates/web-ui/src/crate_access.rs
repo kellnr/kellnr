@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, State};
-use kellnr_appstate::DbState;
-use kellnr_auth::maybe_user::MaybeUser;
+use kellnr_http::state::DbState;
+use kellnr_http::maybe_user::MaybeUser;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_db::DbProvider;
@@ -95,7 +95,8 @@ mod tests {
     use axum::http::{Request, StatusCode, header};
     use axum::routing::get;
     use axum_extra::extract::cookie::Key;
-    use kellnr_appstate::{AppStateData, TEST_KEY, encode_cookies};
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_common::account_name::UserName;
     use kellnr_db::SessionInfo;
     use kellnr_db::mock::MockDb;
@@ -139,7 +140,7 @@ mod tests {
             .with_state(AppStateData {
                 db: Arc::new(db),
                 signing_key: Key::from(TEST_KEY),
-                ..kellnr_appstate::test_state()
+                ..kellnr_http::test_support::test_state()
             });
         let request = request
             .header(
