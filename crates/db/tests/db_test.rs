@@ -5319,7 +5319,10 @@ async fn fail_processing_toolchain_targets_marks_only_processing_targets(
         .add_toolchain_target(tc, "aarch64-unknown-linux-gnu", "b.tar.xz", "b", 1)
         .await
         .unwrap();
-    test_db.set_target_status(ready, "ready").await.unwrap();
+    test_db
+        .set_target_status(ready, kellnr_db::ToolchainTargetStatus::Ready)
+        .await
+        .unwrap();
 
     let marked = test_db.fail_processing_toolchain_targets().await.unwrap();
 
@@ -5330,9 +5333,9 @@ async fn fail_processing_toolchain_targets_marks_only_processing_targets(
         .unwrap()
         .unwrap()
         .targets;
-    let status = |id| &targets.iter().find(|t| t.id == id).unwrap().status;
-    assert_eq!("failed", status(processing));
-    assert_eq!("ready", status(ready));
+    let status = |id| targets.iter().find(|t| t.id == id).unwrap().status;
+    assert_eq!(kellnr_db::ToolchainTargetStatus::Failed, status(processing));
+    assert_eq!(kellnr_db::ToolchainTargetStatus::Ready, status(ready));
 }
 
 #[db_test]

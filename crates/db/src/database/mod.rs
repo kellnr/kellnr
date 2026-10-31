@@ -52,7 +52,8 @@ use crate::provider::{
 };
 use crate::tables::init_database;
 use crate::{
-    AuthToken, ConString, CrateMeta, CrateSummary, DbProvider, DocQueueEntry, Group, User,
+    AuthToken, ConString, CrateMeta, CrateSummary, DbProvider, DocQueueEntry, Group,
+    ToolchainTargetStatus, User,
 };
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
@@ -200,7 +201,7 @@ impl Database {
                 storage_path: t.storage_path,
                 hash: t.hash,
                 size: t.size,
-                status: t.status,
+                status: ToolchainTargetStatus::from_db(&t.status),
                 components: components
                     .into_iter()
                     .map(ToolchainComponentInfo::from)
@@ -2920,16 +2921,23 @@ impl DbProvider for Database {
             storage_path: Set(storage_path.to_string()),
             hash: Set(hash.to_string()),
             size: Set(size),
-            status: Set("processing".to_string()),
+            status: Set(ToolchainTargetStatus::Processing.as_str().to_string()),
         };
 
         let result = model.insert(&self.db_con).await?;
         Ok(result.id)
     }
 
-    async fn set_target_status(&self, target_id: i64, status: &str) -> DbResult<()> {
+    async fn set_target_status(
+        &self,
+        target_id: i64,
+        status: ToolchainTargetStatus,
+    ) -> DbResult<()> {
         toolchain_target::Entity::update_many()
-            .col_expr(toolchain_target::Column::Status, Expr::value(status))
+            .col_expr(
+                toolchain_target::Column::Status,
+                Expr::value(status.as_str()),
+            )
             .filter(toolchain_target::Column::Id.eq(target_id))
             .exec(&self.db_con)
             .await?;
@@ -2938,8 +2946,11 @@ impl DbProvider for Database {
 
     async fn fail_processing_toolchain_targets(&self) -> DbResult<u64> {
         let result = toolchain_target::Entity::update_many()
-            .col_expr(toolchain_target::Column::Status, Expr::value("failed"))
-            .filter(toolchain_target::Column::Status.eq("processing"))
+            .col_expr(
+                toolchain_target::Column::Status,
+                Expr::value(ToolchainTargetStatus::Failed.as_str()),
+            )
+            .filter(toolchain_target::Column::Status.eq(ToolchainTargetStatus::Processing.as_str()))
             .exec(&self.db_con)
             .await?;
         Ok(result.rows_affected)

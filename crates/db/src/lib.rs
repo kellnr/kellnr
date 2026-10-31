@@ -11,6 +11,7 @@ mod krate;
 pub mod password;
 pub mod provider;
 mod tables;
+mod toolchain_target_status;
 mod user;
 
 // Re-exports
@@ -25,6 +26,7 @@ pub use provider::{
     ChannelInfo, CrateSort, CrateTagFilter, CrateVisibility, DbProvider, OAuth2StateData,
     SessionInfo, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets, mock,
 };
+pub use toolchain_target_status::ToolchainTargetStatus;
 pub use user::User;
 
 pub use crate::database::{Database, test_utils};

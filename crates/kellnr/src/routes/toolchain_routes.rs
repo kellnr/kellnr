@@ -14,7 +14,7 @@ use axum::{Json, Router};
 use bytes::Bytes;
 use kellnr_appstate::{AppStateData, DbState, SettingsState, ToolchainStorageState};
 use kellnr_db::error::DbError;
-use kellnr_db::{ChannelInfo, ToolchainTargetInfo, ToolchainWithTargets};
+use kellnr_db::{ChannelInfo, ToolchainTargetInfo, ToolchainTargetStatus, ToolchainWithTargets};
 use kellnr_storage::storage_error::StorageError;
 use kellnr_storage::storage_key::StorageKey;
 use kellnr_storage::toolchain_storage::{ToolchainArchiveId, ToolchainStorage};
@@ -227,8 +227,9 @@ async fn upload_toolchain(
                             tracing::warn!(
                                 "Failed to read archive for component extraction after {attempt} attempts: {e}"
                             );
-                            if let Err(status_err) =
-                                bg_db.set_target_status(target_id, "failed").await
+                            if let Err(status_err) = bg_db
+                                .set_target_status(target_id, ToolchainTargetStatus::Failed)
+                                .await
                             {
                                 tracing::warn!(
                                     "Failed to set target status to failed after archive read error: {status_err}"
@@ -263,7 +264,10 @@ async fn upload_toolchain(
         .await
         {
             Ok(()) => {
-                if let Err(e) = bg_db.set_target_status(target_id, "ready").await {
+                if let Err(e) = bg_db
+                    .set_target_status(target_id, ToolchainTargetStatus::Ready)
+                    .await
+                {
                     tracing::warn!("Failed to set target status to ready: {e}");
                 }
                 tracing::info!(
@@ -274,7 +278,10 @@ async fn upload_toolchain(
                 );
             }
             Err(e) => {
-                if let Err(status_err) = bg_db.set_target_status(target_id, "failed").await {
+                if let Err(status_err) = bg_db
+                    .set_target_status(target_id, ToolchainTargetStatus::Failed)
+                    .await
+                {
                     tracing::warn!("Failed to set target status to failed: {status_err}");
                 }
                 tracing::warn!("Failed to extract components from archive: {e}");
@@ -301,7 +308,10 @@ fn spawn_target_processing(
     tokio::spawn(async move {
         if let Err(e) = tokio::spawn(processing).await {
             tracing::error!("Processing of toolchain target {target_id} stopped: {e}");
-            if let Err(e) = db.set_target_status(target_id, "failed").await {
+            if let Err(e) = db
+                .set_target_status(target_id, ToolchainTargetStatus::Failed)
+                .await
+            {
                 tracing::warn!("Failed to set target status to failed: {e}");
             }
         }
@@ -649,9 +659,15 @@ async fn get_channel_manifest(
 
     // Check if any targets are ready before generating the manifest.
     // If none are ready, the manifest would be invalid (missing required `target` field).
-    let has_ready_targets = toolchain.targets.iter().any(|t| t.status == "ready");
+    let has_ready_targets = toolchain
+        .targets
+        .iter()
+        .any(|t| t.status == ToolchainTargetStatus::Ready);
     if !has_ready_targets {
-        let has_processing = toolchain.targets.iter().any(|t| t.status == "processing");
+        let has_processing = toolchain
+            .targets
+            .iter()
+            .any(|t| t.status == ToolchainTargetStatus::Processing);
         if has_processing {
             return Err(StatusCode::SERVICE_UNAVAILABLE);
         }
@@ -1035,7 +1051,7 @@ version = "{}"
     let ready_targets: Vec<_> = toolchain
         .targets
         .iter()
-        .filter(|t| t.status == "ready")
+        .filter(|t| t.status == ToolchainTargetStatus::Ready)
         .collect();
 
     for target_info in &ready_targets {
@@ -1436,7 +1452,7 @@ mod tests {
                     hash: "abc123".to_string(),
                     size: 1024,
                     components: vec![],
-                    status: "ready".to_string(),
+                    status: ToolchainTargetStatus::Ready,
                 }],
             }])
         });
@@ -1656,7 +1672,7 @@ mod tests {
                             hash: "abc123".to_string(),
                             size: 1024,
                             components: vec![],
-                            status: "ready".to_string(),
+                            status: ToolchainTargetStatus::Ready,
                         },
                         ToolchainTargetInfo {
                             id: 2,
@@ -1666,7 +1682,7 @@ mod tests {
                             hash: "def456".to_string(),
                             size: 2048,
                             components: vec![],
-                            status: "ready".to_string(),
+                            status: ToolchainTargetStatus::Ready,
                         },
                     ],
                 }))
@@ -1733,7 +1749,7 @@ mod tests {
                         hash: "abc123".to_string(),
                         size: 1024,
                         components: vec![],
-                        status: "ready".to_string(),
+                        status: ToolchainTargetStatus::Ready,
                     }],
                 }))
             });
@@ -1807,7 +1823,7 @@ mod tests {
                             hash: "abc123".to_string(),
                             size: 1024,
                             components: vec![],
-                            status: "ready".to_string(),
+                            status: ToolchainTargetStatus::Ready,
                         },
                         ToolchainTargetInfo {
                             id: 2,
@@ -1817,7 +1833,7 @@ mod tests {
                             hash: "def456".to_string(),
                             size: 2048,
                             components: vec![],
-                            status: "ready".to_string(),
+                            status: ToolchainTargetStatus::Ready,
                         },
                     ],
                 }))
@@ -1997,7 +2013,7 @@ mod tests {
                         hash: "abc123".to_string(),
                         size: 1024,
                         components: vec![],
-                        status: "ready".to_string(),
+                        status: ToolchainTargetStatus::Ready,
                     }],
                 }))
             });
@@ -2189,7 +2205,7 @@ mod tests {
                         hash: "abc123def456".to_string(),
                         size: 1024,
                         components: vec![],
-                        status: "ready".to_string(),
+                        status: ToolchainTargetStatus::Ready,
                     }],
                 }))
             });
@@ -2254,7 +2270,7 @@ mod tests {
                         hash: "abc123def456".to_string(),
                         size: 1024,
                         components: vec![],
-                        status: "ready".to_string(),
+                        status: ToolchainTargetStatus::Ready,
                     }],
                 }))
             });
@@ -2320,7 +2336,7 @@ mod tests {
                                 size: 256,
                             },
                         ],
-                        status: "ready".to_string(),
+                        status: ToolchainTargetStatus::Ready,
                     }],
                 }))
             });
@@ -2611,7 +2627,7 @@ mod tests {
                         hash: "abc123def456".to_string(),
                         size: 1024,
                         components: vec![],
-                        status: "ready".to_string(),
+                        status: ToolchainTargetStatus::Ready,
                     }],
                 }))
             });
@@ -2666,7 +2682,7 @@ mod tests {
                     hash: "abc123".to_string(),
                     size: 1024,
                     components: vec![],
-                    status: "ready".to_string(),
+                    status: ToolchainTargetStatus::Ready,
                 })
                 .collect(),
         }
@@ -2905,7 +2921,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_set_target_status()
-            .with(eq(7), eq("failed"))
+            .with(eq(7), eq(ToolchainTargetStatus::Failed))
             .times(1)
             .returning(|_, _| Ok(()));
 
