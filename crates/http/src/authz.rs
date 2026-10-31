@@ -7,12 +7,30 @@ use kellnr_db::provider::DbResult;
 use kellnr_db::{CrateVisibility, DbProvider};
 
 use crate::error::ApiError;
-use crate::maybe_user::MaybeUser;
+use crate::identity::Identity;
+
+/// Fail unless `user` is an admin.
+pub fn require_admin(user: &Identity) -> Result<(), ApiError> {
+    if user.is_admin {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            "Admin access required",
+            StatusCode::FORBIDDEN,
+        ))
+    }
+}
+
+/// Like [`require_admin`], but with the 401 that the cargo token API for
+/// webhooks and empty crates has always answered non-admins with.
+pub fn require_admin_for_token_api(user: &Identity) -> Result<(), ApiError> {
+    require_admin(user).map_err(|_| ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED))
+}
 
 /// Fail unless `user` owns the crate or is an admin.
-pub async fn check_ownership(
+pub async fn require_owner(
     crate_name: &CanonicalName,
-    user: &MaybeUser,
+    user: &Identity,
     db: &Arc<dyn DbProvider>,
 ) -> Result<(), ApiError> {
     if user.is_admin || db.is_owner(crate_name, &user.name).await? {
@@ -25,16 +43,23 @@ pub async fn check_ownership(
     }
 }
 
-/// Fail if `user` is read-only. Admins can always modify.
-pub fn check_can_modify(user: &MaybeUser) -> Result<(), ApiError> {
+/// Fail if `user` is read-only. Admins can always modify, as they can change
+/// their read-only state anyway.
+pub fn require_writable(user: &Identity) -> Result<(), ApiError> {
     if !user.is_admin && user.is_read_only {
         Err(ApiError::new(
             "Read-only users cannot modify the registry",
-            StatusCode::BAD_REQUEST,
+            StatusCode::FORBIDDEN,
         ))
     } else {
         Ok(())
     }
+}
+
+/// Like [`require_writable`], but with the 400 that publishing, yanking and
+/// uploading docs have always answered read-only users with.
+pub fn require_writable_for_upload(user: &Identity) -> Result<(), ApiError> {
+    require_writable(user).map_err(|e| e.with_status(StatusCode::BAD_REQUEST))
 }
 
 /// Whether `user` may read the content of a download-restricted crate,
@@ -55,7 +80,7 @@ pub async fn has_restricted_crate_access(
 /// restriction. `None` is an anonymous caller, who only sees unrestricted crates.
 pub async fn can_read_crate(
     crate_name: &CanonicalName,
-    user: Option<&MaybeUser>,
+    user: Option<&Identity>,
     db: &Arc<dyn DbProvider>,
 ) -> DbResult<bool> {
     if !db.is_download_restricted(crate_name).await? {
@@ -68,7 +93,7 @@ pub async fn can_read_crate(
 }
 
 /// Which download-restricted crates `user` may see in crate listings.
-pub fn crate_visibility(user: Option<&MaybeUser>) -> CrateVisibility {
+pub fn crate_visibility(user: Option<&Identity>) -> CrateVisibility {
     match user {
         None => CrateVisibility::Unrestricted,
         Some(user) if user.is_admin => CrateVisibility::All,
@@ -82,16 +107,18 @@ mod tests {
     use mockall::predicate::eq;
 
     use super::*;
+    use crate::identity::Source;
 
     fn name() -> CanonicalName {
         CanonicalName::try_from("restricted").unwrap()
     }
 
-    fn user(is_admin: bool) -> MaybeUser {
-        MaybeUser {
+    fn user(is_admin: bool) -> Identity {
+        Identity {
             name: UserName::new("user").unwrap(),
             is_admin,
             is_read_only: false,
+            source: Source::Session,
         }
     }
 
@@ -160,6 +187,52 @@ mod tests {
             can_read_crate(&name(), Some(&user(false)), &db)
                 .await
                 .unwrap()
+        );
+    }
+}
+
+#[cfg(test)]
+mod require_tests {
+    use super::*;
+    use crate::identity::Source;
+
+    fn user(is_admin: bool, is_read_only: bool) -> Identity {
+        Identity {
+            name: UserName::new("user").unwrap(),
+            is_admin,
+            is_read_only,
+            source: Source::Token(None),
+        }
+    }
+
+    fn status(result: Result<(), ApiError>) -> Option<StatusCode> {
+        result.err().map(|e| e.status())
+    }
+
+    #[test]
+    fn only_admins_pass_require_admin() {
+        assert_eq!(status(require_admin(&user(true, false))), None);
+        assert_eq!(
+            status(require_admin(&user(false, false))),
+            Some(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    fn read_only_users_are_forbidden_to_write() {
+        assert_eq!(
+            status(require_writable(&user(false, true))),
+            Some(StatusCode::FORBIDDEN)
+        );
+        assert_eq!(status(require_writable(&user(false, false))), None);
+        assert_eq!(status(require_writable(&user(true, true))), None);
+    }
+
+    #[test]
+    fn read_only_users_get_bad_request_for_uploads() {
+        assert_eq!(
+            status(require_writable_for_upload(&user(false, true))),
+            Some(StatusCode::BAD_REQUEST)
         );
     }
 }

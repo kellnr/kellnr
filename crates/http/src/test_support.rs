@@ -3,8 +3,7 @@ use std::sync::Arc;
 
 use axum_extra::extract::cookie::Key;
 use cookie::{Cookie, CookieJar};
-use crate::login_throttle::LoginThrottle;
-use crate::token_cache::TokenCacheManager;
+use kellnr_common::account_name::UserName;
 use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
@@ -14,7 +13,10 @@ use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 
+use crate::identity::{Identity, Source};
+use crate::login_throttle::LoginThrottle;
 use crate::state::{AppStateData, default_settings_prov};
+use crate::token_cache::TokenCacheManager;
 
 pub fn test_state() -> AppStateData {
     let db: Arc<dyn DbProvider> = Arc::new(kellnr_db::mock::MockDb::new());
@@ -81,4 +83,14 @@ pub fn encode_cookies<const N: usize, K: Into<Cow<'static, str>>, V: Into<Cow<'s
         .map(|c| c.encoded().to_string())
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+/// A user logged in with a session cookie.
+pub fn session_identity(name: &str, is_admin: bool) -> Identity {
+    Identity {
+        name: UserName::new(name).unwrap(),
+        is_admin,
+        is_read_only: false,
+        source: Source::Session,
+    }
 }

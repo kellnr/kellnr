@@ -2,15 +2,11 @@ use std::iter;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::FromRequestParts;
-use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use crate::state::AppStateData;
 use kellnr_common::account_name::UserName;
 use kellnr_common::plain_token::PlainToken;
-use crate::token_cache::CachedTokenData;
 use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
 use kellnr_db::password::hash_token;
@@ -22,21 +18,17 @@ use tracing::warn;
 use utoipa::ToSchema;
 
 use crate::password::{PasswordAuthError, authenticate_password};
+use crate::state::AppStateData;
+use crate::token_cache::CachedTokenData;
 
+/// The user of the cargo token or basic auth credentials of a request.
 #[derive(Debug)]
-pub struct Token {
+pub(crate) struct Token {
     /// The auth token, `None` for basic auth with a password
     pub value: Option<PlainToken>,
     pub user: UserName,
     pub is_admin: bool,
     pub is_read_only: bool,
-}
-
-// See https://github.com/tokio-rs/axum/discussions/2281
-#[derive(Debug)]
-pub enum OptionToken {
-    None,
-    Some(Token),
 }
 
 pub fn generate_token() -> PlainToken {
@@ -50,16 +42,13 @@ pub fn generate_token() -> PlainToken {
 }
 
 impl Token {
-    pub async fn from_header(
+    /// The user of the `Authorization` header. Without the header, the
+    /// result is 401.
+    pub(crate) async fn from_header(
         headers: &HeaderMap,
         state: &AppStateData,
-    ) -> Result<Self, StatusCode> {
-        Self::extract_token(headers, state).await
-    }
-
-    async fn extract_token(headers: &HeaderMap, state: &AppStateData) -> Result<Token, StatusCode> {
+    ) -> Result<Token, StatusCode> {
         let (db, cache) = (&state.db, &state.token_cache);
-        // OptionToken code expects UNAUTHORIZED when no token is found
         let mut token = headers
             .get("Authorization")
             .ok_or(StatusCode::UNAUTHORIZED)?
@@ -230,32 +219,6 @@ async fn get_user_with_retry(
     }
 }
 
-impl FromRequestParts<AppStateData> for Token {
-    type Rejection = StatusCode;
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppStateData,
-    ) -> Result<Self, Self::Rejection> {
-        Self::extract_token(&parts.headers, state).await
-    }
-}
-
-impl FromRequestParts<AppStateData> for OptionToken {
-    type Rejection = StatusCode;
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppStateData,
-    ) -> Result<Self, Self::Rejection> {
-        match Token::extract_token(&parts.headers, state).await {
-            Ok(token) => Ok(OptionToken::Some(token)),
-            Err(StatusCode::UNAUTHORIZED) => Ok(OptionToken::None),
-            Err(status_code) => Err(status_code),
-        }
-    }
-}
-
 #[derive(Deserialize, ToSchema)]
 pub struct NewTokenReqData {
     pub name: String,
@@ -273,8 +236,6 @@ fn strip_scheme<'a>(value: &'a str, scheme: &str) -> Option<&'a str> {
 mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
-    use crate::login_throttle::LoginThrottle;
-    use crate::token_cache::TokenCacheManager;
     use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -282,6 +243,8 @@ mod tests {
     use mockall::predicate::*;
 
     use super::*;
+    use crate::login_throttle::LoginThrottle;
+    use crate::token_cache::TokenCacheManager;
 
     fn test_user() -> User {
         User {

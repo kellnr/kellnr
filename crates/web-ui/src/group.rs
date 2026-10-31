@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::error::RouteError;
-use crate::session::AdminUser;
+use kellnr_http::identity::AdminUser;
 
 /// List all groups (admin only)
 #[utoipa::path(
@@ -195,7 +195,7 @@ mod tests {
     async fn add_group_with_invalid_name_is_bad_request() {
         for name in ["", " ", "dev\tteam", &"a".repeat(65)] {
             let result = add(
-                AdminUser(UserName::new("admin").unwrap()),
+                AdminUser(kellnr_http::test_support::session_identity("admin", true)),
                 State(Arc::new(MockDb::new())),
                 Json(NewGroup {
                     name: name.to_string(),

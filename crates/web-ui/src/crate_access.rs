@@ -1,35 +1,18 @@
-use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, State};
 use kellnr_http::state::DbState;
-use kellnr_http::maybe_user::MaybeUser;
-use kellnr_common::canonical_name::CanonicalName;
+use kellnr_http::authz;
+use kellnr_http::identity::{AdminUser, AnyUser};
 use kellnr_common::original_name::OriginalName;
-use kellnr_db::DbProvider;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::error::RouteError;
-use crate::session::AdminUser;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct AccessData {
     pub download_restricted: bool,
-}
-
-/// Admins and crate owners, also read-only ones, may read the access settings
-/// of a crate.
-async fn authorize_read(
-    user: &MaybeUser,
-    crate_name: &CanonicalName,
-    db: &Arc<dyn DbProvider>,
-) -> Result<(), RouteError> {
-    if user.is_admin || db.is_owner(crate_name, &user.name).await? {
-        Ok(())
-    } else {
-        Err(RouteError::InsufficientPrivileges)
-    }
 }
 
 /// Get a crate's access settings (admin or crate owner)
@@ -47,12 +30,16 @@ async fn authorize_read(
     security(("session_cookie" = []))
 )]
 pub async fn get_access_data(
-    user: MaybeUser,
+    user: AnyUser,
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> Result<Json<AccessData>, RouteError> {
     let crate_name = crate_name.to_canonical();
-    authorize_read(&user, &crate_name, &db).await?;
+    // Admins and crate owners, also read-only ones, may read the access
+    // settings of a crate.
+    authz::require_owner(&crate_name, &user, &db)
+        .await
+        .map_err(|e| RouteError::Status(e.status()))?;
     Ok(Json(AccessData {
         download_restricted: db.is_download_restricted(&crate_name).await?,
     }))
@@ -103,6 +90,10 @@ mod tests {
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use mockall::predicate::eq;
     use tower::ServiceExt;
+
+    use std::sync::Arc;
+
+    use kellnr_common::canonical_name::CanonicalName;
 
     use super::*;
 

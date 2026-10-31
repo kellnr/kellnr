@@ -7,11 +7,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use chrono::Utc;
-use kellnr_http::state::{AppState, DbState};
-use kellnr_http::authz::{
-    can_read_crate, check_can_modify, check_ownership, crate_visibility, has_restricted_crate_access,
-};
-use kellnr_http::{maybe_user, token};
 use kellnr_common::account_name::{GroupName, UserName};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
@@ -22,8 +17,14 @@ use kellnr_common::webhook::WebhookEvent;
 use kellnr_db::DbProvider;
 use kellnr_db::error::DbError;
 use kellnr_db::provider::DbResult;
-use kellnr_http::error::{ApiError, ApiResult};
 use kellnr_filter::CrateInfo;
+use kellnr_http::authz::{
+    can_read_crate, crate_visibility, has_restricted_crate_access, require_admin_for_token_api,
+    require_owner, require_writable, require_writable_for_upload,
+};
+use kellnr_http::error::{ApiError, ApiResult};
+use kellnr_http::identity::{AnyUser, Identity, Source, TokenUser};
+use kellnr_http::state::{AppState, DbState};
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::storage_error::StorageError;
 use tracing::{error, warn};
@@ -68,7 +69,7 @@ async fn find_same_version(
 /// that its existence is not revealed.
 async fn check_crate_visible(
     crate_name: &CanonicalName,
-    user: Option<&maybe_user::MaybeUser>,
+    user: Option<&Identity>,
     db: &Arc<dyn DbProvider>,
 ) -> ApiResult<()> {
     if db.get_crate_id(crate_name).await?.is_some() && can_read_crate(crate_name, user, db).await? {
@@ -83,18 +84,18 @@ async fn check_crate_visible(
 /// its existence is not revealed.
 pub async fn check_download_auth(
     crate_name: &CanonicalName,
-    token: &token::OptionToken,
+    user: Option<&Identity>,
     db: &Arc<dyn DbProvider>,
 ) -> ApiResult<()> {
     if !db.is_download_restricted(crate_name).await? {
         return Ok(());
     }
 
-    let has_access = match token {
-        token::OptionToken::Some(token) => {
-            has_restricted_crate_access(crate_name, &token.user, token.is_admin, db).await?
+    let has_access = match user {
+        Some(user) => {
+            has_restricted_crate_access(crate_name, &user.name, user.is_admin, db).await?
         }
-        token::OptionToken::None => false,
+        None => false,
     };
 
     if has_access {
@@ -125,7 +126,7 @@ pub async fn check_download_auth(
     security(("cargo_token" = []))
 )]
 pub async fn remove_owner(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     state: AppState,
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<crate_user::CrateUserRequest>,
@@ -133,13 +134,13 @@ pub async fn remove_owner(
     // Check if user is read-only and can't remove an owner.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&user)?;
+    require_writable(&user)?;
 
     let settings = &state.settings;
     let db = &state.db;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, db).await?;
+    require_owner(&crate_name, &user, db).await?;
 
     db.delete_owners(
         &crate_name,
@@ -173,17 +174,17 @@ pub async fn remove_owner(
     security(("cargo_token" = []))
 )]
 pub async fn remove_owner_single(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     state: AppState,
     Path((crate_name, removed_user)): Path<(OriginalName, UserName)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
-    check_can_modify(&user)?;
+    require_writable(&user)?;
 
     let settings = &state.settings;
     let db = &state.db;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, db).await?;
+    require_owner(&crate_name, &user, db).await?;
 
     db.delete_owners(
         &crate_name,
@@ -215,17 +216,17 @@ pub async fn remove_owner_single(
     security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn remove_crate_user(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, UserName)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     // Check if user is read-only and can't remove a crate user.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&user)?;
+    require_writable(&user)?;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     db.delete_crate_user(&crate_name, &name).await?;
     Ok(Json(crate_user::CrateUserResponse::from(
@@ -251,17 +252,17 @@ pub async fn remove_crate_user(
     security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn remove_crate_group(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, GroupName)>,
 ) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
     // Check if user is read-only and can't remove a crate group.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&user)?;
+    require_writable(&user)?;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     db.delete_crate_group(&crate_name, &name).await?;
     Ok(Json(crate_group::CrateGroupResponse::from(
@@ -287,7 +288,7 @@ pub async fn remove_crate_group(
     security(("cargo_token" = []))
 )]
 pub async fn add_owner(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     State(db): DbState,
     Path(crate_name): Path<OriginalName>,
     Json(input): Json<crate_user::CrateUserRequest>,
@@ -295,10 +296,10 @@ pub async fn add_owner(
     // Check if user is read-only and can't add owners.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&user)?;
+    require_writable(&user)?;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     for user in &input.users {
         db.add_owner(&crate_name, user).await?;
@@ -327,14 +328,14 @@ pub async fn add_owner(
     security(("cargo_token" = []))
 )]
 pub async fn add_owner_single(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     State(db): DbState,
     Path((crate_name, added_user)): Path<(OriginalName, UserName)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
-    check_can_modify(&user)?;
+    require_writable(&user)?;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     db.add_owner(&crate_name, &added_user).await?;
 
@@ -362,10 +363,10 @@ pub async fn add_owner_single(
 pub async fn list_owners(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
-    user: Result<maybe_user::MaybeUser, StatusCode>,
+    user: Option<AnyUser>,
 ) -> ApiResult<Json<crate_user::CrateUserList>> {
     let crate_name = crate_name.to_canonical();
-    check_crate_visible(&crate_name, user.ok().as_ref(), &db).await?;
+    check_crate_visible(&crate_name, user.as_deref(), &db).await?;
 
     let owners: Vec<crate_user::CrateUser> = db
         .get_crate_owners(&crate_name)
@@ -399,17 +400,17 @@ pub async fn list_owners(
     security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn add_crate_user(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, UserName)>,
 ) -> ApiResult<Json<crate_user::CrateUserResponse>> {
     // Check if user is read-only and can't add a crate user.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&user)?;
+    require_writable(&user)?;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     if !db.is_crate_user(&crate_name, &name).await? {
         db.add_crate_user(&crate_name, &name).await?;
@@ -437,12 +438,12 @@ pub async fn add_crate_user(
     security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn list_crate_users(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> ApiResult<Json<crate_user::CrateUserList>> {
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     let users: Vec<crate_user::CrateUser> = db
         .get_crate_users(&crate_name)
@@ -476,17 +477,17 @@ pub async fn list_crate_users(
     security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn add_crate_group(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     State(db): DbState,
     Path((crate_name, name)): Path<(OriginalName, GroupName)>,
 ) -> ApiResult<Json<crate_group::CrateGroupResponse>> {
     // Check if user is read-only and can't add a crate group.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&user)?;
+    require_writable(&user)?;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     if !db.is_crate_group(&crate_name, &name).await? {
         db.add_crate_group(&crate_name, &name).await?;
@@ -514,12 +515,12 @@ pub async fn add_crate_group(
     security(("cargo_token" = []), ("session_cookie" = []))
 )]
 pub async fn list_crate_groups(
-    user: maybe_user::MaybeUser,
+    user: AnyUser,
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
 ) -> ApiResult<Json<crate_group::CrateGroupList>> {
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     let groups: Vec<crate_group::CrateGroup> = db
         .get_crate_groups(&crate_name)
@@ -553,10 +554,10 @@ pub async fn list_crate_groups(
 pub async fn list_crate_versions(
     Path(crate_name): Path<OriginalName>,
     State(db): DbState,
-    user: Result<maybe_user::MaybeUser, StatusCode>,
+    user: Option<AnyUser>,
 ) -> ApiResult<Json<crate_version::CrateVersionList>> {
     let crate_name = crate_name.to_canonical();
-    check_crate_visible(&crate_name, user.ok().as_ref(), &db).await?;
+    check_crate_visible(&crate_name, user.as_deref(), &db).await?;
 
     let versions: Vec<crate_version::CrateVersion> = db
         .get_crate_versions(&crate_name)
@@ -590,11 +591,11 @@ pub async fn list_crate_versions(
 pub async fn search(
     State(db): DbState,
     params: SearchParams,
-    user: Result<maybe_user::MaybeUser, StatusCode>,
+    user: Option<AnyUser>,
 ) -> ApiResult<Json<SearchResult>> {
     let limit = params.per_page.0;
     let offset = (params.page.0 - 1) * limit;
-    let visibility = crate_visibility(user.ok().as_ref());
+    let visibility = crate_visibility(user.as_deref());
     let crates = db
         .search_in_crate_name_and_description(
             params.q.as_str(),
@@ -647,14 +648,14 @@ pub async fn search(
 )]
 pub async fn download(
     State(state): AppState,
-    token: token::OptionToken,
+    user: Option<TokenUser>,
     Path((package, version)): Path<(OriginalName, Version)>,
 ) -> ApiResult<Response> {
     let db = state.db;
     let cs = state.crate_storage;
     let download_counter = state.download_counter;
     let canonical_name = package.to_canonical();
-    check_download_auth(&canonical_name, &token, &db).await?;
+    check_download_auth(&canonical_name, user.as_deref(), &db).await?;
 
     let file = cs
         .get(&package, &version)
@@ -709,13 +710,11 @@ pub async fn download(
 )]
 pub async fn add_empty_crate(
     State(state): AppState,
-    token: token::Token,
+    user: TokenUser,
     Json(data): Json<EmptyCrateData>,
 ) -> ApiResult<Json<EmptyCrateSuccess>> {
     // Only admins can create empty crate placeholders
-    if !token.is_admin {
-        return Err(ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED));
-    }
+    require_admin_for_token_api(&user)?;
     let db = state.db;
     let orig_name = OriginalName::try_from(&data.name)?;
     let canonical_name = orig_name.to_canonical();
@@ -756,7 +755,7 @@ pub async fn add_empty_crate(
 )]
 pub async fn publish(
     State(state): AppState,
-    token: token::Token,
+    user: TokenUser,
     pub_data: PubData,
 ) -> ApiResult<Json<PubDataSuccess>> {
     let db = state.db;
@@ -765,22 +764,21 @@ pub async fn publish(
     let orig_name = OriginalName::try_from(&pub_data.metadata.name)?;
     let canonical_name = orig_name.to_canonical();
 
-    let token_user = token.user.clone();
+    let token_user = user.name.clone();
     // Shown in the version list. Publishing works without it, so a failed
     // lookup only leaves it empty.
-    let token_name = match &token.value {
-        Some(value) => db.get_auth_token_name(value).await.unwrap_or_else(|e| {
+    let token_name = match &user.source {
+        Source::Token(Some(value)) => db.get_auth_token_name(value).await.unwrap_or_else(|e| {
             warn!("Failed to look up the name of the publish token: {e}");
             None
         }),
-        None => None,
+        _ => None,
     };
-    let user = maybe_user::MaybeUser::from_token(token);
 
     // Check if user is read-only and can't publish (upload) crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    check_can_modify(&user)?;
+    require_writable_for_upload(&user)?;
 
     pub_data
         .metadata
@@ -798,7 +796,7 @@ pub async fn publish(
     let id = db.get_crate_id(&canonical_name).await?;
     match (id, settings.registry.new_crates_restricted) {
         (Some(_), _) => {
-            check_ownership(&canonical_name, &user, &db).await?;
+            require_owner(&canonical_name, &user, &db).await?;
 
             if let Some(existing) = find_same_version(&canonical_name, &version, &db).await? {
                 return Err(RegistryError::CrateExists(pub_data.metadata.name, existing).into());
@@ -1005,17 +1003,16 @@ async fn restore_adopted_crate(
 )]
 pub async fn yank(
     Path((crate_name, version)): Path<(OriginalName, Version)>,
-    token: token::Token,
+    user: TokenUser,
     State(db): DbState,
 ) -> ApiResult<Json<YankSuccess>> {
     // Check if user is read-only and can't yank crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    let user = maybe_user::MaybeUser::from_token(token);
-    check_can_modify(&user)?;
+    require_writable_for_upload(&user)?;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     db.yank_crate(&crate_name, &version).await?;
 
@@ -1050,17 +1047,16 @@ pub async fn yank(
 )]
 pub async fn unyank(
     Path((crate_name, version)): Path<(OriginalName, Version)>,
-    token: token::Token,
+    user: TokenUser,
     State(db): DbState,
 ) -> ApiResult<Json<YankSuccess>> {
     // Check if user is read-only and can't unyank crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    let user = maybe_user::MaybeUser::from_token(token);
-    check_can_modify(&user)?;
+    require_writable_for_upload(&user)?;
 
     let crate_name = crate_name.to_canonical();
-    check_ownership(&crate_name, &user, &db).await?;
+    require_owner(&crate_name, &user, &db).await?;
 
     db.unyank_crate(&crate_name, &version).await?;
 
@@ -1090,13 +1086,13 @@ mod reg_api_tests {
     use bytes::Bytes;
     use http_body_util::BodyExt;
     use hyper::header;
-    use kellnr_http::state::AppStateData;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_db::download_counter::DownloadCounter;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, UserFlags, test_utils};
     use kellnr_http::error::ErrorDetails;
+    use kellnr_http::state::AppStateData;
     use kellnr_settings::{LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
@@ -2205,7 +2201,7 @@ mod reg_api_tests {
 
     // A read-only user who is an owner must not be able to modify a crate
     // through the web session. Read-only state is now resolved for session
-    // auth, so `check_can_modify` rejects the request.
+    // auth, so `require_writable` rejects the request.
     #[tokio::test]
     async fn add_owner_single_read_only_owner_session_is_forbidden() {
         let settings = get_settings();
@@ -2271,8 +2267,7 @@ mod reg_api_tests {
             .await
             .unwrap();
 
-        // ReadOnlyModify maps to 400 Bad Request
-        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
     }
 
     // Counterpart to the read-only test: a normal (writable) owner must still
@@ -3983,10 +3978,10 @@ mod crate_access_tests {
     use axum::http::{Request, StatusCode, header};
     use axum::routing::{get, put};
     use cookie::Key;
-    use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_db::SessionInfo;
     use kellnr_db::mock::MockDb;
+    use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use mockall::predicate::eq;
     use tower::ServiceExt;
@@ -4104,11 +4099,10 @@ mod crate_access_tests {
     async fn read_only_owner_can_only_list_crate_users_and_groups() {
         for (method, uri) in ACL_REQUESTS {
             let db = session_db("owner", false, true, true);
-            // ReadOnlyModify maps to 400 Bad Request
             let expected = if method == "GET" {
                 StatusCode::OK
             } else {
-                StatusCode::BAD_REQUEST
+                StatusCode::FORBIDDEN
             };
             assert_eq!(expected, status(db, method, uri).await, "{method} {uri}");
         }

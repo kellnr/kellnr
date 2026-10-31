@@ -6,8 +6,8 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use kellnr_http::state::{AppState, DbState, ProxyClientState, SettingsProvState, SettingsState};
-use kellnr_http::authz::{can_read_crate, crate_visibility};
-use kellnr_http::maybe_user::MaybeUser as MaybeUserOrToken;
+use kellnr_http::authz::{self, can_read_crate, crate_visibility};
+use kellnr_http::identity::{AdminUser, AnyUser, Identity, SessionUser};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CRATESIO_INDEX, CrateData};
 use kellnr_common::crate_dependents::CrateDependents;
@@ -29,7 +29,6 @@ use utoipa::ToSchema;
 
 use crate::error::RouteError;
 use crate::pagination::{PageParams, PageRequest};
-use crate::session::{AdminUser, MaybeUser};
 
 /// Settings response, the flattened `Settings`, the per-leaf source map
 /// derived from the `SettingsProv`, and the compiled-in defaults the UI
@@ -339,10 +338,10 @@ pub async fn crates(
     Query(params): Query<CratesParams>,
     page: PageRequest,
     State(db): DbState,
-    user: Result<MaybeUserOrToken, StatusCode>,
+    user: Option<AnyUser>,
 ) -> Result<Json<Pagination>, RouteError> {
     let cache = params.cache.unwrap_or(false);
-    let visibility = crate_visibility(user.ok().as_ref());
+    let visibility = crate_visibility(user.as_deref());
     let sort = params.sort.unwrap_or_default();
     let tags = CrateTagFilter {
         keyword: params.keyword.filter(|k| !k.is_empty()),
@@ -393,10 +392,10 @@ pub async fn search(
     Query(params): Query<SearchParams>,
     page: PageRequest,
     State(db): DbState,
-    user: Result<MaybeUserOrToken, StatusCode>,
+    user: Option<AnyUser>,
 ) -> Result<Json<Pagination>, RouteError> {
     let cache = params.cache.unwrap_or(false);
-    let visibility = crate_visibility(user.ok().as_ref());
+    let visibility = crate_visibility(user.as_deref());
     let crates = db
         .search_in_crate_name_and_description(
             params.name.as_str(),
@@ -439,12 +438,11 @@ pub struct CrateDataParams {
 pub async fn crate_data(
     Query(params): Query<CrateDataParams>,
     State(db): DbState,
-    user: Result<MaybeUserOrToken, StatusCode>,
+    user: Option<AnyUser>,
 ) -> Result<Json<CrateData>, StatusCode> {
     let index_name = CanonicalName::from(params.name);
-    let user = user.ok();
     // Same response as a missing crate to not reveal that a restricted crate exists.
-    match can_read_crate(&index_name, user.as_ref(), &db).await {
+    match can_read_crate(&index_name, user.as_deref(), &db).await {
         Ok(true) => {}
         Ok(false) => return Err(StatusCode::NOT_FOUND),
         Err(e) => {
@@ -456,7 +454,7 @@ pub async fn crate_data(
         DbError::CrateNotFound(_) => StatusCode::NOT_FOUND,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     })?;
-    hide_restricted_dep_info(&mut cd, user.as_ref(), &db)
+    hide_restricted_dep_info(&mut cd, user.as_deref(), &db)
         .await
         .map_err(|e| {
             error!("Failed to check access to the dependencies of {index_name}: {e}");
@@ -470,7 +468,7 @@ pub async fn crate_data(
 /// not reveal them.
 async fn hide_restricted_dep_info(
     cd: &mut CrateData,
-    user: Option<&MaybeUserOrToken>,
+    user: Option<&Identity>,
     db: &Arc<dyn DbProvider>,
 ) -> Result<(), DbError> {
     let mut readable: HashMap<String, bool> = HashMap::new();
@@ -521,12 +519,11 @@ pub struct CrateDependentsParams {
 pub async fn crate_dependents(
     Query(params): Query<CrateDependentsParams>,
     State(db): DbState,
-    user: Result<MaybeUserOrToken, StatusCode>,
+    user: Option<AnyUser>,
 ) -> Result<Json<CrateDependents>, StatusCode> {
     let index_name = CanonicalName::from(params.name);
-    let user = user.ok();
     // Same response as a missing crate to not reveal that a restricted crate exists.
-    match can_read_crate(&index_name, user.as_ref(), &db).await {
+    match can_read_crate(&index_name, user.as_deref(), &db).await {
         Ok(true) => {}
         Ok(false) => return Err(StatusCode::NOT_FOUND),
         Err(e) => {
@@ -541,7 +538,7 @@ pub async fn crate_dependents(
             DbError::CrateNotFound(_) => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         })?;
-    hide_restricted_dependents(&mut cd, user.as_ref(), &db)
+    hide_restricted_dependents(&mut cd, user.as_deref(), &db)
         .await
         .map_err(|e| {
             error!("Failed to check access to the dependents of {index_name}: {e}");
@@ -555,7 +552,7 @@ pub async fn crate_dependents(
 /// but nothing about them.
 async fn hide_restricted_dependents(
     cd: &mut CrateDependents,
-    user: Option<&MaybeUserOrToken>,
+    user: Option<&Identity>,
     db: &Arc<dyn DbProvider>,
 ) -> Result<(), DbError> {
     let mut visible = Vec::with_capacity(cd.dependents.len());
@@ -803,7 +800,7 @@ pub struct TopCrates {
 pub async fn statistic(
     State(db): DbState,
     State(settings): SettingsState,
-    user: Result<MaybeUserOrToken, StatusCode>,
+    user: Option<AnyUser>,
 ) -> Result<Json<Statistic>, RouteError> {
     let num_crates = db
         .get_total_unique_crates()
@@ -816,7 +813,7 @@ pub async fn statistic(
     let num_crate_downloads = db.get_total_downloads().await.map_err(|e| db_error(&e))?;
     // Crate names are only listed if the caller may see them. The totals
     // are aggregates and do not reveal individual crates.
-    let visibility = crate_visibility(user.ok().as_ref());
+    let visibility = crate_visibility(user.as_deref());
     let mut tops = db
         .get_top_crates_downloads(3, &visibility)
         .await
@@ -885,7 +882,7 @@ pub struct BuildParams {
 pub async fn build_rustdoc(
     Query(params): Query<BuildParams>,
     State(state): AppState,
-    user: MaybeUser,
+    user: SessionUser,
 ) -> Result<(), StatusCode> {
     if !state.settings.docs.enabled {
         return Err(StatusCode::BAD_REQUEST);
@@ -899,23 +896,10 @@ pub async fn build_rustdoc(
     // the build operation is allowed. This comes before the version check, so
     // that others cannot tell which crates and versions exist: they get the
     // same error for a missing crate.
-    let is_allowed = match user {
-        MaybeUser::Normal(user) => {
-            db.is_owner(&canonical_name, &user)
-                .await
-                .map_err(internal_error)?
-                && !db
-                    .get_user(&user)
-                    .await
-                    .map_err(internal_error)?
-                    .is_read_only
-        }
-        MaybeUser::Admin(_) => true,
-    };
-
-    if !is_allowed {
-        return Err(StatusCode::FORBIDDEN);
-    }
+    authz::require_owner(&canonical_name, &user, &db)
+        .await
+        .map_err(|e| e.status())?;
+    authz::require_writable(&user).map_err(|e| e.status())?;
 
     // Check if crate with the version exists.
     let Some(original_name) = db
@@ -2029,7 +2013,7 @@ mod tests {
                 Ok(kellnr_db::SessionInfo {
                     name: UserName::new("user").unwrap(),
                     is_admin: false,
-                    is_read_only: false,
+                    is_read_only: true,
                 })
             });
         mock_db
@@ -2046,20 +2030,6 @@ mod tests {
                 eq(UserName::new("user").unwrap()),
             )
             .returning(move |_, _| Ok(true));
-        mock_db
-            .expect_get_user()
-            .with(eq(UserName::new("user").unwrap()))
-            .returning(move |_| {
-                Ok(User {
-                    id: kellnr_db::UserId::new(0),
-                    name: UserName::new("user").unwrap(),
-                    pwd: String::new(),
-                    salt: String::new(),
-                    is_admin: false,
-                    is_read_only: true,
-                    created: String::new(),
-                })
-            });
         mock_db
             .expect_add_doc_queue()
             .with(
@@ -3044,11 +3014,7 @@ mod tests {
             )
             .returning(|_, _| Ok(true));
         let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let user = MaybeUserOrToken {
-            name: UserName::new("user").unwrap(),
-            is_admin: false,
-            is_read_only: false,
-        };
+        let user = kellnr_http::test_support::session_identity("user", false);
         let mut cd = CrateDependents {
             dependents: vec![dependent("secret")],
             ..CrateDependents::default()

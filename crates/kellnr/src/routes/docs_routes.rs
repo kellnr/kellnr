@@ -1,9 +1,11 @@
 use axum::extract::DefaultBodyLimit;
 use axum::routing::put;
 use axum::{Router, middleware};
-use kellnr_http::state::AppStateData;
 use kellnr_docs::api;
-use kellnr_web_ui::{session, ui};
+use kellnr_http::identity::Accepts;
+use kellnr_http::middleware::auth_when_required;
+use kellnr_http::state::AppStateData;
+use kellnr_web_ui::ui;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -14,8 +16,8 @@ pub fn create_ui_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
         .routes(routes!(ui::migrate_docs_storage))
         .routes(routes!(api::latest_docs))
         .layer(middleware::from_fn_with_state(
-            state,
-            session::session_auth_when_required,
+            (state, Accepts::Session),
+            auth_when_required,
         ))
 }
 

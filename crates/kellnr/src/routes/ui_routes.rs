@@ -1,6 +1,8 @@
 use axum::middleware;
+use kellnr_http::identity::Accepts;
+use kellnr_http::middleware::auth_when_required;
 use kellnr_http::state::AppStateData;
-use kellnr_web_ui::{session, ui};
+use kellnr_web_ui::ui;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -20,7 +22,7 @@ pub fn create_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
         .routes(routes!(ui::docs_enabled))
         .routes(routes!(ui::sponsor_links_enabled))
         .layer(middleware::from_fn_with_state(
-            state,
-            session::session_auth_when_required,
+            (state, Accepts::Session),
+            auth_when_required,
         ))
 }

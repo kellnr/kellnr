@@ -5,7 +5,7 @@ use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use kellnr_http::state::{DbState, SettingsState};
 use kellnr_http::authz::can_read_crate;
-use kellnr_http::maybe_user::MaybeUser;
+use kellnr_http::identity::{AnyUser, Identity};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::prefetch::{Prefetch, db_date_to_http_date, is_not_modified, quote_etag};
 use kellnr_db::DbProvider;
@@ -56,9 +56,9 @@ pub async fn prefetch_kellnr(
     Path((_a, _b, package)): Path<(String, String, OriginalName)>,
     headers: HeaderMap,
     State(db): DbState,
-    user: Result<MaybeUser, StatusCode>,
+    user: Option<AnyUser>,
 ) -> Result<PrefetchResponse, StatusCode> {
-    internal_kellnr_prefetch(&package, &headers, &db, user.ok().as_ref()).await
+    internal_kellnr_prefetch(&package, &headers, &db, user.as_deref()).await
         .map(PrefetchResponse)
 }
 
@@ -84,9 +84,9 @@ pub async fn prefetch_len2_kellnr(
     Path((_a, package)): Path<(String, OriginalName)>,
     headers: HeaderMap,
     State(db): DbState,
-    user: Result<MaybeUser, StatusCode>,
+    user: Option<AnyUser>,
 ) -> Result<PrefetchResponse, StatusCode> {
-    internal_kellnr_prefetch(&package, &headers, &db, user.ok().as_ref()).await
+    internal_kellnr_prefetch(&package, &headers, &db, user.as_deref()).await
         .map(PrefetchResponse)
 }
 
@@ -97,7 +97,7 @@ async fn internal_kellnr_prefetch(
     name: &OriginalName,
     headers: &HeaderMap,
     db: &Arc<dyn DbProvider>,
-    user: Option<&MaybeUser>,
+    user: Option<&Identity>,
 ) -> Result<Prefetch, StatusCode> {
     // Same response as a missing crate to not reveal that a restricted crate exists.
     match can_read_crate(&name.to_canonical(), user, db).await {
