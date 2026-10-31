@@ -11,11 +11,12 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
+use kellnr_common::background_tasks::BackgroundTasks;
 use kellnr_db::error::DbError;
 use kellnr_db::{ChannelInfo, ToolchainTargetInfo, ToolchainTargetStatus, ToolchainWithTargets};
 use kellnr_http::error::{ApiError, ApiResult};
 use kellnr_http::identity::AdminUser;
-use kellnr_http::state::{DbState, SettingsState, ToolchainStorageState};
+use kellnr_http::state::{BackgroundTasksState, DbState, SettingsState, ToolchainStorageState};
 use kellnr_storage::storage_error::StorageError;
 use kellnr_storage::storage_key::StorageKey;
 use kellnr_storage::toolchain_storage::{ToolchainArchiveId, ToolchainStorage};
@@ -102,6 +103,7 @@ pub async fn upload_toolchain(
     _user: AdminUser,
     State(db): DbState,
     State(storage): ToolchainStorageState,
+    State(tasks): BackgroundTasksState,
     Query(params): Query<UploadQuery>,
     body: Bytes,
 ) -> ApiResult<Json<ToolchainResponse>> {
@@ -165,7 +167,7 @@ pub async fn upload_toolchain(
     let bg_target = params.target.clone();
     let bg_date = params.date.clone();
     let bg_path = path.clone();
-    spawn_target_processing(db.clone(), target_id, async move {
+    spawn_target_processing(&tasks, db.clone(), target_id, async move {
         let archive_bytes = {
             let mut archive = None;
             for attempt in 1..=3 {
@@ -253,11 +255,12 @@ pub async fn upload_toolchain(
 /// Runs the processing of an uploaded target in the background. If it panics,
 /// the target is marked as failed instead of staying "processing" forever.
 fn spawn_target_processing(
+    tasks: &BackgroundTasks,
     db: Arc<dyn kellnr_db::DbProvider>,
     target_id: i64,
     processing: impl Future<Output = ()> + Send + 'static,
 ) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+    tasks.spawn_tracked(async move {
         if let Err(e) = tokio::spawn(processing).await {
             tracing::error!("Processing of toolchain target {target_id} stopped: {e}");
             if let Err(e) = db
@@ -1077,6 +1080,7 @@ xz_hash = "{}"
 mod tests {
     use std::io::Cursor;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     use axum::Router;
     use axum::body::{Body, to_bytes};
@@ -2875,8 +2879,26 @@ mod tests {
             .times(1)
             .returning(|_, _| Ok(()));
 
-        spawn_target_processing(Arc::new(mock_db), 7, async { panic!("extraction bug") })
-            .await
-            .unwrap();
+        spawn_target_processing(&BackgroundTasks::new(), Arc::new(mock_db), 7, async {
+            panic!("extraction bug")
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_waits_for_target_processing() {
+        let tasks = BackgroundTasks::new();
+        let finished = Arc::new(AtomicBool::new(false));
+        let finished_in_task = finished.clone();
+
+        spawn_target_processing(&tasks, Arc::new(MockDb::new()), 7, async move {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            finished_in_task.store(true, Ordering::SeqCst);
+        });
+        tasks.request_shutdown();
+        tasks.wait_for_shutdown(Duration::from_secs(30)).await;
+
+        assert!(finished.load(Ordering::SeqCst));
     }
 }

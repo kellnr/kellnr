@@ -3,6 +3,7 @@ use std::sync::Arc;
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use flume::Sender;
+use kellnr_common::background_tasks::BackgroundTasks;
 use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::DbProvider;
@@ -34,6 +35,7 @@ pub type LoginThrottleState = axum::extract::State<Arc<LoginThrottle>>;
 pub type ToolchainStorageState = axum::extract::State<Option<Arc<ToolchainStorage>>>;
 pub type DownloadCounterState = axum::extract::State<Arc<DownloadCounter>>;
 pub type ProxyClientState = axum::extract::State<Client>;
+pub type BackgroundTasksState = axum::extract::State<BackgroundTasks>;
 
 #[derive(Clone, FromRef)]
 pub struct AppStateData {
@@ -59,6 +61,9 @@ pub struct AppStateData {
     pub proxy_client: Client,
     pub cratesio_sync: CratesioSync,
     pub download_filters: Arc<DownloadFilters>,
+    /// Work that outlives a request, e.g. processing an upload, runs here so
+    /// shutdown waits for it.
+    pub background_tasks: BackgroundTasks,
 }
 
 /// Build a defaults-only `SettingsProv`, every leaf reports

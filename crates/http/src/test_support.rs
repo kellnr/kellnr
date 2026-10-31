@@ -4,6 +4,7 @@ use std::sync::Arc;
 use axum_extra::extract::cookie::Key;
 use cookie::{Cookie, CookieJar};
 use kellnr_common::account_name::UserName;
+use kellnr_common::background_tasks::BackgroundTasks;
 use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
@@ -61,6 +62,7 @@ pub fn test_state() -> AppStateData {
         proxy_client,
         cratesio_sync,
         download_filters: Arc::default(),
+        background_tasks: BackgroundTasks::new(),
     }
 }
 
