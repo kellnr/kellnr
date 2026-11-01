@@ -93,9 +93,101 @@ pub(crate) struct ApiDoc;
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+    use std::sync::Arc;
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use kellnr_http::test_support::test_state;
+    use serde_json::Value;
+    use tower::ServiceExt;
     use utoipa::OpenApi;
 
     use super::ApiDoc;
+    use crate::routes::create_router;
+
+    const SNAPSHOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
+
+    /// The document as `/api/openapi.json` serves it, with the optional
+    /// toolchain routes enabled. The version is replaced by a placeholder,
+    /// so the snapshot does not change with every release.
+    async fn served_document() -> Value {
+        let mut state = test_state();
+        let mut settings = (*state.settings).clone();
+        settings.toolchain.enabled = true;
+        state.settings = Arc::new(settings);
+
+        let response = create_router(state, None)
+            .oneshot(
+                Request::get("/api/openapi.json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let mut document: Value = serde_json::from_slice(&body).unwrap();
+        document["info"]["version"] = Value::from("0.0.0");
+        document
+    }
+
+    /// Fails if the document differs from the committed `openapi.json`.
+    /// Run the test with `UPDATE_OPENAPI=1` to write the new document.
+    #[tokio::test]
+    async fn openapi_document_matches_snapshot() {
+        let mut document = serde_json::to_string_pretty(&served_document().await).unwrap();
+        document.push('\n');
+
+        if std::env::var_os("UPDATE_OPENAPI").is_some() {
+            std::fs::write(SNAPSHOT, &document).unwrap();
+            return;
+        }
+        let snapshot = std::fs::read_to_string(Path::new(SNAPSHOT)).unwrap_or_default();
+        assert!(
+            snapshot == document,
+            "The OpenAPI document differs from crates/kellnr/openapi.json. If the change \
+             is intended, update the file with \
+             `UPDATE_OPENAPI=1 cargo nextest run -p kellnr openapi_document_matches_snapshot` \
+             and review the diff."
+        );
+    }
+
+    fn collect_refs<'a>(value: &'a Value, refs: &mut Vec<&'a str>) {
+        match value {
+            Value::Object(map) => {
+                for (key, value) in map {
+                    match value {
+                        Value::String(target) if key == "$ref" => refs.push(target),
+                        _ => collect_refs(value, refs),
+                    }
+                }
+            }
+            Value::Array(values) => values.iter().for_each(|value| collect_refs(value, refs)),
+            _ => {}
+        }
+    }
+
+    #[tokio::test]
+    async fn openapi_document_defines_every_referenced_schema() {
+        let document = served_document().await;
+        let mut refs = Vec::new();
+        collect_refs(&document, &mut refs);
+
+        let schemas = document["components"]["schemas"].as_object().unwrap();
+        let mut undefined: Vec<&str> = refs
+            .into_iter()
+            .filter(|target| {
+                target
+                    .strip_prefix("#/components/schemas/")
+                    .is_none_or(|name| !schemas.contains_key(name))
+            })
+            .collect();
+        undefined.sort_unstable();
+        undefined.dedup();
+        assert!(undefined.is_empty(), "undefined references: {undefined:?}");
+    }
 
     #[test]
     fn api_version_matches_crate_version() {
