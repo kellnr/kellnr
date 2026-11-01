@@ -63,27 +63,33 @@ mod session_cookie_tests {
 
     use axum::http::HeaderMap;
     use axum_extra::extract::cookie::Key;
-    use kellnr_db::mock::MockDb;
+    use kellnr_common::plain_token::PlainToken;
+    use kellnr_db::DbProvider;
+    use kellnr_http::test_support::sqlite_test_state;
     use kellnr_settings::constants::MAX_SESSION_AGE;
     use kellnr_settings::{Protocol, Settings};
 
     use super::*;
 
     async fn new_session_cookie(settings: Settings) -> Cookie<'static> {
-        let mut db = MockDb::new();
-        db.expect_add_session_token().returning(|_, _| Ok(()));
+        let (state, db) = sqlite_test_state().await;
         let state = AppStateData {
-            db: Arc::new(db),
             settings: Arc::new(settings),
-            ..kellnr_http::test_support::test_state()
+            ..state
         };
         let jar = PrivateCookieJar::from_headers(&HeaderMap::new(), Key::generate());
 
-        let jar = create_session_jar(jar, &state, &UserName::new("user").unwrap())
+        let jar = create_session_jar(jar, &state, &UserName::new("admin").unwrap())
             .await
             .unwrap();
 
-        jar.get(COOKIE_SESSION_ID).unwrap()
+        let cookie = jar.get(COOKIE_SESSION_ID).unwrap();
+        let session = db
+            .validate_session(&PlainToken::from(cookie.value()))
+            .await
+            .unwrap();
+        assert_eq!("admin", session.name.to_string());
+        cookie
     }
 
     async fn session_cookie_secure(protocol: Protocol, cookie_secure: Option<bool>) -> bool {
