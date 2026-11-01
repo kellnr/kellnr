@@ -111,6 +111,16 @@ Tests run in parallel and in several processes at once:
 - Write files only to a temporary directory (`tempfile::tempdir()`) that the test owns. `test_settings()` points the data directory at a path that cannot be created, so writing there fails.
 - Do not change environment variables of the test process. Pass values in, or run the code in a child process with its own environment.
 
+## OpenAPI Document
+
+The OpenAPI document that Kellnr serves at `/api/openapi.json` is committed as [crates/kellnr/openapi.json](./crates/kellnr/openapi.json). A test compares both and fails if an API change alters the document. If the change is intended, write the new document and review the diff:
+
+```bash
+UPDATE_OPENAPI=1 cargo nextest run -p kellnr openapi_document_matches_snapshot
+```
+
+Another test checks that every schema the document references is defined. Types that are only used in query parameters have to be registered in `crates/kellnr/src/openapi.rs`.
+
 ## Node Dependencies
 
 When updating any Node.js dependencies, make sure to run:

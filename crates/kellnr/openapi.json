@@ -1,0 +1,7054 @@
+{
+  "components": {
+    "schemas": {
+      "AccessData": {
+        "properties": {
+          "download_restricted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "download_restricted"
+        ],
+        "type": "object"
+      },
+      "AdminState": {
+        "properties": {
+          "state": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
+      "AuthToken": {
+        "properties": {
+          "created": {
+            "description": "When the token was created, unknown for tokens from before Kellnr\nstored it",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/AuthTokenId"
+          },
+          "last_used": {
+            "description": "When the token was last used, updated at most once per hour",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "AuthTokenId": {
+        "description": "Primary key of an auth token.",
+        "format": "int64",
+        "type": "integer"
+      },
+      "ChannelInfo": {
+        "description": "Channel information (e.g., \"stable\" -> \"1.75.0\")",
+        "properties": {
+          "date": {
+            "description": "Release date",
+            "type": "string"
+          },
+          "name": {
+            "description": "Channel name (e.g., \"stable\", \"beta\", \"nightly\")",
+            "type": "string"
+          },
+          "version": {
+            "description": "Toolchain version pointed to by this channel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "date"
+        ],
+        "type": "object"
+      },
+      "ConfigJson": {
+        "description": "The `config.json` of a sparse registry index, see\n<https://doc.rust-lang.org/cargo/reference/registry-index.html#index-configuration>.",
+        "properties": {
+          "api": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "auth-required": {
+            "type": "boolean"
+          },
+          "dl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dl",
+          "auth-required"
+        ],
+        "type": "object"
+      },
+      "ConfigSource": {
+        "description": "Represents the source of a configuration value.",
+        "enum": [
+          "default",
+          "toml",
+          "env",
+          "cli"
+        ],
+        "type": "string"
+      },
+      "Crate": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "max_version": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "max_version",
+          "description"
+        ],
+        "type": "object"
+      },
+      "CrateData": {
+        "properties": {
+          "authors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "homepage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "last_updated": {
+            "type": "string"
+          },
+          "max_version": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owners": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "repository": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_downloads": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/CrateVersionData"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "owners",
+          "max_version",
+          "total_downloads",
+          "last_updated",
+          "categories",
+          "keywords",
+          "authors",
+          "versions"
+        ],
+        "type": "object"
+      },
+      "CrateDependent": {
+        "description": "A crate whose latest version depends on another crate.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "outdated": {
+            "type": "boolean"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/DependentRequirement"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "requirements",
+          "outdated"
+        ],
+        "type": "object"
+      },
+      "CrateDependents": {
+        "description": "Crates in the registry whose latest version depends on a crate.",
+        "properties": {
+          "dependents": {
+            "items": {
+              "$ref": "#/components/schemas/CrateDependent"
+            },
+            "type": "array"
+          },
+          "latest_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "restricted": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dependents",
+          "restricted"
+        ],
+        "type": "object"
+      },
+      "CrateGroup": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/GroupId"
+          },
+          "name": {
+            "$ref": "#/components/schemas/GroupName"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "CrateGroupList": {
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/CrateGroup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "groups"
+        ],
+        "type": "object"
+      },
+      "CrateGroupResponse": {
+        "properties": {
+          "msg": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "msg"
+        ],
+        "type": "object"
+      },
+      "CrateOverview": {
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "documentation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_cache": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "repository": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_downloads": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "date",
+          "total_downloads",
+          "is_cache"
+        ],
+        "type": "object"
+      },
+      "CrateRegistryDep": {
+        "properties": {
+          "default_features": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "explicit_name_in_toml": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latest_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "outdated": {
+            "type": "boolean"
+          },
+          "registry": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version_req": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version_req",
+          "optional",
+          "default_features",
+          "outdated"
+        ],
+        "type": "object"
+      },
+      "CrateSort": {
+        "description": "Order of the crate overview list.",
+        "enum": [
+          "name",
+          "updated",
+          "downloads"
+        ],
+        "type": "string"
+      },
+      "CrateUser": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/UserId"
+          },
+          "login": {
+            "$ref": "#/components/schemas/UserName"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "login"
+        ],
+        "type": "object"
+      },
+      "CrateUserList": {
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/CrateUser"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "users"
+        ],
+        "type": "object"
+      },
+      "CrateUserRequest": {
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/UserName"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "users"
+        ],
+        "type": "object"
+      },
+      "CrateUserResponse": {
+        "properties": {
+          "msg": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "msg"
+        ],
+        "type": "object"
+      },
+      "CrateVersion": {
+        "properties": {
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "type": "object"
+      },
+      "CrateVersionData": {
+        "properties": {
+          "checksum": {
+            "type": "string"
+          },
+          "created": {
+            "type": "string"
+          },
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/CrateRegistryDep"
+            },
+            "type": "array"
+          },
+          "documentation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "downloads": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "features": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "license": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "license_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "links": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "readme": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rust_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "v": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          },
+          "yanked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "version",
+          "created",
+          "downloads",
+          "dependencies",
+          "checksum",
+          "features",
+          "yanked",
+          "v",
+          "size"
+        ],
+        "type": "object"
+      },
+      "CrateVersionList": {
+        "properties": {
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/CrateVersion"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "versions"
+        ],
+        "type": "object"
+      },
+      "CratesioFilter": {
+        "description": "Filters for downloads through the crates.io proxy.\n\nThe fields are the same as in [`RegistryFilter`]. Both are separate structs\nbecause the CLI flag prefix is set per struct.",
+        "properties": {
+          "license_allowed": {
+            "default": [],
+            "description": "Allowed SPDX license identifiers (comma-separated), e.g. \"MIT,Apache-2.0\"",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "license_enabled": {
+            "default": false,
+            "description": "Deny downloads of crates whose license is not allowed",
+            "type": "boolean"
+          },
+          "license_exempt_crates": {
+            "default": [],
+            "description": "Crates (comma-separated) that are allowed regardless of their license",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "license_unknown": {
+            "$ref": "#/components/schemas/LicenseUnknown",
+            "default": "deny",
+            "description": "Decision for crates without a known or valid license: \"deny\" or \"allow\".\nA license that is no valid SPDX expression counts as unknown"
+          }
+        },
+        "type": "object"
+      },
+      "Credentials": {
+        "properties": {
+          "pwd": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user",
+          "pwd"
+        ],
+        "type": "object"
+      },
+      "DependentRequirement": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "outdated": {
+            "type": "boolean"
+          },
+          "version_req": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_req",
+          "kind",
+          "outdated"
+        ],
+        "type": "object"
+      },
+      "DocQueueEntryResponse": {
+        "description": "Entry in the documentation build queue",
+        "properties": {
+          "name": {
+            "description": "Crate name",
+            "type": "string"
+          },
+          "version": {
+            "description": "Crate version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ],
+        "type": "object"
+      },
+      "DocQueueResponse": {
+        "description": "Response containing documentation build queue",
+        "properties": {
+          "queue": {
+            "description": "List of crates in the documentation build queue",
+            "items": {
+              "$ref": "#/components/schemas/DocQueueEntryResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "queue"
+        ],
+        "type": "object"
+      },
+      "DocUploadResponse": {
+        "description": "Response after successfully uploading documentation",
+        "properties": {
+          "crate_name": {
+            "description": "Name of the crate",
+            "type": "string"
+          },
+          "crate_version": {
+            "description": "Version of the crate",
+            "type": "string"
+          },
+          "message": {
+            "description": "Status message",
+            "type": "string"
+          },
+          "url": {
+            "description": "URL to access the uploaded documentation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "url",
+          "crate_name",
+          "crate_version"
+        ],
+        "type": "object"
+      },
+      "Docs": {
+        "properties": {
+          "build_timeout_seconds": {
+            "default": 1800,
+            "description": "Max duration of a single rustdoc build in seconds (0 = unlimited).\nBuilds that take longer are killed and the crate is skipped.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "build_wrapper": {
+            "default": [],
+            "description": "Command prefix (comma-separated) for the rustdoc build process.\n\nBuilding docs compiles the published crate, which runs its build\nscripts and proc macros. Kellnr runs every build in a child process\nwith a cleared environment, so no `KELLNR_*` settings or secrets are\npassed on. Cargo's own `CARGO_*` variables are kept, so a registry\ntoken in `CARGO_REGISTRIES_<NAME>_TOKEN` is visible to build scripts\nand should belong to a dedicated read-only user.\nThe build still runs as the Kellnr user: it can read every\nfile Kellnr can read (for example the config file or the `SQLite`\ndatabase, e.g. via `include_str!`) and it has network access. Kellnr\nonly publishes the files rustdoc generates, but the build can write\nsuch content into the generated docs of the crate. Only enable docs\nfor crates you trust, or set a wrapper that confines the build, e.g.\nwith bubblewrap:\n`[\"bwrap\", \"--ro-bind\", \"/\", \"/\", \"--tmpfs\", \"<data_dir>\",\n\"--bind\", \"<data_dir>/doc_queue\", \"<data_dir>/doc_queue\",\n\"--bind\", \"<cargo_home>\", \"<cargo_home>\", \"--tmpfs\", \"/etc/kellnr\",\n\"--dev\", \"/dev\", \"--proc\", \"/proc\", \"--tmpfs\", \"/tmp\",\n\"--unshare-pid\", \"--die-with-parent\", \"--\"]`.\nThe wrapper is followed by the Kellnr binary and its arguments.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "default": false,
+            "description": "Enable documentation hosting\n\nBuilding docs runs the build scripts and proc macros of every\npublished crate on the Kellnr host. See `build_wrapper` before\nenabling this for publishers you do not fully trust.",
+            "type": "boolean"
+          },
+          "max_size": {
+            "default": 100,
+            "description": "Max docs size in MB",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DocsEnabledResponse": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "EmptyCrateData": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "EmptyCrateSuccess": {
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "ErrorDetails": {
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "errors"
+        ],
+        "type": "object"
+      },
+      "Gcs": {
+        "properties": {
+          "allow_http": {
+            "default": true,
+            "description": "Allow plain HTTP connections. Needed when `endpoint` points at an HTTP endpoint.",
+            "type": "boolean"
+          },
+          "connect_timeout_seconds": {
+            "default": 5,
+            "description": "GCS connect timeout in seconds",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "crates_bucket": {
+            "default": "kellnr-crates",
+            "type": "string"
+          },
+          "cratesio_bucket": {
+            "default": "kellnr-cratesio",
+            "type": "string"
+          },
+          "docs_bucket": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "endpoint": {
+            "default": null,
+            "description": "Base URL override for self-hosted or emulator endpoints (e.g. fake-gcs-server\nin tests). When unset, requests go to the public Google Cloud Storage API.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "request_timeout_seconds": {
+            "default": 30,
+            "description": "GCS request timeout in seconds",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skip_signature": {
+            "default": false,
+            "description": "Skip credential lookup and request signing. Only for unauthenticated endpoints\nsuch as emulators. When false, credentials come from the environment\n(Application Default Credentials).",
+            "type": "boolean"
+          },
+          "toolchain_bucket": {
+            "default": "kellnr-toolchains",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetAllWebhooksResponse": {
+        "items": {
+          "$ref": "#/components/schemas/GetWebhookResponse"
+        },
+        "type": "array"
+      },
+      "GetWebhookResponse": {
+        "properties": {
+          "callback_url": {
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/components/schemas/WebhookEvent"
+          },
+          "has_secret": {
+            "description": "Whether deliveries are signed. The secret itself is never returned.",
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "event",
+          "callback_url"
+        ],
+        "type": "object"
+      },
+      "Group": {
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/GroupName"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "GroupId": {
+        "description": "Primary key of a group.",
+        "format": "int64",
+        "type": "integer"
+      },
+      "GroupName": {
+        "description": "The name of a group.",
+        "type": "string"
+      },
+      "GroupUser": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/UserId"
+          },
+          "name": {
+            "$ref": "#/components/schemas/UserName"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "GroupUserList": {
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/GroupUser"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "users"
+        ],
+        "type": "object"
+      },
+      "KellnrVersion": {
+        "properties": {
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "type": "object"
+      },
+      "LeafKind": {
+        "enum": [
+          "boolean",
+          "number",
+          "string",
+          "array"
+        ],
+        "type": "string"
+      },
+      "LeafMeta": {
+        "description": "Per-leaf metadata for the dynamic UI. All fields except `value`/`source`\nare stable per build (or, in the case of `default`, per binary), so the UI\ncan treat the response as both data and schema.",
+        "properties": {
+          "cli_flag": {
+            "description": "CLI flag string (e.g. `\"--registry-data-dir, -d\"`) when one exists.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default": {
+            "description": "Compiled-in default value in the same shape as `value`."
+          },
+          "key": {
+            "description": "Dotted path, e.g. `\"registry.data_dir\"`.",
+            "type": "string"
+          },
+          "label": {
+            "description": "Optional display label override; `None` means the UI humanizes the key.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "secret": {
+            "description": "`true` for `#[configurable(secret)]` leaves, the UI masks the value.",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ConfigSource",
+            "description": "Where the active value came from."
+          },
+          "type": {
+            "$ref": "#/components/schemas/LeafKind",
+            "description": "JSON-flavoured type tag the UI uses to pick a renderer."
+          },
+          "value": {
+            "description": "Active value as a JSON value (boolean, number, string, array, null)."
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "default",
+          "source",
+          "type",
+          "secret"
+        ],
+        "type": "object"
+      },
+      "LicenseUnknown": {
+        "description": "What the license filter does with a crate whose license is unknown: none\nis declared, the expression does not parse, or it could not be fetched.",
+        "enum": [
+          "deny",
+          "allow"
+        ],
+        "type": "string"
+      },
+      "Local": {
+        "properties": {
+          "ip": {
+            "default": "0.0.0.0",
+            "description": "IP address to bind to",
+            "type": "string"
+          },
+          "port": {
+            "default": 8000,
+            "description": "Port to listen on",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Log": {
+        "properties": {
+          "format": {
+            "$ref": "#/components/schemas/LogFormat",
+            "default": "compact"
+          },
+          "level": {
+            "$ref": "#/components/schemas/LogLevel",
+            "default": "info"
+          },
+          "level_web_server": {
+            "$ref": "#/components/schemas/LogLevel",
+            "default": "warn"
+          }
+        },
+        "type": "object"
+      },
+      "LogFormat": {
+        "enum": [
+          "compact",
+          "pretty",
+          "json"
+        ],
+        "type": "string"
+      },
+      "LogLevel": {
+        "enum": [
+          "trace",
+          "debug",
+          "info",
+          "warn",
+          "error"
+        ],
+        "type": "string"
+      },
+      "LoggedInUser": {
+        "properties": {
+          "is_admin": {
+            "type": "boolean"
+          },
+          "is_logged_in": {
+            "type": "boolean"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user",
+          "is_admin",
+          "is_logged_in"
+        ],
+        "type": "object"
+      },
+      "LogoutResponse": {
+        "properties": {
+          "logout_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Meta": {
+        "properties": {
+          "total": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total"
+        ],
+        "type": "object"
+      },
+      "MigrateDocsStorageResponse": {
+        "description": "Response for [`migrate_docs_storage`].",
+        "properties": {
+          "crate_versions_found": {
+            "description": "Number of crate/version pairs found under the local docs directory.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "started": {
+            "description": "`false` when there was no local docs directory to migrate from.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "started",
+          "crate_versions_found"
+        ],
+        "type": "object"
+      },
+      "NameOrDescription": {
+        "description": "A free-form crate search query, matched against crate names and descriptions.\n\nUnlike [`crate::original_name::OriginalName`] the content is not restricted\nto crate-name characters, because a description search takes arbitrary text.\nOnly the length is bounded, so an oversized query cannot turn into an\noversized `LIKE` pattern scanned across every row.",
+        "type": "string"
+      },
+      "NewGroup": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "NewTokenReqData": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "NewTokenResponse": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "token"
+        ],
+        "type": "object"
+      },
+      "NewUser": {
+        "properties": {
+          "is_admin": {
+            "type": "boolean"
+          },
+          "is_read_only": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pwd1": {
+            "type": "string"
+          },
+          "pwd2": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pwd1",
+          "pwd2",
+          "name"
+        ],
+        "type": "object"
+      },
+      "OAuth2": {
+        "description": "`OAuth2`/`OpenID` Connect authentication configuration",
+        "properties": {
+          "additional_audiences": {
+            "default": [],
+            "description": "Additional audiences accepted in the ID token besides the client ID",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "admin_group_claim": {
+            "default": null,
+            "description": "Claim name to check for admin group membership (e.g., \"groups\"),\nrequires `admin_group_value`",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "admin_group_value": {
+            "default": null,
+            "description": "Value in the admin group claim that grants admin privileges (e.g., \"kellnr-admins\")",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "auto_provision_users": {
+            "default": true,
+            "description": "Automatically create local user accounts for new `OAuth2` users",
+            "type": "boolean"
+          },
+          "auto_redirect": {
+            "default": false,
+            "description": "Skip the login page and redirect straight to the SSO provider (requires `enforced`)",
+            "type": "boolean"
+          },
+          "button_text": {
+            "default": "Log in with SSO",
+            "description": "Text displayed on the `OAuth2` login button",
+            "type": "string"
+          },
+          "client_id": {
+            "default": null,
+            "description": "`OAuth2` client ID",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "default": false,
+            "description": "Enable `OAuth2`/OIDC authentication",
+            "type": "boolean"
+          },
+          "enforced": {
+            "default": false,
+            "description": "Enforce SSO-only login, disabling local password login/change/reset and user creation (requires `enabled`)",
+            "type": "boolean"
+          },
+          "issuer_url": {
+            "default": null,
+            "description": "OIDC issuer URL (discovery URL, e.g., `<https://authentik.example.com/application/o/kellnr/>`)",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_only_group_claim": {
+            "default": null,
+            "description": "Claim name to check for read-only group membership (e.g., \"groups\"),\nrequires `read_only_group_value`",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_only_group_value": {
+            "default": null,
+            "description": "Value in the read-only group claim that grants read-only access (e.g., \"kellnr-readonly\")",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scopes": {
+            "default": [
+              "openid",
+              "profile",
+              "email"
+            ],
+            "description": "`OAuth2` scopes to request (default: `[\"openid\", \"profile\", \"email\"]`)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "OAuth2Config": {
+        "description": "`OAuth2` configuration response for the UI",
+        "properties": {
+          "auto_redirect": {
+            "description": "Whether the login page should redirect straight to the SSO provider",
+            "type": "boolean"
+          },
+          "button_text": {
+            "description": "Text to display on the login button",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether `OAuth2` authentication is enabled",
+            "type": "boolean"
+          },
+          "enforced": {
+            "description": "Whether local password login is disabled (SSO-only)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "button_text",
+          "enforced",
+          "auto_redirect"
+        ],
+        "type": "object"
+      },
+      "Origin": {
+        "properties": {
+          "cookie_secure": {
+            "default": null,
+            "description": "Force the `Secure` flag on cookies (true) or never set it (false).\nUnset, cookies are secure only when `protocol` is https. Set it to true\nwhen Kellnr is reached over https through a TLS-terminating proxy but\n`protocol` is http",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "hostname": {
+            "default": "127.0.0.1",
+            "description": "External hostname for URLs",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "description": "URL path prefix",
+            "type": "string"
+          },
+          "port": {
+            "default": 8000,
+            "description": "External port for URLs",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol",
+            "default": "http",
+            "description": "Protocol (http or https)"
+          }
+        },
+        "type": "object"
+      },
+      "OriginalName": {
+        "type": "string"
+      },
+      "Pagination": {
+        "properties": {
+          "crates": {
+            "items": {
+              "$ref": "#/components/schemas/CrateOverview"
+            },
+            "type": "array"
+          },
+          "page": {
+            "description": "Number of the page, starting at 0",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "page_size": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "total": {
+            "description": "Number of crates on all pages",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "crates",
+          "page_size",
+          "page",
+          "total"
+        ],
+        "type": "object"
+      },
+      "Postgresql": {
+        "properties": {
+          "address": {
+            "default": "localhost",
+            "description": "`PostgreSQL` server address",
+            "type": "string"
+          },
+          "db": {
+            "default": "kellnr",
+            "description": "Database name",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "description": "Use `PostgreSQL` instead of `SQLite`",
+            "type": "boolean"
+          },
+          "port": {
+            "default": 5432,
+            "description": "`PostgreSQL` port",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "user": {
+            "default": "",
+            "description": "Database user",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Protocol": {
+        "enum": [
+          "http",
+          "https"
+        ],
+        "type": "string"
+      },
+      "Proxy": {
+        "properties": {
+          "api": {
+            "default": "https://crates.io/api/v1/crates/",
+            "description": "Crates.io API URL",
+            "type": "string"
+          },
+          "connect_timeout_seconds": {
+            "default": 5,
+            "description": "Connect timeout in seconds for upstream requests",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "download_on_update": {
+            "default": false,
+            "description": "Download crates on index update",
+            "type": "boolean"
+          },
+          "enabled": {
+            "default": false,
+            "description": "Enable crates.io proxy",
+            "type": "boolean"
+          },
+          "index": {
+            "default": "https://index.crates.io/",
+            "description": "Crates.io index URL",
+            "type": "string"
+          },
+          "num_threads": {
+            "default": 10,
+            "description": "Number of proxy threads",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_timeout_seconds": {
+            "default": 30,
+            "description": "Request timeout in seconds for upstream downloads",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "url": {
+            "default": "https://static.crates.io/crates/",
+            "description": "Crates.io download URL",
+            "type": "string"
+          },
+          "user_agent": {
+            "default": "kellnr.io/kellnr",
+            "description": "User-agent sent with requests to crates.io. crates.io's data-access\npolicy asks for a user-agent that identifies the application and a way\nto get in contact, e.g. \"kellnr.io/kellnr (contact@example.com)\".",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PubDataSuccess": {
+        "properties": {
+          "warnings": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Warnings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PwdChange": {
+        "properties": {
+          "new_pwd1": {
+            "type": "string"
+          },
+          "new_pwd2": {
+            "type": "string"
+          },
+          "old_pwd": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "old_pwd",
+          "new_pwd1",
+          "new_pwd2"
+        ],
+        "type": "object"
+      },
+      "ReadOnlyState": {
+        "properties": {
+          "state": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
+      "RegisterWebhookRequest": {
+        "properties": {
+          "callback_url": {
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/components/schemas/WebhookEvent"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "secret": {
+            "description": "Optional secret to sign deliveries according to the Standard Webhooks\nspecification. Base64 encoded, optionally prefixed with `whsec_`, at\nleast 24 bytes. The secret is never returned by the API.",
+            "example": "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw",
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "event",
+          "callback_url"
+        ],
+        "type": "object"
+      },
+      "RegisterWebhookResponse": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "Registry": {
+        "properties": {
+          "allow_ownerless_crates": {
+            "default": false,
+            "description": "Allow crates without owners",
+            "type": "boolean"
+          },
+          "auth_failed_attempts_window_seconds": {
+            "default": 300,
+            "description": "Window in seconds for counting password attempts per username",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "auth_max_failed_attempts": {
+            "default": 10,
+            "description": "Password attempts allowed per username within the window before\nfurther attempts are rejected with HTTP 429 (0 = disabled). Applies to\nweb UI login and cargo basic auth; a successful login resets the count",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "auth_required": {
+            "default": false,
+            "description": "Require authentication for all operations",
+            "type": "boolean"
+          },
+          "cache_max_size": {
+            "default": 0,
+            "description": "Max total size of the in-memory crate cache in MB (0 = no size limit,\nonly `cache_size` applies)",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cache_size": {
+            "default": 1000,
+            "description": "Max number of crates in the in-memory crate cache (0 = disabled)",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cookie_signing_key": {
+            "default": null,
+            "description": "Cookie signing key (for multi-instance setups). At least 64 bytes of\nrandom data; generate it with e.g. `openssl rand -hex 64`. Unset, a\nrandom key is generated on every start",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "data_dir": {
+            "default": "",
+            "description": "Data directory for crates, index, and database",
+            "type": "string"
+          },
+          "download_counter_flush_seconds": {
+            "default": 30,
+            "description": "Download counter flush interval in seconds (0 = flush every download)",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "download_max_concurrent": {
+            "default": 20,
+            "description": "Max concurrent download requests (0 = unlimited)",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "download_timeout_seconds": {
+            "default": 60,
+            "description": "Download request timeout in seconds (0 = disabled)",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_crate_size": {
+            "default": 10,
+            "description": "Max crate size in MB",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_db_connections": {
+            "default": 0,
+            "description": "Max database connections (0 = unlimited)",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "new_crates_restricted": {
+            "default": false,
+            "description": "Restrict new crate uploads to admins",
+            "type": "boolean"
+          },
+          "required_crate_fields": {
+            "default": [],
+            "description": "Required crate fields (comma-separated)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "session_age_seconds": {
+            "default": 28800,
+            "description": "Session lifetime in seconds, counted from the login (0 = sessions\nnever expire)",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sponsor_links_enabled": {
+            "default": true,
+            "description": "Show links to sponsor Kellnr in the web UI and the startup log",
+            "type": "boolean"
+          },
+          "token_cache_enabled": {
+            "default": true,
+            "description": "Enable token cache",
+            "type": "boolean"
+          },
+          "token_cache_max_capacity": {
+            "default": 10000,
+            "description": "Token cache max capacity",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "token_cache_ttl_seconds": {
+            "default": 1800,
+            "description": "Token cache TTL in seconds",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "token_db_retry_count": {
+            "default": 3,
+            "description": "Token DB retry count",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "token_db_retry_delay_ms": {
+            "default": 100,
+            "description": "Token DB retry delay in ms",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "RegistryFilter": {
+        "description": "Filters for downloads of crates hosted in Kellnr.\n\nThe fields are the same as in [`CratesioFilter`].",
+        "properties": {
+          "license_allowed": {
+            "default": [],
+            "description": "Allowed SPDX license identifiers (comma-separated), e.g. \"MIT,Apache-2.0\"",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "license_enabled": {
+            "default": false,
+            "description": "Deny downloads of crates whose license is not allowed",
+            "type": "boolean"
+          },
+          "license_exempt_crates": {
+            "default": [],
+            "description": "Crates (comma-separated) that are allowed regardless of their license",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "license_unknown": {
+            "$ref": "#/components/schemas/LicenseUnknown",
+            "default": "deny",
+            "description": "Decision for crates without a known or valid license: \"deny\" or \"allow\".\nA license that is no valid SPDX expression counts as unknown"
+          }
+        },
+        "type": "object"
+      },
+      "ResetPwd": {
+        "properties": {
+          "new_pwd": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserName"
+          }
+        },
+        "required": [
+          "new_pwd",
+          "user"
+        ],
+        "type": "object"
+      },
+      "S3": {
+        "properties": {
+          "access_key": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "allow_http": {
+            "default": true,
+            "type": "boolean"
+          },
+          "connect_timeout_seconds": {
+            "default": 5,
+            "description": "S3 connect timeout in seconds",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "crates_bucket": {
+            "default": "kellnr-crates",
+            "type": "string"
+          },
+          "cratesio_bucket": {
+            "default": "kellnr-cratesio",
+            "type": "string"
+          },
+          "docs_bucket": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "endpoint": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "request_timeout_seconds": {
+            "default": 30,
+            "description": "S3 request timeout in seconds",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "secret_key": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "toolchain_bucket": {
+            "default": "kellnr-toolchains",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SearchResult": {
+        "properties": {
+          "crates": {
+            "items": {
+              "$ref": "#/components/schemas/Crate"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "crates",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "SetChannelRequest": {
+        "description": "Request to set a channel's toolchain",
+        "properties": {
+          "name": {
+            "description": "Toolchain name (e.g., \"rust\")",
+            "type": "string"
+          },
+          "version": {
+            "description": "Toolchain version (e.g., \"1.75.0\")",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ],
+        "type": "object"
+      },
+      "Settings": {
+        "description": "Pure configuration values, every leaf carries the active value, no\nprovenance attached. Provenance lives on the companion `SettingsProv`,\nwhich is built by [`build_prov_with_cli`] and stored in the app state for\nthe one handler (`/settings`) that needs it.",
+        "properties": {
+          "cratesio_filter": {
+            "$ref": "#/components/schemas/CratesioFilter",
+            "default": {
+              "license_allowed": [],
+              "license_enabled": false,
+              "license_exempt_crates": [],
+              "license_unknown": "deny"
+            }
+          },
+          "docs": {
+            "$ref": "#/components/schemas/Docs",
+            "default": {
+              "build_timeout_seconds": 1800,
+              "build_wrapper": [],
+              "enabled": false,
+              "max_size": 100
+            }
+          },
+          "gcs": {
+            "$ref": "#/components/schemas/Gcs",
+            "default": {
+              "allow_http": true,
+              "connect_timeout_seconds": 5,
+              "crates_bucket": "kellnr-crates",
+              "cratesio_bucket": "kellnr-cratesio",
+              "docs_bucket": null,
+              "enabled": false,
+              "endpoint": null,
+              "request_timeout_seconds": 30,
+              "skip_signature": false,
+              "toolchain_bucket": "kellnr-toolchains"
+            }
+          },
+          "local": {
+            "$ref": "#/components/schemas/Local",
+            "default": {
+              "ip": "0.0.0.0",
+              "port": 8000
+            }
+          },
+          "log": {
+            "$ref": "#/components/schemas/Log",
+            "default": {
+              "format": "compact",
+              "level": "info",
+              "level_web_server": "warn"
+            }
+          },
+          "oauth2": {
+            "$ref": "#/components/schemas/OAuth2",
+            "default": {
+              "additional_audiences": [],
+              "admin_group_claim": null,
+              "admin_group_value": null,
+              "auto_provision_users": true,
+              "auto_redirect": false,
+              "button_text": "Log in with SSO",
+              "client_id": null,
+              "enabled": false,
+              "enforced": false,
+              "issuer_url": null,
+              "read_only_group_claim": null,
+              "read_only_group_value": null,
+              "scopes": [
+                "openid",
+                "profile",
+                "email"
+              ]
+            }
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Origin",
+            "default": {
+              "cookie_secure": null,
+              "hostname": "127.0.0.1",
+              "path": "",
+              "port": 8000,
+              "protocol": "http"
+            }
+          },
+          "postgresql": {
+            "$ref": "#/components/schemas/Postgresql",
+            "default": {
+              "address": "localhost",
+              "db": "kellnr",
+              "enabled": false,
+              "port": 5432,
+              "user": ""
+            }
+          },
+          "proxy": {
+            "$ref": "#/components/schemas/Proxy",
+            "default": {
+              "api": "https://crates.io/api/v1/crates/",
+              "connect_timeout_seconds": 5,
+              "download_on_update": false,
+              "enabled": false,
+              "index": "https://index.crates.io/",
+              "num_threads": 10,
+              "request_timeout_seconds": 30,
+              "url": "https://static.crates.io/crates/",
+              "user_agent": "kellnr.io/kellnr"
+            }
+          },
+          "registry": {
+            "$ref": "#/components/schemas/Registry",
+            "default": {
+              "allow_ownerless_crates": false,
+              "auth_failed_attempts_window_seconds": 300,
+              "auth_max_failed_attempts": 10,
+              "auth_required": false,
+              "cache_max_size": 0,
+              "cache_size": 1000,
+              "cookie_signing_key": null,
+              "data_dir": "",
+              "download_counter_flush_seconds": 30,
+              "download_max_concurrent": 20,
+              "download_timeout_seconds": 60,
+              "max_crate_size": 10,
+              "max_db_connections": 0,
+              "new_crates_restricted": false,
+              "required_crate_fields": [],
+              "session_age_seconds": 28800,
+              "sponsor_links_enabled": true,
+              "token_cache_enabled": true,
+              "token_cache_max_capacity": 10000,
+              "token_cache_ttl_seconds": 1800,
+              "token_db_retry_count": 3,
+              "token_db_retry_delay_ms": 100
+            }
+          },
+          "registry_filter": {
+            "$ref": "#/components/schemas/RegistryFilter",
+            "default": {
+              "license_allowed": [],
+              "license_enabled": false,
+              "license_exempt_crates": [],
+              "license_unknown": "deny"
+            }
+          },
+          "s3": {
+            "$ref": "#/components/schemas/S3",
+            "default": {
+              "access_key": null,
+              "allow_http": true,
+              "connect_timeout_seconds": 5,
+              "crates_bucket": "kellnr-crates",
+              "cratesio_bucket": "kellnr-cratesio",
+              "docs_bucket": null,
+              "enabled": false,
+              "endpoint": null,
+              "region": null,
+              "request_timeout_seconds": 30,
+              "secret_key": null,
+              "toolchain_bucket": "kellnr-toolchains"
+            }
+          },
+          "setup": {
+            "$ref": "#/components/schemas/Setup",
+            "default": {
+              "admin_pwd": "admin",
+              "admin_token": null
+            }
+          },
+          "toolchain": {
+            "$ref": "#/components/schemas/Toolchain",
+            "default": {
+              "enabled": false,
+              "max_size": 500
+            }
+          },
+          "webhooks": {
+            "$ref": "#/components/schemas/Webhooks",
+            "default": {
+              "block_private_targets": false,
+              "ignore_env_proxy": false
+            }
+          }
+        },
+        "type": "object"
+      },
+      "SettingsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Settings"
+          },
+          {
+            "properties": {
+              "defaults": {
+                "$ref": "#/components/schemas/Settings"
+              },
+              "leaves": {
+                "items": {
+                  "$ref": "#/components/schemas/LeafMeta"
+                },
+                "type": "array"
+              },
+              "sources": {
+                "additionalProperties": {
+                  "description": "Represents the source of a configuration value.",
+                  "enum": [
+                    "default",
+                    "toml",
+                    "env",
+                    "cli"
+                  ],
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "sources",
+              "defaults",
+              "leaves"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "Settings response, the flattened `Settings`, the per-leaf source map\nderived from the `SettingsProv`, and the compiled-in defaults the UI\nuses to show \"default: X\" next to overridden values.\n\nSecret leaves are redacted in `settings`, `defaults` and `leaves`: a set\nsecret is replaced by [`REDACTED`], an unset one is `null`.\n\n`leaves` is the new dynamic schema: one entry per `SettingsProv` leaf with\nthe value, default, source, type, secret flag, optional CLI flag string\n(auto-derived from clap) and optional label override. The Vue UI iterates\nover this list instead of hand-maintaining a parallel per-leaf table."
+      },
+      "Setup": {
+        "properties": {
+          "admin_pwd": {
+            "default": "admin",
+            "description": "Initial admin password",
+            "type": "string"
+          },
+          "admin_token": {
+            "default": null,
+            "description": "Initial admin API token",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "SponsorLinksEnabledResponse": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "Statistic": {
+        "properties": {
+          "last_updated_crate": {
+            "items": false,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "description": "A crate version. It is always a valid `SemVer` version and is compared,\nordered and hashed like one, including build metadata. It is displayed,\nserialized and stored as the version string it was parsed from.",
+                "type": "string"
+              }
+            ],
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "num_crate_downloads": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "num_crate_versions": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "num_crates": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "num_proxy_crate_downloads": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "num_proxy_crate_versions": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "num_proxy_crates": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "proxy_enabled": {
+            "type": "boolean"
+          },
+          "top_crates": {
+            "$ref": "#/components/schemas/TopCrates"
+          }
+        },
+        "required": [
+          "num_crates",
+          "num_crate_versions",
+          "num_crate_downloads",
+          "num_proxy_crates",
+          "num_proxy_crate_versions",
+          "num_proxy_crate_downloads",
+          "top_crates",
+          "proxy_enabled"
+        ],
+        "type": "object"
+      },
+      "Toolchain": {
+        "properties": {
+          "enabled": {
+            "default": false,
+            "description": "Enable toolchain distribution server",
+            "type": "boolean"
+          },
+          "max_size": {
+            "default": 500,
+            "description": "Max toolchain archive size in MB",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ToolchainComponentInfo": {
+        "description": "Information about an individual toolchain component (e.g., rustc, cargo)",
+        "properties": {
+          "hash": {
+            "description": "SHA256 hash of the component archive",
+            "type": "string"
+          },
+          "name": {
+            "description": "Component name (e.g., \"rustc\", \"cargo\", \"rust-std-x86_64-unknown-linux-gnu\")",
+            "type": "string"
+          },
+          "size": {
+            "description": "Component archive size in bytes",
+            "format": "int64",
+            "type": "integer"
+          },
+          "storage_path": {
+            "description": "Path to the stored component archive",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "storage_path",
+          "hash",
+          "size"
+        ],
+        "type": "object"
+      },
+      "ToolchainResponse": {
+        "description": "Response for toolchain operations",
+        "properties": {
+          "message": {
+            "description": "Optional message with details",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "success": {
+            "description": "Whether the operation succeeded",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "type": "object"
+      },
+      "ToolchainTargetInfo": {
+        "description": "Toolchain target information (e.g., a specific archive for a target triple)",
+        "properties": {
+          "components": {
+            "description": "Individual components extracted from the combined archive",
+            "items": {
+              "$ref": "#/components/schemas/ToolchainComponentInfo"
+            },
+            "type": "array"
+          },
+          "hash": {
+            "description": "SHA256 hash of the archive",
+            "type": "string"
+          },
+          "id": {
+            "description": "Target ID",
+            "format": "int64",
+            "type": "integer"
+          },
+          "size": {
+            "description": "Archive size in bytes",
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ToolchainTargetStatus",
+            "description": "Processing status"
+          },
+          "storage_path": {
+            "description": "Path to the stored archive",
+            "type": "string"
+          },
+          "target": {
+            "description": "Target triple (e.g., \"x86_64-unknown-linux-gnu\")",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target",
+          "storage_path",
+          "hash",
+          "size",
+          "status",
+          "components"
+        ],
+        "type": "object"
+      },
+      "ToolchainTargetStatus": {
+        "description": "Processing status of an uploaded toolchain target, stored as its\nlowercase name.",
+        "enum": [
+          "processing",
+          "ready",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "ToolchainWithTargets": {
+        "description": "Toolchain with all its targets",
+        "properties": {
+          "channel": {
+            "description": "Channel (e.g., \"stable\", \"beta\", \"nightly\")",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created": {
+            "description": "Creation timestamp",
+            "type": "string"
+          },
+          "date": {
+            "description": "Release date",
+            "type": "string"
+          },
+          "id": {
+            "description": "Toolchain ID",
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Toolchain name (e.g., \"rust\")",
+            "type": "string"
+          },
+          "targets": {
+            "description": "Available targets for this toolchain",
+            "items": {
+              "$ref": "#/components/schemas/ToolchainTargetInfo"
+            },
+            "type": "array"
+          },
+          "version": {
+            "description": "Toolchain version (e.g., \"1.75.0\")",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "date",
+          "created",
+          "targets"
+        ],
+        "type": "object"
+      },
+      "TopCrates": {
+        "description": "The most downloaded crates, `None` if there are fewer crates.",
+        "properties": {
+          "first": {
+            "items": false,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "second": {
+            "items": false,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "third": {
+            "items": false,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "User": {
+        "properties": {
+          "created": {
+            "type": "string"
+          },
+          "is_admin": {
+            "type": "boolean"
+          },
+          "is_read_only": {
+            "type": "boolean"
+          },
+          "name": {
+            "$ref": "#/components/schemas/UserName"
+          }
+        },
+        "required": [
+          "name",
+          "is_admin",
+          "is_read_only",
+          "created"
+        ],
+        "type": "object"
+      },
+      "UserId": {
+        "description": "Primary key of a user.",
+        "format": "int64",
+        "type": "integer"
+      },
+      "UserName": {
+        "description": "The name of a user.",
+        "type": "string"
+      },
+      "Version": {
+        "description": "A crate version. It is always a valid `SemVer` version and is compared,\nordered and hashed like one, including build metadata. It is displayed,\nserialized and stored as the version string it was parsed from.",
+        "type": "string"
+      },
+      "Warnings": {
+        "properties": {
+          "invalid_badges": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "invalid_categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "other": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "WebhookEvent": {
+        "enum": [
+          "crate_add",
+          "crate_update",
+          "crate_yank",
+          "crate_unyank"
+        ],
+        "type": "string"
+      },
+      "Webhooks": {
+        "properties": {
+          "block_private_targets": {
+            "default": false,
+            "description": "Refuse webhook deliveries to loopback, private and other non-public\naddresses. Link-local and cloud metadata addresses are always refused.",
+            "type": "boolean"
+          },
+          "ignore_env_proxy": {
+            "default": false,
+            "description": "Connect to webhook targets directly instead of through a proxy set in\n`HTTP_PROXY` or `HTTPS_PROXY`. Through a proxy, only the proxy's\naddress can be checked against the blocked targets.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "YankSuccess": {
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "cargo_token": {
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey"
+      },
+      "session_cookie": {
+        "in": "cookie",
+        "name": "kellnr_session_id",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "name": "kellnr.io"
+    },
+    "description": "Self-hosted Rust crate registry with support for rustdocs and crates.io caching\n\n[Back to Kellnr](../../)",
+    "license": {
+      "identifier": "MIT OR Apache-2.0",
+      "name": "MIT OR Apache-2.0"
+    },
+    "title": "Kellnr API",
+    "version": "0.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/acl/{crate_name}": {
+      "get": {
+        "operationId": "get_access_data",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OriginalName"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessData"
+                }
+              }
+            },
+            "description": "Access settings"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin or crate owner access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Get a crate's access settings (admin or crate owner)",
+        "tags": [
+          "acl"
+        ]
+      },
+      "put": {
+        "operationId": "set_access_data",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OriginalName"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessData"
+                }
+              }
+            },
+            "description": "Access settings updated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Update a crate's access settings (admin only)",
+        "tags": [
+          "acl"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoggedInUser"
+                }
+              }
+            },
+            "description": "Successfully logged in"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid credentials"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Authentication failed"
+          }
+        },
+        "summary": "Login with username and password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            },
+            "description": "Successfully logged out"
+          }
+        },
+        "summary": "Logout and clear session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/state": {
+      "get": {
+        "operationId": "login_state",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoggedInUser"
+                }
+              }
+            },
+            "description": "Current login state"
+          }
+        },
+        "summary": "Get current login state",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/crates": {
+      "get": {
+        "description": "Searches for crates by name and description in the Kellnr registry.",
+        "operationId": "search",
+        "parameters": [
+          {
+            "description": "Search query",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page to return, starting at 1",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Results per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            },
+            "description": "Search results"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Search crates in Kellnr registry",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/config.json": {
+      "get": {
+        "description": "Returns the configuration JSON for the Kellnr registry index.",
+        "operationId": "config_kellnr",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigJson"
+                }
+              }
+            },
+            "description": "Registry configuration"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Get registry configuration",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/dl/{package}/{version}/download": {
+      "get": {
+        "description": "Downloads a specific version of a crate from the Kellnr registry.",
+        "operationId": "download",
+        "parameters": [
+          {
+            "description": "Package name",
+            "in": "path",
+            "name": "package",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Package version",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {}
+            },
+            "description": "Crate archive"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid package name or version"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Download denied by a registry filter, e.g. the license filter"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found or download-restricted without access"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Download a crate from Kellnr registry",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/new": {
+      "put": {
+        "description": "Publishes a new version of a crate to the Kellnr registry.",
+        "operationId": "publish",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PubDataSuccess"
+                }
+              }
+            },
+            "description": "Crate published"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid crate data"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Version exists"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate is too large"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Publish a new crate version",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/new_empty": {
+      "put": {
+        "description": "Creates an empty crate placeholder for later publishing. Admin only.",
+        "operationId": "add_empty_crate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyCrateData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyCrateSuccess"
+                }
+              }
+            },
+            "description": "Empty crate created"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Unauthorized - admin only"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate already exists"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Create an empty crate placeholder",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{a}/{b}/{package}": {
+      "get": {
+        "description": "Returns sparse index data for a crate (3+ character names).",
+        "operationId": "prefetch_kellnr",
+        "parameters": [
+          {
+            "description": "First path segment",
+            "in": "path",
+            "name": "a",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Second path segment",
+            "in": "path",
+            "name": "b",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Package name",
+            "in": "path",
+            "name": "package",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Crate index data"
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found or download-restricted without access"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Prefetch crate index data",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{a}/{package}": {
+      "get": {
+        "description": "Returns sparse index data for a crate (1-2 character names).",
+        "operationId": "prefetch_len2_kellnr",
+        "parameters": [
+          {
+            "description": "First path segment",
+            "in": "path",
+            "name": "a",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Package name",
+            "in": "path",
+            "name": "package",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Crate index data"
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found or download-restricted without access"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Prefetch crate index data for short names",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{crate_name}/crate_groups": {
+      "get": {
+        "description": "Returns the list of groups with access to a restricted crate.",
+        "operationId": "list_crate_groups",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateGroupList"
+                }
+              }
+            },
+            "description": "List of groups"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          },
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "List crate groups",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{crate_name}/crate_groups/{group}": {
+      "delete": {
+        "description": "Removes a group's access to a restricted crate.",
+        "operationId": "remove_crate_group",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Group name to remove",
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateGroupResponse"
+                }
+              }
+            },
+            "description": "Group removed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          },
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Remove a group from crate access list",
+        "tags": [
+          "crates"
+        ]
+      },
+      "put": {
+        "description": "Adds a group to the access list of a restricted crate.",
+        "operationId": "add_crate_group",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Group name to add",
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateGroupResponse"
+                }
+              }
+            },
+            "description": "Group added"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          },
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Add a group to crate access list",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{crate_name}/crate_users": {
+      "get": {
+        "description": "Returns the list of users with access to a restricted crate.",
+        "operationId": "list_crate_users",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateUserList"
+                }
+              }
+            },
+            "description": "List of users"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          },
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "List crate users",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{crate_name}/crate_users/{user}": {
+      "delete": {
+        "description": "Removes a user's access to a restricted crate.",
+        "operationId": "remove_crate_user",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Username to remove",
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateUserResponse"
+                }
+              }
+            },
+            "description": "User removed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          },
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Remove a user from crate access list",
+        "tags": [
+          "crates"
+        ]
+      },
+      "put": {
+        "description": "Adds a user to the access list of a restricted crate.",
+        "operationId": "add_crate_user",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Username to add",
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateUserResponse"
+                }
+              }
+            },
+            "description": "User added"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          },
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Add a user to crate access list",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{crate_name}/crate_versions": {
+      "get": {
+        "description": "Returns all available versions of a crate.",
+        "operationId": "list_crate_versions",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateVersionList"
+                }
+              }
+            },
+            "description": "List of versions"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found or download-restricted without access"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "List crate versions",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{crate_name}/owners": {
+      "delete": {
+        "description": "Removes one or more owners from a crate. Cannot remove the last owner\nunless `allow_ownerless_crates` is enabled.",
+        "operationId": "remove_owner",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateUserResponse"
+                }
+              }
+            },
+            "description": "Owners removed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "User is not an owner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Cannot remove last owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Remove owners from a crate",
+        "tags": [
+          "crates"
+        ]
+      },
+      "get": {
+        "description": "Returns the list of owners for a crate.",
+        "operationId": "list_owners",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateUserList"
+                }
+              }
+            },
+            "description": "List of owners"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found or download-restricted without access"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "List crate owners",
+        "tags": [
+          "crates"
+        ]
+      },
+      "put": {
+        "description": "Adds one or more owners to a crate.",
+        "operationId": "add_owner",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateUserResponse"
+                }
+              }
+            },
+            "description": "Owners added"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Add owners to a crate",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{crate_name}/owners/{user}": {
+      "delete": {
+        "description": "Removes a single owner from a crate by username.",
+        "operationId": "remove_owner_single",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Username to remove",
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateUserResponse"
+                }
+              }
+            },
+            "description": "Owner removed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "User is not an owner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Cannot remove last owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Remove a single owner from a crate",
+        "tags": [
+          "crates"
+        ]
+      },
+      "put": {
+        "description": "Adds a single owner to a crate by username.",
+        "operationId": "add_owner_single",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Username to add",
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateUserResponse"
+                }
+              }
+            },
+            "description": "Owner added"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Add a single owner to a crate",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{crate_name}/{version}/unyank": {
+      "put": {
+        "description": "Removes the yanked status from a crate version, allowing downloads again.",
+        "operationId": "unyank",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Version to unyank",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YankSuccess"
+                }
+              }
+            },
+            "description": "Version unyanked"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Unyank a crate version",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/crates/{crate_name}/{version}/yank": {
+      "delete": {
+        "description": "Marks a crate version as yanked, preventing new downloads.",
+        "operationId": "yank",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "crate_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Version to yank",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YankSuccess"
+                }
+              }
+            },
+            "description": "Version yanked"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Yank a crate version",
+        "tags": [
+          "crates"
+        ]
+      }
+    },
+    "/api/v1/cratesio": {
+      "get": {
+        "description": "Proxies search requests to crates.io and returns the results.",
+        "operationId": "search",
+        "parameters": [
+          {
+            "description": "Search query",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Results per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results from crates.io"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crates.io proxy disabled"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crates.io search failed"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Search crates.io",
+        "tags": [
+          "cratesio"
+        ]
+      }
+    },
+    "/api/v1/cratesio/config.json": {
+      "get": {
+        "description": "Returns the sparse registry configuration for the crates.io proxy.",
+        "operationId": "config_cratesio",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigJson"
+                }
+              }
+            },
+            "description": "Crates.io proxy configuration"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Get crates.io proxy configuration",
+        "tags": [
+          "cratesio"
+        ]
+      }
+    },
+    "/api/v1/cratesio/dl/{package}/{version}/download": {
+      "get": {
+        "description": "Downloads and caches a crate from crates.io. Returns the cached version\nif available.",
+        "operationId": "download",
+        "parameters": [
+          {
+            "description": "Package name",
+            "in": "path",
+            "name": "package",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Package version",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {}
+            },
+            "description": "Crate archive"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid package name or version"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Download denied by a crates.io filter, e.g. the license filter"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found or proxy disabled"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Failed to save crate"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate from crates.io does not match the index checksum"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Download a crate from crates.io",
+        "tags": [
+          "cratesio"
+        ]
+      }
+    },
+    "/api/v1/cratesio/{a}/{b}/{name}": {
+      "get": {
+        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 3 or more characters.",
+        "operationId": "prefetch_cratesio",
+        "parameters": [
+          {
+            "description": "First two characters of crate name",
+            "in": "path",
+            "name": "a",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Next two characters of crate name",
+            "in": "path",
+            "name": "b",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Full crate name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Crate index metadata"
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crates.io is not reachable"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Prefetch crate metadata from crates.io (3+ char names)",
+        "tags": [
+          "cratesio"
+        ]
+      }
+    },
+    "/api/v1/cratesio/{a}/{name}": {
+      "get": {
+        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 1-2 characters.",
+        "operationId": "prefetch_len2_cratesio",
+        "parameters": [
+          {
+            "description": "Length prefix (1 or 2)",
+            "in": "path",
+            "name": "a",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Full crate name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Crate index metadata"
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crates.io is not reachable"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Prefetch crate metadata from crates.io (1-2 char names)",
+        "tags": [
+          "cratesio"
+        ]
+      }
+    },
+    "/api/v1/docs/builds": {
+      "get": {
+        "description": "Returns the list of crates currently in the documentation build queue.\nDownload-restricted crates are only listed for users who may read their docs.",
+        "operationId": "docs_in_queue",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocQueueResponse"
+                }
+              }
+            },
+            "description": "Documentation build queue"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Get documentation build queue",
+        "tags": [
+          "docs"
+        ]
+      },
+      "post": {
+        "description": "Add a crate version to the documentation build queue.\nRequires ownership of the crate without read-only restriction or admin access.",
+        "operationId": "build_rustdoc",
+        "parameters": [
+          {
+            "description": "Package name",
+            "in": "query",
+            "name": "package",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OriginalName"
+            }
+          },
+          {
+            "description": "Package version",
+            "in": "query",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Build queued successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate or version does not exist"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not logged in"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner of the crate or read-only"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Trigger documentation build for a crate",
+        "tags": [
+          "docs"
+        ]
+      }
+    },
+    "/api/v1/docs/migrate-storage": {
+      "post": {
+        "description": "One-time backfill for existing deployments that switch `s3.docs_bucket`/\n`gcs.docs_bucket` from unset to a bucket name: copies every file already\non local disk (both auto-generated and manually-published docs use the\nsame on-disk layout) into the now-configured backend. Non-destructive —\nlocal files are left in place, so this is safe to re-run. Runs in the\nbackground since a large registry can take minutes to copy; admin-only.",
+        "operationId": "migrate_docs_storage",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrateDocsStorageResponse"
+                }
+              }
+            },
+            "description": "No local docs found to migrate"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrateDocsStorageResponse"
+                }
+              }
+            },
+            "description": "Migration started in the background"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Docs are still backed by local disk, nothing to migrate to"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an admin"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Copy locally-stored docs into the configured S3/GCS docs bucket",
+        "tags": [
+          "docs"
+        ]
+      }
+    },
+    "/api/v1/docs/{package}/latest": {
+      "get": {
+        "description": "Redirects to the latest documentation for a given package.",
+        "operationId": "latest_docs",
+        "parameters": [
+          {
+            "description": "Package name",
+            "in": "path",
+            "name": "package",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to latest documentation"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Redirect to latest documentation",
+        "tags": [
+          "docs"
+        ]
+      }
+    },
+    "/api/v1/docs/{package}/{version}": {
+      "put": {
+        "description": "Upload documentation for a specific crate and version.\nRequires ownership of the crate (via cargo token).",
+        "operationId": "publish_docs",
+        "parameters": [
+          {
+            "description": "Package name",
+            "in": "path",
+            "name": "package",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Package version",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "items": {
+                  "format": "int32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              }
+            }
+          },
+          "description": "Documentation archive (tar.gz or zip)",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocUploadResponse"
+                }
+              }
+            },
+            "description": "Documentation published successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate or version does not exist"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner of the crate"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Publish documentation for a crate version",
+        "tags": [
+          "docs"
+        ]
+      }
+    },
+    "/api/v1/groups": {
+      "get": {
+        "operationId": "list_groups",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Group"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "List of all groups"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "List all groups (admin only)",
+        "tags": [
+          "groups"
+        ]
+      },
+      "post": {
+        "operationId": "add",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewGroup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Group created successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Create a new group (admin only)",
+        "tags": [
+          "groups"
+        ]
+      }
+    },
+    "/api/v1/groups/{group_name}/members": {
+      "get": {
+        "operationId": "list_users",
+        "parameters": [
+          {
+            "description": "Group name",
+            "in": "path",
+            "name": "group_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupUserList"
+                }
+              }
+            },
+            "description": "List of group members"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "List members of a group (admin only)",
+        "tags": [
+          "groups"
+        ]
+      }
+    },
+    "/api/v1/groups/{group_name}/members/{name}": {
+      "delete": {
+        "operationId": "delete_user",
+        "parameters": [
+          {
+            "description": "Group name",
+            "in": "path",
+            "name": "group_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Username to remove",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User removed from group successfully"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Remove a user from a group (admin only)",
+        "tags": [
+          "groups"
+        ]
+      },
+      "put": {
+        "operationId": "add_user",
+        "parameters": [
+          {
+            "description": "Group name",
+            "in": "path",
+            "name": "group_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Username to add",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User added to group successfully"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Add a user to a group (admin only)",
+        "tags": [
+          "groups"
+        ]
+      }
+    },
+    "/api/v1/groups/{name}": {
+      "delete": {
+        "operationId": "delete",
+        "parameters": [
+          {
+            "description": "Group name to delete",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Group deleted successfully"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Delete a group (admin only)",
+        "tags": [
+          "groups"
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "health_check",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Service healthy"
+          }
+        },
+        "summary": "Health check endpoint",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/oauth2/callback": {
+      "get": {
+        "description": "This endpoint:\n1. Validates the CSRF state against the database and the browser cookie\n2. Exchanges the authorization code for tokens\n3. Validates the ID token\n4. Creates or links the user account\n5. Creates a session and sets the session cookie\n6. Redirects to the UI",
+        "operationId": "callback",
+        "parameters": [
+          {
+            "description": "Authorization code from the provider",
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "CSRF protection state",
+            "in": "path",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Error code from the provider, e.g. `access_denied`",
+            "in": "path",
+            "name": "error",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Human readable error from the provider",
+            "in": "path",
+            "name": "error_description",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to UI after successful login or to the login page on a provider error"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid state or missing code"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Token exchange failed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "User not found and auto-provisioning disabled"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "OAuth2 not enabled"
+          }
+        },
+        "summary": "Handle `OAuth2` callback from the provider",
+        "tags": [
+          "oauth2"
+        ]
+      }
+    },
+    "/api/v1/oauth2/config": {
+      "get": {
+        "description": "Returns whether `OAuth2` is enabled and the button text to display.\nThis endpoint is always accessible (no auth required).",
+        "operationId": "get_config",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuth2Config"
+                }
+              }
+            },
+            "description": "OAuth2 configuration"
+          }
+        },
+        "summary": "Get `OAuth2` configuration for the UI",
+        "tags": [
+          "oauth2"
+        ]
+      }
+    },
+    "/api/v1/oauth2/error": {
+      "get": {
+        "description": "Handles errors from the `OAuth2` provider (e.g., user cancelled, access denied)",
+        "operationId": "error_callback",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "error",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error_description",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to login page with error"
+          }
+        },
+        "summary": "Error callback for `OAuth2` flow",
+        "tags": [
+          "oauth2"
+        ]
+      }
+    },
+    "/api/v1/oauth2/login": {
+      "get": {
+        "description": "This endpoint:\n1. Generates PKCE challenge and state for CSRF protection\n2. Stores state/PKCE/nonce in the database and binds the state to the\n   browser with a short-lived encrypted cookie\n3. Redirects the user to the `OAuth2` provider's authorization endpoint",
+        "operationId": "login",
+        "responses": {
+          "302": {
+            "description": "Redirect to OAuth2 provider"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "OAuth2 not enabled"
+          }
+        },
+        "summary": "Initiate `OAuth2` login flow",
+        "tags": [
+          "oauth2"
+        ]
+      }
+    },
+    "/api/v1/toolchains": {
+      "get": {
+        "description": "Returns all toolchains with their available targets.\nRequires admin access.",
+        "operationId": "list_toolchains",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ToolchainWithTargets"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "List of toolchains"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "List all toolchains",
+        "tags": [
+          "toolchains"
+        ]
+      },
+      "put": {
+        "description": "Adds the combined archive of one target to a toolchain. The archive is\nsplit into its components in the background.\nRequires admin access.",
+        "operationId": "upload_toolchain",
+        "parameters": [
+          {
+            "description": "Toolchain name (e.g., \"rust\")",
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Toolchain version (e.g., \"1.75.0\")",
+            "in": "query",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target triple (e.g., \"x86_64-unknown-linux-gnu\")",
+            "in": "query",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Release date (e.g., \"2024-01-15\")",
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional channel to associate (e.g., \"stable\")",
+            "in": "query",
+            "name": "channel",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "items": {
+                  "format": "int32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              }
+            }
+          },
+          "description": "Combined toolchain archive (.tar.xz)",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolchainResponse"
+                }
+              }
+            },
+            "description": "Toolchain uploaded"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Target or archive already exists"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Archive is too large"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Storage not configured"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Upload a toolchain",
+        "tags": [
+          "toolchains"
+        ]
+      }
+    },
+    "/api/v1/toolchains/channels": {
+      "get": {
+        "description": "Returns all configured channels (e.g., stable, beta, nightly) and\nthe toolchain versions they point to.\nRequires admin access.",
+        "operationId": "list_channels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelInfo"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "List of channels"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "List all channels",
+        "tags": [
+          "toolchains"
+        ]
+      }
+    },
+    "/api/v1/toolchains/channels/{channel}": {
+      "put": {
+        "description": "Updates a channel (e.g., \"stable\") to point to a specific toolchain version.\nRequires admin access.",
+        "operationId": "set_channel",
+        "parameters": [
+          {
+            "description": "Channel name (e.g., stable, beta, nightly)",
+            "in": "path",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetChannelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolchainResponse"
+                }
+              }
+            },
+            "description": "Channel updated"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Toolchain not found"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Set a channel to point to a specific toolchain version",
+        "tags": [
+          "toolchains"
+        ]
+      }
+    },
+    "/api/v1/toolchains/dist/{date}/{filename}": {
+      "get": {
+        "description": "Downloads a specific toolchain archive file.",
+        "operationId": "download_archive",
+        "parameters": [
+          {
+            "description": "Release date (e.g., 2024-01-15)",
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Archive filename",
+            "in": "path",
+            "name": "filename",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {}
+            },
+            "description": "Toolchain archive (xz, gzip, or raw)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Archive not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Storage not configured"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Download a toolchain archive",
+        "tags": [
+          "toolchains"
+        ]
+      }
+    },
+    "/api/v1/toolchains/dist/{manifest_file}": {
+      "get": {
+        "description": "Returns a rustup-compatible manifest for a channel.\nExpects a filename in the format `channel-rust-{channel}.toml`\ne.g., `channel-rust-stable.toml` or `channel-rust-nightly.toml`",
+        "operationId": "get_channel_manifest",
+        "parameters": [
+          {
+            "description": "Manifest filename (e.g., channel-rust-stable.toml)",
+            "in": "path",
+            "name": "manifest_file",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/toml": {}
+            },
+            "description": "Channel manifest (TOML)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Channel not found or no targets available"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Targets are still being processed"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Get the channel manifest (rustup-compatible TOML)",
+        "tags": [
+          "toolchains"
+        ]
+      }
+    },
+    "/api/v1/toolchains/{name}/{version}": {
+      "delete": {
+        "description": "Removes a toolchain version and all associated target archives.\nRequires admin access.",
+        "operationId": "delete_toolchain",
+        "parameters": [
+          {
+            "description": "Toolchain name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Toolchain version",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolchainResponse"
+                }
+              }
+            },
+            "description": "Toolchain deleted"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Toolchain not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Storage not configured"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Delete a toolchain and all its targets",
+        "tags": [
+          "toolchains"
+        ]
+      }
+    },
+    "/api/v1/toolchains/{name}/{version}/targets/{target}": {
+      "delete": {
+        "description": "Removes a specific target from a toolchain. If this is the last target,\nthe entire toolchain is deleted.\nRequires admin access.",
+        "operationId": "delete_toolchain_target",
+        "parameters": [
+          {
+            "description": "Toolchain name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Toolchain version",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target triple",
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolchainResponse"
+                }
+              }
+            },
+            "description": "Target deleted"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Toolchain or target not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Storage not configured"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Delete a specific toolchain target",
+        "tags": [
+          "toolchains"
+        ]
+      }
+    },
+    "/api/v1/ui/crate_data": {
+      "get": {
+        "operationId": "crate_data",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OriginalName"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateData"
+                }
+              }
+            },
+            "description": "Crate details"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found or download-restricted without access"
+          }
+        },
+        "summary": "Get detailed crate data",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/crate_dependents": {
+      "get": {
+        "operationId": "crate_dependents",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OriginalName"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrateDependents"
+                }
+              }
+            },
+            "description": "Dependents of the crate"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found or download-restricted without access"
+          }
+        },
+        "summary": "Get the crates whose latest version depends on a crate",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/crates": {
+      "get": {
+        "operationId": "crates",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cache",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/CrateSort"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "description": "Only crates with this keyword",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Only crates in this category",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Number of the page, starting at 0",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Entries per page, 10 by default, at most 100",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pagination"
+                }
+              }
+            },
+            "description": "Paginated crate list"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Page out of range"
+          }
+        },
+        "summary": "Get paginated list of crates",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/crates/{name}": {
+      "delete": {
+        "operationId": "delete_crate_all",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All crate versions deleted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid parameters"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Delete all versions of a crate (path parameter version)",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/crates/{name}/{version}": {
+      "delete": {
+        "operationId": "delete_crate_version",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Version to delete",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Crate version deleted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid parameters"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Delete a specific version of a crate (path parameter version)",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/cratesio_data": {
+      "get": {
+        "operationId": "cratesio_data",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OriginalName"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The JSON answer of the crates.io API for the crate (`GET https://crates.io/api/v1/crates/{name}`), passed through unchanged"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Crate not found"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "crates.io failed or cannot be reached"
+          }
+        },
+        "summary": "Get crate data from crates.io",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/docs_enabled": {
+      "get": {
+        "operationId": "docs_enabled",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocsEnabledResponse"
+                }
+              }
+            },
+            "description": "Documentation generation status"
+          }
+        },
+        "summary": "Check if documentation generation is enabled",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/search": {
+      "get": {
+        "operationId": "search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NameOrDescription"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cache",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Number of the page, starting at 0",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Entries per page, 10 by default, at most 100",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pagination"
+                }
+              }
+            },
+            "description": "Paginated search results"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Page out of range"
+          }
+        },
+        "summary": "Search for crates by name and description",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/settings": {
+      "get": {
+        "operationId": "settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            },
+            "description": "Kellnr settings with source tracking"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Get Kellnr settings (admin only)",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/sponsor_links_enabled": {
+      "get": {
+        "operationId": "sponsor_links_enabled",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SponsorLinksEnabledResponse"
+                }
+              }
+            },
+            "description": "Sponsor links status"
+          }
+        },
+        "summary": "Check if the web UI shows links to sponsor Kellnr",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/statistics": {
+      "get": {
+        "operationId": "statistic",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Statistic"
+                }
+              }
+            },
+            "description": "Registry statistics"
+          }
+        },
+        "summary": "Get registry statistics",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/version": {
+      "get": {
+        "operationId": "kellnr_version",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KellnrVersion"
+                }
+              }
+            },
+            "description": "Kellnr version"
+          }
+        },
+        "summary": "Get Kellnr version",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "operationId": "list_users",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "List of all users"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "List all users (admin only)",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "operationId": "add",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "User created successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Create a new user (admin only)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/password": {
+      "put": {
+        "operationId": "change_pwd",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PwdChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid password or validation failed"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Change the current user's password",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/tokens": {
+      "get": {
+        "operationId": "list_tokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AuthToken"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "List of auth tokens"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "List auth tokens for the current user",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "operationId": "add_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTokenReqData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewTokenResponse"
+                }
+              }
+            },
+            "description": "Token created successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid token name"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Add a new auth token for the current user",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/tokens/{id}": {
+      "delete": {
+        "operationId": "delete_token",
+        "parameters": [
+          {
+            "description": "Token ID to delete",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token deleted successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Token not found"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Delete an auth token",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{name}": {
+      "delete": {
+        "operationId": "delete",
+        "parameters": [
+          {
+            "description": "Username to delete",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User deleted successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Cannot delete yourself"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Delete a user (admin only)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{name}/admin": {
+      "post": {
+        "operationId": "admin",
+        "parameters": [
+          {
+            "description": "Username",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminState"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Admin state changed successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Cannot demote yourself"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Change a user's admin state (admin only)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{name}/password": {
+      "put": {
+        "operationId": "reset_pwd",
+        "parameters": [
+          {
+            "description": "Username",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetPwd"
+                }
+              }
+            },
+            "description": "Password reset successfully"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Reset a user's password (admin only)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{name}/read-only": {
+      "post": {
+        "operationId": "read_only",
+        "parameters": [
+          {
+            "description": "Username",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadOnlyState"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Read-only state changed successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Cannot lock yourself"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Change a user's read-only state (admin only)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/webhooks": {
+      "get": {
+        "operationId": "get_all_webhooks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllWebhooksResponse"
+                }
+              }
+            },
+            "description": "List of all webhooks"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "List all webhooks (admin only)",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "post": {
+        "operationId": "register_webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterWebhookResponse"
+                }
+              }
+            },
+            "description": "Webhook registered successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid callback URL, target address not permitted or invalid secret"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Register a new webhook (admin only)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}": {
+      "delete": {
+        "operationId": "delete_webhook",
+        "parameters": [
+          {
+            "description": "Webhook ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook deleted successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Delete a webhook (admin only)",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "get": {
+        "operationId": "get_webhook",
+        "parameters": [
+          {
+            "description": "Webhook ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetWebhookResponse"
+                }
+              }
+            },
+            "description": "Webhook details"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Get a webhook by ID (admin only)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}/test": {
+      "post": {
+        "operationId": "test_webhook",
+        "parameters": [
+          {
+            "description": "Webhook ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test payload sent successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid callback URL or target address not permitted"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Admin access required"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Webhook callback request failed"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Webhook callback returned a status other than 2xx, which is contained in the error message"
+          }
+        },
+        "security": [
+          {
+            "cargo_token": []
+          }
+        ],
+        "summary": "Test a webhook by sending a test payload (admin only)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Authentication endpoints",
+      "name": "auth"
+    },
+    {
+      "description": "User management",
+      "name": "users"
+    },
+    {
+      "description": "Group management",
+      "name": "groups"
+    },
+    {
+      "description": "Crate access control",
+      "name": "acl"
+    },
+    {
+      "description": "Kellnr registry API",
+      "name": "crates"
+    },
+    {
+      "description": "Crates.io proxy",
+      "name": "cratesio"
+    },
+    {
+      "description": "Documentation",
+      "name": "docs"
+    },
+    {
+      "description": "Toolchain distribution",
+      "name": "toolchains"
+    },
+    {
+      "description": "Webhooks",
+      "name": "webhooks"
+    },
+    {
+      "description": "OAuth2/OIDC",
+      "name": "oauth2"
+    },
+    {
+      "description": "Web UI API",
+      "name": "ui"
+    },
+    {
+      "description": "Health check",
+      "name": "health"
+    }
+  ]
+}
