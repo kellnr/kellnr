@@ -1032,7 +1032,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "time",
- "toml 1.1.6+spec-1.1.0",
+ "toml",
  "toml_edit 0.25.12+spec-1.1.0",
  "toml_parser",
  "toml_writer",
@@ -1140,7 +1140,7 @@ dependencies = [
  "serde-untagged",
  "serde-value",
  "thiserror 2.0.21",
- "toml 1.1.6+spec-1.1.0",
+ "toml",
  "unicode-ident",
  "url",
 ]
@@ -4188,7 +4188,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
- "toml 1.1.6+spec-1.1.0",
+ "toml",
  "tower",
  "tower-http 0.7.1",
  "tracing",
@@ -4506,7 +4506,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "toml 1.1.6+spec-1.1.0",
+ "toml",
  "tracing",
  "url",
  "utoipa",
@@ -6060,9 +6060,9 @@ dependencies = [
 
 [[package]]
 name = "provcfg"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "497a5091cfd593481250a4172a0cf4343d0d3c7fbed6fef955a099a6bef05635"
+checksum = "280de6c93546a3b74a01d4136c5518aa12615b414423c7705cf3f500182eb26e"
 dependencies = [
  "erased-serde",
  "provcfg-clap",
@@ -6070,14 +6070,14 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
- "toml 0.9.12+spec-1.1.0",
+ "toml",
 ]
 
 [[package]]
 name = "provcfg-clap"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c57c49e5ee45c37d8c2d28f4352ba26b07e49b58d90d8585c9ae8f2092bf63aa"
+checksum = "a3440e047aa3f5927347e6c63c9c0a8e880817d734a98f5e68213444d7fa3464"
 dependencies = [
  "clap",
  "provcfg-clap-macros",
@@ -6085,24 +6085,24 @@ dependencies = [
 
 [[package]]
 name = "provcfg-clap-macros"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29dd54c4a83c29e60f8865367e408299baf876671d4f6431670b54c962911c55"
+checksum = "f3c2f74ef6f12bd98d5f5cf565336d030ebbe55961af3825c8174fe7efc8036b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.118",
+ "syn 3.0.9",
 ]
 
 [[package]]
 name = "provcfg-macros"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "023d466f314f68b781a408542c8f0d8205d50d50064c21937584961b032469a9"
+checksum = "5bfc99387696673c1caca391a3108a6d60a533f26a30bc8fa0c7342b03e4557a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.118",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -7832,21 +7832,6 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "toml"
-version = "0.9.12+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf92845e79fc2e2def6a5d828f0801e29a2f8acc037becc5ab08595c7d5e9863"
-dependencies = [
- "indexmap 2.13.0",
- "serde_core",
- "serde_spanned",
- "toml_datetime 0.7.5+spec-1.1.0",
- "toml_parser",
- "toml_writer",
- "winnow 0.7.15",
 ]
 
 [[package]]
