@@ -11,7 +11,7 @@ documentation.workspace = true
 
 [features]
 # Test helpers like `state::test_state()`. Enable only from dev-dependencies.
-test-support = ["kellnr-db/mock"]
+test-support = ["kellnr-db/mock", "kellnr-settings/test-support"]
 
 [dependencies]
 # Internal dependencies from Kellnr
@@ -39,6 +39,7 @@ utoipa.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
+kellnr-settings = { workspace = true, features = ["test-support"] }
 kellnr-db = { workspace = true, features = ["mock"] }
 hyper.workspace = true
 mockall.workspace = true

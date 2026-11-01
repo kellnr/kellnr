@@ -286,14 +286,9 @@ mod tests {
     }
 
     fn test_settings(cache_size: u64) -> Settings {
-        Settings {
-            registry: Registry {
-                data_dir: "/tmp/kellnr-test-cache".to_string(),
-                cache_size,
-                ..Registry::default()
-            },
-            ..Settings::default()
-        }
+        let mut settings = kellnr_settings::test_settings();
+        settings.registry.cache_size = cache_size;
+        settings
     }
 
     fn test_registry(cache_size: u64, cache_max_size: u64) -> Registry {

@@ -198,7 +198,6 @@ mod bin_tests {
     use kellnr_common::original_name::OriginalName;
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_common::version::Version;
-    use kellnr_settings::Settings;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
@@ -206,40 +205,22 @@ mod bin_tests {
     use crate::pub_data::PubData;
 
     struct TestData {
-        settings: Settings,
+        _data_dir: tempfile::TempDir,
+        settings: kellnr_settings::Settings,
         crate_storage: KellnrCrateStorage,
     }
 
-    impl Drop for TestData {
-        fn drop(&mut self) {
-            self.clean();
-        }
-    }
-
     impl TestData {
-        fn from(data_dir: &str) -> TestData {
-            let settings = Settings {
-                registry: kellnr_settings::Registry {
-                    data_dir: data_dir.to_owned(),
-                    session_age_seconds: 60,
-                    ..kellnr_settings::Registry::default()
-                },
-                setup: kellnr_settings::Setup {
-                    admin_pwd: String::new(),
-                    ..kellnr_settings::Setup::default()
-                },
-                ..Settings::default()
-            };
+        fn new() -> TestData {
+            let data_dir = tempfile::tempdir().unwrap();
+            let settings = kellnr_settings::test_settings_in(data_dir.path());
             let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
             let crate_storage = KellnrCrateStorage::new(&settings, storage);
             TestData {
+                _data_dir: data_dir,
                 settings,
                 crate_storage,
             }
-        }
-        fn clean(&self) {
-            rm_rf::ensure_removed(&self.settings.registry.data_dir)
-                .expect("Cannot remove test bin directory.");
         }
     }
 
@@ -252,7 +233,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
 
-        let test_storage = TestData::from("test_add_crate_binary");
+        let test_storage = TestData::new();
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
@@ -269,8 +250,6 @@ mod bin_tests {
 
         assert!(result.is_ok());
         assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], get_res);
-
-        test_storage.clean();
     }
 
     #[tokio::test]
@@ -282,7 +261,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0"),
         };
 
-        let test_storage = TestData::from("Test_Add_crate_binary_Upper-Case");
+        let test_storage = TestData::new();
         let name = OriginalName::try_from(pub_data.metadata.name).unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         let result = test_storage
@@ -300,7 +279,6 @@ mod bin_tests {
         assert!(result.is_ok());
 
         assert_eq!(vec![0x00, 0x11, 0x22, 0x33, 0x44], get_res);
-        test_storage.clean();
     }
 
     #[tokio::test]
@@ -312,7 +290,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
 
-        let test_bin = TestData::from("test_add_duplicate_crate_binary");
+        let test_bin = TestData::new();
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
 
@@ -330,12 +308,11 @@ mod bin_tests {
             "Crate with version already exists: test-0.1.0",
             result.unwrap_err().to_string()
         );
-        test_bin.clean();
     }
 
     #[tokio::test]
     async fn create_rand_doc_queue_path() {
-        let test_bin = TestData::from("test_doc_queue");
+        let test_bin = TestData::new();
 
         let rand_path = test_bin
             .crate_storage
@@ -353,7 +330,6 @@ mod bin_tests {
                     .to_string()
             )
         );
-        test_bin.clean();
     }
 
     #[tokio::test]
@@ -364,7 +340,7 @@ mod bin_tests {
             metadata_length: 0,
             metadata: PublishMetadata::minimal("test", "0.1.0"),
         };
-        let test_storage = TestData::from("delete_crate");
+        let test_storage = TestData::new();
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.1.0").unwrap();
         test_storage
@@ -381,7 +357,6 @@ mod bin_tests {
             .unwrap();
 
         assert!(!crate_path.exists());
-        test_storage.clean();
     }
 
     #[tokio::test]
@@ -393,7 +368,7 @@ mod bin_tests {
             metadata: PublishMetadata::minimal("test", "0.2.0"),
         };
 
-        let test_storage = TestData::from("delete_crate_invalidates_cache");
+        let test_storage = TestData::new();
         let name = OriginalName::try_from("test").unwrap();
         let version = Version::try_from("0.2.0").unwrap();
 
@@ -434,6 +409,5 @@ mod bin_tests {
         );
 
         assert!(!std::path::PathBuf::from(crate_path).exists());
-        test_storage.clean();
     }
 }

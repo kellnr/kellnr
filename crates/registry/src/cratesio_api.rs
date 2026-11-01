@@ -299,7 +299,6 @@ async fn cache_crate(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -309,13 +308,13 @@ mod tests {
     use axum::routing::get;
     use axum::{Router, middleware};
     use http_body_util::BodyExt;
-    use kellnr_common::util::generate_rand_string;
     use kellnr_db::{ConString, Database, SqliteConString};
     use kellnr_filter::DownloadFilters;
     use kellnr_http::state::AppStateData;
     use kellnr_settings::{CratesioFilter, LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
+    use kellnr_storage::object_storage::MemoryStorage;
     use tower::ServiceExt;
 
     use super::*;
@@ -474,7 +473,7 @@ mod tests {
     }
 
     struct TestKellnr {
-        path: PathBuf,
+        data_dir: tempfile::TempDir,
         client: Router,
         storage: Arc<CratesIoCrateStorage>,
         upstream: Arc<Upstream>,
@@ -487,16 +486,12 @@ mod tests {
 
         async fn with_filter(filter: CratesioFilter) -> Self {
             let upstream = Arc::new(Upstream::default());
+            let data_dir = tempfile::tempdir().unwrap();
             let settings = Settings {
-                registry: kellnr_settings::Registry {
-                    data_dir: "/tmp/".to_string() + &generate_rand_string(10),
-                    ..kellnr_settings::Registry::default()
-                },
                 proxy: fake_cratesio(upstream.clone()).await,
                 cratesio_filter: filter,
-                ..Settings::default()
+                ..kellnr_settings::test_settings_in(data_dir.path())
             };
-            std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
             let storage =
                 Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
             let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
@@ -505,7 +500,7 @@ mod tests {
             let db: Arc<dyn DbProvider> = Arc::new(Database::new(&con_string, 10).await.unwrap());
 
             TestKellnr {
-                path: PathBuf::from(&settings.registry.data_dir),
+                data_dir,
                 client: app(settings, storage.clone(), db),
                 storage,
                 upstream,
@@ -553,12 +548,6 @@ mod tests {
         }
     }
 
-    impl Drop for TestKellnr {
-        fn drop(&mut self) {
-            rm_rf::remove(&self.path).expect("Cannot remove TestKellnr");
-        }
-    }
-
     fn app(
         settings: Settings,
         storage: Arc<CratesIoCrateStorage>,
@@ -602,16 +591,12 @@ mod tests {
     ) -> (Router, tempfile::TempDir) {
         let data_dir = tempfile::tempdir().unwrap();
         let settings = Settings {
-            registry: kellnr_settings::Registry {
-                data_dir: data_dir.path().to_string_lossy().to_string(),
-                ..kellnr_settings::Registry::default()
-            },
             proxy: kellnr_settings::Proxy {
                 enabled: true,
                 ..kellnr_settings::Proxy::default()
             },
             cratesio_filter: filter,
-            ..Settings::default()
+            ..kellnr_settings::test_settings_in(data_dir.path())
         };
         let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
         let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
@@ -708,15 +693,8 @@ mod tests {
 
     #[tokio::test]
     async fn cratesio_disabled_returns_404() {
-        let settings = Settings {
-            registry: kellnr_settings::Registry {
-                data_dir: "/tmp/".to_string() + &generate_rand_string(10),
-                ..kellnr_settings::Registry::default()
-            },
-            ..Settings::default()
-        };
-        let data_dir = settings.registry.data_dir.clone();
-        let storage = Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
+        let settings = kellnr_settings::test_settings();
+        let storage = Box::new(MemoryStorage::new()) as DynStorage;
         let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
         let client = app(settings, storage, Arc::new(kellnr_db::mock::MockDb::new()));
 
@@ -730,7 +708,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(StatusCode::NOT_FOUND, r.status());
-        rm_rf::remove(data_dir).unwrap();
     }
 
     #[tokio::test]
@@ -753,7 +730,7 @@ mod tests {
 
         let kellnr = TestKellnr::new().await;
         kellnr.cache("upstream", "1.0.0").await;
-        let file = kellnr.path.join("cratesio/upstream-1.0.0.crate");
+        let file = kellnr.data_dir.path().join("cratesio/upstream-1.0.0.crate");
         std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
         if std::fs::read(&file).is_ok() {
             // Running as root, the file stays readable.

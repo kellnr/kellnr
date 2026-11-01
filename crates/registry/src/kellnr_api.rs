@@ -1074,7 +1074,6 @@ pub async fn unyank(
 
 #[cfg(test)]
 mod reg_api_tests {
-    use std::iter;
     use std::path::PathBuf;
     use std::time::Duration;
 
@@ -1096,13 +1095,12 @@ mod reg_api_tests {
     use kellnr_settings::{LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
+    use kellnr_storage::object_storage::MemoryStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use kellnr_storage::storage::{ObjectWithMeta, Storage};
     use kellnr_storage::storage_error::StorageError;
     use kellnr_storage::storage_key::StorageKey;
     use mockall::predicate::*;
-    use rand::distr::Alphanumeric;
-    use rand::{RngExt, rng};
     use tokio::fs::read;
     use tokio::sync::Notify;
     use tower::ServiceExt;
@@ -1244,19 +1242,13 @@ mod reg_api_tests {
         assert_eq!(1, kellnr.db.get_crate_meta_list(&name).await.unwrap().len());
     }
 
-    /// Path of the crate file in the storage of the test settings.
-    fn crate_file(settings: &Settings, name: &str, version: &str) -> PathBuf {
-        settings.bin_path().join(format!("{name}-{version}.crate"))
-    }
-
     /// The crate bytes `pub_body` sends.
     const CRATE_BYTES: [u8; 4] = [0x1f, 0x8b, 0x08, 0x00];
 
     #[tokio::test]
     async fn publish_adopts_orphaned_crate_file_with_same_content() {
-        let settings = get_settings();
-        let file = crate_file(&settings, "orphan", "1.0.0");
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let file = kellnr.crate_file("orphan", "1.0.0");
         std::fs::write(&file, CRATE_BYTES).unwrap();
 
         let (status, detail) =
@@ -1270,9 +1262,8 @@ mod reg_api_tests {
 
     #[tokio::test]
     async fn publish_rejects_orphaned_crate_file_with_other_content() {
-        let settings = get_settings();
-        let file = crate_file(&settings, "orphan", "1.0.0");
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let file = kellnr.crate_file("orphan", "1.0.0");
         std::fs::write(&file, b"other").unwrap();
 
         let (status, detail) =
@@ -1290,9 +1281,8 @@ mod reg_api_tests {
 
     #[tokio::test]
     async fn failed_publish_keeps_adopted_crate_file() {
-        let settings = get_settings();
-        let file = crate_file(&settings, "foo_bar", "1.0.0");
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let file = kellnr.crate_file("foo_bar", "1.0.0");
         let (status, detail) = publish_metadata(
             &kellnr,
             TOKEN,
@@ -1316,9 +1306,8 @@ mod reg_api_tests {
 
     #[tokio::test]
     async fn failed_publish_removes_its_crate_file() {
-        let settings = get_settings();
-        let file = crate_file(&settings, "foo_bar", "1.0.0");
-        let kellnr = TestKellnr::new(settings).await;
+        let kellnr = TestKellnr::new(get_settings()).await;
+        let file = kellnr.crate_file("foo_bar", "1.0.0");
         let (status, detail) = publish_metadata(
             &kellnr,
             TOKEN,
@@ -1342,8 +1331,8 @@ mod reg_api_tests {
     async fn publish_succeeds_when_queueing_the_docs_build_fails() {
         let mut settings = get_settings();
         settings.docs.enabled = true;
-        let doc_queue = settings.doc_queue_path();
         let kellnr = TestKellnr::new(settings).await;
+        let doc_queue = kellnr.settings.doc_queue_path();
         // A file where the queue directory belongs makes queueing fail.
         let _ = std::fs::remove_dir_all(&doc_queue);
         std::fs::write(&doc_queue, b"").unwrap();
@@ -3660,7 +3649,7 @@ mod reg_api_tests {
     /// Storage that signals `stored` once a crate file is written and then holds
     /// `put` until `release` is notified, to simulate a slow publish.
     struct GatedStorage {
-        inner: FSStorage,
+        inner: MemoryStorage,
         stored: Arc<Notify>,
         release: Arc<Notify>,
     }
@@ -3704,7 +3693,7 @@ mod reg_api_tests {
     }
 
     /// Storage that cannot read crate files, like a remote storage that times out.
-    struct UnreadableStorage(FSStorage);
+    struct UnreadableStorage(MemoryStorage);
 
     #[async_trait]
     impl Storage for UnreadableStorage {
@@ -3744,9 +3733,7 @@ mod reg_api_tests {
     #[tokio::test]
     async fn download_returns_500_if_the_storage_cannot_be_read() {
         let settings = get_settings();
-        let storage = Box::new(UnreadableStorage(
-            FSStorage::new(&settings.crates_path()).unwrap(),
-        )) as DynStorage;
+        let storage = Box::new(UnreadableStorage(MemoryStorage::new())) as DynStorage;
         let kellnr = TestKellnr::with_storage(settings, storage).await;
         let (status, detail) = publish_metadata(
             &kellnr,
@@ -3780,7 +3767,7 @@ mod reg_api_tests {
         let stored = Arc::new(Notify::new());
         let release = Arc::new(Notify::new());
         let storage = Box::new(GatedStorage {
-            inner: FSStorage::new(&settings.crates_path()).unwrap(),
+            inner: MemoryStorage::new(),
             stored: stored.clone(),
             release: release.clone(),
         }) as DynStorage;
@@ -3817,55 +3804,51 @@ mod reg_api_tests {
     }
 
     struct TestKellnr {
-        path: PathBuf,
+        _data_dir: tempfile::TempDir,
+        settings: Settings,
         client: Router,
         db: Arc<Database>,
     }
 
     fn get_settings() -> Settings {
-        Settings {
-            registry: kellnr_settings::Registry {
-                data_dir: "/tmp/".to_string() + &generate_rand_string(10),
-                session_age_seconds: 10,
-                ..kellnr_settings::Registry::default()
-            },
-            ..Settings::default()
-        }
-    }
-
-    fn generate_rand_string(length: usize) -> String {
-        let mut rng = rng();
-        iter::repeat(())
-            .map(|()| rng.sample(Alphanumeric))
-            .map(char::from)
-            .take(length)
-            .collect::<String>()
+        let mut settings = kellnr_settings::test_settings();
+        settings.registry.session_age_seconds = 10;
+        settings
     }
 
     impl TestKellnr {
+        /// Kellnr with the crate storage on disk in a temporary data directory.
         async fn new(settings: Settings) -> Self {
-            let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
-            Self::with_storage(settings, storage).await
+            Self::with(settings, |settings| {
+                Box::new(FSStorage::new(&settings.crates_path()).unwrap())
+            })
+            .await
         }
 
         async fn with_storage(settings: Settings, storage: DynStorage) -> Self {
-            std::fs::create_dir_all(&settings.registry.data_dir).unwrap();
+            Self::with(settings, |_| storage).await
+        }
+
+        async fn with(mut settings: Settings, storage: impl FnOnce(&Settings) -> DynStorage) -> Self {
+            let data_dir = tempfile::tempdir().unwrap();
+            settings.registry.data_dir = data_dir.path().to_string_lossy().into_owned();
+            let storage = storage(&settings);
             let con_string = ConString::Sqlite(SqliteConString::from(&settings));
             kellnr_test_db::copy_sqlite_template(&con_string).await;
             let db = Arc::new(Database::new(&con_string, 10).await.unwrap());
             TestKellnr {
-                path: PathBuf::from(&settings.registry.data_dir),
+                _data_dir: data_dir,
+                settings: settings.clone(),
                 client: Box::pin(app_with_storage(settings, storage, db.clone())).await,
                 db,
             }
         }
-    }
 
-    impl Drop for TestKellnr {
-        fn drop(&mut self) {
-            // SQLite can still remove its journal files while the directory is
-            // removed, so a missing file is not an error here.
-            let _ = std::fs::remove_dir_all(&self.path);
+        /// Path of a crate file in the crate storage on disk.
+        fn crate_file(&self, name: &str, version: &str) -> PathBuf {
+            self.settings
+                .bin_path()
+                .join(format!("{name}-{version}.crate"))
         }
     }
 

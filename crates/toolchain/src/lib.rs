@@ -1100,7 +1100,6 @@ mod tests {
     use kellnr_http::test_support::{TEST_KEY, encode_cookies};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
-    use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
     use kellnr_storage::toolchain_storage::ToolchainStorage;
     use mockall::predicate::*;
     use serde::de::DeserializeOwned;
@@ -1124,14 +1123,9 @@ mod tests {
         db: Arc<dyn DbProvider>,
         toolchain_storage: Option<Arc<ToolchainStorage>>,
     ) -> AppStateData {
-        let settings = kellnr_settings::test_settings();
-        let kellnr_storage =
-            Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         AppStateData {
             db,
             signing_key: Key::from(TEST_KEY),
-            crate_storage: Arc::new(KellnrCrateStorage::new(&settings, kellnr_storage)),
-            settings: Arc::new(settings),
             toolchain_storage,
             ..kellnr_http::test_support::test_state()
         }

@@ -27,6 +27,7 @@ thiserror.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+kellnr-settings = { workspace = true, features = ["test-support"] }
 kellnr-rustfs-testcontainer.workspace = true
 # Path only (no version), so cargo drops it when packaging kellnr-storage.
 # The test helper itself is never published.

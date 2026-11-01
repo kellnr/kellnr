@@ -42,8 +42,10 @@ pub use proxy::Proxy;
 pub use registry::{Registry, SessionAge};
 pub use settings::{
     Settings, SettingsError, SettingsProv, build_prov_with_cli, settings_from_prov,
-    sources_from_prov, test_settings,
+    sources_from_prov,
 };
+#[cfg(any(test, feature = "test-support"))]
+pub use settings::{test_settings, test_settings_in};
 pub use setup::Setup;
 pub use toolchain::Toolchain;
 pub use webhooks::Webhooks;

@@ -30,6 +30,7 @@ utoipa.workspace = true
 xz2.workspace = true
 
 [dev-dependencies]
+kellnr-settings = { workspace = true, features = ["test-support"] }
 kellnr-db = { workspace = true, features = ["mock"] }
 kellnr-http = { workspace = true, features = ["test-support"] }
 axum-extra.workspace = true

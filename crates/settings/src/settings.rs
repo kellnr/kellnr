@@ -205,11 +205,21 @@ impl Settings {
     }
 }
 
-/// Used in unit and integration tests to provide test settings.
+/// Default settings for tests. The data directory is a path that cannot be
+/// created, so a test that writes files fails instead of sharing a directory
+/// with other tests. Such tests use [`test_settings_in`] with a temporary
+/// directory.
+#[cfg(any(test, feature = "test-support"))]
 pub fn test_settings() -> Settings {
+    test_settings_in(Path::new("/dev/null/kellnr-test"))
+}
+
+/// Default settings for tests with `data_dir` as the data directory.
+#[cfg(any(test, feature = "test-support"))]
+pub fn test_settings_in(data_dir: &Path) -> Settings {
     Settings {
         registry: Registry {
-            data_dir: "/tmp/kdata_test".to_string(),
+            data_dir: data_dir.to_string_lossy().into_owned(),
             ..Registry::default()
         },
         ..Settings::default()

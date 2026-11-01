@@ -1081,6 +1081,7 @@ mod tests {
     use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+    use kellnr_storage::object_storage::MemoryStorage;
     use kellnr_storage::storage_error::StorageError;
     use kellnr_storage::storage_key::StorageKey;
     use mockall::predicate::*;
@@ -1985,7 +1986,10 @@ mod tests {
             .times(1)
             .returning(move |_, _, _| Ok(()));
 
-        let (mut settings, storage) = test_deps();
+        // Queueing the build writes the crate to the doc queue directory.
+        let data_dir = tempfile::tempdir().unwrap();
+        let (_, storage) = test_deps();
+        let mut settings = kellnr_settings::test_settings_in(data_dir.path());
         settings.docs.enabled = true;
         let r = app(
             mock_db,
@@ -2121,7 +2125,10 @@ mod tests {
             .times(1)
             .returning(move |_, _, _| Ok(()));
 
-        let (mut settings, storage) = test_deps();
+        // Queueing the build writes the crate to the doc queue directory.
+        let data_dir = tempfile::tempdir().unwrap();
+        let (_, storage) = test_deps();
+        let mut settings = kellnr_settings::test_settings_in(data_dir.path());
         settings.docs.enabled = true;
         let r = app(
             mock_db,
@@ -3681,8 +3688,7 @@ mod tests {
 
     fn test_deps() -> (Settings, DynStorage) {
         let settings = kellnr_settings::test_settings();
-        let storage = FSStorage::new(&settings.crates_path()).unwrap();
-        let storage = Box::new(storage) as DynStorage;
+        let storage = Box::new(MemoryStorage::new()) as DynStorage;
         (settings, storage)
     }
 
