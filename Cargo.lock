@@ -4407,7 +4407,7 @@ dependencies = [
  "kellnr-http",
  "kellnr-settings",
  "kellnr-storage",
- "mockall",
+ "kellnr-test-db",
  "moka",
  "reqwest",
  "serde",

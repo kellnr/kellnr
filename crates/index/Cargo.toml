@@ -35,12 +35,11 @@ tracing.workspace = true
 
 [dev-dependencies]
 kellnr-settings = { workspace = true, features = ["test-support"] }
-mockall.workspace = true
-kellnr-db = { workspace = true, features = ["mock"] }
+kellnr-db = { workspace = true, features = ["test-support"] }
 kellnr-http = { workspace = true, features = ["test-support"] }
+kellnr-test-db.workspace = true
 sha256.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["test-util"] }
 tower.workspace = true
 
 [lints]
