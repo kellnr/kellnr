@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::crate_data::{CRATESIO_INDEX, CrateData};
 use kellnr_common::crate_dependents::CrateDependents;
@@ -590,7 +590,8 @@ pub struct CratesIoDataParams {
             status = 200,
             description = "The JSON answer of the crates.io API for the crate \
                 (`GET https://crates.io/api/v1/crates/{name}`), passed through unchanged",
-            body = String
+            body = Object,
+            content_type = "application/json"
         ),
         (status = 404, description = "Crate not found"),
         (status = 502, description = "crates.io failed or cannot be reached")
@@ -600,7 +601,7 @@ pub async fn cratesio_data(
     State(settings): SettingsState,
     State(client): ProxyClientState,
     Query(params): Query<CratesIoDataParams>,
-) -> Result<String, ApiError> {
+) -> Result<([(header::HeaderName, &'static str); 1], String), ApiError> {
     let url = settings
         .proxy
         .api
@@ -618,10 +619,13 @@ pub async fn cratesio_data(
         })?;
 
     match resp.status() {
-        StatusCode::OK => resp.text().await.map_err(|e| {
-            error!("Failed to read crates.io data: {e}");
-            StatusCode::BAD_GATEWAY.into()
-        }),
+        StatusCode::OK => match resp.text().await {
+            Ok(body) => Ok(([(header::CONTENT_TYPE, "application/json")], body)),
+            Err(e) => {
+                error!("Failed to read crates.io data: {e}");
+                Err(StatusCode::BAD_GATEWAY.into())
+            }
+        },
         StatusCode::NOT_FOUND => Err(StatusCode::NOT_FOUND.into()),
         status => {
             error!("Failed to get crates.io data: {status}");
@@ -2470,14 +2474,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cratesio_data_returns_data() {
-        let r = get_with(test_state(), "/cratesio_data?name=quote", "").await;
+    async fn cratesio_data_passes_json_of_crates_io_through() {
+        const DATA: &str = r#"{"crate":{"description":"Quasi-quoting"}}"#;
+        let upstream = TestServer::start(Router::new().route(
+            "/api/v1/crates/quote",
+            get(|| async { ([(header::CONTENT_TYPE, "application/json")], DATA) }),
+        ))
+        .await;
+        let mut settings = kellnr_settings::test_settings();
+        settings.proxy.api = upstream.url("/api/v1/crates/").parse().unwrap();
 
-        let result_status = r.status();
-        let body =
-            String::from_utf8(r.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
-        assert!(body.contains("quote"));
-        assert_eq!(StatusCode::OK, result_status);
+        let r = get_with(
+            with_settings(test_state(), settings),
+            "/cratesio_data?name=quote",
+            "",
+        )
+        .await;
+
+        assert_eq!(r.status(), StatusCode::OK);
+        assert_eq!(r.headers()[header::CONTENT_TYPE], "application/json");
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, DATA.as_bytes());
     }
 
     #[tokio::test]
