@@ -278,7 +278,6 @@ pub(crate) fn apply_download_limits(
 mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
-    
     use bytes::Bytes;
     use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
@@ -390,16 +389,6 @@ mod tests {
     #[tokio::test]
     async fn restricted_docs_served_to_crate_user() {
         assert_eq!(get_secret_docs_as("alice").await, StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn restricted_docs_served_to_owner() {
-        assert_eq!(get_secret_docs_as("olivia").await, StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn restricted_docs_served_to_crate_group_member() {
-        assert_eq!(get_secret_docs_as("greg").await, StatusCode::OK);
     }
 
     #[tokio::test]

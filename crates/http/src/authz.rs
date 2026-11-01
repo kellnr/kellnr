@@ -189,6 +189,37 @@ mod tests {
                 .unwrap()
         );
     }
+
+    #[tokio::test]
+    async fn restricted_crate_is_readable_by_crate_group_member() {
+        let mut db = restricted_db(true);
+        db.expect_is_crate_user().returning(|_, _| Ok(false));
+        db.expect_is_crate_group_user()
+            .with(eq(name()), eq(UserName::new("user").unwrap()))
+            .returning(|_, _| Ok(true));
+        let db: Arc<dyn DbProvider> = Arc::new(db);
+        assert!(
+            can_read_crate(&name(), Some(&user(false)), &db)
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn restricted_crate_is_readable_by_owner() {
+        let mut db = restricted_db(true);
+        db.expect_is_crate_user().returning(|_, _| Ok(false));
+        db.expect_is_crate_group_user().returning(|_, _| Ok(false));
+        db.expect_is_owner()
+            .with(eq(name()), eq(UserName::new("user").unwrap()))
+            .returning(|_, _| Ok(true));
+        let db: Arc<dyn DbProvider> = Arc::new(db);
+        assert!(
+            can_read_crate(&name(), Some(&user(false)), &db)
+                .await
+                .unwrap()
+        );
+    }
 }
 
 #[cfg(test)]

@@ -93,253 +93,7 @@ pub async fn errors_as_json(request: Request, next: Next) -> Response {
 }
 
 #[cfg(test)]
-mod test {
-
-    use std::sync::Arc;
-
-    use axum::body::Body;
-    use axum::http::{Request, StatusCode, header};
-    use axum::routing::get;
-    use axum::{Router, middleware};
-    use kellnr_common::account_name::UserName;
-    use kellnr_common::plain_token::PlainToken;
-    use kellnr_db::User;
-    use kellnr_db::error::DbError;
-    use kellnr_db::mock::MockDb;
-    use kellnr_settings::Settings;
-    use mockall::predicate::*;
-    use tower::ServiceExt;
-
-    use super::*;
-    use crate::state::AppStateData;
-
-    #[tokio::test]
-    async fn no_auth_required() {
-        let settings = test_settings(false);
-        let r = app(settings)
-            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn auth_required_but_not_provided() {
-        let settings = test_settings(true);
-        let r = app(settings)
-            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
-    }
-
-    #[tokio::test]
-    async fn auth_required_but_wrong_token_provided() {
-        let settings = test_settings(true);
-        let r = app(settings)
-            .oneshot(
-                Request::get("/test")
-                    .header(header::AUTHORIZATION, "wrong_token")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::FORBIDDEN);
-    }
-
-    #[tokio::test]
-    async fn auth_required_and_right_token_provided() {
-        let settings = test_settings(true);
-        let r = app(settings)
-            .oneshot(
-                Request::get("/test")
-                    .header(header::AUTHORIZATION, "token")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::OK);
-    }
-
-    pub(super) async fn ok_handler() -> StatusCode {
-        StatusCode::OK
-    }
-
-    fn test_settings(auth_required: bool) -> Settings {
-        Settings {
-            registry: kellnr_settings::Registry {
-                auth_required,
-                ..kellnr_settings::Registry::default()
-            },
-            ..Settings::default()
-        }
-    }
-
-    fn app(settings: Settings) -> Router {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("token")))
-            .returning(move |_| {
-                Ok(User {
-                    id: kellnr_db::UserId::new(0),
-                    name: UserName::new("user").unwrap(),
-                    pwd: String::new(),
-                    salt: String::new(),
-                    is_admin: false,
-                    is_read_only: false,
-                    created: String::new(),
-                })
-            });
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("wrong_token")))
-            .returning(move |_| Err(DbError::UserNotFound("user".to_string())));
-
-        let state = AppStateData {
-            db: Arc::new(mock_db),
-            settings: Arc::new(settings),
-            ..crate::test_support::test_state()
-        };
-
-        Router::new()
-            .route("/test", get(ok_handler))
-            .route_layer(middleware::from_fn_with_state(
-                (state.clone(), Accepts::Token),
-                auth_when_required,
-            ))
-            .with_state(state)
-    }
-}
-
-#[cfg(test)]
-mod auth_middleware_tests {
-    use std::sync::Arc;
-
-    use axum::Router;
-    use axum::body::Body;
-    use axum::http::StatusCode;
-    use axum::middleware::from_fn_with_state;
-    use axum::routing::get;
-    use hyper::{Request, header};
-    use kellnr_common::plain_token::PlainToken;
-    use kellnr_db::DbProvider;
-    use kellnr_db::error::DbError;
-    use kellnr_db::mock::MockDb;
-    use kellnr_settings::Settings;
-    use mockall::predicate::*;
-    use tower::ServiceExt;
-
-    use super::*;
-    use crate::state::AppStateData;
-
-    fn app_required_auth(db: Arc<dyn DbProvider>) -> Router {
-        let settings = Settings::default();
-        let state = AppStateData {
-            db,
-            settings: Arc::new(Settings {
-                registry: kellnr_settings::Registry {
-                    auth_required: true,
-                    ..kellnr_settings::Registry::default()
-                },
-                ..settings
-            }),
-            ..crate::test_support::test_state()
-        };
-
-        Router::new()
-            .route("/guarded", get(StatusCode::OK))
-            .route_layer(from_fn_with_state(
-                (state.clone(), Accepts::Token),
-                auth_when_required,
-            ))
-            .route("/not_guarded", get(StatusCode::OK))
-            .with_state(state)
-    }
-
-    fn app_not_required_auth(db: Arc<dyn DbProvider>) -> Router {
-        let settings = Settings::default();
-        let state = AppStateData {
-            db,
-            settings: Arc::new(settings),
-            ..crate::test_support::test_state()
-        };
-        Router::new()
-            .route("/guarded", get(StatusCode::OK))
-            .route_layer(from_fn_with_state(
-                (state.clone(), Accepts::Token),
-                auth_when_required,
-            ))
-            .with_state(state)
-    }
-
-    type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-    #[tokio::test]
-    async fn guarded_route_with_invalid_token() -> Result {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("1234")))
-            .returning(|_st| Err(DbError::UserNotFound("1234".to_owned())));
-
-        let r = app_required_auth(Arc::new(mock_db))
-            .oneshot(
-                Request::get("/guarded")
-                    .header(header::AUTHORIZATION, "1234")
-                    .body(Body::empty())?,
-            )
-            .await?;
-        assert_eq!(r.status(), StatusCode::FORBIDDEN);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn guarded_route_without_token() -> Result {
-        let mock_db = MockDb::new();
-
-        let r = app_required_auth(Arc::new(mock_db))
-            .oneshot(Request::get("/guarded").body(Body::empty())?)
-            .await?;
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn not_guarded_route_without_token() -> Result {
-        let mock_db = MockDb::new();
-
-        let r = app_required_auth(Arc::new(mock_db))
-            .oneshot(Request::get("/not_guarded").body(Body::empty())?)
-            .await?;
-        assert_eq!(r.status(), StatusCode::OK);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn app_not_required_auth_with_guarded_route() -> Result {
-        let mock_db = MockDb::new();
-
-        let r = app_not_required_auth(Arc::new(mock_db))
-            .oneshot(Request::get("/guarded").body(Body::empty())?)
-            .await?;
-        assert_eq!(r.status(), StatusCode::OK);
-
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod session_and_combined_tests {
+mod auth_when_required_tests {
     use std::sync::Arc;
 
     use axum::Router;
@@ -347,13 +101,11 @@ mod session_and_combined_tests {
     use axum::http::header;
     use axum::middleware::from_fn_with_state;
     use axum::routing::get;
-    
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
-    use kellnr_db::{DbProvider, SessionInfo};
-    use kellnr_settings::Settings;
+    use kellnr_db::{SessionInfo, User};
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use mockall::predicate::eq;
     use tower::ServiceExt;
@@ -363,17 +115,13 @@ mod session_and_combined_tests {
 
     type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+    /// Router with `/guarded` behind the middleware and `/not_guarded` without.
     fn app(db: MockDb, auth_required: bool, accepts: Accepts) -> Router {
-        let db: Arc<dyn DbProvider> = Arc::new(db);
+        let mut settings = kellnr_settings::test_settings();
+        settings.registry.auth_required = auth_required;
         let state = AppStateData {
-            db,
-            settings: Arc::new(Settings {
-                registry: kellnr_settings::Registry {
-                    auth_required,
-                    ..kellnr_settings::Registry::default()
-                },
-                ..Settings::default()
-            }),
+            db: Arc::new(db),
+            settings: Arc::new(settings),
             ..test_state()
         };
         Router::new()
@@ -384,6 +132,22 @@ mod session_and_combined_tests {
             ))
             .route("/not_guarded", get(StatusCode::OK))
             .with_state(state)
+    }
+
+    /// Db with the cargo token "token" of a user.
+    fn token_db() -> MockDb {
+        let mut db = MockDb::new();
+        db.expect_get_user_from_token()
+            .with(eq(PlainToken::from("token")))
+            .returning(|_| {
+                Ok(User {
+                    name: UserName::new("user").unwrap(),
+                    ..User::default()
+                })
+            });
+        db.expect_get_user_from_token()
+            .returning(|_| Err(DbError::TokenNotFound));
+        db
     }
 
     fn session_db(result: fn() -> kellnr_db::provider::DbResult<SessionInfo>) -> MockDb {
@@ -413,6 +177,32 @@ mod session_and_combined_tests {
             );
         }
         Ok(app.oneshot(request.body(Body::empty())?).await?)
+    }
+
+    async fn send_token(app: Router, token: &str) -> Result<Response> {
+        let request = Request::get("/guarded").header(header::AUTHORIZATION, token);
+        Ok(app.oneshot(request.body(Body::empty())?).await?)
+    }
+
+    #[tokio::test]
+    async fn guarded_route_with_valid_token() -> Result {
+        let r = send_token(app(token_db(), true, Accepts::Token), "token").await?;
+        assert_eq!(r.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn guarded_route_with_invalid_token() -> Result {
+        let r = send_token(app(token_db(), true, Accepts::Token), "wrong_token").await?;
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn guarded_route_without_token() -> Result {
+        let r = send(app(MockDb::new(), true, Accepts::Token), "/guarded", false).await?;
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
     }
 
     #[tokio::test]
