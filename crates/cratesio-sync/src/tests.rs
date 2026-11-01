@@ -5,8 +5,10 @@ use axum::Router;
 use axum::http::{HeaderMap, StatusCode as HttpStatus, header};
 use axum::response::IntoResponse;
 use axum::routing::get;
-use kellnr_common::prefetch::Prefetch;
+use kellnr_common::version::Version;
+use kellnr_db::CrateVisibility;
 use kellnr_db::mock::MockDb;
+use kellnr_test_db::TestDb;
 use reqwest::Url;
 
 use super::*;
@@ -88,30 +90,54 @@ async fn fake_cratesio(api_ok: bool, calls: Arc<Calls>) -> kellnr_settings::Prox
     }
 }
 
-type Stored = Arc<Mutex<Vec<(Option<String>, Vec<String>, HashMap<String, String>)>>>;
-
-/// A database that records what is written.
-fn recording_db(state: PrefetchState) -> (MockDb, Stored) {
-    let stored: Stored = Arc::default();
-    let mut db = MockDb::new();
-    db.expect_is_cratesio_cache_up_to_date()
-        .return_once(move |_, _, _| Ok(state));
-    db.expect_add_cratesio_prefetch_data().returning({
-        let stored = stored.clone();
-        move |_, _, _, description, indices, licenses| {
-            stored.lock().unwrap().push((
-                description,
-                indices.iter().map(|i| i.vers.clone()).collect(),
-                licenses.clone(),
-            ));
-            Ok(Prefetch {
-                data: vec![],
-                etag: String::new(),
-                last_modified: String::new(),
-            })
+/// What the database holds of "upstream": its description and the license
+/// of each version, `None` if the crate is not stored.
+async fn stored(db: &TestDb) -> Option<(Option<String>, HashMap<String, Option<String>>)> {
+    let krate = db
+        .search_in_crate_name_and_description(
+            "upstream",
+            10,
+            0,
+            true,
+            &CrateVisibility::Unrestricted,
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|c| c.is_cache)?;
+    let mut licenses = HashMap::new();
+    for vers in ["1.0.0", "1.1.0"] {
+        let meta = db
+            .get_cratesio_version_meta(
+                &upstream().to_canonical(),
+                &Version::try_from(vers).unwrap(),
+            )
+            .await
+            .unwrap();
+        if let Some(meta) = meta {
+            licenses.insert(vers.to_string(), meta.license);
         }
-    });
-    (db, stored)
+    }
+    Some((krate.description, licenses))
+}
+
+/// Stores the index of "upstream" with the entity tag `etag` and the
+/// description "stored".
+async fn store_upstream(db: &TestDb, etag: &str) {
+    let indices: Vec<IndexMetadata> = INDEX
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    db.add_cratesio_prefetch_data(
+        &upstream(),
+        etag,
+        "",
+        Some("stored".to_string()),
+        &indices,
+        &HashMap::new(),
+    )
+    .await
+    .unwrap();
 }
 
 fn upstream() -> OriginalName {
@@ -122,44 +148,44 @@ fn upstream() -> OriginalName {
 async fn fetch_stores_index_and_licenses() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
-    let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
     assert_eq!(2, synced.written().unwrap().len());
-    let stored = stored.lock().unwrap();
-    assert_eq!(1, stored.len());
-    let (description, versions, licenses) = &stored[0];
-    assert_eq!(Some("An upstream crate".to_string()), *description);
-    assert_eq!(&vec!["1.0.0".to_string(), "1.1.0".to_string()], versions);
-    assert_eq!(Some(&"MIT".to_string()), licenses.get("1.0.0"));
-    assert_eq!(Some(&UNKNOWN_LICENSE.to_string()), licenses.get("1.1.0"));
+    let (description, licenses) = stored(&db).await.unwrap();
+    assert_eq!(Some("An upstream crate".to_string()), description);
+    assert_eq!(2, licenses.len());
+    assert_eq!(Some(&Some("MIT".to_string())), licenses.get("1.0.0"));
+    assert_eq!(
+        Some(&Some(UNKNOWN_LICENSE.to_string())),
+        licenses.get("1.1.0")
+    );
 }
 
 #[tokio::test]
 async fn api_failure_still_stores_index() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(false, calls.clone()).await;
-    let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
     assert!(matches!(synced, SyncOutcome::Written(_)));
-    let stored = stored.lock().unwrap();
-    let (description, versions, licenses) = &stored[0];
-    assert_eq!(None, *description);
-    assert_eq!(2, versions.len());
-    assert!(licenses.is_empty());
+    let (description, licenses) = stored(&db).await.unwrap();
+    assert_eq!(None, description);
+    assert_eq!(2, licenses.len());
+    assert!(licenses.values().all(Option::is_none));
 }
 
 #[tokio::test]
 async fn concurrent_syncs_of_a_crate_share_one_job() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
-    let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     // E.g. a download that misses the checksum while the prefetch worker
     // refreshes the same crate
@@ -181,7 +207,7 @@ async fn concurrent_syncs_of_a_crate_share_one_job() {
     ));
     assert_eq!(1, calls.index.load(Ordering::SeqCst));
     assert_eq!(1, calls.api.load(Ordering::SeqCst));
-    assert_eq!(1, stored.lock().unwrap().len());
+    assert!(stored(&db).await.is_some());
     assert!(sync.inner.running.lock().unwrap().is_empty());
 }
 
@@ -189,8 +215,8 @@ async fn concurrent_syncs_of_a_crate_share_one_job() {
 async fn finished_sync_is_not_cached() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
-    let (db, _) = recording_db(PrefetchState::NotFound);
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     sync.sync(&upstream(), SyncSource::Fetch).await;
     sync.sync(&upstream(), SyncSource::Fetch).await;
@@ -203,11 +229,9 @@ async fn finished_sync_is_not_cached() {
 async fn index_source_skips_stored_index() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
-    let (db, stored) = recording_db(PrefetchState::UpToDate {
-        etag: "etag".to_string(),
-        last_modified: String::new(),
-    });
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    store_upstream(&db, "etag").await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     let synced = sync
         .sync(
@@ -222,15 +246,16 @@ async fn index_source_skips_stored_index() {
 
     assert!(matches!(synced, SyncOutcome::Unchanged));
     assert_eq!(0, calls.api.load(Ordering::SeqCst));
-    assert!(stored.lock().unwrap().is_empty());
+    let (description, _) = stored(&db).await.unwrap();
+    assert_eq!(Some("stored".to_string()), description);
 }
 
 #[tokio::test]
 async fn index_source_stores_new_index_without_fetching_it() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
-    let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     let synced = sync
         .sync(
@@ -246,15 +271,15 @@ async fn index_source_stores_new_index_without_fetching_it() {
     assert!(matches!(synced, SyncOutcome::Written(_)));
     assert_eq!(0, calls.index.load(Ordering::SeqCst));
     assert_eq!(1, calls.api.load(Ordering::SeqCst));
-    assert_eq!(1, stored.lock().unwrap().len());
+    assert!(stored(&db).await.is_some());
 }
 
 #[tokio::test]
 async fn refresh_of_unchanged_index_writes_nothing() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
-    let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     let synced = sync
         .sync(
@@ -269,15 +294,15 @@ async fn refresh_of_unchanged_index_writes_nothing() {
     assert!(matches!(synced, SyncOutcome::Unchanged));
     assert_eq!(1, calls.index.load(Ordering::SeqCst));
     assert_eq!(0, calls.api.load(Ordering::SeqCst));
-    assert!(stored.lock().unwrap().is_empty());
+    assert!(stored(&db).await.is_none());
 }
 
 #[tokio::test]
 async fn refresh_of_changed_index_writes_it() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
-    let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     let synced = sync
         .sync(
@@ -291,15 +316,15 @@ async fn refresh_of_changed_index_writes_it() {
 
     assert_eq!(2, synced.written().unwrap().len());
     assert_eq!(1, calls.api.load(Ordering::SeqCst));
-    assert_eq!(1, stored.lock().unwrap().len());
+    assert!(stored(&db).await.is_some());
 }
 
 #[tokio::test]
 async fn crate_missing_upstream_is_not_found() {
     let calls = Arc::new(Calls::default());
     let proxy = fake_cratesio(true, calls.clone()).await;
-    let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     // The fake index only serves crates with more than three characters.
     let synced = sync
@@ -307,7 +332,7 @@ async fn crate_missing_upstream_is_not_found() {
         .await;
 
     assert!(matches!(synced, SyncOutcome::NotFound));
-    assert!(stored.lock().unwrap().is_empty());
+    assert!(stored(&db).await.is_none());
 }
 
 #[tokio::test]
@@ -409,16 +434,16 @@ async fn flaky_cratesio(calls: Arc<Calls>) -> kellnr_settings::Proxy {
 async fn server_errors_and_rate_limits_are_retried() {
     let calls = Arc::new(Calls::default());
     let proxy = flaky_cratesio(calls.clone()).await;
-    let (db, stored) = recording_db(PrefetchState::NotFound);
-    let sync = test_sync(Arc::new(db), Client::new(), &proxy);
+    let db = TestDb::sqlite().await;
+    let sync = test_sync(db.provider(), Client::new(), &proxy);
 
     let synced = sync.sync(&upstream(), SyncSource::Fetch).await;
 
     assert_eq!(2, synced.written().unwrap().len());
     assert_eq!(2, calls.index.load(Ordering::SeqCst));
     assert_eq!(2, calls.api.load(Ordering::SeqCst));
-    let stored = stored.lock().unwrap();
-    assert_eq!(Some("An upstream crate".to_string()), stored[0].0);
+    let (description, _) = stored(&db).await.unwrap();
+    assert_eq!(Some("An upstream crate".to_string()), description);
 }
 
 #[tokio::test]

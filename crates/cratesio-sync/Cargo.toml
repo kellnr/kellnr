@@ -28,6 +28,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 kellnr-db = { workspace = true, features = ["mock"] }
+kellnr-test-db.workspace = true
 axum.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
 
