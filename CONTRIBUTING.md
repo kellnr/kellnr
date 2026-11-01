@@ -82,6 +82,31 @@ just test-all
 just run
 ```
 
+### Writing Tests
+
+Test each behavior once, at the lowest layer that can show it:
+
+| Layer | What it tests | Where |
+|---|---|---|
+| Database | Query semantics, the only tests that touch SQL | `crates/db/tests/db_test.rs`, `#[db_test]` runs each test on SQLite and PostgreSQL |
+| Handlers | Status codes, auth decisions, error mapping | Unit tests next to the handler, an in-process router with `MockDb` or SQLite |
+| Router | Wiring only: middleware, path prefix, headers | `crates/kellnr/src/routes/`; `login_methods_tests.rs` pins the accepted login methods of every endpoint |
+| UI | End-to-end flows in the browser | Playwright tests in `tests/` |
+
+Before adding a test, check whether a lower layer or the login methods table already covers it. Shared helpers:
+
+- `kellnr_settings::test_settings()` and `test_settings_in(dir)` (feature `test-support`) for settings.
+- `kellnr_http::test_support` (feature `test-support`): `test_state()` (`MockDb`, in-memory storage, `TEST_KEY` for cookies), `encode_cookies`, and `TestServer` for fake upstream servers like crates.io or webhook targets.
+- `kellnr_test_db`: `TestDb::sqlite()` / `TestDb::postgres()` and `sqlite_database(&settings)` for a migrated database.
+
+Enable these features only from `[dev-dependencies]`, so nothing test-only ends up in the release binary.
+
+Tests run in parallel and in several processes at once:
+
+- Bind test servers to port 0 (`TestServer` does) and pass the actual address to the code under test. Never use a fixed port.
+- Write files only to a temporary directory (`tempfile::tempdir()`) that the test owns. `test_settings()` points the data directory at a path that cannot be created, so writing there fails.
+- Do not change environment variables of the test process. Pass values in, or run the code in a child process with its own environment.
+
 ## Node Dependencies
 
 When updating any Node.js dependencies, make sure to run:
