@@ -2499,7 +2499,17 @@ mod tests {
 
     #[tokio::test]
     async fn cratesio_data_not_found() {
-        let r = get_with(test_state(), "/cratesio_data?name=thisdoesnotevenexist", "").await;
+        let upstream =
+            TestServer::start(Router::new().fallback(|| async { StatusCode::NOT_FOUND })).await;
+        let mut settings = kellnr_settings::test_settings();
+        settings.proxy.api = upstream.url("/api/v1/crates/").parse().unwrap();
+
+        let r = get_with(
+            with_settings(test_state(), settings),
+            "/cratesio_data?name=thisdoesnotevenexist",
+            "",
+        )
+        .await;
 
         assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
