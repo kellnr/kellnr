@@ -2505,7 +2505,7 @@ mod reg_api_tests {
                 .client
                 .clone()
                 .oneshot(
-                    Request::get(format!("/api/v1/crates/counted/{version}/download"))
+                    Request::get(format!("/api/v1/crates/dl/counted/{version}/download"))
                         .header(header::AUTHORIZATION, TOKEN)
                         .body(Body::empty())
                         .unwrap(),
@@ -2542,7 +2542,7 @@ mod reg_api_tests {
             .client
             .clone()
             .oneshot(
-                Request::get("/api/v1/crates/filtered/1.0.0/download")
+                Request::get("/api/v1/crates/dl/filtered/1.0.0/download")
                     .header(header::AUTHORIZATION, TOKEN)
                     .body(Body::empty())
                     .unwrap(),
@@ -2609,7 +2609,7 @@ mod reg_api_tests {
             .client
             .clone()
             .oneshot(
-                Request::get("/api/v1/crates/test-lib/99.1.0/download")
+                Request::get("/api/v1/crates/dl/test-lib/99.1.0/download")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -2627,7 +2627,7 @@ mod reg_api_tests {
             .client
             .clone()
             .oneshot(
-                Request::get("/api/v1/crates/invalid_version/0.a.0/download")
+                Request::get("/api/v1/crates/dl/invalid_version/0.a.0/download")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -2656,7 +2656,7 @@ mod reg_api_tests {
             .with(eq("foo"), eq(false), eq(CrateVisibility::Unrestricted))
             .returning(|_, _, _| Ok(0));
 
-        let kellnr = app_search(Arc::new(mock_db));
+        let kellnr = app_with_db(mock_db);
         let r = kellnr
             .oneshot(
                 Request::get("/api/v1/crates?q=foo")
@@ -2692,7 +2692,7 @@ mod reg_api_tests {
             )
             .returning(|_, _, _| Ok(0));
 
-        let r = app_search(Arc::new(mock_db))
+        let r = app_with_db(mock_db)
             .oneshot(
                 Request::get("/api/v1/crates?q=foo")
                     .header(header::AUTHORIZATION, "crate-user-token")
@@ -2753,20 +2753,7 @@ mod reg_api_tests {
         if let Some(token) = token {
             request = request.header(header::AUTHORIZATION, token);
         }
-        Router::new()
-            .route("/api/v1/crates/{crate_name}/owners", get(list_owners))
-            .route(
-                "/api/v1/crates/{crate_name}/crate_versions",
-                get(list_crate_versions),
-            )
-            .route(
-                "/api/v1/crates/dl/{package}/{version}/download",
-                get(download),
-            )
-            .with_state(AppStateData {
-                db: Arc::new(restricted_crate_mock_db()),
-                ..kellnr_http::test_support::test_state()
-            })
+        app_with_db(restricted_crate_mock_db())
             .oneshot(request.body(Body::empty()).unwrap())
             .await
             .unwrap()
@@ -2863,7 +2850,7 @@ mod reg_api_tests {
             .with(eq("foo"), eq(false), eq(CrateVisibility::Unrestricted))
             .returning(|_, _, _| Ok(0));
 
-        let kellnr = app_search(Arc::new(mock_db));
+        let kellnr = app_with_db(mock_db);
         let r = kellnr
             .oneshot(
                 Request::get("/api/v1/crates?q=foo&page=3&per_page=20")
@@ -2895,7 +2882,7 @@ mod reg_api_tests {
             .with(eq("foo"), eq(false), eq(CrateVisibility::Unrestricted))
             .returning(|_, _, _| Ok(0));
 
-        let kellnr = app_search(Arc::new(mock_db));
+        let kellnr = app_with_db(mock_db);
         let r = kellnr
             .oneshot(
                 Request::get("/api/v1/crates?q=foo&per_page=20")
@@ -2927,7 +2914,7 @@ mod reg_api_tests {
             .with(eq("foo"), eq(false), eq(CrateVisibility::Unrestricted))
             .returning(|_, _, _| Ok(1234));
 
-        let kellnr = app_search(Arc::new(mock_db));
+        let kellnr = app_with_db(mock_db);
         let r = kellnr
             .oneshot(
                 Request::get("/api/v1/crates?q=foo&per_page=20")
@@ -3747,7 +3734,7 @@ mod reg_api_tests {
             .client
             .clone()
             .oneshot(
-                Request::get("/api/v1/crates/unreadable/1.0.0/download")
+                Request::get("/api/v1/crates/dl/unreadable/1.0.0/download")
                     .header(header::AUTHORIZATION, TOKEN)
                     .body(Body::empty())
                     .unwrap(),
@@ -3921,14 +3908,33 @@ mod reg_api_tests {
             ..kellnr_http::test_support::test_state()
         };
 
+        app(state)
+    }
+
+    /// The registry API routes at their paths in the API.
+    pub(super) fn app(state: AppStateData) -> Router {
         let routes = Router::new()
-            .route("/{crate_name}/owners", delete(remove_owner))
-            .route("/{crate_name}/owners", put(add_owner))
-            .route("/{crate_name}/owners", get(list_owners))
-            .route("/{crate_name}/owners/{user}", delete(remove_owner_single))
-            .route("/{crate_name}/owners/{user}", put(add_owner_single))
+            .route(
+                "/{crate_name}/owners",
+                get(list_owners).put(add_owner).delete(remove_owner),
+            )
+            .route(
+                "/{crate_name}/owners/{user}",
+                put(add_owner_single).delete(remove_owner_single),
+            )
+            .route("/{crate_name}/crate_users", get(list_crate_users))
+            .route(
+                "/{crate_name}/crate_users/{user}",
+                put(add_crate_user).delete(remove_crate_user),
+            )
+            .route("/{crate_name}/crate_groups", get(list_crate_groups))
+            .route(
+                "/{crate_name}/crate_groups/{group}",
+                put(add_crate_group).delete(remove_crate_group),
+            )
+            .route("/{crate_name}/crate_versions", get(list_crate_versions))
             .route("/", get(search))
-            .route("/{package}/{version}/download", get(download))
+            .route("/dl/{package}/{version}/download", get(download))
             .route("/new_empty", put(add_empty_crate))
             .route("/new", put(publish))
             .route("/{crate_name}/{version}/yank", delete(yank))
@@ -3939,22 +3945,20 @@ mod reg_api_tests {
             .with_state(state)
     }
 
-    fn app_search(db: Arc<dyn DbProvider>) -> Router {
-        Router::new()
-            .route("/api/v1/crates", get(search))
-            .with_state(AppStateData {
-                db,
-                ..kellnr_http::test_support::test_state()
-            })
+    fn app_with_db(db: impl DbProvider + 'static) -> Router {
+        app(AppStateData {
+            db: Arc::new(db),
+            ..kellnr_http::test_support::test_state()
+        })
     }
 }
 
 #[cfg(test)]
 mod crate_access_tests {
-    use axum::Router;
+    
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
-    use axum::routing::{get, put};
+    
     
     use kellnr_db::SessionInfo;
     use kellnr_db::mock::MockDb;
@@ -4000,24 +4004,13 @@ mod crate_access_tests {
     }
 
     async fn status(db: MockDb, method: &str, uri: &str) -> StatusCode {
-        let app = Router::new()
-            .route("/{crate_name}/crate_users", get(list_crate_users))
-            .route(
-                "/{crate_name}/crate_users/{user}",
-                put(add_crate_user).delete(remove_crate_user),
-            )
-            .route("/{crate_name}/crate_groups", get(list_crate_groups))
-            .route(
-                "/{crate_name}/crate_groups/{group}",
-                put(add_crate_group).delete(remove_crate_group),
-            )
-            .with_state(AppStateData {
-                db: Arc::new(db),
-                ..kellnr_http::test_support::test_state()
-            });
+        let app = reg_api_tests::app(AppStateData {
+            db: Arc::new(db),
+            ..kellnr_http::test_support::test_state()
+        });
         let request = Request::builder()
             .method(method)
-            .uri(uri)
+            .uri(format!("/api/v1/crates{uri}"))
             .header(
                 header::COOKIE,
                 encode_cookies([(COOKIE_SESSION_ID, "cookie")]),

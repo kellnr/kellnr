@@ -1424,15 +1424,13 @@ mod tests {
             .build::<SettingsProv>()
             .unwrap();
 
-        let app: Router = Router::new()
-            .route("/settings", get(crate::ui::settings))
-            .with_state(AppStateData {
-                db: Arc::new(mock_db),
-                settings: Arc::new(settings.clone()),
-                settings_prov: Arc::new(prov),
-                crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
-                ..kellnr_http::test_support::test_state()
-            });
+        let app = app_with_state(AppStateData {
+            db: Arc::new(mock_db),
+            settings: Arc::new(settings.clone()),
+            settings_prov: Arc::new(prov),
+            crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
+            ..kellnr_http::test_support::test_state()
+        });
 
         let r = app
             .oneshot(
@@ -1532,15 +1530,13 @@ mod tests {
             })
         });
         let (_, storage) = test_deps();
-        let app: Router = Router::new()
-            .route("/settings", get(crate::ui::settings))
-            .with_state(AppStateData {
-                db: Arc::new(mock_db),
-                settings: Arc::new(settings.clone()),
-                settings_prov: Arc::new(prov),
-                crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
-                ..kellnr_http::test_support::test_state()
-            });
+        let app = app_with_state(AppStateData {
+            db: Arc::new(mock_db),
+            settings: Arc::new(settings.clone()),
+            settings_prov: Arc::new(prov),
+            crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
+            ..kellnr_http::test_support::test_state()
+        });
 
         let r = app
             .oneshot(
@@ -2152,15 +2148,13 @@ mod tests {
         docs_storage: DocsStorage,
         background_tasks: BackgroundTasks,
     ) -> Router {
-        Router::new()
-            .route("/migrate-storage", post(migrate_docs_storage))
-            .with_state(AppStateData {
-                db: Arc::new(mock_db),
-                settings: Arc::new(settings),
-                docs_storage: Arc::new(docs_storage),
-                background_tasks,
-                ..kellnr_http::test_support::test_state()
-            })
+        app_with_state(AppStateData {
+            db: Arc::new(mock_db),
+            settings: Arc::new(settings),
+            docs_storage: Arc::new(docs_storage),
+            background_tasks,
+            ..kellnr_http::test_support::test_state()
+        })
     }
 
     fn fs_docs_storage(dir: &std::path::Path) -> DocsStorage {
@@ -3678,6 +3672,15 @@ mod tests {
     }
 
     fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
+        app_with_state(AppStateData {
+            db: Arc::new(mock_db),
+            settings: Arc::new(settings),
+            crate_storage: Arc::new(crate_storage),
+            ..kellnr_http::test_support::test_state()
+        })
+    }
+
+    fn app_with_state(state: AppStateData) -> Router {
         Router::new()
             .route("/search", get(search))
             .route("/crates", get(crates))
@@ -3687,14 +3690,10 @@ mod tests {
             .route("/statistic", get(statistic))
             .route("/build", post(build_rustdoc))
             .route("/cratesio_data", get(cratesio_data))
-            .route("/settings", get(crate::ui::settings))
+            .route("/settings", get(settings))
             .route("/docs_enabled", get(docs_enabled))
             .route("/sponsor_links_enabled", get(sponsor_links_enabled))
-            .with_state(AppStateData {
-                db: Arc::new(mock_db),
-                settings: Arc::new(settings),
-                crate_storage: Arc::new(crate_storage),
-                ..kellnr_http::test_support::test_state()
-            })
+            .route("/migrate-storage", post(migrate_docs_storage))
+            .with_state(state)
     }
 }

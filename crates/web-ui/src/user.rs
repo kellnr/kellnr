@@ -596,7 +596,6 @@ mod tests {
     use axum::body::Body;
     use axum::response::IntoResponse;
     use axum::routing::{post, put};
-    
     use hyper::{Request, header};
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
@@ -645,6 +644,23 @@ mod tests {
         encode_cookies([(COOKIE_SESSION_ID, "session")])
     }
 
+    /// The user routes at their paths in the API.
+    fn app(state: AppStateData) -> Router {
+        Router::new()
+            .route("/login", post(login))
+            .route("/logout", post(logout))
+            .route("/", post(add))
+            .route("/{name}", axum::routing::delete(delete))
+            .route("/{name}/password", put(reset_pwd))
+            .route("/{name}/admin", post(admin))
+            .route("/{name}/read-only", post(read_only))
+            .route("/me/password", put(change_pwd))
+            .route("/me/tokens", post(add_token))
+            .route("/me/tokens/{id}", axum::routing::delete(delete_token))
+            .layer(Extension::<Option<Arc<kellnr_oauth2::OAuth2Handler>>>(None))
+            .with_state(state)
+    }
+
     // ==========================
     // SSO Enforcement Tests
     // ==========================
@@ -662,7 +678,7 @@ mod tests {
         mock_db.expect_authenticate_user().never();
 
         let state = sso_enforced_state(mock_db, cache);
-        let app = Router::new().route("/login", post(login)).with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
@@ -691,9 +707,7 @@ mod tests {
         mock_db.expect_change_pwd().never();
 
         let state = sso_enforced_state(mock_db, cache);
-        let app = Router::new()
-            .route("/me/password", put(change_pwd))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
@@ -724,9 +738,7 @@ mod tests {
         mock_db.expect_change_pwd().never();
 
         let state = sso_enforced_state(mock_db, cache);
-        let app = Router::new()
-            .route("/{name}/password", put(reset_pwd))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
@@ -754,11 +766,11 @@ mod tests {
         mock_db.expect_add_user().never();
 
         let state = sso_enforced_state(mock_db, cache);
-        let app = Router::new().route("/add", post(add)).with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/add")
+                Request::post("/")
                     .header(header::COOKIE, session_cookie_header())
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(
@@ -806,7 +818,7 @@ mod tests {
                 )),
             )
         };
-        let app = Router::new().route("/login", post(login)).with_state(state);
+        let app = app(state);
 
         assert_eq!(post_login(&app, "admin").await, StatusCode::UNAUTHORIZED);
         assert_eq!(post_login(&app, "admin").await, StatusCode::UNAUTHORIZED);
@@ -839,9 +851,7 @@ mod tests {
                 )),
             )
         };
-        let app = Router::new()
-            .route("/me/password", put(change_pwd))
-            .with_state(state);
+        let app = app(state);
 
         let mut statuses = Vec::new();
         for _ in 0..2 {
@@ -886,10 +896,7 @@ mod tests {
                 100,
             )),
         );
-        let app = Router::new()
-            .route("/logout", post(logout))
-            .layer(Extension::<Option<Arc<kellnr_oauth2::OAuth2Handler>>>(None))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
@@ -928,10 +935,7 @@ mod tests {
                 100,
             )),
         );
-        let app = Router::new()
-            .route("/logout", post(logout))
-            .layer(Extension::<Option<Arc<kellnr_oauth2::OAuth2Handler>>>(None))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
@@ -1124,9 +1128,7 @@ mod tests {
     }
 
     async fn put_change_pwd(state: AppStateData) -> StatusCode {
-        Router::new()
-            .route("/me/password", put(change_pwd))
-            .with_state(state)
+        app(state)
             .oneshot(
                 Request::put("/me/password")
                     .header(header::COOKIE, session_cookie_header())
@@ -1142,9 +1144,7 @@ mod tests {
     }
 
     async fn put_reset_pwd(state: AppStateData, name: &str) -> StatusCode {
-        Router::new()
-            .route("/{name}/password", put(reset_pwd))
-            .with_state(state)
+        app(state)
             .oneshot(
                 Request::put(format!("/{name}/password"))
                     .header(header::COOKIE, session_cookie_header())
@@ -1278,13 +1278,11 @@ mod tests {
             .returning(|_, _, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/add_token", post(add_token))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/add_token")
+                Request::post("/me/tokens")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1345,13 +1343,11 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/delete_token/{id}", axum::routing::delete(delete_token))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::delete("/delete_token/1")
+                Request::delete("/me/tokens/1")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1399,13 +1395,11 @@ mod tests {
                 100,
             )),
         );
-        let app = Router::new()
-            .route("/delete_token/{id}", axum::routing::delete(delete_token))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::delete("/delete_token/1")
+                Request::delete("/me/tokens/1")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1455,13 +1449,11 @@ mod tests {
             .returning(|_| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/delete/{name}", axum::routing::delete(delete))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::delete("/delete/user_to_delete")
+                Request::delete("/user_to_delete")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1518,13 +1510,11 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/read_only/{name}", post(read_only))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/read_only/target_user")
+                Request::post("/target_user/read-only")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1565,13 +1555,11 @@ mod tests {
         // Note: change_read_only_state should NOT be called because self-locking is blocked
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/read_only/{name}", post(read_only))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/read_only/admin") // Trying to lock self
+                Request::post("/admin/read-only") // Trying to lock self
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1617,13 +1605,11 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/read_only/{name}", post(read_only))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/read_only/admin") // Same user
+                Request::post("/admin/read-only") // Same user
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1665,13 +1651,11 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/read_only/{name}", post(read_only))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/read_only/other_user") // Locking another user
+                Request::post("/other_user/read-only") // Locking another user
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1725,11 +1709,11 @@ mod tests {
             .returning(|_, _, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new().route("/add", post(add)).with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/add")
+                Request::post("/")
                     .header(header::COOKIE, encode_cookies([(COOKIE_SESSION_ID, "session")]))
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(r#"{"name":"new_user","pwd1":"password","pwd2":"password","is_admin":false,"is_read_only":false}"#))
@@ -1788,13 +1772,11 @@ mod tests {
             });
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/add_token", post(add_token))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/add_token")
+                Request::post("/me/tokens")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1849,13 +1831,11 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/admin/{name}", post(admin))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/admin/target_user")
+                Request::post("/target_user/admin")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1896,9 +1876,7 @@ mod tests {
         // Note: change_admin_state should NOT be called because self-demotion is blocked
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/admin/{name}", post(admin))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
@@ -1941,13 +1919,11 @@ mod tests {
         }); // NOT admin
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/admin/{name}", post(admin))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/admin/target_user")
+                Request::post("/target_user/admin")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -1991,13 +1967,11 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/admin/{name}", post(admin))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/admin/other_admin")
+                Request::post("/other_admin/admin")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -2039,13 +2013,11 @@ mod tests {
             .returning(|_, _| Err(DbError::UserNotFound("nonexistent".to_string())));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/admin/{name}", post(admin))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::post("/admin/nonexistent")
+                Request::post("/nonexistent/admin")
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -2091,9 +2063,7 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/admin/{name}", post(admin))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
@@ -2135,13 +2105,11 @@ mod tests {
         // Note: delete_user should NOT be called because self-deletion is blocked
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/delete/{name}", axum::routing::delete(delete))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::delete("/delete/admin") // Trying to delete self
+                Request::delete("/admin") // Trying to delete self
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -2184,13 +2152,11 @@ mod tests {
             .returning(|_| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache.clone());
-        let app = Router::new()
-            .route("/delete/{name}", axum::routing::delete(delete))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::delete("/delete/other_user") // Deleting another user
+                Request::delete("/other_user") // Deleting another user
                     .header(
                         header::COOKIE,
                         encode_cookies([(COOKIE_SESSION_ID, "session")]),
@@ -2226,13 +2192,11 @@ mod tests {
             .returning(|_| Ok(()));
 
         let state = test_state_with_cache(mock_db, cache);
-        let app = Router::new()
-            .route("/delete/{name}", axum::routing::delete(delete))
-            .with_state(state);
+        let app = app(state);
 
         let response = app
             .oneshot(
-                Request::delete(format!("/delete/{legacy_name}"))
+                Request::delete(format!("/{legacy_name}"))
                     .header(header::COOKIE, session_cookie_header())
                     .body(Body::empty())
                     .unwrap(),

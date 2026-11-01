@@ -238,7 +238,7 @@ mod tests {
 
         let kellnr = app(Arc::new(db));
         let r = kellnr
-            .oneshot(Request::get("/queue").body(Body::empty()).unwrap())
+            .oneshot(Request::get("/builds").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -281,7 +281,7 @@ mod tests {
     }
 
     async fn queued_names(db: MockDb, token: Option<&str>) -> Vec<String> {
-        let mut request = Request::get("/queue");
+        let mut request = Request::get("/builds");
         if let Some(token) = token {
             request = request.header(header::AUTHORIZATION, token);
         }
@@ -331,10 +331,18 @@ mod tests {
     }
 
     fn app(db: Arc<dyn DbProvider>) -> Router {
+        app_with_storage(db, kellnr_http::test_support::test_state().docs_storage)
+    }
+
+    /// The docs API routes at their paths in the API.
+    fn app_with_storage(db: Arc<dyn DbProvider>, docs_storage: Arc<DocsStorage>) -> Router {
         Router::new()
-            .route("/queue", get(docs_in_queue))
+            .route("/builds", get(docs_in_queue))
+            .route("/{package}/latest", get(latest_docs))
+            .route("/{package}/{version}", put(publish_docs))
             .with_state(AppStateData {
                 db,
+                docs_storage,
                 ..kellnr_http::test_support::test_state()
             })
     }
@@ -349,16 +357,6 @@ mod tests {
         }
         zip.finish().unwrap();
         buf
-    }
-
-    fn publish_app(db: Arc<dyn DbProvider>, docs_storage: Arc<DocsStorage>) -> Router {
-        Router::new()
-            .route("/{package}/{version}", put(publish_docs))
-            .with_state(AppStateData {
-                db,
-                docs_storage,
-                ..kellnr_http::test_support::test_state()
-            })
     }
 
     fn expect_admin_owner(db: &mut MockDb, canonical: &CanonicalName) {
@@ -404,7 +402,7 @@ mod tests {
             Box::new(MemoryStorage::new()) as DynStorage
         ));
 
-        let r = publish_app(Arc::new(db), docs_storage.clone())
+        let r = app_with_storage(Arc::new(db), docs_storage.clone())
             .oneshot(
                 Request::put("/MY-crate/1.0.0")
                     .header(header::AUTHORIZATION, "sometoken")
@@ -454,7 +452,7 @@ mod tests {
             Box::new(MemoryStorage::new()) as DynStorage
         ));
 
-        let r = publish_app(Arc::new(db), docs_storage.clone())
+        let r = app_with_storage(Arc::new(db), docs_storage.clone())
             .oneshot(
                 Request::put("/my_crate/1.0.0")
                     .header(header::AUTHORIZATION, "sometoken")
@@ -498,7 +496,7 @@ mod tests {
             FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
         ) as DynStorage));
 
-        let kellnr = publish_app(Arc::new(db), docs_storage.clone());
+        let kellnr = app_with_storage(Arc::new(db), docs_storage.clone());
         let zip_bytes = build_zip(&[("doc/test_crate/index.html", b"<html>docs</html>")]);
 
         let r = kellnr
@@ -542,7 +540,7 @@ mod tests {
             FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
         ) as DynStorage));
 
-        let kellnr = publish_app(Arc::new(db), docs_storage.clone());
+        let kellnr = app_with_storage(Arc::new(db), docs_storage.clone());
         let zip_bytes = build_zip(&[("doc/test_crate/index.html", b"<html>docs</html>")]);
 
         let r = kellnr
@@ -593,7 +591,7 @@ mod tests {
 
         for uri in ["/test-crate/1.0.0", "/test-crate/9.9.9", "/missing/1.0.0"] {
             let zip_bytes = build_zip(&[("doc/x/index.html", b"<html>docs</html>")]);
-            let r = publish_app(db.clone(), docs_storage.clone())
+            let r = app_with_storage(db.clone(), docs_storage.clone())
                 .oneshot(
                     Request::put(uri)
                         .header(header::AUTHORIZATION, "sometoken")
@@ -621,7 +619,7 @@ mod tests {
             FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
         ) as DynStorage));
 
-        let kellnr = publish_app(Arc::new(db), docs_storage);
+        let kellnr = app_with_storage(Arc::new(db), docs_storage);
         let zip_bytes = build_zip(&[("../escape.html", b"evil")]);
 
         let r = kellnr
@@ -637,16 +635,6 @@ mod tests {
         // Previously this error was silently discarded (`let _ = ...`), returning 200
         // even though extraction failed. It must now surface as a client error.
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
-    }
-
-    fn latest_app(db: Arc<dyn DbProvider>, docs_storage: Arc<DocsStorage>) -> Router {
-        Router::new()
-            .route("/{package}/latest", get(latest_docs))
-            .with_state(AppStateData {
-                db,
-                docs_storage,
-                ..kellnr_http::test_support::test_state()
-            })
     }
 
     async fn docs_storage_with_latest_docs() -> (tempfile::TempDir, Arc<DocsStorage>) {
@@ -693,7 +681,7 @@ mod tests {
         if let Some(token) = token {
             request = request.header(header::AUTHORIZATION, token);
         }
-        let r = latest_app(Arc::new(db), docs_storage)
+        let r = app_with_storage(Arc::new(db), docs_storage)
             .oneshot(request.body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -736,7 +724,7 @@ mod tests {
             "My-Crate",
         );
 
-        let r = latest_app(Arc::new(db), docs_storage)
+        let r = app_with_storage(Arc::new(db), docs_storage)
             .oneshot(
                 Request::get("/My-Crate/latest")
                     .body(Body::empty())
