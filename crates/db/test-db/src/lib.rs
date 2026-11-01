@@ -210,6 +210,11 @@ pub async fn copy_sqlite_template(con: &ConString) {
     });
 }
 
+/// Tasks of this process wait for the SQLite template here without blocking a
+/// runtime thread, so only one of them takes the file lock that other
+/// processes wait on.
+static BUILDING_SQLITE_TEMPLATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Path of the SQLite template for the admin credentials of `con`, created on
 /// first use in this test run.
 async fn sqlite_template(con: &SqliteConString) -> PathBuf {
@@ -221,8 +226,11 @@ async fn sqlite_template(con: &SqliteConString) -> PathBuf {
         return template;
     }
 
+    let _building = BUILDING_SQLITE_TEMPLATE.lock().await;
+    if template.exists() {
+        return template;
+    }
     let lock = File::create(dir.join(format!("{key}.lock"))).expect("cannot create lock file");
-    // Blocks only this test, as every test has its own runtime.
     lock.lock().expect("cannot lock SQLite template");
     if template.exists() {
         return template;
