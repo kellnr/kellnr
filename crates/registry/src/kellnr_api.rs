@@ -8,6 +8,7 @@ use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use chrono::Utc;
 use kellnr_common::account_name::{GroupName, UserName};
+use kellnr_common::binary_body::BinaryBody;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::search_result;
@@ -744,6 +745,7 @@ pub async fn add_empty_crate(
     put,
     path = "/new",
     tag = "crates",
+    request_body(content = inline(BinaryBody), content_type = "application/octet-stream", description = "Crate metadata and .crate file in the publish format of cargo"),
     responses(
         (status = 200, description = "Crate published", body = PubDataSuccess),
         (status = 400, description = "Invalid crate data"),

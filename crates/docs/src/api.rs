@@ -3,6 +3,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::response::Redirect;
+use kellnr_common::binary_body::BinaryBody;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
@@ -119,7 +120,7 @@ async fn can_read_docs(
         ("package" = String, Path, description = "Package name"),
         ("version" = String, Path, description = "Package version")
     ),
-    request_body(content = Vec<u8>, description = "Documentation archive (tar.gz or zip)", content_type = "application/octet-stream"),
+    request_body(content = inline(BinaryBody), description = "Documentation archive (tar.gz or zip)", content_type = "application/octet-stream"),
     responses(
         (status = 200, description = "Documentation published successfully", body = DocUploadResponse),
         (status = 400, description = "Crate or version does not exist"),

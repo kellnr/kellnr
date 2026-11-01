@@ -2,13 +2,16 @@
 // from utoipa derive macro
 #![allow(clippy::needless_for_each, unused_qualifications)]
 
+use std::collections::HashSet;
+
 use kellnr_common::name_or_description::NameOrDescription;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::provider::CrateSort;
 use kellnr_http::error::ErrorDetails;
+use kellnr_settings::Settings;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
-use utoipa::openapi::{Content, Ref, RefOr};
+use utoipa::openapi::{Content, Ref, RefOr, Schema};
 use utoipa::{Modify, OpenApi, PartialSchema, ToSchema};
 
 pub(crate) struct SecurityAddon;
@@ -60,6 +63,47 @@ pub(crate) fn add_error_bodies(mut api: utoipa::openapi::OpenApi) -> utoipa::ope
         }
     }
     api
+}
+
+/// Marks the fields of [`Settings`] and of the objects in it as required.
+/// The server always sends all of them, but `#[serde(default)]` on the
+/// settings structs makes them optional in the generated schemas.
+pub(crate) fn require_settings_fields(
+    mut api: utoipa::openapi::OpenApi,
+) -> utoipa::openapi::OpenApi {
+    let components = api.components.get_or_insert_with(Default::default);
+    let mut pending = vec![Settings::name().into_owned()];
+    let mut seen = HashSet::new();
+    while let Some(name) = pending.pop() {
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        if let Some(RefOr::T(Schema::Object(object))) = components.schemas.get_mut(&name) {
+            object.required = object.properties.keys().cloned().collect();
+            for property in object.properties.values() {
+                collect_schema_refs(property, &mut pending);
+            }
+        }
+    }
+    api
+}
+
+/// Adds the names of the component schemas `schema` refers to.
+fn collect_schema_refs(schema: &RefOr<Schema>, names: &mut Vec<String>) {
+    match schema {
+        RefOr::Ref(reference) => names.extend(
+            reference
+                .ref_location
+                .strip_prefix("#/components/schemas/")
+                .map(str::to_string),
+        ),
+        RefOr::T(Schema::AllOf(all_of)) => {
+            for item in &all_of.items {
+                collect_schema_refs(item, names);
+            }
+        }
+        RefOr::T(_) => {}
+    }
 }
 
 #[derive(OpenApi)]
