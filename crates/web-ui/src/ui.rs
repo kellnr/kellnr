@@ -1055,12 +1055,12 @@ async fn list_local_crate_versions(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use std::sync::Arc;
     use std::time::Duration;
 
     use axum::Router;
     use axum::body::Body;
+    use axum::http::Response;
     use axum::routing::{get, post};
     use bytes::Bytes;
     use http_body_util::BodyExt;
@@ -1069,13 +1069,16 @@ mod tests {
     use kellnr_common::background_tasks::BackgroundTasks;
     use kellnr_common::crate_data::{CrateRegistryDep, CrateVersionData};
     use kellnr_common::crate_dependents::CrateDependent;
-    use kellnr_common::plain_token::PlainToken;
-    use kellnr_db::error::DbError;
-    use kellnr_db::mock::MockDb;
-    use kellnr_db::{CrateVisibility, User};
+    use kellnr_common::publish_metadata::{PublishMetadata, RegistryDep};
+    use kellnr_db::UserFlags;
+    use kellnr_db::test_utils::{
+        TestCrateBuilder, default_created, test_add_cached_crate_with_downloads, test_drop_table,
+    };
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TestServer, encode_cookies};
-    use kellnr_settings::{Postgresql, Settings, Setup, constants};
+    use kellnr_http::test_support::{
+        TestServer, session_cookie, session_identity, sqlite_test_state, test_state,
+    };
+    use kellnr_settings::{Postgresql, Settings, Setup};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
@@ -1083,35 +1086,148 @@ mod tests {
     use kellnr_storage::object_storage::MemoryStorage;
     use kellnr_storage::storage_error::StorageError;
     use kellnr_storage::storage_key::StorageKey;
-    use mockall::predicate::*;
+    use kellnr_test_db::TestDb;
+    use serde::de::DeserializeOwned;
     use tower::ServiceExt;
 
     use super::*;
 
+    fn app(state: AppStateData) -> Router {
+        Router::new()
+            .route("/search", get(search))
+            .route("/crates", get(crates))
+            .route("/crate_data", get(crate_data))
+            .route("/crate_dependents", get(crate_dependents))
+            .route("/version", get(kellnr_version))
+            .route("/statistic", get(statistic))
+            .route("/build", post(build_rustdoc))
+            .route("/cratesio_data", get(cratesio_data))
+            .route("/settings", get(settings))
+            .route("/docs_enabled", get(docs_enabled))
+            .route("/sponsor_links_enabled", get(sponsor_links_enabled))
+            .route("/migrate-storage", post(migrate_docs_storage))
+            .with_state(state)
+    }
+
+    /// `state` with `settings` and an empty crate storage that uses them.
+    fn with_settings(state: AppStateData, settings: Settings) -> AppStateData {
+        let crate_storage = KellnrCrateStorage::new(&settings, Box::new(MemoryStorage::new()));
+        AppStateData {
+            settings: Arc::new(settings),
+            crate_storage: Arc::new(crate_storage),
+            ..state
+        }
+    }
+
+    /// Sends a GET request, with a session if `cookie` is not empty.
+    async fn get_with(state: AppStateData, uri: &str, cookie: &str) -> Response<Body> {
+        send(state, Request::get(uri), cookie).await
+    }
+
+    async fn post_with(state: AppStateData, uri: &str, cookie: &str) -> Response<Body> {
+        send(state, Request::post(uri), cookie).await
+    }
+
+    async fn send(
+        state: AppStateData,
+        request: hyper::http::request::Builder,
+        cookie: &str,
+    ) -> Response<Body> {
+        let request = if cookie.is_empty() {
+            request
+        } else {
+            request.header(header::COOKIE, cookie)
+        };
+        app(state)
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+    }
+
+    async fn json<T: DeserializeOwned>(response: Response<Body>) -> T {
+        assert_eq!(StatusCode::OK, response.status());
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    async fn add_crate(db: &TestDb, name: &str, version: &str) {
+        TestCrateBuilder::new(db)
+            .name(name)
+            .version(version)
+            .build()
+            .await
+            .unwrap();
+    }
+
+    async fn add_crate_with_downloads(db: &TestDb, name: &str, downloads: i64) {
+        TestCrateBuilder::new(db)
+            .name(name)
+            .downloads(downloads)
+            .build()
+            .await
+            .unwrap();
+    }
+
+    /// Publishes `pm` with `admin` as owner.
+    async fn publish(db: &TestDb, pm: PublishMetadata) {
+        db.add_crate(
+            &pm,
+            "cksum",
+            1024,
+            &default_created(),
+            &UserName::new("admin").unwrap(),
+            None,
+        )
+        .await
+        .unwrap();
+    }
+
+    async fn add_user(db: &TestDb, name: &str) {
+        db.add_user(&UserName::new(name).unwrap(), "pwd", UserFlags::normal())
+            .await
+            .unwrap();
+    }
+
+    /// Adds the download-restricted crate `name`, owned by `admin`.
+    async fn add_restricted_crate(db: &TestDb, name: &str) {
+        add_crate(db, name, "1.0.0").await;
+        db.change_download_restricted(&canonical(name), true)
+            .await
+            .unwrap();
+    }
+
+    async fn add_crate_user(db: &TestDb, name: &str, user: &str) {
+        db.add_crate_user(&canonical(name), &UserName::new(user).unwrap())
+            .await
+            .unwrap();
+    }
+
+    fn canonical(name: &str) -> CanonicalName {
+        CanonicalName::try_from(name).unwrap()
+    }
+
+    async fn versions(db: &TestDb, name: &str) -> Vec<String> {
+        db.get_crate_versions(&canonical(name))
+            .await
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    fn names(crates: &[CrateOverview]) -> Vec<&str> {
+        crates.iter().map(|c| c.name.as_str()).collect()
+    }
+
     #[tokio::test]
     async fn deleting_a_version_forgets_its_known_license() {
         let data_dir = tempfile::tempdir().unwrap();
-        let settings = kellnr_settings::test_settings_in(data_dir.path());
-        let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
-        let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, storage));
-        let docs_storage = Arc::new(DocsStorage::new(Box::new(
-            FSStorage::new(&settings.docs_path()).unwrap(),
-        ) as DynStorage));
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_crate_original_name()
-            .returning(|_| Ok(Some(OriginalName::from_unchecked("licensed".to_string()))));
-        mock_db.expect_delete_crate().returning(|_, _| Ok(()));
-        let state = AppStateData {
-            db: Arc::new(mock_db),
-            settings: Arc::new(settings),
-            crate_storage: crate_storage.clone(),
-            docs_storage,
-            ..kellnr_http::test_support::test_state()
-        };
+        let (state, db) = delete_state(data_dir.path()).await;
+        add_crate(&db, "licensed", "1.0.0").await;
         let name = OriginalName::try_from("licensed").unwrap();
         let version = Version::try_from("1.0.0").unwrap();
-        crate_storage
+        state
+            .crate_storage
             .put(&name, &version, Bytes::from_static(b"crate"))
             .await
             .unwrap();
@@ -1130,26 +1246,27 @@ mod tests {
         assert_eq!(None, licenses.get(&name.to_canonical(), &version));
     }
 
-    fn delete_state(mock_db: MockDb, data_dir: &std::path::Path) -> AppStateData {
+    async fn delete_state(data_dir: &std::path::Path) -> (AppStateData, TestDb) {
+        let (state, db) = sqlite_test_state().await;
         let settings = kellnr_settings::test_settings_in(data_dir);
         let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         let docs_storage = Arc::new(DocsStorage::new(Box::new(
             FSStorage::new(&settings.docs_path()).unwrap(),
         ) as DynStorage));
-        AppStateData {
-            db: Arc::new(mock_db),
+        let state = AppStateData {
             crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
             settings: Arc::new(settings),
             docs_storage,
-            ..kellnr_http::test_support::test_state()
-        }
+            ..state
+        };
+        (state, db)
     }
 
-    /// Storage that records deleted keys. Every key exists, deleting fails
-    /// if `fail_delete` is set.
+    /// Storage that records deleted keys. Every key exists, deleting
+    /// `fail_key` fails.
     struct RecordingStorage {
         deleted: Arc<std::sync::Mutex<Vec<String>>>,
-        fail_delete: bool,
+        fail_key: Option<&'static str>,
     }
 
     #[async_trait::async_trait]
@@ -1174,7 +1291,7 @@ mod tests {
             unimplemented!()
         }
         async fn delete(&self, key: &StorageKey) -> Result<(), StorageError> {
-            if self.fail_delete {
+            if self.fail_key == Some(key.to_string().as_str()) {
                 return Err(StorageError::GenericError("delete failed".to_string()));
             }
             self.deleted.lock().unwrap().push(key.to_string());
@@ -1193,12 +1310,12 @@ mod tests {
 
     fn with_recording_storage(
         mut state: AppStateData,
-        fail_delete: bool,
+        fail_key: Option<&'static str>,
     ) -> (AppStateData, Arc<std::sync::Mutex<Vec<String>>>) {
         let deleted = Arc::new(std::sync::Mutex::new(Vec::new()));
         let storage = Box::new(RecordingStorage {
             deleted: deleted.clone(),
-            fail_delete,
+            fail_key,
         }) as DynStorage;
         state.crate_storage = Arc::new(KellnrCrateStorage::new(&state.settings, storage));
         (state, deleted)
@@ -1209,22 +1326,9 @@ mod tests {
     #[tokio::test]
     async fn deleting_a_crate_removes_the_file_of_its_original_name() {
         let data_dir = tempfile::tempdir().unwrap();
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_crate_original_name()
-            .returning(|_| Ok(Some(OriginalName::from_unchecked("My_Crate".to_string()))));
-        mock_db.expect_get_crate_meta_list().returning(|_| {
-            Ok(vec![kellnr_db::CrateMeta {
-                version: "1.0.0".to_string(),
-                ..kellnr_db::CrateMeta::default()
-            }])
-        });
-        mock_db
-            .expect_delete_crate()
-            .times(1)
-            .returning(|_, _| Ok(()));
-        let (state, deleted) =
-            with_recording_storage(delete_state(mock_db, data_dir.path()), false);
+        let (state, db) = delete_state(data_dir.path()).await;
+        add_crate(&db, "My_Crate", "1.0.0").await;
+        let (state, deleted) = with_recording_storage(state, None);
 
         let requested = OriginalName::try_from("my_crate").unwrap();
         delete_crate_versions_impl(&state, &requested, None)
@@ -1232,6 +1336,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(*deleted.lock().unwrap(), vec!["My_Crate-1.0.0.crate"]);
+        assert!(versions(&db, "my_crate").await.is_empty());
     }
 
     /// If the crate file cannot be deleted, the database entry must stay so
@@ -1239,12 +1344,9 @@ mod tests {
     #[tokio::test]
     async fn failed_storage_deletion_keeps_the_database_entry() {
         let data_dir = tempfile::tempdir().unwrap();
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_crate_original_name()
-            .returning(|_| Ok(Some(OriginalName::from_unchecked("foo".to_string()))));
-        mock_db.expect_delete_crate().times(0);
-        let (state, _) = with_recording_storage(delete_state(mock_db, data_dir.path()), true);
+        let (state, db) = delete_state(data_dir.path()).await;
+        add_crate(&db, "foo", "1.0.0").await;
+        let (state, _) = with_recording_storage(state, Some("foo-1.0.0.crate"));
 
         let result = delete_crate_versions_impl(
             &state,
@@ -1254,16 +1356,13 @@ mod tests {
         .await;
 
         assert!(result.is_err());
+        assert_eq!(versions(&db, "foo").await, ["1.0.0"]);
     }
 
     #[tokio::test]
     async fn deleting_an_unknown_crate_is_not_found() {
         let data_dir = tempfile::tempdir().unwrap();
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_crate_original_name()
-            .returning(|_| Ok(None));
-        let state = delete_state(mock_db, data_dir.path());
+        let (state, _db) = delete_state(data_dir.path()).await;
 
         let result =
             delete_crate_versions_impl(&state, &OriginalName::try_from("nope").unwrap(), None)
@@ -1281,70 +1380,25 @@ mod tests {
     #[tokio::test]
     async fn deleting_all_versions_continues_after_a_failure() {
         let data_dir = tempfile::tempdir().unwrap();
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_crate_original_name()
-            .returning(|_| Ok(Some(OriginalName::from_unchecked("foo".to_string()))));
-        mock_db.expect_get_crate_meta_list().returning(|_| {
-            Ok(["1.0.0", "2.0.0"]
-                .map(|v| kellnr_db::CrateMeta {
-                    version: v.to_string(),
-                    ..kellnr_db::CrateMeta::default()
-                })
-                .to_vec())
-        });
-        mock_db
-            .expect_delete_crate()
-            .with(always(), eq(Version::try_from("1.0.0").unwrap()))
-            .times(1)
-            .returning(|_, _| Err(DbError::FailedToCountCrates));
-        mock_db
-            .expect_delete_crate()
-            .with(always(), eq(Version::try_from("2.0.0").unwrap()))
-            .times(1)
-            .returning(|_, _| Ok(()));
-        let state = delete_state(mock_db, data_dir.path());
+        let (state, db) = delete_state(data_dir.path()).await;
+        add_crate(&db, "foo", "1.0.0").await;
+        add_crate(&db, "foo", "2.0.0").await;
+        let (state, deleted) = with_recording_storage(state, Some("foo-1.0.0.crate"));
 
         let result =
             delete_crate_versions_impl(&state, &OriginalName::try_from("foo").unwrap(), None).await;
 
         assert!(result.is_err());
+        assert_eq!(*deleted.lock().unwrap(), vec!["foo-2.0.0.crate"]);
+        assert_eq!(versions(&db, "foo").await, ["1.0.0"]);
     }
 
     #[tokio::test]
     async fn settings_returns_from_settings() {
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        });
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/settings")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, "token")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_response = serde_json::from_slice::<SettingsResponse>(&result_msg).unwrap();
+        let response: SettingsResponse = json(get_with(state, "/settings", &cookie).await).await;
 
         // Set the password to empty string because it is not serialized
         // and expect the configured admin password to be redacted.
@@ -1363,12 +1417,11 @@ mod tests {
             ..tmp
         };
         let result_settings: Settings =
-            serde_json::from_value(serde_json::Value::Object(result_response.settings)).unwrap();
+            serde_json::from_value(serde_json::Value::Object(response.settings)).unwrap();
 
-        assert_eq!(result_status, StatusCode::OK);
         assert_eq!(result_settings, expected_state);
         // `sources` is structurally part of `SettingsResponse`, successful
-        // deserialization on line above is sufficient proof it round-trips.
+        // deserialization above is sufficient proof it round-trips.
         // The companion test below asserts that an override actually flows
         // into the `sources` map.
     }
@@ -1377,16 +1430,8 @@ mod tests {
     async fn settings_response_sources_reflect_prov_overrides() {
         use kellnr_settings::{Config, ConfigSource, SettingsProv};
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        });
-
-        let (settings, storage) = test_deps();
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
         // Build a real `SettingsProv` with one non-default leaf so the
         // handler must emit a non-empty `sources` entry for it. Using only
@@ -1398,33 +1443,12 @@ mod tests {
             )
             .build::<SettingsProv>()
             .unwrap();
-
-        let app = app_with_state(AppStateData {
-            db: Arc::new(mock_db),
-            settings: Arc::new(settings.clone()),
+        let state = AppStateData {
             settings_prov: Arc::new(prov),
-            crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
-            ..kellnr_http::test_support::test_state()
-        });
+            ..state
+        };
 
-        let r = app
-            .oneshot(
-                Request::get("/settings")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .header(header::AUTHORIZATION, "token")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::OK);
-        let body = r.into_body().collect().await.unwrap().to_bytes();
-        let response: SettingsResponse = serde_json::from_slice(&body).unwrap();
+        let response: SettingsResponse = json(get_with(state, "/settings", &cookie).await).await;
 
         assert_eq!(
             response.sources.get("registry.data_dir"),
@@ -1496,35 +1520,14 @@ mod tests {
         settings.setup.admin_pwd = SECRETS[1].to_string();
         settings.setup.admin_token = Some(SECRETS[2].to_string());
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        });
-        let (_, storage) = test_deps();
-        let app = app_with_state(AppStateData {
-            db: Arc::new(mock_db),
-            settings: Arc::new(settings.clone()),
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        let state = AppStateData {
             settings_prov: Arc::new(prov),
-            crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
-            ..kellnr_http::test_support::test_state()
-        });
+            ..with_settings(state, settings)
+        };
 
-        let r = app
-            .oneshot(
-                Request::get("/settings")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let r = get_with(state, "/settings", &cookie).await;
 
         assert_eq!(r.status(), StatusCode::OK);
         let body = r.into_body().collect().await.unwrap().to_bytes();
@@ -1564,556 +1567,164 @@ mod tests {
 
     #[tokio::test]
     async fn docs_enabled_returns_false_by_default() {
-        let mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/docs_enabled").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
+        let response: DocsEnabledResponse =
+            json(get_with(test_state(), "/docs_enabled", "").await).await;
 
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result = serde_json::from_slice::<DocsEnabledResponse>(&result_msg).unwrap();
-
-        assert_eq!(StatusCode::OK, result_status);
-        assert!(!result.enabled);
+        assert!(!response.enabled);
     }
 
     #[tokio::test]
     async fn docs_enabled_returns_true_when_enabled() {
-        let mock_db = MockDb::new();
-        let (mut settings, storage) = test_deps();
+        let mut settings = kellnr_settings::test_settings();
         settings.docs.enabled = true;
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/docs_enabled").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
+        let state = with_settings(test_state(), settings);
 
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result = serde_json::from_slice::<DocsEnabledResponse>(&result_msg).unwrap();
+        let response: DocsEnabledResponse = json(get_with(state, "/docs_enabled", "").await).await;
 
-        assert_eq!(StatusCode::OK, result_status);
-        assert!(result.enabled);
+        assert!(response.enabled);
     }
 
     #[tokio::test]
     async fn sponsor_links_enabled_returns_true_by_default() {
-        let mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/sponsor_links_enabled")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let response: SponsorLinksEnabledResponse =
+            json(get_with(test_state(), "/sponsor_links_enabled", "").await).await;
 
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result = serde_json::from_slice::<SponsorLinksEnabledResponse>(&result_msg).unwrap();
-
-        assert_eq!(StatusCode::OK, result_status);
-        assert!(result.enabled);
+        assert!(response.enabled);
     }
 
     #[tokio::test]
     async fn sponsor_links_enabled_returns_false_when_disabled() {
-        let mock_db = MockDb::new();
-        let (mut settings, storage) = test_deps();
+        let mut settings = kellnr_settings::test_settings();
         settings.registry.sponsor_links_enabled = false;
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/sponsor_links_enabled")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let state = with_settings(test_state(), settings);
 
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result = serde_json::from_slice::<SponsorLinksEnabledResponse>(&result_msg).unwrap();
+        let response: SponsorLinksEnabledResponse =
+            json(get_with(state, "/sponsor_links_enabled", "").await).await;
 
-        assert_eq!(StatusCode::OK, result_status);
-        assert!(!result.enabled);
+        assert!(!response.enabled);
+    }
+
+    /// State with docs enabled. Queueing a build writes the crate to the doc
+    /// queue directory in `data_dir`.
+    async fn docs_state(data_dir: &std::path::Path) -> (AppStateData, TestDb) {
+        let (state, db) = sqlite_test_state().await;
+        let mut settings = kellnr_settings::test_settings_in(data_dir);
+        settings.docs.enabled = true;
+        (with_settings(state, settings), db)
+    }
+
+    async fn build_foobar_docs(state: AppStateData, cookie: &str) -> StatusCode {
+        post_with(state, "/build?package=foobar&version=1.0.0", cookie)
+            .await
+            .status()
+    }
+
+    async fn doc_queue_len(db: &TestDb) -> usize {
+        db.get_doc_queue().await.unwrap().len()
     }
 
     #[tokio::test]
     async fn build_rust_doc_crate_not_found() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_original_name()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(Version::try_from("1.0.0").unwrap()),
-            )
-            .returning(move |_, _| Ok(None));
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("cookie")))
-            .returning(move |_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        let (mut settings, storage) = test_deps();
-        settings.docs.enabled = true;
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::post("/build?package=foobar&version=1.0.0")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, "token")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let data_dir = tempfile::tempdir().unwrap();
+        let (state, db) = docs_state(data_dir.path()).await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
-        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        let status = build_foobar_docs(state, &cookie).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 
     // A non-owner gets the same response for a missing crate as for a crate
     // of someone else, so that the existence of a crate is not revealed.
     #[tokio::test]
     async fn build_rust_doc_crate_not_found_for_non_owner() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("cookie")))
-            .returning(move |_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_is_owner()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(UserName::new("user").unwrap()),
-            )
-            .returning(move |_, _| Ok(false));
-        let (mut settings, storage) = test_deps();
-        settings.docs.enabled = true;
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::post("/build?package=foobar&version=1.0.0")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, "token")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let data_dir = tempfile::tempdir().unwrap();
+        let (state, db) = docs_state(data_dir.path()).await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
 
-        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        let status = build_foobar_docs(state, &cookie).await;
+
+        assert_eq!(status, StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
     async fn build_rust_doc_version_not_found() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("cookie")))
-            .returning(move |_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_is_owner()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(UserName::new("user").unwrap()),
-            )
-            .returning(move |_, _| Ok(true));
-        mock_db
-            .expect_get_user()
-            .with(eq(UserName::new("user").unwrap()))
-            .returning(move |_| {
-                Ok(User {
-                    id: kellnr_db::UserId::new(0),
-                    name: UserName::new("user").unwrap(),
-                    pwd: String::new(),
-                    salt: String::new(),
-                    is_admin: false,
-                    is_read_only: false,
-                    created: String::new(),
-                })
-            });
-        mock_db
-            .expect_get_original_name()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(Version::try_from("1.0.0").unwrap()),
-            )
-            .returning(move |_, _| Ok(None));
-        let (mut settings, storage) = test_deps();
-        settings.docs.enabled = true;
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::post("/build?package=foobar&version=1.0.0")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, "token")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let data_dir = tempfile::tempdir().unwrap();
+        let (state, db) = docs_state(data_dir.path()).await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
+        TestCrateBuilder::new(&db)
+            .name("foobar")
+            .owner("user")
+            .version("2.0.0")
+            .build()
+            .await
+            .unwrap();
 
-        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        let status = build_foobar_docs(state, &cookie).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
     async fn build_rust_doc_not_owner() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("cookie")))
-            .returning(move |_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_original_name()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(Version::try_from("1.0.0").unwrap()),
-            )
-            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
-        mock_db
-            .expect_is_owner()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(UserName::new("user").unwrap()),
-            )
-            .returning(move |_, _| Ok(false));
-        mock_db
-            .expect_get_user()
-            .with(eq(UserName::new("user").unwrap()))
-            .returning(move |_| {
-                Ok(User {
-                    id: kellnr_db::UserId::new(0),
-                    name: UserName::new("user").unwrap(),
-                    pwd: String::new(),
-                    salt: String::new(),
-                    is_admin: false,
-                    is_read_only: false,
-                    created: String::new(),
-                })
-            });
-        let (mut settings, storage) = test_deps();
-        settings.docs.enabled = true;
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::post("/build?package=foobar&version=1.0.0")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, "token")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let data_dir = tempfile::tempdir().unwrap();
+        let (state, db) = docs_state(data_dir.path()).await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
+        add_crate(&db, "foobar", "1.0.0").await;
 
-        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        let status = build_foobar_docs(state, &cookie).await;
+
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(doc_queue_len(&db).await, 0);
     }
 
     #[tokio::test]
     async fn build_rust_doc_is_owner() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("cookie")))
-            .returning(move |_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_original_name()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(Version::try_from("1.0.0").unwrap()),
-            )
-            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
-        mock_db
-            .expect_is_owner()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(UserName::new("user").unwrap()),
-            )
-            .returning(move |_, _| Ok(true));
-        mock_db
-            .expect_get_user()
-            .with(eq(UserName::new("user").unwrap()))
-            .returning(move |_| {
-                Ok(User {
-                    id: kellnr_db::UserId::new(0),
-                    name: UserName::new("user").unwrap(),
-                    pwd: String::new(),
-                    salt: String::new(),
-                    is_admin: false,
-                    is_read_only: false,
-                    created: String::new(),
-                })
-            });
-        mock_db
-            .expect_add_doc_queue()
-            .with(
-                eq(OriginalName::try_from("foobar").unwrap()),
-                eq(Version::try_from("1.0.0").unwrap()),
-                always(),
-            )
-            .times(1)
-            .returning(move |_, _, _| Ok(()));
-
-        // Queueing the build writes the crate to the doc queue directory.
         let data_dir = tempfile::tempdir().unwrap();
-        let (_, storage) = test_deps();
-        let mut settings = kellnr_settings::test_settings_in(data_dir.path());
-        settings.docs.enabled = true;
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::post("/build?package=foobar&version=1.0.0")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, "token")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let (state, db) = docs_state(data_dir.path()).await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
+        TestCrateBuilder::new(&db)
+            .name("foobar")
+            .owner("user")
+            .build()
+            .await
+            .unwrap();
 
-        assert_eq!(r.status(), StatusCode::OK);
+        let status = build_foobar_docs(state, &cookie).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(doc_queue_len(&db).await, 1);
     }
 
     #[tokio::test]
     async fn build_rust_doc_read_only_owner_is_rejected() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("cookie")))
-            .returning(move |_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: true,
-                })
-            });
-        mock_db
-            .expect_get_original_name()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(Version::try_from("1.0.0").unwrap()),
-            )
-            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
-        mock_db
-            .expect_is_owner()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(UserName::new("user").unwrap()),
-            )
-            .returning(move |_, _| Ok(true));
-        mock_db
-            .expect_add_doc_queue()
-            .with(
-                eq(OriginalName::try_from("foobar").unwrap()),
-                eq(Version::try_from("1.0.0").unwrap()),
-                always(),
-            )
-            .times(0)
-            .returning(move |_, _, _| Ok(()));
+        let data_dir = tempfile::tempdir().unwrap();
+        let (state, db) = docs_state(data_dir.path()).await;
+        let cookie = session_cookie(&db, "user", UserFlags::read_only()).await;
+        TestCrateBuilder::new(&db)
+            .name("foobar")
+            .owner("user")
+            .build()
+            .await
+            .unwrap();
 
-        let (mut settings, storage) = test_deps();
-        settings.docs.enabled = true;
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::post("/build?package=foobar&version=1.0.0")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, "token")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let status = build_foobar_docs(state, &cookie).await;
 
-        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(doc_queue_len(&db).await, 0);
     }
 
     #[tokio::test]
     async fn build_rust_doc_not_owner_but_admin() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("cookie")))
-            .returning(move |_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_original_name()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(Version::try_from("1.0.0").unwrap()),
-            )
-            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked("foobar".to_string()))));
-        mock_db
-            .expect_is_owner()
-            .with(
-                eq(CanonicalName::try_from("foobar").unwrap()),
-                eq(UserName::new("user").unwrap()),
-            )
-            .returning(move |_, _| Ok(false));
-        mock_db
-            .expect_get_user()
-            .with(eq(UserName::new("user").unwrap()))
-            .returning(move |_| {
-                Ok(User {
-                    id: kellnr_db::UserId::new(0),
-                    name: UserName::new("user").unwrap(),
-                    pwd: String::new(),
-                    salt: String::new(),
-                    is_admin: true,
-                    is_read_only: false,
-                    created: String::new(),
-                })
-            });
-        mock_db
-            .expect_add_doc_queue()
-            .with(
-                eq(OriginalName::try_from("foobar").unwrap()),
-                eq(Version::try_from("1.0.0").unwrap()),
-                always(),
-            )
-            .times(1)
-            .returning(move |_, _, _| Ok(()));
-
-        // Queueing the build writes the crate to the doc queue directory.
         let data_dir = tempfile::tempdir().unwrap();
-        let (_, storage) = test_deps();
-        let mut settings = kellnr_settings::test_settings_in(data_dir.path());
-        settings.docs.enabled = true;
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::post("/build?package=foobar&version=1.0.0")
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, "token")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let (state, db) = docs_state(data_dir.path()).await;
+        let cookie = session_cookie(&db, "other_admin", UserFlags::admin()).await;
+        add_crate(&db, "foobar", "1.0.0").await;
 
-        assert_eq!(r.status(), StatusCode::OK);
-    }
+        let status = build_foobar_docs(state, &cookie).await;
 
-    fn migrate_storage_app(
-        mock_db: MockDb,
-        settings: Settings,
-        docs_storage: DocsStorage,
-    ) -> Router {
-        migrate_storage_app_with_tasks(mock_db, settings, docs_storage, BackgroundTasks::new())
-    }
-
-    fn migrate_storage_app_with_tasks(
-        mock_db: MockDb,
-        settings: Settings,
-        docs_storage: DocsStorage,
-        background_tasks: BackgroundTasks,
-    ) -> Router {
-        app_with_state(AppStateData {
-            db: Arc::new(mock_db),
-            settings: Arc::new(settings),
-            docs_storage: Arc::new(docs_storage),
-            background_tasks,
-            ..kellnr_http::test_support::test_state()
-        })
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(doc_queue_len(&db).await, 1);
     }
 
     fn fs_docs_storage(dir: &std::path::Path) -> DocsStorage {
@@ -2132,44 +1743,38 @@ mod tests {
         settings
     }
 
-    fn admin_session_mock_db() -> MockDb {
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        });
-        mock_db
+    /// Posts to `/migrate-storage` as `user`, with docs migrated to `target`.
+    async fn migrate_storage(
+        settings: Settings,
+        target: &std::path::Path,
+        background_tasks: BackgroundTasks,
+        user: (&str, UserFlags),
+    ) -> Response<Body> {
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, user.0, user.1).await;
+        let state = AppStateData {
+            docs_storage: Arc::new(fs_docs_storage(target)),
+            background_tasks,
+            ..with_settings(state, settings)
+        };
+        post_with(state, "/migrate-storage", &cookie).await
     }
+
+    const ADMIN: (&str, UserFlags) = ("admin", UserFlags::admin());
 
     #[tokio::test]
     async fn migrate_docs_storage_returns_403_for_non_admin() {
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("user").unwrap(),
-                is_admin: false,
-                is_read_only: false,
-            })
-        });
         let local = tempfile::tempdir().unwrap();
         let target = tempfile::tempdir().unwrap();
         let settings = settings_with_docs_bucket_configured(local.path());
 
-        let r = migrate_storage_app(mock_db, settings, fs_docs_storage(target.path()))
-            .oneshot(
-                Request::post("/migrate-storage")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let r = migrate_storage(
+            settings,
+            target.path(),
+            BackgroundTasks::new(),
+            ("user", UserFlags::normal()),
+        )
+        .await;
 
         assert_eq!(r.status(), StatusCode::FORBIDDEN);
     }
@@ -2181,22 +1786,7 @@ mod tests {
         let mut settings = kellnr_settings::test_settings();
         settings.registry.data_dir = local.path().to_str().unwrap().to_string();
 
-        let r = migrate_storage_app(
-            admin_session_mock_db(),
-            settings,
-            fs_docs_storage(target.path()),
-        )
-        .oneshot(
-            Request::post("/migrate-storage")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let r = migrate_storage(settings, target.path(), BackgroundTasks::new(), ADMIN).await;
 
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
@@ -2209,26 +1799,9 @@ mod tests {
         // `{data_dir}/docs` itself was never created.
         let settings = settings_with_docs_bucket_configured(local.path());
 
-        let r = migrate_storage_app(
-            admin_session_mock_db(),
-            settings,
-            fs_docs_storage(target.path()),
-        )
-        .oneshot(
-            Request::post("/migrate-storage")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let r = migrate_storage(settings, target.path(), BackgroundTasks::new(), ADMIN).await;
 
-        assert_eq!(r.status(), StatusCode::OK);
-        let body = r.into_body().collect().await.unwrap().to_bytes();
-        let response: MigrateDocsStorageResponse = serde_json::from_slice(&body).unwrap();
+        let response: MigrateDocsStorageResponse = json(r).await;
         assert!(!response.started);
         assert_eq!(response.crate_versions_found, 0);
     }
@@ -2263,29 +1836,8 @@ mod tests {
         .await
         .unwrap();
 
-        let target_docs_storage = fs_docs_storage(target.path());
         let tasks = BackgroundTasks::new();
-        let r = migrate_storage_app_with_tasks(
-            admin_session_mock_db(),
-            settings,
-            // `migrate_storage_app` wraps this in the `Arc` the handler needs,
-            // but we still need our own handle on the same backing directory
-            // to assert on afterwards, so build a second `DocsStorage` on top
-            // of the same `target` directory rather than reusing the moved value.
-            fs_docs_storage(target.path()),
-            tasks.clone(),
-        )
-        .oneshot(
-            Request::post("/migrate-storage")
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let r = migrate_storage(settings, target.path(), tasks.clone(), ADMIN).await;
 
         assert_eq!(r.status(), StatusCode::ACCEPTED);
         let body = r.into_body().collect().await.unwrap().to_bytes();
@@ -2307,6 +1859,8 @@ mod tests {
         tasks.request_shutdown();
         tasks.wait_for_shutdown(Duration::from_secs(30)).await;
 
+        // A second storage on the same directory sees what the migration wrote.
+        let target_docs_storage = fs_docs_storage(target.path());
         assert_eq!(
             target_docs_storage.get(&key_a).await.unwrap(),
             Bytes::from_static(b"crate-a docs")
@@ -2320,125 +1874,55 @@ mod tests {
     /// A failing database must not look like an empty registry.
     #[tokio::test]
     async fn statistic_database_error_is_internal_error() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_total_unique_crates()
-            .returning(|| Err(DbError::FailedToCountCrates));
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
+        let (state, db) = sqlite_test_state().await;
+        test_drop_table(&db, "krate").await.unwrap();
+
+        let r = get_with(state, "/statistic", "").await;
 
         assert_eq!(r.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
+    fn top(name: &str, downloads: u64) -> (String, u64) {
+        (name.to_string(), downloads)
+    }
+
+    fn last_updated(name: &str) -> (OriginalName, Version) {
+        (
+            OriginalName::from_unchecked(name.to_string()),
+            Version::try_from("1.0.0").unwrap(),
+        )
+    }
+
     #[tokio::test]
     async fn statistic_returns_sparse_statistics() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_total_unique_crates()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_total_crate_versions()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_total_downloads()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_top_crates_downloads()
-            .with(eq(3), eq(CrateVisibility::Unrestricted))
-            .returning(move |_, _| Ok(vec![("top1".to_string(), 1000)]));
-        mock_db
-            .expect_get_last_updated_crate()
-            .returning(move |_| Ok(None));
-        mock_db
-            .expect_get_total_unique_cached_crates()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_total_cached_crate_versions()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_total_cached_downloads()
-            .returning(move || Ok(0));
+        let (state, db) = sqlite_test_state().await;
+        add_crate_with_downloads(&db, "top1", 1000).await;
 
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
+        let result: Statistic = json(get_with(state, "/statistic", "").await).await;
 
         let expect = Statistic {
-            num_crates: 0,
-            num_crate_versions: 0,
-            num_crate_downloads: 0,
+            num_crates: 1,
+            num_crate_versions: 1,
+            num_crate_downloads: 1000,
             num_proxy_crates: 0,
             num_proxy_crate_versions: 0,
             num_proxy_crate_downloads: 0,
             top_crates: TopCrates {
-                first: Some(("top1".to_string(), 1000)),
+                first: Some(top("top1", 1000)),
                 second: None,
                 third: None,
             },
-            last_updated_crate: None,
+            last_updated_crate: Some(last_updated("top1")),
             proxy_enabled: false,
         };
-
-        assert_eq!(expect, result_stat);
+        assert_eq!(expect, result);
     }
 
     #[tokio::test]
     async fn statistic_returns_empty_statistics() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_total_unique_crates()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_total_crate_versions()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_total_downloads()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_top_crates_downloads()
-            .with(eq(3), eq(CrateVisibility::Unrestricted))
-            .returning(move |_, _| Ok(vec![]));
-        mock_db
-            .expect_get_last_updated_crate()
-            .returning(move |_| Ok(None));
-        mock_db
-            .expect_get_total_unique_cached_crates()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_total_cached_crate_versions()
-            .returning(move || Ok(0));
-        mock_db
-            .expect_get_total_cached_downloads()
-            .returning(move || Ok(0));
+        let (state, _db) = sqlite_test_state().await;
 
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
+        let result: Statistic = json(get_with(state, "/statistic", "").await).await;
 
         let expect = Statistic {
             num_crates: 0,
@@ -2455,252 +1939,120 @@ mod tests {
             last_updated_crate: None,
             proxy_enabled: false,
         };
-
-        assert_eq!(expect, result_stat);
+        assert_eq!(expect, result);
     }
 
     #[tokio::test]
     async fn statistic_returns_crate_statistics() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_total_unique_crates()
-            .returning(move || Ok(1000));
-        mock_db
-            .expect_get_total_crate_versions()
-            .returning(move || Ok(10000));
-        mock_db
-            .expect_get_total_downloads()
-            .returning(move || Ok(100_000));
-        mock_db
-            .expect_get_top_crates_downloads()
-            .with(eq(3), eq(CrateVisibility::Unrestricted))
-            .returning(move |_, _| {
-                Ok(vec![
-                    ("top1".to_string(), 1000),
-                    ("top2".to_string(), 500),
-                    ("top3".to_string(), 100),
-                ])
-            });
-        mock_db
-            .expect_get_total_unique_cached_crates()
-            .returning(move || Ok(9999));
-        mock_db
-            .expect_get_total_cached_crate_versions()
-            .returning(move || Ok(99999));
-        mock_db
-            .expect_get_total_cached_downloads()
-            .returning(move || Ok(999_999));
-        mock_db.expect_get_last_updated_crate().returning(move |_| {
-            Ok(Some((
-                OriginalName::from_unchecked("foobar".to_string()),
-                Version::try_from("1.0.0").unwrap(),
-            )))
-        });
+        let (state, db) = sqlite_test_state().await;
+        add_crate_with_downloads(&db, "top1", 1000).await;
+        add_crate_with_downloads(&db, "top2", 500).await;
+        add_crate_with_downloads(&db, "top3", 100).await;
+        TestCrateBuilder::new(&db)
+            .name("foobar")
+            .downloads(10)
+            .created(default_created() + Duration::from_secs(60))
+            .build()
+            .await
+            .unwrap();
+        test_add_cached_crate_with_downloads(&db, "cached1", "1.0.0", 9)
+            .await
+            .unwrap();
+        test_add_cached_crate_with_downloads(&db, "cached2", "1.0.0", 90)
+            .await
+            .unwrap();
 
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/statistic").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_stat = serde_json::from_slice::<Statistic>(&result_msg).unwrap();
+        let result: Statistic = json(get_with(state, "/statistic", "").await).await;
 
         let expect = Statistic {
-            num_crates: 1000,
-            num_crate_versions: 10000,
-            num_crate_downloads: 100_000,
-            num_proxy_crates: 9999,
-            num_proxy_crate_versions: 99999,
-            num_proxy_crate_downloads: 999_999,
+            num_crates: 4,
+            num_crate_versions: 4,
+            num_crate_downloads: 1610,
+            num_proxy_crates: 2,
+            num_proxy_crate_versions: 2,
+            num_proxy_crate_downloads: 99,
             top_crates: TopCrates {
-                first: Some(("top1".to_string(), 1000)),
-                second: Some(("top2".to_string(), 500)),
-                third: Some(("top3".to_string(), 100)),
+                first: Some(top("top1", 1000)),
+                second: Some(top("top2", 500)),
+                third: Some(top("top3", 100)),
             },
-            last_updated_crate: Some((
-                OriginalName::from_unchecked("foobar".to_string()),
-                Version::try_from("1.0.0").unwrap(),
-            )),
+            last_updated_crate: Some(last_updated("foobar")),
             proxy_enabled: false,
         };
-        assert_eq!(expect, result_stat);
+        assert_eq!(expect, result);
+    }
+
+    #[tokio::test]
+    async fn statistic_user_session_hides_inaccessible_crate_names() {
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
+        add_restricted_crate(&db, "secret").await;
+
+        let result: Statistic = json(get_with(state, "/statistic", &cookie).await).await;
+
+        assert_eq!(1, result.num_crates);
+        assert_eq!(None, result.top_crates.first);
+        assert_eq!(None, result.last_updated_crate);
     }
 
     #[tokio::test]
     async fn kellnr_version_returns_version() {
-        let (settings, storage) = test_deps();
-        let mock_db = MockDb::new();
+        let result: KellnrVersion = json(get_with(test_state(), "/version", "").await).await;
 
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/version").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_version = serde_json::from_slice::<KellnrVersion>(&result_msg).unwrap();
-
-        assert_eq!("0.0.0-unknown", result_version.version);
+        assert_eq!("0.0.0-unknown", result.version);
     }
 
     #[tokio::test]
     async fn search_not_hits_returns_nothing() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "hello", "1.0.0").await;
 
-        mock_db
-            .expect_search_in_crate_name_and_description()
-            .with(
-                eq("doesnotexist"),
-                eq(10),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-            )
-            .returning(move |_name, _, _, _, _| Ok(vec![]));
-        mock_db
-            .expect_count_by_crate_name_and_description()
-            .returning(|_, _, _| Ok(0));
+        let result: Pagination = json(get_with(state, "/search?name=doesnotexist", "").await).await;
 
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/search?name=doesnotexist")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
-
-        assert_eq!(StatusCode::OK, result_status);
-        assert_eq!(0, result_crates.crates.len());
-        assert_eq!(0, result_crates.page);
-        assert_eq!(10, result_crates.page_size);
+        assert_eq!(0, result.crates.len());
+        assert_eq!(0, result.page);
+        assert_eq!(10, result.page_size);
     }
 
     // The length bound lives on `NameOrDescription`. It has to hold here too,
     // where the value arrives through serde rather than an explicit `TryFrom`.
     #[tokio::test]
     async fn search_rejects_overlong_query() {
-        let mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+        let uri = format!("/search?name={}", "a".repeat(65));
 
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get(format!("/search?name={}", "a".repeat(65)))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let r = get_with(test_state(), &uri, "").await;
 
         assert_eq!(StatusCode::BAD_REQUEST, r.status());
     }
 
     #[tokio::test]
     async fn search_accepts_multi_word_query() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+        let (state, _db) = sqlite_test_state().await;
 
-        mock_db
-            .expect_search_in_crate_name_and_description()
-            .with(
-                eq("vcard parser"),
-                eq(10),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-            )
-            .returning(|_, _, _, _, _| Ok(vec![]));
-        mock_db
-            .expect_count_by_crate_name_and_description()
-            .returning(|_, _, _| Ok(0));
-
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/search?name=vcard%20parser")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let r = get_with(state, "/search?name=vcard%20parser", "").await;
 
         assert_eq!(StatusCode::OK, r.status());
     }
 
     #[tokio::test]
     async fn search_returns_only_searched_results() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+        let (state, db) = sqlite_test_state().await;
+        add_crate_with_downloads(&db, "hello", 2).await;
+        add_crate(&db, "other", "1.0.0").await;
 
-        let test_crate_summary = CrateOverview {
-            name: "hello".to_string(),
-            version: "1.0.0".to_string(),
-            date: "12-10-2021 05:41:00".to_string(),
-            total_downloads: 2,
-            ..Default::default()
-        };
+        let result: Pagination = json(get_with(state, "/search?name=hello", "").await).await;
 
-        let tc = test_crate_summary.clone();
-        mock_db
-            .expect_search_in_crate_name_and_description()
-            .with(
-                eq("hello"),
-                eq(10),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-            )
-            .returning(move |_, _, _, _, _| Ok(vec![tc.clone()]));
-        mock_db
-            .expect_count_by_crate_name_and_description()
-            .returning(|_, _, _| Ok(0));
+        assert_eq!(names(&result.crates), ["hello"]);
+        assert_eq!("1.0.0", result.crates[0].version);
+        assert_eq!(2, result.crates[0].total_downloads);
+        assert_eq!(0, result.page);
+        assert_eq!(10, result.page_size);
+    }
 
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/search?name=hello")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
-
-        assert_eq!(StatusCode::OK, result_status);
-        assert_eq!(1, result_crates.crates.len());
-        assert_eq!(0, result_crates.page);
-        assert_eq!(10, result_crates.page_size);
-        assert_eq!(test_crate_summary, result_crates.crates[0]);
+    async fn add_hello_crates(db: &TestDb, count: usize) {
+        for i in 0..count {
+            add_crate(db, &format!("hello{i}"), "1.0.0").await;
+        }
     }
 
     // Search has to page through the database the same way the crate overview
@@ -2708,176 +2060,80 @@ mod tests {
     // first is only reachable if `page` is translated into an offset.
     #[tokio::test]
     async fn search_paginates_like_crate_overview() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+        let (state, db) = sqlite_test_state().await;
+        add_hello_crates(&db, 5).await;
 
-        mock_db
-            .expect_search_in_crate_name_and_description()
-            .with(
-                eq("hello"),
-                eq(20),
-                eq(60),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-            )
-            .returning(|_, _, _, _, _| Ok(vec![]));
-        mock_db
-            .expect_count_by_crate_name_and_description()
-            .returning(|_, _, _| Ok(0));
+        let result: Pagination =
+            json(get_with(state, "/search?name=hello&page=1&page_size=2", "").await).await;
 
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/search?name=hello&page=3&page_size=20")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
-
-        assert_eq!(StatusCode::OK, result_status);
-        assert_eq!(3, result_crates.page);
-        assert_eq!(20, result_crates.page_size);
+        assert_eq!(names(&result.crates), ["hello2", "hello3"]);
+        assert_eq!(1, result.page);
+        assert_eq!(2, result.page_size);
     }
 
     // The page size is whatever the caller asked for, so a full page cannot be
     // mistaken for the end of the results.
     #[tokio::test]
     async fn search_reports_requested_page_size_on_a_full_page() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+        let (state, db) = sqlite_test_state().await;
+        add_hello_crates(&db, 3).await;
 
-        let hits = (0..2)
-            .map(|i| CrateOverview {
-                name: format!("hello{i}"),
-                version: "1.0.0".to_string(),
-                ..Default::default()
-            })
-            .collect::<Vec<_>>();
+        let result: Pagination =
+            json(get_with(state, "/search?name=hello&page_size=2", "").await).await;
 
-        mock_db
-            .expect_search_in_crate_name_and_description()
-            .with(
-                eq("hello"),
-                eq(2),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-            )
-            .returning(move |_, _, _, _, _| Ok(hits.clone()));
-        mock_db
-            .expect_count_by_crate_name_and_description()
-            .returning(|_, _, _| Ok(0));
+        assert_eq!(2, result.crates.len());
+        assert_eq!(2, result.page_size);
+    }
 
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/search?name=hello&page_size=2")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    #[tokio::test]
+    async fn search_admin_session_lists_all_crates() {
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_crate(&db, "foo", "1.0.0").await;
+        add_restricted_crate(&db, "foo-secret").await;
 
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_crates = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
+        let result: Pagination = json(get_with(state, "/search?name=foo", &cookie).await).await;
 
-        assert_eq!(2, result_crates.crates.len());
-        assert_eq!(2, result_crates.page_size);
+        assert_eq!(names(&result.crates), ["foo", "foo-secret"]);
     }
 
     #[tokio::test]
     async fn crate_get_crate_information() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
-
-        let expected_crate_data = CrateData {
-            name: "crate1".to_string(),
-            owners: vec!["owner1".to_string(), "owner2".to_string()],
-            max_version: "1.0.0".to_string(),
-            total_downloads: 5,
-            last_updated: "12-10-2021 05:41:00".to_string(),
-            homepage: Some("homepage".to_string()),
-            description: Some("description".to_string()),
-            categories: vec!["cat1".to_string(), "cat2".to_string()],
-            keywords: vec!["key1".to_string(), "key2".to_string()],
-            authors: vec!["author1".to_string(), "author2".to_string()],
-            repository: Some("repository".to_string()),
-            versions: vec![CrateVersionData {
-                version: "1.0.0".to_string(),
-                created: "12-10-2021 05:41:00".to_string(),
-                downloads: 5,
+        let (state, db) = sqlite_test_state().await;
+        publish(
+            &db,
+            PublishMetadata {
+                name: "crate1".to_string(),
+                vers: "1.0.0".to_string(),
+                description: Some("description".to_string()),
+                homepage: Some("homepage".to_string()),
                 readme: Some("readme".to_string()),
                 license: Some("MIT".to_string()),
-                license_file: Some("license".to_string()),
-                documentation: Some("documentation".to_string()),
-                dependencies: vec![CrateRegistryDep {
-                    name: "dep1".to_string(),
-                    description: Some("description".to_string()),
-                    version_req: "1.0.0".to_string(),
-                    target: Some("target".to_string()),
-                    kind: Some("dev".to_string()),
-                    registry: Some("registry".to_string()),
-                    ..Default::default()
-                }],
-                checksum: "checksum".to_string(),
-                features: BTreeMap::default(),
-                yanked: false,
-                links: Some("links".to_string()),
-                v: 1,
-                size: 1024,
-                rust_version: Some("1.85".to_string()),
-                publisher: Some("admin".to_string()),
-                publisher_token: Some("ci".to_string()),
-            }],
-        };
-
-        let ecd = expected_crate_data.clone();
-        mock_db
-            .expect_get_crate_data()
-            .returning(move |_| Ok(ecd.clone()));
-        mock_db
-            .expect_is_download_restricted()
-            .returning(|_| Ok(false));
-
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
+                keywords: vec!["key1".to_string()],
+                categories: vec!["cat1".to_string()],
+                authors: Some(vec!["author1".to_string()]),
+                ..PublishMetadata::default()
+            },
         )
-        .oneshot(
-            Request::get("/crate_data?name=crate1&version=1.0.0")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        .await;
 
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_crate_data = serde_json::from_slice::<CrateData>(&result_msg).unwrap();
+        let result: CrateData =
+            json(get_with(state, "/crate_data?name=crate1&version=1.0.0", "").await).await;
 
-        assert_eq!(StatusCode::OK, result_status);
-        assert_eq!(expected_crate_data, result_crate_data);
+        assert_eq!(
+            db.get_crate_data(&canonical("crate1")).await.unwrap(),
+            result
+        );
+        assert_eq!("crate1", result.name);
+        assert_eq!(Some("description".to_string()), result.description);
+        assert_eq!(Some("readme".to_string()), result.versions[0].readme);
     }
 
     #[tokio::test]
     async fn crate_data_hides_dependency_info_of_restricted_crates() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_is_download_restricted()
-            .returning(|name| Ok(name.as_str() == "secret"));
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let db = TestDb::sqlite().await;
+        add_restricted_crate(&db, "secret").await;
+        add_crate(&db, "public", "1.0.0").await;
 
         let dep = |name: &str, registry: Option<&str>| CrateRegistryDep {
             name: name.to_string(),
@@ -2900,7 +2156,9 @@ mod tests {
             ..CrateData::default()
         };
 
-        hide_restricted_dep_info(&mut cd, None, &db).await.unwrap();
+        hide_restricted_dep_info(&mut cd, None, &db.provider())
+            .await
+            .unwrap();
 
         let deps = &cd.versions[0].dependencies;
         assert_eq!(None, deps[0].description);
@@ -2921,18 +2179,15 @@ mod tests {
 
     #[tokio::test]
     async fn crate_dependents_counts_restricted_dependents_only() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_is_download_restricted()
-            .returning(|name| Ok(name.as_str() == "secret"));
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let db = TestDb::sqlite().await;
+        add_restricted_crate(&db, "secret").await;
         let mut cd = CrateDependents {
             latest_version: Some("2.0.0".to_string()),
             dependents: vec![dependent("Secret"), dependent("public")],
             restricted: 0,
         };
 
-        hide_restricted_dependents(&mut cd, None, &db)
+        hide_restricted_dependents(&mut cd, None, &db.provider())
             .await
             .unwrap();
 
@@ -2942,25 +2197,17 @@ mod tests {
 
     #[tokio::test]
     async fn crate_dependents_shows_restricted_dependents_with_access() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_is_download_restricted()
-            .returning(|name| Ok(name.as_str() == "secret"));
-        mock_db
-            .expect_is_crate_user()
-            .with(
-                eq(CanonicalName::try_from("secret").unwrap()),
-                eq(UserName::new("user").unwrap()),
-            )
-            .returning(|_, _| Ok(true));
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let user = kellnr_http::test_support::session_identity("user", false);
+        let db = TestDb::sqlite().await;
+        add_user(&db, "user").await;
+        add_restricted_crate(&db, "secret").await;
+        add_crate_user(&db, "secret", "user").await;
+        let user = session_identity("user", false);
         let mut cd = CrateDependents {
             dependents: vec![dependent("secret")],
             ..CrateDependents::default()
         };
 
-        hide_restricted_dependents(&mut cd, Some(&user), &db)
+        hide_restricted_dependents(&mut cd, Some(&user), &db.provider())
             .await
             .unwrap();
 
@@ -2968,590 +2215,255 @@ mod tests {
         assert_eq!(0, cd.restricted);
     }
 
+    /// Publishes `name` 1.0.0 with a dependency on `foo`.
+    async fn publish_foo_dependent(db: &TestDb, name: &str) {
+        publish(
+            db,
+            PublishMetadata {
+                name: name.to_string(),
+                vers: "1.0.0".to_string(),
+                deps: vec![RegistryDep {
+                    name: "foo".to_string(),
+                    version_req: "^1".to_string(),
+                    features: None,
+                    optional: false,
+                    default_features: true,
+                    target: None,
+                    kind: Some("normal".to_string()),
+                    registry: None,
+                    explicit_name_in_toml: None,
+                }],
+                ..PublishMetadata::default()
+            },
+        )
+        .await;
+    }
+
     #[tokio::test]
     async fn crate_dependents_returns_dependents() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_is_download_restricted()
-            .returning(|name| Ok(name.as_str() == "secret"));
-        mock_db
-            .expect_get_crate_dependents()
-            .with(eq(CanonicalName::try_from("foo").unwrap()))
-            .returning(|_| {
-                Ok(CrateDependents {
-                    latest_version: Some("2.0.0".to_string()),
-                    dependents: vec![dependent("public"), dependent("secret")],
-                    restricted: 0,
-                })
-            });
-        let (settings, storage) = test_deps();
-        let response = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/crate_dependents?name=Foo")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "foo", "1.0.0").await;
+        publish_foo_dependent(&db, "public").await;
+        publish_foo_dependent(&db, "secret").await;
+        db.change_download_restricted(&canonical("secret"), true)
+            .await
+            .unwrap();
 
-        assert_eq!(StatusCode::OK, response.status());
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        let cd: CrateDependents = serde_json::from_slice(&body).unwrap();
+        let cd: CrateDependents =
+            json(get_with(state, "/crate_dependents?name=Foo", "").await).await;
+
+        assert_eq!(Some("1.0.0".to_string()), cd.latest_version);
         assert_eq!(
-            CrateDependents {
-                latest_version: Some("2.0.0".to_string()),
-                dependents: vec![dependent("public")],
-                restricted: 1,
-            },
-            cd
+            ["public"],
+            cd.dependents
+                .iter()
+                .map(|d| d.name.as_str())
+                .collect::<Vec<_>>()[..]
         );
+        assert_eq!(1, cd.restricted);
     }
 
     #[tokio::test]
     async fn crate_dependents_of_restricted_crate_anonymous_returns_not_found() {
-        let mock_db = restricted_crate_mock(None);
-        let (settings, storage) = test_deps();
-        let response = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/crate_dependents?name=secret")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-        assert_eq!(StatusCode::NOT_FOUND, response.status());
+        let (state, db) = sqlite_test_state().await;
+        add_restricted_crate(&db, "secret").await;
+
+        let r = get_with(state, "/crate_dependents?name=secret", "").await;
+
+        assert_eq!(StatusCode::NOT_FOUND, r.status());
     }
 
     #[tokio::test]
     async fn crate_dependents_of_unknown_crate_returns_not_found() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_is_download_restricted()
-            .returning(|_| Ok(false));
-        mock_db
-            .expect_get_crate_dependents()
-            .returning(|name| Err(DbError::CrateNotFound(name.to_string())));
-        let (settings, storage) = test_deps();
-        let response = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/crate_dependents?name=missing")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-        assert_eq!(StatusCode::NOT_FOUND, response.status());
+        let (state, _db) = sqlite_test_state().await;
+
+        let r = get_with(state, "/crate_dependents?name=missing", "").await;
+
+        assert_eq!(StatusCode::NOT_FOUND, r.status());
     }
 
-    fn restricted_crate_mock(session_user: Option<(&'static str, bool)>) -> MockDb {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_is_download_restricted()
-            .with(eq(CanonicalName::try_from("secret").unwrap()))
-            .returning(|_| Ok(true));
-        mock_db.expect_get_crate_data().returning(|_| {
-            Ok(CrateData {
-                name: "secret".to_string(),
-                ..Default::default()
-            })
-        });
-        if let Some((name, is_admin)) = session_user {
-            mock_db.expect_validate_session().returning(move |_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new(name).unwrap(),
-                    is_admin,
-                    is_read_only: false,
-                })
-            });
-        }
-        mock_db
-    }
-
-    async fn get_secret_crate_data(mock_db: MockDb, with_cookie: bool) -> StatusCode {
-        let (settings, storage) = test_deps();
-        let mut request = Request::get("/crate_data?name=secret");
-        if with_cookie {
-            request = request.header(
-                header::COOKIE,
-                encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-            );
-        }
-        app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(request.body(Body::empty()).unwrap())
-        .await
-        .unwrap()
-        .status()
+    /// Status of `/crate_data` for the restricted crate `secret` as `user`,
+    /// anonymous if `None`. `prepare` sets up access to the crate.
+    async fn get_secret_crate_data(
+        user: Option<(&str, UserFlags)>,
+        prepare: impl AsyncFnOnce(&TestDb),
+    ) -> StatusCode {
+        let (state, db) = sqlite_test_state().await;
+        add_restricted_crate(&db, "secret").await;
+        let cookie = match user {
+            Some((name, flags)) => session_cookie(&db, name, flags).await,
+            None => String::new(),
+        };
+        prepare(&db).await;
+        get_with(state, "/crate_data?name=secret", &cookie)
+            .await
+            .status()
     }
 
     #[tokio::test]
     async fn crate_data_restricted_crate_anonymous_returns_not_found() {
-        let mock_db = restricted_crate_mock(None);
-        assert_eq!(
-            StatusCode::NOT_FOUND,
-            get_secret_crate_data(mock_db, false).await
-        );
+        let status = get_secret_crate_data(None, async |_| {}).await;
+
+        assert_eq!(StatusCode::NOT_FOUND, status);
     }
 
     #[tokio::test]
     async fn crate_data_restricted_crate_without_access_returns_not_found() {
-        let mut mock_db = restricted_crate_mock(Some(("user", false)));
-        mock_db.expect_is_crate_user().returning(|_, _| Ok(false));
-        mock_db
-            .expect_is_crate_group_user()
-            .returning(|_, _| Ok(false));
-        mock_db.expect_is_owner().returning(|_, _| Ok(false));
-        assert_eq!(
-            StatusCode::NOT_FOUND,
-            get_secret_crate_data(mock_db, true).await
-        );
+        let status = get_secret_crate_data(Some(("user", UserFlags::normal())), async |_| {}).await;
+
+        assert_eq!(StatusCode::NOT_FOUND, status);
     }
 
     #[tokio::test]
     async fn crate_data_restricted_crate_crate_user_returns_ok() {
-        let mut mock_db = restricted_crate_mock(Some(("user", false)));
-        mock_db
-            .expect_is_crate_user()
-            .with(
-                eq(CanonicalName::try_from("secret").unwrap()),
-                eq(UserName::new("user").unwrap()),
-            )
-            .returning(|_, _| Ok(true));
-        assert_eq!(StatusCode::OK, get_secret_crate_data(mock_db, true).await);
+        let status = get_secret_crate_data(Some(("user", UserFlags::normal())), async |db| {
+            add_crate_user(db, "secret", "user").await;
+        })
+        .await;
+
+        assert_eq!(StatusCode::OK, status);
     }
 
     #[tokio::test]
     async fn crate_data_restricted_crate_admin_returns_ok() {
-        let mock_db = restricted_crate_mock(Some(("admin", true)));
-        assert_eq!(StatusCode::OK, get_secret_crate_data(mock_db, true).await);
-    }
+        let status =
+            get_secret_crate_data(Some(("other_admin", UserFlags::admin())), async |_| {}).await;
 
-    async fn get_with_session(
-        uri: &str,
-        mut mock_db: MockDb,
-        name: &'static str,
-        is_admin: bool,
-    ) -> StatusCode {
-        mock_db.expect_validate_session().returning(move |_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new(name).unwrap(),
-                is_admin,
-                is_read_only: false,
-            })
-        });
-        let (settings, storage) = test_deps();
-        app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get(uri)
-                .header(
-                    header::COOKIE,
-                    encode_cookies([(constants::COOKIE_SESSION_ID, "cookie")]),
-                )
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap()
-        .status()
+        assert_eq!(StatusCode::OK, status);
     }
 
     #[tokio::test]
     async fn crates_user_session_lists_accessible_restricted_crates() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_crate_overview_list()
-            .with(
-                eq(10),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::User(UserName::new("user").unwrap())),
-                eq(CrateSort::Name),
-                eq(CrateTagFilter::default()),
-            )
-            .returning(|_, _, _, _, _, _| Ok(vec![]));
-        mock_db
-            .expect_count_crate_overview_list()
-            .returning(|_, _, _| Ok(42));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
+        add_crate(&db, "open", "1.0.0").await;
+        add_restricted_crate(&db, "secret").await;
+        add_crate_user(&db, "secret", "user").await;
+        add_restricted_crate(&db, "hidden").await;
 
-        let status = get_with_session("/crates", mock_db, "user", false).await;
+        let result: Pagination = json(get_with(state, "/crates", &cookie).await).await;
 
-        assert_eq!(StatusCode::OK, status);
-    }
-
-    #[tokio::test]
-    async fn search_admin_session_lists_all_crates() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_search_in_crate_name_and_description()
-            .with(
-                eq("foo"),
-                eq(10),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::All),
-            )
-            .returning(|_, _, _, _, _| Ok(vec![]));
-        mock_db
-            .expect_count_by_crate_name_and_description()
-            .returning(|_, _, _| Ok(0));
-
-        let status = get_with_session("/search?name=foo", mock_db, "admin", true).await;
-
-        assert_eq!(StatusCode::OK, status);
-    }
-
-    #[tokio::test]
-    async fn statistic_user_session_hides_inaccessible_crate_names() {
-        let visibility = CrateVisibility::User(UserName::new("user").unwrap());
-        let mut mock_db = MockDb::new();
-        mock_db.expect_get_total_unique_crates().returning(|| Ok(0));
-        mock_db
-            .expect_get_total_crate_versions()
-            .returning(|| Ok(0));
-        mock_db.expect_get_total_downloads().returning(|| Ok(0));
-        mock_db
-            .expect_get_top_crates_downloads()
-            .with(eq(3), eq(visibility.clone()))
-            .returning(|_, _| Ok(vec![]));
-        mock_db
-            .expect_get_last_updated_crate()
-            .with(eq(visibility))
-            .returning(|_| Ok(None));
-        mock_db
-            .expect_get_total_unique_cached_crates()
-            .returning(|| Ok(0));
-        mock_db
-            .expect_get_total_cached_crate_versions()
-            .returning(|| Ok(0));
-        mock_db
-            .expect_get_total_cached_downloads()
-            .returning(|| Ok(0));
-
-        let status = get_with_session("/statistic", mock_db, "user", false).await;
-
-        assert_eq!(StatusCode::OK, status);
+        assert_eq!(names(&result.crates), ["open", "secret"]);
+        assert_eq!(2, result.total);
     }
 
     /// A failing database must not look like an empty registry.
     #[tokio::test]
     async fn crates_database_error_is_internal_error() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_crate_overview_list()
-            .returning(|_, _, _, _, _, _| Err(DbError::FailedToCountCrates));
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/crates").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
+        let (state, db) = sqlite_test_state().await;
+        test_drop_table(&db, "krate").await.unwrap();
+
+        let r = get_with(state, "/crates", "").await;
 
         assert_eq!(r.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[tokio::test]
     async fn crates_get_page() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+        let (state, db) = sqlite_test_state().await;
+        for i in 0..12 {
+            add_crate(&db, &format!("c{i:02}"), "1.0.0").await;
+        }
 
-        let test_crate_overview = CrateOverview {
-            name: "c1".to_string(),
-            version: "1.0.0".to_string(),
-            description: None,
-            total_downloads: 2,
-            date: "12-10-2021 05:41:00".to_string(),
-            documentation: None,
-            repository: None,
-            is_cache: false,
-        };
+        let result: Pagination = json(get_with(state, "/crates?page=0", "").await).await;
 
-        let test_crates = std::iter::repeat_with(|| test_crate_overview.clone())
-            .take(10)
-            .collect::<Vec<_>>();
-
-        let tc = test_crates.clone();
-
-        mock_db
-            .expect_get_crate_overview_list()
-            .with(
-                eq(10),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-                eq(CrateSort::Name),
-                eq(CrateTagFilter::default()),
-            )
-            .returning(move |_, _, _, _, _, _| Ok(tc.clone()));
-        mock_db
-            .expect_count_crate_overview_list()
-            .returning(|_, _, _| Ok(42));
-
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/crates?page=0").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
-
-        let expected = test_crates[0..10].to_vec();
-        assert_eq!(StatusCode::OK, result_status);
-        assert_eq!(0, result_pagination.page);
-        assert_eq!(10, result_pagination.page_size);
-        assert_eq!(10, result_pagination.crates.len());
-        assert_eq!(expected, result_pagination.crates);
+        let expected: Vec<String> = (0..10).map(|i| format!("c{i:02}")).collect();
+        assert_eq!(names(&result.crates), expected);
+        assert_eq!(0, result.page);
+        assert_eq!(10, result.page_size);
+        assert_eq!(12, result.total);
     }
 
     #[tokio::test]
     async fn crates_get_all_crates() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "c1", "1.0.0").await;
+        add_crate(&db, "c2", "2.0.0").await;
+        add_crate(&db, "c3", "3.0.0").await;
 
-        let expected_crate_overview = vec![
-            CrateOverview {
-                name: "c1".to_string(),
-                version: "1.0.0".to_string(),
-                date: "12-11-2021 05:41:00".to_string(),
-                total_downloads: 1,
-                description: Some("Desc".to_string()),
-                documentation: Some("Docs".to_string()),
-                repository: None,
-                is_cache: true,
-            },
-            CrateOverview {
-                name: "c2".to_string(),
-                version: "2.0.0".to_string(),
-                date: "12-12-2021 05:41:00".to_string(),
-                total_downloads: 2,
-                description: Some("Desc".to_string()),
-                documentation: Some("Docs".to_string()),
-                repository: None,
-                is_cache: true,
-            },
-            CrateOverview {
-                name: "c3".to_string(),
-                version: "3.0.0".to_string(),
-                date: "12-09-2021 05:41:00".to_string(),
-                total_downloads: 3,
-                description: None,
-                documentation: None,
-                repository: None,
-                is_cache: true,
-            },
-        ];
+        let result: Pagination = json(get_with(state, "/crates", "").await).await;
 
-        let crate_overview = expected_crate_overview.clone();
-        mock_db
-            .expect_get_crate_overview_list()
-            .with(
-                eq(10),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-                eq(CrateSort::Name),
-                eq(CrateTagFilter::default()),
-            )
-            .returning(move |_, _, _, _, _, _| Ok(crate_overview.clone()));
-        mock_db
-            .expect_count_crate_overview_list()
-            .returning(|_, _, _| Ok(42));
-
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/crates").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-        let result_status = r.status();
-        let result_msg = r.into_body().collect().await.unwrap().to_bytes();
-        let result_pagination = serde_json::from_slice::<Pagination>(&result_msg).unwrap();
-
-        assert_eq!(StatusCode::OK, result_status);
-        assert_eq!(3, result_pagination.crates.len());
-        assert_eq!(0, result_pagination.page);
-        assert_eq!(10, result_pagination.page_size);
-        assert_eq!(42, result_pagination.total);
-        assert_eq!(expected_crate_overview, result_pagination.crates);
+        assert_eq!(names(&result.crates), ["c1", "c2", "c3"]);
+        assert_eq!(
+            ["1.0.0", "2.0.0", "3.0.0"],
+            result
+                .crates
+                .iter()
+                .map(|c| c.version.as_str())
+                .collect::<Vec<_>>()[..]
+        );
+        assert_eq!(0, result.page);
+        assert_eq!(10, result.page_size);
+        assert_eq!(3, result.total);
     }
 
     #[tokio::test]
-    async fn crates_passes_sort_order_to_db() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+    async fn crates_sorts_by_requested_order() {
+        let (state, db) = sqlite_test_state().await;
+        add_crate_with_downloads(&db, "a", 1).await;
+        add_crate_with_downloads(&db, "b", 3).await;
+        add_crate_with_downloads(&db, "c", 2).await;
 
-        mock_db
-            .expect_get_crate_overview_list()
-            .with(
-                eq(5),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-                eq(CrateSort::Downloads),
-                eq(CrateTagFilter::default()),
-            )
-            .returning(|_, _, _, _, _, _| Ok(vec![]));
-        mock_db
-            .expect_count_crate_overview_list()
-            .returning(|_, _, _| Ok(0));
+        let result: Pagination =
+            json(get_with(state, "/crates?page_size=2&sort=downloads", "").await).await;
 
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
+        assert_eq!(names(&result.crates), ["b", "c"]);
+    }
+
+    /// Publishes `name` with `keywords` and `categories`.
+    async fn publish_tagged(db: &TestDb, name: &str, keywords: &[&str], categories: &[&str]) {
+        publish(
+            db,
+            PublishMetadata {
+                name: name.to_string(),
+                vers: "1.0.0".to_string(),
+                keywords: keywords.iter().map(ToString::to_string).collect(),
+                categories: categories.iter().map(ToString::to_string).collect(),
+                ..PublishMetadata::default()
+            },
         )
-        .oneshot(
-            Request::get("/crates?page_size=5&sort=downloads")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        .await;
+    }
 
-        assert_eq!(StatusCode::OK, r.status());
+    async fn add_tagged_crates(db: &TestDb) {
+        publish_tagged(db, "cli-tool", &["cli"], &["development-tools"]).await;
+        publish_tagged(db, "cli-only", &["cli"], &[]).await;
+        publish_tagged(db, "plain", &[], &[]).await;
     }
 
     #[tokio::test]
-    async fn crates_passes_keyword_and_category_to_db() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
-        let tags = CrateTagFilter {
-            keyword: Some("cli".to_string()),
-            category: Some("development-tools".to_string()),
-        };
+    async fn crates_filters_by_keyword_and_category() {
+        let (state, db) = sqlite_test_state().await;
+        add_tagged_crates(&db).await;
 
-        mock_db
-            .expect_get_crate_overview_list()
-            .with(
-                eq(10),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-                eq(CrateSort::Name),
-                eq(tags.clone()),
-            )
-            .returning(|_, _, _, _, _, _| Ok(vec![]));
-        mock_db
-            .expect_count_crate_overview_list()
-            .with(eq(false), eq(CrateVisibility::Unrestricted), eq(tags))
-            .returning(|_, _, _| Ok(0));
+        let result: Pagination =
+            json(get_with(state, "/crates?keyword=cli&category=development-tools", "").await).await;
 
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/crates?keyword=cli&category=development-tools")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(StatusCode::OK, r.status());
+        assert_eq!(names(&result.crates), ["cli-tool"]);
+        assert_eq!(1, result.total);
     }
 
     #[tokio::test]
     async fn crates_ignores_empty_keyword_and_category() {
-        let mut mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
+        let (state, db) = sqlite_test_state().await;
+        add_tagged_crates(&db).await;
 
-        mock_db
-            .expect_get_crate_overview_list()
-            .with(
-                eq(10),
-                eq(0),
-                eq(false),
-                eq(CrateVisibility::Unrestricted),
-                eq(CrateSort::Name),
-                eq(CrateTagFilter::default()),
-            )
-            .returning(|_, _, _, _, _, _| Ok(vec![]));
-        mock_db
-            .expect_count_crate_overview_list()
-            .returning(|_, _, _| Ok(0));
+        let result: Pagination =
+            json(get_with(state, "/crates?keyword=&category=", "").await).await;
 
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/crates?keyword=&category=")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(StatusCode::OK, r.status());
+        assert_eq!(names(&result.crates), ["cli-only", "cli-tool", "plain"]);
     }
 
     #[tokio::test]
     async fn crates_rejects_unknown_sort_order() {
-        let (settings, storage) = test_deps();
-        let r = app(
-            MockDb::new(),
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/crates?sort=stars")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let r = get_with(test_state(), "/crates?sort=stars", "").await;
 
         assert_eq!(StatusCode::BAD_REQUEST, r.status());
     }
 
     #[tokio::test]
     async fn cratesio_data_returns_data() {
-        let mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/cratesio_data?name=quote")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let r = get_with(test_state(), "/cratesio_data?name=quote", "").await;
 
         let result_status = r.status();
         let body =
@@ -3562,20 +2474,7 @@ mod tests {
 
     #[tokio::test]
     async fn cratesio_data_not_found() {
-        let mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(
-            Request::get("/cratesio_data?name=thisdoesnotevenexist")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        let r = get_with(test_state(), "/cratesio_data?name=thisdoesnotevenexist", "").await;
 
         assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
@@ -3586,54 +2485,16 @@ mod tests {
         let upstream =
             TestServer::start(Router::new().fallback(|| async { StatusCode::TOO_MANY_REQUESTS }))
                 .await;
-        let (mut settings, storage) = test_deps();
+        let mut settings = kellnr_settings::test_settings();
         settings.proxy.api = upstream.url("/api/v1/crates/").parse().unwrap();
 
-        let r = app(
-            MockDb::new(),
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
+        let r = get_with(
+            with_settings(test_state(), settings),
+            "/cratesio_data?name=quote",
+            "",
         )
-        .oneshot(
-            Request::get("/cratesio_data?name=quote")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        .await;
 
         assert_eq!(r.status(), StatusCode::BAD_GATEWAY);
-    }
-
-    fn test_deps() -> (Settings, DynStorage) {
-        let settings = kellnr_settings::test_settings();
-        let storage = Box::new(MemoryStorage::new()) as DynStorage;
-        (settings, storage)
-    }
-
-    fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
-        app_with_state(AppStateData {
-            db: Arc::new(mock_db),
-            settings: Arc::new(settings),
-            crate_storage: Arc::new(crate_storage),
-            ..kellnr_http::test_support::test_state()
-        })
-    }
-
-    fn app_with_state(state: AppStateData) -> Router {
-        Router::new()
-            .route("/search", get(search))
-            .route("/crates", get(crates))
-            .route("/crate_data", get(crate_data))
-            .route("/crate_dependents", get(crate_dependents))
-            .route("/version", get(kellnr_version))
-            .route("/statistic", get(statistic))
-            .route("/build", post(build_rustdoc))
-            .route("/cratesio_data", get(cratesio_data))
-            .route("/settings", get(settings))
-            .route("/docs_enabled", get(docs_enabled))
-            .route("/sponsor_links_enabled", get(sponsor_links_enabled))
-            .route("/migrate-storage", post(migrate_docs_storage))
-            .with_state(state)
     }
 }
