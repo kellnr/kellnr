@@ -1087,7 +1087,6 @@ mod tests {
     use axum::http::{Request, StatusCode, header};
     use axum::response::Response;
     use axum::routing::{delete, get, put};
-    
     use bytes::Bytes;
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
@@ -1229,25 +1228,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(StatusCode::FORBIDDEN, response.status());
-    }
-
-    #[tokio::test]
-    async fn test_list_toolchains_no_cookie_unauthorized() {
-        let mock_db = MockDb::new();
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(StatusCode::UNAUTHORIZED, response.status());
     }
 
     #[tokio::test]

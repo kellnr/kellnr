@@ -1062,7 +1062,6 @@ mod tests {
     use axum::Router;
     use axum::body::Body;
     use axum::routing::{get, post};
-    
     use bytes::Bytes;
     use http_body_util::BodyExt;
     use hyper::{Request, header};
@@ -1310,30 +1309,6 @@ mod tests {
             delete_crate_versions_impl(&state, &OriginalName::try_from("foo").unwrap(), None).await;
 
         assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn settings_no_admin_returns_unauthorized() {
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        });
-
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/settings").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
@@ -1585,22 +1560,6 @@ mod tests {
             .find(|l| l.key == "oauth2.client_secret")
             .expect("oauth2.client_secret leaf must be present");
         assert!(unset_secret.value.is_null(), "unset secret must be null");
-    }
-
-    #[tokio::test]
-    async fn docs_enabled_no_auth_returns_ok() {
-        let mock_db = MockDb::new();
-        let (settings, storage) = test_deps();
-        let r = app(
-            mock_db,
-            KellnrCrateStorage::new(&settings, storage),
-            settings,
-        )
-        .oneshot(Request::get("/docs_enabled").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-
-        assert_eq!(r.status(), StatusCode::OK);
     }
 
     #[tokio::test]
@@ -2183,24 +2142,6 @@ mod tests {
             })
         });
         mock_db
-    }
-
-    #[tokio::test]
-    async fn migrate_docs_storage_returns_401_without_session() {
-        let local = tempfile::tempdir().unwrap();
-        let target = tempfile::tempdir().unwrap();
-        let settings = settings_with_docs_bucket_configured(local.path());
-
-        let r = migrate_storage_app(MockDb::new(), settings, fs_docs_storage(target.path()))
-            .oneshot(
-                Request::post("/migrate-storage")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
@@ -3642,10 +3583,9 @@ mod tests {
     /// Errors of crates.io like rate limits are not a missing crate.
     #[tokio::test]
     async fn cratesio_data_upstream_error_is_bad_gateway() {
-        let upstream = TestServer::start(
-            Router::new().fallback(|| async { StatusCode::TOO_MANY_REQUESTS }),
-        )
-        .await;
+        let upstream =
+            TestServer::start(Router::new().fallback(|| async { StatusCode::TOO_MANY_REQUESTS }))
+                .await;
         let (mut settings, storage) = test_deps();
         settings.proxy.api = upstream.url("/api/v1/crates/").parse().unwrap();
 

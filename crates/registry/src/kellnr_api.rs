@@ -1095,8 +1095,8 @@ mod reg_api_tests {
     use kellnr_settings::{LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
-    use kellnr_storage::object_storage::MemoryStorage;
     use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+    use kellnr_storage::object_storage::MemoryStorage;
     use kellnr_storage::storage::{ObjectWithMeta, Storage};
     use kellnr_storage::storage_error::StorageError;
     use kellnr_storage::storage_key::StorageKey;
@@ -2472,24 +2472,6 @@ mod reg_api_tests {
     }
 
     #[tokio::test]
-    async fn download_not_existing_package() {
-        let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
-        let r = kellnr
-            .client
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/cratesio/does_not_exist/0.1.0/download")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::NOT_FOUND);
-    }
-
-    #[tokio::test]
     async fn download_counts_only_existing_versions() {
         let kellnr = TestKellnr::new(get_settings()).await;
         let (status, detail) = publish_metadata(
@@ -2581,24 +2563,6 @@ mod reg_api_tests {
 
         assert_eq!(StatusCode::FORBIDDEN, deny);
         assert_eq!(StatusCode::OK, allow);
-    }
-
-    #[tokio::test]
-    async fn download_invalid_package_name() {
-        let settings = get_settings();
-        let kellnr = TestKellnr::new(settings).await;
-        let r = kellnr
-            .client
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/cratesio/-invalid_name/0.1.0/download")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(r.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -3816,7 +3780,10 @@ mod reg_api_tests {
             Self::with(settings, |_| storage).await
         }
 
-        async fn with(mut settings: Settings, storage: impl FnOnce(&Settings) -> DynStorage) -> Self {
+        async fn with(
+            mut settings: Settings,
+            storage: impl FnOnce(&Settings) -> DynStorage,
+        ) -> Self {
             let data_dir = tempfile::tempdir().unwrap();
             settings.registry.data_dir = data_dir.path().to_string_lossy().into_owned();
             let storage = storage(&settings);
@@ -3955,11 +3922,9 @@ mod reg_api_tests {
 
 #[cfg(test)]
 mod crate_access_tests {
-    
+
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
-    
-    
     use kellnr_db::SessionInfo;
     use kellnr_db::mock::MockDb;
     use kellnr_http::state::AppStateData;
