@@ -101,28 +101,24 @@ mod auth_when_required_tests {
     use axum::http::header;
     use axum::middleware::from_fn_with_state;
     use axum::routing::get;
-    use kellnr_common::account_name::UserName;
-    use kellnr_common::plain_token::PlainToken;
-    use kellnr_db::error::DbError;
-    use kellnr_db::mock::MockDb;
-    use kellnr_db::{SessionInfo, User};
+    use kellnr_db::UserFlags;
+    use kellnr_db::test_utils::test_drop_table;
     use kellnr_settings::constants::COOKIE_SESSION_ID;
-    use mockall::predicate::eq;
+    use kellnr_test_db::TestDb;
     use tower::ServiceExt;
 
     use super::*;
-    use crate::test_support::{encode_cookies, test_state};
+    use crate::test_support::{encode_cookies, session_cookie, sqlite_test_state, test_state};
 
     type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
     /// Router with `/guarded` behind the middleware and `/not_guarded` without.
-    fn app(db: MockDb, auth_required: bool, accepts: Accepts) -> Router {
-        let mut settings = kellnr_settings::test_settings();
+    fn app(state: AppStateData, auth_required: bool, accepts: Accepts) -> Router {
+        let mut settings = (*state.settings).clone();
         settings.registry.auth_required = auth_required;
         let state = AppStateData {
-            db: Arc::new(db),
             settings: Arc::new(settings),
-            ..test_state()
+            ..state
         };
         Router::new()
             .route("/guarded", get(StatusCode::OK))
@@ -134,47 +130,24 @@ mod auth_when_required_tests {
             .with_state(state)
     }
 
-    /// Db with the cargo token "token" of a user.
-    fn token_db() -> MockDb {
-        let mut db = MockDb::new();
-        db.expect_get_user_from_token()
-            .with(eq(PlainToken::from("token")))
-            .returning(|_| {
-                Ok(User {
-                    name: UserName::new("user").unwrap(),
-                    ..User::default()
-                })
-            });
-        db.expect_get_user_from_token()
-            .returning(|_| Err(DbError::TokenNotFound));
-        db
+    /// App on a database that holds `admin` with the cargo token `token`.
+    async fn db_app(accepts: Accepts) -> (Router, TestDb) {
+        let (state, db) = sqlite_test_state().await;
+        (app(state, true, accepts), db)
     }
 
-    fn session_db(result: fn() -> kellnr_db::provider::DbResult<SessionInfo>) -> MockDb {
-        let mut db = MockDb::new();
-        db.expect_validate_session()
-            .with(eq(PlainToken::from("1234")))
-            .returning(move |_| result());
-        db.expect_get_user_from_token()
-            .returning(|_| Err(DbError::TokenNotFound));
-        db
+    async fn guest_session(db: &TestDb) -> String {
+        session_cookie(db, "guest", UserFlags::default()).await
     }
 
-    fn valid_session() -> SessionInfo {
-        SessionInfo {
-            name: UserName::new("guest").unwrap(),
-            is_admin: false,
-            is_read_only: false,
-        }
+    fn unknown_session() -> String {
+        encode_cookies([(COOKIE_SESSION_ID, "1234")])
     }
 
-    async fn send(app: Router, uri: &str, cookie: bool) -> Result<Response> {
+    async fn send(app: Router, uri: &str, cookie: Option<String>) -> Result<Response> {
         let mut request = Request::get(uri);
-        if cookie {
-            request = request.header(
-                header::COOKIE,
-                encode_cookies([(COOKIE_SESSION_ID, "1234")]),
-            );
+        if let Some(cookie) = cookie {
+            request = request.header(header::COOKIE, cookie);
         }
         Ok(app.oneshot(request.body(Body::empty())?).await?)
     }
@@ -186,41 +159,39 @@ mod auth_when_required_tests {
 
     #[tokio::test]
     async fn guarded_route_with_valid_token() -> Result {
-        let r = send_token(app(token_db(), true, Accepts::Token), "token").await?;
+        let (app, _db) = db_app(Accepts::Token).await;
+        let r = send_token(app, "token").await?;
         assert_eq!(r.status(), StatusCode::OK);
         Ok(())
     }
 
     #[tokio::test]
     async fn guarded_route_with_invalid_token() -> Result {
-        let r = send_token(app(token_db(), true, Accepts::Token), "wrong_token").await?;
+        let (app, _db) = db_app(Accepts::Token).await;
+        let r = send_token(app, "wrong_token").await?;
         assert_eq!(r.status(), StatusCode::FORBIDDEN);
         Ok(())
     }
 
     #[tokio::test]
     async fn guarded_route_without_token() -> Result {
-        let r = send(app(MockDb::new(), true, Accepts::Token), "/guarded", false).await?;
+        let r = send(app(test_state(), true, Accepts::Token), "/guarded", None).await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
     #[tokio::test]
     async fn guarded_route_with_valid_cookie() -> Result {
-        let r = send(
-            app(session_db(|| Ok(valid_session())), true, Accepts::Session),
-            "/guarded",
-            true,
-        )
-        .await?;
+        let (app, db) = db_app(Accepts::Session).await;
+        let r = send(app, "/guarded", Some(guest_session(&db).await)).await?;
         assert_eq!(r.status(), StatusCode::OK);
         Ok(())
     }
 
     #[tokio::test]
     async fn guarded_route_with_invalid_cookie() -> Result {
-        let db = session_db(|| Err(DbError::SessionNotFound));
-        let r = send(app(db, true, Accepts::Session), "/guarded", true).await?;
+        let (app, _db) = db_app(Accepts::Session).await;
+        let r = send(app, "/guarded", Some(unknown_session())).await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
         assert!(!r.headers().contains_key("WWW-Authenticate"));
         Ok(())
@@ -229,20 +200,17 @@ mod auth_when_required_tests {
     /// A failing database is not a missing login.
     #[tokio::test]
     async fn guarded_route_with_database_error() -> Result {
-        let db = session_db(|| Err(DbError::FailedToCountCrates));
-        let r = send(app(db, true, Accepts::Session), "/guarded", true).await?;
+        let (app, db) = db_app(Accepts::Session).await;
+        let cookie = guest_session(&db).await;
+        test_drop_table(&db, "session").await?;
+        let r = send(app, "/guarded", Some(cookie)).await?;
         assert_eq!(r.status(), StatusCode::INTERNAL_SERVER_ERROR);
         Ok(())
     }
 
     #[tokio::test]
     async fn guarded_route_without_cookie() -> Result {
-        let r = send(
-            app(MockDb::new(), true, Accepts::Session),
-            "/guarded",
-            false,
-        )
-        .await?;
+        let r = send(app(test_state(), true, Accepts::Session), "/guarded", None).await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
         Ok(())
     }
@@ -250,9 +218,9 @@ mod auth_when_required_tests {
     #[tokio::test]
     async fn not_guarded_route_without_cookie() -> Result {
         let r = send(
-            app(MockDb::new(), true, Accepts::Session),
+            app(test_state(), true, Accepts::Session),
             "/not_guarded",
-            false,
+            None,
         )
         .await?;
         assert_eq!(r.status(), StatusCode::OK);
@@ -261,28 +229,15 @@ mod auth_when_required_tests {
 
     #[tokio::test]
     async fn app_not_required_auth_with_guarded_route() -> Result {
-        let r = send(
-            app(MockDb::new(), false, Accepts::Session),
-            "/guarded",
-            false,
-        )
-        .await?;
+        let r = send(app(test_state(), false, Accepts::Session), "/guarded", None).await?;
         assert_eq!(r.status(), StatusCode::OK);
         Ok(())
     }
 
     #[tokio::test]
     async fn token_or_session_accepts_session() -> Result {
-        let r = send(
-            app(
-                session_db(|| Ok(valid_session())),
-                true,
-                Accepts::TokenOrSession,
-            ),
-            "/guarded",
-            true,
-        )
-        .await?;
+        let (app, db) = db_app(Accepts::TokenOrSession).await;
+        let r = send(app, "/guarded", Some(guest_session(&db).await)).await?;
         assert_eq!(r.status(), StatusCode::OK);
         Ok(())
     }
@@ -291,8 +246,10 @@ mod auth_when_required_tests {
     /// one, also a failing database.
     #[tokio::test]
     async fn token_or_session_answers_every_failure_with_401() -> Result {
-        let db = session_db(|| Err(DbError::FailedToCountCrates));
-        let r = send(app(db, true, Accepts::TokenOrSession), "/guarded", true).await?;
+        let (app, db) = db_app(Accepts::TokenOrSession).await;
+        let cookie = guest_session(&db).await;
+        test_drop_table(&db, "session").await?;
+        let r = send(app, "/guarded", Some(cookie)).await?;
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(r.headers()["WWW-Authenticate"], "Basic, Bearer");
         Ok(())
