@@ -279,54 +279,51 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use bytes::Bytes;
-    use kellnr_common::account_name::UserName;
+    use kellnr_common::account_name::{GroupName, UserName};
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_common::version::Version;
-    use kellnr_db::error::DbError;
-    use kellnr_db::mock::MockDb;
-    use kellnr_db::{SessionInfo, User};
-    use kellnr_http::test_support::encode_cookies;
-    use kellnr_settings::constants::COOKIE_SESSION_ID;
+    use kellnr_db::test_utils::{TestCrateBuilder, test_drop_table};
+    use kellnr_db::{DbProvider, UserFlags};
+    use kellnr_http::test_support::{session_cookie, sqlite_test_state, test_state};
     use kellnr_storage::docs_storage::{DocsName, DocsStorage};
-    use mockall::predicate::eq;
+    use kellnr_test_db::TestDb;
     use tower::ServiceExt;
 
     use super::*;
 
-    fn docs_test_state(db: MockDb) -> AppStateData {
-        AppStateData {
-            db: Arc::new(db),
-            ..kellnr_http::test_support::test_state()
+    /// App state on a database with the restricted crate `secret`, its crate
+    /// user `alice`, owner `olivia`, group member `greg` and `bob` without
+    /// access. The cargo token of each user is its name.
+    async fn restricted_state() -> (AppStateData, TestDb) {
+        let (state, db) = sqlite_test_state().await;
+        for name in ["alice", "bob", "olivia", "greg"] {
+            let user = UserName::new(name).unwrap();
+            db.add_user(&user, "pwd", UserFlags::default())
+                .await
+                .unwrap();
+            db.add_auth_token("token", &PlainToken::from(name), &user)
+                .await
+                .unwrap();
         }
-    }
-
-    fn unrestricted_db() -> MockDb {
-        let mut db = MockDb::new();
-        db.expect_is_download_restricted().returning(|_| Ok(false));
-        db
-    }
-
-    /// Db for a restricted crate `secret` with crate user `alice`, owner
-    /// `olivia` and group member `greg`.
-    fn restricted_db() -> MockDb {
-        let mut db = MockDb::new();
-        db.expect_is_download_restricted()
-            .with(eq(CanonicalName::try_from("secret").unwrap()))
-            .returning(|_| Ok(true));
-        db.expect_get_user_from_token().returning(|token| {
-            Ok(User {
-                name: UserName::new(token.expose_secret()).unwrap(),
-                ..User::default()
-            })
-        });
-        db.expect_is_crate_user()
-            .returning(|_, user| Ok(user == "alice"));
-        db.expect_is_crate_group_user()
-            .returning(|_, user| Ok(user == "greg"));
-        db.expect_is_owner()
-            .returning(|_, user| Ok(user == "olivia"));
-        db
+        TestCrateBuilder::new(&db)
+            .name("secret")
+            .owner("olivia")
+            .build()
+            .await
+            .unwrap();
+        let secret = CanonicalName::try_from("secret").unwrap();
+        db.change_download_restricted(&secret, true).await.unwrap();
+        db.add_crate_user(&secret, &UserName::new("alice").unwrap())
+            .await
+            .unwrap();
+        let group = GroupName::new("group").unwrap();
+        db.add_group(&group).await.unwrap();
+        db.add_group_user(&group, &UserName::new("greg").unwrap())
+            .await
+            .unwrap();
+        db.add_crate_group(&secret, &group).await.unwrap();
+        (state, db)
     }
 
     async fn put_secret_docs(state: &AppStateData) -> String {
@@ -353,7 +350,7 @@ mod tests {
 
     #[tokio::test]
     async fn restricted_docs_hidden_from_anonymous_user() {
-        let state = docs_test_state(restricted_db());
+        let (state, _db) = restricted_state().await;
         let uri = put_secret_docs(&state).await;
 
         let status = get_docs(state, Request::get(uri).body(Body::empty()).unwrap()).await;
@@ -363,7 +360,7 @@ mod tests {
 
     #[tokio::test]
     async fn restricted_docs_hidden_from_user_without_access() {
-        let state = docs_test_state(restricted_db());
+        let (state, _db) = restricted_state().await;
         let uri = put_secret_docs(&state).await;
 
         let request = Request::get(uri)
@@ -376,7 +373,7 @@ mod tests {
     }
 
     async fn get_secret_docs_as(user: &str) -> StatusCode {
-        let state = docs_test_state(restricted_db());
+        let (state, _db) = restricted_state().await;
         let uri = put_secret_docs(&state).await;
 
         let request = Request::get(uri)
@@ -393,10 +390,8 @@ mod tests {
 
     #[tokio::test]
     async fn docs_hidden_when_restriction_check_fails() {
-        let mut db = MockDb::new();
-        db.expect_is_download_restricted()
-            .returning(|_| Err(DbError::CrateNotFound("secret".to_string())));
-        let state = docs_test_state(db);
+        let (state, db) = sqlite_test_state().await;
+        test_drop_table(&db, "krate").await.unwrap();
         let uri = put_secret_docs(&state).await;
 
         let status = get_docs(state, Request::get(uri).body(Body::empty()).unwrap()).await;
@@ -406,13 +401,8 @@ mod tests {
 
     #[tokio::test]
     async fn restricted_docs_hidden_when_access_check_fails() {
-        let mut db = MockDb::new();
-        db.expect_is_download_restricted().returning(|_| Ok(true));
-        db.expect_get_user_from_token()
-            .returning(|_| Ok(User::default()));
-        db.expect_is_crate_user()
-            .returning(|_, _| Err(DbError::CrateNotFound("secret".to_string())));
-        let state = docs_test_state(db);
+        let (state, db) = restricted_state().await;
+        test_drop_table(&db, "crate_user").await.unwrap();
         let uri = put_secret_docs(&state).await;
 
         let request = Request::get(uri)
@@ -426,24 +416,13 @@ mod tests {
 
     #[tokio::test]
     async fn restricted_docs_served_to_admin_session() {
-        let mut db = MockDb::new();
-        db.expect_is_download_restricted().returning(|_| Ok(true));
-        db.expect_validate_session()
-            .with(eq(PlainToken::from("admin-session")))
-            .returning(|_| {
-                Ok(SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        let state = docs_test_state(db);
+        let (state, db) = restricted_state().await;
         let uri = put_secret_docs(&state).await;
 
         let request = Request::get(uri)
             .header(
                 header::COOKIE,
-                encode_cookies([(COOKIE_SESSION_ID, "admin-session")]),
+                session_cookie(&db, "admin", UserFlags::default()).await,
             )
             .body(Body::empty())
             .unwrap();
@@ -454,7 +433,7 @@ mod tests {
 
     #[tokio::test]
     async fn restricted_docs_checked_with_canonical_crate_name() {
-        let state = docs_test_state(restricted_db());
+        let (state, _db) = restricted_state().await;
         let key = DocsStorage::file_key(
             &DocsName::from_folder("Secret".to_string()),
             &Version::try_from("1.0.0").unwrap(),
@@ -481,7 +460,7 @@ mod tests {
     async fn docs_path_with_empty_segment_is_rejected() {
         // The storage drops empty segments, so this path addresses `secret/...`.
         // It must never be served based on a check of a different segment.
-        let state = docs_test_state(MockDb::new());
+        let state = test_state();
         let uri = put_secret_docs(&state).await.replace("/docs/", "/docs//");
 
         let status = get_docs(state, Request::get(uri).body(Body::empty()).unwrap()).await;
@@ -491,7 +470,7 @@ mod tests {
 
     #[tokio::test]
     async fn restricted_docs_never_answer_conditional_request_without_access() {
-        let state = docs_test_state(restricted_db());
+        let (state, _db) = restricted_state().await;
         let uri = put_secret_docs(&state).await;
         let app = create_router(state, None);
 
@@ -523,7 +502,7 @@ mod tests {
 
     #[tokio::test]
     async fn docs_route_serves_stored_file_with_mime_and_csp() {
-        let state = docs_test_state(unrestricted_db());
+        let (state, _db) = sqlite_test_state().await;
         let key = DocsStorage::file_key(
             &DocsName::from_folder("routes-test-crate".to_string()),
             &Version::try_from("1.0.0").unwrap(),
@@ -578,7 +557,7 @@ mod tests {
 
     #[tokio::test]
     async fn ui_responses_have_security_headers() {
-        let r = get_response(kellnr_http::test_support::test_state(), "/").await;
+        let r = get_response(test_state(), "/").await;
 
         assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], UI_CSP);
         assert_eq!(r.headers()["cross-origin-opener-policy"], "same-origin");
@@ -589,7 +568,7 @@ mod tests {
 
     #[tokio::test]
     async fn openapi_documents_the_error_body() {
-        let r = get_response(kellnr_http::test_support::test_state(), "/api/openapi.json").await;
+        let r = get_response(test_state(), "/api/openapi.json").await;
         let body = axum::body::to_bytes(r.into_body(), usize::MAX)
             .await
             .unwrap();
@@ -605,14 +584,14 @@ mod tests {
 
     #[tokio::test]
     async fn api_responses_have_ui_csp() {
-        let r = get_response(kellnr_http::test_support::test_state(), "/api/v1/health").await;
+        let r = get_response(test_state(), "/api/v1/health").await;
 
         assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], UI_CSP);
     }
 
     #[tokio::test]
     async fn swagger_ui_has_ui_csp() {
-        let r = get_response(kellnr_http::test_support::test_state(), "/api/docs/").await;
+        let r = get_response(test_state(), "/api/docs/").await;
 
         assert_eq!(r.headers()[header::CONTENT_SECURITY_POLICY], UI_CSP);
     }
@@ -633,7 +612,7 @@ mod tests {
 
     #[tokio::test]
     async fn hsts_is_sent_when_origin_uses_https() {
-        let mut state = kellnr_http::test_support::test_state();
+        let mut state = test_state();
         let mut settings = (*state.settings).clone();
         settings.origin.protocol = Protocol::Https;
         state.settings = Arc::new(settings);
@@ -648,7 +627,7 @@ mod tests {
 
     #[tokio::test]
     async fn docs_keep_their_own_csp() {
-        let state = docs_test_state(unrestricted_db());
+        let (state, _db) = sqlite_test_state().await;
         let uri = put_secret_docs(&state).await;
 
         let r = get_response(state, &uri).await;
@@ -658,7 +637,7 @@ mod tests {
     }
 
     async fn cache_control_for(file: &str) -> String {
-        let state = docs_test_state(unrestricted_db());
+        let (state, _db) = sqlite_test_state().await;
         let key = DocsStorage::file_key(
             &DocsName::from_folder("routes-test-crate".to_string()),
             &Version::try_from("1.0.0").unwrap(),
@@ -704,7 +683,7 @@ mod tests {
 
     #[tokio::test]
     async fn docs_route_returns_304_for_matching_if_none_match() {
-        let state = docs_test_state(unrestricted_db());
+        let (state, _db) = sqlite_test_state().await;
         let key = DocsStorage::file_key(
             &DocsName::from_folder("routes-test-crate".to_string()),
             &Version::try_from("1.0.0").unwrap(),
@@ -748,7 +727,7 @@ mod tests {
 
     #[tokio::test]
     async fn docs_route_404_for_missing_file() {
-        let state = docs_test_state(unrestricted_db());
+        let (state, _db) = sqlite_test_state().await;
         let app = create_router(state, None);
 
         let r = app
