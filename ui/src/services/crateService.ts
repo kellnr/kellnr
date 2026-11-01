@@ -14,7 +14,7 @@ import type {
   CrateAccessDataResponse,
   CrateAccessDataRequest,
 } from '../types/api'
-import type { CrateData, CrateDependents } from '../types/crate_data'
+import type { CrateData, CrateDependents, CratesIoCrateData } from '../types/crate_data'
 import type { Statistics } from '../types/statistics'
 import {
   CRATES,
@@ -79,18 +79,18 @@ export async function getCrateDependents(name: string): Promise<ApiResult<CrateD
  * Successful crates.io responses, kept for the lifetime of the page so the
  * dependency list does not query crates.io again on every tab switch.
  */
-const cratesIoDataCache = new Map<string, Promise<ApiResult<CrateData>>>()
+const cratesIoDataCache = new Map<string, Promise<ApiResult<CratesIoCrateData>>>()
 
 /**
  * Get crates.io crate data (for cached crates)
  */
-export async function getCratesIoData(name: string): Promise<ApiResult<CrateData>> {
+export async function getCratesIoData(name: string): Promise<ApiResult<CratesIoCrateData>> {
   const cached = cratesIoDataCache.get(name)
   if (cached) {
     return cached
   }
 
-  const request = apiGet<CrateData>(CRATESIO_DATA, { name })
+  const request = apiGet<CratesIoCrateData>(CRATESIO_DATA, { name })
   cratesIoDataCache.set(name, request)
   const result = await request
   if (result.error) {

@@ -3,8 +3,9 @@ use std::fmt::Display;
 use clap::ValueEnum;
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Deserializer, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema)]
 #[serde(default)]
 pub struct Log {
     #[arg(long = "log-format", value_enum)]
@@ -25,7 +26,8 @@ impl Default for Log {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum, Default, ToSchema)]
+#[schema(rename_all = "lowercase")]
 pub enum LogFormat {
     #[default]
     Compact,
@@ -68,7 +70,8 @@ impl Display for LogFormat {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum, Default, ToSchema)]
+#[schema(rename_all = "lowercase")]
 pub enum LogLevel {
     Trace,
     Debug,

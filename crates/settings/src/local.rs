@@ -2,16 +2,18 @@ use std::net::{IpAddr, Ipv4Addr};
 
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 fn default_ip() -> IpAddr {
     IpAddr::V4(Ipv4Addr::UNSPECIFIED)
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema)]
 #[serde(default)]
 #[configurable(clap_prefix = "local")]
 pub struct Local {
     /// IP address to bind to
+    #[schema(value_type = String)]
     pub ip: IpAddr,
 
     /// Port to listen on

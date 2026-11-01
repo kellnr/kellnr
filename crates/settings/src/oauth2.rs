@@ -1,5 +1,6 @@
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 fn default_scopes() -> Vec<String> {
     vec![
@@ -14,7 +15,7 @@ fn default_button_text() -> String {
 }
 
 /// `OAuth2`/`OpenID` Connect authentication configuration
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema)]
 #[serde(default)]
 #[configurable(clap_prefix = "oauth2")]
 #[allow(clippy::struct_excessive_bools)]

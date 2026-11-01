@@ -1,7 +1,9 @@
 use clap::ValueEnum;
 use serde::{Deserialize, Deserializer, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum, ToSchema)]
+#[schema(rename_all = "lowercase")]
 pub enum Protocol {
     #[default]
     Http,

@@ -50,7 +50,7 @@ fn get_client(settings: &kellnr_settings::Proxy) -> &'static Client {
     path = "/config.json",
     tag = "cratesio",
     responses(
-        (status = 200, description = "Crates.io proxy configuration")
+        (status = 200, description = "Crates.io proxy configuration", body = ConfigJson)
     ),
     security(("cargo_token" = []))
 )]

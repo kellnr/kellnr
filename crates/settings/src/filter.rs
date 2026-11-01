@@ -6,12 +6,15 @@ use std::fmt::Display;
 use clap::ValueEnum;
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Deserializer, Serialize};
+use utoipa::ToSchema;
 
 /// Filters for downloads through the crates.io proxy.
 ///
 /// The fields are the same as in [`RegistryFilter`]. Both are separate structs
 /// because the CLI flag prefix is set per struct.
-#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(
+    Debug, Default, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema,
+)]
 #[serde(default)]
 #[configurable(clap_prefix = "cratesio-filter")]
 pub struct CratesioFilter {
@@ -37,7 +40,9 @@ pub struct CratesioFilter {
 /// Filters for downloads of crates hosted in Kellnr.
 ///
 /// The fields are the same as in [`CratesioFilter`].
-#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(
+    Debug, Default, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema,
+)]
 #[serde(default)]
 #[configurable(clap_prefix = "registry-filter")]
 pub struct RegistryFilter {
@@ -62,7 +67,8 @@ pub struct RegistryFilter {
 
 /// What the license filter does with a crate whose license is unknown: none
 /// is declared, the expression does not parse, or it could not be fetched.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum, Default, ToSchema)]
+#[schema(rename_all = "lowercase")]
 pub enum LicenseUnknown {
     #[default]
     Deny,
