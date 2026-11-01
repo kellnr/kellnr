@@ -461,10 +461,10 @@ mod tests {
 
     use cargo::core::SourceId;
     use cargo::sources::SourceConfigMap;
-    use kellnr_db::error::DbError;
-    use kellnr_db::mock::MockDb;
+    use kellnr_db::test_utils::{TestCrateBuilder, test_drop_table};
     use kellnr_storage::object_storage::MemoryStorage;
     use kellnr_storage::storage_key::StorageKey;
+    use kellnr_test_db::TestDb;
 
     use super::*;
 
@@ -488,13 +488,8 @@ mod tests {
         builder.into_inner().unwrap().finish().unwrap()
     }
 
-    fn queue_entry(id: i64, name: &str, path: PathBuf) -> DocQueueEntry {
-        DocQueueEntry {
-            id,
-            name: name.to_string(),
-            version: Version::try_from("1.0.0").unwrap(),
-            path,
-        }
+    fn version() -> Version {
+        Version::try_from("1.0.0").unwrap()
     }
 
     /// Builder that runs `script` with `/bin/sh`. In the script, `$0` is
@@ -512,9 +507,9 @@ mod tests {
         )
     }
 
-    /// Worker with the crates `names` in a case-sensitive crate storage.
+    /// Worker on `db` with the crates `names` in a case-sensitive crate storage.
     async fn worker(
-        db: MockDb,
+        db: &TestDb,
         data_dir: &Path,
         names: &[&str],
         builder: DocBuilder,
@@ -525,14 +520,14 @@ mod tests {
         for name in names {
             cs.put(
                 &OriginalName::from_unchecked((*name).to_string()),
-                &Version::try_from("1.0.0").unwrap(),
+                &version(),
                 crate_tarball(name, "1.0.0").into(),
             )
             .await
             .unwrap();
         }
         DocQueueWorker {
-            db: Arc::new(db),
+            db: db.provider(),
             cs: Arc::new(cs),
             docs_storage: Arc::new(DocsStorage::new(Box::new(MemoryStorage::new()))),
             path_prefix: UrlPathPrefix::default(),
@@ -544,14 +539,50 @@ mod tests {
     }
 
     /// Worker whose builds fail after appending a line to `build_log`.
-    async fn failing_worker(db: MockDb, data_dir: &Path, build_log: &Path) -> DocQueueWorker {
+    async fn failing_worker(db: &TestDb, data_dir: &Path, build_log: &Path) -> DocQueueWorker {
         let builder = shell_builder("echo \"$3\" >> \"$0\"; exit 1", build_log);
         worker(db, data_dir, &["a", "b"], builder).await
     }
 
-    fn expect_original_names(db: &mut MockDb) {
-        db.expect_get_original_name()
-            .returning(|name, _| Ok(Some(OriginalName::from_unchecked(name.to_string()))));
+    /// Adds version 1.0.0 of the crates `names`, owned by `admin`.
+    async fn add_crates(db: &TestDb, names: &[&str]) {
+        for name in names {
+            TestCrateBuilder::new(db).name(name).build().await.unwrap();
+        }
+    }
+
+    /// Queues the docs builds of version 1.0.0 of `names`, each with its own
+    /// working directory in `data_dir`. Returns the working directories.
+    async fn queue(db: &TestDb, data_dir: &Path, names: &[&str]) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        for (i, name) in names.iter().enumerate() {
+            let path = data_dir.join(format!("queue{i}"));
+            std::fs::create_dir(&path).unwrap();
+            db.add_doc_queue(
+                &OriginalName::from_unchecked((*name).to_string()),
+                &version(),
+                &path,
+            )
+            .await
+            .unwrap();
+            paths.push(path);
+        }
+        paths
+    }
+
+    async fn queued(db: &TestDb) -> Vec<String> {
+        db.get_doc_queue()
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect()
+    }
+
+    async fn docs_link(db: &TestDb, name: &str) -> Option<String> {
+        let name = CanonicalName::try_from(name).unwrap();
+        let data = db.get_crate_data(&name).await.unwrap();
+        data.versions[0].documentation.clone()
     }
 
     #[cfg(unix)]
@@ -559,32 +590,18 @@ mod tests {
     async fn process_queue_builds_duplicates_once_and_always_cleans_up() {
         let data_dir = tempfile::tempdir().unwrap();
         let build_log = data_dir.path().join("builds.log");
-        let paths: Vec<PathBuf> = (0..3)
-            .map(|i| {
-                let path = data_dir.path().join(format!("queue{i}"));
-                std::fs::create_dir(&path).unwrap();
-                path
-            })
-            .collect();
-        let queued = paths.clone();
-        let mut db = MockDb::new();
-        db.expect_get_doc_queue().returning(move || {
-            Ok(vec![
-                queue_entry(0, "a", queued[0].clone()),
-                queue_entry(1, "a", queued[1].clone()),
-                queue_entry(2, "b", queued[2].clone()),
-            ])
-        });
-        expect_original_names(&mut db);
-        db.expect_delete_doc_queue().times(3).returning(|_| Ok(()));
-        db.expect_update_docs_link().never();
-        let worker = failing_worker(db, data_dir.path(), &build_log).await;
+        let db = TestDb::sqlite().await;
+        add_crates(&db, &["a", "b"]).await;
+        let paths = queue(&db, data_dir.path(), &["a", "a", "b"]).await;
+        let worker = failing_worker(&db, data_dir.path(), &build_log).await;
 
         worker.process_queue().await.unwrap();
 
         let builds = std::fs::read_to_string(&build_log).unwrap();
         assert_eq!(builds.lines().count(), 2, "builds: {builds}");
         assert!(paths.iter().all(|p| !p.exists()));
+        assert!(queued(&db).await.is_empty());
+        assert_eq!(docs_link(&db, "a").await, None);
     }
 
     #[cfg(unix)]
@@ -592,22 +609,13 @@ mod tests {
     async fn shutdown_stops_the_queue_and_keeps_the_stopped_build_queued() {
         let data_dir = tempfile::tempdir().unwrap();
         let build_log = data_dir.path().join("builds.log");
-        let path = data_dir.path().join("queue");
-        std::fs::create_dir(&path).unwrap();
-        let queued = path.clone();
-        let mut db = MockDb::new();
-        db.expect_get_doc_queue().returning(move || {
-            Ok(vec![
-                queue_entry(0, "a", queued.clone()),
-                queue_entry(1, "b", queued.clone()),
-            ])
-        });
-        expect_original_names(&mut db);
-        db.expect_delete_doc_queue().never();
+        let db = TestDb::sqlite().await;
+        add_crates(&db, &["a", "b"]).await;
+        let paths = queue(&db, data_dir.path(), &["a", "b"]).await;
         let shutdown = CancellationToken::new();
         let builder = shell_builder("echo \"$3\" >> \"$0\"; sleep 30", &build_log)
             .with_shutdown(shutdown.clone());
-        let mut worker = worker(db, data_dir.path(), &["a", "b"], builder).await;
+        let mut worker = worker(&db, data_dir.path(), &["a", "b"], builder).await;
         worker.shutdown = shutdown.clone();
 
         let run = tokio::spawn(async move { worker.process_queue().await });
@@ -619,58 +627,59 @@ mod tests {
 
         let builds = std::fs::read_to_string(&build_log).unwrap();
         assert_eq!(builds.lines().count(), 1, "builds: {builds}");
-        assert!(!path.exists());
+        assert!(!paths[0].exists());
+        assert_eq!(queued(&db).await, vec!["a", "b"]);
     }
 
     #[cfg(unix)]
     #[tokio::test]
     async fn process_queue_builds_crate_with_uppercase_letters() {
         let data_dir = tempfile::tempdir().unwrap();
-        let path = data_dir.path().join("queue");
-        let queued = path.clone();
-        let mut db = MockDb::new();
-        db.expect_get_doc_queue()
-            .returning(move || Ok(vec![queue_entry(0, "my-crate", queued.clone())]));
-        db.expect_get_original_name()
-            .returning(|_, _| Ok(Some(OriginalName::from_unchecked("My-Crate".to_string()))));
-        db.expect_update_docs_link()
-            .withf(|name, _, link| {
-                name.as_str() == "my_crate"
-                    && link == "/docs/my-crate/1.0.0/doc/My_Crate/index.html"
-            })
-            .times(1)
-            .returning(|_, _, _| Ok(()));
-        db.expect_delete_doc_queue().times(1).returning(|_| Ok(()));
+        let db = TestDb::sqlite().await;
+        add_crates(&db, &["My-Crate"]).await;
+        queue(&db, data_dir.path(), &["My-Crate"]).await;
         let builder = shell_builder(
             "test -f \"$3/Cargo.toml\" && mkdir -p \"$3/target/doc/My_Crate\" && echo docs > \"$3/target/doc/My_Crate/index.html\"",
             data_dir.path(),
         );
-        let worker = worker(db, data_dir.path(), &["My-Crate"], builder).await;
+        let worker = worker(&db, data_dir.path(), &["My-Crate"], builder).await;
 
         worker.process_queue().await.unwrap();
 
         let key = DocsStorage::file_key(
             &DocsName::from(&OriginalName::try_from("my-crate").unwrap()),
-            &Version::try_from("1.0.0").unwrap(),
+            &version(),
             "doc/My_Crate/index.html",
         );
         assert!(worker.docs_storage.exists(&key).await.unwrap());
+        assert_eq!(
+            docs_link(&db, "my_crate").await.as_deref(),
+            Some("/docs/my-crate/1.0.0/doc/My_Crate/index.html")
+        );
+        assert!(queued(&db).await.is_empty());
     }
 
     const SUCCESSFUL_BUILD: &str = "echo \"$3\" >> \"$0\"; mkdir -p \"$3/target/doc/a\" && echo docs > \"$3/target/doc/a/index.html\"";
 
-    fn queue_dir(data_dir: &Path, i: i64) -> PathBuf {
-        data_dir.join(format!("queue{i}"))
-    }
+    /// Like [`SUCCESSFUL_BUILD`], but waits for [`process_queue_with`] after
+    /// writing to the build log.
+    const WAITING_BUILD: &str = "echo \"$3\" >> \"$0\"; while [ ! -e \"$0.go\" ]; do sleep 0.01; done; mkdir -p \"$3/target/doc/a\" && echo docs > \"$3/target/doc/a/index.html\"";
 
-    fn expect_queue(db: &mut MockDb, data_dir: &Path, names: &'static [&'static str]) {
-        let data_dir = data_dir.to_path_buf();
-        db.expect_get_doc_queue().returning(move || {
-            Ok((0..)
-                .zip(names)
-                .map(|(i, name)| queue_entry(i, name, queue_dir(&data_dir, i)))
-                .collect())
+    /// Processes the queue with a worker that runs [`WAITING_BUILD`] with
+    /// `build_log`, and runs `during_build` while the first build waits.
+    async fn process_queue_with(
+        worker: &DocQueueWorker,
+        build_log: &Path,
+        during_build: impl Future<Output = ()>,
+    ) {
+        let (result, ()) = tokio::join!(worker.process_queue(), async {
+            while !build_log.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            during_build.await;
+            std::fs::write(build_log.with_extension("log.go"), "").unwrap();
         });
+        result.unwrap();
     }
 
     fn build_count(build_log: &Path) -> usize {
@@ -682,19 +691,17 @@ mod tests {
     async fn process_queue_continues_after_database_errors() {
         let data_dir = tempfile::tempdir().unwrap();
         let build_log = data_dir.path().join("builds.log");
-        let mut db = MockDb::new();
-        expect_queue(&mut db, data_dir.path(), &["a", "b"]);
-        expect_original_names(&mut db);
-        db.expect_update_docs_link()
-            .times(2)
-            .returning(|_, _, _| Err(DbError::CrateNotFound("a".to_string())));
-        db.expect_delete_doc_queue()
-            .times(2)
-            .returning(|_| Err(DbError::CrateNotFound("a".to_string())));
-        let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
-        let worker = worker(db, data_dir.path(), &["a", "b"], builder).await;
+        let db = TestDb::sqlite().await;
+        add_crates(&db, &["a", "b"]).await;
+        queue(&db, data_dir.path(), &["a", "b"]).await;
+        let builder = shell_builder(WAITING_BUILD, &build_log);
+        let worker = worker(&db, data_dir.path(), &["a", "b"], builder).await;
 
-        worker.process_queue().await.unwrap();
+        // Removing the entries from the queue fails.
+        process_queue_with(&worker, &build_log, async {
+            test_drop_table(&db, "doc_queue").await.unwrap();
+        })
+        .await;
 
         assert_eq!(build_count(&build_log), 2);
     }
@@ -704,26 +711,27 @@ mod tests {
     async fn process_queue_does_not_build_again_if_entry_cannot_be_removed() {
         let data_dir = tempfile::tempdir().unwrap();
         let build_log = data_dir.path().join("builds.log");
-        let mut db = MockDb::new();
-        expect_queue(&mut db, data_dir.path(), &["a"]);
-        expect_original_names(&mut db);
-        db.expect_update_docs_link().returning(|_, _, _| Ok(()));
-        let mut deletes = 0;
-        db.expect_delete_doc_queue().times(2).returning(move |_| {
-            deletes += 1;
-            if deletes == 1 {
-                Err(DbError::CrateNotFound("a".to_string()))
-            } else {
-                Ok(())
-            }
-        });
-        let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
-        let worker = worker(db, data_dir.path(), &["a"], builder).await;
+        let db = TestDb::sqlite().await;
+        add_crates(&db, &["a"]).await;
+        queue(&db, data_dir.path(), &["a"]).await;
+        let id = db.get_doc_queue().await.unwrap()[0].id;
+        let builder = shell_builder(WAITING_BUILD, &build_log);
+        let mut worker = worker(&db, data_dir.path(), &["a"], builder).await;
+        process_queue_with(&worker, &build_log, async {
+            test_drop_table(&db, "doc_queue").await.unwrap();
+        })
+        .await;
 
-        worker.process_queue().await.unwrap();
+        // The database is back, with the entry still queued.
+        let restored = TestDb::sqlite().await;
+        add_crates(&restored, &["a"]).await;
+        queue(&restored, data_dir.path(), &["a"]).await;
+        assert_eq!(restored.get_doc_queue().await.unwrap()[0].id, id);
+        worker.db = restored.provider();
         worker.process_queue().await.unwrap();
 
         assert_eq!(build_count(&build_log), 1);
+        assert!(queued(&restored).await.is_empty());
     }
 
     #[cfg(unix)]
@@ -731,17 +739,17 @@ mod tests {
     async fn process_queue_retries_entry_if_crate_cannot_be_read() {
         let data_dir = tempfile::tempdir().unwrap();
         let build_log = data_dir.path().join("builds.log");
-        let mut db = MockDb::new();
-        expect_queue(&mut db, data_dir.path(), &["a"]);
-        db.expect_get_original_name()
-            .returning(|_, _| Err(DbError::CrateNotFound("a".to_string())));
-        db.expect_delete_doc_queue().never();
+        let db = TestDb::sqlite().await;
+        add_crates(&db, &["a"]).await;
+        queue(&db, data_dir.path(), &["a"]).await;
+        test_drop_table(&db, "crate_meta").await.unwrap();
         let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
-        let worker = worker(db, data_dir.path(), &["a"], builder).await;
+        let worker = worker(&db, data_dir.path(), &["a"], builder).await;
 
         worker.process_queue().await.unwrap();
 
         assert_eq!(build_count(&build_log), 0);
+        assert_eq!(queued(&db).await, vec!["a"]);
     }
 
     #[cfg(unix)]
@@ -749,48 +757,45 @@ mod tests {
     async fn process_queue_does_not_upload_docs_of_version_deleted_during_build() {
         let data_dir = tempfile::tempdir().unwrap();
         let build_log = data_dir.path().join("builds.log");
-        let mut db = MockDb::new();
-        expect_queue(&mut db, data_dir.path(), &["a"]);
-        let mut lookups = 0;
-        db.expect_get_original_name().returning(move |name, _| {
-            lookups += 1;
-            Ok((lookups == 1).then(|| OriginalName::from_unchecked(name.to_string())))
-        });
-        db.expect_update_docs_link().never();
-        db.expect_delete_doc_queue().times(1).returning(|_| Ok(()));
-        let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
-        let worker = worker(db, data_dir.path(), &["a"], builder).await;
+        let db = TestDb::sqlite().await;
+        add_crates(&db, &["a"]).await;
+        queue(&db, data_dir.path(), &["a"]).await;
+        let builder = shell_builder(WAITING_BUILD, &build_log);
+        let worker = worker(&db, data_dir.path(), &["a"], builder).await;
 
-        worker.process_queue().await.unwrap();
+        process_queue_with(&worker, &build_log, async {
+            let name = CanonicalName::try_from("a").unwrap();
+            db.delete_crate(&name, &version()).await.unwrap();
+        })
+        .await;
 
         assert_eq!(build_count(&build_log), 1);
         let prefix = DocsStorage::version_prefix(
             &DocsName::from(&OriginalName::try_from("a").unwrap()),
-            &Version::try_from("1.0.0").unwrap(),
+            &version(),
         );
         assert!(worker.docs_storage.list(&prefix).await.unwrap().is_empty());
+        assert!(queued(&db).await.is_empty());
     }
 
     #[cfg(unix)]
     #[tokio::test]
     async fn process_queue_publishes_only_rustdoc_output() {
         let data_dir = tempfile::tempdir().unwrap();
-        let mut db = MockDb::new();
-        expect_queue(&mut db, data_dir.path(), &["a"]);
-        expect_original_names(&mut db);
-        db.expect_update_docs_link().returning(|_, _, _| Ok(()));
-        db.expect_delete_doc_queue().returning(|_| Ok(()));
+        let db = TestDb::sqlite().await;
+        add_crates(&db, &["a"]).await;
+        queue(&db, data_dir.path(), &["a"]).await;
         let builder = shell_builder(
             "mkdir -p \"$3/target/doc\" && cd \"$3/target/doc\" && mkdir -p a src/a src/other && touch a/index.html src/a/lib.rs.html src/other/x.html crates.js leak.txt",
             data_dir.path(),
         );
-        let worker = worker(db, data_dir.path(), &["a"], builder).await;
+        let worker = worker(&db, data_dir.path(), &["a"], builder).await;
 
         worker.process_queue().await.unwrap();
 
         let prefix = DocsStorage::version_prefix(
             &DocsName::from(&OriginalName::try_from("a").unwrap()),
-            &Version::try_from("1.0.0").unwrap(),
+            &version(),
         );
         let mut keys: Vec<String> = worker
             .docs_storage

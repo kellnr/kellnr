@@ -4283,6 +4283,7 @@ dependencies = [
  "kellnr-docs",
  "kellnr-settings",
  "kellnr-storage",
+ "kellnr-test-db",
  "rustix",
  "tar",
  "tempfile",
