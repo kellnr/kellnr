@@ -1062,7 +1062,7 @@ mod tests {
     use axum::Router;
     use axum::body::Body;
     use axum::routing::{get, post};
-    use axum_extra::extract::cookie::Key;
+    
     use bytes::Bytes;
     use http_body_util::BodyExt;
     use hyper::{Request, header};
@@ -1440,7 +1440,6 @@ mod tests {
             .route("/settings", get(crate::ui::settings))
             .with_state(AppStateData {
                 db: Arc::new(mock_db),
-                signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings.clone()),
                 settings_prov: Arc::new(prov),
                 crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
@@ -1549,7 +1548,6 @@ mod tests {
             .route("/settings", get(crate::ui::settings))
             .with_state(AppStateData {
                 db: Arc::new(mock_db),
-                signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings.clone()),
                 settings_prov: Arc::new(prov),
                 crate_storage: Arc::new(KellnrCrateStorage::new(&settings, storage)),
@@ -2170,7 +2168,6 @@ mod tests {
             .route("/migrate-storage", post(migrate_docs_storage))
             .with_state(AppStateData {
                 db: Arc::new(mock_db),
-                signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings),
                 docs_storage: Arc::new(docs_storage),
                 background_tasks,
@@ -3692,7 +3689,6 @@ mod tests {
         (settings, storage)
     }
 
-    const TEST_KEY: &[u8] = &[1; 64];
     fn app(mock_db: MockDb, crate_storage: KellnrCrateStorage, settings: Settings) -> Router {
         Router::new()
             .route("/search", get(search))
@@ -3708,7 +3704,6 @@ mod tests {
             .route("/sponsor_links_enabled", get(sponsor_links_enabled))
             .with_state(AppStateData {
                 db: Arc::new(mock_db),
-                signing_key: Key::from(TEST_KEY),
                 settings: Arc::new(settings),
                 crate_storage: Arc::new(crate_storage),
                 ..kellnr_http::test_support::test_state()

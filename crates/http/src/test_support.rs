@@ -23,11 +23,10 @@ use crate::login_throttle::LoginThrottle;
 use crate::state::{AppStateData, default_settings_prov};
 use crate::token_cache::TokenCacheManager;
 
-/// App state with a `MockDb`, [`kellnr_settings::test_settings`] and
-/// in-memory storage.
+/// App state with a `MockDb`, [`kellnr_settings::test_settings`], in-memory
+/// storage and [`TEST_KEY`] as cookie signing key.
 pub fn test_state() -> AppStateData {
     let db: Arc<dyn DbProvider> = Arc::new(kellnr_db::mock::MockDb::new());
-    let signing_key = Key::generate();
     let settings = Arc::new(kellnr_settings::test_settings());
     let settings_prov = default_settings_prov();
     let crate_storage = Arc::new(KellnrCrateStorage::new(
@@ -54,7 +53,7 @@ pub fn test_state() -> AppStateData {
     let cratesio_sync = CratesioSync::new(db.clone(), proxy_client.clone(), &settings.proxy);
     AppStateData {
         db,
-        signing_key,
+        signing_key: Key::from(TEST_KEY),
         settings,
         settings_prov,
         crate_storage,
@@ -72,8 +71,8 @@ pub fn test_state() -> AppStateData {
     }
 }
 
-/// Fixed cookie signing key for tests. Use it as `signing_key` in the app
-/// state when requests carry cookies created by [`encode_cookies`].
+/// Fixed cookie signing key of [`test_state`], so requests can carry cookies
+/// created by [`encode_cookies`].
 pub const TEST_KEY: &[u8] = &[1; 64];
 
 /// Encodes cookies as a `Cookie` header value, encrypted with [`TEST_KEY`] the

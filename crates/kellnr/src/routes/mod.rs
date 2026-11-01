@@ -278,7 +278,7 @@ pub(crate) fn apply_download_limits(
 mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
-    use axum_extra::extract::cookie::Key;
+    
     use bytes::Bytes;
     use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
@@ -287,7 +287,7 @@ mod tests {
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{SessionInfo, User};
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
+    use kellnr_http::test_support::encode_cookies;
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use kellnr_storage::docs_storage::{DocsName, DocsStorage};
     use mockall::predicate::eq;
@@ -298,7 +298,6 @@ mod tests {
     fn docs_test_state(db: MockDb) -> AppStateData {
         AppStateData {
             db: Arc::new(db),
-            signing_key: Key::from(TEST_KEY),
             ..kellnr_http::test_support::test_state()
         }
     }
