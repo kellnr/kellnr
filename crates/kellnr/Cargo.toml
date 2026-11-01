@@ -50,12 +50,11 @@ tracing.workspace = true
 
 [dev-dependencies]
 kellnr-settings = { workspace = true, features = ["test-support"] }
-kellnr-db = { workspace = true, features = ["mock", "test-support"] }
+kellnr-db = { workspace = true, features = ["test-support"] }
 kellnr-http = { workspace = true, features = ["test-support"] }
 kellnr-test-db.workspace = true
 chrono.workspace = true
 hyper.workspace = true
-mockall.workspace = true
 serde_json.workspace = true
 tower.workspace = true
 
