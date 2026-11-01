@@ -41,6 +41,7 @@ mock = ["dep:mockall"]
 kellnr-db = { workspace = true, features = ["mock", "test-support"] }
 kellnr-db-testcontainer.workspace = true
 kellnr-test-db.workspace = true
+tempfile.workspace = true
 url.workspace = true
 
 [lints]

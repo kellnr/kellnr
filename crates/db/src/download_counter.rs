@@ -160,8 +160,11 @@ fn requeue_on_error(pending: &PendingCounts, result: DbResult<()>, key: CountKey
 
 #[cfg(test)]
 mod tests {
+    use kellnr_settings::SessionAge;
+
     use super::*;
-    use crate::mock::MockDb;
+    use crate::test_utils::test_drop_table;
+    use crate::{ConString, Database, SqliteConString};
 
     fn key(name: &str) -> (CanonicalName, Version) {
         (
@@ -170,16 +173,22 @@ mod tests {
         )
     }
 
+    /// A fresh SQLite database in `dir`. The `kellnr-test-db` template cannot
+    /// be used here, as it links its own copy of this crate.
+    async fn sqlite_db(dir: &tempfile::TempDir) -> Arc<Database> {
+        let con = ConString::Sqlite(SqliteConString::new(
+            &dir.path().join("db.sqlite"),
+            "123",
+            None,
+            SessionAge::from_secs(3600),
+        ));
+        Arc::new(Database::new(&con, 1).await.unwrap())
+    }
+
     #[tokio::test]
     async fn flush_drops_counts_for_unknown_crates() {
-        let mut db = MockDb::new();
-        db.expect_increase_download_counter_by()
-            .times(1)
-            .returning(|name, _, _| Err(DbError::CrateNotFound(name.to_string())));
-        db.expect_increase_cached_download_counter_by()
-            .times(1)
-            .returning(|name, _, _| Err(DbError::CrateNotFound(name.to_string())));
-        let counter = DownloadCounter::new(Arc::new(db), 30);
+        let dir = tempfile::tempdir().unwrap();
+        let counter = DownloadCounter::new(sqlite_db(&dir).await, 30);
         let (name, version) = key("unknown");
         counter
             .increment_and_maybe_flush(name.clone(), version.clone())
@@ -196,11 +205,10 @@ mod tests {
 
     #[tokio::test]
     async fn flush_requeues_counts_on_transient_errors() {
-        let mut db = MockDb::new();
-        db.expect_increase_download_counter_by()
-            .times(1)
-            .returning(|_, _, _| Err(DbError::FailedToCountCrates));
-        let counter = DownloadCounter::new(Arc::new(db), 30);
+        let dir = tempfile::tempdir().unwrap();
+        let db = sqlite_db(&dir).await;
+        test_drop_table(&db, "krate").await.unwrap();
+        let counter = DownloadCounter::new(db, 30);
         let (name, version) = key("known");
         counter.increment_and_maybe_flush(name, version).await;
 
