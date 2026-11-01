@@ -9,6 +9,7 @@ use cargo::core::Workspace;
 use cargo::core::compiler::UserIntent;
 use cargo::core::resolver::CliFeatures;
 use cargo::ops::{self, CompileOptions, DocOptions, OutputFormat};
+use cargo::util::Filesystem;
 use flate2::read::GzDecoder;
 use kellnr_common::background_tasks::{BackgroundTasks, FirstRound};
 use kellnr_common::canonical_name::CanonicalName;
@@ -433,8 +434,11 @@ pub fn generate_docs(
 ) -> Result<(), DocsError> {
     let manifest_path = crate_path.as_ref().join("Cargo.toml").canonicalize()?;
     let ctx = build_doc_context(cratesio_index)?;
-    let workspace =
+    let mut workspace =
         Workspace::new(&manifest_path, &ctx).map_err(|e| DocsError::CargoError(e.to_string()))?;
+    // The docs are published from `crate_path/target/doc`, so ignore a target
+    // dir set by `CARGO_TARGET_DIR` or the cargo config of the environment.
+    workspace.set_target_dir(Filesystem::new(crate_path.as_ref().join("target")));
     let compile_opts = CompileOptions {
         cli_features: doc_features(&workspace)?,
         ..CompileOptions::new(
