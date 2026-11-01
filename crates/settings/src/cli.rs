@@ -285,6 +285,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     use super::*;
+    use crate::protocol::Protocol;
 
     // Env-source precedence (env wins over TOML, CLI wins over env) is covered
     // by provcfg's own suite, `full_layered_stack_defaults_toml_env_cli` in
@@ -360,6 +361,20 @@ mod tests {
             panic!("expected RunServer");
         };
         assert_eq!(resolved.settings.origin.cookie_secure, Some(false));
+    }
+
+    #[test]
+    fn origin_protocol_reads_from_cli() {
+        let CliResult::RunServer(resolved) = run_start(None, &["--origin-protocol", "https"])
+        else {
+            panic!("expected RunServer");
+        };
+
+        assert_eq!(resolved.settings.origin.protocol, Protocol::Https);
+        assert_eq!(
+            resolved.prov.origin.protocol.source().category(),
+            Category::Cli,
+        );
     }
 
     #[test]
