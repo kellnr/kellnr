@@ -489,24 +489,11 @@ fn login_error_redirect(path_prefix: &UrlPathPrefix, error: &str) -> Redirect {
 
 #[cfg(test)]
 mod sync_tests {
-    use std::sync::Arc;
-
-    use kellnr_db::mock::MockDb;
-    use mockall::predicate::eq;
+    use kellnr_db::DbProvider;
+    use kellnr_http::test_support::sqlite_test_state;
+    use kellnr_test_db::TestDb;
 
     use super::*;
-
-    fn user(is_admin: bool, is_read_only: bool) -> User {
-        User {
-            id: kellnr_db::UserId::new(1),
-            name: UserName::new("alice").unwrap(),
-            pwd: String::new(),
-            salt: String::new(),
-            is_admin,
-            is_read_only,
-            created: String::new(),
-        }
-    }
 
     fn user_info(is_admin: bool, is_read_only: bool) -> UserInfo {
         UserInfo {
@@ -519,90 +506,76 @@ mod sync_tests {
         }
     }
 
-    // `MockDb` panics on any method call without a matching expectation, so a
-    // mock with no expectations asserts that the DB is never written to.
-    fn state(db: MockDb) -> AppStateData {
-        AppStateData {
-            db: Arc::new(db),
-            ..kellnr_http::test_support::test_state()
-        }
+    fn alice() -> UserName {
+        UserName::new("alice").unwrap()
+    }
+
+    /// App state with the user "alice" stored with the given flags.
+    async fn state_with_alice(is_admin: bool, is_read_only: bool) -> (AppStateData, TestDb) {
+        let (state, db) = sqlite_test_state().await;
+        let flags = UserFlags {
+            admin: is_admin,
+            read_only: is_read_only,
+        };
+        db.add_user(&alice(), "pwd", flags).await.unwrap();
+        (state, db)
+    }
+
+    /// Syncs the stored "alice" with `user_info` and returns the synced user
+    /// together with the user as stored afterwards.
+    async fn sync(
+        stored: (bool, bool),
+        admin_governed: bool,
+        read_only_governed: bool,
+        user_info: &UserInfo,
+    ) -> (User, User) {
+        let (state, db) = state_with_alice(stored.0, stored.1).await;
+        let user = db.get_user(&alice()).await.unwrap();
+
+        let result =
+            sync_oauth2_privileges(&state, admin_governed, read_only_governed, user, user_info)
+                .await
+                .unwrap();
+
+        (result, db.get_user(&alice()).await.unwrap())
     }
 
     #[tokio::test]
     async fn read_only_governed_promotes_user() {
-        let mut db = MockDb::new();
-        db.expect_change_read_only_state()
-            .with(eq(UserName::new("alice").unwrap()), eq(true))
-            .times(1)
-            .returning(|_, _| Ok(()));
-
-        let result = sync_oauth2_privileges(
-            &state(db),
-            false,
-            true,
-            user(false, false),
-            &user_info(false, true),
-        )
-        .await
-        .unwrap();
+        let (result, stored) = sync((false, false), false, true, &user_info(false, true)).await;
 
         assert!(result.is_read_only);
+        assert!(stored.is_read_only);
     }
 
     #[tokio::test]
     async fn admin_governed_demotes_user() {
-        let mut db = MockDb::new();
-        db.expect_change_admin_state()
-            .with(eq(UserName::new("alice").unwrap()), eq(false))
-            .times(1)
-            .returning(|_, _| Ok(()));
-
-        let result = sync_oauth2_privileges(
-            &state(db),
-            true,
-            false,
-            user(true, false),
-            &user_info(false, false),
-        )
-        .await
-        .unwrap();
+        let (result, stored) = sync((true, false), true, false, &user_info(false, false)).await;
 
         assert!(!result.is_admin);
+        assert!(!stored.is_admin);
     }
 
     #[tokio::test]
     async fn unconfigured_claim_leaves_user_untouched() {
         // Claims not governed by the IdP: the differing claim values must be
-        // ignored and no DB write performed (mock has no expectations).
-        let result = sync_oauth2_privileges(
-            &state(MockDb::new()),
-            false,
-            false,
-            user(true, false),
-            &user_info(false, true),
-        )
-        .await
-        .unwrap();
+        // ignored and the stored user kept as it is.
+        let (result, stored) = sync((true, false), false, false, &user_info(false, true)).await;
 
         assert!(result.is_admin);
         assert!(!result.is_read_only);
+        assert!(stored.is_admin);
+        assert!(!stored.is_read_only);
     }
 
     #[tokio::test]
     async fn governed_but_unchanged_is_noop() {
-        // Governed but values already match: no DB write expected.
-        let result = sync_oauth2_privileges(
-            &state(MockDb::new()),
-            true,
-            true,
-            user(true, true),
-            &user_info(true, true),
-        )
-        .await
-        .unwrap();
+        let (result, stored) = sync((true, true), true, true, &user_info(true, true)).await;
 
         assert!(result.is_admin);
         assert!(result.is_read_only);
+        assert!(stored.is_admin);
+        assert!(stored.is_read_only);
     }
 }
 

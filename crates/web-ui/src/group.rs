@@ -184,10 +184,7 @@ pub async fn delete_user(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use axum::http::StatusCode;
-    use kellnr_db::mock::MockDb;
 
     use super::*;
 
@@ -196,7 +193,7 @@ mod tests {
         for name in ["", " ", "dev\tteam", &"a".repeat(65)] {
             let result = add(
                 AdminUser(kellnr_http::test_support::session_identity("admin", true)),
-                State(Arc::new(MockDb::new())),
+                State(kellnr_http::test_support::test_state().db),
                 Json(NewGroup {
                     name: name.to_string(),
                 }),

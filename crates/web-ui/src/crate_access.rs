@@ -73,20 +73,17 @@ pub async fn set_access_data(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use axum::routing::get;
     use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
-    use kellnr_db::SessionInfo;
-    use kellnr_db::mock::MockDb;
+    use kellnr_db::test_utils::TestCrateBuilder;
+    use kellnr_db::{DbProvider, UserFlags};
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::encode_cookies;
-    use kellnr_settings::constants::COOKIE_SESSION_ID;
-    use mockall::predicate::eq;
+    use kellnr_http::test_support::{session_cookie, sqlite_test_state};
+    use kellnr_test_db::TestDb;
     use tower::ServiceExt;
 
     use super::*;
@@ -95,92 +92,85 @@ mod tests {
         CanonicalName::try_from("mycrate").unwrap()
     }
 
-    /// Mock with a session for `name` who owns "mycrate" if `is_owner`.
-    fn session_db(
-        name: &'static str,
-        is_admin: bool,
-        is_read_only: bool,
-        is_owner: bool,
-    ) -> MockDb {
-        let mut db = MockDb::new();
-        db.expect_validate_session().returning(move |_| {
-            Ok(SessionInfo {
-                name: UserName::new(name).unwrap(),
-                is_admin,
-                is_read_only,
-            })
-        });
-        db.expect_is_owner()
-            .with(eq(crate_name()), eq(UserName::new(name).unwrap()))
-            .returning(move |_, _| Ok(is_owner));
-        db.expect_is_download_restricted().returning(|_| Ok(false));
-        db.expect_change_download_restricted()
-            .returning(|_, _| Ok(()));
-        db
+    /// A database with "mycrate" owned by "owner", and a session cookie for
+    /// `name` with `flags`.
+    async fn state_with_session(name: &str, flags: UserFlags) -> (AppStateData, TestDb, String) {
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, name, flags).await;
+        if name != "owner" {
+            db.add_user(&UserName::new("owner").unwrap(), "pwd", UserFlags::normal())
+                .await
+                .unwrap();
+        }
+        TestCrateBuilder::new(&db)
+            .name("mycrate")
+            .owner("owner")
+            .build()
+            .await
+            .unwrap();
+        (state, db, cookie)
     }
 
-    async fn send(db: MockDb, request: axum::http::request::Builder, body: Body) -> StatusCode {
+    async fn send(
+        state: AppStateData,
+        cookie: &str,
+        request: axum::http::request::Builder,
+        body: Body,
+    ) -> StatusCode {
         let app = Router::new()
             .route("/{crate_name}", get(get_access_data).put(set_access_data))
-            .with_state(AppStateData {
-                db: Arc::new(db),
-                ..kellnr_http::test_support::test_state()
-            });
+            .with_state(state);
         let request = request
-            .header(
-                header::COOKIE,
-                encode_cookies([(COOKIE_SESSION_ID, "cookie")]),
-            )
+            .header(header::COOKIE, cookie)
             .header(header::CONTENT_TYPE, "application/json")
             .body(body)
             .unwrap();
         app.oneshot(request).await.unwrap().status()
     }
 
-    async fn status(db: MockDb, method: &str, uri: &str) -> StatusCode {
-        send(
-            db,
-            Request::builder().method(method).uri(uri),
-            Body::empty(),
-        )
-        .await
+    async fn restrict(state: AppStateData, cookie: &str) -> StatusCode {
+        let body = Body::from(r#"{"download_restricted":true}"#);
+        send(state, cookie, Request::put("/mycrate"), body).await
     }
 
     #[tokio::test]
     async fn owner_and_admin_can_read_access_settings() {
-        for (name, is_admin, is_read_only, is_owner) in [
-            ("owner", false, false, true),
-            ("owner", false, true, true),
-            ("admin", true, false, false),
+        for (name, flags) in [
+            ("owner", UserFlags::normal()),
+            ("owner", UserFlags::read_only()),
+            ("admin", UserFlags::admin()),
         ] {
-            let db = session_db(name, is_admin, is_read_only, is_owner);
+            let (state, _db, cookie) = state_with_session(name, flags).await;
             assert_eq!(
                 StatusCode::OK,
-                status(db, "GET", "/mycrate").await,
-                "{name} read-only: {is_read_only}"
+                send(state, &cookie, Request::get("/mycrate"), Body::empty()).await,
+                "{name} {flags:?}"
             );
         }
     }
 
     #[tokio::test]
     async fn non_owner_cannot_read_access_settings() {
-        let db = session_db("user", false, false, false);
-        assert_eq!(StatusCode::FORBIDDEN, status(db, "GET", "/mycrate").await);
+        let (state, _db, cookie) = state_with_session("user", UserFlags::normal()).await;
+        assert_eq!(
+            StatusCode::FORBIDDEN,
+            send(state, &cookie, Request::get("/mycrate"), Body::empty()).await
+        );
     }
 
     #[tokio::test]
     async fn owner_cannot_change_download_restriction() {
-        let db = session_db("owner", false, false, true);
-        let body = Body::from(r#"{"download_restricted":true}"#);
-        let status = send(db, Request::put("/mycrate"), body).await;
-        assert_eq!(StatusCode::FORBIDDEN, status);
+        let (state, db, cookie) = state_with_session("owner", UserFlags::normal()).await;
+
+        assert_eq!(StatusCode::FORBIDDEN, restrict(state, &cookie).await);
+        assert!(!db.is_download_restricted(&crate_name()).await.unwrap());
     }
 
     #[tokio::test]
     async fn admin_can_change_download_restriction() {
-        let db = session_db("admin", true, false, false);
-        let body = Body::from(r#"{"download_restricted":true}"#);
-        let status = send(db, Request::put("/mycrate"), body).await;
-        assert_eq!(StatusCode::OK, status);
+        let (state, db, cookie) = state_with_session("admin", UserFlags::admin()).await;
+
+        assert_eq!(StatusCode::OK, restrict(state, &cookie).await);
+        assert!(db.is_download_restricted(&crate_name()).await.unwrap());
     }
 }
