@@ -591,58 +591,24 @@ pub async fn add(
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::Duration;
 
     use axum::Router;
     use axum::body::Body;
+    use axum::http::Response;
     use axum::response::IntoResponse;
     use axum::routing::{post, put};
-    use hyper::{Request, header};
-    use kellnr_db::error::DbError;
-    use kellnr_db::mock::MockDb;
+    use hyper::{Method, Request, header};
+    use kellnr_db::test_utils::test_drop_table;
     use kellnr_http::login_throttle::LoginThrottle;
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::encode_cookies;
+    use kellnr_http::test_support::{encode_cookies, session_cookie, sqlite_test_state};
     use kellnr_http::token_cache::{CachedTokenData, TokenCacheManager};
     use kellnr_settings::constants::COOKIE_SESSION_ID;
-    use mockall::predicate::*;
+    use kellnr_test_db::TestDb;
     use tower::ServiceExt;
 
     use super::*;
-
-    fn test_state_with_cache(mock_db: MockDb, cache: Arc<TokenCacheManager>) -> AppStateData {
-        AppStateData {
-            db: Arc::new(mock_db),
-            token_cache: cache,
-            ..kellnr_http::test_support::test_state()
-        }
-    }
-
-    /// Same state as `test_state_with_cache`, but with SSO-only login enforced.
-    fn sso_enforced_state(mock_db: MockDb, cache: Arc<TokenCacheManager>) -> AppStateData {
-        let mut state = test_state_with_cache(mock_db, cache);
-        let mut settings = (*state.settings).clone();
-        settings.oauth2.enabled = true;
-        settings.oauth2.enforced = true;
-        state.settings = Arc::new(settings);
-        state
-    }
-
-    /// A `MockDb` whose sessions resolve to a user with the given role.
-    fn session_db(is_admin: bool) -> MockDb {
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().returning(move |_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new(if is_admin { "admin" } else { "user" }.to_string()).unwrap(),
-                is_admin,
-                is_read_only: false,
-            })
-        });
-        mock_db
-    }
-
-    fn session_cookie_header() -> String {
-        encode_cookies([(COOKIE_SESSION_ID, "session")])
-    }
 
     /// The user routes at their paths in the API.
     fn app(state: AppStateData) -> Router {
@@ -661,34 +627,98 @@ mod tests {
             .with_state(state)
     }
 
+    fn sso_enforced(mut state: AppStateData) -> AppStateData {
+        let mut settings = (*state.settings).clone();
+        settings.oauth2.enabled = true;
+        settings.oauth2.enforced = true;
+        state.settings = Arc::new(settings);
+        state
+    }
+
+    fn token_cache() -> Arc<TokenCacheManager> {
+        Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100))
+    }
+
+    /// A token cache that holds `key` for `user`.
+    async fn token_cache_with(key: &str, user: &str) -> Arc<TokenCacheManager> {
+        let cache = token_cache();
+        cache
+            .insert(
+                key.to_string(),
+                CachedTokenData {
+                    user: UserName::new(user).unwrap(),
+                    is_admin: false,
+                    is_read_only: false,
+                },
+                cache.generation(),
+            )
+            .await;
+        cache
+    }
+
+    async fn send(
+        state: AppStateData,
+        method: Method,
+        uri: &str,
+        cookie: &str,
+        json: Option<&str>,
+    ) -> Response<Body> {
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::COOKIE, cookie)
+            .header(header::CONTENT_TYPE, "application/json");
+        let body = json.map_or_else(Body::empty, |json| Body::from(json.to_string()));
+        app(state)
+            .oneshot(request.body(body).unwrap())
+            .await
+            .unwrap()
+    }
+
+    async fn add_user(db: &TestDb, name: &str, flags: UserFlags) {
+        db.add_user(&UserName::new(name).unwrap(), "pwd", flags)
+            .await
+            .unwrap();
+    }
+
+    async fn has_password(db: &TestDb, name: &str, pwd: &str) -> bool {
+        db.authenticate_user(&UserName::new(name).unwrap(), pwd)
+            .await
+            .is_ok()
+    }
+
+    async fn user(db: &TestDb, name: &str) -> User {
+        db.get_user(&UserName::new(name).unwrap()).await.unwrap()
+    }
+
+    async fn has_session(db: &TestDb, token: &str) -> bool {
+        db.validate_session(&PlainToken::from(token)).await.is_ok()
+    }
+
+    async fn add_session(db: &TestDb, name: &str, token: &str) {
+        db.add_session_token(&UserName::new(name).unwrap(), &PlainToken::from(token))
+            .await
+            .unwrap();
+    }
+
     // ==========================
     // SSO Enforcement Tests
     // ==========================
 
-    /// Password login must be refused outright, without consulting the DB, so
-    /// that a still-valid local password cannot be used to bypass SSO.
+    /// Password login must be refused outright, so that a still-valid local
+    /// password cannot be used to bypass SSO.
     #[tokio::test]
     async fn test_login_forbidden_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        let mut mock_db = MockDb::new();
-        mock_db.expect_authenticate_user().never();
+        let (state, _db) = sqlite_test_state().await;
 
-        let state = sso_enforced_state(mock_db, cache);
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/login")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"user":"admin","pwd":"admin"}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            sso_enforced(state),
+            Method::POST,
+            "/login",
+            "",
+            Some(r#"{"user":"admin","pwd":"123"}"#),
+        )
+        .await;
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
@@ -697,177 +727,122 @@ mod tests {
     /// a new hash to the DB.
     #[tokio::test]
     async fn test_change_pwd_forbidden_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        let mut mock_db = session_db(false);
-        mock_db.expect_authenticate_user().never();
-        mock_db.expect_change_pwd().never();
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
 
-        let state = sso_enforced_state(mock_db, cache);
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::put("/me/password")
-                    .header(header::COOKIE, session_cookie_header())
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(
-                        r#"{"old_pwd":"old","new_pwd1":"newpassword","new_pwd2":"newpassword"}"#,
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            sso_enforced(state),
+            Method::PUT,
+            "/me/password",
+            &cookie,
+            Some(r#"{"old_pwd":"pwd","new_pwd1":"newpassword","new_pwd2":"newpassword"}"#),
+        )
+        .await;
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(has_password(&db, "user", "pwd").await);
     }
 
     /// An admin resetting another user's password must not produce a usable
     /// local credential while SSO is the only permitted login method.
     #[tokio::test]
     async fn test_reset_pwd_forbidden_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        let mut mock_db = session_db(true);
-        mock_db.expect_change_pwd().never();
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, "someuser", UserFlags::normal()).await;
 
-        let state = sso_enforced_state(mock_db, cache);
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::put("/someuser/password")
-                    .header(header::COOKIE, session_cookie_header())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            sso_enforced(state),
+            Method::PUT,
+            "/someuser/password",
+            &cookie,
+            None,
+        )
+        .await;
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(has_password(&db, "someuser", "pwd").await);
     }
 
     /// Users are provisioned by the `IdP` under enforcement, so creating a local
     /// password-backed account must be refused.
     #[tokio::test]
     async fn test_add_user_forbidden_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        let mut mock_db = session_db(true);
-        mock_db.expect_add_user().never();
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
-        let state = sso_enforced_state(mock_db, cache);
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/")
-                    .header(header::COOKIE, session_cookie_header())
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(
-                        r#"{"name":"new_user","pwd1":"password","pwd2":"password","is_admin":false,"is_read_only":false}"#,
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            sso_enforced(state),
+            Method::POST,
+            "/",
+            &cookie,
+            Some(
+                r#"{"name":"new_user","pwd1":"password","pwd2":"password","is_admin":false,"is_read_only":false}"#,
+            ),
+        )
+        .await;
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(
+            db.get_user(&UserName::new("new_user").unwrap())
+                .await
+                .is_err()
+        );
     }
 
-    async fn post_login(app: &Router, user: &str) -> StatusCode {
-        app.clone()
-            .oneshot(
-                Request::post("/login")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(format!(r#"{{"user":"{user}","pwd":"guess"}}"#)))
-                    .unwrap(),
-            )
-            .await
-            .unwrap()
-            .status()
+    async fn post_login(state: &AppStateData, user: &str) -> StatusCode {
+        send(
+            state.clone(),
+            Method::POST,
+            "/login",
+            "",
+            Some(&format!(r#"{{"user":"{user}","pwd":"guess"}}"#)),
+        )
+        .await
+        .status()
     }
 
     /// Password guessing on the login form is throttled per username. Other
     /// users stay unaffected so a single attacker cannot lock out everyone.
     #[tokio::test]
     async fn test_login_throttled_after_failed_attempts() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_authenticate_user()
-            .times(3)
-            .returning(|_, _| Err(DbError::PasswordMismatch));
-
+        let (state, db) = sqlite_test_state().await;
+        add_user(&db, "other", UserFlags::normal()).await;
         let state = AppStateData {
-            login_throttle: Arc::new(LoginThrottle::new(2, std::time::Duration::from_mins(5))),
-            ..test_state_with_cache(
-                mock_db,
-                Arc::new(TokenCacheManager::new(
-                    false,
-                    std::time::Duration::from_secs(60),
-                    100,
-                )),
-            )
+            login_throttle: Arc::new(LoginThrottle::new(2, Duration::from_mins(5))),
+            ..state
         };
-        let app = app(state);
 
-        assert_eq!(post_login(&app, "admin").await, StatusCode::UNAUTHORIZED);
-        assert_eq!(post_login(&app, "admin").await, StatusCode::UNAUTHORIZED);
+        assert_eq!(post_login(&state, "admin").await, StatusCode::UNAUTHORIZED);
+        assert_eq!(post_login(&state, "admin").await, StatusCode::UNAUTHORIZED);
         assert_eq!(
-            post_login(&app, "admin").await,
+            post_login(&state, "admin").await,
             StatusCode::TOO_MANY_REQUESTS
         );
-        assert_eq!(post_login(&app, "other").await, StatusCode::UNAUTHORIZED);
+        assert_eq!(post_login(&state, "other").await, StatusCode::UNAUTHORIZED);
     }
 
     /// The old password check on password change must not become a way
     /// around the login throttle.
     #[tokio::test]
     async fn test_change_pwd_throttled_after_failed_attempts() {
-        let mut mock_db = session_db(false);
-        mock_db
-            .expect_authenticate_user()
-            .times(1)
-            .returning(|_, _| Err(DbError::PasswordMismatch));
-        mock_db.expect_change_pwd().never();
-
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
         let state = AppStateData {
-            login_throttle: Arc::new(LoginThrottle::new(1, std::time::Duration::from_mins(5))),
-            ..test_state_with_cache(
-                mock_db,
-                Arc::new(TokenCacheManager::new(
-                    false,
-                    std::time::Duration::from_secs(60),
-                    100,
-                )),
-            )
+            login_throttle: Arc::new(LoginThrottle::new(1, Duration::from_mins(5))),
+            ..state
         };
-        let app = app(state);
 
         let mut statuses = Vec::new();
         for _ in 0..2 {
-            let response = app
-                .clone()
-                .oneshot(
-                    Request::put("/me/password")
-                        .header(header::COOKIE, session_cookie_header())
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .body(Body::from(
-                            r#"{"old_pwd":"guess","new_pwd1":"newpassword","new_pwd2":"newpassword"}"#,
-                        ))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
+            let response = send(
+                state.clone(),
+                Method::PUT,
+                "/me/password",
+                &cookie,
+                Some(r#"{"old_pwd":"guess","new_pwd1":"newpassword","new_pwd2":"newpassword"}"#),
+            )
+            .await;
             statuses.push(response.status());
         }
 
@@ -875,38 +850,24 @@ mod tests {
             statuses,
             [StatusCode::BAD_REQUEST, StatusCode::TOO_MANY_REQUESTS]
         );
+        assert!(has_password(&db, "user", "pwd").await);
     }
 
     /// The removal cookie must carry the same path as the session cookie,
     /// otherwise the browser keeps the original cookie after logout.
     #[tokio::test]
     async fn test_logout_removes_session_cookie_with_root_path() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_delete_session_token()
-            .with(eq(PlainToken::from("session")))
-            .times(1)
-            .returning(|_| Ok(()));
+        let (state, db) = sqlite_test_state().await;
+        add_session(&db, "admin", "session").await;
 
-        let state = test_state_with_cache(
-            mock_db,
-            Arc::new(TokenCacheManager::new(
-                false,
-                std::time::Duration::from_secs(60),
-                100,
-            )),
-        );
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/logout")
-                    .header(header::COOKIE, session_cookie_header())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            state,
+            Method::POST,
+            "/logout",
+            &encode_cookies([(COOKIE_SESSION_ID, "session")]),
+            None,
+        )
+        .await;
 
         assert_eq!(response.status(), StatusCode::OK);
         let removal = response
@@ -918,34 +879,16 @@ mod tests {
             .expect("session cookie must be removed");
         assert!(removal.contains("Path=/"), "{removal}");
         assert!(removal.contains("Max-Age=0"), "{removal}");
+        assert!(!has_session(&db, "session").await);
     }
 
     #[tokio::test]
     async fn test_logout_removes_session_cookie_if_session_cannot_be_deleted() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_delete_session_token()
-            .returning(|_| Err(DbError::FailedToCountCrates));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        test_drop_table(&db, "session").await.unwrap();
 
-        let state = test_state_with_cache(
-            mock_db,
-            Arc::new(TokenCacheManager::new(
-                false,
-                std::time::Duration::from_secs(60),
-                100,
-            )),
-        );
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/logout")
-                    .header(header::COOKIE, session_cookie_header())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(state, Method::POST, "/logout", &cookie, None).await;
 
         assert_eq!(response.status(), StatusCode::OK);
         assert!(
@@ -955,11 +898,6 @@ mod tests {
                 .iter()
                 .any(|v| v.to_str().unwrap().starts_with(COOKIE_SESSION_ID))
         );
-    }
-
-    async fn sqlite_db(data_dir: &std::path::Path) -> Arc<dyn DbProvider> {
-        let settings = kellnr_settings::test_settings_in(data_dir);
-        Arc::new(kellnr_test_db::sqlite_database(&settings).await)
     }
 
     fn new_user(name: &str) -> NewUser {
@@ -975,15 +913,12 @@ mod tests {
     /// Basic auth splits at the first ':', so such a user could never log in.
     #[tokio::test]
     async fn test_add_user_with_invalid_name_is_bad_request() {
+        let db = TestDb::sqlite().await;
         for name in ["", "  ", "a:b", "line\nbreak", &"a".repeat(65)] {
             let result = add(
                 AdminUser(kellnr_http::test_support::session_identity("admin", true)),
-                State(Arc::new(MockDb::new())),
-                State(Arc::new(TokenCacheManager::new(
-                    false,
-                    std::time::Duration::from_secs(60),
-                    100,
-                ))),
+                State(db.provider()),
+                State(token_cache()),
                 State(Arc::new(Settings::default())),
                 Json(new_user(name)),
             )
@@ -996,19 +931,19 @@ mod tests {
                 "{name:?}: {result:?}"
             );
         }
+        assert_eq!(db.get_users().await.unwrap().len(), 1);
     }
 
     #[tokio::test]
     async fn test_add_token_with_invalid_name_is_bad_request() {
+        let db = TestDb::sqlite().await;
+        let admin = UserName::new("admin").unwrap();
+        let tokens_before = db.get_auth_tokens(&admin).await.unwrap().len();
         for name in [String::new(), "a".repeat(129)] {
             let result = add_token(
-                SessionUser(kellnr_http::test_support::session_identity("user", false)),
-                State(Arc::new(MockDb::new())),
-                State(Arc::new(TokenCacheManager::new(
-                    false,
-                    std::time::Duration::from_secs(60),
-                    100,
-                ))),
+                SessionUser(kellnr_http::test_support::session_identity("admin", false)),
+                State(db.provider()),
+                State(token_cache()),
                 Json(token::NewTokenReqData { name }),
             )
             .await;
@@ -1019,22 +954,21 @@ mod tests {
                     .is_err_and(|e| e.status() == StatusCode::BAD_REQUEST)
             );
         }
+        assert_eq!(
+            db.get_auth_tokens(&admin).await.unwrap().len(),
+            tokens_before
+        );
     }
 
     #[tokio::test]
     async fn test_add_existing_user_is_conflict() {
-        let data_dir = tempfile::tempdir().unwrap();
-        let db = sqlite_db(data_dir.path()).await;
-        let cache = Arc::new(TokenCacheManager::new(
-            false,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let db = TestDb::sqlite().await;
+        let cache = token_cache();
         let settings = Arc::new(Settings::default());
         let add_bob = || {
             add(
                 AdminUser(kellnr_http::test_support::session_identity("admin", true)),
-                State(db.clone()),
+                State(db.provider()),
                 State(cache.clone()),
                 State(settings.clone()),
                 Json(new_user("bob")),
@@ -1047,1131 +981,489 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 
-    async fn insert_cached_credentials(cache: &TokenCacheManager) {
-        cache
-            .insert(
-                "basic:credentials".to_string(),
-                CachedTokenData {
-                    user: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                },
-                cache.generation(),
-            )
-            .await;
-    }
+    const CHANGE_PWD: &str =
+        r#"{"old_pwd":"pwd","new_pwd1":"newpassword","new_pwd2":"newpassword"}"#;
 
     /// Cached basic auth credentials carry the old password and must not
     /// survive a password change.
     #[tokio::test]
     async fn test_change_pwd_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        insert_cached_credentials(&cache).await;
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
+        let cache = token_cache_with("basic:credentials", "user").await;
+        let state = AppStateData {
+            token_cache: cache.clone(),
+            ..state
+        };
 
-        let mut mock_db = change_pwd_db();
-        mock_db
-            .expect_delete_other_user_sessions()
-            .returning(|_, _| Ok(0));
+        let response = send(
+            state,
+            Method::PUT,
+            "/me/password",
+            &cookie,
+            Some(CHANGE_PWD),
+        )
+        .await;
 
-        let status = put_change_pwd(test_state_with_cache(mock_db, cache.clone())).await;
-
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(has_password(&db, "user", "newpassword").await);
         assert!(cache.get("basic:credentials").await.is_none());
     }
 
     #[tokio::test]
     async fn test_reset_pwd_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        insert_cached_credentials(&cache).await;
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, "user", UserFlags::normal()).await;
+        let cache = token_cache_with("basic:credentials", "user").await;
+        let state = AppStateData {
+            token_cache: cache.clone(),
+            ..state
+        };
 
-        let mut mock_db = reset_pwd_db();
-        mock_db.expect_delete_user_sessions().returning(|_| Ok(0));
+        let response = send(state, Method::PUT, "/user/password", &cookie, None).await;
 
-        let status = put_reset_pwd(test_state_with_cache(mock_db, cache.clone()), "user").await;
-
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!has_password(&db, "user", "pwd").await);
         assert!(cache.get("basic:credentials").await.is_none());
-    }
-
-    /// A session of `user` whose old password just got replaced.
-    fn change_pwd_db() -> MockDb {
-        let mut mock_db = session_db(false);
-        mock_db.expect_authenticate_user().returning(|name, _| {
-            Ok(User {
-                name: name.clone(),
-                ..User::default()
-            })
-        });
-        mock_db
-            .expect_change_pwd()
-            .times(1)
-            .returning(|_, _| Ok(()));
-        mock_db
-    }
-
-    /// An admin session resetting a password.
-    fn reset_pwd_db() -> MockDb {
-        let mut mock_db = session_db(true);
-        mock_db
-            .expect_change_pwd()
-            .times(1)
-            .returning(|_, _| Ok(()));
-        mock_db
-    }
-
-    async fn put_change_pwd(state: AppStateData) -> StatusCode {
-        app(state)
-            .oneshot(
-                Request::put("/me/password")
-                    .header(header::COOKIE, session_cookie_header())
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(
-                        r#"{"old_pwd":"old","new_pwd1":"newpassword","new_pwd2":"newpassword"}"#,
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap()
-            .status()
-    }
-
-    async fn put_reset_pwd(state: AppStateData, name: &str) -> StatusCode {
-        app(state)
-            .oneshot(
-                Request::put(format!("/{name}/password"))
-                    .header(header::COOKIE, session_cookie_header())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap()
-            .status()
     }
 
     /// Changing the password logs out every other session, for example one
     /// an attacker obtained with the old password, but keeps the current one.
     #[tokio::test]
     async fn test_change_pwd_revokes_other_sessions() {
-        let mut mock_db = change_pwd_db();
-        mock_db
-            .expect_delete_other_user_sessions()
-            .with(
-                eq(UserName::new("user").unwrap()),
-                eq(PlainToken::from("session")),
-            )
-            .times(1)
-            .returning(|_, _| Ok(2));
-        mock_db.expect_delete_user_sessions().never();
+        let (state, db) = sqlite_test_state().await;
+        add_user(&db, "user", UserFlags::normal()).await;
+        add_session(&db, "user", "current").await;
+        add_session(&db, "user", "other").await;
 
-        let status = put_change_pwd(test_state_with_cache(
-            mock_db,
-            Arc::new(TokenCacheManager::new(
-                false,
-                std::time::Duration::from_secs(60),
-                100,
-            )),
-        ))
+        let response = send(
+            state,
+            Method::PUT,
+            "/me/password",
+            &encode_cookies([(COOKIE_SESSION_ID, "current")]),
+            Some(CHANGE_PWD),
+        )
         .await;
 
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(has_session(&db, "current").await);
+        assert!(!has_session(&db, "other").await);
     }
 
     /// An admin reset is typically a response to a compromised account, so
     /// all sessions of that user end.
     #[tokio::test]
     async fn test_reset_pwd_revokes_all_sessions_of_user() {
-        let mut mock_db = reset_pwd_db();
-        mock_db
-            .expect_delete_user_sessions()
-            .with(eq(UserName::new("user").unwrap()))
-            .times(1)
-            .returning(|_| Ok(1));
-        mock_db.expect_delete_other_user_sessions().never();
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, "user", UserFlags::normal()).await;
+        add_session(&db, "user", "user-session").await;
 
-        let status = put_reset_pwd(
-            test_state_with_cache(
-                mock_db,
-                Arc::new(TokenCacheManager::new(
-                    false,
-                    std::time::Duration::from_secs(60),
-                    100,
-                )),
-            ),
-            "user",
-        )
-        .await;
+        let response = send(state, Method::PUT, "/user/password", &cookie, None).await;
 
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!has_session(&db, "user-session").await);
     }
 
     #[tokio::test]
     async fn test_reset_own_pwd_keeps_current_session() {
-        let mut mock_db = reset_pwd_db();
-        mock_db
-            .expect_delete_other_user_sessions()
-            .with(
-                eq(UserName::new("admin").unwrap()),
-                eq(PlainToken::from("session")),
-            )
-            .times(1)
-            .returning(|_, _| Ok(0));
-        mock_db.expect_delete_user_sessions().never();
+        let (state, db) = sqlite_test_state().await;
+        add_session(&db, "admin", "current").await;
+        add_session(&db, "admin", "other").await;
 
-        let status = put_reset_pwd(
-            test_state_with_cache(
-                mock_db,
-                Arc::new(TokenCacheManager::new(
-                    false,
-                    std::time::Duration::from_secs(60),
-                    100,
-                )),
-            ),
-            "admin",
+        let response = send(
+            state,
+            Method::PUT,
+            "/admin/password",
+            &encode_cookies([(COOKIE_SESSION_ID, "current")]),
+            None,
         )
         .await;
 
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(has_session(&db, "current").await);
+        assert!(!has_session(&db, "other").await);
     }
 
     #[tokio::test]
     async fn test_add_token_invalidates_cache() {
-        // Pre-populate cache with a token
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        cache
-            .insert(
-                "existing_token".to_string(),
-                CachedTokenData {
-                    user: UserName::new("test_user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                },
-                cache.generation(),
-            )
-            .await;
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "test_user", UserFlags::normal()).await;
+        let cache = token_cache_with("existing_token", "test_user").await;
+        let state = AppStateData {
+            token_cache: cache.clone(),
+            ..state
+        };
 
-        // Verify token is cached
-        assert!(cache.get("existing_token").await.is_some());
+        let response = send(
+            state,
+            Method::POST,
+            "/me/tokens",
+            &cookie,
+            Some(r#"{"name":"new_token"}"#),
+        )
+        .await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("test_user").unwrap(),
-                is_admin: false,
-                is_read_only: false,
-            })
-        });
-        mock_db
-            .expect_add_auth_token()
-            .times(1)
-            .returning(|_, _, _| Ok(()));
-
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/me/tokens")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"name":"new_token"}"#))
-                    .unwrap(),
-            )
+        assert_eq!(response.status(), StatusCode::OK);
+        let tokens = db
+            .get_auth_tokens(&UserName::new("test_user").unwrap())
             .await
             .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
+        assert_eq!(
+            tokens.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+            ["new_token"]
         );
-
-        // Verify cache was invalidated
         assert!(cache.get("existing_token").await.is_none());
+    }
+
+    /// Adds an API token for `user` and returns its id.
+    async fn add_auth_token(db: &TestDb, user: &str) -> AuthTokenId {
+        let user = UserName::new(user).unwrap();
+        db.add_auth_token("ci", &PlainToken::from(format!("{user}-token")), &user)
+            .await
+            .unwrap();
+        db.get_auth_tokens(&user).await.unwrap()[0].id
     }
 
     #[tokio::test]
     async fn test_delete_token_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        cache
-            .insert(
-                "token_to_keep".to_string(),
-                CachedTokenData {
-                    user: UserName::new("test_user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                },
-                cache.generation(),
-            )
-            .await;
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "test_user", UserFlags::normal()).await;
+        let id = add_auth_token(&db, "test_user").await;
+        let cache = token_cache_with("token_to_keep", "test_user").await;
+        let state = AppStateData {
+            token_cache: cache.clone(),
+            ..state
+        };
 
-        assert!(cache.get("token_to_keep").await.is_some());
+        let response = send(
+            state,
+            Method::DELETE,
+            &format!("/me/tokens/{id}"),
+            &cookie,
+            None,
+        )
+        .await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("test_user").unwrap(),
-                is_admin: false,
-                is_read_only: false,
-            })
-        });
-        mock_db
-            .expect_delete_auth_token()
-            .times(1)
-            .with(
-                eq(UserName::new("test_user").unwrap()),
-                eq(AuthTokenId::new(1)),
-            )
-            .returning(|_, _| Ok(()));
-
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::delete("/me/tokens/1")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
-
-        // Verify cache was invalidated
+        assert_eq!(response.status(), StatusCode::OK);
+        let user = UserName::new("test_user").unwrap();
+        assert!(db.get_auth_tokens(&user).await.unwrap().is_empty());
         assert!(cache.get("token_to_keep").await.is_none());
     }
 
     #[tokio::test]
     async fn test_delete_token_of_other_user_is_not_found() {
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("test_user").unwrap(),
-                is_admin: false,
-                is_read_only: false,
-            })
-        });
-        mock_db
-            .expect_delete_auth_token()
-            .times(1)
-            .with(
-                eq(UserName::new("test_user").unwrap()),
-                eq(AuthTokenId::new(1)),
-            )
-            .returning(|_, _| Err(DbError::TokenNotFound));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "test_user", UserFlags::normal()).await;
+        add_user(&db, "other", UserFlags::normal()).await;
+        let id = add_auth_token(&db, "other").await;
 
-        let state = test_state_with_cache(
-            mock_db,
-            Arc::new(TokenCacheManager::new(
-                true,
-                std::time::Duration::from_secs(60),
-                100,
-            )),
-        );
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::delete("/me/tokens/1")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            state,
+            Method::DELETE,
+            &format!("/me/tokens/{id}"),
+            &cookie,
+            None,
+        )
+        .await;
 
         assert_eq!(StatusCode::NOT_FOUND, response.status());
+        let other = UserName::new("other").unwrap();
+        assert_eq!(db.get_auth_tokens(&other).await.unwrap().len(), 1);
     }
 
     #[tokio::test]
     async fn test_delete_user_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        cache
-            .insert(
-                "user_token".to_string(),
-                CachedTokenData {
-                    user: UserName::new("user_to_delete").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                },
-                cache.generation(),
-            )
-            .await;
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, "user_to_delete", UserFlags::normal()).await;
+        let cache = token_cache_with("user_token", "user_to_delete").await;
+        let state = AppStateData {
+            token_cache: cache.clone(),
+            ..state
+        };
 
-        assert!(cache.get("user_token").await.is_some());
+        let response = send(state, Method::DELETE, "/user_to_delete", &cookie, None).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_delete_user()
-            .times(1)
-            .with(eq(UserName::new("user_to_delete").unwrap()))
-            .returning(|_| Ok(()));
-
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::delete("/user_to_delete")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
-
-        // Verify cache was invalidated
+        assert_eq!(response.status(), StatusCode::OK);
+        let name = UserName::new("user_to_delete").unwrap();
+        assert!(db.get_user(&name).await.is_err());
         assert!(cache.get("user_token").await.is_none());
     }
 
     #[tokio::test]
     async fn test_read_only_change_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        cache
-            .insert(
-                "user_token".to_string(),
-                CachedTokenData {
-                    user: UserName::new("target_user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false, // Currently NOT read-only
-                },
-                cache.generation(),
-            )
-            .await;
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, "target_user", UserFlags::normal()).await;
+        let cache = token_cache_with("user_token", "target_user").await;
+        let state = AppStateData {
+            token_cache: cache.clone(),
+            ..state
+        };
 
-        assert!(cache.get("user_token").await.is_some());
+        let response = send(
+            state,
+            Method::POST,
+            "/target_user/read-only",
+            &cookie,
+            Some(r#"{"state":true}"#),
+        )
+        .await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_change_read_only_state()
-            .times(1)
-            .with(eq(UserName::new("target_user").unwrap()), eq(true))
-            .returning(|_, _| Ok(()));
-
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/target_user/read-only")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":true}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
-
-        // Verify cache was invalidated - important because is_read_only permission changed
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(user(&db, "target_user").await.is_read_only);
+        // The cached permissions are outdated now.
         assert!(cache.get("user_token").await.is_none());
     }
 
     #[tokio::test]
     async fn test_admin_self_locking_prevented() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        // Note: change_read_only_state should NOT be called because self-locking is blocked
+        let response = send(
+            state,
+            Method::POST,
+            "/admin/read-only",
+            &cookie,
+            Some(r#"{"state":true}"#),
+        )
+        .await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/admin/read-only") // Trying to lock self
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":true}"#)) // Locking (state=true)
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        // Request should fail with Bad Request
-        assert_eq!(
-            response.status(),
-            StatusCode::BAD_REQUEST,
-            "Expected BAD_REQUEST but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(!user(&db, "admin").await.is_read_only);
     }
 
+    /// Only locking oneself is blocked, unlocking is allowed.
     #[tokio::test]
     async fn test_admin_self_unlocking_allowed() {
-        // An admin unlocking themselves (state=false) should be allowed
-        // Only self-locking (state=true) is blocked
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_change_read_only_state()
-            .times(1)
-            .with(eq(UserName::new("admin").unwrap()), eq(false)) // Self-unlocking
-            .returning(|_, _| Ok(()));
+        let response = send(
+            state,
+            Method::POST,
+            "/admin/read-only",
+            &cookie,
+            Some(r#"{"state":false}"#),
+        )
+        .await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/admin/read-only") // Same user
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":false}"#)) // Unlocking (state=false)
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!user(&db, "admin").await.is_read_only);
     }
 
     #[tokio::test]
     async fn test_admin_locking_other_user_works() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, "other_user", UserFlags::normal()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_change_read_only_state()
-            .times(1)
-            .with(eq(UserName::new("other_user").unwrap()), eq(true))
-            .returning(|_, _| Ok(()));
+        let response = send(
+            state,
+            Method::POST,
+            "/other_user/read-only",
+            &cookie,
+            Some(r#"{"state":true}"#),
+        )
+        .await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/other_user/read-only") // Locking another user
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":true}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(user(&db, "other_user").await.is_read_only);
     }
 
     #[tokio::test]
     async fn test_add_user_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        cache
-            .insert(
-                "existing_token".to_string(),
-                CachedTokenData {
-                    user: UserName::new("existing_user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                },
-                cache.generation(),
-            )
-            .await;
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        let cache = token_cache_with("existing_token", "existing_user").await;
+        let state = AppStateData {
+            token_cache: cache.clone(),
+            ..state
+        };
 
-        assert!(cache.get("existing_token").await.is_some());
+        let response = send(
+            state,
+            Method::POST,
+            "/",
+            &cookie,
+            Some(
+                r#"{"name":"new_user","pwd1":"password","pwd2":"password","is_admin":false,"is_read_only":false}"#,
+            ),
+        )
+        .await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_add_user()
-            .times(1)
-            .returning(|_, _, _| Ok(()));
-
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/")
-                    .header(header::COOKIE, encode_cookies([(COOKIE_SESSION_ID, "session")]))
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"name":"new_user","pwd1":"password","pwd2":"password","is_admin":false,"is_read_only":false}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
-
-        // Verify cache was invalidated
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(has_password(&db, "new_user", "password").await);
         assert!(cache.get("existing_token").await.is_none());
     }
 
     #[tokio::test]
     async fn test_cache_not_invalidated_on_db_failure() {
-        // Verify cache is NOT invalidated when DB operation fails
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        cache
-            .insert(
-                "existing_token".to_string(),
-                CachedTokenData {
-                    user: UserName::new("test_user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                },
-                cache.generation(),
-            )
-            .await;
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "test_user", UserFlags::normal()).await;
+        test_drop_table(&db, "auth_token").await.unwrap();
+        let cache = token_cache_with("existing_token", "test_user").await;
+        let state = AppStateData {
+            token_cache: cache.clone(),
+            ..state
+        };
 
-        assert!(cache.get("existing_token").await.is_some());
+        let response = send(
+            state,
+            Method::POST,
+            "/me/tokens",
+            &cookie,
+            Some(r#"{"name":"new_token"}"#),
+        )
+        .await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("test_user").unwrap(),
-                is_admin: false,
-                is_read_only: false,
-            })
-        });
-        mock_db
-            .expect_add_auth_token()
-            .times(1)
-            .returning(|_, _, _| {
-                Err(DbError::InitializationError(
-                    "Connection timeout".to_string(),
-                ))
-            });
-
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/me/tokens")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"name":"new_token"}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        // Request should have failed
         assert!(!response.status().is_success());
-
-        // Cache should still contain the token since operation failed
         assert!(cache.get("existing_token").await.is_some());
     }
 
     #[tokio::test]
     async fn test_admin_change_invalidates_cache() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        cache
-            .insert(
-                "user_token".to_string(),
-                CachedTokenData {
-                    user: UserName::new("target_user").unwrap(),
-                    is_admin: false, // Currently NOT admin
-                    is_read_only: false,
-                },
-                cache.generation(),
-            )
-            .await;
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, "target_user", UserFlags::normal()).await;
+        let cache = token_cache_with("user_token", "target_user").await;
+        let state = AppStateData {
+            token_cache: cache.clone(),
+            ..state
+        };
 
-        assert!(cache.get("user_token").await.is_some());
+        let response = send(
+            state,
+            Method::POST,
+            "/target_user/admin",
+            &cookie,
+            Some(r#"{"state":true}"#),
+        )
+        .await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_change_admin_state()
-            .times(1)
-            .with(eq(UserName::new("target_user").unwrap()), eq(true))
-            .returning(|_, _| Ok(()));
-
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/target_user/admin")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":true}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
-
-        // Verify cache was invalidated - important because is_admin permission changed
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(user(&db, "target_user").await.is_admin);
+        // The cached permissions are outdated now.
         assert!(cache.get("user_token").await.is_none());
     }
 
     #[tokio::test]
     async fn test_admin_self_demotion_prevented() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        // Note: change_admin_state should NOT be called because self-demotion is blocked
+        let response = send(
+            state,
+            Method::POST,
+            "/admin/admin",
+            &cookie,
+            Some(r#"{"state":false}"#),
+        )
+        .await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/admin/admin") // Trying to demote self
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":false}"#)) // Demoting (state=false)
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        // Request should fail with Bad Request
-        assert_eq!(
-            response.status(),
-            StatusCode::BAD_REQUEST,
-            "Expected BAD_REQUEST but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(user(&db, "admin").await.is_admin);
     }
 
     #[tokio::test]
     async fn test_non_admin_cannot_change_admin_status() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "regular_user", UserFlags::normal()).await;
+        add_user(&db, "target_user", UserFlags::normal()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("regular_user").unwrap(),
-                is_admin: false,
-                is_read_only: false,
-            })
-        }); // NOT admin
+        let response = send(
+            state,
+            Method::POST,
+            "/target_user/admin",
+            &cookie,
+            Some(r#"{"state":true}"#),
+        )
+        .await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/target_user/admin")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":true}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        // Request should fail with Forbidden
-        assert_eq!(
-            response.status(),
-            StatusCode::FORBIDDEN,
-            "Expected FORBIDDEN but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(!user(&db, "target_user").await.is_admin);
     }
 
     #[tokio::test]
     async fn test_admin_demotion_works() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, "other_admin", UserFlags::admin()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_change_admin_state()
-            .times(1)
-            .with(eq(UserName::new("other_admin").unwrap()), eq(false)) // Demoting other_admin
-            .returning(|_, _| Ok(()));
+        let response = send(
+            state,
+            Method::POST,
+            "/other_admin/admin",
+            &cookie,
+            Some(r#"{"state":false}"#),
+        )
+        .await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/other_admin/admin")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":false}"#)) // Demoting
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!user(&db, "other_admin").await.is_admin);
     }
 
     #[tokio::test]
     async fn test_admin_nonexistent_user_returns_error() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_change_admin_state()
-            .times(1)
-            .with(eq(UserName::new("nonexistent").unwrap()), eq(true))
-            .returning(|_, _| Err(DbError::UserNotFound("nonexistent".to_string())));
+        let response = send(
+            state,
+            Method::POST,
+            "/nonexistent/admin",
+            &cookie,
+            Some(r#"{"state":true}"#),
+        )
+        .await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/nonexistent/admin")
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":true}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        // Request should fail with Not Found
-        assert_eq!(
-            response.status(),
-            StatusCode::NOT_FOUND,
-            "Expected NOT_FOUND but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
+    /// Only demoting oneself is blocked, promoting is a harmless no-op.
     #[tokio::test]
     async fn test_admin_self_promotion_allowed() {
-        // An admin promoting themselves (state=true) should be allowed
-        // Only self-demotion (state=false) is blocked
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_change_admin_state()
-            .times(1)
-            .with(eq(UserName::new("admin").unwrap()), eq(true)) // Self-promotion (no-op but allowed)
-            .returning(|_, _| Ok(()));
+        let response = send(
+            state,
+            Method::POST,
+            "/admin/admin",
+            &cookie,
+            Some(r#"{"state":true}"#),
+        )
+        .await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::post("/admin/admin") // Same user
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"state":true}"#)) // Promoting (state=true)
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(user(&db, "admin").await.is_admin);
     }
 
     #[tokio::test]
     async fn test_admin_self_deletion_prevented() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        // Note: delete_user should NOT be called because self-deletion is blocked
+        let response = send(state, Method::DELETE, "/admin", &cookie, None).await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::delete("/admin") // Trying to delete self
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        // Request should fail with Bad Request
-        assert_eq!(
-            response.status(),
-            StatusCode::BAD_REQUEST,
-            "Expected BAD_REQUEST but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        user(&db, "admin").await;
     }
 
     #[tokio::test]
     async fn test_admin_deletion_of_other_user_works() {
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, "other_user", UserFlags::normal()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db.expect_validate_session().times(1).returning(|_| {
-            Ok(kellnr_db::SessionInfo {
-                name: UserName::new("admin").unwrap(),
-                is_admin: true,
-                is_read_only: false,
-            })
-        }); // Must be admin
-        mock_db
-            .expect_delete_user()
-            .times(1)
-            .with(eq(UserName::new("other_user").unwrap()))
-            .returning(|_| Ok(()));
+        let response = send(state, Method::DELETE, "/other_user", &cookie, None).await;
 
-        let state = test_state_with_cache(mock_db, cache.clone());
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::delete("/other_user") // Deleting another user
-                    .header(
-                        header::COOKIE,
-                        encode_cookies([(COOKIE_SESSION_ID, "session")]),
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            response.status().is_success(),
-            "Expected success but got {}",
-            response.status()
-        );
+        assert_eq!(response.status(), StatusCode::OK);
+        let name = UserName::new("other_user").unwrap();
+        assert!(db.get_user(&name).await.is_err());
     }
 
     /// Names stored before the name rules existed must still be usable.
@@ -2179,31 +1471,21 @@ mod tests {
     async fn test_admin_deletion_of_user_with_name_against_the_rules_works() {
         let legacy_name = "legacy:user";
         assert!(UserName::for_new_user(legacy_name).is_err());
-        let cache = Arc::new(TokenCacheManager::new(
-            true,
-            std::time::Duration::from_secs(60),
-            100,
-        ));
-        let mut mock_db = session_db(true);
-        mock_db
-            .expect_delete_user()
-            .times(1)
-            .with(eq(UserName::new(legacy_name).unwrap()))
-            .returning(|_| Ok(()));
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        add_user(&db, legacy_name, UserFlags::normal()).await;
 
-        let state = test_state_with_cache(mock_db, cache);
-        let app = app(state);
-
-        let response = app
-            .oneshot(
-                Request::delete(format!("/{legacy_name}"))
-                    .header(header::COOKIE, session_cookie_header())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            state,
+            Method::DELETE,
+            &format!("/{legacy_name}"),
+            &cookie,
+            None,
+        )
+        .await;
 
         assert_eq!(response.status(), StatusCode::OK);
+        let name = UserName::new(legacy_name).unwrap();
+        assert!(db.get_user(&name).await.is_err());
     }
 }
