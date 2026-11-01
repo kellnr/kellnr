@@ -4478,7 +4478,6 @@ dependencies = [
  "kellnr-storage",
  "kellnr-test-db",
  "kellnr-webhooks",
- "mockall",
  "reqwest",
  "serde",
  "serde_json",

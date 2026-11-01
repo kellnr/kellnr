@@ -43,7 +43,6 @@ kellnr-http = { workspace = true, features = ["test-support"] }
 async-trait.workspace = true
 cookie.workspace = true
 kellnr-test-db.workspace = true
-mockall.workspace = true
 tempfile.workspace = true
 tower.workspace = true
 
