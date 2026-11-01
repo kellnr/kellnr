@@ -36,8 +36,8 @@ pub async fn authenticate_password(
 mod tests {
     use std::time::Duration;
 
-    use kellnr_db::error::DbError;
-    use kellnr_db::mock::MockDb;
+    use kellnr_db::UserFlags;
+    use kellnr_test_db::TestDb;
 
     use super::*;
 
@@ -45,20 +45,24 @@ mod tests {
         LoginThrottle::new(max_attempts, Duration::from_mins(5))
     }
 
-    fn user() -> User {
-        User {
-            name: UserName::new("user").unwrap(),
-            ..User::default()
-        }
+    fn user() -> UserName {
+        UserName::new("user").unwrap()
+    }
+
+    /// A database with the user `user` and the password `right`.
+    async fn user_db() -> TestDb {
+        let db = TestDb::sqlite().await;
+        db.add_user(&user(), "right", UserFlags::default())
+            .await
+            .unwrap();
+        db
     }
 
     #[tokio::test]
     async fn valid_password_authenticates() {
-        let mut db = MockDb::new();
-        db.expect_authenticate_user().returning(|_, _| Ok(user()));
+        let db = user_db().await;
 
-        let result =
-            authenticate_password(&db, &throttle(3), &UserName::new("user").unwrap(), "pwd").await;
+        let result = authenticate_password(&*db, &throttle(3), &user(), "right").await;
 
         assert_eq!(result.unwrap().name, "user");
     }
@@ -67,35 +71,25 @@ mod tests {
     /// correct guess cannot be confirmed either.
     #[tokio::test]
     async fn throttles_after_limit_without_checking_password() {
-        let mut db = MockDb::new();
-        db.expect_authenticate_user()
-            .times(2)
-            .returning(|_, _| Err(DbError::PasswordMismatch));
+        let db = user_db().await;
         let throttle = throttle(2);
 
         for _ in 0..2 {
-            let result =
-                authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "wrong")
-                    .await;
+            let result = authenticate_password(&*db, &throttle, &user(), "wrong").await;
             assert_eq!(result.unwrap_err(), PasswordAuthError::Invalid);
         }
-        let result =
-            authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "right").await;
+        let result = authenticate_password(&*db, &throttle, &user(), "right").await;
         assert_eq!(result.unwrap_err(), PasswordAuthError::Throttled);
     }
 
     #[tokio::test]
     async fn unknown_user_is_throttled() {
-        let mut db = MockDb::new();
-        db.expect_authenticate_user()
-            .times(1)
-            .returning(|name, _| Err(DbError::UserNotFound(name.to_string())));
+        let db = user_db().await;
         let throttle = throttle(1);
+        let ghost = UserName::new("ghost").unwrap();
 
-        let first =
-            authenticate_password(&db, &throttle, &UserName::new("ghost").unwrap(), "pwd").await;
-        let second =
-            authenticate_password(&db, &throttle, &UserName::new("ghost").unwrap(), "pwd").await;
+        let first = authenticate_password(&*db, &throttle, &ghost, "pwd").await;
+        let second = authenticate_password(&*db, &throttle, &ghost, "pwd").await;
 
         assert_eq!(first.unwrap_err(), PasswordAuthError::Invalid);
         assert_eq!(second.unwrap_err(), PasswordAuthError::Throttled);
@@ -103,26 +97,17 @@ mod tests {
 
     #[tokio::test]
     async fn success_resets_attempts() {
-        let mut db = MockDb::new();
-        db.expect_authenticate_user()
-            .withf(|_, pwd| pwd == "right")
-            .returning(|_, _| Ok(user()));
-        db.expect_authenticate_user()
-            .withf(|_, pwd| pwd == "wrong")
-            .returning(|_, _| Err(DbError::PasswordMismatch));
+        let db = user_db().await;
         let throttle = throttle(2);
 
-        let _ =
-            authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "wrong").await;
-        authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "right")
+        let _ = authenticate_password(&*db, &throttle, &user(), "wrong").await;
+        authenticate_password(&*db, &throttle, &user(), "right")
             .await
             .unwrap();
 
         // Both attempts are available again after the successful login.
         for _ in 0..2 {
-            let result =
-                authenticate_password(&db, &throttle, &UserName::new("user").unwrap(), "wrong")
-                    .await;
+            let result = authenticate_password(&*db, &throttle, &user(), "wrong").await;
             assert_eq!(result.unwrap_err(), PasswordAuthError::Invalid);
         }
     }
