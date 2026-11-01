@@ -78,12 +78,6 @@ impl ApiError {
         self.status
     }
 
-    /// The same error with another status code.
-    #[must_use]
-    pub fn with_status(self, status: StatusCode) -> Self {
-        Self { status, ..self }
-    }
-
     pub fn from_err(e: &dyn std::error::Error, status: StatusCode) -> Self {
         let e = format!("ERROR: {e}");
         Self {

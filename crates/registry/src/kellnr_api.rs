@@ -19,8 +19,8 @@ use kellnr_db::error::DbError;
 use kellnr_db::provider::DbResult;
 use kellnr_filter::CrateInfo;
 use kellnr_http::authz::{
-    can_read_crate, crate_visibility, has_restricted_crate_access, require_admin_for_token_api,
-    require_owner, require_writable, require_writable_for_upload,
+    can_read_crate, crate_visibility, has_restricted_crate_access, require_admin, require_owner,
+    require_writable,
 };
 use kellnr_http::error::{ApiError, ApiResult, PlainTextError};
 use kellnr_http::identity::{AnyUser, Identity, Source, TokenUser};
@@ -714,7 +714,7 @@ pub async fn add_empty_crate(
     Json(data): Json<EmptyCrateData>,
 ) -> ApiResult<Json<EmptyCrateSuccess>> {
     // Only admins can create empty crate placeholders
-    require_admin_for_token_api(&user)?;
+    require_admin(&user)?;
     let db = state.db;
     let orig_name = OriginalName::try_from(&data.name)?;
     let canonical_name = orig_name.to_canonical();
@@ -778,7 +778,7 @@ pub async fn publish(
     // Check if user is read-only and can't publish (upload) crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    require_writable_for_upload(&user)?;
+    require_writable(&user)?;
 
     pub_data
         .metadata
@@ -1009,7 +1009,7 @@ pub async fn yank(
     // Check if user is read-only and can't yank crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    require_writable_for_upload(&user)?;
+    require_writable(&user)?;
 
     let crate_name = crate_name.to_canonical();
     require_owner(&crate_name, &user, &db).await?;
@@ -1053,7 +1053,7 @@ pub async fn unyank(
     // Check if user is read-only and can't unyank crates.
     // Admin users bypass this check as they can modify
     // their read-only status.
-    require_writable_for_upload(&user)?;
+    require_writable(&user)?;
 
     let crate_name = crate_name.to_canonical();
     require_owner(&crate_name, &user, &db).await?;
@@ -3101,7 +3101,7 @@ mod reg_api_tests {
 
         let response_status = r.status();
 
-        assert_eq!(StatusCode::UNAUTHORIZED, response_status);
+        assert_eq!(StatusCode::FORBIDDEN, response_status);
 
         let canonical_name = OriginalName::try_from("rogue-crate")
             .unwrap()
@@ -3234,7 +3234,7 @@ mod reg_api_tests {
         let error: ErrorDetails =
             serde_json::from_slice(&msg).expect("Cannot deserialize error message");
 
-        assert_eq!(StatusCode::BAD_REQUEST, response_status);
+        assert_eq!(StatusCode::FORBIDDEN, response_status);
         assert_eq!(
             "ERROR: Read-only users cannot modify the registry",
             error.errors[0].detail
