@@ -91,8 +91,10 @@ pub fn crate_visibility(user: Option<&Identity>) -> CrateVisibility {
 
 #[cfg(test)]
 mod tests {
-    use kellnr_db::mock::MockDb;
-    use mockall::predicate::eq;
+    use kellnr_common::account_name::GroupName;
+    use kellnr_db::UserFlags;
+    use kellnr_db::test_utils::TestCrateBuilder;
+    use kellnr_test_db::TestDb;
 
     use super::*;
     use crate::identity::Source;
@@ -101,21 +103,39 @@ mod tests {
         CanonicalName::try_from("restricted").unwrap()
     }
 
+    fn user_name() -> UserName {
+        UserName::new("user").unwrap()
+    }
+
     fn user(is_admin: bool) -> Identity {
         Identity {
-            name: UserName::new("user").unwrap(),
+            name: user_name(),
             is_admin,
             is_read_only: false,
             source: Source::Session,
         }
     }
 
-    fn restricted_db(restricted: bool) -> MockDb {
-        let mut db = MockDb::new();
-        db.expect_is_download_restricted()
-            .with(eq(name()))
-            .returning(move |_| Ok(restricted));
+    /// A database with the crate `restricted`, owned by `admin`, and the
+    /// user `user` without any access to it.
+    async fn crate_db(restricted: bool) -> TestDb {
+        let db = TestDb::sqlite().await;
+        TestCrateBuilder::new(&db)
+            .name("restricted")
+            .build()
+            .await
+            .unwrap();
+        db.change_download_restricted(&name(), restricted)
+            .await
+            .unwrap();
+        db.add_user(&user_name(), "pwd", UserFlags::default())
+            .await
+            .unwrap();
         db
+    }
+
+    async fn can_read(db: &TestDb, user: Option<&Identity>) -> bool {
+        can_read_crate(&name(), user, &db.provider()).await.unwrap()
     }
 
     #[test]
@@ -130,83 +150,50 @@ mod tests {
 
     #[tokio::test]
     async fn unrestricted_crate_is_readable_by_anyone() {
-        let db: Arc<dyn DbProvider> = Arc::new(restricted_db(false));
-        assert!(can_read_crate(&name(), None, &db).await.unwrap());
+        let db = crate_db(false).await;
+        assert!(can_read(&db, None).await);
     }
 
     #[tokio::test]
     async fn restricted_crate_is_hidden_from_anonymous() {
-        let db: Arc<dyn DbProvider> = Arc::new(restricted_db(true));
-        assert!(!can_read_crate(&name(), None, &db).await.unwrap());
+        let db = crate_db(true).await;
+        assert!(!can_read(&db, None).await);
     }
 
     #[tokio::test]
     async fn restricted_crate_is_readable_by_admin() {
-        let db: Arc<dyn DbProvider> = Arc::new(restricted_db(true));
-        assert!(
-            can_read_crate(&name(), Some(&user(true)), &db)
-                .await
-                .unwrap()
-        );
+        let db = crate_db(true).await;
+        assert!(can_read(&db, Some(&user(true))).await);
     }
 
     #[tokio::test]
     async fn restricted_crate_is_hidden_from_user_without_access() {
-        let mut db = restricted_db(true);
-        db.expect_is_crate_user().returning(|_, _| Ok(false));
-        db.expect_is_crate_group_user().returning(|_, _| Ok(false));
-        db.expect_is_owner().returning(|_, _| Ok(false));
-        let db: Arc<dyn DbProvider> = Arc::new(db);
-        assert!(
-            !can_read_crate(&name(), Some(&user(false)), &db)
-                .await
-                .unwrap()
-        );
+        let db = crate_db(true).await;
+        assert!(!can_read(&db, Some(&user(false))).await);
     }
 
     #[tokio::test]
     async fn restricted_crate_is_readable_by_crate_user() {
-        let mut db = restricted_db(true);
-        db.expect_is_crate_user()
-            .with(eq(name()), eq(UserName::new("user").unwrap()))
-            .returning(|_, _| Ok(true));
-        let db: Arc<dyn DbProvider> = Arc::new(db);
-        assert!(
-            can_read_crate(&name(), Some(&user(false)), &db)
-                .await
-                .unwrap()
-        );
+        let db = crate_db(true).await;
+        db.add_crate_user(&name(), &user_name()).await.unwrap();
+        assert!(can_read(&db, Some(&user(false))).await);
     }
 
     #[tokio::test]
     async fn restricted_crate_is_readable_by_crate_group_member() {
-        let mut db = restricted_db(true);
-        db.expect_is_crate_user().returning(|_, _| Ok(false));
-        db.expect_is_crate_group_user()
-            .with(eq(name()), eq(UserName::new("user").unwrap()))
-            .returning(|_, _| Ok(true));
-        let db: Arc<dyn DbProvider> = Arc::new(db);
-        assert!(
-            can_read_crate(&name(), Some(&user(false)), &db)
-                .await
-                .unwrap()
-        );
+        let db = crate_db(true).await;
+        let group = GroupName::new("group").unwrap();
+        db.add_group(&group).await.unwrap();
+        db.add_group_user(&group, &user_name()).await.unwrap();
+        db.add_crate_group(&name(), &group).await.unwrap();
+        assert!(can_read(&db, Some(&user(false))).await);
     }
 
     #[tokio::test]
     async fn restricted_crate_is_readable_by_owner() {
-        let mut db = restricted_db(true);
-        db.expect_is_crate_user().returning(|_, _| Ok(false));
-        db.expect_is_crate_group_user().returning(|_, _| Ok(false));
-        db.expect_is_owner()
-            .with(eq(name()), eq(UserName::new("user").unwrap()))
-            .returning(|_, _| Ok(true));
-        let db: Arc<dyn DbProvider> = Arc::new(db);
-        assert!(
-            can_read_crate(&name(), Some(&user(false)), &db)
-                .await
-                .unwrap()
-        );
+        let db = crate_db(true).await;
+        db.add_owner(&name(), &user_name()).await.unwrap();
+        assert!(can_read(&db, Some(&user(false))).await);
     }
 }
 
