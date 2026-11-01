@@ -10,8 +10,13 @@ repository.workspace = true
 documentation.workspace = true
 
 [features]
-# Test helpers like `state::test_state()`. Enable only from dev-dependencies.
-test-support = ["kellnr-db/mock", "kellnr-settings/test-support"]
+# Test helpers like `test_support::test_state()`. Enable only from dev-dependencies.
+test-support = [
+  "dep:kellnr-test-db",
+  "kellnr-db/mock",
+  "kellnr-db/test-support",
+  "kellnr-settings/test-support",
+]
 
 [dependencies]
 # Internal dependencies from Kellnr
@@ -21,6 +26,7 @@ kellnr-db.workspace = true
 kellnr-filter.workspace = true
 kellnr-settings.workspace = true
 kellnr-storage.workspace = true
+kellnr-test-db = { workspace = true, optional = true }
 
 # External dependencies from crates.io
 axum-extra.workspace = true

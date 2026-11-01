@@ -89,15 +89,19 @@ Test each behavior once, at the lowest layer that can show it:
 | Layer | What it tests | Where |
 |---|---|---|
 | Database | Query semantics, the only tests that touch SQL | `crates/db/tests/db_test.rs`, `#[db_test]` runs each test on SQLite and PostgreSQL |
-| Handlers | Status codes, auth decisions, error mapping | Unit tests next to the handler, an in-process router with `MockDb` or SQLite |
+| Handlers | Status codes, auth decisions, error mapping | Unit tests next to the handler, an in-process router on SQLite (`sqlite_test_state`) |
 | Router | Wiring only: middleware, path prefix, headers | `crates/kellnr/src/routes/`; `login_methods_tests.rs` pins the accepted login methods of every endpoint |
 | UI | End-to-end flows in the browser | Playwright tests in `tests/` |
 
 Before adding a test, check whether a lower layer or the login methods table already covers it. Shared helpers:
 
 - `kellnr_settings::test_settings()` and `test_settings_in(dir)` (feature `test-support`) for settings.
-- `kellnr_http::test_support` (feature `test-support`): `test_state()` (`MockDb`, in-memory storage, `TEST_KEY` for cookies), `encode_cookies`, and `TestServer` for fake upstream servers like crates.io or webhook targets.
-- `kellnr_test_db`: `TestDb::sqlite()` / `TestDb::postgres()` and `sqlite_database(&settings)` for a migrated database.
+- `kellnr_http::test_support` (feature `test-support`):
+  - `sqlite_test_state()` returns app state on a fresh, migrated SQLite database and the `TestDb` to seed and inspect it. Use it for every handler that touches the database: insert the data the handler needs through the normal `Database` methods, call the handler, then assert the response and the resulting database state.
+  - `session_cookie(&db, name, flags)` logs a user in (adding it if needed) and returns the `Cookie` header value. The database already holds the admin user `admin`.
+  - `test_state()` (`MockDb` without expectations, in-memory storage, `TEST_KEY` for cookies) for handlers that do not touch the database, `encode_cookies`, and `TestServer` for fake upstream servers like crates.io or webhook targets.
+- `kellnr_db::test_utils` (feature `test-support`): seeding helpers like `TestCrateBuilder`, and `test_drop_table` to make the database fail for error path tests.
+- `kellnr_test_db`: `TestDb::sqlite()` / `TestDb::postgres()` and `sqlite_database(&settings)` for a migrated database. `TestDb::provider()` gives the database as `Arc<dyn DbProvider>`.
 
 Enable these features only from `[dev-dependencies]`, so nothing test-only ends up in the release binary.
 

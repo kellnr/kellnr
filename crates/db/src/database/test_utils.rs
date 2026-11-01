@@ -33,7 +33,7 @@ use kellnr_entity::{
 };
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, ExprTrait,
     QueryFilter, Set,
 };
 
@@ -702,5 +702,20 @@ pub async fn add_aged_oauth2_state(
         ..Default::default()
     };
     s.insert(&db.db_con).await?;
+    Ok(())
+}
+
+/// Drops `table`, so that every query that uses it fails, e.g. to test how
+/// callers handle database errors.
+pub async fn test_drop_table(db: &Database, table: &str) -> DbResult<()> {
+    // PostgreSQL only drops a table that others refer to with CASCADE, which
+    // SQLite does not know.
+    let cascade = match db.db_con.get_database_backend() {
+        DbBackend::Postgres => " CASCADE",
+        _ => "",
+    };
+    db.db_con
+        .execute_unprepared(&format!("DROP TABLE \"{table}\"{cascade}"))
+        .await?;
     Ok(())
 }

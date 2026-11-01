@@ -4373,6 +4373,7 @@ dependencies = [
  "kellnr-filter",
  "kellnr-settings",
  "kellnr-storage",
+ "kellnr-test-db",
  "mockall",
  "moka",
  "provcfg",

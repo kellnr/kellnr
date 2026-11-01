@@ -8,25 +8,53 @@ use cookie::{Cookie, CookieJar};
 use kellnr_common::account_name::UserName;
 use kellnr_common::background_tasks::BackgroundTasks;
 use kellnr_cratesio_sync::CratesioSync;
-use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
+use kellnr_db::{Database, DbProvider, UserFlags};
 use kellnr_settings::Proxy;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
 use kellnr_storage::object_storage::MemoryStorage;
+use kellnr_test_db::TestDb;
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 
 use crate::identity::{Identity, Source};
 use crate::login_throttle::LoginThrottle;
 use crate::state::{AppStateData, default_settings_prov};
+use crate::token::generate_token;
 use crate::token_cache::TokenCacheManager;
 
 /// App state with a `MockDb`, [`kellnr_settings::test_settings`], in-memory
 /// storage and [`TEST_KEY`] as cookie signing key.
 pub fn test_state() -> AppStateData {
-    let db: Arc<dyn DbProvider> = Arc::new(kellnr_db::mock::MockDb::new());
+    state_with_db(Arc::new(kellnr_db::mock::MockDb::new()))
+}
+
+/// App state like [`test_state`], but on a fresh, migrated SQLite database.
+/// Seed and inspect the database through the returned [`TestDb`]. It holds
+/// the user `admin` with password `123` and is removed when dropped.
+pub async fn sqlite_test_state() -> (AppStateData, TestDb) {
+    let db = TestDb::sqlite().await;
+    (state_with_db(db.provider()), db)
+}
+
+/// Logs in the user `name`, adding it with `flags` and password `pwd` if it
+/// does not exist yet. Returns a `Cookie` header value with the new session.
+pub async fn session_cookie(db: &Database, name: &str, flags: UserFlags) -> String {
+    let name = UserName::new(name).unwrap();
+    if db.get_user(&name).await.is_err() {
+        db.add_user(&name, "pwd", flags).await.unwrap();
+    }
+    let token = generate_token();
+    db.add_session_token(&name, &token).await.unwrap();
+    encode_cookies([(
+        kellnr_settings::constants::COOKIE_SESSION_ID,
+        token.into_secret(),
+    )])
+}
+
+fn state_with_db(db: Arc<dyn DbProvider>) -> AppStateData {
     let settings = Arc::new(kellnr_settings::test_settings());
     let settings_prov = default_settings_prov();
     let crate_storage = Arc::new(KellnrCrateStorage::new(
