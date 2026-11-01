@@ -18,27 +18,18 @@ pub fn fakegcs_testcontainer(_attr: TokenStream, stream: TokenStream) -> TokenSt
 
     let output = quote! {
         #(#attrs)* #vis #sig {
-            use testcontainers::ImageExt;
             use testcontainers::core::BuildImageOptions;
             use testcontainers::runners::{AsyncBuilder, AsyncRunner};
-            // `fake-gcs-server`'s `-public-host` must match the host:port the test will
-            // actually connect through, so the port has to be known before the container
-            // starts (rather than reading back a Docker-assigned random port afterwards).
-            // Reserve one by briefly binding to it, then hand it to the image so it can be
-            // baked into `-public-host`, and fix the container's published port to match.
-            let port = {
-                let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
-                    .expect("Failed to reserve a free port for fake-gcs-server");
-                listener.local_addr().expect("Failed to read reserved port").port()
-            };
             // The image is built from `tests/fixtures/test-gcs-storage`, see `crates/storage/tests/gcs_image/mod.rs`.
             // Building is skipped once the image exists, so only the first run pays for it.
-            let container = image::FakeGcsServerImage::new(port)
+            let container = image::FakeGcsServerImage
                 .build_image_with(BuildImageOptions::new().with_skip_if_exists(true))
                 .await.expect("Failed to build fake-gcs-server image")
-                .with_mapped_port(port, image::FakeGcsServer::CONTAINER_PORT)
                 .start()
                 .await.expect("Failed to start fake-gcs-server container");
+            let port = container
+                .get_host_port_ipv4(image::FakeGcsServer::CONTAINER_PORT)
+                .await.expect("Failed to read the port of fake-gcs-server");
             #(#stmts)*
         }
     };
