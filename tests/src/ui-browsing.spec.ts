@@ -174,9 +174,18 @@ test.describe("Browsing", () => {
 
   test("startup config can be searched", async ({ page }) => {
     await loginAsAdmin(page);
+    // Answer the settings request only after the search is entered, as on a
+    // slow connection
+    let searchEntered!: () => void;
+    const searchEnteredPromise = new Promise<void>((resolve) => (searchEntered = resolve));
+    await page.route("**/api/v1/ui/settings", async (route) => {
+      await searchEnteredPromise;
+      await route.continue();
+    });
     await page.goto(`${baseUrl}/settings?tab=config`);
 
     await page.getByTestId("config-search").locator("input").fill("port");
+    searchEntered();
 
     // Matching sections open, and only matching settings are shown
     const rows = page.locator(".config-row:visible");
