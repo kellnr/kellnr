@@ -308,6 +308,8 @@ mod tests {
     use axum::routing::get;
     use axum::{Router, middleware};
     use http_body_util::BodyExt;
+    use kellnr_common::index_metadata::IndexMetadata;
+    use kellnr_db::test_utils::test_drop_table;
     use kellnr_filter::DownloadFilters;
     use kellnr_http::state::AppStateData;
     use kellnr_http::test_support::{TestServer, closed_port_url};
@@ -315,6 +317,7 @@ mod tests {
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::object_storage::MemoryStorage;
+    use kellnr_test_db::TestDb;
     use tower::ServiceExt;
 
     use super::*;
@@ -573,9 +576,9 @@ mod tests {
             .with_state(state)
     }
 
-    /// A Kellnr whose database is a mock, with "upstream" 1.0.0 in the cache.
+    /// A Kellnr on `db` with "upstream" 1.0.0 in the cache.
     async fn kellnr_with_cached_crate(
-        db: kellnr_db::mock::MockDb,
+        db: Arc<dyn DbProvider>,
         filter: CratesioFilter,
     ) -> (Router, tempfile::TempDir) {
         let data_dir = tempfile::tempdir().unwrap();
@@ -597,7 +600,7 @@ mod tests {
             )
             .await
             .unwrap();
-        (app(settings, storage, Arc::new(db)), data_dir)
+        (app(settings, storage, db), data_dir)
     }
 
     async fn status_of(client: &Router, uri: &str) -> StatusCode {
@@ -612,9 +615,8 @@ mod tests {
     #[tokio::test]
     async fn cache_hit_without_filters_needs_no_database() {
         // The mock panics on any database call
-        let (client, _data_dir) =
-            kellnr_with_cached_crate(kellnr_db::mock::MockDb::new(), CratesioFilter::default())
-                .await;
+        let db = Arc::new(kellnr_db::mock::MockDb::new());
+        let (client, _data_dir) = kellnr_with_cached_crate(db, CratesioFilter::default()).await;
 
         let status = status_of(&client, "/api/v1/cratesio/upstream/1.0.0/download").await;
 
@@ -623,21 +625,28 @@ mod tests {
 
     #[tokio::test]
     async fn known_license_is_not_queried_again() {
-        let mut db = kellnr_db::mock::MockDb::new();
-        db.expect_get_cratesio_version_meta()
-            .times(1)
-            .returning(|_, _| {
-                Ok(Some(CratesioVersionMeta {
-                    cksum: sha256::digest(UPSTREAM_CRATE),
-                    license: Some("MIT".to_string()),
-                }))
-            });
+        let db = TestDb::sqlite().await;
+        let index: IndexMetadata = serde_json::from_str(&index_line("1.0.0", true)).unwrap();
+        let licenses = [("1.0.0".to_string(), "MIT".to_string())].into();
+        db.add_cratesio_prefetch_data(
+            &OriginalName::try_from("upstream").unwrap(),
+            "etag",
+            "",
+            None,
+            &[index],
+            &licenses,
+        )
+        .await
+        .unwrap();
         let (client, _data_dir) =
-            kellnr_with_cached_crate(db, license_filter(LicenseUnknown::Deny)).await;
+            kellnr_with_cached_crate(db.provider(), license_filter(LicenseUnknown::Deny)).await;
+        let download = || status_of(&client, "/api/v1/cratesio/upstream/1.0.0/download");
 
-        for _ in 0..3 {
-            let status = status_of(&client, "/api/v1/cratesio/upstream/1.0.0/download").await;
-            assert_eq!(StatusCode::OK, status);
+        assert_eq!(StatusCode::OK, download().await);
+        // Later downloads would fail if they looked up the license again.
+        test_drop_table(&db, "cratesio_meta").await.unwrap();
+        for _ in 0..2 {
+            assert_eq!(StatusCode::OK, download().await);
         }
     }
 
