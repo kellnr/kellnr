@@ -37,6 +37,7 @@ axum-extra.workspace = true
 mockall.workspace = true
 serde_json.workspace = true
 tower.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true
