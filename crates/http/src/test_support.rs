@@ -1,5 +1,8 @@
 use std::borrow::Cow;
+use std::net::SocketAddr;
 use std::sync::Arc;
+
+use axum::Router;
 
 use axum_extra::extract::cookie::Key;
 use cookie::{Cookie, CookieJar};
@@ -13,6 +16,8 @@ use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+use tokio::net::TcpListener;
+use tokio::task::JoinHandle;
 
 use crate::identity::{Identity, Source};
 use crate::login_throttle::LoginThrottle;
@@ -95,4 +100,41 @@ pub fn session_identity(name: &str, is_admin: bool) -> Identity {
         is_read_only: false,
         source: Source::Session,
     }
+}
+
+/// An HTTP server on a free port of 127.0.0.1 for tests of code that calls
+/// other servers, like crates.io or webhook targets. It stops when dropped.
+pub struct TestServer {
+    addr: SocketAddr,
+    task: JoinHandle<()>,
+}
+
+impl TestServer {
+    pub async fn start(router: Router) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        Self { addr, task }
+    }
+
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    /// URL of `path` on this server, e.g. `url("/api/")`.
+    pub fn url(&self, path: &str) -> String {
+        format!("http://{}{path}", self.addr)
+    }
+}
+
+impl Drop for TestServer {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+/// URL of a free port of 127.0.0.1 where nothing listens.
+pub async fn closed_port_url() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    format!("http://{}/", listener.local_addr().unwrap())
 }

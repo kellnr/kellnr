@@ -1,76 +1,71 @@
-use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpListener;
-use tokio::sync::mpsc::{Receiver, Sender, channel};
-use tokio::task::JoinHandle;
+use axum::Router;
+use axum::body::Bytes;
+use axum::http::{HeaderMap, StatusCode, header};
+use kellnr_http::test_support::TestServer;
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
+/// A request received by a [`TestListener`].
+pub(crate) struct Received {
+    pub headers: HeaderMap,
+    pub body: Bytes,
+}
+
+/// Webhook target on a free port that answers every request the same way and
+/// reports each received request on `rx`.
 pub(crate) struct TestListener {
-    handle: JoinHandle<()>,
-    pub rx: Receiver<u8>,
-    /// All raw request data received by the listener.
-    pub received: Arc<Mutex<String>>,
+    server: TestServer,
+    pub rx: UnboundedReceiver<Received>,
 }
-impl Drop for TestListener {
-    fn drop(&mut self) {
-        self.handle.abort();
+
+impl TestListener {
+    pub(crate) fn url(&self) -> String {
+        self.server.url("/")
+    }
+
+    pub(crate) fn port(&self) -> u16 {
+        self.server.addr().port()
     }
 }
 
-pub(crate) async fn get_test_listener(port: u16, status_code: u16) -> TestListener {
-    get_test_listener_with_response(
-        port,
-        format!("HTTP/1.1 {status_code}\r\nContent-Length: 0\r\n\r\n"),
-    )
-    .await
+pub(crate) async fn get_test_listener(status_code: u16) -> TestListener {
+    get_test_listener_with_response(status_code, HeaderMap::new(), String::new()).await
 }
 
-pub(crate) async fn get_redirect_listener(port: u16, location: &str) -> TestListener {
-    get_test_listener_with_response(
-        port,
-        format!("HTTP/1.1 302\r\nLocation: {location}\r\nContent-Length: 0\r\n\r\n"),
-    )
-    .await
+pub(crate) async fn get_redirect_listener(location: &str) -> TestListener {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::LOCATION, location.parse().unwrap());
+    get_test_listener_with_response(302, headers, String::new()).await
 }
 
-pub(crate) async fn get_test_listener_with_response(port: u16, response: String) -> TestListener {
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await.unwrap();
-    let (tx, rx) = channel(10);
-    let received = Arc::new(Mutex::new(String::new()));
-    let handle = tokio::spawn(listener_task(response, listener, tx, received.clone()));
+pub(crate) async fn get_test_listener_with_response(
+    status_code: u16,
+    headers: HeaderMap,
+    body: String,
+) -> TestListener {
+    let status = StatusCode::from_u16(status_code).unwrap();
+    let (tx, rx) = unbounded_channel();
+    let router = Router::new().fallback(move |request_headers: HeaderMap, request_body: Bytes| {
+        let _ = tx.send(Received {
+            headers: request_headers,
+            body: request_body,
+        });
+        let response = (status, headers.clone(), body.clone());
+        async move { response }
+    });
     TestListener {
-        handle,
+        server: TestServer::start(router).await,
         rx,
-        received,
     }
 }
 
-async fn listener_task(
-    response: String,
-    listener: TcpListener,
-    tx: Sender<u8>,
-    received: Arc<Mutex<String>>,
-) {
-    let mut buf = [0; 4096];
-
-    loop {
-        let (mut stream, _) = listener.accept().await.unwrap();
-        loop {
-            stream.readable().await.unwrap();
-
-            match stream.try_read(&mut buf) {
-                Ok(n) => {
-                    received
-                        .lock()
-                        .unwrap()
-                        .push_str(&String::from_utf8_lossy(&buf[..n]));
-                    tx.send(0).await.unwrap();
-                }
-                Err(_) => break,
-            }
-        }
-
-        stream.writable().await.unwrap();
-        stream.write_all(response.as_bytes()).await.unwrap();
-    }
+/// Webhook target on a free port that answers every request with 200 after
+/// `delay`, handling requests in parallel.
+pub(crate) async fn get_slow_listener(delay: Duration) -> TestServer {
+    TestServer::start(Router::new().fallback(move || async move {
+        tokio::time::sleep(delay).await;
+        StatusCode::OK
+    }))
+    .await
 }

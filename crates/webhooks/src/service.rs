@@ -169,18 +169,20 @@ mod service_tests {
     use kellnr_common::version::Version;
     use kellnr_common::webhook::{Webhook, WebhookEvent};
     use kellnr_db::{ConString, Database, DbProvider, SqliteConString, UserFlags};
+    use kellnr_http::test_support::closed_port_url;
 
     use super::*;
     use crate::notify_crate;
-    use crate::tests::get_test_listener;
+    use crate::tests::{get_slow_listener, get_test_listener};
 
     #[tokio::test]
     async fn test_handle_queue_send_ok() {
         let db = get_db().await;
+        let mut listener = get_test_listener(200).await;
 
         for _ in 0..5 {
             let _ = db
-                .register_webhook(sample_webhook(WebhookEvent::CrateAdd, 9980))
+                .register_webhook(sample_webhook(WebhookEvent::CrateAdd, &listener.url()))
                 .await
                 .unwrap();
         }
@@ -194,13 +196,11 @@ mod service_tests {
         )
         .await;
 
-        let mut listener = get_test_listener(9980, 200).await;
         let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
         handle_queue(&db, &http_client).await.unwrap();
 
         for _ in 0..5 {
-            let listener_resp = listener.rx.recv().await.unwrap();
-            assert_eq!(0, listener_resp);
+            listener.rx.recv().await.unwrap();
         }
 
         let ts = Utc::now() + TimeDelta::minutes(5);
@@ -213,9 +213,10 @@ mod service_tests {
         let db = get_db().await;
         let deliveries = 8;
         let delay = Duration::from_secs(1);
+        let listener = get_slow_listener(delay).await;
 
         for _ in 0..deliveries {
-            db.register_webhook(sample_webhook(WebhookEvent::CrateAdd, 9989))
+            db.register_webhook(sample_webhook(WebhookEvent::CrateAdd, &listener.url("/")))
                 .await
                 .unwrap();
         }
@@ -228,12 +229,10 @@ mod service_tests {
         )
         .await;
 
-        let listener = spawn_slow_listener(9989, delay).await;
         let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
         let start = std::time::Instant::now();
         handle_queue(&db, &http_client).await.unwrap();
         let elapsed = start.elapsed();
-        listener.abort();
 
         assert!(elapsed < delay * 4, "deliveries took {elapsed:?}");
         let ts = Utc::now() + TimeDelta::minutes(5);
@@ -248,9 +247,20 @@ mod service_tests {
     #[tokio::test]
     async fn test_handle_queue_records_mixed_results() {
         let db = get_db().await;
+        let ok = get_test_listener(200).await;
+        let fail = get_test_listener(500).await;
+        let closed = closed_port_url().await;
 
-        for port in [9990, 9990, 9990, 9991, 9991, 9991, 9992] {
-            db.register_webhook(sample_webhook(WebhookEvent::CrateAdd, port))
+        for url in [
+            ok.url(),
+            ok.url(),
+            ok.url(),
+            fail.url(),
+            fail.url(),
+            fail.url(),
+            closed,
+        ] {
+            db.register_webhook(sample_webhook(WebhookEvent::CrateAdd, &url))
                 .await
                 .unwrap();
         }
@@ -263,9 +273,6 @@ mod service_tests {
         )
         .await;
 
-        let _ok = get_test_listener(9990, 200).await;
-        let _fail = get_test_listener(9991, 500).await;
-        // Nothing listens on port 9992.
         let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
         handle_queue(&db, &http_client).await.unwrap();
 
@@ -280,35 +287,13 @@ mod service_tests {
         }
     }
 
-    /// Listener that answers every connection with 200 after `delay`,
-    /// handling connections in parallel.
-    async fn spawn_slow_listener(port: u16, delay: Duration) -> tokio::task::JoinHandle<()> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            loop {
-                let (mut stream, _) = listener.accept().await.unwrap();
-                tokio::spawn(async move {
-                    let mut buf = [0; 4096];
-                    let _ = stream.read(&mut buf).await;
-                    tokio::time::sleep(delay).await;
-                    let _ = stream
-                        .write_all(b"HTTP/1.1 200\r\nContent-Length: 0\r\n\r\n")
-                        .await;
-                });
-            }
-        })
-    }
-
     #[tokio::test]
     async fn test_handle_queue_send_fail() {
         let db = get_db().await;
+        let mut listener = get_test_listener(400).await;
 
         let _ = db
-            .register_webhook(sample_webhook(WebhookEvent::CrateAdd, 9981))
+            .register_webhook(sample_webhook(WebhookEvent::CrateAdd, &listener.url()))
             .await
             .unwrap();
 
@@ -321,12 +306,10 @@ mod service_tests {
         )
         .await;
 
-        let mut listener = get_test_listener(9981, 400).await;
         let http_client = WebhookClient::new(&Webhooks::default()).unwrap();
         handle_queue(&db, &http_client).await.unwrap();
 
-        let listener_resp = listener.rx.recv().await.unwrap();
-        assert_eq!(0, listener_resp);
+        listener.rx.recv().await.unwrap();
 
         let ts = Utc::now() + TimeDelta::minutes(5);
         let pending = db.get_pending_webhook_queue_entries(ts).await.unwrap();
@@ -356,7 +339,7 @@ mod service_tests {
         for callback_url in ["http://169.254.169.254/", "not a url"] {
             db.register_webhook(Webhook {
                 callback_url: callback_url.to_string(),
-                ..sample_webhook(WebhookEvent::CrateAdd, 0)
+                ..sample_webhook(WebhookEvent::CrateAdd, "")
             })
             .await
             .unwrap();
@@ -385,7 +368,7 @@ mod service_tests {
     #[tokio::test]
     async fn notify_crate_adds_original_name_to_payload() {
         let db = get_db().await;
-        db.register_webhook(sample_webhook(WebhookEvent::CrateYank, 9995))
+        db.register_webhook(sample_webhook(WebhookEvent::CrateYank, "http://127.0.0.1/"))
             .await
             .unwrap();
         db.add_user(&UserName::new("owner").unwrap(), "pwd", UserFlags::normal())
@@ -424,7 +407,10 @@ mod service_tests {
         let db = get_db().await;
 
         let _ = db
-            .register_webhook(sample_webhook(WebhookEvent::CrateAdd, 9982))
+            .register_webhook(sample_webhook(
+                WebhookEvent::CrateAdd,
+                &closed_port_url().await,
+            ))
             .await
             .unwrap();
 
@@ -456,11 +442,11 @@ mod service_tests {
         Arc::new(db)
     }
 
-    fn sample_webhook(event: WebhookEvent, callback_port: u16) -> Webhook {
+    fn sample_webhook(event: WebhookEvent, callback_url: &str) -> Webhook {
         Webhook {
             id: None,
             event,
-            callback_url: format!("http://0.0.0.0:{callback_port}"),
+            callback_url: callback_url.to_string(),
             name: None,
             secret: None,
         }
