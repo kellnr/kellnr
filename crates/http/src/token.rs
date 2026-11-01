@@ -259,17 +259,13 @@ mod tests {
     }
 
     fn test_settings() -> Arc<Settings> {
-        Arc::new(Settings {
-            registry: kellnr_settings::Registry {
-                token_cache_enabled: true,
-                token_cache_ttl_seconds: 60,
-                token_cache_max_capacity: 100,
-                token_db_retry_count: 3,
-                token_db_retry_delay_ms: 1,
-                ..kellnr_settings::Registry::default()
-            },
-            ..Settings::default()
-        })
+        let mut settings = kellnr_settings::test_settings();
+        settings.registry.token_cache_enabled = true;
+        settings.registry.token_cache_ttl_seconds = 60;
+        settings.registry.token_cache_max_capacity = 100;
+        settings.registry.token_db_retry_count = 3;
+        settings.registry.token_db_retry_delay_ms = 1;
+        Arc::new(settings)
     }
 
     fn app_state(

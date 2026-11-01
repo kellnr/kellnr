@@ -3,7 +3,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::Router;
-
 use axum_extra::extract::cookie::Key;
 use cookie::{Cookie, CookieJar};
 use kellnr_common::account_name::UserName;
@@ -11,6 +10,7 @@ use kellnr_common::background_tasks::BackgroundTasks;
 use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
+use kellnr_settings::Proxy;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::docs_storage::DocsStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
@@ -124,6 +124,19 @@ impl TestServer {
     /// URL of `path` on this server, e.g. `url("/api/")`.
     pub fn url(&self, path: &str) -> String {
         format!("http://{}{path}", self.addr)
+    }
+
+    /// Enabled crates.io proxy settings for this server as a fake crates.io
+    /// with the sparse index at `/index/`, the API at `/api/` and downloads at
+    /// `/dl/`.
+    pub fn cratesio_proxy(&self) -> Proxy {
+        Proxy {
+            enabled: true,
+            index: self.url("/index/").parse().unwrap(),
+            api: self.url("/api/").parse().unwrap(),
+            url: self.url("/dl/").parse().unwrap(),
+            ..Proxy::default()
+        }
     }
 }
 

@@ -24,7 +24,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
 
 use kellnr_db::{AdminUser, ConString, Database, PgConString, SqliteConString};
-use kellnr_settings::SessionAge;
+use kellnr_settings::{SessionAge, Settings};
 use sea_orm::{ConnectOptions, ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use tempfile::TempDir;
 use testcontainers::ContainerAsync;
@@ -174,6 +174,16 @@ impl Drop for Cleanup {
         })
         .join();
     }
+}
+
+/// Opens a copy of the SQLite template at the database path of `settings`,
+/// for tests that need the database in the data directory of Kellnr.
+pub async fn sqlite_database(settings: &Settings) -> Database {
+    let con = ConString::Sqlite(SqliteConString::from(settings));
+    copy_sqlite_template(&con).await;
+    Database::new(&con, MAX_CON)
+        .await
+        .expect("cannot open SQLite test database")
 }
 
 /// Puts a copy of the SQLite template for the admin credentials of `con` at

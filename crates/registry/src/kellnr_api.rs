@@ -1089,7 +1089,7 @@ mod reg_api_tests {
     use kellnr_common::publish_metadata::PublishMetadata;
     use kellnr_db::download_counter::DownloadCounter;
     use kellnr_db::mock::MockDb;
-    use kellnr_db::{ConString, CrateVisibility, Database, SqliteConString, UserFlags, test_utils};
+    use kellnr_db::{CrateVisibility, Database, UserFlags, test_utils};
     use kellnr_http::error::ErrorDetails;
     use kellnr_http::state::AppStateData;
     use kellnr_settings::{LicenseUnknown, Settings};
@@ -3833,9 +3833,7 @@ mod reg_api_tests {
             let data_dir = tempfile::tempdir().unwrap();
             settings.registry.data_dir = data_dir.path().to_string_lossy().into_owned();
             let storage = storage(&settings);
-            let con_string = ConString::Sqlite(SqliteConString::from(&settings));
-            kellnr_test_db::copy_sqlite_template(&con_string).await;
-            let db = Arc::new(Database::new(&con_string, 10).await.unwrap());
+            let db = Arc::new(kellnr_test_db::sqlite_database(&settings).await);
             TestKellnr {
                 _data_dir: data_dir,
                 settings: settings.clone(),

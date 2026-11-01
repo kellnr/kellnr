@@ -308,9 +308,9 @@ mod tests {
     use axum::routing::get;
     use axum::{Router, middleware};
     use http_body_util::BodyExt;
-    use kellnr_db::{ConString, Database, SqliteConString};
     use kellnr_filter::DownloadFilters;
     use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::{TestServer, closed_port_url};
     use kellnr_settings::{CratesioFilter, LicenseUnknown, Settings};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
@@ -339,26 +339,23 @@ mod tests {
 
     #[tokio::test]
     async fn search_failing_upstream_is_bad_gateway() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let app = Router::new().route(
+        let upstream = TestServer::start(Router::new().route(
             "/api",
             get(|| async { (StatusCode::TOO_MANY_REQUESTS, "slow down") }),
-        );
-        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        ))
+        .await;
 
         assert_eq!(
             StatusCode::BAD_GATEWAY,
-            search_status(&format!("http://{addr}/api")).await
+            search_status(&upstream.url("/api")).await
         );
     }
 
     #[tokio::test]
     async fn search_unreachable_upstream_is_bad_gateway() {
-        // Nothing listens on port 1, so the connection is refused.
         assert_eq!(
             StatusCode::BAD_GATEWAY,
-            search_status("http://127.0.0.1:1/api").await
+            search_status(&closed_port_url().await).await
         );
     }
 
@@ -400,9 +397,7 @@ mod tests {
     /// A fake crates.io with a sparse index, an API and downloads. Only the
     /// crate "upstream" exists in the index. Downloads exist for every crate,
     /// except for version 99.x and the crate `does_not_exist`.
-    async fn fake_cratesio(upstream: Arc<Upstream>) -> kellnr_settings::Proxy {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
+    async fn fake_cratesio(upstream: Arc<Upstream>) -> TestServer {
         let index_upstream = upstream.clone();
         let app = Router::new()
             .route(
@@ -452,15 +447,7 @@ mod tests {
                     },
                 ),
             );
-        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-
-        kellnr_settings::Proxy {
-            enabled: true,
-            index: Url::parse(&format!("http://{addr}/index/")).unwrap(),
-            api: Url::parse(&format!("http://{addr}/api/")).unwrap(),
-            url: Url::parse(&format!("http://{addr}/dl/")).unwrap(),
-            ..kellnr_settings::Proxy::default()
-        }
+        TestServer::start(app).await
     }
 
     fn license_filter(unknown: LicenseUnknown) -> CratesioFilter {
@@ -477,6 +464,7 @@ mod tests {
         client: Router,
         storage: Arc<CratesIoCrateStorage>,
         upstream: Arc<Upstream>,
+        _upstream_server: TestServer,
     }
 
     impl TestKellnr {
@@ -487,23 +475,24 @@ mod tests {
         async fn with_filter(filter: CratesioFilter) -> Self {
             let upstream = Arc::new(Upstream::default());
             let data_dir = tempfile::tempdir().unwrap();
+            let upstream_server = fake_cratesio(upstream.clone()).await;
             let settings = Settings {
-                proxy: fake_cratesio(upstream.clone()).await,
+                proxy: upstream_server.cratesio_proxy(),
                 cratesio_filter: filter,
                 ..kellnr_settings::test_settings_in(data_dir.path())
             };
             let storage =
                 Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
             let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
-            let con_string = ConString::Sqlite(SqliteConString::from(&settings));
-            kellnr_test_db::copy_sqlite_template(&con_string).await;
-            let db: Arc<dyn DbProvider> = Arc::new(Database::new(&con_string, 10).await.unwrap());
+            let db: Arc<dyn DbProvider> =
+                Arc::new(kellnr_test_db::sqlite_database(&settings).await);
 
             TestKellnr {
                 data_dir,
                 client: app(settings, storage.clone(), db),
                 storage,
                 upstream,
+                _upstream_server: upstream_server,
             }
         }
 

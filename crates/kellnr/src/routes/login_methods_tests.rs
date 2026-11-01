@@ -18,7 +18,7 @@ use kellnr_common::account_name::UserName;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::plain_token::PlainToken;
 use kellnr_common::version::Version;
-use kellnr_db::{ConString, Database, DbProvider, SqliteConString};
+use kellnr_db::{Database, DbProvider};
 use kellnr_http::state::AppStateData;
 use kellnr_http::test_support::{encode_cookies, test_state};
 use kellnr_settings::Settings;
@@ -226,17 +226,9 @@ struct TestApp {
 impl TestApp {
     async fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let mut settings = Settings {
-            registry: kellnr_settings::Registry {
-                data_dir: dir.path().to_str().unwrap().to_string(),
-                ..kellnr_settings::Registry::default()
-            },
-            ..Settings::default()
-        };
+        let mut settings = kellnr_settings::test_settings_in(dir.path());
         settings.toolchain.enabled = true;
-        let con = ConString::Sqlite(SqliteConString::from(&settings));
-        kellnr_test_db::copy_sqlite_template(&con).await;
-        let db = Arc::new(Database::new(&con, 10).await.unwrap());
+        let db = Arc::new(kellnr_test_db::sqlite_database(&settings).await);
         let admin = UserName::new("admin").unwrap();
         db.add_auth_token("test", &PlainToken::from(TOKEN), &admin)
             .await

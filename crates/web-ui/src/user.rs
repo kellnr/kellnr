@@ -954,16 +954,8 @@ mod tests {
     }
 
     async fn sqlite_db(data_dir: &std::path::Path) -> Arc<dyn DbProvider> {
-        let settings = Settings {
-            registry: kellnr_settings::Registry {
-                data_dir: data_dir.to_string_lossy().to_string(),
-                ..kellnr_settings::Registry::default()
-            },
-            ..Settings::default()
-        };
-        let con = kellnr_db::ConString::Sqlite(kellnr_db::SqliteConString::from(&settings));
-        kellnr_test_db::copy_sqlite_template(&con).await;
-        Arc::new(kellnr_db::Database::new(&con, 1).await.unwrap())
+        let settings = kellnr_settings::test_settings_in(data_dir);
+        Arc::new(kellnr_test_db::sqlite_database(&settings).await)
     }
 
     fn new_user(name: &str) -> NewUser {
