@@ -219,7 +219,7 @@ mod endpoint_tests {
 
     use axum::Router;
     use axum::body::{Body, to_bytes};
-    use axum::http::Request;
+    use axum::http::{HeaderMap, Request};
     use axum::response::Response;
     use axum::routing::{delete, get, post};
     use hyper::header;
@@ -228,6 +228,7 @@ mod endpoint_tests {
     use kellnr_common::webhook::WebhookEvent;
     use kellnr_db::{ConString, Database, DbProvider, SqliteConString, UserFlags};
     use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::closed_port_url;
     use serde::de::DeserializeOwned;
     use tower::ServiceExt;
 
@@ -531,10 +532,10 @@ mod endpoint_tests {
     #[tokio::test]
     async fn test_test_webhook() {
         let (router, db) = get_app().await;
-        let mut listener = get_test_listener(9977, 200).await;
+        let mut listener = get_test_listener(200).await;
 
         let mut webhook = sample_webhook();
-        webhook.callback_url = "http://0.0.0.0:9977".to_string();
+        webhook.callback_url = listener.url();
         let id = db.register_webhook(webhook).await.unwrap();
 
         let response = router
@@ -550,25 +551,18 @@ mod endpoint_tests {
 
         assert_eq!(200, response.status().as_u16());
 
-        let listener_resp = listener.rx.recv().await.unwrap();
-        assert_eq!(0, listener_resp);
+        listener.rx.recv().await.unwrap();
     }
 
     #[tokio::test]
     async fn test_test_webhook_does_not_return_callback_body() {
         let (router, db) = get_app().await;
         let body = "internal-callback-details";
-        let _listener = get_test_listener_with_response(
-            9979,
-            format!(
-                "HTTP/1.1 503\r\nContent-Length: {}\r\n\r\n{body}",
-                body.len()
-            ),
-        )
-        .await;
+        let listener =
+            get_test_listener_with_response(503, HeaderMap::new(), body.to_string()).await;
 
         let mut webhook = sample_webhook();
-        webhook.callback_url = "http://127.0.0.1:9979".to_string();
+        webhook.callback_url = listener.url();
         let id = db.register_webhook(webhook).await.unwrap();
 
         let response = router
@@ -592,9 +586,9 @@ mod endpoint_tests {
     #[tokio::test]
     async fn test_test_webhook_returns_502_for_unauthorized_callback() {
         let (router, db) = get_app().await;
-        let _listener = get_test_listener(9996, 401).await;
+        let listener = get_test_listener(401).await;
         let mut webhook = sample_webhook();
-        webhook.callback_url = "http://127.0.0.1:9996".to_string();
+        webhook.callback_url = listener.url();
         let id = db.register_webhook(webhook).await.unwrap();
 
         let response = router
@@ -618,7 +612,7 @@ mod endpoint_tests {
         let (router, db) = get_app().await;
 
         let mut webhook = sample_webhook();
-        webhook.callback_url = "http://127.0.0.1:9976".to_string();
+        webhook.callback_url = closed_port_url().await;
         let id = db.register_webhook(webhook).await.unwrap();
 
         let response = router
@@ -642,10 +636,10 @@ mod endpoint_tests {
     #[tokio::test]
     async fn test_test_webhook_non_admin() {
         let (router, db) = get_app().await;
-        let mut listener = get_test_listener(9978, 200).await;
+        let mut listener = get_test_listener(200).await;
 
         let mut webhook = sample_webhook();
-        webhook.callback_url = "http://0.0.0.0:9978".to_string();
+        webhook.callback_url = listener.url();
         let id = db.register_webhook(webhook).await.unwrap();
 
         let response = router
@@ -661,8 +655,7 @@ mod endpoint_tests {
 
         assert_eq!(401, response.status().as_u16());
 
-        let listener_resp = listener.rx.try_recv();
-        assert!(listener_resp.is_err());
+        assert!(listener.rx.try_recv().is_err());
     }
 
     async fn get_app() -> (Router, Arc<Database>) {

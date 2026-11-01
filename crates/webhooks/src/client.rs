@@ -126,23 +126,22 @@ pub(crate) async fn truncated_body(mut response: reqwest::Response) -> String {
 
 #[cfg(test)]
 mod tests {
+    use axum::http::HeaderMap;
+
     use super::*;
     use crate::tests::{get_redirect_listener, get_test_listener, get_test_listener_with_response};
 
+    /// Environment variable with the target URL for the tests run in a child
+    /// process by [`run_with_proxy_in_environment`].
+    const TARGET_ENV: &str = "KELLNR_TEST_WEBHOOK_TARGET";
+
     #[tokio::test]
     async fn truncates_response_body() {
-        let body = "x".repeat(10_000);
-        let _listener = get_test_listener_with_response(
-            9986,
-            format!(
-                "HTTP/1.1 500\r\nContent-Length: {}\r\n\r\n{body}",
-                body.len()
-            ),
-        )
-        .await;
+        let listener =
+            get_test_listener_with_response(500, HeaderMap::new(), "x".repeat(10_000)).await;
 
         let response = client(false)
-            .post("http://127.0.0.1:9986", &unsigned())
+            .post(&listener.url(), &unsigned())
             .await
             .unwrap();
 
@@ -165,22 +164,19 @@ mod tests {
         }
     }
 
-    fn header<'a>(request: &'a str, name: &str) -> Option<&'a str> {
-        request.lines().find_map(|line| {
-            let (key, value) = line.split_once(':')?;
-            key.eq_ignore_ascii_case(name).then(|| value.trim())
-        })
+    fn header<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+        headers.get(name).map(|value| value.to_str().unwrap())
     }
 
     #[tokio::test]
     async fn sends_signed_delivery_if_secret_is_set() {
-        let mut listener = get_test_listener(9987, 200).await;
+        let mut listener = get_test_listener(200).await;
         let secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
         let payload = serde_json::json!({"type": "crate_add"});
 
         client(false)
             .post(
-                "http://127.0.0.1:9987",
+                &listener.url(),
                 &Delivery {
                     id: "msg_42",
                     payload: &payload,
@@ -189,11 +185,9 @@ mod tests {
             )
             .await
             .unwrap();
-        listener.rx.recv().await.unwrap();
+        let request = listener.rx.recv().await.unwrap();
 
-        let request = listener.received.lock().unwrap().clone();
-        let body = request.split("\r\n\r\n").nth(1).unwrap();
-        let timestamp: i64 = header(&request, "webhook-timestamp")
+        let timestamp: i64 = header(&request.headers, "webhook-timestamp")
             .unwrap()
             .parse()
             .unwrap();
@@ -201,44 +195,46 @@ mod tests {
             &decode_secret(secret).unwrap(),
             "msg_42",
             timestamp,
-            body.as_bytes(),
+            &request.body,
         );
 
-        assert_eq!(Some("msg_42"), header(&request, "webhook-id"));
+        assert_eq!(Some("msg_42"), header(&request.headers, "webhook-id"));
         assert_eq!(
             Some(expected.as_str()),
-            header(&request, "webhook-signature")
+            header(&request.headers, "webhook-signature")
         );
-        assert_eq!(Some("application/json"), header(&request, "content-type"));
+        assert_eq!(
+            Some("application/json"),
+            header(&request.headers, "content-type")
+        );
         assert_eq!(
             payload,
-            serde_json::from_str::<serde_json::Value>(body).unwrap()
+            serde_json::from_slice::<serde_json::Value>(&request.body).unwrap()
         );
     }
 
     #[tokio::test]
     async fn sends_unsigned_delivery_without_secret() {
-        let mut listener = get_test_listener(9988, 200).await;
+        let mut listener = get_test_listener(200).await;
 
         client(false)
-            .post("http://127.0.0.1:9988", &unsigned())
+            .post(&listener.url(), &unsigned())
             .await
             .unwrap();
-        listener.rx.recv().await.unwrap();
+        let request = listener.rx.recv().await.unwrap();
 
-        let request = listener.received.lock().unwrap().clone();
-        assert_eq!(Some("msg_1"), header(&request, "webhook-id"));
-        assert!(header(&request, "webhook-timestamp").is_some());
-        assert!(header(&request, "webhook-signature").is_none());
+        assert_eq!(Some("msg_1"), header(&request.headers, "webhook-id"));
+        assert!(header(&request.headers, "webhook-timestamp").is_some());
+        assert!(header(&request.headers, "webhook-signature").is_none());
     }
 
     #[tokio::test]
     async fn does_not_follow_redirects() {
-        let mut target = get_test_listener(9983, 200).await;
-        let _redirect = get_redirect_listener(9984, "http://127.0.0.1:9983/").await;
+        let mut target = get_test_listener(200).await;
+        let redirect = get_redirect_listener(&target.url()).await;
 
         let response = client(false)
-            .post("http://127.0.0.1:9984", &unsigned())
+            .post(&redirect.url(), &unsigned())
             .await
             .unwrap();
 
@@ -247,15 +243,16 @@ mod tests {
     }
 
     /// Runs `test` in a child process with `HTTP_PROXY` pointing at
-    /// `proxy_port`, as the environment of this process cannot be changed
-    /// safely, and returns whether the child test passed.
-    async fn run_with_proxy_in_environment(test: &str, proxy_port: u16) -> bool {
-        let proxy = format!("http://127.0.0.1:{proxy_port}");
+    /// `proxy_url` and [`TARGET_ENV`] at `target_url`, as the environment of
+    /// this process cannot be changed safely, and returns whether the child
+    /// test passed.
+    async fn run_with_proxy_in_environment(test: &str, proxy_url: &str, target_url: &str) -> bool {
         let mut child = std::process::Command::new(std::env::current_exe().unwrap());
         child
             .args(["--exact", test, "--ignored"])
-            .env("HTTP_PROXY", &proxy)
-            .env("http_proxy", &proxy)
+            .env("HTTP_PROXY", proxy_url)
+            .env("http_proxy", proxy_url)
+            .env(TARGET_ENV, target_url)
             .env_remove("NO_PROXY")
             .env_remove("no_proxy");
         tokio::task::spawn_blocking(move || child.status().unwrap().success())
@@ -265,12 +262,15 @@ mod tests {
 
     #[tokio::test]
     async fn uses_proxy_from_environment_by_default() {
-        let mut proxy = get_test_listener(9993, 200).await;
-        let mut target = get_test_listener(9994, 200).await;
+        let mut proxy = get_test_listener(200).await;
+        let mut target = get_test_listener(200).await;
 
-        let passed =
-            run_with_proxy_in_environment("client::tests::delivers_with_default_settings", 9993)
-                .await;
+        let passed = run_with_proxy_in_environment(
+            "client::tests::delivers_with_default_settings",
+            &proxy.url(),
+            &target.url(),
+        )
+        .await;
 
         assert!(passed);
         assert!(proxy.rx.try_recv().is_ok());
@@ -279,12 +279,15 @@ mod tests {
 
     #[tokio::test]
     async fn ignores_proxy_from_environment_if_configured() {
-        let mut proxy = get_test_listener(9997, 200).await;
-        let mut target = get_test_listener(9998, 200).await;
+        let mut proxy = get_test_listener(200).await;
+        let mut target = get_test_listener(200).await;
 
-        let passed =
-            run_with_proxy_in_environment("client::tests::delivers_with_ignore_env_proxy", 9997)
-                .await;
+        let passed = run_with_proxy_in_environment(
+            "client::tests::delivers_with_ignore_env_proxy",
+            &proxy.url(),
+            &target.url(),
+        )
+        .await;
 
         assert!(passed);
         assert!(proxy.rx.try_recv().is_err());
@@ -295,7 +298,7 @@ mod tests {
     #[ignore = "run by uses_proxy_from_environment_by_default"]
     async fn delivers_with_default_settings() {
         let response = client(false)
-            .post("http://127.0.0.1:9994", &unsigned())
+            .post(&std::env::var(TARGET_ENV).unwrap(), &unsigned())
             .await
             .unwrap();
         assert_eq!(200, response.status().as_u16());
@@ -310,7 +313,7 @@ mod tests {
         })
         .unwrap();
         let response = client
-            .post("http://127.0.0.1:9998", &unsigned())
+            .post(&std::env::var(TARGET_ENV).unwrap(), &unsigned())
             .await
             .unwrap();
         assert_eq!(200, response.status().as_u16());
@@ -326,15 +329,13 @@ mod tests {
 
     #[tokio::test]
     async fn refuses_private_targets_if_configured() {
-        let mut target = get_test_listener(9985, 200).await;
+        let mut target = get_test_listener(200).await;
 
-        let result = client(true)
-            .post("http://127.0.0.1:9985", &unsigned())
-            .await;
+        let result = client(true).post(&target.url(), &unsigned()).await;
         assert!(matches!(result, Err(DeliveryError::BlockedTarget)));
 
         let result = client(true)
-            .post("http://localhost:9985", &unsigned())
+            .post(&format!("http://localhost:{}", target.port()), &unsigned())
             .await;
         assert!(matches!(result, Err(DeliveryError::Request(_))));
 
