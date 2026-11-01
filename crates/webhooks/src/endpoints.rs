@@ -2,7 +2,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use kellnr_common::webhook::Webhook;
-use kellnr_http::authz::require_admin_for_token_api;
+use kellnr_http::authz::require_admin;
 use kellnr_http::error::{ApiError, ApiResult};
 use kellnr_http::identity::TokenUser;
 use kellnr_http::state::{DbState, SettingsState};
@@ -34,7 +34,7 @@ pub async fn register_webhook(
     Json(input): Json<types::RegisterWebhookRequest>,
 ) -> ApiResult<Json<types::RegisterWebhookResponse>> {
     trace!(user = %user.name, event = ?input.event, "Registering webhook");
-    require_admin_for_token_api(&user)?;
+    require_admin(&user)?;
 
     let url = validate_callback_url(&input.callback_url)
         .map_err(|e| ApiError::new(&e, StatusCode::BAD_REQUEST))?;
@@ -81,7 +81,7 @@ pub async fn get_webhook(
     State(db): DbState,
 ) -> ApiResult<Json<types::GetWebhookResponse>> {
     trace!(user = %user.name, webhook_id = %id, "Getting webhook");
-    require_admin_for_token_api(&user)?;
+    require_admin(&user)?;
 
     Ok(Json(db.get_webhook(&id).await?.into()))
 }
@@ -102,7 +102,7 @@ pub async fn get_all_webhooks(
     State(db): DbState,
 ) -> ApiResult<Json<types::GetAllWebhooksResponse>> {
     trace!(user = %user.name, "Listing all webhooks");
-    require_admin_for_token_api(&user)?;
+    require_admin(&user)?;
 
     let w = db.get_all_webhooks().await?;
     Ok(Json(types::GetAllWebhooksResponse(
@@ -130,7 +130,7 @@ pub async fn delete_webhook(
     State(db): DbState,
 ) -> ApiResult<()> {
     trace!(user = %user.name, webhook_id = %id, "Deleting webhook");
-    require_admin_for_token_api(&user)?;
+    require_admin(&user)?;
 
     db.delete_webhook(&id).await?;
     Ok(())
@@ -160,7 +160,7 @@ pub async fn test_webhook(
     State(settings): SettingsState,
 ) -> ApiResult<()> {
     trace!(user = %user.name, webhook_id = %id, "Testing webhook");
-    require_admin_for_token_api(&user)?;
+    require_admin(&user)?;
 
     let w = db.get_webhook(&id).await?;
     let client = WebhookClient::new(&settings.webhooks)
@@ -385,7 +385,7 @@ mod endpoint_tests {
             .await
             .unwrap();
 
-        assert_eq!(401, response.status().as_u16());
+        assert_eq!(403, response.status().as_u16());
     }
 
     #[tokio::test]
@@ -431,7 +431,7 @@ mod endpoint_tests {
             .await
             .unwrap();
 
-        assert_eq!(401, response.status().as_u16());
+        assert_eq!(403, response.status().as_u16());
     }
 
     #[tokio::test]
@@ -480,7 +480,7 @@ mod endpoint_tests {
             .await
             .unwrap();
 
-        assert_eq!(401, response.status().as_u16());
+        assert_eq!(403, response.status().as_u16());
     }
 
     #[tokio::test]
@@ -523,7 +523,7 @@ mod endpoint_tests {
             .await
             .unwrap();
 
-        assert_eq!(401, response.status().as_u16());
+        assert_eq!(403, response.status().as_u16());
 
         let result = db.get_webhook(&id).await;
         assert!(result.is_ok());
@@ -653,7 +653,7 @@ mod endpoint_tests {
             .await
             .unwrap();
 
-        assert_eq!(401, response.status().as_u16());
+        assert_eq!(403, response.status().as_u16());
 
         assert!(listener.rx.try_recv().is_err());
     }

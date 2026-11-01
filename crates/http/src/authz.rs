@@ -21,12 +21,6 @@ pub fn require_admin(user: &Identity) -> Result<(), ApiError> {
     }
 }
 
-/// Like [`require_admin`], but with the 401 that the cargo token API for
-/// webhooks and empty crates has always answered non-admins with.
-pub fn require_admin_for_token_api(user: &Identity) -> Result<(), ApiError> {
-    require_admin(user).map_err(|_| ApiError::new("Unauthorized", StatusCode::UNAUTHORIZED))
-}
-
 /// Fail unless `user` owns the crate or is an admin.
 pub async fn require_owner(
     crate_name: &CanonicalName,
@@ -54,12 +48,6 @@ pub fn require_writable(user: &Identity) -> Result<(), ApiError> {
     } else {
         Ok(())
     }
-}
-
-/// Like [`require_writable`], but with the 400 that publishing, yanking and
-/// uploading docs have always answered read-only users with.
-pub fn require_writable_for_upload(user: &Identity) -> Result<(), ApiError> {
-    require_writable(user).map_err(|e| e.with_status(StatusCode::BAD_REQUEST))
 }
 
 /// Whether `user` may read the content of a download-restricted crate,
@@ -257,13 +245,5 @@ mod require_tests {
         );
         assert_eq!(status(require_writable(&user(false, false))), None);
         assert_eq!(status(require_writable(&user(true, true))), None);
-    }
-
-    #[test]
-    fn read_only_users_get_bad_request_for_uploads() {
-        assert_eq!(
-            status(require_writable_for_upload(&user(false, true))),
-            Some(StatusCode::BAD_REQUEST)
-        );
     }
 }

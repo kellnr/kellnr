@@ -7,7 +7,7 @@ use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
-use kellnr_http::authz::{can_read_crate, require_owner, require_writable_for_upload};
+use kellnr_http::authz::{can_read_crate, require_owner, require_writable};
 use kellnr_http::error::ApiResult;
 use kellnr_http::identity::{AnyUser, Identity, TokenUser};
 use kellnr_http::state::{AppState, DbState, DocsStorageState, SettingsState};
@@ -143,7 +143,7 @@ pub async fn publish_docs(
     // If not, he is not allowed to push the docs. This comes before the
     // version check, so that others cannot tell which crates and versions
     // exist: they get the same error for a missing crate.
-    require_writable_for_upload(&user)?;
+    require_writable(&user)?;
     require_owner(&canonical_name, &user, &db).await?;
 
     let Some(original_name) = db.get_original_name(&canonical_name, &version).await? else {
@@ -553,8 +553,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Read-only users are rejected with 400, like on all other modifying endpoints.
-        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
         let key = DocsStorage::file_key(
             &docs_name("test-crate"),
             &Version::try_from("1.0.0").unwrap(),
