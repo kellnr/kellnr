@@ -11,11 +11,10 @@ use kellnr_common::background_tasks::BackgroundTasks;
 use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
-use kellnr_storage::cached_crate_storage::DynStorage;
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::docs_storage::DocsStorage;
-use kellnr_storage::fs_storage::FSStorage;
 use kellnr_storage::kellnr_crate_storage::KellnrCrateStorage;
+use kellnr_storage::object_storage::MemoryStorage;
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 
@@ -24,20 +23,22 @@ use crate::login_throttle::LoginThrottle;
 use crate::state::{AppStateData, default_settings_prov};
 use crate::token_cache::TokenCacheManager;
 
+/// App state with a `MockDb`, [`kellnr_settings::test_settings`] and
+/// in-memory storage.
 pub fn test_state() -> AppStateData {
     let db: Arc<dyn DbProvider> = Arc::new(kellnr_db::mock::MockDb::new());
     let signing_key = Key::generate();
     let settings = Arc::new(kellnr_settings::test_settings());
     let settings_prov = default_settings_prov();
-    let kellnr_storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
-    let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, kellnr_storage));
+    let crate_storage = Arc::new(KellnrCrateStorage::new(
+        &settings,
+        Box::new(MemoryStorage::new()),
+    ));
     let cratesio_storage = Arc::new(CratesIoCrateStorage::new(
         &settings,
-        Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage,
+        Box::new(MemoryStorage::new()),
     ));
-    let docs_storage = Arc::new(DocsStorage::new(Box::new(
-        FSStorage::new(&settings.docs_path()).unwrap(),
-    ) as DynStorage));
+    let docs_storage = Arc::new(DocsStorage::new(Box::new(MemoryStorage::new())));
     let (cratesio_prefetch_sender, _) = flume::unbounded();
     let token_cache = Arc::new(TokenCacheManager::new(
         false,

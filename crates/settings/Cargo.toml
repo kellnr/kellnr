@@ -9,6 +9,10 @@ homepage.workspace = true
 repository.workspace = true
 documentation.workspace = true
 
+[features]
+# `test_settings()` for tests of other crates. Enable only from dev-dependencies.
+test-support = []
+
 [dependencies]
 kellnr-common.workspace = true
 
