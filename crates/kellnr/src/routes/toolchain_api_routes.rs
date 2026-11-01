@@ -1,6 +1,4 @@
-use axum::Router;
 use axum::extract::DefaultBodyLimit;
-use axum::routing::put;
 use kellnr_http::state::AppStateData;
 use kellnr_toolchain as toolchain;
 use utoipa_axum::router::OpenApiRouter;
@@ -8,13 +6,10 @@ use utoipa_axum::routes;
 
 /// Creates the toolchain API routes (management endpoints)
 pub(super) fn create_api_routes(max_bytes: usize) -> OpenApiRouter<AppStateData> {
-    // Upload route needs custom body limit, so we merge it as a regular Router
-    let upload_router: OpenApiRouter<AppStateData> = Router::new()
-        .route(
-            "/",
-            put(toolchain::upload_toolchain).layer(DefaultBodyLimit::max(max_bytes)),
-        )
-        .into();
+    // Upload route needs custom body limit, so it gets its own router
+    let upload_router = OpenApiRouter::new()
+        .routes(routes!(toolchain::upload_toolchain))
+        .layer(DefaultBodyLimit::max(max_bytes));
 
     OpenApiRouter::new()
         .routes(routes!(toolchain::list_toolchains))

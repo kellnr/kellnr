@@ -80,7 +80,10 @@ pub(crate) fn create_router(
             .nest("/api/v1/users", user_routes::create_routes())
             .nest("/api/v1/groups", group_routes::create_routes())
             .nest("/api/v1/acl", crate_access_routes::create_routes())
-            .nest("/api/v1/docs", docs_routes::create_ui_routes(state.clone()))
+            .nest(
+                "/api/v1/docs",
+                docs_routes::create_routes(state.clone(), max_docs_bytes),
+            )
             .nest("/api/v1/webhooks", webhook_routes::create_routes())
             .nest("/api/v1/oauth2", oauth2_routes::create_routes())
             .nest(
@@ -114,12 +117,8 @@ pub(crate) fn create_router(
     let (router, api): (Router<AppStateData>, _) = api_router.split_for_parts();
     let api = add_error_bodies(api);
 
-    // Add routes that don't have OpenAPI annotations and static services
+    // Add static services
     let router = router
-        .nest(
-            "/api/v1/docs",
-            docs_routes::create_manual_routes(max_docs_bytes),
-        )
         // Every API error has the same JSON format, also the rejections of
         // axum's extractors.
         .layer(middleware::from_fn(errors_as_json))
@@ -227,10 +226,10 @@ async fn add_docs_csp(mut response: axum::response::Response) -> axum::response:
 /// Layer ordering: the timeout wraps the handler directly, so it measures
 /// actual request processing time (not time spent waiting for a permit).
 pub(crate) fn apply_download_limits(
-    mut router: Router<AppStateData>,
+    mut router: OpenApiRouter<AppStateData>,
     semaphore: Option<Arc<Semaphore>>,
     settings: &Registry,
-) -> Router<AppStateData> {
+) -> OpenApiRouter<AppStateData> {
     // Apply timeout first (innermost layer = applied first to the handler)
     if settings.download_timeout_seconds > 0 {
         let timeout_secs = settings.download_timeout_seconds;

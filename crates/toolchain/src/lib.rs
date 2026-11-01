@@ -99,6 +99,27 @@ pub async fn list_toolchains(
         .map_err(|e| internal_error("Failed to load toolchains", e))
 }
 
+/// Upload a toolchain
+///
+/// Adds the combined archive of one target to a toolchain. The archive is
+/// split into its components in the background.
+/// Requires admin access.
+#[utoipa::path(
+    put,
+    path = "/",
+    tag = "toolchains",
+    params(UploadQuery),
+    request_body(content = Vec<u8>, content_type = "application/octet-stream", description = "Combined toolchain archive (.tar.xz)"),
+    responses(
+        (status = 200, description = "Toolchain uploaded", body = ToolchainResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin access required"),
+        (status = 409, description = "Target or archive already exists"),
+        (status = 413, description = "Archive is too large"),
+        (status = 503, description = "Storage not configured")
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn upload_toolchain(
     _user: AdminUser,
     State(db): DbState,
