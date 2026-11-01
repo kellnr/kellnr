@@ -1,6 +1,11 @@
-// Allow needless_for_each in generated code from utoipa derive macro
-#![allow(clippy::needless_for_each)]
+// Allow needless_for_each and the qualified schema paths in generated code
+// from utoipa derive macro
+#![allow(clippy::needless_for_each, unused_qualifications)]
 
+use kellnr_common::name_or_description::NameOrDescription;
+use kellnr_common::original_name::OriginalName;
+use kellnr_common::version::Version;
+use kellnr_db::provider::CrateSort;
 use kellnr_http::error::ErrorDetails;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::{Content, Ref, RefOr};
@@ -79,6 +84,9 @@ pub(crate) fn add_error_bodies(mut api: utoipa::openapi::OpenApi) -> utoipa::ope
         (name = "ui", description = "Web UI API"),
         (name = "health", description = "Health check")
     ),
+    // Query parameters only reference their types by name, so the types have
+    // to be registered here.
+    components(schemas(CrateSort, NameOrDescription, OriginalName, Version)),
     modifiers(&SecurityAddon)
 )]
 pub(crate) struct ApiDoc;

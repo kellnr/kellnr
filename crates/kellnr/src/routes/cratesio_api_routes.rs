@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use axum::routing::get;
-use axum::{Router, middleware};
+use axum::middleware;
 use kellnr_http::identity::Accepts;
 use kellnr_http::middleware::auth_when_required;
 use kellnr_http::state::AppStateData;
@@ -21,14 +20,8 @@ pub(super) fn create_routes(
     let settings = &state.settings.registry;
 
     // Download route with concurrency limit and timeout to prevent I/O starvation
-    let download_router = Router::new().route(
-        "/dl/{package}/{version}/download",
-        get(cratesio_api::download),
-    );
-
+    let download_router = OpenApiRouter::new().routes(routes!(cratesio_api::download));
     let download_router = apply_download_limits(download_router, download_semaphore, settings);
-
-    let download_router: OpenApiRouter<AppStateData> = download_router.into();
 
     OpenApiRouter::new()
         .routes(routes!(cratesio_prefetch_api::config_cratesio))

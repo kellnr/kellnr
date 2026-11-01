@@ -1,6 +1,5 @@
 use axum::extract::DefaultBodyLimit;
-use axum::routing::put;
-use axum::{Router, middleware};
+use axum::middleware;
 use kellnr_docs::api;
 use kellnr_http::identity::Accepts;
 use kellnr_http::middleware::auth_when_required;
@@ -9,8 +8,17 @@ use kellnr_web_ui::ui;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-/// Creates the docs UI routes
-pub(super) fn create_ui_routes(state: AppStateData) -> OpenApiRouter<AppStateData> {
+/// Creates the docs routes
+pub(super) fn create_routes(
+    state: AppStateData,
+    max_docs_bytes: usize,
+) -> OpenApiRouter<AppStateData> {
+    // Cargo uploads docs with its token, so the upload is not behind the
+    // session check of the UI routes. It also needs a custom body limit.
+    let upload_router = OpenApiRouter::new()
+        .routes(routes!(api::publish_docs))
+        .layer(DefaultBodyLimit::max(max_docs_bytes));
+
     OpenApiRouter::new()
         .routes(routes!(api::docs_in_queue, ui::build_rustdoc))
         .routes(routes!(ui::migrate_docs_storage))
@@ -19,13 +27,5 @@ pub(super) fn create_ui_routes(state: AppStateData) -> OpenApiRouter<AppStateDat
             (state, Accepts::Session),
             auth_when_required,
         ))
-}
-
-/// Creates the docs manual routes
-pub(super) fn create_manual_routes(max_docs_bytes: usize) -> Router<AppStateData> {
-    // Keep as regular Router due to custom layer on specific route
-    Router::new().route(
-        "/{package}/{version}",
-        put(api::publish_docs).layer(DefaultBodyLimit::max(max_docs_bytes)),
-    )
+        .merge(upload_router)
 }
