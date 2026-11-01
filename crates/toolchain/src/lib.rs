@@ -1091,15 +1091,17 @@ mod tests {
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
-    use kellnr_db::{
-        DbProvider, ToolchainComponentInfo, ToolchainTargetInfo, ToolchainWithTargets,
-    };
+    use kellnr_db::test_utils::test_drop_table;
+    use kellnr_db::{DbProvider, ToolchainTargetInfo, ToolchainWithTargets, UserFlags};
     use kellnr_http::error::ErrorDetails;
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::encode_cookies;
+    use kellnr_http::test_support::{
+        encode_cookies, session_cookie, sqlite_test_state, test_state,
+    };
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::toolchain_storage::ToolchainStorage;
+    use kellnr_test_db::TestDb;
     use mockall::predicate::*;
     use serde::de::DeserializeOwned;
     use tempfile::TempDir;
@@ -1107,26 +1109,22 @@ mod tests {
 
     use super::*;
 
-    /// Create an encrypted admin session cookie
-    fn admin_cookie() -> String {
-        encode_cookies([("kellnr_session_id", "admin_session")])
-    }
+    const TARGET: &str = "x86_64-unknown-linux-gnu";
+    const ARCHIVE_PATH: &str = "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz";
+    const UPLOAD_URL: &str = "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15";
 
-    /// Create an encrypted non-admin session cookie
-    fn non_admin_cookie() -> String {
-        encode_cookies([("kellnr_session_id", "user_session")])
-    }
-
-    /// Create app state with the given database and toolchain storage
-    fn create_app_state(
-        db: Arc<dyn DbProvider>,
+    /// App state on a fresh database with `toolchain_storage`, and a session
+    /// cookie of the admin.
+    async fn admin_state(
         toolchain_storage: Option<Arc<ToolchainStorage>>,
-    ) -> AppStateData {
-        AppStateData {
-            db,
+    ) -> (AppStateData, TestDb, String) {
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::admin()).await;
+        let state = AppStateData {
             toolchain_storage,
-            ..kellnr_http::test_support::test_state()
-        }
+            ..state
+        };
+        (state, db, cookie)
     }
 
     /// Create a router with API routes for testing
@@ -1152,6 +1150,18 @@ mod tests {
             .with_state(state)
     }
 
+    async fn send(state: AppStateData, request: Request<Body>) -> Response<Body> {
+        create_test_router(state).oneshot(request).await.unwrap()
+    }
+
+    async fn get_with(state: AppStateData, uri: &str, cookie: &str) -> Response<Body> {
+        let mut request = Request::get(uri);
+        if !cookie.is_empty() {
+            request = request.header(header::COOKIE, cookie);
+        }
+        send(state, request.body(Body::empty()).unwrap()).await
+    }
+
     async fn parse_response<T: DeserializeOwned>(response: Response<Body>) -> T {
         let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         serde_json::from_slice(&bytes).unwrap()
@@ -1162,248 +1172,129 @@ mod tests {
         details.errors[0].detail.clone()
     }
 
+    async fn text(response: Response<Body>) -> String {
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        String::from_utf8(body.to_vec()).unwrap()
+    }
+
     fn sample_archive() -> Bytes {
         // Create a minimal valid-looking archive (XZ magic bytes)
         Bytes::from(vec![0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00])
     }
 
+    fn upload_request(uri: &str, cookie: &str) -> Request<Body> {
+        Request::put(uri)
+            .header(header::COOKIE, cookie)
+            .header(header::CONTENT_TYPE, "application/octet-stream")
+            .body(Body::from(sample_archive()))
+            .unwrap()
+    }
+
+    fn delete_request(uri: &str, cookie: &str) -> Request<Body> {
+        Request::delete(uri)
+            .header(header::COOKIE, cookie)
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    fn set_channel_request(channel: &str, version: &str, cookie: &str) -> Request<Body> {
+        Request::put(format!("/api/v1/toolchains/channels/{channel}"))
+            .header(header::COOKIE, cookie)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(format!(
+                r#"{{"name": "rust", "version": "{version}"}}"#
+            )))
+            .unwrap()
+    }
+
+    /// Adds the toolchain `rust` 1.0.0 of 2024-01-15 on the channel `stable`,
+    /// with a ready target for each of `targets`. Returns the target ids.
+    async fn add_toolchain(db: &TestDb, targets: &[&str]) -> Vec<i64> {
+        let id = db
+            .add_toolchain("rust", "1.0.0", "2024-01-15", Some("stable".to_string()))
+            .await
+            .unwrap();
+        let mut ids = Vec::new();
+        for target in targets {
+            let target_id = db
+                .add_toolchain_target(
+                    id,
+                    target,
+                    &format!("2024-01-15/rust-1.0.0-{target}.tar.xz"),
+                    "abc123",
+                    1024,
+                )
+                .await
+                .unwrap();
+            db.set_target_status(target_id, ToolchainTargetStatus::Ready)
+                .await
+                .unwrap();
+            ids.push(target_id);
+        }
+        ids
+    }
+
+    /// The toolchain `rust` 1.0.0, if it exists.
+    async fn toolchain(db: &TestDb) -> Option<ToolchainWithTargets> {
+        db.get_toolchain_by_version("rust", "1.0.0").await.unwrap()
+    }
+
+    fn target_names(toolchain: &ToolchainWithTargets) -> Vec<&str> {
+        toolchain
+            .targets
+            .iter()
+            .map(|t| t.target.as_str())
+            .collect()
+    }
+
+    fn stored(path: &str) -> StorageKey {
+        StorageKey::from_stored(path.to_string())
+    }
+
+    fn fs_toolchain_storage(dir: &TempDir) -> Arc<ToolchainStorage> {
+        let storage: DynStorage = Box::new(FSStorage::new(dir.path().to_str().unwrap()).unwrap());
+        Arc::new(ToolchainStorage::new(storage))
+    }
+
     // ==================== Authorization Tests ====================
 
     #[tokio::test]
-    async fn test_list_toolchains_admin_authorized() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db.expect_list_toolchains().returning(|| Ok(vec![]));
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains")
-                    .header(header::COOKIE, admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(StatusCode::OK, response.status());
-    }
-
-    #[tokio::test]
-    async fn test_list_toolchains_non_admin_forbidden() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("user_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains")
-                    .header(header::COOKIE, non_admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(StatusCode::FORBIDDEN, response.status());
-    }
-
-    #[tokio::test]
-    async fn test_upload_toolchain_non_admin_forbidden() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("user_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::put(
-                    "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15",
-                )
-                .header(header::COOKIE, non_admin_cookie())
-                .header(header::CONTENT_TYPE, "application/octet-stream")
-                .body(Body::from(sample_archive()))
+    async fn admin_endpoints_forbid_non_admin() {
+        let (state, db) = sqlite_test_state().await;
+        let cookie = session_cookie(&db, "user", UserFlags::normal()).await;
+        let requests = [
+            Request::get("/api/v1/toolchains")
+                .header(header::COOKIE, &cookie)
+                .body(Body::empty())
                 .unwrap(),
-            )
-            .await
-            .unwrap();
+            upload_request(UPLOAD_URL, &cookie),
+            delete_request("/api/v1/toolchains/rust/1.0.0", &cookie),
+            delete_request(
+                "/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu",
+                &cookie,
+            ),
+            Request::get("/api/v1/toolchains/channels")
+                .header(header::COOKIE, &cookie)
+                .body(Body::empty())
+                .unwrap(),
+            set_channel_request("stable", "1.0.0", &cookie),
+        ];
 
-        assert_eq!(StatusCode::FORBIDDEN, response.status());
-    }
-
-    #[tokio::test]
-    async fn test_delete_toolchain_non_admin_forbidden() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("user_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::delete("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu")
-                    .header(header::COOKIE, non_admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(StatusCode::FORBIDDEN, response.status());
-    }
-
-    #[tokio::test]
-    async fn test_list_channels_non_admin_forbidden() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("user_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains/channels")
-                    .header(header::COOKIE, non_admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(StatusCode::FORBIDDEN, response.status());
-    }
-
-    #[tokio::test]
-    async fn test_set_channel_non_admin_forbidden() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("user_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let payload = r#"{"name": "rust", "version": "1.0.0"}"#;
-
-        let response = router
-            .oneshot(
-                Request::put("/api/v1/toolchains/channels/stable")
-                    .header(header::COOKIE, non_admin_cookie())
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(payload))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(StatusCode::FORBIDDEN, response.status());
+        for request in requests {
+            let uri = request.uri().to_string();
+            let response = send(state.clone(), request).await;
+            assert_eq!(StatusCode::FORBIDDEN, response.status(), "{uri}");
+        }
     }
 
     // ==================== Happy Path Tests ====================
 
     #[tokio::test]
     async fn test_list_toolchains_returns_data() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db.expect_list_toolchains().returning(|| {
-            Ok(vec![ToolchainWithTargets {
-                id: 1,
-                name: "rust".to_string(),
-                version: "1.0.0".to_string(),
-                date: "2024-01-15".to_string(),
-                channel: Some("stable".to_string()),
-                created: "2024-01-15".to_string(),
-                targets: vec![ToolchainTargetInfo {
-                    id: 1,
-                    target: "x86_64-unknown-linux-gnu".to_string(),
-                    storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                        .to_string(),
-                    hash: "abc123".to_string(),
-                    size: 1024,
-                    components: vec![],
-                    status: ToolchainTargetStatus::Ready,
-                }],
-            }])
-        });
+        let (state, db, cookie) = admin_state(None).await;
+        add_toolchain(&db, &[TARGET]).await;
 
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains")
-                    .header(header::COOKIE, admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = get_with(state, "/api/v1/toolchains", &cookie).await;
 
         assert_eq!(StatusCode::OK, response.status());
 
@@ -1416,37 +1307,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_channels_returns_data() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db.expect_get_channels().returning(|| {
-            Ok(vec![ChannelInfo {
-                name: "stable".to_string(),
-                version: "1.0.0".to_string(),
-                date: "2024-01-15".to_string(),
-            }])
-        });
+        let (state, db, cookie) = admin_state(None).await;
+        add_toolchain(&db, &[]).await;
 
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains/channels")
-                    .header(header::COOKIE, admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = get_with(state, "/api/v1/toolchains/channels", &cookie).await;
 
         assert_eq!(StatusCode::OK, response.status());
 
@@ -1459,254 +1323,81 @@ mod tests {
     #[tokio::test]
     async fn test_upload_toolchain_success() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage =
-            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
-        let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
+        let (state, db, cookie) = admin_state(Some(fs_toolchain_storage(&temp_dir))).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| Ok(None));
-        mock_db
-            .expect_add_toolchain()
-            .with(
-                eq("rust"),
-                eq("1.0.0"),
-                eq("2024-01-15"),
-                eq(Some("stable".to_string())),
-            )
-            .returning(|_, _, _, _| Ok(1));
-        mock_db
-            .expect_add_toolchain_target()
-            .returning(|_, _, _, _, _| Ok(1));
-
-        let state = create_app_state(Arc::new(mock_db), toolchain_storage);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::put(
-                    "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15&channel=stable",
-                )
-                .header(header::COOKIE, admin_cookie())
-                .header(header::CONTENT_TYPE, "application/octet-stream")
-                .body(Body::from(sample_archive()))
-                .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            state,
+            upload_request(&format!("{UPLOAD_URL}&channel=stable"), &cookie),
+        )
+        .await;
 
         assert_eq!(StatusCode::OK, response.status());
 
         let result: ToolchainResponse = parse_response(response).await;
         assert!(result.success);
         assert!(result.message.unwrap().contains("Uploaded"));
+        let toolchain = toolchain(&db).await.unwrap();
+        assert_eq!(toolchain.date, "2024-01-15");
+        assert_eq!(toolchain.channel.as_deref(), Some("stable"));
+        assert_eq!(target_names(&toolchain), vec![TARGET]);
+        assert_eq!(toolchain.targets[0].storage_path, ARCHIVE_PATH);
     }
 
     #[tokio::test]
     async fn test_set_channel_success() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| {
-                Ok(Some(ToolchainWithTargets {
-                    id: 1,
-                    name: "rust".to_string(),
-                    version: "1.0.0".to_string(),
-                    date: "2024-01-15".to_string(),
-                    channel: None,
-                    created: "2024-01-15".to_string(),
-                    targets: vec![],
-                }))
-            });
-        mock_db
-            .expect_set_channel()
-            .with(eq("stable"), eq("rust"), eq("1.0.0"))
-            .returning(|_, _, _| Ok(()));
+        let (state, db, cookie) = admin_state(None).await;
+        add_toolchain(&db, &[]).await;
 
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let payload = r#"{"name": "rust", "version": "1.0.0"}"#;
-
-        let response = router
-            .oneshot(
-                Request::put("/api/v1/toolchains/channels/stable")
-                    .header(header::COOKIE, admin_cookie())
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(payload))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(state, set_channel_request("beta", "1.0.0", &cookie)).await;
 
         assert_eq!(StatusCode::OK, response.status());
 
         let result: ToolchainResponse = parse_response(response).await;
         assert!(result.success);
+        assert_eq!(
+            toolchain(&db).await.unwrap().channel.as_deref(),
+            Some("beta")
+        );
     }
 
     #[tokio::test]
     async fn test_delete_toolchain_target_success() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage =
-            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
-        let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
+        let (state, db, cookie) = admin_state(Some(fs_toolchain_storage(&temp_dir))).await;
+        // Two targets so deleting one doesn't trigger auto-delete of toolchain
+        add_toolchain(&db, &[TARGET, "aarch64-unknown-linux-gnu"]).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| {
-                // Two targets so deleting one doesn't trigger auto-delete of toolchain
-                Ok(Some(ToolchainWithTargets {
-                    id: 1,
-                    name: "rust".to_string(),
-                    version: "1.0.0".to_string(),
-                    date: "2024-01-15".to_string(),
-                    channel: None,
-                    created: "2024-01-15".to_string(),
-                    targets: vec![
-                        ToolchainTargetInfo {
-                            id: 1,
-                            target: "x86_64-unknown-linux-gnu".to_string(),
-                            storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                                .to_string(),
-                            hash: "abc123".to_string(),
-                            size: 1024,
-                            components: vec![],
-                            status: ToolchainTargetStatus::Ready,
-                        },
-                        ToolchainTargetInfo {
-                            id: 2,
-                            target: "aarch64-unknown-linux-gnu".to_string(),
-                            storage_path: "2024-01-15/rust-1.0.0-aarch64-unknown-linux-gnu.tar.xz"
-                                .to_string(),
-                            hash: "def456".to_string(),
-                            size: 2048,
-                            components: vec![],
-                            status: ToolchainTargetStatus::Ready,
-                        },
-                    ],
-                }))
-            });
-        mock_db
-            .expect_delete_toolchain_target()
-            .with(eq("rust"), eq("1.0.0"), eq("x86_64-unknown-linux-gnu"))
-            .returning(|_, _, _| Ok(()));
-
-        let state = create_app_state(Arc::new(mock_db), toolchain_storage);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::delete("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu")
-                    .header(header::COOKIE, admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            state,
+            delete_request(
+                "/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu",
+                &cookie,
+            ),
+        )
+        .await;
 
         assert_eq!(StatusCode::OK, response.status());
 
         let result: ToolchainResponse = parse_response(response).await;
         assert!(result.success);
+        let toolchain = toolchain(&db).await.unwrap();
+        assert_eq!(target_names(&toolchain), vec!["aarch64-unknown-linux-gnu"]);
     }
 
     #[tokio::test]
     async fn test_delete_last_target_auto_deletes_toolchain() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage =
-            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
-        let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
+        let (state, db, cookie) = admin_state(Some(fs_toolchain_storage(&temp_dir))).await;
+        add_toolchain(&db, &[TARGET]).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| {
-                // Only one target - deleting it should auto-delete the toolchain
-                Ok(Some(ToolchainWithTargets {
-                    id: 1,
-                    name: "rust".to_string(),
-                    version: "1.0.0".to_string(),
-                    date: "2024-01-15".to_string(),
-                    channel: None,
-                    created: "2024-01-15".to_string(),
-                    targets: vec![ToolchainTargetInfo {
-                        id: 1,
-                        target: "x86_64-unknown-linux-gnu".to_string(),
-                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                            .to_string(),
-                        hash: "abc123".to_string(),
-                        size: 1024,
-                        components: vec![],
-                        status: ToolchainTargetStatus::Ready,
-                    }],
-                }))
-            });
-        // Expect delete_toolchain to be called (not delete_toolchain_target)
-        // because this is the last target
-        mock_db
-            .expect_delete_toolchain()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| Ok(()));
-
-        let state = create_app_state(Arc::new(mock_db), toolchain_storage);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::delete("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu")
-                    .header(header::COOKIE, admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            state,
+            delete_request(
+                "/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu",
+                &cookie,
+            ),
+        )
+        .await;
 
         assert_eq!(StatusCode::OK, response.status());
 
@@ -1718,189 +1409,53 @@ mod tests {
             msg.contains("last target removed"),
             "Expected 'last target removed' in message: {msg}"
         );
+        assert!(toolchain(&db).await.is_none());
     }
 
     #[tokio::test]
     async fn test_delete_toolchain_success() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage =
-            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
-        let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
+        let (state, db, cookie) = admin_state(Some(fs_toolchain_storage(&temp_dir))).await;
+        add_toolchain(&db, &[TARGET, "aarch64-unknown-linux-gnu"]).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| {
-                Ok(Some(ToolchainWithTargets {
-                    id: 1,
-                    name: "rust".to_string(),
-                    version: "1.0.0".to_string(),
-                    date: "2024-01-15".to_string(),
-                    channel: Some("stable".to_string()),
-                    created: "2024-01-15".to_string(),
-                    targets: vec![
-                        ToolchainTargetInfo {
-                            id: 1,
-                            target: "x86_64-unknown-linux-gnu".to_string(),
-                            storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                                .to_string(),
-                            hash: "abc123".to_string(),
-                            size: 1024,
-                            components: vec![],
-                            status: ToolchainTargetStatus::Ready,
-                        },
-                        ToolchainTargetInfo {
-                            id: 2,
-                            target: "aarch64-unknown-linux-gnu".to_string(),
-                            storage_path: "2024-01-15/rust-1.0.0-aarch64-unknown-linux-gnu.tar.xz"
-                                .to_string(),
-                            hash: "def456".to_string(),
-                            size: 2048,
-                            components: vec![],
-                            status: ToolchainTargetStatus::Ready,
-                        },
-                    ],
-                }))
-            });
-        mock_db
-            .expect_delete_toolchain()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| Ok(()));
-
-        let state = create_app_state(Arc::new(mock_db), toolchain_storage);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::delete("/api/v1/toolchains/rust/1.0.0")
-                    .header(header::COOKIE, admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            state,
+            delete_request("/api/v1/toolchains/rust/1.0.0", &cookie),
+        )
+        .await;
 
         assert_eq!(StatusCode::OK, response.status());
 
         let result: ToolchainResponse = parse_response(response).await;
         assert!(result.success);
         assert!(result.message.unwrap().contains("Deleted"));
+        assert!(toolchain(&db).await.is_none());
     }
 
     #[tokio::test]
     async fn test_delete_toolchain_not_found() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage =
-            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
-        let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
+        let (state, _db, cookie) = admin_state(Some(fs_toolchain_storage(&temp_dir))).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("99.99.99"))
-            .returning(|_, _| Ok(None));
-
-        let state = create_app_state(Arc::new(mock_db), toolchain_storage);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::delete("/api/v1/toolchains/rust/99.99.99")
-                    .header(header::COOKIE, admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(
+            state,
+            delete_request("/api/v1/toolchains/rust/99.99.99", &cookie),
+        )
+        .await;
 
         assert_eq!(StatusCode::NOT_FOUND, response.status());
 
         assert!(error_detail(response).await.contains("not found"));
     }
 
-    #[tokio::test]
-    async fn test_delete_entire_toolchain_non_admin_forbidden() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("user_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("user").unwrap(),
-                    is_admin: false,
-                    is_read_only: false,
-                })
-            });
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::delete("/api/v1/toolchains/rust/1.0.0")
-                    .header(header::COOKIE, non_admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(StatusCode::FORBIDDEN, response.status());
-    }
-
     // ==================== Error Path Tests ====================
 
     #[tokio::test]
     async fn test_upload_toolchain_storage_not_configured() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-
         // No toolchain storage configured
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
+        let (state, _db, cookie) = admin_state(None).await;
 
-        let response = router
-            .oneshot(
-                Request::put(
-                    "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15",
-                )
-                .header(header::COOKIE, admin_cookie())
-                .header(header::CONTENT_TYPE, "application/octet-stream")
-                .body(Body::from(sample_archive()))
-                .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(state, upload_request(UPLOAD_URL, &cookie)).await;
 
         assert_eq!(StatusCode::SERVICE_UNAVAILABLE, response.status());
 
@@ -1910,60 +1465,10 @@ mod tests {
     #[tokio::test]
     async fn test_upload_duplicate_target_conflict() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage =
-            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
-        let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
+        let (state, db, cookie) = admin_state(Some(fs_toolchain_storage(&temp_dir))).await;
+        add_toolchain(&db, &[TARGET]).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| {
-                Ok(Some(ToolchainWithTargets {
-                    id: 1,
-                    name: "rust".to_string(),
-                    version: "1.0.0".to_string(),
-                    date: "2024-01-15".to_string(),
-                    channel: None,
-                    created: "2024-01-15".to_string(),
-                    targets: vec![ToolchainTargetInfo {
-                        id: 1,
-                        target: "x86_64-unknown-linux-gnu".to_string(),
-                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                            .to_string(),
-                        hash: "abc123".to_string(),
-                        size: 1024,
-                        components: vec![],
-                        status: ToolchainTargetStatus::Ready,
-                    }],
-                }))
-            });
-
-        let state = create_app_state(Arc::new(mock_db), toolchain_storage);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::put(
-                    "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15",
-                )
-                .header(header::COOKIE, admin_cookie())
-                .header(header::CONTENT_TYPE, "application/octet-stream")
-                .body(Body::from(sample_archive()))
-                .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(state, upload_request(UPLOAD_URL, &cookie)).await;
 
         assert_eq!(StatusCode::CONFLICT, response.status());
 
@@ -1972,42 +1477,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_channel_toolchain_not_found() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_validate_session()
-            .with(eq(PlainToken::from("admin_session")))
-            .returning(|_| {
-                Ok(kellnr_db::SessionInfo {
-                    name: UserName::new("admin").unwrap(),
-                    is_admin: true,
-                    is_read_only: false,
-                })
-            });
-        mock_db
-            .expect_set_channel()
-            .with(eq("stable"), eq("rust"), eq("99.99.99"))
-            .returning(|_, name, version| {
-                Err(DbError::ToolchainNotFound(
-                    name.to_string(),
-                    version.to_string(),
-                ))
-            });
+        let (state, _db, cookie) = admin_state(None).await;
 
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let payload = r#"{"name": "rust", "version": "99.99.99"}"#;
-
-        let response = router
-            .oneshot(
-                Request::put("/api/v1/toolchains/channels/stable")
-                    .header(header::COOKIE, admin_cookie())
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(payload))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = send(state, set_channel_request("stable", "99.99.99", &cookie)).await;
 
         assert_eq!(StatusCode::NOT_FOUND, response.status());
 
@@ -2016,48 +1488,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_manifest_invalid_format_not_found() {
-        let mock_db = MockDb::new();
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
         // Missing prefix
-        let response = router
-            .clone()
-            .oneshot(
-                Request::get("/api/v1/toolchains/dist/stable.toml")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = get_with(test_state(), "/api/v1/toolchains/dist/stable.toml", "").await;
 
         assert_eq!(StatusCode::NOT_FOUND, response.status());
     }
 
     #[tokio::test]
     async fn test_get_manifest_channel_not_found() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_toolchain_by_channel()
-            .with(eq("nonexistent"))
-            .returning(|_| Ok(None));
-        mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("nonexistent"))
-            .returning(|_, _| Ok(None));
+        let (state, _db) = sqlite_test_state().await;
 
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains/dist/channel-rust-nonexistent.toml")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = get_with(
+            state,
+            "/api/v1/toolchains/dist/channel-rust-nonexistent.toml",
+            "",
+        )
+        .await;
 
         assert_eq!(StatusCode::NOT_FOUND, response.status());
     }
@@ -2065,45 +1511,30 @@ mod tests {
     #[tokio::test]
     async fn test_download_archive_not_found() {
         let temp_dir = TempDir::new().unwrap();
-        let storage: DynStorage =
-            Box::new(FSStorage::new(temp_dir.path().to_str().unwrap()).unwrap());
-        let toolchain_storage = Some(Arc::new(ToolchainStorage::new(storage)));
+        let state = AppStateData {
+            toolchain_storage: Some(fs_toolchain_storage(&temp_dir)),
+            ..test_state()
+        };
 
-        let mock_db = MockDb::new();
-
-        let state = create_app_state(Arc::new(mock_db), toolchain_storage);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains/dist/2024-01-15/nonexistent.tar.xz")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = get_with(
+            state,
+            "/api/v1/toolchains/dist/2024-01-15/nonexistent.tar.xz",
+            "",
+        )
+        .await;
 
         assert_eq!(StatusCode::NOT_FOUND, response.status());
     }
 
     #[tokio::test]
     async fn test_download_archive_storage_not_configured() {
-        let mock_db = MockDb::new();
-
         // No toolchain storage
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get(
-                    "/api/v1/toolchains/dist/2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz",
-                )
-                .body(Body::empty())
-                .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = get_with(
+            test_state(),
+            "/api/v1/toolchains/dist/2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz",
+            "",
+        )
+        .await;
 
         assert_eq!(StatusCode::SERVICE_UNAVAILABLE, response.status());
     }
@@ -2112,42 +1543,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_manifest_returns_valid_toml() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_toolchain_by_channel()
-            .with(eq("stable"))
-            .returning(|_| {
-                Ok(Some(ToolchainWithTargets {
-                    id: 1,
-                    name: "rust".to_string(),
-                    version: "1.0.0".to_string(),
-                    date: "2024-01-15".to_string(),
-                    channel: Some("stable".to_string()),
-                    created: "2024-01-15".to_string(),
-                    targets: vec![ToolchainTargetInfo {
-                        id: 1,
-                        target: "x86_64-unknown-linux-gnu".to_string(),
-                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                            .to_string(),
-                        hash: "abc123def456".to_string(),
-                        size: 1024,
-                        components: vec![],
-                        status: ToolchainTargetStatus::Ready,
-                    }],
-                }))
-            });
+        let (state, db) = sqlite_test_state().await;
+        add_toolchain(&db, &[TARGET]).await;
 
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains/dist/channel-rust-stable.toml")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = get_with(
+            state,
+            "/api/v1/toolchains/dist/channel-rust-stable.toml",
+            "",
+        )
+        .await;
 
         assert_eq!(StatusCode::OK, response.status());
         assert_eq!(
@@ -2155,8 +1559,7 @@ mod tests {
             "text/toml; charset=utf-8"
         );
 
-        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let manifest = String::from_utf8(body.to_vec()).unwrap();
+        let manifest = text(response).await;
 
         // Verify manifest structure
         assert!(manifest.contains("manifest-version = \"2\""));
@@ -2166,58 +1569,20 @@ mod tests {
         assert!(manifest.contains("[pkg.rust.target.x86_64-unknown-linux-gnu]"));
         assert!(manifest.contains("available = true"));
         assert!(manifest.contains("xz_url = \""));
-        assert!(manifest.contains("xz_hash = \"abc123def456\""));
+        assert!(manifest.contains("xz_hash = \"abc123\""));
     }
 
     #[tokio::test]
     async fn test_get_manifest_by_version_falls_back_when_no_channel() {
-        let mut mock_db = MockDb::new();
-        // Channel lookup returns None, version "1.0.0" is not a channel name
-        mock_db
-            .expect_get_toolchain_by_channel()
-            .with(eq("1.0.0"))
-            .returning(|_| Ok(None));
-        // Fallback: version lookup succeeds
-        mock_db
-            .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| {
-                Ok(Some(ToolchainWithTargets {
-                    id: 1,
-                    name: "rust".to_string(),
-                    version: "1.0.0".to_string(),
-                    date: "2024-01-15".to_string(),
-                    channel: None,
-                    created: "2024-01-15".to_string(),
-                    targets: vec![ToolchainTargetInfo {
-                        id: 1,
-                        target: "x86_64-unknown-linux-gnu".to_string(),
-                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                            .to_string(),
-                        hash: "abc123def456".to_string(),
-                        size: 1024,
-                        components: vec![],
-                        status: ToolchainTargetStatus::Ready,
-                    }],
-                }))
-            });
+        let (state, db) = sqlite_test_state().await;
+        add_toolchain(&db, &[TARGET]).await;
 
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains/dist/channel-rust-1.0.0.toml")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        // "1.0.0" is not a channel name, so the version lookup finds the toolchain
+        let response = get_with(state, "/api/v1/toolchains/dist/channel-rust-1.0.0.toml", "").await;
 
         assert_eq!(StatusCode::OK, response.status());
 
-        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let manifest = String::from_utf8(body.to_vec()).unwrap();
+        let manifest = text(response).await;
 
         assert!(manifest.contains("manifest-version = \"2\""));
         assert!(manifest.contains("version = \"1.0.0\""));
@@ -2226,64 +1591,30 @@ mod tests {
 
     #[tokio::test]
     async fn test_manifest_includes_component_packages() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_toolchain_by_channel()
-            .with(eq("stable"))
-            .returning(|_| {
-                Ok(Some(ToolchainWithTargets {
-                    id: 1,
-                    name: "rust".to_string(),
-                    version: "1.0.0".to_string(),
-                    date: "2024-01-15".to_string(),
-                    channel: Some("stable".to_string()),
-                    created: "2024-01-15".to_string(),
-                    targets: vec![ToolchainTargetInfo {
-                        id: 1,
-                        target: "x86_64-unknown-linux-gnu".to_string(),
-                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                            .to_string(),
-                        hash: "abc123".to_string(),
-                        size: 1024,
-                        components: vec![
-                            ToolchainComponentInfo {
-                                name: "rustc".to_string(),
-                                storage_path:
-                                    "2024-01-15/rustc-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                                        .to_string(),
-                                hash: "rustc_hash".to_string(),
-                                size: 512,
-                            },
-                            ToolchainComponentInfo {
-                                name: "cargo".to_string(),
-                                storage_path:
-                                    "2024-01-15/cargo-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                                        .to_string(),
-                                hash: "cargo_hash".to_string(),
-                                size: 256,
-                            },
-                        ],
-                        status: ToolchainTargetStatus::Ready,
-                    }],
-                }))
-            });
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
-
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains/dist/channel-rust-stable.toml")
-                    .body(Body::empty())
-                    .unwrap(),
+        let (state, db) = sqlite_test_state().await;
+        let target_id = add_toolchain(&db, &[TARGET]).await[0];
+        for (name, hash, size) in [("rustc", "rustc_hash", 512), ("cargo", "cargo_hash", 256)] {
+            db.add_toolchain_component(
+                target_id,
+                name,
+                &format!("2024-01-15/{name}-1.0.0-x86_64-unknown-linux-gnu.tar.xz"),
+                hash,
+                size,
             )
             .await
             .unwrap();
+        }
+
+        let response = get_with(
+            state,
+            "/api/v1/toolchains/dist/channel-rust-stable.toml",
+            "",
+        )
+        .await;
 
         assert_eq!(StatusCode::OK, response.status());
 
-        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let manifest = String::from_utf8(body.to_vec()).unwrap();
+        let manifest = text(response).await;
 
         // Component list under the rust meta-package
         assert!(manifest.contains("[[pkg.rust.target.x86_64-unknown-linux-gnu.components]]"));
@@ -2376,45 +1707,44 @@ mod tests {
         xz_encoder.finish().unwrap()
     }
 
+    const ARCHIVE_ID: ToolchainArchiveId<'static> = ToolchainArchiveId {
+        name: "rust",
+        version: "1.0.0",
+        date: "2024-01-15",
+        target: TARGET,
+    };
+
     #[tokio::test]
     async fn test_extract_components_from_archive() {
-        use tempfile::TempDir;
-
         let xz_data = two_component_archive();
 
-        // Set up storage and mock DB
+        // Set up storage and database
         let tmp_dir = TempDir::new().unwrap();
         let toolchain_dir = tmp_dir.path().join("toolchains");
         std::fs::create_dir_all(&toolchain_dir).unwrap();
         let fs = Box::new(FSStorage::new(toolchain_dir.to_str().unwrap()).unwrap()) as DynStorage;
         let storage = Arc::new(ToolchainStorage::new(fs));
-
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_is_toolchain_component_stored_at()
-            .returning(|_| Ok(false));
-        mock_db
-            .expect_add_toolchain_component()
-            .times(2)
-            .returning(|_, _, _, _, _| Ok(()));
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let db = TestDb::sqlite().await;
+        let target_id = add_toolchain(&db, &[TARGET]).await[0];
 
         let result = extract_and_store_components(
             &storage,
-            &db,
-            1,
-            &ToolchainArchiveId {
-                name: "rust",
-                version: "1.0.0",
-                date: "2024-01-15",
-                target: "x86_64-unknown-linux-gnu",
-            },
+            &db.provider(),
+            target_id,
+            &ARCHIVE_ID,
             Bytes::from(xz_data),
         )
         .await;
 
         assert!(result.is_ok(), "extraction failed: {result:?}");
+
+        let mut components: Vec<String> = toolchain(&db).await.unwrap().targets[0]
+            .components
+            .iter()
+            .map(|c| c.name.clone())
+            .collect();
+        components.sort_unstable();
+        assert_eq!(components, vec!["cargo", "rustc"]);
 
         // Verify component archives were stored
         let rustc_exists = storage
@@ -2474,8 +1804,8 @@ mod tests {
     const RUSTC_COMPONENT: &str = "2024-01-15/rustc-1.0.0-x86_64-unknown-linux-gnu.tar.xz";
 
     /// Extracts [`two_component_archive`] into `storage` after a leftover file
-    /// was stored at the path of the rustc component, which a target refers
-    /// to if `in_use`.
+    /// was stored at the path of the rustc component, which another target
+    /// refers to if `in_use`.
     async fn extract_over_leftover(
         storage: &Arc<ToolchainStorage>,
         in_use: bool,
@@ -2484,25 +1814,19 @@ mod tests {
             .put_raw(&stored(RUSTC_COMPONENT), Bytes::from_static(b"leftover"))
             .await
             .unwrap();
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_is_toolchain_component_stored_at()
-            .returning(move |path| Ok(in_use && path == RUSTC_COMPONENT));
-        mock_db
-            .expect_add_toolchain_component()
-            .returning(|_, _, _, _, _| Ok(()));
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let db = TestDb::sqlite().await;
+        let ids = add_toolchain(&db, &[TARGET, "aarch64-unknown-linux-gnu"]).await;
+        if in_use {
+            db.add_toolchain_component(ids[1], "rustc", RUSTC_COMPONENT, "hash", 8)
+                .await
+                .unwrap();
+        }
 
         extract_and_store_components(
             storage,
-            &db,
-            1,
-            &ToolchainArchiveId {
-                name: "rust",
-                version: "1.0.0",
-                date: "2024-01-15",
-                target: "x86_64-unknown-linux-gnu",
-            },
+            &db.provider(),
+            ids[0],
+            &ARCHIVE_ID,
             Bytes::from(two_component_archive()),
         )
         .await
@@ -2534,49 +1858,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_manifest_sha256_returns_ok() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_toolchain_by_channel()
-            .with(eq("stable"))
-            .returning(|_| {
-                Ok(Some(ToolchainWithTargets {
-                    id: 1,
-                    name: "rust".to_string(),
-                    version: "1.0.0".to_string(),
-                    date: "2024-01-15".to_string(),
-                    channel: Some("stable".to_string()),
-                    created: "2024-01-15".to_string(),
-                    targets: vec![ToolchainTargetInfo {
-                        id: 1,
-                        target: "x86_64-unknown-linux-gnu".to_string(),
-                        storage_path: "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz"
-                            .to_string(),
-                        hash: "abc123def456".to_string(),
-                        size: 1024,
-                        components: vec![],
-                        status: ToolchainTargetStatus::Ready,
-                    }],
-                }))
-            });
-
-        let state = create_app_state(Arc::new(mock_db), None);
-        let router = create_test_router(state);
+        let (state, db) = sqlite_test_state().await;
+        add_toolchain(&db, &[TARGET]).await;
 
         // rustup requests the .sha256 of the manifest before downloading
         // the manifest itself. This must return a valid SHA256 hash.
-        let response = router
-            .oneshot(
-                Request::get("/api/v1/toolchains/dist/channel-rust-stable.toml.sha256")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = get_with(
+            state,
+            "/api/v1/toolchains/dist/channel-rust-stable.toml.sha256",
+            "",
+        )
+        .await;
 
         assert_eq!(StatusCode::OK, response.status());
 
-        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let hash_content = String::from_utf8(body.to_vec()).unwrap();
+        let hash_content = text(response).await;
 
         // Should be a valid hex-encoded SHA256 hash (64 characters)
         let hash = hash_content.trim();
@@ -2636,7 +1932,69 @@ mod tests {
         );
     }
 
-    fn admin_db() -> MockDb {
+    /// A misspelled target must not count as the last target, which would
+    /// delete the whole toolchain.
+    #[tokio::test]
+    async fn delete_unknown_target_of_single_target_toolchain_is_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let (state, db, cookie) = admin_state(Some(fs_toolchain_storage(&temp_dir))).await;
+        add_toolchain(&db, &[TARGET]).await;
+
+        let response = send(
+            state,
+            delete_request(
+                "/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnux",
+                &cookie,
+            ),
+        )
+        .await;
+
+        assert_eq!(StatusCode::NOT_FOUND, response.status());
+        assert_eq!(target_names(&toolchain(&db).await.unwrap()), vec![TARGET]);
+    }
+
+    #[tokio::test]
+    async fn upload_does_not_create_toolchain_when_archive_cannot_be_stored() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = fs_toolchain_storage(&temp_dir);
+        storage
+            .put_raw(&stored(ARCHIVE_PATH), Bytes::from_static(b"orphan"))
+            .await
+            .unwrap();
+        let (state, db, cookie) = admin_state(Some(storage)).await;
+
+        let response = send(state, upload_request(UPLOAD_URL, &cookie)).await;
+
+        assert_eq!(StatusCode::CONFLICT, response.status());
+        assert!(toolchain(&db).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn upload_removes_archive_and_new_toolchain_when_target_cannot_be_added() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = fs_toolchain_storage(&temp_dir);
+        let (state, db, cookie) = admin_state(Some(storage.clone())).await;
+        test_drop_table(&db, "toolchain_target").await.unwrap();
+
+        let response = send(state, upload_request(UPLOAD_URL, &cookie)).await;
+
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, response.status());
+        assert!(!error_detail(response).await.contains("no such table"));
+        assert!(!storage.exists(&stored(ARCHIVE_PATH)).await.unwrap());
+        assert!(toolchain(&db).await.is_none());
+    }
+
+    // The database cannot fail the delete of a toolchain while it still
+    // reads it, so these tests keep a mock.
+
+    /// Create an encrypted admin session cookie
+    fn admin_cookie() -> String {
+        encode_cookies([("kellnr_session_id", "admin_session")])
+    }
+
+    /// Database with a session of the admin that holds the toolchain `rust`
+    /// 1.0.0 with `targets`.
+    fn admin_db(targets: &'static [&'static str]) -> MockDb {
         let mut mock_db = MockDb::new();
         mock_db
             .expect_validate_session()
@@ -2649,42 +2007,9 @@ mod tests {
                 })
             });
         mock_db
-    }
-
-    fn stored(path: &str) -> StorageKey {
-        StorageKey::from_stored(path.to_string())
-    }
-
-    fn fs_toolchain_storage(dir: &TempDir) -> Arc<ToolchainStorage> {
-        let storage: DynStorage = Box::new(FSStorage::new(dir.path().to_str().unwrap()).unwrap());
-        Arc::new(ToolchainStorage::new(storage))
-    }
-
-    /// A misspelled target must not count as the last target, which would
-    /// delete the whole toolchain.
-    #[tokio::test]
-    async fn delete_unknown_target_of_single_target_toolchain_is_not_found() {
-        let temp_dir = TempDir::new().unwrap();
-        let mut mock_db = admin_db();
-        mock_db
             .expect_get_toolchain_by_version()
-            .with(eq("rust"), eq("1.0.0"))
-            .returning(|_, _| Ok(Some(ready_toolchain(&["x86_64-unknown-linux-gnu"]))));
-        mock_db.expect_delete_toolchain().never();
-        mock_db.expect_delete_toolchain_target().never();
-
-        let state = create_app_state(Arc::new(mock_db), Some(fs_toolchain_storage(&temp_dir)));
-        let response = create_test_router(state)
-            .oneshot(
-                Request::delete("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnux")
-                    .header(header::COOKIE, admin_cookie())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(StatusCode::NOT_FOUND, response.status());
+            .returning(|_, _| Ok(Some(ready_toolchain(targets))));
+        mock_db
     }
 
     /// Stands in for a database error whose text must not reach the client.
@@ -2692,171 +2017,103 @@ mod tests {
         DbError::InitializationError("secret detail".to_string())
     }
 
-    const ARCHIVE_PATH: &str = "2024-01-15/rust-1.0.0-x86_64-unknown-linux-gnu.tar.xz";
-    const UPLOAD_URL: &str = "/api/v1/toolchains?name=rust&version=1.0.0&target=x86_64-unknown-linux-gnu&date=2024-01-15";
-
-    async fn send(state: AppStateData, request: Request<Body>) -> (StatusCode, String) {
-        let response = create_test_router(state).oneshot(request).await.unwrap();
-        let status = response.status();
-        (status, error_detail(response).await)
-    }
-
-    fn upload_request() -> Request<Body> {
-        Request::put(UPLOAD_URL)
-            .header(header::COOKIE, admin_cookie())
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .body(Body::from(sample_archive()))
-            .unwrap()
-    }
-
-    fn delete_request(uri: &str) -> Request<Body> {
-        Request::delete(uri)
-            .header(header::COOKIE, admin_cookie())
-            .body(Body::empty())
-            .unwrap()
-    }
-
-    #[tokio::test]
-    async fn upload_does_not_create_toolchain_when_archive_cannot_be_stored() {
-        let temp_dir = TempDir::new().unwrap();
-        let storage = fs_toolchain_storage(&temp_dir);
+    /// State with `mock_db` and a toolchain storage that holds the archive of
+    /// the `x86_64-unknown-linux-gnu` target.
+    async fn state_with_archive(
+        mock_db: MockDb,
+        dir: &TempDir,
+    ) -> (AppStateData, Arc<ToolchainStorage>) {
+        let storage = fs_toolchain_storage(dir);
         storage
-            .put_raw(&stored(ARCHIVE_PATH), Bytes::from_static(b"orphan"))
+            .put_raw(&stored(ARCHIVE_PATH), Bytes::from_static(b"archive"))
             .await
             .unwrap();
-        let mut mock_db = admin_db();
-        mock_db
-            .expect_get_toolchain_by_version()
-            .returning(|_, _| Ok(None));
-        mock_db.expect_add_toolchain().never();
-        mock_db.expect_add_toolchain_target().never();
-
-        let (status, _) = send(
-            create_app_state(Arc::new(mock_db), Some(storage)),
-            upload_request(),
-        )
-        .await;
-
-        assert_eq!(StatusCode::CONFLICT, status);
-    }
-
-    #[tokio::test]
-    async fn upload_removes_archive_and_new_toolchain_when_target_cannot_be_added() {
-        let temp_dir = TempDir::new().unwrap();
-        let storage = fs_toolchain_storage(&temp_dir);
-        let mut mock_db = admin_db();
-        mock_db
-            .expect_get_toolchain_by_version()
-            .returning(|_, _| Ok(None));
-        mock_db.expect_add_toolchain().returning(|_, _, _, _| Ok(1));
-        mock_db
-            .expect_add_toolchain_target()
-            .returning(|_, _, _, _, _| Err(db_error()));
-        mock_db
-            .expect_delete_toolchain()
-            .with(eq("rust"), eq("1.0.0"))
-            .times(1)
-            .returning(|_, _| Ok(()));
-
-        let (status, result) = send(
-            create_app_state(Arc::new(mock_db), Some(storage.clone())),
-            upload_request(),
-        )
-        .await;
-
-        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
-        assert!(!result.contains("secret detail"));
-        assert!(!storage.exists(&stored(ARCHIVE_PATH)).await.unwrap());
+        let state = AppStateData {
+            db: Arc::new(mock_db),
+            toolchain_storage: Some(storage.clone()),
+            ..test_state()
+        };
+        (state, storage)
     }
 
     #[tokio::test]
     async fn delete_toolchain_keeps_archives_when_database_delete_fails() {
         let temp_dir = TempDir::new().unwrap();
-        let storage = fs_toolchain_storage(&temp_dir);
-        storage
-            .put_raw(&stored(ARCHIVE_PATH), Bytes::from_static(b"archive"))
-            .await
-            .unwrap();
-        let mut mock_db = admin_db();
-        mock_db
-            .expect_get_toolchain_by_version()
-            .returning(|_, _| Ok(Some(ready_toolchain(&["x86_64-unknown-linux-gnu"]))));
+        let mut mock_db = admin_db(&[TARGET]);
         mock_db
             .expect_delete_toolchain()
             .returning(|_, _| Err(db_error()));
+        let (state, storage) = state_with_archive(mock_db, &temp_dir).await;
 
-        let (status, result) = send(
-            create_app_state(Arc::new(mock_db), Some(storage.clone())),
-            delete_request("/api/v1/toolchains/rust/1.0.0"),
+        let response = send(
+            state,
+            delete_request("/api/v1/toolchains/rust/1.0.0", &admin_cookie()),
         )
         .await;
 
-        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
-        assert!(!result.contains("secret detail"));
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, response.status());
+        assert!(!error_detail(response).await.contains("secret detail"));
         assert!(storage.exists(&stored(ARCHIVE_PATH)).await.unwrap());
     }
 
     #[tokio::test]
     async fn delete_target_keeps_archives_when_database_delete_fails() {
         let temp_dir = TempDir::new().unwrap();
-        let storage = fs_toolchain_storage(&temp_dir);
-        storage
-            .put_raw(&stored(ARCHIVE_PATH), Bytes::from_static(b"archive"))
-            .await
-            .unwrap();
-        let mut mock_db = admin_db();
-        mock_db.expect_get_toolchain_by_version().returning(|_, _| {
-            Ok(Some(ready_toolchain(&[
-                "x86_64-unknown-linux-gnu",
-                "aarch64-unknown-linux-gnu",
-            ])))
-        });
+        let mut mock_db = admin_db(&[TARGET, "aarch64-unknown-linux-gnu"]);
         mock_db
             .expect_delete_toolchain_target()
             .returning(|_, _, _| Err(db_error()));
+        let (state, storage) = state_with_archive(mock_db, &temp_dir).await;
 
-        let (status, _) = send(
-            create_app_state(Arc::new(mock_db), Some(storage.clone())),
-            delete_request("/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu"),
+        let response = send(
+            state,
+            delete_request(
+                "/api/v1/toolchains/rust/1.0.0/targets/x86_64-unknown-linux-gnu",
+                &admin_cookie(),
+            ),
         )
         .await;
 
-        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, response.status());
         assert!(storage.exists(&stored(ARCHIVE_PATH)).await.unwrap());
     }
 
     #[tokio::test]
     async fn database_errors_are_not_returned_to_the_client() {
-        let mut mock_db = admin_db();
-        mock_db
-            .expect_get_toolchain_by_version()
-            .returning(|_, _| Err(db_error()));
         let temp_dir = TempDir::new().unwrap();
+        let (state, db, cookie) = admin_state(Some(fs_toolchain_storage(&temp_dir))).await;
+        test_drop_table(&db, "toolchain").await.unwrap();
 
-        let (status, result) = send(
-            create_app_state(Arc::new(mock_db), Some(fs_toolchain_storage(&temp_dir))),
-            delete_request("/api/v1/toolchains/rust/1.0.0"),
+        let response = send(
+            state,
+            delete_request("/api/v1/toolchains/rust/1.0.0", &cookie),
         )
         .await;
 
-        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status);
-        assert!(!result.contains("secret detail"));
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, response.status());
+        assert!(!error_detail(response).await.contains("no such table"));
     }
 
     #[tokio::test]
     async fn target_is_marked_failed_when_processing_panics() {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_set_target_status()
-            .with(eq(7), eq(ToolchainTargetStatus::Failed))
-            .times(1)
-            .returning(|_, _| Ok(()));
+        let db = TestDb::sqlite().await;
+        let id = db
+            .add_toolchain("rust", "1.0.0", "2024-01-15", None)
+            .await
+            .unwrap();
+        let target_id = db
+            .add_toolchain_target(id, TARGET, ARCHIVE_PATH, "abc123", 1024)
+            .await
+            .unwrap();
 
-        spawn_target_processing(&BackgroundTasks::new(), Arc::new(mock_db), 7, async {
+        spawn_target_processing(&BackgroundTasks::new(), db.provider(), target_id, async {
             panic!("extraction bug")
         })
         .await
         .unwrap();
+
+        let status = &toolchain(&db).await.unwrap().targets[0].status;
+        assert_eq!(*status, ToolchainTargetStatus::Failed);
     }
 
     #[tokio::test(start_paused = true)]
@@ -2865,7 +2122,7 @@ mod tests {
         let finished = Arc::new(AtomicBool::new(false));
         let finished_in_task = finished.clone();
 
-        spawn_target_processing(&tasks, Arc::new(MockDb::new()), 7, async move {
+        spawn_target_processing(&tasks, test_state().db, 7, async move {
             tokio::time::sleep(Duration::from_secs(5)).await;
             finished_in_task.store(true, Ordering::SeqCst);
         });
