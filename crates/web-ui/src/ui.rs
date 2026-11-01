@@ -1075,7 +1075,7 @@ mod tests {
     use kellnr_db::mock::MockDb;
     use kellnr_db::{CrateVisibility, User};
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::encode_cookies;
+    use kellnr_http::test_support::{TestServer, encode_cookies};
     use kellnr_settings::{Postgresql, Settings, Setup, constants};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
@@ -1092,13 +1092,7 @@ mod tests {
     #[tokio::test]
     async fn deleting_a_version_forgets_its_known_license() {
         let data_dir = tempfile::tempdir().unwrap();
-        let settings = Settings {
-            registry: kellnr_settings::Registry {
-                data_dir: data_dir.path().to_string_lossy().to_string(),
-                ..kellnr_settings::Registry::default()
-            },
-            ..Settings::default()
-        };
+        let settings = kellnr_settings::test_settings_in(data_dir.path());
         let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         let crate_storage = Arc::new(KellnrCrateStorage::new(&settings, storage));
         let docs_storage = Arc::new(DocsStorage::new(Box::new(
@@ -1138,13 +1132,7 @@ mod tests {
     }
 
     fn delete_state(mock_db: MockDb, data_dir: &std::path::Path) -> AppStateData {
-        let settings = Settings {
-            registry: kellnr_settings::Registry {
-                data_dir: data_dir.to_string_lossy().to_string(),
-                ..kellnr_settings::Registry::default()
-            },
-            ..Settings::default()
-        };
+        let settings = kellnr_settings::test_settings_in(data_dir);
         let storage = Box::new(FSStorage::new(&settings.crates_path()).unwrap()) as DynStorage;
         let docs_storage = Arc::new(DocsStorage::new(Box::new(
             FSStorage::new(&settings.docs_path()).unwrap(),
@@ -3660,12 +3648,12 @@ mod tests {
     /// Errors of crates.io like rate limits are not a missing crate.
     #[tokio::test]
     async fn cratesio_data_upstream_error_is_bad_gateway() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let upstream = Router::new().fallback(|| async { StatusCode::TOO_MANY_REQUESTS });
-        tokio::spawn(async move { axum::serve(listener, upstream).await.unwrap() });
+        let upstream = TestServer::start(
+            Router::new().fallback(|| async { StatusCode::TOO_MANY_REQUESTS }),
+        )
+        .await;
         let (mut settings, storage) = test_deps();
-        settings.proxy.api = format!("http://{addr}/api/v1/crates/").parse().unwrap();
+        settings.proxy.api = upstream.url("/api/v1/crates/").parse().unwrap();
 
         let r = app(
             MockDb::new(),

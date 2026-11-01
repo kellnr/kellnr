@@ -540,7 +540,8 @@ mod tests {
     use http_body_util::BodyExt;
     use kellnr_db::mock::MockDb;
     use kellnr_http::state::AppStateData;
-    use kellnr_settings::{Protocol, Settings};
+    use kellnr_http::test_support::{TestServer, closed_port_url};
+    use kellnr_settings::Protocol;
     use reqwest::Url;
     use tower::ServiceExt;
 
@@ -586,8 +587,7 @@ mod tests {
     async fn fetch_cratesio_prefetch_unreachable_upstream_is_bad_gateway() {
         let (sender, _receiver) = flume::unbounded::<CratesioPrefetchMsg>();
         let proxy = kellnr_settings::Proxy::default();
-        // Nothing listens on port 1, so the connection is refused.
-        let index_url = BaseUrl::new(Url::parse("http://127.0.0.1:1/").unwrap()).unwrap();
+        let index_url = BaseUrl::new(Url::parse(&closed_port_url().await).unwrap()).unwrap();
 
         let result = fetch_cratesio_prefetch(
             OriginalName::try_from("rocket").unwrap(),
@@ -702,15 +702,13 @@ mod tests {
     }
 
     fn app() -> Router {
-        let settings = Settings {
-            origin: kellnr_settings::Origin {
-                protocol: Protocol::Http,
-                hostname: "test.api.com".to_string(),
-                port: 1234,
-                path: String::new(),
-                cookie_secure: None,
-            },
-            ..Settings::default()
+        let mut settings = kellnr_settings::test_settings();
+        settings.origin = kellnr_settings::Origin {
+            protocol: Protocol::Http,
+            hostname: "test.api.com".to_string(),
+            port: 1234,
+            path: String::new(),
+            cookie_secure: None,
         };
 
         let mut mock_db = MockDb::new();
@@ -790,9 +788,7 @@ mod tests {
         }
 
         /// A fake crates.io with the index, the API and downloads of "upstream".
-        async fn fake_cratesio(upstream: Arc<Upstream>) -> kellnr_settings::Proxy {
-            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-            let addr = listener.local_addr().unwrap();
+        async fn fake_cratesio(upstream: Arc<Upstream>) -> TestServer {
             let (index_up, api_up, dl_up) = (upstream.clone(), upstream.clone(), upstream);
             let app = Router::new()
                 .route(
@@ -830,14 +826,7 @@ mod tests {
                         }
                     }),
                 );
-            tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-
-            kellnr_settings::Proxy {
-                index: Url::parse(&format!("http://{addr}/index/")).unwrap(),
-                api: Url::parse(&format!("http://{addr}/api/")).unwrap(),
-                url: Url::parse(&format!("http://{addr}/dl/")).unwrap(),
-                ..kellnr_settings::Proxy::default()
-            }
+            TestServer::start(app).await
         }
 
         type Stored = Arc<Mutex<Vec<HashMap<String, String>>>>;
@@ -870,13 +859,7 @@ mod tests {
 
         fn worker(db: MockDb, proxy: &kellnr_settings::Proxy, filters: FilterChain) -> Worker {
             let data_dir = tempfile::tempdir().unwrap();
-            let settings = Settings {
-                registry: kellnr_settings::Registry {
-                    data_dir: data_dir.path().to_string_lossy().to_string(),
-                    ..kellnr_settings::Registry::default()
-                },
-                ..Settings::default()
-            };
+            let settings = kellnr_settings::test_settings_in(data_dir.path());
             let storage =
                 Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
             let db: Arc<dyn DbProvider> = Arc::new(db);
@@ -922,7 +905,8 @@ mod tests {
         #[tokio::test]
         async fn predownload_skips_versions_denied_by_filters() {
             let upstream = Arc::new(Upstream::default());
-            let proxy = fake_cratesio(upstream.clone()).await;
+            let server = fake_cratesio(upstream.clone()).await;
+            let proxy = server.cratesio_proxy();
             let mut db = MockDb::new();
             db.expect_get_cratesio_version_meta()
                 .returning(|_, version| {
@@ -953,7 +937,8 @@ mod tests {
         #[tokio::test]
         async fn predownload_without_filters_downloads_all_versions() {
             let upstream = Arc::new(Upstream::default());
-            let proxy = fake_cratesio(upstream.clone()).await;
+            let server = fake_cratesio(upstream.clone()).await;
+            let proxy = server.cratesio_proxy();
             // No license lookup is expected, the mock panics on unexpected calls
             let worker = worker(MockDb::new(), &proxy, FilterChain::default());
 
@@ -966,7 +951,8 @@ mod tests {
         #[tokio::test]
         async fn insert_message_syncs_the_index_it_carries() {
             let upstream = Arc::new(Upstream::default());
-            let proxy = fake_cratesio(upstream.clone()).await;
+            let server = fake_cratesio(upstream.clone()).await;
+            let proxy = server.cratesio_proxy();
             let (db, stored) = recording_db();
             let worker = worker(db, &proxy, FilterChain::default());
 
@@ -996,7 +982,8 @@ mod tests {
         #[tokio::test]
         async fn update_message_refreshes_once_within_the_cache_timeout() {
             let upstream = Arc::new(Upstream::default());
-            let proxy = fake_cratesio(upstream.clone()).await;
+            let server = fake_cratesio(upstream.clone()).await;
+            let proxy = server.cratesio_proxy();
             let (db, stored) = recording_db();
             let worker = worker(db, &proxy, FilterChain::default());
             let update = || {

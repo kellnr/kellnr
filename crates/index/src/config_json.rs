@@ -62,25 +62,21 @@ impl ConfigJson {
 
 #[cfg(test)]
 mod tests {
-    use kellnr_settings::{Origin, Protocol, Registry};
+    use kellnr_settings::{Origin, Protocol};
 
     use super::*;
 
     fn settings(protocol: Protocol, port: u16, path: &str, auth_required: bool) -> Settings {
-        Settings {
-            origin: Origin {
-                hostname: "localhost".to_string(),
-                port,
-                protocol,
-                path: path.to_string(),
-                cookie_secure: None,
-            },
-            registry: Registry {
-                auth_required,
-                ..Registry::default()
-            },
-            ..Settings::default()
-        }
+        let mut settings = kellnr_settings::test_settings();
+        settings.origin = Origin {
+            hostname: "localhost".to_string(),
+            port,
+            protocol,
+            path: path.to_string(),
+            cookie_secure: None,
+        };
+        settings.registry.auth_required = auth_required;
+        settings
     }
 
     fn json(settings: &Settings, kind: IndexKind) -> String {

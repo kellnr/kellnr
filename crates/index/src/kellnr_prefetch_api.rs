@@ -147,7 +147,7 @@ mod tests {
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::mock::MockDb;
     use kellnr_http::state::AppStateData;
-    use kellnr_settings::{Protocol, Settings};
+    use kellnr_settings::Protocol;
     use mockall::predicate::*;
     use tower::ServiceExt;
 
@@ -316,15 +316,13 @@ mod tests {
     }
 
     fn app() -> Router {
-        let settings = Settings {
-            origin: kellnr_settings::Origin {
-                protocol: Protocol::Http,
-                hostname: "test.api.com".to_string(),
-                port: 1234,
-                path: String::new(),
-                cookie_secure: None,
-            },
-            ..Settings::default()
+        let mut settings = kellnr_settings::test_settings();
+        settings.origin = kellnr_settings::Origin {
+            protocol: Protocol::Http,
+            hostname: "test.api.com".to_string(),
+            port: 1234,
+            path: String::new(),
+            cookie_secure: None,
         };
 
         let secret = OriginalName::try_from("secret").unwrap().to_canonical();
