@@ -34,10 +34,10 @@ zip.workspace = true
 
 [dev-dependencies]
 kellnr-settings = { workspace = true, features = ["test-support"] }
-kellnr-db = { workspace = true, features = ["mock"] }
+kellnr-db = { workspace = true, features = ["test-support"] }
 kellnr-http = { workspace = true, features = ["test-support"] }
+kellnr-test-db.workspace = true
 hyper.workspace = true
-mockall.workspace = true
 tokio.workspace = true
 tower.workspace = true
 
