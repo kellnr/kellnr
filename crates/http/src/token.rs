@@ -236,14 +236,16 @@ fn strip_scheme<'a>(value: &'a str, scheme: &str) -> Option<&'a str> {
 mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
-    use kellnr_db::User;
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
+    use kellnr_db::{User, UserFlags};
     use kellnr_settings::Settings;
+    use kellnr_test_db::TestDb;
     use mockall::predicate::*;
 
     use super::*;
     use crate::login_throttle::LoginThrottle;
+    use crate::test_support::sqlite_test_state;
     use crate::token_cache::TokenCacheManager;
 
     fn test_user() -> User {
@@ -258,6 +260,10 @@ mod tests {
         }
     }
 
+    fn test_user_name() -> UserName {
+        UserName::new("test_user").unwrap()
+    }
+
     fn test_settings() -> Arc<Settings> {
         let mut settings = kellnr_settings::test_settings();
         settings.registry.token_cache_enabled = true;
@@ -268,17 +274,29 @@ mod tests {
         Arc::new(settings)
     }
 
-    fn app_state(
-        db: &Arc<dyn DbProvider>,
+    fn cache() -> Arc<TokenCacheManager> {
+        Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100))
+    }
+
+    /// App state on a database with the user `test_user`, its password
+    /// `correct_password` and its cargo token `valid_token`.
+    async fn db_state(
         cache: &Arc<TokenCacheManager>,
-        settings: &Arc<Settings>,
-    ) -> AppStateData {
-        AppStateData {
-            db: db.clone(),
+        settings: Arc<Settings>,
+    ) -> (AppStateData, TestDb) {
+        let (state, db) = sqlite_test_state().await;
+        db.add_user(&test_user_name(), "correct_password", UserFlags::default())
+            .await
+            .unwrap();
+        db.add_auth_token("test", &PlainToken::from("valid_token"), &test_user_name())
+            .await
+            .unwrap();
+        let state = AppStateData {
             token_cache: cache.clone(),
-            settings: settings.clone(),
-            ..crate::test_support::test_state()
-        }
+            settings,
+            ..state
+        };
+        (state, db)
     }
 
     /// Settings with SSO-only login enforced.
@@ -296,26 +314,31 @@ mod tests {
         headers
     }
 
+    fn bearer_header(token: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert("Authorization", format!("Bearer {token}").parse().unwrap());
+        headers
+    }
+
+    async fn change_pwd(db: &TestDb, pwd: &str) {
+        db.change_pwd(&test_user_name(), pwd).await.unwrap();
+    }
+
     // ===================
     // Retry Logic Tests
     // ===================
 
     #[tokio::test]
     async fn test_retry_succeeds_on_first_attempt() {
-        // DB returns user on first try - no retries needed
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("valid_token")))
-            .times(1)
-            .returning(|_| Ok(test_user()));
+        let (state, _db) = db_state(&cache(), test_settings()).await;
 
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let result = get_user_with_retry(&db, &PlainToken::from("valid_token"), 3, 10).await;
+        let result = get_user_with_retry(&state.db, &PlainToken::from("valid_token"), 3, 10).await;
 
-        assert!(result.is_ok());
         assert_eq!(result.unwrap().name, "test_user");
     }
+
+    // The tests below inject transient database errors and count the
+    // attempts, so they need a mock database.
 
     #[tokio::test]
     async fn test_retry_succeeds_after_transient_error() {
@@ -346,20 +369,18 @@ mod tests {
         assert_eq!(call_count.load(Ordering::SeqCst), 2);
     }
 
+    /// An unknown token is final, so the lookup must not wait for a retry.
     #[tokio::test]
     async fn test_no_retry_on_token_not_found() {
-        // TokenNotFound should NOT trigger retries
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("invalid_token")))
-            .times(1) // Should only be called once
-            .returning(|_| Err(DbError::TokenNotFound));
+        let (state, _db) = db_state(&cache(), test_settings()).await;
 
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let result = get_user_with_retry(&db, &PlainToken::from("invalid_token"), 3, 10).await;
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            get_user_with_retry(&state.db, &PlainToken::from("invalid_token"), 3, 60_000),
+        )
+        .await
+        .expect("lookup was retried");
 
-        assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), DbError::TokenNotFound));
     }
 
@@ -405,14 +426,40 @@ mod tests {
         assert_eq!(call_count.load(Ordering::SeqCst), 4);
     }
 
+    #[tokio::test]
+    async fn test_zero_retries_only_attempts_once() {
+        // With max_retries = 0, should only attempt once
+        let call_count = Arc::new(AtomicU32::new(0));
+        let call_count_clone = call_count.clone();
+
+        let mut mock_db = MockDb::new();
+        mock_db
+            .expect_get_user_from_token()
+            .with(eq(PlainToken::from("token")))
+            .times(1)
+            .returning(move |_| {
+                call_count_clone.fetch_add(1, Ordering::SeqCst);
+                Err(DbError::PostgresError(sea_orm::DbErr::ConnectionAcquire(
+                    sea_orm::error::ConnAcquireErr::Timeout,
+                )))
+            });
+
+        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let result = get_user_with_retry(&db, &PlainToken::from("token"), 0, 1).await;
+
+        assert!(result.is_err());
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+    }
+
     // =====================================
     // Token Extraction with Cache Tests
     // =====================================
 
+    /// The cached token does not exist in the database, so only the cache
+    /// can know it.
     #[tokio::test]
     async fn test_cache_hit_returns_cached_token() {
-        // Pre-populate cache, DB should NOT be called
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
+        let cache = cache();
         cache
             .insert(
                 "cached_token".to_string(),
@@ -424,67 +471,46 @@ mod tests {
                 cache.generation(),
             )
             .await;
+        let (state, _db) = db_state(&cache, test_settings()).await;
 
-        let mock_db = MockDb::new(); // No expectations - should not be called
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let settings = test_settings();
+        let token = Token::from_header(&bearer_header("cached_token"), &state)
+            .await
+            .unwrap();
 
-        let mut headers = HeaderMap::new();
-        headers.insert("Authorization", "Bearer cached_token".parse().unwrap());
-
-        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
-
-        assert!(result.is_ok());
-        let token = result.unwrap();
         assert_eq!(token.user, "cached_user");
         assert!(token.is_admin);
     }
 
     #[tokio::test]
     async fn test_cache_miss_queries_db_and_caches() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
+        let cache = cache();
+        let (state, db) = db_state(&cache, test_settings()).await;
+        let db_user = UserName::new("db_user").unwrap();
+        let flags = UserFlags {
+            read_only: true,
+            ..UserFlags::default()
+        };
+        db.add_user(&db_user, "pwd", flags).await.unwrap();
+        db.add_auth_token("test", &PlainToken::from("new_token"), &db_user)
+            .await
+            .unwrap();
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("new_token")))
-            .times(1)
-            .returning(|_| {
-                Ok(User {
-                    id: kellnr_db::UserId::new(1),
-                    name: UserName::new("db_user").unwrap(),
-                    pwd: String::new(),
-                    salt: String::new(),
-                    is_admin: false,
-                    is_read_only: true,
-                    created: String::new(),
-                })
-            });
+        let token = Token::from_header(&bearer_header("new_token"), &state)
+            .await
+            .unwrap();
 
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let settings = test_settings();
-
-        let mut headers = HeaderMap::new();
-        headers.insert("Authorization", "Bearer new_token".parse().unwrap());
-
-        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
-
-        assert!(result.is_ok());
-        let token = result.unwrap();
         assert_eq!(token.user, "db_user");
         assert!(token.is_read_only);
-
-        // Verify token was cached
         let cached = cache.get("new_token").await;
-        assert!(cached.is_some());
         assert_eq!(cached.unwrap().user, "db_user");
     }
 
     /// A token revoked while its DB lookup is in flight must not end up in
-    /// the cache, otherwise it would stay usable for the whole TTL.
+    /// the cache, otherwise it would stay usable for the whole TTL. The mock
+    /// revokes it in the middle of the lookup.
     #[tokio::test]
     async fn test_invalidation_during_lookup_is_not_cached() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
+        let cache = cache();
         let cache_in_db = cache.clone();
 
         let mut mock_db = MockDb::new();
@@ -497,11 +523,14 @@ mod tests {
                 Ok(test_user())
             });
 
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let mut headers = HeaderMap::new();
-        headers.insert("Authorization", "Bearer racy_token".parse().unwrap());
+        let state = AppStateData {
+            db: Arc::new(mock_db),
+            token_cache: cache.clone(),
+            settings: test_settings(),
+            ..crate::test_support::test_state()
+        };
 
-        let token = Token::from_header(&headers, &app_state(&db, &cache, &test_settings()))
+        let token = Token::from_header(&bearer_header("racy_token"), &state)
             .await
             .unwrap();
 
@@ -511,29 +540,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_miss_with_invalid_token_returns_forbidden() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
+        let cache = cache();
+        let (state, _db) = db_state(&cache, test_settings()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("bad_token")))
-            .times(1) // Should not retry on TokenNotFound
-            .returning(|_| Err(DbError::TokenNotFound));
+        let result = Token::from_header(&bearer_header("bad_token"), &state).await;
 
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let settings = test_settings();
-
-        let mut headers = HeaderMap::new();
-        headers.insert("Authorization", "Bearer bad_token".parse().unwrap());
-
-        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
-
-        assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
-
-        // Verify invalid token was NOT cached
-        let cached = cache.get("bad_token").await;
-        assert!(cached.is_none());
+        assert!(cache.get("bad_token").await.is_none());
     }
 
     // ==========================
@@ -541,21 +554,14 @@ mod tests {
     // ==========================
 
     /// Basic auth carries a username and password, so it must be rejected
-    /// outright when SSO is the only permitted login method. The DB is never
-    /// consulted, which is what stops a valid password from being accepted.
+    /// outright when SSO is the only permitted login method, even with the
+    /// correct password.
     #[tokio::test]
     async fn test_basic_auth_rejected_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
-
-        let mut mock_db = MockDb::new();
-        mock_db.expect_get_user().never();
-        mock_db.expect_authenticate_user().never();
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let (state, _db) = db_state(&cache(), sso_enforced_settings()).await;
         let headers = basic_auth_header("test_user", "correct_password");
 
-        let result =
-            Token::from_header(&headers, &app_state(&db, &cache, &sso_enforced_settings())).await;
+        let result = Token::from_header(&headers, &state).await;
 
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
     }
@@ -563,19 +569,12 @@ mod tests {
     /// The lowercase spelling of the scheme must not slip past the check.
     #[tokio::test]
     async fn test_lowercase_basic_auth_rejected_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
-
-        let mut mock_db = MockDb::new();
-        mock_db.expect_get_user().never();
-        mock_db.expect_authenticate_user().never();
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let (state, _db) = db_state(&cache(), sso_enforced_settings()).await;
         let encoded = STANDARD.encode("test_user:correct_password");
         let mut headers = HeaderMap::new();
         headers.insert("Authorization", format!("basic {encoded}").parse().unwrap());
 
-        let result =
-            Token::from_header(&headers, &app_state(&db, &cache, &sso_enforced_settings())).await;
+        let result = Token::from_header(&headers, &state).await;
 
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
     }
@@ -584,20 +583,9 @@ mod tests {
     /// login method and must keep working so publishing does not break.
     #[tokio::test]
     async fn test_bearer_token_still_works_when_sso_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
+        let (state, _db) = db_state(&cache(), sso_enforced_settings()).await;
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("valid_token")))
-            .times(1)
-            .returning(|_| Ok(test_user()));
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let mut headers = HeaderMap::new();
-        headers.insert("Authorization", "Bearer valid_token".parse().unwrap());
-
-        let token = Token::from_header(&headers, &app_state(&db, &cache, &sso_enforced_settings()))
+        let token = Token::from_header(&bearer_header("valid_token"), &state)
             .await
             .expect("bearer tokens must remain valid under SSO enforcement");
 
@@ -607,22 +595,10 @@ mod tests {
     /// Without enforcement, basic auth keeps authenticating against the DB.
     #[tokio::test]
     async fn test_basic_auth_allowed_when_sso_not_enforced() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
-
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_authenticate_user()
-            .with(
-                eq(UserName::new("test_user").unwrap()),
-                eq("correct_password"),
-            )
-            .times(1)
-            .returning(|_, _| Ok(test_user()));
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let (state, _db) = db_state(&cache(), test_settings()).await;
         let headers = basic_auth_header("test_user", "correct_password");
 
-        let token = Token::from_header(&headers, &app_state(&db, &cache, &test_settings()))
+        let token = Token::from_header(&headers, &state)
             .await
             .expect("basic auth should work when SSO is not enforced");
 
@@ -634,80 +610,48 @@ mod tests {
     // ==========================
 
     /// Password hashing is slow by design, so cargo requests with the same
-    /// credentials must not verify the password again.
+    /// credentials must not verify the password again. The password changes
+    /// in the database after the first request, so the later requests can
+    /// only succeed from the cache.
     #[tokio::test]
     async fn test_basic_auth_success_is_cached() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
-
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_authenticate_user()
-            .times(1)
-            .returning(|_, _| Ok(test_user()));
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let (state, db) = db_state(&cache(), test_settings()).await;
         let headers = basic_auth_header("test_user", "correct_password");
 
-        for _ in 0..3 {
-            let token = Token::from_header(&headers, &app_state(&db, &cache, &test_settings()))
-                .await
-                .unwrap();
+        Token::from_header(&headers, &state).await.unwrap();
+        change_pwd(&db, "new_password").await;
+
+        for _ in 0..2 {
+            let token = Token::from_header(&headers, &state).await.unwrap();
             assert_eq!(token.user, "test_user");
         }
     }
 
+    /// A failed login is checked again, so it succeeds once the password is
+    /// valid.
     #[tokio::test]
     async fn test_basic_auth_failure_is_not_cached() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
+        let (state, db) = db_state(&cache(), test_settings()).await;
+        let headers = basic_auth_header("test_user", "new_password");
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_authenticate_user()
-            .times(2)
-            .returning(|_, _| Err(DbError::PasswordMismatch));
+        let result = Token::from_header(&headers, &state).await;
+        assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+        change_pwd(&db, "new_password").await;
 
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let headers = basic_auth_header("test_user", "wrong_password");
-
-        for _ in 0..2 {
-            let result =
-                Token::from_header(&headers, &app_state(&db, &cache, &test_settings())).await;
-            assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
-        }
+        let token = Token::from_header(&headers, &state).await.unwrap();
+        assert_eq!(token.user, "test_user");
     }
 
     /// A different password for a cached user must still be verified.
     #[tokio::test]
     async fn test_basic_auth_cache_is_keyed_by_password() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
-
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_authenticate_user()
-            .with(
-                eq(UserName::new("test_user").unwrap()),
-                eq("correct_password"),
-            )
-            .times(1)
-            .returning(|_, _| Ok(test_user()));
-        mock_db
-            .expect_authenticate_user()
-            .with(
-                eq(UserName::new("test_user").unwrap()),
-                eq("wrong_password"),
-            )
-            .times(1)
-            .returning(|_, _| Err(DbError::PasswordMismatch));
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let (state, _db) = db_state(&cache(), test_settings()).await;
 
         let ok = basic_auth_header("test_user", "correct_password");
-        Token::from_header(&ok, &app_state(&db, &cache, &test_settings()))
-            .await
-            .unwrap();
+        Token::from_header(&ok, &state).await.unwrap();
 
         let wrong = basic_auth_header("test_user", "wrong_password");
-        let result = Token::from_header(&wrong, &app_state(&db, &cache, &test_settings())).await;
+        let result = Token::from_header(&wrong, &state).await;
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
     }
 
@@ -715,27 +659,15 @@ mod tests {
     /// credentials must be verified against the DB again.
     #[tokio::test]
     async fn test_basic_auth_cache_respects_invalidation() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
+        let cache = cache();
+        let (state, db) = db_state(&cache, test_settings()).await;
+        let headers = basic_auth_header("test_user", "correct_password");
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_authenticate_user()
-            .times(1)
-            .returning(|_, _| Ok(test_user()));
-        mock_db
-            .expect_authenticate_user()
-            .times(1)
-            .returning(|_, _| Err(DbError::PasswordMismatch));
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let headers = basic_auth_header("test_user", "old_password");
-
-        Token::from_header(&headers, &app_state(&db, &cache, &test_settings()))
-            .await
-            .unwrap();
+        Token::from_header(&headers, &state).await.unwrap();
+        change_pwd(&db, "new_password").await;
         cache.invalidate_all();
 
-        let result = Token::from_header(&headers, &app_state(&db, &cache, &test_settings())).await;
+        let result = Token::from_header(&headers, &state).await;
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
     }
 
@@ -743,26 +675,19 @@ mod tests {
     /// username, and the password is no longer checked once locked.
     #[tokio::test]
     async fn test_basic_auth_failures_are_throttled() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
-
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_authenticate_user()
-            .times(2)
-            .returning(|_, _| Err(DbError::PasswordMismatch));
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let (state, _db) = db_state(&cache(), test_settings()).await;
         let state = AppStateData {
             login_throttle: Arc::new(LoginThrottle::new(2, Duration::from_mins(5))),
-            ..app_state(&db, &cache, &test_settings())
+            ..state
         };
-        let headers = basic_auth_header("test_user", "guess");
+        let guess = basic_auth_header("test_user", "guess");
 
         for _ in 0..2 {
-            let result = Token::from_header(&headers, &state).await;
+            let result = Token::from_header(&guess, &state).await;
             assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
         }
-        let result = Token::from_header(&headers, &state).await;
+        let valid = basic_auth_header("test_user", "correct_password");
+        let result = Token::from_header(&valid, &state).await;
         assert_eq!(result.unwrap_err(), StatusCode::TOO_MANY_REQUESTS);
     }
 
@@ -770,27 +695,10 @@ mod tests {
     /// so an attacker cannot lock out CI that uses basic auth.
     #[tokio::test]
     async fn test_cached_basic_auth_bypasses_throttle() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
-
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_authenticate_user()
-            .with(
-                eq(UserName::new("test_user").unwrap()),
-                eq("correct_password"),
-            )
-            .times(1)
-            .returning(|_, _| Ok(test_user()));
-        mock_db
-            .expect_authenticate_user()
-            .with(eq(UserName::new("test_user").unwrap()), eq("guess"))
-            .times(1)
-            .returning(|_, _| Err(DbError::PasswordMismatch));
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+        let (state, _db) = db_state(&cache(), test_settings()).await;
         let state = AppStateData {
             login_throttle: Arc::new(LoginThrottle::new(1, Duration::from_mins(5))),
-            ..app_state(&db, &cache, &test_settings())
+            ..state
         };
         let valid = basic_auth_header("test_user", "correct_password");
         Token::from_header(&valid, &state).await.unwrap();
@@ -820,73 +728,39 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_authorization_header_returns_unauthorized() {
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
-        let mock_db = MockDb::new();
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let settings = test_settings();
+        let state = crate::test_support::test_state();
 
-        let headers = HeaderMap::new(); // No Authorization header
+        let result = Token::from_header(&HeaderMap::new(), &state).await;
 
-        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
-
-        assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
     }
 
+    /// Without the cache, a revoked token stops working at once.
     #[tokio::test]
     async fn test_disabled_cache_always_queries_db() {
-        // Cache is disabled - should always query DB
-        let cache = Arc::new(TokenCacheManager::new(false, Duration::from_secs(60), 100)); // Disabled
+        let cache = Arc::new(TokenCacheManager::new(false, Duration::from_secs(60), 100));
+        let (state, db) = db_state(&cache, test_settings()).await;
+        let headers = bearer_header("valid_token");
 
-        let call_count = Arc::new(AtomicU32::new(0));
-        let call_count_clone = call_count.clone();
+        Token::from_header(&headers, &state).await.unwrap();
+        let tokens = db.get_auth_tokens(&test_user_name()).await.unwrap();
+        db.delete_auth_token(&test_user_name(), tokens[0].id)
+            .await
+            .unwrap();
 
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("token")))
-            .times(2) // Called twice
-            .returning(move |_| {
-                call_count_clone.fetch_add(1, Ordering::SeqCst);
-                Ok(test_user())
-            });
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let settings = test_settings();
-
-        let mut headers = HeaderMap::new();
-        headers.insert("Authorization", "Bearer token".parse().unwrap());
-
-        // First call
-        let _ = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
-        // Second call - should hit DB again since cache is disabled
-        let _ = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
-
-        assert_eq!(call_count.load(Ordering::SeqCst), 2);
+        let result = Token::from_header(&headers, &state).await;
+        assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
     async fn test_lowercase_bearer_prefix_works() {
-        // Verifies case-insensitive handling of "bearer" prefix
-        let cache = Arc::new(TokenCacheManager::new(true, Duration::from_secs(60), 100));
-
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("lowercase_token")))
-            .times(1)
-            .returning(|_| Ok(test_user()));
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let settings = test_settings();
-
+        let (state, _db) = db_state(&cache(), test_settings()).await;
         let mut headers = HeaderMap::new();
-        headers.insert("Authorization", "bearer lowercase_token".parse().unwrap());
+        headers.insert("Authorization", "bearer valid_token".parse().unwrap());
 
-        let result = Token::from_header(&headers, &app_state(&db, &cache, &settings)).await;
+        let token = Token::from_header(&headers, &state).await.unwrap();
 
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().user, "test_user");
+        assert_eq!(token.user, "test_user");
     }
 
     #[test]
@@ -898,30 +772,5 @@ mod tests {
         assert_eq!(strip_scheme("Bearerabc", "Bearer"), None);
         assert_eq!(strip_scheme("abc", "Bearer"), None);
         assert_eq!(strip_scheme("Bäarer abc", "Bearer"), None);
-    }
-
-    #[tokio::test]
-    async fn test_zero_retries_only_attempts_once() {
-        // With max_retries = 0, should only attempt once
-        let call_count = Arc::new(AtomicU32::new(0));
-        let call_count_clone = call_count.clone();
-
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("token")))
-            .times(1)
-            .returning(move |_| {
-                call_count_clone.fetch_add(1, Ordering::SeqCst);
-                Err(DbError::PostgresError(sea_orm::DbErr::ConnectionAcquire(
-                    sea_orm::error::ConnAcquireErr::Timeout,
-                )))
-            });
-
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
-        let result = get_user_with_retry(&db, &PlainToken::from("token"), 0, 1).await;
-
-        assert!(result.is_err());
-        assert_eq!(call_count.load(Ordering::SeqCst), 1);
     }
 }
