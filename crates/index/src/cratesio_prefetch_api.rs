@@ -538,18 +538,48 @@ mod tests {
     use axum::http::{Request, header};
     use axum::routing::get;
     use http_body_util::BodyExt;
-    use kellnr_db::mock::MockDb;
+    use kellnr_db::test_utils::test_drop_table;
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TestServer, closed_port_url};
+    use kellnr_http::test_support::{TestServer, closed_port_url, sqlite_test_state};
     use kellnr_settings::Protocol;
+    use kellnr_test_db::TestDb;
     use reqwest::Url;
     use tower::ServiceExt;
 
     use super::*;
 
+    /// Stores the index of the crates.io crate `name` with one version and
+    /// `etag` and `last_modified` as validators.
+    async fn add_cached_crate(db: &TestDb, name: &str, etag: &str, last_modified: &str) {
+        let index = IndexMetadata {
+            name: name.to_string(),
+            vers: "1.0.0".to_string(),
+            deps: vec![],
+            cksum: "cksum".to_string(),
+            features: std::collections::BTreeMap::new(),
+            features2: None,
+            pubtime: None,
+            yanked: false,
+            links: None,
+            v: Some(1),
+            rust_version: None,
+        };
+        db.add_cratesio_prefetch_data(
+            &OriginalName::try_from(name).unwrap(),
+            etag,
+            last_modified,
+            None,
+            &[index],
+            &std::collections::HashMap::new(),
+        )
+        .await
+        .unwrap();
+    }
+
     #[tokio::test]
     async fn fetch_cratesio_prefetch_works() {
-        let r = app()
+        let (app, _db) = app().await;
+        let r = app
             .oneshot(
                 Request::get("/api/v1/cratesio/ro/ck/rocket")
                     .header(header::IF_MODIFIED_SINCE, "date")
@@ -568,7 +598,8 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_cratesio_prefetch_404() {
-        let r = app()
+        let (app, _db) = app().await;
+        let r = app
             .oneshot(
                 // URL points to crate that does not exist
                 Request::get("/api/v1/cratesio/ro/ck/rock123456789")
@@ -602,7 +633,8 @@ mod tests {
 
     #[tokio::test]
     async fn config_returns_config_json() {
-        let r = app()
+        let (app, _db) = app().await;
+        let r = app
             .oneshot(
                 Request::get("/api/v1/cratesio/config.json")
                     .body(Body::empty())
@@ -625,22 +657,17 @@ mod tests {
         headers
     }
 
-    async fn sent_update(state: PrefetchState) -> (Result<Prefetch, StatusCode>, UpdateData) {
-        let mut mock_db = MockDb::new();
-        mock_db
-            .expect_is_cratesio_cache_up_to_date()
-            .withf(|_, etag, lm| {
-                etag.as_deref() == Some("client-etag") && lm.as_deref() == Some("client-date")
-            })
-            .return_once(move |_, _, _| Ok(state));
-        let db: Arc<dyn DbProvider> = Arc::new(mock_db);
+    /// Requests the cached crate "rocket" with the client validators
+    /// `client-etag` and `client-date` and returns the result and the update
+    /// message sent to the prefetch worker.
+    async fn sent_update(db: &TestDb) -> (Result<Prefetch, StatusCode>, UpdateData) {
         let (sender, receiver) = flume::unbounded::<CratesioPrefetchMsg>();
         let proxy = kellnr_settings::Proxy::default();
 
         let result = internal_prefetch_cratesio(
             OriginalName::try_from("rocket").unwrap(),
             conditional_headers(),
-            &db,
+            &db.provider(),
             &sender,
             &proxy,
         )
@@ -654,13 +681,10 @@ mod tests {
 
     #[tokio::test]
     async fn background_update_uses_stored_validators_when_stale() {
-        let stored = Prefetch {
-            data: vec![0x1],
-            etag: "stored-etag".to_string(),
-            last_modified: "stored-date".to_string(),
-        };
+        let db = TestDb::sqlite().await;
+        add_cached_crate(&db, "rocket", "stored-etag", "stored-date").await;
 
-        let (result, update) = sent_update(PrefetchState::NeedsUpdate(stored)).await;
+        let (result, update) = sent_update(&db).await;
 
         assert!(result.is_ok());
         assert_eq!(Some("stored-etag".to_string()), update.etag);
@@ -669,39 +693,29 @@ mod tests {
 
     #[tokio::test]
     async fn background_update_uses_stored_validators_when_up_to_date() {
-        let state = PrefetchState::UpToDate {
-            etag: "stored-etag".to_string(),
-            last_modified: "stored-date".to_string(),
-        };
+        let db = TestDb::sqlite().await;
+        add_cached_crate(&db, "rocket", "client-etag", "stored-date").await;
 
-        let (result, update) = sent_update(state).await;
+        let (result, update) = sent_update(&db).await;
 
         assert_eq!(Err(StatusCode::NOT_MODIFIED), result.map(|_| ()));
-        assert_eq!(Some("stored-etag".to_string()), update.etag);
+        assert_eq!(Some("client-etag".to_string()), update.etag);
         assert_eq!(Some("stored-date".to_string()), update.last_modified);
     }
 
-    #[tokio::test(start_paused = true)]
-    async fn index_update_backs_off_on_db_error() {
-        let calls = Arc::new(AtomicUsize::new(0));
-        let mut mock_db = MockDb::new();
-        mock_db.expect_get_cratesio_index_update_list().returning({
-            let calls = calls.clone();
-            move || {
-                calls.fetch_add(1, Ordering::SeqCst);
-                Err(kellnr_db::error::DbError::FailedToCountCrates)
-            }
-        });
+    #[tokio::test]
+    async fn update_round_backs_off_on_db_error() {
+        let db = TestDb::sqlite().await;
+        test_drop_table(&db, "cratesio_crate").await.unwrap();
         let (sender, _receiver) = flume::unbounded::<CratesioPrefetchMsg>();
 
-        spawn_index_update(Arc::new(mock_db), sender, &BackgroundTasks::new());
-        tokio::time::sleep(Duration::from_secs(UPDATE_LIST_RETRY_SECS * 2 + 1)).await;
+        let next = queue_update_round(&*db, &sender).await;
 
-        // Calls at t=0, t=retry and t=2*retry. Without a delay the loop would spin.
-        assert_eq!(3, calls.load(Ordering::SeqCst));
+        // Without a delay the update loop would spin.
+        assert_eq!(UPDATE_LIST_RETRY_SECS, next);
     }
 
-    fn app() -> Router {
+    async fn app() -> (Router, TestDb) {
         let mut settings = kellnr_settings::test_settings();
         settings.origin = kellnr_settings::Origin {
             protocol: Protocol::Http,
@@ -711,22 +725,7 @@ mod tests {
             cookie_secure: None,
         };
 
-        let mut mock_db = MockDb::new();
-
-        mock_db
-            .expect_add_cratesio_prefetch_data()
-            .returning(move |_, _, _, _, _, _| {
-                Ok(Prefetch {
-                    data: vec![0x1, 0x2, 0x3],
-                    etag: "etag".to_string(),
-                    last_modified: "date".to_string(),
-                })
-            });
-
-        mock_db
-            .expect_is_cratesio_cache_up_to_date()
-            .returning(move |_, _, _| Ok(PrefetchState::NotFound));
-
+        let (state, db) = sqlite_test_state().await;
         let (sender, receiver) = flume::unbounded::<CratesioPrefetchMsg>();
         // Make receiver undroppable, else the sender will fail, as the receiver is dropped when
         // this function goes out of scope
@@ -738,15 +737,15 @@ mod tests {
             .route("/{_}/{name}", get(prefetch_len2_cratesio));
 
         let state = AppStateData {
-            db: Arc::new(mock_db),
             settings: Arc::new(settings),
             cratesio_prefetch_sender: sender,
-            ..kellnr_http::test_support::test_state()
+            ..state
         };
 
-        Router::new()
+        let app = Router::new()
             .nest("/api/v1/cratesio", cratesio_prefetch)
-            .with_state(state)
+            .with_state(state);
+        (app, db)
     }
 
     mod worker {
@@ -755,8 +754,6 @@ mod tests {
 
         use axum::extract::Path as AxumPath;
         use axum::response::IntoResponse;
-        use kellnr_common::license::UNKNOWN_LICENSE;
-        use kellnr_db::provider::CratesioVersionMeta;
         use kellnr_settings::CratesioFilter;
         use kellnr_storage::cached_crate_storage::DynStorage;
         use kellnr_storage::fs_storage::FSStorage;
@@ -829,40 +826,41 @@ mod tests {
             TestServer::start(app).await
         }
 
-        type Stored = Arc<Mutex<Vec<HashMap<String, String>>>>;
+        /// The licenses of "upstream" as `VERSIONS` lists them.
+        fn licenses() -> HashMap<String, String> {
+            VERSIONS
+                .iter()
+                .map(|(vers, license)| ((*vers).to_string(), (*license).to_string()))
+                .collect()
+        }
 
-        /// A database without stored crates that records the licenses written.
-        fn recording_db() -> (MockDb, Stored) {
-            let stored: Stored = Arc::default();
-            let mut db = MockDb::new();
-            db.expect_is_cratesio_cache_up_to_date()
-                .returning(|_, _, _| Ok(PrefetchState::NotFound));
-            db.expect_add_cratesio_prefetch_data().returning({
-                let stored = stored.clone();
-                move |_, _, _, _, _, licenses| {
-                    stored.lock().unwrap().push(licenses.clone());
-                    Ok(Prefetch {
-                        data: vec![],
-                        etag: String::new(),
-                        last_modified: String::new(),
-                    })
-                }
-            });
-            (db, stored)
+        /// The license stored for a version of "upstream".
+        async fn stored_license(worker: &Worker, version: &str) -> Option<String> {
+            worker
+                .db
+                .get_cratesio_version_meta(
+                    &upstream_name().to_canonical(),
+                    &Version::try_from(version).unwrap(),
+                )
+                .await
+                .unwrap()
+                .and_then(|meta| meta.license)
         }
 
         struct Worker {
             args: CratesIoPrefetchArgs,
             sender: flume::Sender<CratesioPrefetchMsg>,
+            db: TestDb,
             _data_dir: tempfile::TempDir,
         }
 
-        fn worker(db: MockDb, proxy: &kellnr_settings::Proxy, filters: FilterChain) -> Worker {
+        async fn worker(proxy: &kellnr_settings::Proxy, filters: FilterChain) -> Worker {
             let data_dir = tempfile::tempdir().unwrap();
             let settings = kellnr_settings::test_settings_in(data_dir.path());
             let storage =
                 Box::new(FSStorage::new(&settings.crates_io_path()).unwrap()) as DynStorage;
-            let db: Arc<dyn DbProvider> = Arc::new(db);
+            let test_db = TestDb::sqlite().await;
+            let db = test_db.provider();
             let (sender, recv) = flume::unbounded();
             let args = CratesIoPrefetchArgs {
                 db: db.clone(),
@@ -878,6 +876,7 @@ mod tests {
             Worker {
                 args,
                 sender,
+                db: test_db,
                 _data_dir: data_dir,
             }
         }
@@ -907,25 +906,25 @@ mod tests {
             let upstream = Arc::new(Upstream::default());
             let server = fake_cratesio(upstream.clone()).await;
             let proxy = server.cratesio_proxy();
-            let mut db = MockDb::new();
-            db.expect_get_cratesio_version_meta()
-                .returning(|_, version| {
-                    let license = VERSIONS
-                        .iter()
-                        .find(|(v, _)| *v == version.to_string())
-                        .map(|(_, l)| (*l).to_string());
-                    Ok(Some(CratesioVersionMeta {
-                        cksum: sha256::digest(CRATE),
-                        license,
-                    }))
-                });
             let filters = FilterChain::cratesio(&CratesioFilter {
                 license_enabled: true,
                 license_allowed: vec!["MIT".to_string()],
                 ..CratesioFilter::default()
             })
             .unwrap();
-            let worker = worker(db, &proxy, filters);
+            let worker = worker(&proxy, filters).await;
+            worker
+                .db
+                .add_cratesio_prefetch_data(
+                    &upstream_name(),
+                    "etag",
+                    "",
+                    None,
+                    &metadata(),
+                    &licenses(),
+                )
+                .await
+                .unwrap();
 
             predownload_crates(&metadata(), &worker.args).await;
 
@@ -939,8 +938,7 @@ mod tests {
             let upstream = Arc::new(Upstream::default());
             let server = fake_cratesio(upstream.clone()).await;
             let proxy = server.cratesio_proxy();
-            // No license lookup is expected, the mock panics on unexpected calls
-            let worker = worker(MockDb::new(), &proxy, FilterChain::default());
+            let worker = worker(&proxy, FilterChain::default()).await;
 
             predownload_crates(&metadata(), &worker.args).await;
 
@@ -953,8 +951,7 @@ mod tests {
             let upstream = Arc::new(Upstream::default());
             let server = fake_cratesio(upstream.clone()).await;
             let proxy = server.cratesio_proxy();
-            let (db, stored) = recording_db();
-            let worker = worker(db, &proxy, FilterChain::default());
+            let worker = worker(&proxy, FilterChain::default()).await;
 
             worker
                 .sender
@@ -973,10 +970,14 @@ mod tests {
             // The index came with the message, only the API is called
             assert_eq!(0, upstream.index_calls.load(Ordering::SeqCst));
             assert_eq!(1, upstream.api_calls.load(Ordering::SeqCst));
-            let stored = stored.lock().unwrap();
-            assert_eq!(Some(&"MIT".to_string()), stored[0].get("1.0.0"));
-            assert_eq!(Some(&"GPL-3.0-only".to_string()), stored[0].get("1.1.0"));
-            assert!(!stored[0].values().any(|l| l == UNKNOWN_LICENSE));
+            assert_eq!(
+                Some("MIT"),
+                stored_license(&worker, "1.0.0").await.as_deref()
+            );
+            assert_eq!(
+                Some("GPL-3.0-only"),
+                stored_license(&worker, "1.1.0").await.as_deref()
+            );
         }
 
         #[tokio::test]
@@ -984,8 +985,7 @@ mod tests {
             let upstream = Arc::new(Upstream::default());
             let server = fake_cratesio(upstream.clone()).await;
             let proxy = server.cratesio_proxy();
-            let (db, stored) = recording_db();
-            let worker = worker(db, &proxy, FilterChain::default());
+            let worker = worker(&proxy, FilterChain::default()).await;
             let update = || {
                 CratesioPrefetchMsg::Update(UpdateData {
                     name: upstream_name(),
@@ -1006,7 +1006,10 @@ mod tests {
             assert_eq!(2, first.unwrap().len());
             assert!(second.is_none());
             assert_eq!(1, upstream.index_calls.load(Ordering::SeqCst));
-            assert_eq!(1, stored.lock().unwrap().len());
+            assert_eq!(
+                Some("MIT"),
+                stored_license(&worker, "1.0.0").await.as_deref()
+            );
         }
     }
 
@@ -1020,12 +1023,12 @@ mod tests {
 
     #[tokio::test]
     async fn update_round_queues_all_cached_crates() {
-        let mut db = MockDb::new();
-        db.expect_get_cratesio_index_update_list()
-            .returning(|| Ok(vec![update_msg("a"), update_msg("b")]));
+        let db = TestDb::sqlite().await;
+        add_cached_crate(&db, "aaa", "etag", "date").await;
+        add_cached_crate(&db, "bbb", "etag", "date").await;
         let (sender, receiver) = flume::unbounded();
 
-        let next = queue_update_round(&db, &sender).await;
+        let next = queue_update_round(&*db, &sender).await;
 
         assert_eq!(UPDATE_INTERVAL_SECS, next);
         assert_eq!(2, receiver.len());
@@ -1033,12 +1036,12 @@ mod tests {
 
     #[tokio::test]
     async fn update_round_is_postponed_while_the_previous_one_is_queued() {
-        let mut db = MockDb::new();
-        db.expect_get_cratesio_index_update_list().never();
+        let db = TestDb::sqlite().await;
+        add_cached_crate(&db, "aaa", "etag", "date").await;
         let (sender, receiver) = flume::unbounded();
         sender.send(update_msg("still-queued")).unwrap();
 
-        let next = queue_update_round(&db, &sender).await;
+        let next = queue_update_round(&*db, &sender).await;
 
         assert_eq!(UPDATE_LIST_RETRY_SECS, next);
         assert_eq!(1, receiver.len());

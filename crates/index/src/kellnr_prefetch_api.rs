@@ -145,17 +145,23 @@ mod tests {
     use http_body_util::BodyExt;
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
-    use kellnr_db::mock::MockDb;
+    use kellnr_db::UserFlags;
+    use kellnr_db::test_utils::{TestCrateBuilder, test_drop_table};
     use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::sqlite_test_state;
     use kellnr_settings::Protocol;
-    use mockall::predicate::*;
+    use kellnr_test_db::TestDb;
     use tower::ServiceExt;
 
     use super::*;
 
+    /// `Last-Modified` of the crates added by `TestCrateBuilder`.
+    const LAST_MODIFIED: &str = "Wed, 07 Oct 2020 13:18:00 GMT";
+
     #[tokio::test]
     async fn config_returns_config_json() {
-        let r = app()
+        let (app, _db) = app().await;
+        let r = app
             .oneshot(
                 Request::get("/api/v1/index/config.json")
                     .body(Body::empty())
@@ -171,9 +177,17 @@ mod tests {
         );
     }
 
+    async fn stored_prefetch(db: &TestDb, name: &str) -> Prefetch {
+        db.get_prefetch_data(&OriginalName::try_from(name).unwrap())
+            .await
+            .unwrap()
+    }
+
     #[tokio::test]
     async fn prefetch_returns_prefetch_data() {
-        let r = app()
+        let (app, db) = app().await;
+        let stored = stored_prefetch(&db, "metadata").await;
+        let r = app
             .oneshot(
                 Request::get("/api/v1/index/me/ta/metadata")
                     .header(header::IF_MODIFIED_SINCE, "foo")
@@ -187,25 +201,38 @@ mod tests {
         let result_status = r.status();
 
         assert_eq!(StatusCode::OK, result_status);
-        assert_eq!("3", r.headers().get(header::CONTENT_LENGTH).unwrap());
         assert_eq!(
-            "Fri, 30 Oct 2026 12:00:00 GMT",
+            stored.data.len().to_string(),
+            r.headers()
+                .get(header::CONTENT_LENGTH)
+                .unwrap()
+                .to_str()
+                .unwrap()
+        );
+        assert_eq!(
+            LAST_MODIFIED,
             r.headers().get(header::LAST_MODIFIED).unwrap()
         );
-        assert_eq!("\"etag\"", r.headers().get(header::ETAG).unwrap());
         assert_eq!(
-            vec![0x1, 0x2, 0x3],
+            quote_etag(&stored.etag),
+            r.headers().get(header::ETAG).unwrap().to_str().unwrap()
+        );
+        assert_eq!(
+            stored.data,
             r.into_body().collect().await.unwrap().to_bytes()
         );
     }
 
+    /// Status of a request for "metadata" with the headers. `ETAG` in a
+    /// header value is replaced with the stored entity tag.
     async fn prefetch_status(headers: &[(header::HeaderName, &str)]) -> StatusCode {
+        let (app, db) = app().await;
+        let etag = quote_etag(&stored_prefetch(&db, "metadata").await.etag);
         let mut request = Request::get("/api/v1/index/me/ta/metadata");
         for (name, value) in headers {
-            request = request.header(name, *value);
+            request = request.header(name, value.replace("ETAG", &etag));
         }
-        app()
-            .oneshot(request.body(Body::empty()).unwrap())
+        app.oneshot(request.body(Body::empty()).unwrap())
             .await
             .unwrap()
             .status()
@@ -214,8 +241,8 @@ mod tests {
     #[tokio::test]
     async fn prefetch_returns_not_modified() {
         let status = prefetch_status(&[
-            (header::IF_MODIFIED_SINCE, "Fri, 30 Oct 2026 12:00:00 GMT"),
-            (header::IF_NONE_MATCH, "\"etag\""),
+            (header::IF_MODIFIED_SINCE, LAST_MODIFIED),
+            (header::IF_NONE_MATCH, "ETAG"),
         ])
         .await;
 
@@ -224,15 +251,14 @@ mod tests {
 
     #[tokio::test]
     async fn prefetch_returns_not_modified_for_matching_etag_alone() {
-        let status = prefetch_status(&[(header::IF_NONE_MATCH, "\"etag\"")]).await;
+        let status = prefetch_status(&[(header::IF_NONE_MATCH, "ETAG")]).await;
 
         assert_eq!(StatusCode::NOT_MODIFIED, status);
     }
 
     #[tokio::test]
     async fn prefetch_returns_not_modified_for_matching_date_alone() {
-        let status =
-            prefetch_status(&[(header::IF_MODIFIED_SINCE, "Fri, 30 Oct 2026 12:00:00 GMT")]).await;
+        let status = prefetch_status(&[(header::IF_MODIFIED_SINCE, LAST_MODIFIED)]).await;
 
         assert_eq!(StatusCode::NOT_MODIFIED, status);
     }
@@ -240,7 +266,7 @@ mod tests {
     #[tokio::test]
     async fn prefetch_returns_data_for_older_date() {
         let status =
-            prefetch_status(&[(header::IF_MODIFIED_SINCE, "Thu, 29 Oct 2026 12:00:00 GMT")]).await;
+            prefetch_status(&[(header::IF_MODIFIED_SINCE, "Tue, 06 Oct 2020 13:18:00 GMT")]).await;
 
         assert_eq!(StatusCode::OK, status);
     }
@@ -248,7 +274,7 @@ mod tests {
     #[tokio::test]
     async fn prefetch_returns_data_for_other_etag_with_matching_date() {
         let status = prefetch_status(&[
-            (header::IF_MODIFIED_SINCE, "Fri, 30 Oct 2026 12:00:00 GMT"),
+            (header::IF_MODIFIED_SINCE, LAST_MODIFIED),
             (header::IF_NONE_MATCH, "\"old\""),
         ])
         .await;
@@ -258,9 +284,12 @@ mod tests {
 
     #[tokio::test]
     async fn prefetch_returns_internal_error_on_database_failure() {
-        let r = app()
+        let (app, db) = app().await;
+        test_drop_table(&db, "krate").await.unwrap();
+
+        let r = app
             .oneshot(
-                Request::get("/api/v1/index/br/ok/broken")
+                Request::get("/api/v1/index/me/ta/metadata")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -272,7 +301,8 @@ mod tests {
 
     #[tokio::test]
     async fn prefetch_restricted_crate_anonymous_returns_not_found() {
-        let r = app()
+        let (app, _db) = app().await;
+        let r = app
             .oneshot(
                 Request::get("/api/v1/index/se/cr/secret")
                     .body(Body::empty())
@@ -286,7 +316,8 @@ mod tests {
 
     #[tokio::test]
     async fn prefetch_restricted_crate_with_access_returns_prefetch_data() {
-        let r = app()
+        let (app, _db) = app().await;
+        let r = app
             .oneshot(
                 Request::get("/api/v1/index/se/cr/secret")
                     .header(header::AUTHORIZATION, "crate-user-token")
@@ -301,7 +332,8 @@ mod tests {
 
     #[tokio::test]
     async fn prefetch_returns_not_found() {
-        let r = app()
+        let (app, _db) = app().await;
+        let r = app
             .oneshot(
                 Request::get("/api/v1/index/no/tf/notfound")
                     .header(header::IF_MODIFIED_SINCE, "date")
@@ -315,7 +347,10 @@ mod tests {
         assert_eq!(StatusCode::NOT_FOUND, r.status());
     }
 
-    fn app() -> Router {
+    /// The index routes on a database with the crate "metadata" and the
+    /// download-restricted crate "secret", which only the token
+    /// `crate-user-token` of "`crate_user`" may read.
+    async fn app() -> (Router, TestDb) {
         let mut settings = kellnr_settings::test_settings();
         settings.origin = kellnr_settings::Origin {
             protocol: Protocol::Http,
@@ -325,53 +360,20 @@ mod tests {
             cookie_secure: None,
         };
 
+        let (state, db) = sqlite_test_state().await;
+        for name in ["metadata", "secret"] {
+            TestCrateBuilder::new(&db).name(name).build().await.unwrap();
+        }
         let secret = OriginalName::try_from("secret").unwrap().to_canonical();
-        let mut mock_db = MockDb::new();
-        let restricted = secret.clone();
-        mock_db
-            .expect_is_download_restricted()
-            .returning(move |name| Ok(*name == restricted));
-        mock_db
-            .expect_get_user_from_token()
-            .with(eq(PlainToken::from("crate-user-token")))
-            .returning(|_| {
-                Ok(kellnr_db::User {
-                    name: UserName::new("crate_user").unwrap(),
-                    ..kellnr_db::User::default()
-                })
-            });
-        mock_db
-            .expect_is_crate_user()
-            .with(eq(secret), eq(UserName::new("crate_user").unwrap()))
-            .returning(|_, _| Ok(true));
-        mock_db
-            .expect_get_prefetch_data()
-            .with(eq(OriginalName::try_from("secret").unwrap()))
-            .returning(move |_| {
-                Ok(Prefetch {
-                    data: vec![0x4],
-                    etag: "etag".to_string(),
-                    last_modified: "2026-10-30 12:00:00".to_string(),
-                })
-            });
-        mock_db
-            .expect_get_prefetch_data()
-            .with(eq(OriginalName::try_from("metadata").unwrap()))
-            .returning(move |_| {
-                Ok(Prefetch {
-                    data: vec![0x1, 0x2, 0x3],
-                    etag: "etag".to_string(),
-                    last_modified: "2026-10-30 12:00:00".to_string(),
-                })
-            });
-        mock_db
-            .expect_get_prefetch_data()
-            .with(eq(OriginalName::try_from("notfound").unwrap()))
-            .returning(move |_| Err(DbError::CrateNotFound("notfound".to_string())));
-        mock_db
-            .expect_get_prefetch_data()
-            .with(eq(OriginalName::try_from("broken").unwrap()))
-            .returning(move |_| Err(DbError::FailedToCountCrates));
+        let crate_user = UserName::new("crate_user").unwrap();
+        db.change_download_restricted(&secret, true).await.unwrap();
+        db.add_user(&crate_user, "pwd", UserFlags::normal())
+            .await
+            .unwrap();
+        db.add_auth_token("test", &PlainToken::from("crate-user-token"), &crate_user)
+            .await
+            .unwrap();
+        db.add_crate_user(&secret, &crate_user).await.unwrap();
 
         let kellnr_prefetch = Router::new()
             .route("/config.json", get(config_kellnr))
@@ -379,13 +381,13 @@ mod tests {
             .route("/{a}/{name}", get(prefetch_len2_kellnr));
 
         let state = AppStateData {
-            db: Arc::new(mock_db),
             settings: Arc::new(settings),
-            ..kellnr_http::test_support::test_state()
+            ..state
         };
 
-        Router::new()
+        let app = Router::new()
             .nest("/api/v1/index", kellnr_prefetch)
-            .with_state(state)
+            .with_state(state);
+        (app, db)
     }
 }
