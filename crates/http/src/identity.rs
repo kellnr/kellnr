@@ -271,14 +271,13 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, header};
     use axum::routing::get;
-    use cookie::Key;
     use kellnr_db::mock::MockDb;
     use kellnr_db::{DbProvider, User};
     use mockall::predicate::eq;
     use tower::ServiceExt;
 
     use super::*;
-    use crate::test_support::{TEST_KEY, encode_cookies, test_state};
+    use crate::test_support::{encode_cookies, test_state};
 
     type Result<T = (), E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
@@ -311,11 +310,7 @@ mod tests {
             .route("/any", get(any_endpoint))
             .route("/optional_any", get(optional_any_endpoint))
             .route("/optional_token", get(optional_token_endpoint))
-            .with_state(AppStateData {
-                db,
-                signing_key: Key::from(TEST_KEY),
-                ..test_state()
-            })
+            .with_state(AppStateData { db, ..test_state() })
     }
 
     fn c1234() -> String {

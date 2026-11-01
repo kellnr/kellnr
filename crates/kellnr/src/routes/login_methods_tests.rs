@@ -13,7 +13,6 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Method, Request, header};
-use axum_extra::extract::cookie::Key;
 use bytes::Bytes;
 use kellnr_common::account_name::UserName;
 use kellnr_common::canonical_name::CanonicalName;
@@ -21,7 +20,7 @@ use kellnr_common::plain_token::PlainToken;
 use kellnr_common::version::Version;
 use kellnr_db::{ConString, Database, DbProvider, SqliteConString};
 use kellnr_http::state::AppStateData;
-use kellnr_http::test_support::{TEST_KEY, encode_cookies, test_state};
+use kellnr_http::test_support::{encode_cookies, test_state};
 use kellnr_settings::Settings;
 use kellnr_settings::constants::COOKIE_SESSION_ID;
 use kellnr_storage::docs_storage::{DocsName, DocsStorage};
@@ -262,7 +261,6 @@ impl TestApp {
         let dyn_db: Arc<dyn DbProvider> = db.clone();
         let state = AppStateData {
             db: dyn_db,
-            signing_key: Key::from(TEST_KEY),
             settings: Arc::new(settings),
             docs_storage: Arc::new(docs_storage),
             ..test_state()

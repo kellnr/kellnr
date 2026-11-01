@@ -596,13 +596,13 @@ mod tests {
     use axum::body::Body;
     use axum::response::IntoResponse;
     use axum::routing::{post, put};
-    use axum_extra::extract::cookie::Key;
+    
     use hyper::{Request, header};
     use kellnr_db::error::DbError;
     use kellnr_db::mock::MockDb;
     use kellnr_http::login_throttle::LoginThrottle;
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
+    use kellnr_http::test_support::encode_cookies;
     use kellnr_http::token_cache::{CachedTokenData, TokenCacheManager};
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use mockall::predicate::*;
@@ -613,7 +613,6 @@ mod tests {
     fn test_state_with_cache(mock_db: MockDb, cache: Arc<TokenCacheManager>) -> AppStateData {
         AppStateData {
             db: Arc::new(mock_db),
-            signing_key: Key::from(TEST_KEY),
             token_cache: cache,
             ..kellnr_http::test_support::test_state()
         }

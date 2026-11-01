@@ -3920,9 +3920,6 @@ mod reg_api_tests {
             ),
             settings: settings.into(),
             crate_storage: cs.into(),
-            // Use a fixed signing key matching the test cookie helper so that
-            // session cookies actually decrypt and session auth is exercised.
-            signing_key: cookie::Key::from(kellnr_http::test_support::TEST_KEY),
             ..kellnr_http::test_support::test_state()
         };
 
@@ -3960,11 +3957,11 @@ mod crate_access_tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use axum::routing::{get, put};
-    use cookie::Key;
+    
     use kellnr_db::SessionInfo;
     use kellnr_db::mock::MockDb;
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
+    use kellnr_http::test_support::encode_cookies;
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use mockall::predicate::eq;
     use tower::ServiceExt;
@@ -4018,7 +4015,6 @@ mod crate_access_tests {
             )
             .with_state(AppStateData {
                 db: Arc::new(db),
-                signing_key: Key::from(TEST_KEY),
                 ..kellnr_http::test_support::test_state()
             });
         let request = Request::builder()

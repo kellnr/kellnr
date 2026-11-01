@@ -347,7 +347,7 @@ mod session_and_combined_tests {
     use axum::http::header;
     use axum::middleware::from_fn_with_state;
     use axum::routing::get;
-    use cookie::Key;
+    
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
     use kellnr_db::error::DbError;
@@ -359,7 +359,7 @@ mod session_and_combined_tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::test_support::{TEST_KEY, encode_cookies, test_state};
+    use crate::test_support::{encode_cookies, test_state};
 
     type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -367,7 +367,6 @@ mod session_and_combined_tests {
         let db: Arc<dyn DbProvider> = Arc::new(db);
         let state = AppStateData {
             db,
-            signing_key: Key::from(TEST_KEY),
             settings: Arc::new(Settings {
                 registry: kellnr_settings::Registry {
                     auth_required,

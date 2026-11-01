@@ -1087,7 +1087,7 @@ mod tests {
     use axum::http::{Request, StatusCode, header};
     use axum::response::Response;
     use axum::routing::{delete, get, put};
-    use axum_extra::extract::cookie::Key;
+    
     use bytes::Bytes;
     use kellnr_common::account_name::UserName;
     use kellnr_common::plain_token::PlainToken;
@@ -1097,7 +1097,7 @@ mod tests {
     };
     use kellnr_http::error::ErrorDetails;
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
+    use kellnr_http::test_support::encode_cookies;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::toolchain_storage::ToolchainStorage;
@@ -1125,7 +1125,6 @@ mod tests {
     ) -> AppStateData {
         AppStateData {
             db,
-            signing_key: Key::from(TEST_KEY),
             toolchain_storage,
             ..kellnr_http::test_support::test_state()
         }

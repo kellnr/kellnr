@@ -79,13 +79,12 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use axum::routing::get;
-    use axum_extra::extract::cookie::Key;
     use kellnr_common::account_name::UserName;
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_db::SessionInfo;
     use kellnr_db::mock::MockDb;
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::{TEST_KEY, encode_cookies};
+    use kellnr_http::test_support::encode_cookies;
     use kellnr_settings::constants::COOKIE_SESSION_ID;
     use mockall::predicate::eq;
     use tower::ServiceExt;
@@ -125,7 +124,6 @@ mod tests {
             .route("/{crate_name}", get(get_access_data).put(set_access_data))
             .with_state(AppStateData {
                 db: Arc::new(db),
-                signing_key: Key::from(TEST_KEY),
                 ..kellnr_http::test_support::test_state()
             });
         let request = request
