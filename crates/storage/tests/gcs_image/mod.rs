@@ -18,15 +18,9 @@ const IMAGE_NAME: &str = "kellnr-fake-gcs-server";
 const IMAGE_TAG: &str = "local";
 
 /// Build context for [`FakeGcsServer`], shared with the Playwright UI tests.
-pub(crate) struct FakeGcsServerImage {
-    host_port: u16,
-}
+pub(crate) struct FakeGcsServerImage;
 
 impl FakeGcsServerImage {
-    pub(crate) fn new(host_port: u16) -> Self {
-        Self { host_port }
-    }
-
     fn fixture_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/test-gcs-storage")
     }
@@ -49,23 +43,16 @@ impl BuildableImage for FakeGcsServerImage {
     }
 
     fn into_image(self) -> Self::Built {
-        FakeGcsServer {
-            host_port: self.host_port,
-        }
+        FakeGcsServer
     }
 }
 
-/// `fake-gcs-server`'s `-public-host` flag must match the exact `host:port` the client
-/// connects through for its flat, GCS-XML-API-style object routes (used by
-/// `object_store`) to dispatch correctly; a mismatch (e.g. a Docker-assigned random host
-/// port that differs from a hardcoded `-public-host`) causes every GET/PUT to 404/405.
-/// The host port is therefore reserved up front and threaded through here so it can be
-/// baked into `-public-host`, and the container is started with that same port fixed via
-/// `ImageExt::with_mapped_port` (see `fakegcs-testcontainer`).
+/// `fake-gcs-server` dispatches its flat, GCS-XML-API-style object routes (used by
+/// `object_store`) only for requests whose host matches `-public-host`. Without a port in
+/// `-public-host`, only the host name is compared, so the container can be published on
+/// any free host port that Docker picks. Clients must connect through `localhost`.
 #[derive(Debug, Clone)]
-pub(crate) struct FakeGcsServer {
-    host_port: u16,
-}
+pub(crate) struct FakeGcsServer;
 
 impl FakeGcsServer {
     pub(crate) const PORT: u16 = 4443;
@@ -93,10 +80,7 @@ impl Image for FakeGcsServer {
     fn cmd(&self) -> impl IntoIterator<Item = impl Into<Cow<'_, str>>> {
         // The image's ENTRYPOINT already carries `-data /data -scheme http`, and the bucket
         // directories are created at build time.
-        vec![
-            "-public-host".to_string(),
-            format!("localhost:{}", self.host_port),
-        ]
+        vec!["-public-host", "localhost"]
     }
 
     fn expose_ports(&self) -> &[ContainerPort] {

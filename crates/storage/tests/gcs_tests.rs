@@ -50,9 +50,8 @@ fn test_docs_storage(url: &str) -> DocsStorage {
 #[fakegcs_testcontainer]
 #[tokio::test]
 async fn add_and_get_crate() {
-    // `localhost`, not `container.get_host()`: the reserved port is baked into
-    // fake-gcs-server's `-public-host` as `localhost:{port}`, and a mismatch makes every
-    // object route 404 (see `gcs_image/mod.rs`).
+    // `localhost`, not `container.get_host()`: fake-gcs-server's `-public-host` is
+    // `localhost`, and a mismatch makes every object route 404 (see `gcs_image/mod.rs`).
     let url = format!("http://localhost:{port}");
     let cratedata = bytes::Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44]);
     let metadata = PublishMetadata::minimal("Test_Add_crate_binary_Upper-Case", "0.1.0");
