@@ -224,8 +224,10 @@ function collapseAll() {
   expandedPanels.value = [];
 }
 
-// Open the sections with matches, so the results are visible right away
-watch(searchQuery, (query) => {
+// Open the sections with matches, so the results are visible right away.
+// Also watch the sections, as the search can be entered before the settings
+// are loaded.
+watch([searchQuery, sections], ([query]) => {
   if (query.trim() !== '') {
     expandAll();
   }
