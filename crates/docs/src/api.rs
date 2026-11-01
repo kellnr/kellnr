@@ -199,45 +199,103 @@ mod tests {
     use axum::http::{Request, StatusCode, header};
     use axum::routing::{get, put};
     use http_body_util::BodyExt;
-    use kellnr_common::account_name::UserName;
+    use kellnr_common::account_name::{GroupName, UserName};
     use kellnr_common::canonical_name::CanonicalName;
-    use kellnr_db::error::DbError;
-    use kellnr_db::mock::MockDb;
-    use kellnr_db::{DbProvider, DocQueueEntry, User};
+    use kellnr_common::plain_token::PlainToken;
+    use kellnr_db::UserFlags;
+    use kellnr_db::test_utils::{TestCrateBuilder, test_drop_table};
     use kellnr_http::state::AppStateData;
+    use kellnr_http::test_support::sqlite_test_state;
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
     use kellnr_storage::object_storage::MemoryStorage;
-    use mockall::predicate::eq;
+    use kellnr_test_db::TestDb;
     use tower::ServiceExt;
 
     use super::*;
     use crate::doc_queue_response::DocQueueEntryResponse;
 
+    /// Token of the user `admin` in every test database.
+    const ADMIN_TOKEN: &str = "token";
+
+    /// The docs API routes at their paths in the API, on `state` with `docs_storage`.
+    fn app(state: AppStateData, docs_storage: Arc<DocsStorage>) -> Router {
+        Router::new()
+            .route("/builds", get(docs_in_queue))
+            .route("/{package}/latest", get(latest_docs))
+            .route("/{package}/{version}", put(publish_docs))
+            .with_state(AppStateData {
+                docs_storage,
+                ..state
+            })
+    }
+
+    fn memory_docs_storage() -> Arc<DocsStorage> {
+        Arc::new(DocsStorage::new(
+            Box::new(MemoryStorage::new()) as DynStorage
+        ))
+    }
+
+    fn canonical(name: &str) -> CanonicalName {
+        CanonicalName::try_from(name).unwrap()
+    }
+
+    fn user_name(name: &str) -> UserName {
+        UserName::new(name).unwrap()
+    }
+
+    async fn add_crate(db: &TestDb, name: &str, version: &str) {
+        TestCrateBuilder::new(db)
+            .name(name)
+            .version(version)
+            .build()
+            .await
+            .unwrap();
+    }
+
+    /// Adds the crate `name`, which is download-restricted if `restricted`.
+    async fn add_restricted_crate(db: &TestDb, name: &str, restricted: bool) {
+        add_crate(db, name, "1.0.0").await;
+        db.change_download_restricted(&canonical(name), restricted)
+            .await
+            .unwrap();
+    }
+
+    /// Adds the user `name` with `flags` and returns a new cargo token of it.
+    async fn token_user(db: &TestDb, name: &str, flags: UserFlags) -> String {
+        db.add_user(&user_name(name), "pwd", flags).await.unwrap();
+        let token = format!("{name}-token");
+        db.add_auth_token("test", &PlainToken::from(token.as_str()), &user_name(name))
+            .await
+            .unwrap();
+        token
+    }
+
+    async fn add_doc_queue(db: &TestDb, name: &str, version: &str) {
+        db.add_doc_queue(
+            &OriginalName::try_from(name).unwrap(),
+            &Version::try_from(version).unwrap(),
+            &PathBuf::default(),
+        )
+        .await
+        .unwrap();
+    }
+
+    async fn docs_link(db: &TestDb, name: &str) -> Option<String> {
+        let data = db.get_crate_data(&canonical(name)).await.unwrap();
+        data.versions[0].documentation.clone()
+    }
+
     #[tokio::test]
     async fn doc_in_queue_returns_queue_entries() {
-        let mut db = MockDb::new();
-        db.expect_is_download_restricted().returning(|_| Ok(false));
-        db.expect_get_doc_queue().returning(|| {
-            Ok(vec![
-                DocQueueEntry {
-                    id: 0,
-                    name: "crate1".to_string(),
-                    version: Version::try_from("0.0.1").unwrap(),
-                    path: PathBuf::default(),
-                },
-                DocQueueEntry {
-                    id: 1,
-                    name: "crate2".to_string(),
-                    version: Version::try_from("0.0.2").unwrap(),
-                    path: PathBuf::default(),
-                },
-            ])
-        });
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "crate1", "0.0.1").await;
+        add_crate(&db, "crate2", "0.0.2").await;
+        add_doc_queue(&db, "crate1", "0.0.1").await;
+        add_doc_queue(&db, "crate2", "0.0.2").await;
 
-        let kellnr = app(Arc::new(db));
-        let r = kellnr
+        let r = app(state, memory_docs_storage())
             .oneshot(Request::get("/builds").body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -261,31 +319,23 @@ mod tests {
         );
     }
 
-    fn queue_entry(id: i64, name: &str) -> DocQueueEntry {
-        DocQueueEntry {
-            id,
-            name: name.to_string(),
-            version: Version::try_from("1.0.0").unwrap(),
-            path: PathBuf::default(),
-        }
+    /// App state with the unrestricted crate `public` and the restricted
+    /// crate `secret` in the docs queue.
+    async fn state_with_restricted_queue_entry() -> (AppStateData, TestDb) {
+        let (state, db) = sqlite_test_state().await;
+        add_restricted_crate(&db, "public", false).await;
+        add_restricted_crate(&db, "secret", true).await;
+        add_doc_queue(&db, "public", "1.0.0").await;
+        add_doc_queue(&db, "secret", "1.0.0").await;
+        (state, db)
     }
 
-    /// Queue with the unrestricted crate `public` and the restricted crate `secret`.
-    fn db_with_restricted_queue_entry() -> MockDb {
-        let mut db = MockDb::new();
-        db.expect_get_doc_queue()
-            .returning(|| Ok(vec![queue_entry(0, "public"), queue_entry(1, "secret")]));
-        db.expect_is_download_restricted()
-            .returning(|name| Ok(name.to_string() == "secret"));
-        db
-    }
-
-    async fn queued_names(db: MockDb, token: Option<&str>) -> Vec<String> {
+    async fn queued_names(state: AppStateData, token: Option<&str>) -> Vec<String> {
         let mut request = Request::get("/builds");
         if let Some(token) = token {
             request = request.header(header::AUTHORIZATION, token);
         }
-        let r = app(Arc::new(db))
+        let r = app(state, memory_docs_storage())
             .oneshot(request.body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -300,51 +350,34 @@ mod tests {
 
     #[tokio::test]
     async fn doc_queue_hides_restricted_crate_from_anonymous_user() {
-        let names = queued_names(db_with_restricted_queue_entry(), None).await;
+        let (state, _db) = state_with_restricted_queue_entry().await;
+
+        let names = queued_names(state, None).await;
 
         assert_eq!(names, vec!["public"]);
     }
 
     #[tokio::test]
     async fn doc_queue_hides_restricted_crate_from_user_without_access() {
-        let mut db = db_with_restricted_queue_entry();
-        expect_token_user(&mut db, "bob");
-        db.expect_is_crate_user().returning(|_, _| Ok(false));
-        db.expect_is_crate_group_user().returning(|_, _| Ok(false));
-        db.expect_is_owner().returning(|_, _| Ok(false));
+        let (state, db) = state_with_restricted_queue_entry().await;
+        let token = token_user(&db, "bob", UserFlags::normal()).await;
 
-        let names = queued_names(db, Some("token")).await;
+        let names = queued_names(state, Some(&token)).await;
 
         assert_eq!(names, vec!["public"]);
     }
 
     #[tokio::test]
     async fn doc_queue_lists_restricted_crate_for_crate_user() {
-        let mut db = db_with_restricted_queue_entry();
-        expect_token_user(&mut db, "alice");
-        db.expect_is_crate_user()
-            .returning(|_, user| Ok(user == "alice"));
+        let (state, db) = state_with_restricted_queue_entry().await;
+        let token = token_user(&db, "alice", UserFlags::normal()).await;
+        db.add_crate_user(&canonical("secret"), &user_name("alice"))
+            .await
+            .unwrap();
 
-        let names = queued_names(db, Some("token")).await;
+        let names = queued_names(state, Some(&token)).await;
 
         assert_eq!(names, vec!["public", "secret"]);
-    }
-
-    fn app(db: Arc<dyn DbProvider>) -> Router {
-        app_with_storage(db, kellnr_http::test_support::test_state().docs_storage)
-    }
-
-    /// The docs API routes at their paths in the API.
-    fn app_with_storage(db: Arc<dyn DbProvider>, docs_storage: Arc<DocsStorage>) -> Router {
-        Router::new()
-            .route("/builds", get(docs_in_queue))
-            .route("/{package}/latest", get(latest_docs))
-            .route("/{package}/{version}", put(publish_docs))
-            .with_state(AppStateData {
-                db,
-                docs_storage,
-                ..kellnr_http::test_support::test_state()
-            })
     }
 
     fn build_zip(files: &[(&str, &[u8])]) -> Vec<u8> {
@@ -359,59 +392,28 @@ mod tests {
         buf
     }
 
-    fn expect_admin_owner(db: &mut MockDb, canonical: &CanonicalName) {
-        expect_original_name(db, canonical, "test-crate");
-        db.expect_get_user_from_token().returning(|_| {
-            Ok(User {
-                is_admin: true,
-                name: UserName::new("admin").unwrap(),
-                ..User::default()
-            })
-        });
+    fn fs_docs_storage(dir: &tempfile::TempDir) -> Arc<DocsStorage> {
+        Arc::new(DocsStorage::new(
+            Box::new(FSStorage::new(dir.path().to_str().unwrap()).unwrap()) as DynStorage,
+        ))
     }
 
-    fn expect_original_name(db: &mut MockDb, canonical: &CanonicalName, original: &'static str) {
-        db.expect_get_original_name()
-            .with(
-                eq(canonical.clone()),
-                eq(Version::try_from("1.0.0").unwrap()),
-            )
-            .returning(move |_, _| Ok(Some(OriginalName::from_unchecked(original.to_string()))));
+    fn publish_request(uri: &str, token: &str, zip: Vec<u8>) -> Request<Body> {
+        Request::put(uri)
+            .header(header::AUTHORIZATION, token)
+            .body(Body::from(zip))
+            .unwrap()
     }
 
     #[tokio::test]
     async fn publish_docs_stores_docs_under_lowercase_name_and_links_rustdoc_folder() {
-        let canonical = CanonicalName::try_from("my-crate").unwrap();
-        let mut db = MockDb::new();
-        expect_original_name(&mut db, &canonical, "My-Crate");
-        db.expect_get_user_from_token().returning(|_| {
-            Ok(User {
-                is_admin: true,
-                name: UserName::new("admin").unwrap(),
-                ..User::default()
-            })
-        });
-        db.expect_update_docs_link()
-            .with(
-                eq(canonical.clone()),
-                eq(Version::try_from("1.0.0").unwrap()),
-                eq("/docs/my-crate/1.0.0/doc/My_Crate/index.html".to_string()),
-            )
-            .returning(|_, _, _| Ok(()));
-        let docs_storage = Arc::new(DocsStorage::new(
-            Box::new(MemoryStorage::new()) as DynStorage
-        ));
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "My-Crate", "1.0.0").await;
+        let docs_storage = memory_docs_storage();
+        let zip = build_zip(&[("doc/My_Crate/index.html", b"<html>docs</html>")]);
 
-        let r = app_with_storage(Arc::new(db), docs_storage.clone())
-            .oneshot(
-                Request::put("/MY-crate/1.0.0")
-                    .header(header::AUTHORIZATION, "sometoken")
-                    .body(Body::from(build_zip(&[(
-                        "doc/My_Crate/index.html",
-                        b"<html>docs</html>",
-                    )])))
-                    .unwrap(),
-            )
+        let r = app(state, docs_storage.clone())
+            .oneshot(publish_request("/MY-crate/1.0.0", ADMIN_TOKEN, zip))
             .await
             .unwrap();
 
@@ -425,43 +427,23 @@ mod tests {
         let body = r.into_body().collect().await.unwrap().to_bytes();
         let response: DocUploadResponse = serde_json::from_slice(&body).unwrap();
         assert_eq!(response.crate_name, "My-Crate");
+        assert_eq!(
+            docs_link(&db, "my-crate").await.as_deref(),
+            Some("/docs/my-crate/1.0.0/doc/My_Crate/index.html")
+        );
     }
 
     // Docs stay under the lowercase name the crate was published with, also
     // if they are uploaded under another spelling of the crate name.
     #[tokio::test]
     async fn publish_docs_under_other_separator_stores_docs_under_published_name() {
-        let canonical = CanonicalName::try_from("my-crate").unwrap();
-        let mut db = MockDb::new();
-        expect_original_name(&mut db, &canonical, "My-Crate");
-        db.expect_get_user_from_token().returning(|_| {
-            Ok(User {
-                is_admin: true,
-                name: UserName::new("admin").unwrap(),
-                ..User::default()
-            })
-        });
-        db.expect_update_docs_link()
-            .with(
-                eq(canonical.clone()),
-                eq(Version::try_from("1.0.0").unwrap()),
-                eq("/docs/my-crate/1.0.0/doc/My_Crate/index.html".to_string()),
-            )
-            .returning(|_, _, _| Ok(()));
-        let docs_storage = Arc::new(DocsStorage::new(
-            Box::new(MemoryStorage::new()) as DynStorage
-        ));
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "My-Crate", "1.0.0").await;
+        let docs_storage = memory_docs_storage();
+        let zip = build_zip(&[("doc/My_Crate/index.html", b"<html>docs</html>")]);
 
-        let r = app_with_storage(Arc::new(db), docs_storage.clone())
-            .oneshot(
-                Request::put("/my_crate/1.0.0")
-                    .header(header::AUTHORIZATION, "sometoken")
-                    .body(Body::from(build_zip(&[(
-                        "doc/My_Crate/index.html",
-                        b"<html>docs</html>",
-                    )])))
-                    .unwrap(),
-            )
+        let r = app(state, docs_storage.clone())
+            .oneshot(publish_request("/my_crate/1.0.0", ADMIN_TOKEN, zip))
             .await
             .unwrap();
 
@@ -472,6 +454,10 @@ mod tests {
         assert!(docs_storage.exists(&key).await.unwrap());
         let other = DocsStorage::version_prefix(&docs_name("my_crate"), &version);
         assert!(docs_storage.list(&other).await.unwrap().is_empty());
+        assert_eq!(
+            docs_link(&db, "my-crate").await.as_deref(),
+            Some("/docs/my-crate/1.0.0/doc/My_Crate/index.html")
+        );
     }
 
     fn docs_name(name: &str) -> DocsName {
@@ -480,37 +466,18 @@ mod tests {
 
     #[tokio::test]
     async fn publish_docs_uploads_files_and_updates_docs_link() {
-        let canonical = CanonicalName::try_from("test-crate").unwrap();
-        let mut db = MockDb::new();
-        expect_admin_owner(&mut db, &canonical);
-        db.expect_update_docs_link()
-            .with(
-                eq(canonical.clone()),
-                eq(Version::try_from("1.0.0").unwrap()),
-                eq("/docs/test-crate/1.0.0/doc/test_crate/index.html".to_string()),
-            )
-            .returning(|_, _, _| Ok(()));
-
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "test-crate", "1.0.0").await;
         let tmp = tempfile::tempdir().unwrap();
-        let docs_storage = Arc::new(DocsStorage::new(Box::new(
-            FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
-        ) as DynStorage));
+        let docs_storage = fs_docs_storage(&tmp);
+        let zip = build_zip(&[("doc/test_crate/index.html", b"<html>docs</html>")]);
 
-        let kellnr = app_with_storage(Arc::new(db), docs_storage.clone());
-        let zip_bytes = build_zip(&[("doc/test_crate/index.html", b"<html>docs</html>")]);
-
-        let r = kellnr
-            .oneshot(
-                Request::put("/test-crate/1.0.0")
-                    .header(header::AUTHORIZATION, "sometoken")
-                    .body(Body::from(zip_bytes))
-                    .unwrap(),
-            )
+        let r = app(state, docs_storage.clone())
+            .oneshot(publish_request("/test-crate/1.0.0", ADMIN_TOKEN, zip))
             .await
             .unwrap();
 
         assert_eq!(r.status(), StatusCode::OK);
-
         let key = DocsStorage::file_key(
             &docs_name("test-crate"),
             &Version::try_from("1.0.0").unwrap(),
@@ -518,38 +485,28 @@ mod tests {
         );
         let stored = docs_storage.get(&key).await.unwrap();
         assert_eq!(stored, bytes::Bytes::from_static(b"<html>docs</html>"));
+        assert_eq!(
+            docs_link(&db, "test-crate").await.as_deref(),
+            Some("/docs/test-crate/1.0.0/doc/test_crate/index.html")
+        );
     }
 
     #[tokio::test]
     async fn publish_docs_rejects_read_only_owner() {
-        let canonical = CanonicalName::try_from("test-crate").unwrap();
-        let mut db = MockDb::new();
-        expect_original_name(&mut db, &canonical, "test-crate");
-        db.expect_get_user_from_token().returning(|_| {
-            Ok(User {
-                name: UserName::new("reader").unwrap(),
-                is_read_only: true,
-                ..User::default()
-            })
-        });
-        db.expect_is_owner().returning(|_, _| Ok(true));
-        db.expect_update_docs_link().never();
-
+        let (state, db) = sqlite_test_state().await;
+        let token = token_user(&db, "reader", UserFlags::read_only()).await;
+        TestCrateBuilder::new(&db)
+            .name("test-crate")
+            .owner("reader")
+            .build()
+            .await
+            .unwrap();
         let tmp = tempfile::tempdir().unwrap();
-        let docs_storage = Arc::new(DocsStorage::new(Box::new(
-            FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
-        ) as DynStorage));
+        let docs_storage = fs_docs_storage(&tmp);
+        let zip = build_zip(&[("doc/test_crate/index.html", b"<html>docs</html>")]);
 
-        let kellnr = app_with_storage(Arc::new(db), docs_storage.clone());
-        let zip_bytes = build_zip(&[("doc/test_crate/index.html", b"<html>docs</html>")]);
-
-        let r = kellnr
-            .oneshot(
-                Request::put("/test-crate/1.0.0")
-                    .header(header::AUTHORIZATION, "sometoken")
-                    .body(Body::from(zip_bytes))
-                    .unwrap(),
-            )
+        let r = app(state, docs_storage.clone())
+            .oneshot(publish_request("/test-crate/1.0.0", &token, zip))
             .await
             .unwrap();
 
@@ -560,47 +517,28 @@ mod tests {
             "doc/test_crate/index.html",
         );
         assert!(!docs_storage.exists(&key).await.unwrap());
+        assert_eq!(docs_link(&db, "test-crate").await, None);
     }
 
     // A non-owner gets the same response for a missing crate or version as for
     // an existing crate, so that the existence of a crate is not revealed.
     #[tokio::test]
     async fn publish_docs_non_owner_cannot_tell_missing_from_existing_crate() {
-        let mut db = MockDb::new();
-        db.expect_get_original_name().returning(|name, version| {
-            Ok(
-                (name.as_str() == "test-crate" && version.to_string() == "1.0.0")
-                    .then(|| OriginalName::from_unchecked(name.to_string())),
-            )
-        });
-        db.expect_get_user_from_token().returning(|_| {
-            Ok(User {
-                name: UserName::new("other").unwrap(),
-                ..User::default()
-            })
-        });
-        db.expect_is_owner().returning(|_, _| Ok(false));
-        db.expect_update_docs_link().never();
-        let db: Arc<dyn DbProvider> = Arc::new(db);
-
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "test-crate", "1.0.0").await;
+        let token = token_user(&db, "other", UserFlags::normal()).await;
         let tmp = tempfile::tempdir().unwrap();
-        let docs_storage = Arc::new(DocsStorage::new(Box::new(
-            FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
-        ) as DynStorage));
+        let docs_storage = fs_docs_storage(&tmp);
 
         for uri in ["/test-crate/1.0.0", "/test-crate/9.9.9", "/missing/1.0.0"] {
-            let zip_bytes = build_zip(&[("doc/x/index.html", b"<html>docs</html>")]);
-            let r = app_with_storage(db.clone(), docs_storage.clone())
-                .oneshot(
-                    Request::put(uri)
-                        .header(header::AUTHORIZATION, "sometoken")
-                        .body(Body::from(zip_bytes))
-                        .unwrap(),
-                )
+            let zip = build_zip(&[("doc/x/index.html", b"<html>docs</html>")]);
+            let r = app(state.clone(), docs_storage.clone())
+                .oneshot(publish_request(uri, &token, zip))
                 .await
                 .unwrap();
             assert_eq!(r.status(), StatusCode::FORBIDDEN, "{uri}");
         }
+        assert_eq!(docs_link(&db, "test-crate").await, None);
     }
 
     #[tokio::test]
@@ -609,38 +547,25 @@ mod tests {
         // archive parses fine (`ZipArchive::new` succeeds) but `ZipArchive::extract`
         // rejects the unsafe path, so the inner `Result` from `docs.extract(..)` must
         // reach the caller as an error (previously silently discarded, returning 200).
-        let canonical = CanonicalName::try_from("test-crate").unwrap();
-        let mut db = MockDb::new();
-        expect_admin_owner(&mut db, &canonical);
-
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "test-crate", "1.0.0").await;
         let tmp = tempfile::tempdir().unwrap();
-        let docs_storage = Arc::new(DocsStorage::new(Box::new(
-            FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
-        ) as DynStorage));
+        let zip = build_zip(&[("../escape.html", b"evil")]);
 
-        let kellnr = app_with_storage(Arc::new(db), docs_storage);
-        let zip_bytes = build_zip(&[("../escape.html", b"evil")]);
-
-        let r = kellnr
-            .oneshot(
-                Request::put("/test-crate/1.0.0")
-                    .header(header::AUTHORIZATION, "sometoken")
-                    .body(Body::from(zip_bytes))
-                    .unwrap(),
-            )
+        let r = app(state, fs_docs_storage(&tmp))
+            .oneshot(publish_request("/test-crate/1.0.0", ADMIN_TOKEN, zip))
             .await
             .unwrap();
 
         // Previously this error was silently discarded (`let _ = ...`), returning 200
         // even though extraction failed. It must now surface as a client error.
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(docs_link(&db, "test-crate").await, None);
     }
 
     async fn docs_storage_with_latest_docs() -> (tempfile::TempDir, Arc<DocsStorage>) {
         let tmp = tempfile::tempdir().unwrap();
-        let docs_storage = Arc::new(DocsStorage::new(Box::new(
-            FSStorage::new(tmp.path().to_str().unwrap()).unwrap(),
-        ) as DynStorage));
+        let docs_storage = fs_docs_storage(&tmp);
         let key = DocsStorage::file_key(
             &docs_name("secret"),
             &Version::try_from("1.0.0").unwrap(),
@@ -653,26 +578,15 @@ mod tests {
         (tmp, docs_storage)
     }
 
-    fn expect_restricted_crate(db: &mut MockDb, restricted: bool) {
-        db.expect_is_download_restricted()
-            .returning(move |_| Ok(restricted));
-        db.expect_get_max_version_from_name()
-            .returning(|_| Ok(Version::try_from("1.0.0").unwrap()));
-        db.expect_get_original_name()
-            .returning(|_, _| Ok(Some(OriginalName::from_unchecked("secret".to_string()))));
-    }
-
-    fn expect_token_user(db: &mut MockDb, name: &'static str) {
-        db.expect_get_user_from_token().returning(move |_| {
-            Ok(User {
-                name: UserName::new(name).unwrap(),
-                ..User::default()
-            })
-        });
+    /// App state with the crate `secret`, which is download-restricted if `restricted`.
+    async fn state_with_crate(restricted: bool) -> (AppStateData, TestDb) {
+        let (state, db) = sqlite_test_state().await;
+        add_restricted_crate(&db, "secret", restricted).await;
+        (state, db)
     }
 
     async fn latest_location(
-        db: MockDb,
+        state: AppStateData,
         docs_storage: Arc<DocsStorage>,
         token: Option<&str>,
     ) -> String {
@@ -680,7 +594,7 @@ mod tests {
         if let Some(token) = token {
             request = request.header(header::AUTHORIZATION, token);
         }
-        let r = app_with_storage(Arc::new(db), docs_storage)
+        let r = app(state, docs_storage)
             .oneshot(request.body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -691,19 +605,16 @@ mod tests {
     #[tokio::test]
     async fn latest_docs_redirects_to_docs_for_unrestricted_crate() {
         let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
-        let mut db = MockDb::new();
-        expect_restricted_crate(&mut db, false);
+        let (state, _db) = state_with_crate(false).await;
 
-        let location = latest_location(db, docs_storage, None).await;
+        let location = latest_location(state, docs_storage, None).await;
 
         assert_eq!(location, "/docs/secret/1.0.0/doc/secret/index.html");
     }
 
     #[tokio::test]
     async fn latest_docs_redirects_to_docs_of_crate_with_uppercase_letters() {
-        let docs_storage = Arc::new(DocsStorage::new(
-            Box::new(MemoryStorage::new()) as DynStorage
-        ));
+        let docs_storage = memory_docs_storage();
         let key = DocsStorage::file_key(
             &docs_name("my-crate"),
             &Version::try_from("1.0.0").unwrap(),
@@ -713,17 +624,10 @@ mod tests {
             .put(&key, bytes::Bytes::from_static(b"<html>docs</html>"))
             .await
             .unwrap();
-        let mut db = MockDb::new();
-        db.expect_is_download_restricted().returning(|_| Ok(false));
-        db.expect_get_max_version_from_name()
-            .returning(|_| Ok(Version::try_from("1.0.0").unwrap()));
-        expect_original_name(
-            &mut db,
-            &CanonicalName::try_from("my-crate").unwrap(),
-            "My-Crate",
-        );
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "My-Crate", "1.0.0").await;
 
-        let r = app_with_storage(Arc::new(db), docs_storage)
+        let r = app(state, docs_storage)
             .oneshot(
                 Request::get("/My-Crate/latest")
                     .body(Body::empty())
@@ -741,10 +645,9 @@ mod tests {
     #[tokio::test]
     async fn latest_docs_hides_restricted_crate_from_anonymous_user() {
         let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
-        let mut db = MockDb::new();
-        expect_restricted_crate(&mut db, true);
+        let (state, _db) = state_with_crate(true).await;
 
-        let location = latest_location(db, docs_storage, None).await;
+        let location = latest_location(state, docs_storage, None).await;
 
         assert_eq!(location, "/");
     }
@@ -752,14 +655,10 @@ mod tests {
     #[tokio::test]
     async fn latest_docs_hides_restricted_crate_from_user_without_access() {
         let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
-        let mut db = MockDb::new();
-        expect_restricted_crate(&mut db, true);
-        expect_token_user(&mut db, "bob");
-        db.expect_is_crate_user().returning(|_, _| Ok(false));
-        db.expect_is_crate_group_user().returning(|_, _| Ok(false));
-        db.expect_is_owner().returning(|_, _| Ok(false));
+        let (state, db) = state_with_crate(true).await;
+        let token = token_user(&db, "bob", UserFlags::normal()).await;
 
-        let location = latest_location(db, docs_storage, Some("token")).await;
+        let location = latest_location(state, docs_storage, Some(&token)).await;
 
         assert_eq!(location, "/");
     }
@@ -767,17 +666,13 @@ mod tests {
     #[tokio::test]
     async fn latest_docs_redirects_crate_user_of_restricted_crate() {
         let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
-        let mut db = MockDb::new();
-        expect_restricted_crate(&mut db, true);
-        expect_token_user(&mut db, "alice");
-        db.expect_is_crate_user()
-            .with(
-                eq(CanonicalName::try_from("secret").unwrap()),
-                eq(UserName::new("alice").unwrap()),
-            )
-            .returning(|_, _| Ok(true));
+        let (state, db) = state_with_crate(true).await;
+        let token = token_user(&db, "alice", UserFlags::normal()).await;
+        db.add_crate_user(&canonical("secret"), &user_name("alice"))
+            .await
+            .unwrap();
 
-        let location = latest_location(db, docs_storage, Some("token")).await;
+        let location = latest_location(state, docs_storage, Some(&token)).await;
 
         assert_eq!(location, "/docs/secret/1.0.0/doc/secret/index.html");
     }
@@ -785,19 +680,13 @@ mod tests {
     #[tokio::test]
     async fn latest_docs_redirects_owner_of_restricted_crate() {
         let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
-        let mut db = MockDb::new();
-        expect_restricted_crate(&mut db, true);
-        expect_token_user(&mut db, "olivia");
-        db.expect_is_crate_user().returning(|_, _| Ok(false));
-        db.expect_is_crate_group_user().returning(|_, _| Ok(false));
-        db.expect_is_owner()
-            .with(
-                eq(CanonicalName::try_from("secret").unwrap()),
-                eq(UserName::new("olivia").unwrap()),
-            )
-            .returning(|_, _| Ok(true));
+        let (state, db) = state_with_crate(true).await;
+        let token = token_user(&db, "olivia", UserFlags::normal()).await;
+        db.add_owner(&canonical("secret"), &user_name("olivia"))
+            .await
+            .unwrap();
 
-        let location = latest_location(db, docs_storage, Some("token")).await;
+        let location = latest_location(state, docs_storage, Some(&token)).await;
 
         assert_eq!(location, "/docs/secret/1.0.0/doc/secret/index.html");
     }
@@ -805,18 +694,16 @@ mod tests {
     #[tokio::test]
     async fn latest_docs_redirects_group_member_of_restricted_crate() {
         let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
-        let mut db = MockDb::new();
-        expect_restricted_crate(&mut db, true);
-        expect_token_user(&mut db, "greg");
-        db.expect_is_crate_user().returning(|_, _| Ok(false));
-        db.expect_is_crate_group_user()
-            .with(
-                eq(CanonicalName::try_from("secret").unwrap()),
-                eq(UserName::new("greg").unwrap()),
-            )
-            .returning(|_, _| Ok(true));
+        let (state, db) = state_with_crate(true).await;
+        let token = token_user(&db, "greg", UserFlags::normal()).await;
+        let group = GroupName::new("readers").unwrap();
+        db.add_group(&group).await.unwrap();
+        db.add_group_user(&group, &user_name("greg")).await.unwrap();
+        db.add_crate_group(&canonical("secret"), &group)
+            .await
+            .unwrap();
 
-        let location = latest_location(db, docs_storage, Some("token")).await;
+        let location = latest_location(state, docs_storage, Some(&token)).await;
 
         assert_eq!(location, "/docs/secret/1.0.0/doc/secret/index.html");
     }
@@ -824,11 +711,10 @@ mod tests {
     #[tokio::test]
     async fn latest_docs_hides_crate_when_restriction_check_fails() {
         let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
-        let mut db = MockDb::new();
-        db.expect_is_download_restricted()
-            .returning(|_| Err(DbError::CrateNotFound("secret".to_string())));
+        let (state, db) = state_with_crate(false).await;
+        test_drop_table(&db, "krate").await.unwrap();
 
-        let location = latest_location(db, docs_storage, None).await;
+        let location = latest_location(state, docs_storage, None).await;
 
         assert_eq!(location, "/");
     }
@@ -836,13 +722,15 @@ mod tests {
     #[tokio::test]
     async fn latest_docs_hides_restricted_crate_when_access_check_fails() {
         let (_tmp, docs_storage) = docs_storage_with_latest_docs().await;
-        let mut db = MockDb::new();
-        expect_restricted_crate(&mut db, true);
-        expect_token_user(&mut db, "alice");
-        db.expect_is_crate_user()
-            .returning(|_, _| Err(DbError::CrateNotFound("secret".to_string())));
+        let (state, db) = state_with_crate(true).await;
+        // Owners may read the docs, but the crate users are checked first.
+        let token = token_user(&db, "olivia", UserFlags::normal()).await;
+        db.add_owner(&canonical("secret"), &user_name("olivia"))
+            .await
+            .unwrap();
+        test_drop_table(&db, "crate_user").await.unwrap();
 
-        let location = latest_location(db, docs_storage, Some("token")).await;
+        let location = latest_location(state, docs_storage, Some(&token)).await;
 
         assert_eq!(location, "/");
     }

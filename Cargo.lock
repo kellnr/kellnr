@@ -4305,7 +4305,7 @@ dependencies = [
  "kellnr-http",
  "kellnr-settings",
  "kellnr-storage",
- "mockall",
+ "kellnr-test-db",
  "serde",
  "serde_json",
  "tar",
