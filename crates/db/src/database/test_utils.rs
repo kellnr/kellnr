@@ -285,7 +285,7 @@ pub async fn test_add_crate(
         .one(&db.db_con)
         .await?;
     if user.is_none() {
-        db.add_user(&test_user_name(name), "pwd", UserFlags::normal())
+        db.add_user(&test_user_name(owner), "pwd", UserFlags::normal())
             .await?;
     }
 

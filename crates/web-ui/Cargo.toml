@@ -35,13 +35,12 @@ urlencoding = "2"
 
 [dev-dependencies]
 kellnr-settings = { workspace = true, features = ["test-support"] }
-kellnr-db = { workspace = true, features = ["mock", "test-support"] }
+kellnr-db = { workspace = true, features = ["test-support"] }
 kellnr-http = { workspace = true, features = ["test-support"] }
 async-trait.workspace = true
 bytes.workspace = true
 flume.workspace = true
 hyper.workspace = true
-mockall.workspace = true
 kellnr-filter.workspace = true
 kellnr-test-db.workspace = true
 tempfile.workspace = true
