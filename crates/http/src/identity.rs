@@ -265,19 +265,17 @@ impl FromRequestParts<AppStateData> for AdminUser {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, header};
     use axum::routing::get;
-    use kellnr_db::mock::MockDb;
-    use kellnr_db::{DbProvider, User};
-    use mockall::predicate::eq;
+    use kellnr_db::UserFlags;
+    use kellnr_db::test_utils::test_drop_table;
+    use kellnr_test_db::TestDb;
     use tower::ServiceExt;
 
     use super::*;
-    use crate::test_support::{encode_cookies, test_state};
+    use crate::test_support::{encode_cookies, session_cookie, sqlite_test_state, test_state};
 
     type Result<T = (), E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
@@ -301,8 +299,7 @@ mod tests {
         user.map(|u| u.name.to_string()).unwrap_or_default()
     }
 
-    fn app(db: MockDb) -> Router {
-        let db: Arc<dyn DbProvider> = Arc::new(db);
+    fn app(state: AppStateData) -> Router {
         Router::new()
             .route("/admin", get(admin_endpoint))
             .route("/session", get(session_endpoint))
@@ -310,41 +307,22 @@ mod tests {
             .route("/any", get(any_endpoint))
             .route("/optional_any", get(optional_any_endpoint))
             .route("/optional_token", get(optional_token_endpoint))
-            .with_state(AppStateData { db, ..test_state() })
+            .with_state(state)
     }
 
-    fn c1234() -> String {
+    /// An app on a database that holds `admin` with the API token `token`.
+    async fn db_app() -> (Router, TestDb) {
+        let (state, db) = sqlite_test_state().await;
+        (app(state), db)
+    }
+
+    /// A cookie with a session that does not exist.
+    fn unknown_session() -> String {
         encode_cookies([(COOKIE_SESSION_ID, "1234")])
     }
 
-    fn session_db(result: fn() -> kellnr_db::provider::DbResult<SessionInfo>) -> MockDb {
-        let mut db = MockDb::new();
-        db.expect_validate_session()
-            .with(eq(PlainToken::from("1234")))
-            .returning(move |_| result());
-        db
-    }
-
-    fn session(is_admin: bool) -> SessionInfo {
-        SessionInfo {
-            name: UserName::new("user").unwrap(),
-            is_admin,
-            is_read_only: false,
-        }
-    }
-
-    fn token_db(db: &mut MockDb) {
-        db.expect_get_user_from_token()
-            .with(eq(PlainToken::from("token")))
-            .returning(|_| {
-                Ok(User {
-                    name: UserName::new("token_user").unwrap(),
-                    ..User::default()
-                })
-            });
-        db.expect_get_user_from_token()
-            .with(eq(PlainToken::from("invalid")))
-            .returning(|_| Err(DbError::TokenNotFound));
+    async fn user_session(db: &TestDb) -> String {
+        session_cookie(db, "user", UserFlags::default()).await
     }
 
     async fn send(
@@ -364,60 +342,57 @@ mod tests {
 
     #[tokio::test]
     async fn admin_session_is_admin_user() -> Result {
-        let app = app(session_db(|| Ok(session(true))));
-        let (status, _) = send(app, "/admin", &[(header::COOKIE, c1234())]).await?;
+        let (app, db) = db_app().await;
+        let cookie = session_cookie(&db, "admin", UserFlags::default()).await;
+        let (status, _) = send(app, "/admin", &[(header::COOKIE, cookie)]).await?;
         assert_eq!(status, StatusCode::OK);
         Ok(())
     }
 
     #[tokio::test]
     async fn normal_session_is_no_admin_user() -> Result {
-        let app = app(session_db(|| Ok(session(false))));
-        let (status, _) = send(app, "/admin", &[(header::COOKIE, c1234())]).await?;
+        let (app, db) = db_app().await;
+        let cookie = user_session(&db).await;
+        let (status, _) = send(app, "/admin", &[(header::COOKIE, cookie)]).await?;
         assert_eq!(status, StatusCode::FORBIDDEN);
         Ok(())
     }
 
     #[tokio::test]
     async fn admin_user_needs_a_session() -> Result {
-        let (status, _) = send(app(MockDb::new()), "/admin", &[]).await?;
+        let (status, _) = send(app(test_state()), "/admin", &[]).await?;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
     #[tokio::test]
     async fn admin_user_with_unknown_session() -> Result {
-        let app = app(session_db(|| Err(DbError::SessionNotFound)));
-        let (status, _) = send(app, "/admin", &[(header::COOKIE, c1234())]).await?;
+        let (app, _db) = db_app().await;
+        let (status, _) = send(app, "/admin", &[(header::COOKIE, unknown_session())]).await?;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
     #[tokio::test]
     async fn session_user_with_session() -> Result {
-        let app = app(session_db(|| Ok(session(false))));
-        let (status, _) = send(app, "/session", &[(header::COOKIE, c1234())]).await?;
+        let (app, db) = db_app().await;
+        let cookie = user_session(&db).await;
+        let (status, _) = send(app, "/session", &[(header::COOKIE, cookie)]).await?;
         assert_eq!(status, StatusCode::OK);
         Ok(())
     }
 
     #[tokio::test]
     async fn session_user_without_session() -> Result {
-        let (status, _) = send(app(MockDb::new()), "/session", &[]).await?;
+        let (status, _) = send(app(test_state()), "/session", &[]).await?;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
     #[tokio::test]
     async fn session_user_ignores_tokens() -> Result {
-        let mut db = MockDb::new();
-        token_db(&mut db);
-        let (status, _) = send(
-            app(db),
-            "/session",
-            &[(header::AUTHORIZATION, "token".into())],
-        )
-        .await?;
+        let (app, _db) = db_app().await;
+        let (status, _) = send(app, "/session", &[(header::AUTHORIZATION, "token".into())]).await?;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         Ok(())
     }
@@ -425,45 +400,52 @@ mod tests {
     /// A failing database is not a missing login.
     #[tokio::test]
     async fn session_user_with_database_error() -> Result {
-        let app = app(session_db(|| Err(DbError::FailedToCountCrates)));
-        let (status, _) = send(app, "/session", &[(header::COOKIE, c1234())]).await?;
+        let (app, db) = db_app().await;
+        let cookie = user_session(&db).await;
+        test_drop_table(&db, "session").await?;
+        let (status, _) = send(app, "/session", &[(header::COOKIE, cookie)]).await?;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         Ok(())
     }
 
     #[tokio::test]
     async fn session_user_with_unknown_session() -> Result {
-        let app = app(session_db(|| Err(DbError::SessionNotFound)));
-        let (status, _) = send(app, "/session", &[(header::COOKIE, c1234())]).await?;
+        let (app, _db) = db_app().await;
+        let (status, _) = send(app, "/session", &[(header::COOKIE, unknown_session())]).await?;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
     #[tokio::test]
     async fn optional_session_user_without_session_is_anonymous() -> Result {
-        let (status, body) = send(app(MockDb::new()), "/optional_session", &[]).await?;
+        let (status, body) = send(app(test_state()), "/optional_session", &[]).await?;
         assert_eq!((status, body.as_str()), (StatusCode::OK, ""));
         Ok(())
     }
 
     #[tokio::test]
     async fn optional_session_user_with_unknown_session_is_rejected() -> Result {
-        let app = app(session_db(|| Err(DbError::SessionNotFound)));
-        let (status, _) = send(app, "/optional_session", &[(header::COOKIE, c1234())]).await?;
+        let (app, _db) = db_app().await;
+        let (status, _) = send(
+            app,
+            "/optional_session",
+            &[(header::COOKIE, unknown_session())],
+        )
+        .await?;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
     #[tokio::test]
     async fn any_user_prefers_the_token() -> Result {
-        let mut db = session_db(|| Ok(session(false)));
-        token_db(&mut db);
+        let (app, db) = db_app().await;
+        let cookie = user_session(&db).await;
         let (status, body) = send(
-            app(db),
+            app,
             "/any",
             &[
                 (header::AUTHORIZATION, "token".into()),
-                (header::COOKIE, c1234()),
+                (header::COOKIE, cookie),
             ],
         )
         .await?;
@@ -474,14 +456,14 @@ mod tests {
 
     #[tokio::test]
     async fn any_user_falls_back_to_the_session_if_the_token_fails() -> Result {
-        let mut db = session_db(|| Ok(session(false)));
-        token_db(&mut db);
+        let (app, db) = db_app().await;
+        let cookie = user_session(&db).await;
         let (status, body) = send(
-            app(db),
+            app,
             "/any",
             &[
                 (header::AUTHORIZATION, "invalid".into()),
-                (header::COOKIE, c1234()),
+                (header::COOKIE, cookie),
             ],
         )
         .await?;
@@ -491,17 +473,16 @@ mod tests {
 
     #[tokio::test]
     async fn any_user_without_login() -> Result {
-        let (status, _) = send(app(MockDb::new()), "/any", &[]).await?;
+        let (status, _) = send(app(test_state()), "/any", &[]).await?;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
     #[tokio::test]
     async fn optional_any_user_with_invalid_token_is_anonymous() -> Result {
-        let mut db = MockDb::new();
-        token_db(&mut db);
+        let (app, _db) = db_app().await;
         let (status, body) = send(
-            app(db),
+            app,
             "/optional_any",
             &[(header::AUTHORIZATION, "invalid".into())],
         )
@@ -512,17 +493,16 @@ mod tests {
 
     #[tokio::test]
     async fn optional_token_user_without_token_is_anonymous() -> Result {
-        let (status, body) = send(app(MockDb::new()), "/optional_token", &[]).await?;
+        let (status, body) = send(app(test_state()), "/optional_token", &[]).await?;
         assert_eq!((status, body.as_str()), (StatusCode::OK, ""));
         Ok(())
     }
 
     #[tokio::test]
     async fn optional_token_user_with_invalid_token_is_rejected() -> Result {
-        let mut db = MockDb::new();
-        token_db(&mut db);
+        let (app, _db) = db_app().await;
         let (status, _) = send(
-            app(db),
+            app,
             "/optional_token",
             &[(header::AUTHORIZATION, "invalid".into())],
         )
@@ -533,15 +513,14 @@ mod tests {
 
     #[tokio::test]
     async fn optional_token_user_with_token() -> Result {
-        let mut db = MockDb::new();
-        token_db(&mut db);
+        let (app, _db) = db_app().await;
         let (status, body) = send(
-            app(db),
+            app,
             "/optional_token",
             &[(header::AUTHORIZATION, "token".into())],
         )
         .await?;
-        assert_eq!((status, body.as_str()), (StatusCode::OK, "token_user"));
+        assert_eq!((status, body.as_str()), (StatusCode::OK, "admin"));
         Ok(())
     }
 }
