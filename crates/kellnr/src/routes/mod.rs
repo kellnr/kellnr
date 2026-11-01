@@ -20,7 +20,7 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::openapi::{ApiDoc, add_error_bodies};
+use crate::openapi::{ApiDoc, add_error_bodies, require_settings_fields};
 
 mod auth_routes;
 mod crate_access_routes;
@@ -115,7 +115,7 @@ pub(crate) fn create_router(
 
     // Split into router and OpenAPI spec
     let (router, api): (Router<AppStateData>, _) = api_router.split_for_parts();
-    let api = add_error_bodies(api);
+    let api = require_settings_fields(add_error_bodies(api));
 
     // Add static services
     let router = router

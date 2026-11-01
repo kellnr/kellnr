@@ -658,6 +658,12 @@
             "description": "Decision for crates without a known or valid license: \"deny\" or \"allow\".\nA license that is no valid SPDX expression counts as unknown"
           }
         },
+        "required": [
+          "license_allowed",
+          "license_enabled",
+          "license_exempt_crates",
+          "license_unknown"
+        ],
         "type": "object"
       },
       "Credentials": {
@@ -785,6 +791,12 @@
             "type": "integer"
           }
         },
+        "required": [
+          "build_timeout_seconds",
+          "build_wrapper",
+          "enabled",
+          "max_size"
+        ],
         "type": "object"
       },
       "DocsEnabledResponse": {
@@ -903,6 +915,18 @@
             "type": "string"
           }
         },
+        "required": [
+          "allow_http",
+          "connect_timeout_seconds",
+          "crates_bucket",
+          "cratesio_bucket",
+          "docs_bucket",
+          "enabled",
+          "endpoint",
+          "request_timeout_seconds",
+          "skip_signature",
+          "toolchain_bucket"
+        ],
         "type": "object"
       },
       "GetAllWebhooksResponse": {
@@ -1082,6 +1106,10 @@
             "type": "integer"
           }
         },
+        "required": [
+          "ip",
+          "port"
+        ],
         "type": "object"
       },
       "Log": {
@@ -1099,6 +1127,11 @@
             "default": "warn"
           }
         },
+        "required": [
+          "format",
+          "level",
+          "level_web_server"
+        ],
         "type": "object"
       },
       "LogFormat": {
@@ -1343,6 +1376,21 @@
             "type": "array"
           }
         },
+        "required": [
+          "additional_audiences",
+          "admin_group_claim",
+          "admin_group_value",
+          "auto_provision_users",
+          "auto_redirect",
+          "button_text",
+          "client_id",
+          "enabled",
+          "enforced",
+          "issuer_url",
+          "read_only_group_claim",
+          "read_only_group_value",
+          "scopes"
+        ],
         "type": "object"
       },
       "OAuth2Config": {
@@ -1406,6 +1454,13 @@
             "description": "Protocol (http or https)"
           }
         },
+        "required": [
+          "cookie_secure",
+          "hostname",
+          "path",
+          "port",
+          "protocol"
+        ],
         "type": "object"
       },
       "OriginalName": {
@@ -1475,6 +1530,13 @@
             "type": "string"
           }
         },
+        "required": [
+          "address",
+          "db",
+          "enabled",
+          "port",
+          "user"
+        ],
         "type": "object"
       },
       "Protocol": {
@@ -1537,6 +1599,17 @@
             "type": "string"
           }
         },
+        "required": [
+          "api",
+          "connect_timeout_seconds",
+          "download_on_update",
+          "enabled",
+          "index",
+          "num_threads",
+          "request_timeout_seconds",
+          "url",
+          "user_agent"
+        ],
         "type": "object"
       },
       "PubDataSuccess": {
@@ -1771,6 +1844,30 @@
             "type": "integer"
           }
         },
+        "required": [
+          "allow_ownerless_crates",
+          "auth_failed_attempts_window_seconds",
+          "auth_max_failed_attempts",
+          "auth_required",
+          "cache_max_size",
+          "cache_size",
+          "cookie_signing_key",
+          "data_dir",
+          "download_counter_flush_seconds",
+          "download_max_concurrent",
+          "download_timeout_seconds",
+          "max_crate_size",
+          "max_db_connections",
+          "new_crates_restricted",
+          "required_crate_fields",
+          "session_age_seconds",
+          "sponsor_links_enabled",
+          "token_cache_enabled",
+          "token_cache_max_capacity",
+          "token_cache_ttl_seconds",
+          "token_db_retry_count",
+          "token_db_retry_delay_ms"
+        ],
         "type": "object"
       },
       "RegistryFilter": {
@@ -1803,6 +1900,12 @@
             "description": "Decision for crates without a known or valid license: \"deny\" or \"allow\".\nA license that is no valid SPDX expression counts as unknown"
           }
         },
+        "required": [
+          "license_allowed",
+          "license_enabled",
+          "license_exempt_crates",
+          "license_unknown"
+        ],
         "type": "object"
       },
       "ResetPwd": {
@@ -1892,6 +1995,20 @@
             "type": "string"
           }
         },
+        "required": [
+          "access_key",
+          "allow_http",
+          "connect_timeout_seconds",
+          "crates_bucket",
+          "cratesio_bucket",
+          "docs_bucket",
+          "enabled",
+          "endpoint",
+          "region",
+          "request_timeout_seconds",
+          "secret_key",
+          "toolchain_bucket"
+        ],
         "type": "object"
       },
       "SearchResult": {
@@ -2112,6 +2229,23 @@
             }
           }
         },
+        "required": [
+          "cratesio_filter",
+          "docs",
+          "gcs",
+          "local",
+          "log",
+          "oauth2",
+          "origin",
+          "postgresql",
+          "proxy",
+          "registry",
+          "registry_filter",
+          "s3",
+          "setup",
+          "toolchain",
+          "webhooks"
+        ],
         "type": "object"
       },
       "SettingsResponse": {
@@ -2173,6 +2307,10 @@
             ]
           }
         },
+        "required": [
+          "admin_pwd",
+          "admin_token"
+        ],
         "type": "object"
       },
       "SponsorLinksEnabledResponse": {
@@ -2267,6 +2405,10 @@
             "type": "integer"
           }
         },
+        "required": [
+          "enabled",
+          "max_size"
+        ],
         "type": "object"
       },
       "ToolchainComponentInfo": {
@@ -2571,6 +2713,10 @@
             "type": "boolean"
           }
         },
+        "required": [
+          "block_private_targets",
+          "ignore_env_proxy"
+        ],
         "type": "object"
       },
       "YankSuccess": {
@@ -2971,6 +3117,18 @@
       "put": {
         "description": "Publishes a new version of a crate to the Kellnr registry.",
         "operationId": "publish",
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "Crate metadata and .crate file in the publish format of cargo",
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -4556,12 +4714,8 @@
           "content": {
             "application/octet-stream": {
               "schema": {
-                "items": {
-                  "format": "int32",
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "type": "array"
+                "format": "binary",
+                "type": "string"
               }
             }
           },
@@ -5205,12 +5359,8 @@
           "content": {
             "application/octet-stream": {
               "schema": {
-                "items": {
-                  "format": "int32",
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "type": "array"
+                "format": "binary",
+                "type": "string"
               }
             }
           },

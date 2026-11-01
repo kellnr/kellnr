@@ -12,6 +12,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use kellnr_common::background_tasks::BackgroundTasks;
+use kellnr_common::binary_body::BinaryBody;
 use kellnr_db::error::DbError;
 use kellnr_db::{ChannelInfo, ToolchainTargetInfo, ToolchainTargetStatus, ToolchainWithTargets};
 use kellnr_http::error::{ApiError, ApiResult};
@@ -109,7 +110,7 @@ pub async fn list_toolchains(
     path = "/",
     tag = "toolchains",
     params(UploadQuery),
-    request_body(content = Vec<u8>, content_type = "application/octet-stream", description = "Combined toolchain archive (.tar.xz)"),
+    request_body(content = inline(BinaryBody), content_type = "application/octet-stream", description = "Combined toolchain archive (.tar.xz)"),
     responses(
         (status = 200, description = "Toolchain uploaded", body = ToolchainResponse),
         (status = 401, description = "Not authenticated"),
