@@ -462,11 +462,15 @@ pub fn generate_docs(
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
+    use async_trait::async_trait;
     use cargo::core::SourceId;
     use cargo::sources::SourceConfigMap;
     use kellnr_db::test_utils::{TestCrateBuilder, test_drop_table};
     use kellnr_storage::object_storage::MemoryStorage;
+    use kellnr_storage::storage::{ObjectWithMeta, Storage};
+    use kellnr_storage::storage_error::StorageError;
     use kellnr_storage::storage_key::StorageKey;
     use kellnr_test_db::TestDb;
 
@@ -779,6 +783,84 @@ mod tests {
             &version(),
         );
         assert!(worker.docs_storage.list(&prefix).await.unwrap().is_empty());
+        assert!(queued(&db).await.is_empty());
+    }
+
+    /// Docs storage that drops `table` when the first file is stored, so the
+    /// database fails after the docs are built.
+    struct DropTableOnUpload {
+        inner: MemoryStorage,
+        db: Arc<TestDb>,
+        table: &'static str,
+        dropped: AtomicBool,
+    }
+
+    #[async_trait]
+    impl Storage for DropTableOnUpload {
+        async fn get(&self, key: &StorageKey) -> Result<Bytes, StorageError> {
+            self.inner.get(key).await
+        }
+
+        async fn get_with_meta(&self, key: &StorageKey) -> Result<ObjectWithMeta, StorageError> {
+            self.inner.get_with_meta(key).await
+        }
+
+        async fn put(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
+            self.inner.put(key, object).await
+        }
+
+        async fn put_overwrite(&self, key: &StorageKey, object: Bytes) -> Result<(), StorageError> {
+            if !self.dropped.swap(true, Ordering::SeqCst) {
+                test_drop_table(&self.db, self.table).await.unwrap();
+            }
+            self.inner.put_overwrite(key, object).await
+        }
+
+        async fn delete(&self, key: &StorageKey) -> Result<(), StorageError> {
+            self.inner.delete(key).await
+        }
+
+        async fn exists(&self, key: &StorageKey) -> Result<bool, StorageError> {
+            self.inner.exists(key).await
+        }
+
+        async fn size(&self, key: &StorageKey) -> Result<u64, StorageError> {
+            self.inner.size(key).await
+        }
+
+        async fn list(&self, prefix: &str) -> Result<Vec<StorageKey>, StorageError> {
+            self.inner.list(prefix).await
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_publishes_docs_once_if_docs_link_cannot_be_updated() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let build_log = data_dir.path().join("builds.log");
+        let db = Arc::new(TestDb::sqlite().await);
+        add_crates(&db, &["a"]).await;
+        queue(&db, data_dir.path(), &["a"]).await;
+        let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
+        let mut worker = worker(&db, data_dir.path(), &["a"], builder).await;
+        // Updating the docs link fails, as the crate versions are gone.
+        worker.docs_storage = Arc::new(DocsStorage::new(Box::new(DropTableOnUpload {
+            inner: MemoryStorage::new(),
+            db: db.clone(),
+            table: "crate_meta",
+            dropped: AtomicBool::new(false),
+        })));
+
+        worker.process_queue().await.unwrap();
+        worker.process_queue().await.unwrap();
+
+        assert_eq!(build_count(&build_log), 1);
+        let key = DocsStorage::file_key(
+            &DocsName::from(&OriginalName::try_from("a").unwrap()),
+            &version(),
+            "doc/a/index.html",
+        );
+        assert!(worker.docs_storage.exists(&key).await.unwrap());
         assert!(queued(&db).await.is_empty());
     }
 
