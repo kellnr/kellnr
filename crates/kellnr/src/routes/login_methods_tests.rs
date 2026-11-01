@@ -311,20 +311,30 @@ impl TestApp {
     }
 }
 
-#[tokio::test]
-async fn endpoints_accept_the_same_login_methods() {
-    let mut actual = String::new();
-    for (method, uri) in ENDPOINTS {
-        let app = TestApp::new().await;
-        let mut groups = Vec::new();
-        for auth_required in [true, false] {
-            let mut statuses = Vec::new();
-            for credentials in ALL_CREDENTIALS {
-                statuses.push(app.call(method, uri, auth_required, credentials).await);
-            }
-            groups.push(statuses.join(" "));
+/// The row of the table for one endpoint.
+async fn row(method: &str, uri: &str) -> String {
+    let app = TestApp::new().await;
+    let mut groups = Vec::new();
+    for auth_required in [true, false] {
+        let mut statuses = Vec::new();
+        for credentials in ALL_CREDENTIALS {
+            statuses.push(app.call(method, uri, auth_required, credentials).await);
         }
-        writeln!(actual, "{method} {uri} | {}", groups.join(" | ")).unwrap();
+        groups.push(statuses.join(" "));
+    }
+    format!("{method} {uri} | {}", groups.join(" | "))
+}
+
+// Every endpoint has its own database, so the rows are computed in parallel.
+#[tokio::test(flavor = "multi_thread")]
+async fn endpoints_accept_the_same_login_methods() {
+    let rows: Vec<_> = ENDPOINTS
+        .iter()
+        .map(|(method, uri)| tokio::spawn(row(method, uri)))
+        .collect();
+    let mut actual = String::new();
+    for row in rows {
+        writeln!(actual, "{}", row.await.unwrap()).unwrap();
     }
 
     assert_eq!(EXPECTED, actual, "actual table:\n{actual}");
