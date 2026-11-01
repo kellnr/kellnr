@@ -1,5 +1,6 @@
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 fn default_pg_address() -> String {
     "localhost".to_string()
@@ -9,7 +10,7 @@ fn default_pg_db() -> String {
     "kellnr".to_string()
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema)]
 #[serde(default)]
 #[configurable(clap_prefix = "postgresql")]
 pub struct Postgresql {

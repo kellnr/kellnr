@@ -70,9 +70,7 @@ function isCratesIoDep(registry: string | undefined) {
 async function setDescFromCratesIo(crate: string) {
   const result = await crateService.getCratesIoData(crate);
   if (isSuccess(result) && result.data) {
-    // The crates.io response wraps crate data in a 'crate' property
-    const data = result.data as unknown as { crate: { description: string } };
-    fetched_desc.value = data.crate?.description ?? "No description available";
+    fetched_desc.value = result.data.crate?.description ?? "No description available";
   } else {
     fetched_desc.value = "Cannot fetch description.";
   }

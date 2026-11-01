@@ -2,6 +2,7 @@ use std::fmt;
 
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::protocol::Protocol;
 
@@ -16,7 +17,7 @@ fn default_origin_port() -> u16 {
         .unwrap_or(8000)
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema)]
 #[serde(default)]
 #[configurable(clap_prefix = "origin")]
 pub struct Origin {

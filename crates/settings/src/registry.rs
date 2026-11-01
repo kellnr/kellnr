@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::compile_time_config;
 use crate::constants::MAX_SESSION_AGE;
@@ -15,7 +16,7 @@ fn default_data_dir() -> String {
         .unwrap_or_default()
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema)]
 #[serde(default)]
 #[configurable(clap_prefix = "registry")]
 #[allow(clippy::struct_excessive_bools)]

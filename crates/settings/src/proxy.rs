@@ -2,6 +2,7 @@ use kellnr_common::base_url::{BaseUrl, BaseUrlError};
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 use url::Url;
+use utoipa::ToSchema;
 
 fn default_proxy_url() -> Url {
     Url::parse("https://static.crates.io/crates/").unwrap()
@@ -23,7 +24,7 @@ fn default_user_agent() -> String {
     DEFAULT_USER_AGENT.to_string()
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema)]
 #[serde(default)]
 #[configurable(clap_prefix = "proxy")]
 pub struct Proxy {
@@ -37,12 +38,15 @@ pub struct Proxy {
     pub download_on_update: bool,
 
     /// Crates.io download URL
+    #[schema(value_type = String)]
     pub url: Url,
 
     /// Crates.io index URL
+    #[schema(value_type = String)]
     pub index: Url,
 
     /// Crates.io API URL
+    #[schema(value_type = String)]
     pub api: Url,
 
     /// Connect timeout in seconds for upstream requests

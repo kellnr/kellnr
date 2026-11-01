@@ -41,11 +41,14 @@ use crate::pagination::{PageParams, PageRequest};
 /// the value, default, source, type, secret flag, optional CLI flag string
 /// (auto-derived from clap) and optional label override. The Vue UI iterates
 /// over this list instead of hand-maintaining a parallel per-leaf table.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct SettingsResponse {
     #[serde(flatten)]
+    #[schema(value_type = Settings)]
     pub settings: serde_json::Map<String, serde_json::Value>,
+    #[schema(inline)]
     pub sources: SourceMap,
+    #[schema(value_type = Settings)]
     pub defaults: serde_json::Value,
     pub leaves: Vec<LeafMeta>,
 }
@@ -56,7 +59,7 @@ pub const REDACTED: &str = "********";
 /// Per-leaf metadata for the dynamic UI. All fields except `value`/`source`
 /// are stable per build (or, in the case of `default`, per binary), so the UI
 /// can treat the response as both data and schema.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct LeafMeta {
     /// Dotted path, e.g. `"registry.data_dir"`.
     pub key: String,
@@ -77,7 +80,7 @@ pub struct LeafMeta {
     pub label: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum LeafKind {
     Boolean,
@@ -200,7 +203,7 @@ impl LeafKind {
     path = "/settings",
     tag = "ui",
     responses(
-        (status = 200, description = "Kellnr settings with source tracking"),
+        (status = 200, description = "Kellnr settings with source tracking", body = SettingsResponse),
         (status = 403, description = "Admin access required")
     ),
     security(("session_cookie" = []))
@@ -583,7 +586,12 @@ pub struct CratesIoDataParams {
     tag = "ui",
     params(CratesIoDataParams),
     responses(
-        (status = 200, description = "Crates.io crate data", body = String),
+        (
+            status = 200,
+            description = "The JSON answer of the crates.io API for the crate \
+                (`GET https://crates.io/api/v1/crates/{name}`), passed through unchanged",
+            body = String
+        ),
         (status = 404, description = "Crate not found"),
         (status = 502, description = "crates.io failed or cannot be reached")
     )

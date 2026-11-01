@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub use provcfg::Error as SettingsError;
 use provcfg::{ClapArgs, Configurable, Provenance};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::config_source::SourceMap;
 use crate::docs::{Docs, DocsArgs, DocsPartial, DocsProv};
@@ -31,7 +32,9 @@ use crate::webhooks::{Webhooks, WebhooksArgs, WebhooksPartial, WebhooksProv};
 /// provenance attached. Provenance lives on the companion `SettingsProv`,
 /// which is built by [`build_prov_with_cli`] and stored in the app state for
 /// the one handler (`/settings`) that needs it.
-#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(
+    Debug, Default, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema,
+)]
 #[serde(default)]
 pub struct Settings {
     #[configurable(nested)]

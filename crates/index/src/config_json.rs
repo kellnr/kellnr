@@ -1,5 +1,6 @@
 use kellnr_settings::Settings;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// The two registries Kellnr serves an index for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,7 +29,9 @@ impl IndexKind {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+/// The `config.json` of a sparse registry index, see
+/// <https://doc.rust-lang.org/cargo/reference/registry-index.html#index-configuration>.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, ToSchema)]
 pub struct ConfigJson {
     dl: String,
     #[serde(skip_serializing_if = "Option::is_none")]

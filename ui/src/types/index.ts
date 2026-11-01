@@ -45,6 +45,7 @@ export type {
   CrateRegistryDep,
   CrateDependents,
   CrateDependent,
+  CratesIoCrateData,
   DependentRequirement,
   CrateAccessData,
   CrateGroup,

@@ -1,7 +1,8 @@
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema)]
 #[serde(default)]
 #[configurable(clap_prefix = "docs")]
 pub struct Docs {

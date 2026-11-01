@@ -117,6 +117,13 @@ export type DependentRequirement = {
     outdated: boolean,
 }
 
+/** The part of the crates.io API answer for a crate the UI reads */
+export type CratesIoCrateData = {
+    crate: {
+        description?: string | null,
+    },
+}
+
 export type CrateAccessData = {
     is_download_restricted: boolean,
 }

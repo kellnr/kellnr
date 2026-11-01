@@ -24,7 +24,7 @@ use crate::prefetch_response::PrefetchResponse;
     path = "/config.json",
     tag = "crates",
     responses(
-        (status = 200, description = "Registry configuration")
+        (status = 200, description = "Registry configuration", body = ConfigJson)
     ),
     security(("cargo_token" = []))
 )]
