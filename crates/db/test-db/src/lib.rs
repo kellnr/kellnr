@@ -20,10 +20,10 @@ mod image;
 use std::fs::{self, File};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime};
 
-use kellnr_db::{AdminUser, ConString, Database, PgConString, SqliteConString};
+use kellnr_db::{AdminUser, ConString, Database, DbProvider, PgConString, SqliteConString};
 use kellnr_settings::{SessionAge, Settings};
 use sea_orm::{ConnectOptions, ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use tempfile::TempDir;
@@ -43,7 +43,7 @@ const STALE_RUN_AGE: Duration = Duration::from_hours(24);
 /// A fresh database for one test, removed when dropped.
 pub struct TestDb {
     // Dropped first, so the connections are closed before the database is removed.
-    db: Database,
+    db: Arc<Database>,
     _cleanup: Cleanup,
 }
 
@@ -56,6 +56,11 @@ impl Deref for TestDb {
 }
 
 impl TestDb {
+    /// The database as Kellnr's components take it, e.g. for `AppStateData`.
+    pub fn provider(&self) -> Arc<dyn DbProvider> {
+        self.db.clone()
+    }
+
     /// A copy of the SQLite template in its own temporary directory.
     pub async fn sqlite() -> Self {
         let dir = tempfile::Builder::new()
@@ -73,7 +78,7 @@ impl TestDb {
             .await
             .expect("cannot open SQLite test database");
         Self {
-            db,
+            db: Arc::new(db),
             _cleanup: Cleanup::Sqlite { _dir: dir },
         }
     }
@@ -119,7 +124,7 @@ impl TestDb {
             .await
             .expect("cannot open PostgreSQL test database");
         Self {
-            db,
+            db: Arc::new(db),
             _cleanup: Cleanup::Postgres {
                 server,
                 name,
