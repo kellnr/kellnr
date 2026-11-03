@@ -8,6 +8,8 @@
 export interface OAuth2Config {
   /** Whether OAuth2 authentication is enabled */
   enabled: boolean
+  /** Whether the OIDC provider is reachable, so that SSO login is possible */
+  available: boolean
   /** Text to display on the OAuth2 login button */
   button_text: string
   /** Whether local password login is disabled (SSO-only) */

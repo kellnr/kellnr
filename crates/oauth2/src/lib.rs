@@ -7,6 +7,7 @@ mod oidc_http;
 
 use std::future::Future;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use kellnr_common::account_name::MAX_NAME_LEN;
 use kellnr_settings::OAuth2 as OAuth2Settings;
@@ -23,6 +24,7 @@ use openidconnect::{
     PkceCodeChallenge, PkceCodeVerifier, ProviderMetadataWithLogout, RedirectUrl, Scope,
     TokenResponse,
 };
+use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{info, trace, warn};
@@ -62,6 +64,9 @@ pub enum OAuth2Error {
 
     #[error("Failed to discover OIDC provider: {0}")]
     DiscoveryError(String),
+
+    #[error("OIDC provider has not been discovered yet")]
+    ProviderUnavailable,
 
     #[error("Failed to parse URL: {0}")]
     UrlParseError(#[from] url::ParseError),
@@ -120,29 +125,52 @@ pub struct TokenResult {
     pub id_token: String,
 }
 
+/// First wait before discovery is retried after a failure.
+const DISCOVERY_RETRY_INITIAL: Duration = Duration::from_secs(5);
+/// Longest wait between two discovery attempts.
+const DISCOVERY_RETRY_MAX: Duration = Duration::from_mins(5);
+
+/// What OIDC discovery yields: the client with the provider's current
+/// signing keys and the optional RP-initiated logout endpoint.
+struct Provider {
+    client: ConfiguredCoreClient,
+    end_session_endpoint: Option<String>,
+}
+
 /// OAuth2/OIDC authentication handler
+///
+/// The handler is created from the settings alone, the provider is discovered
+/// separately (see [`Self::discover`]). Until discovery succeeds, every
+/// operation that needs the provider fails with
+/// [`OAuth2Error::ProviderUnavailable`].
 pub struct OAuth2Handler {
-    /// The configured OIDC client, wrapped so it can be rebuilt when the
-    /// provider rotates its signing keys (see [`Self::rediscover`]).
-    client: Mutex<Arc<ConfiguredCoreClient>>,
+    /// The discovered provider, `None` until discovery succeeds. Replaced when
+    /// the provider rotates its signing keys.
+    provider: Mutex<Option<Arc<Provider>>>,
     client_id: ClientId,
     client_secret: Option<ClientSecret>,
     redirect_url: RedirectUrl,
     settings: Arc<OAuth2Settings>,
     issuer_url: IssuerUrl,
     http_client: OidcHttpClient,
-    end_session_endpoint: Mutex<Arc<Option<String>>>,
 }
 
 impl OAuth2Handler {
-    /// Create a new `OAuth2Handler` using OIDC discovery
-    ///
-    /// This performs automatic discovery of the OIDC provider's configuration
-    /// using the well-known endpoint.
+    /// Create a handler and discover the provider.
     pub async fn from_discovery(
         settings: &OAuth2Settings,
         redirect_url: &str,
     ) -> Result<Self, OAuth2Error> {
+        let handler = Self::new(settings, redirect_url)?;
+        handler.discover().await?;
+        Ok(handler)
+    }
+
+    /// Create a handler from the settings without contacting the provider.
+    ///
+    /// Fails only for an invalid configuration. The provider is not available
+    /// before [`Self::discover`] succeeds.
+    pub fn new(settings: &OAuth2Settings, redirect_url: &str) -> Result<Self, OAuth2Error> {
         if !settings.enabled {
             return Err(OAuth2Error::NotEnabled);
         }
@@ -160,8 +188,6 @@ impl OAuth2Handler {
         let issuer_url = IssuerUrl::new(issuer_url_str.clone())
             .map_err(|e| OAuth2Error::ConfigurationError(format!("Invalid issuer URL: {e}")))?;
 
-        info!("Discovering OIDC provider at: {}", issuer_url_str);
-
         let http_client =
             OidcHttpClient::new().map_err(|e| OAuth2Error::HttpError(e.to_string()))?;
 
@@ -176,43 +202,74 @@ impl OAuth2Handler {
 
         let redirect_url = RedirectUrl::new(redirect_url.to_string())?;
 
-        // Perform OIDC discovery and build the client from provider metadata.
-        // The same discovery fetch also yields the optional RP-initiated logout
-        // endpoint, which the openidconnect client does not expose.
-        let (client, end_session_endpoint) = Self::discover_client(
-            &issuer_url,
-            &client_id,
-            client_secret.as_ref(),
-            &redirect_url,
-            &http_client,
-        )
-        .await?;
-
         Ok(Self {
-            client: Mutex::new(Arc::new(client)),
+            provider: Mutex::new(None),
             client_id,
             client_secret,
             redirect_url,
             settings: Arc::new(settings.clone()),
             issuer_url,
             http_client,
-            end_session_endpoint: Mutex::new(Arc::new(end_session_endpoint)),
         })
     }
 
+    /// Discover the provider and make it available.
+    pub async fn discover(&self) -> Result<(), OAuth2Error> {
+        info!("Discovering OIDC provider at: {}", self.issuer_url.as_str());
+        let provider = self.fetch_provider().await?;
+        *self
+            .provider
+            .lock()
+            .expect("OAuth2 provider mutex poisoned") = Some(provider);
+        Ok(())
+    }
+
+    /// Discover the provider, retrying failures until discovery succeeds.
+    ///
+    /// The wait between attempts doubles from 5 seconds up to 5 minutes, with
+    /// jitter so that several instances do not retry in lockstep.
+    pub async fn discover_until_available(&self) {
+        self.discover_with_retry(DISCOVERY_RETRY_INITIAL, DISCOVERY_RETRY_MAX)
+            .await;
+    }
+
+    async fn discover_with_retry(&self, initial: Duration, max: Duration) {
+        let mut wait = initial;
+        loop {
+            match self.discover().await {
+                Ok(()) => {
+                    info!("OIDC provider discovered, OAuth2/OIDC login is available");
+                    return;
+                }
+                Err(e) => {
+                    let jittered = with_jitter(wait);
+                    warn!(
+                        "OIDC provider discovery failed, retrying in {}s: {e}",
+                        jittered.as_secs()
+                    );
+                    tokio::time::sleep(jittered).await;
+                    wait = (wait * 2).min(max);
+                }
+            }
+        }
+    }
+
+    /// Whether the provider has been discovered, so that login is possible.
+    pub fn is_available(&self) -> bool {
+        self.provider
+            .lock()
+            .expect("OAuth2 provider mutex poisoned")
+            .is_some()
+    }
+
     /// Perform OIDC discovery and build a configured client from the fetched
-    /// provider metadata (which includes the current JWKS signing keys). Also
-    /// returns the optional `end_session_endpoint` (RP-Initiated Logout 1.0)
-    /// read from the same discovery document.
-    async fn discover_client(
-        issuer_url: &IssuerUrl,
-        client_id: &ClientId,
-        client_secret: Option<&ClientSecret>,
-        redirect_url: &RedirectUrl,
-        http_client: &OidcHttpClient,
-    ) -> Result<(ConfiguredCoreClient, Option<String>), OAuth2Error> {
+    /// provider metadata (which includes the current JWKS signing keys). The
+    /// same discovery document yields the optional `end_session_endpoint`
+    /// (RP-Initiated Logout 1.0), which the openidconnect client does not
+    /// expose.
+    async fn fetch_provider(&self) -> Result<Arc<Provider>, OAuth2Error> {
         let provider_metadata =
-            ProviderMetadataWithLogout::discover_async(issuer_url.clone(), http_client)
+            ProviderMetadataWithLogout::discover_async(self.issuer_url.clone(), &self.http_client)
                 .await
                 .map_err(|e| OAuth2Error::DiscoveryError(error_chain(&e)))?;
 
@@ -224,12 +281,15 @@ impl OAuth2Handler {
 
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
-            client_id.clone(),
-            client_secret.cloned(),
+            self.client_id.clone(),
+            self.client_secret.clone(),
         )
-        .set_redirect_uri(redirect_url.clone());
+        .set_redirect_uri(self.redirect_url.clone());
 
-        Ok((client, end_session_endpoint))
+        Ok(Arc::new(Provider {
+            client,
+            end_session_endpoint,
+        }))
     }
 
     /// Build the RP-initiated logout URL to end the provider session, or `None`
@@ -239,11 +299,8 @@ impl OAuth2Handler {
         id_token_hint: &str,
         post_logout_redirect_uri: &str,
     ) -> Option<String> {
-        let endpoint = self
-            .end_session_endpoint
-            .lock()
-            .expect("OAuth2 end session endpoint mutex poisoned");
-        let mut url = Url::parse(endpoint.as_ref().as_ref()?).ok()?;
+        let provider = self.current_provider().ok()?;
+        let mut url = Url::parse(provider.end_session_endpoint.as_ref()?).ok()?;
         url.query_pairs_mut()
             .append_pair("id_token_hint", id_token_hint)
             .append_pair("client_id", self.client_id.as_str())
@@ -251,29 +308,12 @@ impl OAuth2Handler {
         Some(url.into())
     }
 
-    fn current_client(&self) -> Arc<ConfiguredCoreClient> {
-        self.client
+    fn current_provider(&self) -> Result<Arc<Provider>, OAuth2Error> {
+        self.provider
             .lock()
-            .expect("OAuth2 client mutex poisoned")
+            .expect("OAuth2 provider mutex poisoned")
             .clone()
-    }
-
-    /// Re-run OIDC discovery to obtain a client with a fresh JWKS.
-    ///
-    /// Used to recover from provider signing-key rotation, after which the
-    /// keys cached at startup can no longer verify newly issued tokens.
-    async fn rediscover(
-        &self,
-    ) -> Result<(Arc<ConfiguredCoreClient>, Arc<Option<String>>), OAuth2Error> {
-        Self::discover_client(
-            &self.issuer_url,
-            &self.client_id,
-            self.client_secret.as_ref(),
-            &self.redirect_url,
-            &self.http_client,
-        )
-        .await
-        .map(|(client, end_session_endpoint)| (Arc::new(client), Arc::new(end_session_endpoint)))
+            .ok_or(OAuth2Error::ProviderUnavailable)
     }
 
     /// Build the ID token verifier for `client`.
@@ -297,13 +337,14 @@ impl OAuth2Handler {
     /// Returns an `AuthRequest` containing the URL to redirect the user to,
     /// along with the state, PKCE verifier, and nonce that must be stored
     /// for later verification.
-    pub fn generate_auth_url(&self) -> AuthRequest {
+    pub fn generate_auth_url(&self) -> Result<AuthRequest, OAuth2Error> {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
-        let client = self.current_client();
+        let provider = self.current_provider()?;
 
         // Build the authorization request with configured scopes
-        let mut auth_request = client
+        let mut auth_request = provider
+            .client
             .authorize_url(
                 CoreAuthenticationFlow::AuthorizationCode,
                 CsrfToken::new_random,
@@ -318,12 +359,12 @@ impl OAuth2Handler {
 
         let (auth_url, csrf_state, nonce) = auth_request.url();
 
-        AuthRequest {
+        Ok(AuthRequest {
             auth_url,
             state: csrf_state.secret().clone(),
             pkce_verifier: pkce_verifier.secret().clone(),
             nonce: nonce.secret().clone(),
-        }
+        })
     }
 
     /// Exchange an authorization code for tokens and validate the ID token
@@ -344,9 +385,10 @@ impl OAuth2Handler {
         let code = AuthorizationCode::new(code.to_string());
         let pkce_verifier = PkceCodeVerifier::new(pkce_verifier.to_string());
 
-        let client = self.current_client();
+        let provider = self.current_provider()?;
 
-        let token_request = client
+        let token_request = provider
+            .client
             .exchange_code(code)
             .map_err(|e| OAuth2Error::TokenExchangeError(e.to_string()))?;
 
@@ -363,7 +405,7 @@ impl OAuth2Handler {
 
         let nonce = Nonce::new(nonce.to_string());
 
-        let verifier = self.id_token_verifier(&client);
+        let verifier = self.id_token_verifier(&provider.client);
 
         let claims = match id_token.claims(&verifier, &nonce) {
             Ok(claims) => claims.clone(),
@@ -374,24 +416,22 @@ impl OAuth2Handler {
                 trace!(
                     "ID token signature verification failed; refreshing OIDC JWKS and retrying (provider may have rotated signing keys)"
                 );
-                let (refreshed_client, refreshed_end_session_endpoint) = self.rediscover().await?;
-                *self
-                    .end_session_endpoint
-                    .lock()
-                    .expect("OAuth2 end session endpoint mutex poisoned") =
-                    refreshed_end_session_endpoint;
+                let refreshed = self.fetch_provider().await?;
                 // Scoped so the verifier's borrow of `refreshed` ends before
-                // it is moved into the cached client below.
+                // it is moved into the cached provider below.
                 let claims = {
-                    let verifier = self.id_token_verifier(&refreshed_client);
+                    let verifier = self.id_token_verifier(&refreshed.client);
                     id_token
                         .claims(&verifier, &nonce)
                         .map_err(|e| OAuth2Error::TokenVerificationError(e.to_string()))?
                         .clone()
                 };
-                // Persist the refreshed client so subsequent logins reuse the
-                // new keys instead of re-fetching on every request.
-                *self.client.lock().expect("OAuth2 client mutex poisoned") = refreshed_client;
+                // Persist the refreshed provider so subsequent logins reuse
+                // the new keys instead of re-fetching on every request.
+                *self
+                    .provider
+                    .lock()
+                    .expect("OAuth2 provider mutex poisoned") = Some(refreshed);
                 claims
             }
             Err(e) => return Err(OAuth2Error::TokenVerificationError(e.to_string())),
@@ -517,6 +557,11 @@ impl OAuth2Handler {
     pub fn read_only_claim_configured(&self) -> bool {
         self.settings.read_only_claim().is_some()
     }
+}
+
+/// `wait` scaled by a random factor between 0.5 and 1.
+fn with_jitter(wait: Duration) -> Duration {
+    wait.mul_f64(rng().random_range(0.5..=1.0))
 }
 
 /// Extract and decode the payload from a JWT
@@ -1155,7 +1200,13 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
     /// Returns the shared provider state, its issuer URL and the server task,
     /// which the caller must abort once done.
     async fn start_mock_provider() -> (Arc<MockProvider>, String, JoinHandle<()>) {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        start_mock_provider_on(TcpListener::bind("127.0.0.1:0").await.unwrap())
+    }
+
+    /// Serve the mock provider on `listener`, see [`start_mock_provider`].
+    fn start_mock_provider_on(
+        listener: TcpListener,
+    ) -> (Arc<MockProvider>, String, JoinHandle<()>) {
         let issuer = format!("http://{}", listener.local_addr().unwrap());
 
         let provider = Arc::new(MockProvider {
@@ -1284,6 +1335,84 @@ Y4dOyrc/PytM2BLxs06WhIWeneUpz64RtUlvZUrSDgnO5AQX0ba2
             url_after.starts_with(END_SESSION_ENDPOINT_B),
             "expected logout URL built from endpoint B after rotation, got {url_after}"
         );
+
+        server.abort();
+    }
+
+    fn millis(ms: u64) -> std::time::Duration {
+        std::time::Duration::from_millis(ms)
+    }
+
+    /// An invalid configuration is rejected when the handler is created, not
+    /// when the provider is contacted.
+    #[test]
+    fn handler_rejects_invalid_configuration() {
+        let settings = OAuth2Settings {
+            client_id: None,
+            ..test_settings("http://127.0.0.1:9", vec![])
+        };
+
+        let result = OAuth2Handler::new(&settings, REDIRECT_URI);
+
+        assert!(matches!(result, Err(OAuth2Error::ConfigurationError(_))));
+    }
+
+    /// Before discovery the handler is configured but cannot log anyone in.
+    #[tokio::test]
+    async fn handler_is_unavailable_before_discovery() {
+        let handler =
+            OAuth2Handler::new(&test_settings("http://127.0.0.1:9", vec![]), REDIRECT_URI)
+                .expect("configuration is valid");
+
+        assert!(!handler.is_available());
+        assert!(matches!(
+            handler.generate_auth_url(),
+            Err(OAuth2Error::ProviderUnavailable)
+        ));
+        assert!(matches!(
+            handler
+                .exchange_and_validate("auth-code", "pkce-verifier", NONCE)
+                .await,
+            Err(OAuth2Error::ProviderUnavailable)
+        ));
+        assert_eq!(None, handler.end_session_url("id-token", "http://kellnr/"));
+    }
+
+    /// A provider that is unreachable at startup becomes available once it is
+    /// up, without restarting Kellnr.
+    #[tokio::test]
+    async fn discovery_retry_recovers_once_provider_is_reachable() {
+        // Reserve a port and free it again, so discovery fails until the
+        // provider listens on it.
+        let addr = TcpListener::bind("127.0.0.1:0")
+            .await
+            .unwrap()
+            .local_addr()
+            .unwrap();
+        let handler = Arc::new(
+            OAuth2Handler::new(
+                &test_settings(&format!("http://{addr}"), vec![]),
+                REDIRECT_URI,
+            )
+            .expect("configuration is valid"),
+        );
+        let retry = tokio::spawn({
+            let handler = handler.clone();
+            async move { handler.discover_with_retry(millis(20), millis(100)).await }
+        });
+
+        tokio::time::sleep(millis(100)).await;
+        assert!(!handler.is_available());
+
+        let (_provider, _issuer, server) =
+            start_mock_provider_on(TcpListener::bind(addr).await.unwrap());
+        tokio::time::timeout(std::time::Duration::from_secs(5), retry)
+            .await
+            .expect("discovery should succeed once the provider is up")
+            .unwrap();
+
+        assert!(handler.is_available());
+        assert!(handler.generate_auth_url().is_ok());
 
         server.abort();
     }

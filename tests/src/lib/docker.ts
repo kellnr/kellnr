@@ -664,7 +664,7 @@ export async function startS3RustFsContainer(
  * process could grab the port between release and Docker binding it), but it's the same
  * technique used on the Rust test side (see `fakegcs-testcontainer`).
  */
-async function reserveFreePort(): Promise<number> {
+export async function reserveFreePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
     const server = net.createServer();
     server.on("error", reject);
@@ -674,7 +674,7 @@ async function reserveFreePort(): Promise<number> {
         if (address && typeof address === "object") {
           resolve(address.port);
         } else {
-          reject(new Error("Failed to reserve a free port for fake-gcs-server"));
+          reject(new Error("Failed to reserve a free port"));
         }
       });
     });

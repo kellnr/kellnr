@@ -9,6 +9,7 @@
  * - Hiding password login when SSO is enforced
  * - Automatic redirection to the OIDC server from the login page when enabled
  * - Hiding the password tab, password reset and user creation when SSO is enforced
+ * - Recovering SSO without a restart when the OIDC server is down at startup
  *
  * Performance: Tests use a mock OIDC server for fast, reliable testing.
  *
@@ -26,8 +27,10 @@ import {
   startMockOidcServer,
   getOAuth2EnvVars,
   getOAuth2EnvVarsWithAdmin,
+  mockOidcConfig,
   type StartedMockOidc,
 } from "./lib/mock-oidc";
+import { reserveFreePort } from "./lib/docker";
 
 // Run all test suites serially to avoid port conflicts
 test.describe.configure({ mode: "serial" });
@@ -507,5 +510,71 @@ test.describe("OAuth2 UI Tests - SSO enforcement with auto-redirect", () => {
     // URL should contain the OIDC authorization endpoint
     const url = page.url();
     expect(url).toContain("/authorize");
+  });
+});
+
+test.describe("OAuth2 UI Tests - OIDC server down at startup", () => {
+  // These tests use fixed localhost:8000 port
+  restrictToSingleWorkerBecauseFixedPorts();
+
+  let started: StartedLocalKellnr;
+  let mockOidc: StartedMockOidc | undefined;
+  let baseUrl: string;
+  let oidcPort: number;
+
+  test.beforeAll(async () => {
+    test.setTimeout(60_000);
+    assertKellnrBinaryExists();
+
+    const suffix = `${Date.now()}`;
+    oidcPort = await reserveFreePort();
+
+    // Start Kellnr while nothing listens on the issuer URL yet
+    started = await startLocalKellnr({
+      name: `kellnr-oauth2-down-${suffix}`,
+      env: {
+        ...getOAuth2EnvVars(mockOidcConfig(oidcPort)),
+      },
+    });
+
+    baseUrl = started.baseUrl;
+    console.log(`[setup] Server ready at ${baseUrl} (OIDC server down)`);
+  });
+
+  test.afterAll(async () => {
+    if (started) {
+      console.log("[teardown] Stopping Kellnr process");
+      await started.stop();
+    }
+    if (mockOidc) {
+      console.log("[teardown] Stopping mock OIDC server");
+      await mockOidc.stop();
+    }
+    // Give the port time to be released
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  });
+
+  test("SSO becomes available once the OIDC server is up", async ({ page }) => {
+    test.setTimeout(180_000);
+    const loginPage = new LoginPage(page);
+
+    await page.goto(`${baseUrl}/login`);
+    await loginPage.waitForOAuth2Button();
+    await expect(loginPage.oauth2Button).toBeDisabled();
+    await expect(loginPage.oauth2Unavailable).toBeVisible();
+
+    console.log("[test] Starting mock OIDC server...");
+    mockOidc = await startMockOidcServer({ name: "mock-oidc-late", hostPort: oidcPort });
+
+    // Kellnr retries discovery with a growing wait, no restart needed
+    await expect(async () => {
+      await page.reload();
+      await loginPage.waitForOAuth2Button();
+      await expect(loginPage.oauth2Button).toBeEnabled({ timeout: 1000 });
+    }).toPass({ intervals: [2000], timeout: 90_000 });
+    await expect(loginPage.oauth2Unavailable).not.toBeVisible();
+
+    await loginPage.clickOAuth2Login();
+    await page.waitForURL(/.*\/authorize.*/, { timeout: 10000 });
   });
 });

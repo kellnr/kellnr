@@ -1,7 +1,8 @@
 use std::fmt::Display;
+use std::time::Duration;
 
 use axum::Json;
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use kellnr_common::account_name::AccountNameError;
 use kellnr_common::original_name::NameError;
@@ -20,6 +21,8 @@ pub type ApiResult<T> = Result<T, ApiError>;
 pub struct ApiError {
     status: StatusCode,
     details: ErrorDetails,
+    /// Sent as `Retry-After` header.
+    retry_after: Option<Duration>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -51,6 +54,7 @@ impl ApiError {
         Self {
             status,
             details: ErrorDetails::from(format!("ERROR: {e}")),
+            retry_after: None,
         }
     }
 
@@ -74,6 +78,14 @@ impl ApiError {
         Self::from_str(&msg.to_string(), StatusCode::CONFLICT)
     }
 
+    /// A 503 error that asks the client to retry after `retry_after`.
+    pub fn service_unavailable(msg: impl Display, retry_after: Duration) -> Self {
+        Self {
+            retry_after: Some(retry_after),
+            ..Self::from_str(&msg.to_string(), StatusCode::SERVICE_UNAVAILABLE)
+        }
+    }
+
     pub fn status(&self) -> StatusCode {
         self.status
     }
@@ -83,6 +95,7 @@ impl ApiError {
         Self {
             status,
             details: ErrorDetails::from(e),
+            retry_after: None,
         }
     }
 
@@ -96,7 +109,13 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status, Json(self.details)).into_response()
+        let mut response = (self.status, Json(self.details)).into_response();
+        if let Some(retry_after) = self.retry_after {
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, retry_after.as_secs().into());
+        }
+        response
     }
 }
 
@@ -237,6 +256,15 @@ mod tests {
         assert_eq!(StatusCode::UNAUTHORIZED, e.status);
         assert_eq!(1, e.details.errors.len());
         assert_eq!("ERROR: Unauthorized", e.to_string());
+    }
+
+    #[test]
+    fn service_unavailable_sends_retry_after() {
+        let response =
+            ApiError::service_unavailable("down", Duration::from_secs(30)).into_response();
+
+        assert_eq!(StatusCode::SERVICE_UNAVAILABLE, response.status());
+        assert_eq!("30", response.headers()[header::RETRY_AFTER]);
     }
 
     #[test]

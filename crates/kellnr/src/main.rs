@@ -20,7 +20,7 @@ use kellnr_http::token_cache::TokenCacheManager;
 use kellnr_index::cratesio_prefetch_api::{
     CratesIoPrefetchArgs, UPDATE_CACHE_TIMEOUT_SECS, init_cratesio_prefetch_thread,
 };
-use kellnr_oauth2::{OAuth2Error, OAuth2Handler};
+use kellnr_oauth2::OAuth2Handler;
 use kellnr_settings::{
     CliResult, LogFormat, ResolvedSettings, SessionAge, Settings, ShowConfigOptions, UrlPathPrefix,
     parse_cli,
@@ -257,21 +257,7 @@ async fn run_server(resolved: ResolvedSettings) {
         fail_interrupted_toolchain_targets(db.as_ref()).await;
     }
 
-    // Initialize OAuth2/OIDC handler if enabled
-    let oauth2_handler = init_oauth2_handler(&settings).await.unwrap_or_else(|e| {
-        error!("Failed to initialize OAuth2/OIDC handler: {}", e);
-        // With enforcement on, password login is rejected, so a handler that
-        // failed to initialize for *any* reason leaves no way to log in at all.
-        // Refuse to start instead of serving an unusable registry.
-        if settings.oauth2.enforced {
-            error!(
-                "OAuth2 enforcement is enabled, so login is impossible without a working OIDC provider"
-            );
-            std::process::exit(1);
-        }
-        warn!("OAuth2/OIDC authentication will be disabled");
-        None
-    });
+    let oauth2_handler = init_oauth2_handler(&settings, &tasks).await;
 
     // With enforcement on, the local admin can no longer log in, so an
     // administrator has to come from the IdP. That needs either an admin group
@@ -630,18 +616,50 @@ async fn fail_interrupted_toolchain_targets(db: &dyn DbProvider) {
     }
 }
 
+/// Create the `OAuth2`/OIDC handler if `OAuth2` is enabled.
+///
+/// An invalid configuration stops Kellnr. An unreachable provider stops it
+/// only with enforcement on: password login is rejected then, so there would
+/// be no way to log in at all, and a restart by the process manager is the
+/// simplest recovery. Otherwise SSO is unavailable until a background task
+/// discovers the provider.
 async fn init_oauth2_handler(
     settings: &Settings,
-) -> Result<Option<Arc<OAuth2Handler>>, OAuth2Error> {
+    tasks: &BackgroundTasks,
+) -> Option<Arc<OAuth2Handler>> {
     if !settings.oauth2.enabled {
-        return Ok(None);
+        return None;
     }
 
     let callback_url = format!("{}/api/v1/oauth2/callback", settings.origin.base_url());
+    let handler = match OAuth2Handler::new(&settings.oauth2, &callback_url) {
+        Ok(handler) => Arc::new(handler),
+        Err(e) => {
+            error!("Failed to initialize OAuth2/OIDC handler: {e}");
+            std::process::exit(1);
+        }
+    };
 
-    OAuth2Handler::from_discovery(&settings.oauth2, &callback_url)
-        .await
-        .map(|handler| Some(Arc::new(handler)))
+    if settings.oauth2.enforced {
+        if let Err(e) = handler.discover().await {
+            error!("Failed to initialize OAuth2/OIDC handler: {e}");
+            error!(
+                "OAuth2 enforcement is enabled, so login is impossible without a working OIDC provider"
+            );
+            std::process::exit(1);
+        }
+    } else {
+        let discovering = handler.clone();
+        let shutdown = tasks.shutdown_token();
+        tasks.spawn_once("OIDC provider discovery", async move {
+            tokio::select! {
+                () = shutdown.cancelled() => {}
+                () = discovering.discover_until_available() => {}
+            }
+        });
+    }
+
+    Some(handler)
 }
 
 #[cfg(test)]

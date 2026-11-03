@@ -80,7 +80,9 @@ export async function getOAuth2Config(): Promise<ApiResult<OAuth2Config>> {
   const result = await apiGet<OAuth2Config>(OAUTH2_CONFIG, undefined, {
     redirectOnAuthError: false,
   })
-  if (isSuccess(result)) {
+  // An unavailable provider becomes available once Kellnr discovers it,
+  // so only a final answer is cached.
+  if (isSuccess(result) && (!result.data.enabled || result.data.available)) {
     oauth2ConfigCache = result.data
   }
   return result
