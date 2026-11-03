@@ -107,7 +107,7 @@ router.beforeEach(async (to) => {
   // With auto_redirect enabled, skip the login page and go straight to the provider.
   if (to.name === 'Login' && to.query['from'] !== 'logout') {
     const cfg = await settingsService.getOAuth2Config()
-    if (isSuccess(cfg) && cfg.data.enabled && cfg.data.auto_redirect) {
+    if (isSuccess(cfg) && cfg.data.enabled && cfg.data.available && cfg.data.auto_redirect) {
       startSsoLogin()
       return false
     }

@@ -4449,6 +4449,7 @@ dependencies = [
  "kellnr-common",
  "kellnr-settings",
  "openidconnect",
+ "rand 0.10.3",
  "reqwest",
  "serde",
  "serde_json",

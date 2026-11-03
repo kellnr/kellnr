@@ -6,6 +6,7 @@
 //! - `/api/v1/oauth2/callback` - GET - Handles callback from provider
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
@@ -17,7 +18,7 @@ use kellnr_common::account_name::UserName;
 use kellnr_db::{User, UserFlags};
 use kellnr_http::error::ApiError;
 use kellnr_http::state::{AppState, AppStateData, DbState, SettingsState};
-use kellnr_oauth2::{OAuth2Handler, UserInfo, generate_unique_username};
+use kellnr_oauth2::{OAuth2Error, OAuth2Handler, UserInfo, generate_unique_username};
 use kellnr_settings::UrlPathPrefix;
 use kellnr_settings::constants::{COOKIE_OAUTH2_STATE, COOKIE_OIDC_ID_TOKEN, OAUTH2_STATE_MAX_AGE};
 use serde::{Deserialize, Serialize};
@@ -29,11 +30,19 @@ use crate::session::{create_session_jar, session_cookie};
 /// Type alias for the `OAuth2` handler extension
 pub type OAuth2Ext = Extension<Option<Arc<OAuth2Handler>>>;
 
+/// How long a client should wait before it retries a login while the
+/// provider has not been discovered yet.
+const PROVIDER_RETRY_AFTER: Duration = Duration::from_secs(30);
+
 /// `OAuth2` configuration response for the UI
 #[derive(Debug, Serialize, ToSchema)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct OAuth2Config {
     /// Whether `OAuth2` authentication is enabled
     pub enabled: bool,
+    /// Whether the OIDC provider has been discovered, so that SSO login is
+    /// possible. `false` while an enabled provider is unreachable.
+    pub available: bool,
     /// Text to display on the login button
     pub button_text: String,
     /// Whether local password login is disabled (SSO-only)
@@ -110,9 +119,15 @@ impl TryFrom<CallbackParams> for CallbackQuery {
     )
 )]
 #[allow(clippy::unused_async)]
-pub async fn get_config(State(settings): SettingsState) -> Json<OAuth2Config> {
+pub async fn get_config(
+    State(settings): SettingsState,
+    Extension(oauth2_handler): OAuth2Ext,
+) -> Json<OAuth2Config> {
     Json(OAuth2Config {
         enabled: settings.oauth2.enabled,
+        available: oauth2_handler
+            .as_ref()
+            .is_some_and(|handler| handler.is_available()),
         button_text: settings.oauth2.button_text.clone(),
         enforced: settings.oauth2.enforced,
         auto_redirect: settings.oauth2.auto_redirect,
@@ -132,7 +147,8 @@ pub async fn get_config(State(settings): SettingsState) -> Json<OAuth2Config> {
     tag = "oauth2",
     responses(
         (status = 302, description = "Redirect to OAuth2 provider"),
-        (status = 404, description = "OAuth2 not enabled")
+        (status = 404, description = "OAuth2 not enabled"),
+        (status = 503, description = "OIDC provider not reachable yet, retry after the `Retry-After` seconds")
     )
 )]
 pub async fn login(
@@ -150,7 +166,10 @@ pub async fn login(
     })?;
 
     // Generate authorization URL with PKCE
-    let auth_request = handler.generate_auth_url();
+    let auth_request = handler.generate_auth_url().map_err(|e| {
+        warn!("OAuth2 login attempted but the OIDC provider is unavailable: {e}");
+        provider_unavailable()
+    })?;
 
     // Store state in database for verification in callback
     db.store_oauth2_state(
@@ -223,7 +242,8 @@ fn take_state_cookie(
         (status = 400, description = "Invalid state or missing code"),
         (status = 401, description = "Token exchange failed"),
         (status = 403, description = "User not found and auto-provisioning disabled"),
-        (status = 404, description = "OAuth2 not enabled")
+        (status = 404, description = "OAuth2 not enabled"),
+        (status = 503, description = "OIDC provider not reachable yet, retry after the `Retry-After` seconds")
     )
 )]
 pub async fn callback(
@@ -282,7 +302,10 @@ pub async fn callback(
         .await
         .map_err(|e| {
             error!("Failed to exchange OAuth2 code: {}", e);
-            ApiError::from(StatusCode::UNAUTHORIZED)
+            match e {
+                OAuth2Error::ProviderUnavailable => provider_unavailable(),
+                _ => ApiError::from(StatusCode::UNAUTHORIZED),
+            }
         })?;
 
     // Extract user information from token
@@ -482,6 +505,13 @@ pub async fn error_callback(
 }
 
 /// Redirect to the login page of the UI, which shows `error`.
+fn provider_unavailable() -> ApiError {
+    ApiError::service_unavailable(
+        "Single sign-on is temporarily unavailable",
+        PROVIDER_RETRY_AFTER,
+    )
+}
+
 fn login_error_redirect(path_prefix: &UrlPathPrefix, error: &str) -> Redirect {
     let encoded_error = urlencoding::encode(error);
     Redirect::to(&format!("{path_prefix}/login?error={encoded_error}"))
@@ -760,5 +790,82 @@ mod callback_tests {
         .await;
 
         assert_eq!(location(redirect), "/kellnr/login?error=User%20cancelled");
+    }
+}
+
+#[cfg(test)]
+mod availability_tests {
+    use axum::http::{HeaderMap, header};
+    use axum::response::IntoResponse;
+    use axum_extra::extract::cookie::Key;
+    use kellnr_http::test_support::{TEST_KEY, test_state};
+    use kellnr_settings::OAuth2 as OAuth2Settings;
+
+    use super::*;
+
+    fn empty_jar() -> PrivateCookieJar {
+        PrivateCookieJar::from_headers(&HeaderMap::new(), Key::from(TEST_KEY))
+    }
+
+    /// A handler for a provider that has not been discovered.
+    fn undiscovered_handler() -> Arc<OAuth2Handler> {
+        let settings = OAuth2Settings {
+            enabled: true,
+            issuer_url: Some("http://127.0.0.1:9".to_string()),
+            client_id: Some("kellnr".to_string()),
+            client_secret: Some("secret".to_string()),
+            ..Default::default()
+        };
+        let handler = OAuth2Handler::new(&settings, "http://kellnr/api/v1/oauth2/callback")
+            .expect("configuration is valid");
+        Arc::new(handler)
+    }
+
+    async fn login_response(handler: Option<Arc<OAuth2Handler>>) -> axum::response::Response {
+        let state = test_state();
+        login(
+            empty_jar(),
+            State(state.db),
+            State(state.settings),
+            Extension(handler),
+        )
+        .await
+        .into_response()
+    }
+
+    #[tokio::test]
+    async fn login_without_oauth2_is_not_found() {
+        let response = login_response(None).await;
+
+        assert_eq!(StatusCode::NOT_FOUND, response.status());
+    }
+
+    #[tokio::test]
+    async fn login_with_undiscovered_provider_is_unavailable() {
+        let response = login_response(Some(undiscovered_handler())).await;
+
+        assert_eq!(StatusCode::SERVICE_UNAVAILABLE, response.status());
+        assert_eq!(
+            PROVIDER_RETRY_AFTER.as_secs().to_string(),
+            response.headers()[header::RETRY_AFTER]
+        );
+    }
+
+    #[tokio::test]
+    async fn config_reports_undiscovered_provider_as_unavailable() {
+        let Json(config) = get_config(
+            State(test_state().settings),
+            Extension(Some(undiscovered_handler())),
+        )
+        .await;
+
+        assert!(!config.available);
+    }
+
+    #[tokio::test]
+    async fn config_reports_disabled_oauth2_as_unavailable() {
+        let Json(config) = get_config(State(test_state().settings), Extension(None)).await;
+
+        assert!(!config.available);
     }
 }

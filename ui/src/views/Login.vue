@@ -109,11 +109,19 @@
                 data-testid="login-oauth2-button"
                 class="oauth2-button"
                 rounded="lg"
+                :disabled="!oauth2Available"
                 @click="handleOAuth2Login"
               >
                 <v-icon icon="mdi-shield-account" class="mr-2" />
                 {{ oauth2ButtonText }}
               </v-btn>
+              <p
+                v-if="!oauth2Available"
+                class="text-caption text-medium-emphasis text-center mt-2"
+                data-testid="login-oauth2-unavailable"
+              >
+                Single sign-on is temporarily unavailable. Please try again later.
+              </p>
             </template>
           </v-card-text>
         </v-card>
@@ -141,6 +149,7 @@ const store = useStore()
 
 // OAuth2 state
 const oauth2Enabled = ref(false)
+const oauth2Available = ref(true)
 const oauth2ButtonText = ref("Log in with SSO")
 const ssoEnforced = ref(false)
 
@@ -175,6 +184,7 @@ onMounted(async () => {
   const oauth2Result = await settingsService.getOAuth2Config()
   if (isSuccess(oauth2Result)) {
     oauth2Enabled.value = oauth2Result.data.enabled
+    oauth2Available.value = oauth2Result.data.available
     oauth2ButtonText.value = oauth2Result.data.button_text
     ssoEnforced.value = oauth2Result.data.enforced
   }

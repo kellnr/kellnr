@@ -49,7 +49,25 @@ export type StartMockOidcOptions = {
   clientId?: string;
   /** Client secret to use (default: "kellnr-secret") */
   clientSecret?: string;
+  /**
+   * Host port to serve on (default: a random port). Fixing it lets a test
+   * configure the issuer URL before the server runs, see `mockOidcConfig`.
+   */
+  hostPort?: number;
 };
+
+/**
+ * The configuration of a mock OIDC server that will be started on `hostPort`
+ * with the default client credentials.
+ */
+export function mockOidcConfig(hostPort: number): MockOidcConfig {
+  return {
+    issuerUrl: `http://localhost:${hostPort}/default`,
+    clientId: "kellnr",
+    clientSecret: "kellnr-secret",
+    port: hostPort,
+  };
+}
 
 /**
  * Start a mock OIDC server for testing OAuth2 flows.
@@ -84,7 +102,9 @@ export async function startMockOidcServer(
   // is specifically designed for testing OAuth2/OIDC flows
   const container = await new GenericContainer("ghcr.io/navikt/mock-oauth2-server:2.1.10")
     .withName(name)
-    .withExposedPorts(8080)
+    .withExposedPorts(
+      options.hostPort === undefined ? 8080 : { container: 8080, host: options.hostPort },
+    )
     .withEnvironment({
       // Configure the server to accept any client by default
       JSON_CONFIG: JSON.stringify({

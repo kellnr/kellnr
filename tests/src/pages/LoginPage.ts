@@ -22,6 +22,7 @@ export class LoginPage extends BasePage {
   readonly alertMessage: Locator;
   readonly oauth2Button: Locator;
   readonly oauth2Divider: Locator;
+  readonly oauth2Unavailable: Locator;
 
   constructor(page: Page) {
     super(page);
@@ -39,6 +40,7 @@ export class LoginPage extends BasePage {
     // OAuth2/SSO login elements
     this.oauth2Button = page.getByTestId("login-oauth2-button");
     this.oauth2Divider = page.getByTestId("login-oauth2-divider");
+    this.oauth2Unavailable = page.getByTestId("login-oauth2-unavailable");
   }
 
   /**

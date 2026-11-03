@@ -1400,6 +1400,10 @@
             "description": "Whether the login page should redirect straight to the SSO provider",
             "type": "boolean"
           },
+          "available": {
+            "description": "Whether the OIDC provider has been discovered, so that SSO login is\npossible. `false` while an enabled provider is unreachable.",
+            "type": "boolean"
+          },
           "button_text": {
             "description": "Text to display on the login button",
             "type": "string"
@@ -1415,6 +1419,7 @@
         },
         "required": [
           "enabled",
+          "available",
           "button_text",
           "enforced",
           "auto_redirect"
@@ -5162,6 +5167,16 @@
               }
             },
             "description": "OAuth2 not enabled"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "OIDC provider not reachable yet, retry after the `Retry-After` seconds"
           }
         },
         "summary": "Handle `OAuth2` callback from the provider",
@@ -5245,6 +5260,16 @@
               }
             },
             "description": "OAuth2 not enabled"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "OIDC provider not reachable yet, retry after the `Retry-After` seconds"
           }
         },
         "summary": "Initiate `OAuth2` login flow",
