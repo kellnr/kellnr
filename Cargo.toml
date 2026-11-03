@@ -7,7 +7,7 @@ resolver = "3"
 authors = ["kellnr.io"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
-version = "6.13.0"
+version = "7.0.0"
 description = "Kellnr is a self-hosted registry for Rust crates with support for rustdocs and crates.io caching."
 homepage = "https://kellnr.io/"
 repository = "https://github.com/kellnr/kellnr"
@@ -17,27 +17,27 @@ keywords = ["cargo", "registry", "crates-io", "self-hosted"]
 
 [workspace.dependencies]
 # Internal dependencies from Kellnr
-kellnr-common = { version = "6.13.0", path = "./crates/common" }
-kellnr-cratesio-sync = { version = "6.13.0", path = "./crates/cratesio-sync" }
-kellnr-db = { version = "6.13.0", path = "./crates/db" }
-kellnr-db-testcontainer = { version = "6.13.0", path = "./crates/db/db-testcontainer" }
-kellnr-docs = { version = "6.13.0", path = "./crates/docs" }
-kellnr-docgen = { version = "6.13.0", path = "./crates/docgen" }
-kellnr-entity = { version = "6.13.0", path = "./crates/db/entity" }
-kellnr-filter = { version = "6.13.0", path = "./crates/filter" }
-kellnr-http = { version = "6.13.0", path = "./crates/http" }
-kellnr-index = { version = "6.13.0", path = "./crates/index" }
-kellnr-migration = { version = "6.13.0", path = "./crates/db/migration" }
-kellnr-oauth2 = { version = "6.13.0", path = "./crates/oauth2" }
-kellnr-rustfs-testcontainer = { version = "6.13.0", path = "./crates/storage/rustfs-testcontainer" }
-kellnr-registry = { version = "6.13.0", path = "./crates/registry" }
-kellnr-settings = { version = "6.13.0", path = "./crates/settings" }
-kellnr-storage = { version = "6.13.0", path = "./crates/storage" }
-kellnr-test-db = { version = "6.13.0", path = "./crates/db/test-db" }
-kellnr-toolchain = { version = "6.13.0", path = "./crates/toolchain" }
-kellnr-web-ui = { version = "6.13.0", path = "./crates/web-ui" }
-kellnr-webhooks = { version = "6.13.0", path = "./crates/webhooks" }
-kellnr-embedded-resources = { version = "6.13.0", path = "./crates/embedded-resources" }
+kellnr-common = { version = "7.0.0", path = "./crates/common" }
+kellnr-cratesio-sync = { version = "7.0.0", path = "./crates/cratesio-sync" }
+kellnr-db = { version = "7.0.0", path = "./crates/db" }
+kellnr-db-testcontainer = { version = "7.0.0", path = "./crates/db/db-testcontainer" }
+kellnr-docs = { version = "7.0.0", path = "./crates/docs" }
+kellnr-docgen = { version = "7.0.0", path = "./crates/docgen" }
+kellnr-entity = { version = "7.0.0", path = "./crates/db/entity" }
+kellnr-filter = { version = "7.0.0", path = "./crates/filter" }
+kellnr-http = { version = "7.0.0", path = "./crates/http" }
+kellnr-index = { version = "7.0.0", path = "./crates/index" }
+kellnr-migration = { version = "7.0.0", path = "./crates/db/migration" }
+kellnr-oauth2 = { version = "7.0.0", path = "./crates/oauth2" }
+kellnr-rustfs-testcontainer = { version = "7.0.0", path = "./crates/storage/rustfs-testcontainer" }
+kellnr-registry = { version = "7.0.0", path = "./crates/registry" }
+kellnr-settings = { version = "7.0.0", path = "./crates/settings" }
+kellnr-storage = { version = "7.0.0", path = "./crates/storage" }
+kellnr-test-db = { version = "7.0.0", path = "./crates/db/test-db" }
+kellnr-toolchain = { version = "7.0.0", path = "./crates/toolchain" }
+kellnr-web-ui = { version = "7.0.0", path = "./crates/web-ui" }
+kellnr-webhooks = { version = "7.0.0", path = "./crates/webhooks" }
+kellnr-embedded-resources = { version = "7.0.0", path = "./crates/embedded-resources" }
 
 # External dependencies from crates.io
 argon2 = "0.6.0"
