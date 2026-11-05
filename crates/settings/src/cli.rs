@@ -424,6 +424,36 @@ mod tests {
     }
 
     #[test]
+    fn min_release_age_flags_reach_the_settings() {
+        let CliResult::RunServer(resolved) = run_start(
+            None,
+            &[
+                "--proxy-min-release-age",
+                "259200",
+                "--proxy-min-release-age-exempt-crates",
+                "openssl,ring",
+            ],
+        ) else {
+            panic!("expected RunServer");
+        };
+
+        assert_eq!(259_200, resolved.settings.proxy.min_release_age_seconds);
+        assert_eq!(
+            vec!["openssl", "ring"],
+            resolved.settings.proxy.min_release_age_exempt_crates
+        );
+        assert_eq!(
+            resolved
+                .prov
+                .proxy
+                .min_release_age_exempt_crates
+                .source()
+                .category(),
+            Category::Cli,
+        );
+    }
+
+    #[test]
     fn invalid_license_unknown_flag_is_rejected() {
         let result = Cli::try_parse_from([
             "kellnr",

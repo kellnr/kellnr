@@ -1,4 +1,8 @@
+use std::time::Duration;
+
 use kellnr_common::base_url::{BaseUrl, BaseUrlError};
+use kellnr_common::canonical_name::CanonicalName;
+use kellnr_common::original_name::OriginalName;
 use provcfg::{ClapArgs, Configurable};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -62,6 +66,19 @@ pub struct Proxy {
     /// to get in contact, e.g. "kellnr.io/kellnr (contact@example.com)".
     #[arg(long = "proxy-user-agent")]
     pub user_agent: String,
+
+    /// Minimum age in seconds of a crates.io version, counted from the
+    /// `pubtime` of its index entry, before the proxy serves it (0 =
+    /// disabled). Younger versions are left out of the index and their
+    /// downloads are denied. Versions without a `pubtime` are served
+    #[arg(long = "proxy-min-release-age")]
+    pub min_release_age_seconds: u64,
+
+    /// Crates (comma-separated) whose versions are served regardless of the
+    /// minimum release age, e.g. to let an urgent security fix through
+    #[configurable(env_list)]
+    #[arg(value_delimiter = ',')]
+    pub min_release_age_exempt_crates: Vec<String>,
 }
 
 impl Default for Proxy {
@@ -76,6 +93,8 @@ impl Default for Proxy {
             connect_timeout_seconds: 5,
             request_timeout_seconds: 30,
             user_agent: default_user_agent(),
+            min_release_age_seconds: 0,
+            min_release_age_exempt_crates: Vec::new(),
         }
     }
 }
@@ -133,6 +152,22 @@ impl Proxy {
         } else {
             Vec::new()
         }
+    }
+
+    /// Minimum age of the versions of the crates.io crate `name` before they
+    /// are served, `None` if versions are served regardless of their age: the
+    /// minimum release age is 0 or the crate is exempt. Crate names are
+    /// compared like cargo does.
+    pub fn min_release_age(&self, name: &OriginalName) -> Option<Duration> {
+        if self.min_release_age_seconds == 0 {
+            return None;
+        }
+        let name = name.to_canonical();
+        let exempt = self
+            .min_release_age_exempt_crates
+            .iter()
+            .any(|c| CanonicalName::try_from(c.trim()).is_ok_and(|c| c == name));
+        (!exempt).then(|| Duration::from_secs(self.min_release_age_seconds))
     }
 
     /// The upstream sparse-index URL that internal cargo invocations (e.g. the
@@ -326,6 +361,44 @@ mod tests {
         let toml = r#"user_agent = "kellnr.io/kellnr (admin@example.com)""#;
         let proxy: Proxy = toml::from_str(toml).unwrap();
         assert_eq!(proxy.user_agent, "kellnr.io/kellnr (admin@example.com)");
+    }
+
+    fn name(name: &str) -> OriginalName {
+        OriginalName::try_from(name).unwrap()
+    }
+
+    #[test]
+    fn min_release_age_is_disabled_by_default() {
+        let proxy: Proxy = toml::from_str("enabled = true").unwrap();
+        assert_eq!(proxy.min_release_age_seconds, 0);
+        assert!(proxy.min_release_age_exempt_crates.is_empty());
+        assert_eq!(proxy.min_release_age(&name("serde")), None);
+    }
+
+    #[test]
+    fn min_release_age_applies_to_crates_that_are_not_exempt() {
+        let proxy: Proxy = toml::from_str(
+            r#"
+            min_release_age_seconds = 259200
+            min_release_age_exempt_crates = ["openssl", " Tokio-Util "]
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            proxy.min_release_age(&name("serde")),
+            Some(Duration::from_hours(72))
+        );
+        assert_eq!(proxy.min_release_age(&name("openssl")), None);
+        // Names that only differ in case or in `-` versus `_` are the same crate
+        assert_eq!(proxy.min_release_age(&name("OpenSSL")), None);
+        assert_eq!(proxy.min_release_age(&name("tokio_util")), None);
+        assert!(proxy.min_release_age(&name("openssl-sys")).is_some());
+    }
+
+    #[test]
+    fn min_release_age_exempt_crates_is_an_env_list_key() {
+        assert!(crate::settings::env_list_keys().contains(&"proxy.min_release_age_exempt_crates"));
     }
 
     #[test]

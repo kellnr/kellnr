@@ -4671,6 +4671,7 @@ async fn get_cratesio_version_meta_returns_checksum_and_license(test_db: &kellnr
         Some(kellnr_db::provider::CratesioVersionMeta {
             cksum: "cksum-1.0.0".to_string(),
             license: Some("MIT OR Apache-2.0".to_string()),
+            pubtime: None,
         }),
         upstream_meta(test_db, "1.0.0").await
     );
@@ -4684,10 +4685,40 @@ async fn get_cratesio_version_meta_returns_checksum_and_license(test_db: &kellnr
         Some(kellnr_db::provider::CratesioVersionMeta {
             cksum: "cksum-1.2.0".to_string(),
             license: None,
+            pubtime: None,
         }),
         upstream_meta(test_db, "1.2.0").await
     );
     assert_eq!(None, upstream_meta(test_db, "2.0.0").await);
+}
+
+#[db_test]
+async fn get_cratesio_version_meta_returns_pubtime(test_db: &kellnr_db::Database) {
+    let pubtime = Utc.with_ymd_and_hms(2026, 11, 3, 23, 5, 13).unwrap();
+    let indices = [
+        IndexMetadata {
+            pubtime: Some(pubtime),
+            ..upstream_index("1.0.0")
+        },
+        upstream_index("1.1.0"),
+    ];
+    test_db
+        .add_cratesio_prefetch_data(
+            &OriginalName::try_from("Upstream").unwrap(),
+            "etag",
+            "last_modified",
+            None,
+            &indices,
+            &HashMap::new(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        Some(pubtime),
+        upstream_meta(test_db, "1.0.0").await.unwrap().pubtime
+    );
+    assert_eq!(None, upstream_meta(test_db, "1.1.0").await.unwrap().pubtime);
 }
 
 #[db_test]

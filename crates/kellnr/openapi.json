@@ -1580,6 +1580,21 @@
             "description": "Crates.io index URL",
             "type": "string"
           },
+          "min_release_age_exempt_crates": {
+            "default": [],
+            "description": "Crates (comma-separated) whose versions are served regardless of the\nminimum release age, e.g. to let an urgent security fix through",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "min_release_age_seconds": {
+            "default": 0,
+            "description": "Minimum age in seconds of a crates.io version, counted from the\n`pubtime` of its index entry, before the proxy serves it (0 =\ndisabled). Younger versions are left out of the index and their\ndownloads are denied. Versions without a `pubtime` are served",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "num_threads": {
             "default": 10,
             "description": "Number of proxy threads",
@@ -1610,6 +1625,8 @@
           "download_on_update",
           "enabled",
           "index",
+          "min_release_age_exempt_crates",
+          "min_release_age_seconds",
           "num_threads",
           "request_timeout_seconds",
           "url",
@@ -2153,6 +2170,8 @@
               "download_on_update": false,
               "enabled": false,
               "index": "https://index.crates.io/",
+              "min_release_age_exempt_crates": [],
+              "min_release_age_seconds": 0,
               "num_threads": 10,
               "request_timeout_seconds": 30,
               "url": "https://static.crates.io/crates/",
@@ -4319,7 +4338,7 @@
                 }
               }
             },
-            "description": "Download denied by a crates.io filter, e.g. the license filter"
+            "description": "Download denied by a crates.io filter, e.g. the license filter, or because the version is younger than the minimum release age"
           },
           "404": {
             "content": {
@@ -4365,7 +4384,7 @@
     },
     "/api/v1/cratesio/{a}/{b}/{name}": {
       "get": {
-        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 3 or more characters.",
+        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 3 or more characters. Versions younger than\n`proxy.min_release_age_seconds` are left out.",
         "operationId": "prefetch_cratesio",
         "parameters": [
           {
@@ -4437,7 +4456,7 @@
     },
     "/api/v1/cratesio/{a}/{name}": {
       "get": {
-        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 1-2 characters.",
+        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 1-2 characters. Versions younger than\n`proxy.min_release_age_seconds` are left out.",
         "operationId": "prefetch_len2_cratesio",
         "parameters": [
           {

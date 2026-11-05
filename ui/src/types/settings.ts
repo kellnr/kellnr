@@ -127,6 +127,8 @@ export type Proxy = {
   api: string
   connect_timeout_seconds: number
   request_timeout_seconds: number
+  min_release_age_seconds: number
+  min_release_age_exempt_crates: string[]
 }
 
 export type Registry = {
@@ -230,7 +232,9 @@ export const emptySettings: Settings = {
     index: "",
     api: "",
     connect_timeout_seconds: 5,
-    request_timeout_seconds: 30
+    request_timeout_seconds: 30,
+    min_release_age_seconds: 0,
+    min_release_age_exempt_crates: []
   },
   registry: {
     data_dir: "",
