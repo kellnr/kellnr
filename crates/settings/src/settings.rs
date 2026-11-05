@@ -109,6 +109,7 @@ pub(crate) fn env_list_keys() -> &'static [&'static str] {
         "oauth2.scopes",
         "oauth2.additional_audiences",
         "docs.build_wrapper",
+        "proxy.min_release_age_exempt_crates",
         "cratesio_filter.license_allowed",
         "cratesio_filter.license_exempt_crates",
         "registry_filter.license_allowed",

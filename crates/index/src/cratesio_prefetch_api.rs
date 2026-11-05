@@ -3,14 +3,15 @@ use std::time::Duration;
 
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, header};
+use chrono::{DateTime, TimeDelta, Utc};
 use hyper::StatusCode;
 use kellnr_common::background_tasks::BackgroundTasks;
 use kellnr_common::base_url::BaseUrl;
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::original_name::OriginalName;
-use kellnr_common::prefetch::Prefetch;
+use kellnr_common::prefetch::{Prefetch, is_not_modified, quote_etag};
 use kellnr_common::version::Version;
 use kellnr_cratesio_sync::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_cratesio_sync::{CratesioSync, SyncSource, crate_sub_path};
@@ -22,7 +23,8 @@ use kellnr_http::state::{CratesIoPrefetchSenderState, DbState, SettingsState};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use moka::future::Cache;
 use reqwest::Client;
-use tracing::{error, trace, warn};
+use serde::Deserialize;
+use tracing::{debug, error, trace, warn};
 
 use super::config_json::{ConfigJson, IndexKind};
 use crate::prefetch_response::PrefetchResponse;
@@ -62,7 +64,8 @@ pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson>
 /// Prefetch crate metadata from crates.io (3+ char names)
 ///
 /// Fetches and caches crate index metadata from crates.io for crates with
-/// names of 3 or more characters.
+/// names of 3 or more characters. Versions younger than
+/// `proxy.min_release_age_seconds` are left out.
 #[utoipa::path(
     get,
     path = "/{a}/{b}/{name}",
@@ -87,15 +90,14 @@ pub async fn prefetch_cratesio(
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
 ) -> ApiResult<PrefetchResponse> {
-    PrefetchResponse::from_result(
-        internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await,
-    )
+    serve_cratesio_index(name, headers, &db, &sender, &settings.proxy).await
 }
 
 /// Prefetch crate metadata from crates.io (1-2 char names)
 ///
 /// Fetches and caches crate index metadata from crates.io for crates with
-/// names of 1-2 characters.
+/// names of 1-2 characters. Versions younger than
+/// `proxy.min_release_age_seconds` are left out.
 #[utoipa::path(
     get,
     path = "/{a}/{name}",
@@ -119,9 +121,7 @@ pub async fn prefetch_len2_cratesio(
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
 ) -> ApiResult<PrefetchResponse> {
-    PrefetchResponse::from_result(
-        internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await,
-    )
+    serve_cratesio_index(name, headers, &db, &sender, &settings.proxy).await
 }
 
 pub fn init_cratesio_prefetch_thread(
@@ -163,6 +163,102 @@ fn spawn_index_update(
         let (db, sender) = (db.clone(), sender.clone());
         async move { Duration::from_secs(queue_update_round(db.as_ref(), &sender).await) }
     });
+}
+
+/// Answers a sparse index request for the crates.io crate `name`, without the
+/// versions younger than the minimum release age.
+async fn serve_cratesio_index(
+    name: OriginalName,
+    headers: HeaderMap,
+    db: &Arc<dyn DbProvider>,
+    sender: &flume::Sender<CratesioPrefetchMsg>,
+    proxy_settings: &kellnr_settings::Proxy,
+) -> ApiResult<PrefetchResponse> {
+    let Some(min_age) = proxy_settings.min_release_age(&name) else {
+        return PrefetchResponse::from_result(
+            internal_prefetch_cratesio(name, headers, db, sender, proxy_settings).await,
+        );
+    };
+
+    // The filtered entry changes when a version gets old enough, also if the
+    // cached entry does not change. So the cached entry is always loaded, and
+    // only an ETag of the filtered entry answers with a 304.
+    let prefetch =
+        internal_prefetch_cratesio(name.clone(), HeaderMap::new(), db, sender, proxy_settings)
+            .await?;
+    let cutoff = release_cutoff(Utc::now(), min_age);
+    let Some(data) = without_versions_published_after(&name, &prefetch.data, cutoff) else {
+        // Like a crate that does not exist on crates.io, so that cargo
+        // reports that no matching package was found.
+        return Err(StatusCode::NOT_FOUND.into());
+    };
+    let etag = quote_etag(&sha256::digest(&data));
+    let if_none_match = headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|h| h.to_str().ok());
+    if is_not_modified(if_none_match, None, &etag, "") {
+        return Ok(PrefetchResponse::NotModified);
+    }
+    Ok(PrefetchResponse::Filtered { data, etag })
+}
+
+/// The latest publish time of a version that is at least `min_age` old at
+/// `now`.
+fn release_cutoff(now: DateTime<Utc>, min_age: Duration) -> DateTime<Utc> {
+    TimeDelta::from_std(min_age)
+        .ok()
+        .and_then(|min_age| now.checked_sub_signed(min_age))
+        .unwrap_or(DateTime::<Utc>::MIN_UTC)
+}
+
+/// The part of a sparse index entry that the minimum release age needs.
+#[derive(Deserialize)]
+struct Published {
+    pubtime: Option<String>,
+}
+
+/// The publish time of a sparse index entry, `None` if it has none.
+fn pubtime(entry: &[u8]) -> Result<Option<DateTime<Utc>>, String> {
+    let entry: Published = serde_json::from_slice(entry).map_err(|e| e.to_string())?;
+    entry
+        .pubtime
+        .map(|p| DateTime::parse_from_rfc3339(&p).map(|p| p.to_utc()))
+        .transpose()
+        .map_err(|e| e.to_string())
+}
+
+/// The entries of the sparse index file `data` that were published at or
+/// before `cutoff`, `None` if there are none.
+///
+/// Entries without a publish time are kept. crates.io gives every version
+/// one, so only entries that Kellnr cached before it or crates.io had the
+/// field lack one, and those are older than any sensible minimum release age.
+/// Entries whose publish time cannot be read are left out, as their age is
+/// unknown.
+fn without_versions_published_after(
+    name: &OriginalName,
+    data: &[u8],
+    cutoff: DateTime<Utc>,
+) -> Option<Vec<u8>> {
+    let mut kept = Vec::with_capacity(data.len());
+    let mut withheld = 0;
+    for entry in data.split(|b| *b == b'\n').filter(|e| !e.is_empty()) {
+        match pubtime(entry) {
+            Ok(Some(pubtime)) if pubtime > cutoff => withheld += 1,
+            Ok(_) => {
+                kept.extend_from_slice(entry);
+                kept.push(b'\n');
+            }
+            Err(e) => {
+                warn!("Leaving out an index entry of {name} with an unreadable publish time: {e}");
+                withheld += 1;
+            }
+        }
+    }
+    if withheld > 0 {
+        debug!("Left out {withheld} versions of {name} for the minimum release age");
+    }
+    (!kept.is_empty()).then_some(kept)
 }
 
 async fn internal_prefetch_cratesio(
@@ -407,7 +503,7 @@ async fn handle_cratesio_prefetch_msg(
     match msg {
         Ok(CratesioPrefetchMsg::Insert(msg)) => {
             trace!("Inserting prefetch data from crates.io for {}", msg.name);
-            let date = chrono::Utc::now().to_rfc3339();
+            let date = Utc::now().to_rfc3339();
             args.cache.insert(msg.name.clone(), date).await;
             args.sync
                 .sync(
@@ -428,7 +524,7 @@ async fn handle_cratesio_prefetch_msg(
                 None
             } else {
                 args.cache
-                    .insert(msg.name.clone(), chrono::Utc::now().to_rfc3339())
+                    .insert(msg.name.clone(), Utc::now().to_rfc3339())
                     .await;
                 args.sync
                     .sync(
@@ -1009,6 +1105,309 @@ mod tests {
             assert_eq!(
                 Some("MIT"),
                 stored_license(&worker, "1.0.0").await.as_deref()
+            );
+        }
+    }
+
+    mod min_release_age {
+        use axum::response::{IntoResponse, Response};
+
+        use super::*;
+
+        const STORED_ETAG: &str = "\"stored-etag\"";
+        const STORED_DATE: &str = "Mon, 02 Nov 2026 10:00:00 GMT";
+
+        fn entry(name: &str, vers: &str, pubtime: Option<DateTime<Utc>>) -> IndexMetadata {
+            IndexMetadata {
+                name: name.to_string(),
+                vers: vers.to_string(),
+                deps: vec![],
+                cksum: "cksum".to_string(),
+                features: std::collections::BTreeMap::new(),
+                features2: None,
+                pubtime,
+                yanked: false,
+                links: None,
+                v: Some(1),
+                rust_version: None,
+            }
+        }
+
+        fn days_ago(days: i64) -> DateTime<Utc> {
+            Utc::now() - TimeDelta::days(days)
+        }
+
+        fn proxy(min_release_age_seconds: u64) -> kellnr_settings::Proxy {
+            kellnr_settings::Proxy {
+                min_release_age_seconds,
+                ..kellnr_settings::Proxy::default()
+            }
+        }
+
+        const THREE_DAYS: u64 = 3 * 86_400;
+
+        /// Caches "rocket" with 1.0.0 published 10 days ago, 1.1.0 without a
+        /// publish time and 2.0.0 published 1 day ago.
+        async fn cache_rocket(db: &TestDb) {
+            db.add_cratesio_prefetch_data(
+                &OriginalName::try_from("rocket").unwrap(),
+                STORED_ETAG,
+                STORED_DATE,
+                None,
+                &[
+                    entry("rocket", "1.0.0", Some(days_ago(10))),
+                    entry("rocket", "1.1.0", None),
+                    entry("rocket", "2.0.0", Some(days_ago(1))),
+                ],
+                &std::collections::HashMap::new(),
+            )
+            .await
+            .unwrap();
+        }
+
+        async fn serve(
+            db: &Arc<dyn DbProvider>,
+            proxy: &kellnr_settings::Proxy,
+            name: &str,
+            headers: &[(header::HeaderName, &str)],
+        ) -> Response {
+            let (sender, _receiver) = flume::unbounded::<CratesioPrefetchMsg>();
+            let mut header_map = HeaderMap::new();
+            for (name, value) in headers {
+                header_map.insert(name, value.parse().unwrap());
+            }
+            serve_cratesio_index(
+                OriginalName::try_from(name).unwrap(),
+                header_map,
+                db,
+                &sender,
+                proxy,
+            )
+            .await
+            .into_response()
+        }
+
+        fn header<'a>(r: &'a Response, name: &header::HeaderName) -> Option<&'a str> {
+            r.headers().get(name).map(|v| v.to_str().unwrap())
+        }
+
+        async fn versions(r: Response) -> Vec<String> {
+            let body = r.into_body().collect().await.unwrap().to_bytes();
+            std::str::from_utf8(&body)
+                .unwrap()
+                .lines()
+                .map(|l| serde_json::from_str::<IndexMetadata>(l).unwrap().vers)
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn young_versions_are_left_out_of_the_index() {
+            let db = TestDb::sqlite().await;
+            cache_rocket(&db).await;
+
+            let r = serve(&db.provider(), &proxy(THREE_DAYS), "rocket", &[]).await;
+
+            assert_eq!(StatusCode::OK, r.status());
+            assert_eq!(None, header(&r, &header::LAST_MODIFIED));
+            let etag = header(&r, &header::ETAG).unwrap().to_string();
+            let body = r.into_body().collect().await.unwrap().to_bytes();
+            assert_eq!(quote_etag(&sha256::digest(body.as_ref())), etag);
+            let lines: Vec<_> = std::str::from_utf8(&body).unwrap().lines().collect();
+            assert_eq!(2, lines.len());
+            assert!(lines[0].contains(r#""vers":"1.0.0""#));
+            assert!(lines[1].contains(r#""vers":"1.1.0""#));
+        }
+
+        #[tokio::test]
+        async fn only_the_etag_of_the_filtered_index_is_not_modified() {
+            let db = TestDb::sqlite().await;
+            cache_rocket(&db).await;
+            let db = db.provider();
+            let proxy = proxy(THREE_DAYS);
+            let filtered = serve(&db, &proxy, "rocket", &[]).await;
+            let etag = header(&filtered, &header::ETAG).unwrap().to_string();
+
+            let r = serve(&db, &proxy, "rocket", &[(header::IF_NONE_MATCH, &etag)]).await;
+            assert_eq!(StatusCode::NOT_MODIFIED, r.status());
+
+            // A client that cached the unfiltered index gets the filtered one
+            let r = serve(
+                &db,
+                &proxy,
+                "rocket",
+                &[(header::IF_NONE_MATCH, STORED_ETAG)],
+            )
+            .await;
+            assert_eq!(StatusCode::OK, r.status());
+            assert_eq!(vec!["1.0.0", "1.1.0"], versions(r).await);
+
+            // A date cannot tell whether a version got old enough since
+            let r = serve(
+                &db,
+                &proxy,
+                "rocket",
+                &[(header::IF_MODIFIED_SINCE, "Thu, 01 Jan 2099 00:00:00 GMT")],
+            )
+            .await;
+            assert_eq!(StatusCode::OK, r.status());
+        }
+
+        #[tokio::test]
+        async fn version_is_served_once_it_is_old_enough() {
+            let db = TestDb::sqlite().await;
+            cache_rocket(&db).await;
+            let db = db.provider();
+            let held_back = serve(&db, &proxy(THREE_DAYS), "rocket", &[]).await;
+            let etag = header(&held_back, &header::ETAG).unwrap().to_string();
+
+            // 2.0.0 is one day old, which is old enough for 12 hours
+            let r = serve(
+                &db,
+                &proxy(12 * 3600),
+                "rocket",
+                &[(header::IF_NONE_MATCH, &etag)],
+            )
+            .await;
+
+            assert_eq!(StatusCode::OK, r.status());
+            assert_ne!(Some(etag.as_str()), header(&r, &header::ETAG));
+            assert_eq!(vec!["1.0.0", "1.1.0", "2.0.0"], versions(r).await);
+        }
+
+        #[tokio::test]
+        async fn crate_without_old_enough_versions_is_not_found() {
+            let db = TestDb::sqlite().await;
+            db.add_cratesio_prefetch_data(
+                &OriginalName::try_from("fresh").unwrap(),
+                STORED_ETAG,
+                STORED_DATE,
+                None,
+                &[entry("fresh", "0.1.0", Some(days_ago(1)))],
+                &std::collections::HashMap::new(),
+            )
+            .await
+            .unwrap();
+
+            let r = serve(&db.provider(), &proxy(THREE_DAYS), "fresh", &[]).await;
+
+            assert_eq!(StatusCode::NOT_FOUND, r.status());
+        }
+
+        #[tokio::test]
+        async fn exempt_crates_and_a_min_release_age_of_zero_get_the_cached_index() {
+            let db = TestDb::sqlite().await;
+            cache_rocket(&db).await;
+            let db = db.provider();
+            let exempt = kellnr_settings::Proxy {
+                min_release_age_exempt_crates: vec!["Rocket".to_string()],
+                ..proxy(THREE_DAYS)
+            };
+
+            for proxy in [proxy(0), exempt] {
+                let r = serve(&db, &proxy, "rocket", &[]).await;
+                assert_eq!(StatusCode::OK, r.status());
+                assert_eq!(Some(STORED_ETAG), header(&r, &header::ETAG));
+                assert_eq!(Some(STORED_DATE), header(&r, &header::LAST_MODIFIED));
+                assert_eq!(vec!["1.0.0", "1.1.0", "2.0.0"], versions(r).await);
+
+                let r = serve(
+                    &db,
+                    &proxy,
+                    "rocket",
+                    &[(header::IF_NONE_MATCH, STORED_ETAG)],
+                )
+                .await;
+                assert_eq!(StatusCode::NOT_MODIFIED, r.status());
+            }
+        }
+
+        #[tokio::test]
+        async fn index_fetched_from_cratesio_is_filtered_too() {
+            let young = days_ago(1).format("%Y-%m-%dT%H:%M:%SZ").to_string();
+            let index = format!(
+                "{}\n{}\n",
+                r#"{"name":"rocket","vers":"1.0.0","deps":[],"cksum":"c","features":{},"yanked":false,"pubtime":"2016-12-23T09:00:00Z"}"#,
+                format_args!(
+                    r#"{{"name":"rocket","vers":"2.0.0","deps":[],"cksum":"c","features":{{}},"yanked":false,"pubtime":"{young}"}}"#
+                ),
+            );
+            let server = TestServer::start(
+                Router::new().route("/index/{a}/{b}/{name}", get(move || async move { index })),
+            )
+            .await;
+            let db = TestDb::sqlite().await;
+            let proxy = kellnr_settings::Proxy {
+                min_release_age_seconds: THREE_DAYS,
+                ..server.cratesio_proxy()
+            };
+
+            let r = serve(&db.provider(), &proxy, "rocket", &[]).await;
+
+            assert_eq!(StatusCode::OK, r.status());
+            assert_eq!(vec!["1.0.0"], versions(r).await);
+        }
+
+        fn line(vers: &str, pubtime: &str) -> String {
+            format!(r#"{{"name":"c","vers":"{vers}","pubtime":{pubtime}}}"#)
+        }
+
+        #[test]
+        fn filter_compares_the_publish_time_with_the_cutoff() {
+            let name = OriginalName::try_from("c").unwrap();
+            let cutoff = DateTime::parse_from_rfc3339("2026-11-02T00:00:00Z")
+                .unwrap()
+                .to_utc();
+            let data = [
+                line("1.0.0", r#""2026-11-01T23:59:59Z""#),
+                line("1.1.0", r#""2026-11-02T00:00:00Z""#),
+                line("1.2.0", r#""2026-11-02T00:00:01Z""#),
+                r#"{"name":"c","vers":"1.3.0"}"#.to_string(),
+                line("1.4.0", "null"),
+                line("1.5.0", r#""yesterday""#),
+                line("1.6.0", r#""2026-11-02T00:00:00.5+00:00""#),
+            ]
+            .join("\n");
+
+            let kept = without_versions_published_after(&name, data.as_bytes(), cutoff).unwrap();
+
+            assert_eq!(
+                [
+                    line("1.0.0", r#""2026-11-01T23:59:59Z""#),
+                    line("1.1.0", r#""2026-11-02T00:00:00Z""#),
+                    r#"{"name":"c","vers":"1.3.0"}"#.to_string(),
+                    line("1.4.0", "null"),
+                    String::new(),
+                ]
+                .join("\n"),
+                String::from_utf8(kept).unwrap()
+            );
+        }
+
+        #[test]
+        fn filter_without_kept_versions_is_none() {
+            let name = OriginalName::try_from("c").unwrap();
+            let cutoff = DateTime::parse_from_rfc3339("2026-11-02T00:00:00Z")
+                .unwrap()
+                .to_utc();
+            let data = line("1.0.0", r#""2026-11-03T00:00:00Z""#);
+
+            assert_eq!(
+                None,
+                without_versions_published_after(&name, data.as_bytes(), cutoff)
+            );
+            assert_eq!(None, without_versions_published_after(&name, b"\n", cutoff));
+        }
+
+        #[test]
+        fn cutoff_saturates() {
+            let now = Utc::now();
+            assert_eq!(
+                now - TimeDelta::days(3),
+                release_cutoff(now, Duration::from_hours(72))
+            );
+            assert_eq!(
+                DateTime::<Utc>::MIN_UTC,
+                release_cutoff(now, Duration::from_secs(u64::MAX))
             );
         }
     }

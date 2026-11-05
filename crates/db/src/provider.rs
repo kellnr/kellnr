@@ -39,13 +39,15 @@ pub enum PrefetchState {
     NotFound,
 }
 
-/// Checksum and license of a cached crates.io crate version.
+/// Checksum, license and publish time of a cached crates.io crate version.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CratesioVersionMeta {
     pub cksum: String,
     /// `None` if the license was not fetched yet, `UNKNOWN_LICENSE` if the
     /// version declares none.
     pub license: Option<String>,
+    /// `pubtime` of the index entry, `None` if it has none.
+    pub pubtime: Option<DateTime<Utc>>,
 }
 
 /// Which download-restricted crates a caller may see in crate listings.
@@ -380,8 +382,8 @@ pub trait DbProvider: Send + Sync {
         licenses: &HashMap<String, String>,
     ) -> DbResult<Prefetch>;
     async fn get_cratesio_index_update_list(&self) -> DbResult<Vec<CratesioPrefetchMsg>>;
-    /// Checksum and license of a crates.io crate version from the cached
-    /// index, if the version is known.
+    /// Checksum, license and publish time of a crates.io crate version from
+    /// the cached index, if the version is known.
     async fn get_cratesio_version_meta(
         &self,
         crate_name: &CanonicalName,
