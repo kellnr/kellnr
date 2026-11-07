@@ -8,6 +8,7 @@ use axum::routing::get;
 use kellnr_common::version::Version;
 use kellnr_db::CrateVisibility;
 use kellnr_db::mock::MockDb;
+use kellnr_storage::object_storage::MemoryStorage;
 use kellnr_test_db::TestDb;
 use reqwest::Url;
 
@@ -34,7 +35,23 @@ fn test_sync(
     client: Client,
     proxy: &kellnr_settings::Proxy,
 ) -> CratesioSync {
-    CratesioSync::with_retry_base_delay(db, client, proxy, Duration::from_millis(10))
+    test_sync_with_storage(db, client, proxy, memory_storage())
+}
+
+fn test_sync_with_storage(
+    db: Arc<dyn DbProvider>,
+    client: Client,
+    proxy: &kellnr_settings::Proxy,
+    storage: Arc<CratesIoCrateStorage>,
+) -> CratesioSync {
+    CratesioSync::with_retry_base_delay(db, client, proxy, storage, Duration::from_millis(10))
+}
+
+fn memory_storage() -> Arc<CratesIoCrateStorage> {
+    Arc::new(CratesIoCrateStorage::new(
+        &kellnr_settings::Settings::default(),
+        Box::new(MemoryStorage::new()),
+    ))
 }
 
 #[derive(Default)]
@@ -475,4 +492,120 @@ async fn retries_wait_with_backoff() {
     assert_eq!(MAX_TRIES as usize, tries.load(Ordering::SeqCst));
     // 50ms before the second and 100ms before the third try
     assert!(start.elapsed() >= Duration::from_millis(150));
+}
+
+mod remove_deleted {
+    use bytes::Bytes;
+
+    use super::*;
+
+    /// A crates.io that deleted "upstream" 1.1.0, or the whole crate if
+    /// `index` is `None`.
+    async fn cratesio_after_deletion(index: Option<&'static str>) -> kellnr_settings::Proxy {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let app = Router::new().route(
+            "/index/{a}/{b}/{name}",
+            get(move || async move {
+                match index {
+                    Some(index) => ([(header::ETAG, "new")], index).into_response(),
+                    None => HttpStatus::NOT_FOUND.into_response(),
+                }
+            }),
+        );
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        kellnr_settings::Proxy {
+            index: Url::parse(&format!("http://{addr}/index/")).unwrap(),
+            api: Url::parse(&format!("http://{addr}/api/")).unwrap(),
+            ..kellnr_settings::Proxy::default()
+        }
+    }
+
+    const INDEX_WITHOUT_1_1_0: &str = concat!(
+        r#"{"name":"upstream","vers":"1.0.0","deps":[],"cksum":"aaa","features":{},"yanked":false}"#,
+        "\n",
+    );
+
+    /// Syncs "upstream", cached with 1.0.0 and 1.1.0 and both crate files,
+    /// against a crates.io that serves `index`. Returns which versions are
+    /// still in the database and the storage.
+    async fn sync_after_deletion(
+        index: Option<&'static str>,
+        remove_deleted_versions: bool,
+    ) -> (SyncOutcome, Vec<&'static str>, Vec<&'static str>) {
+        let proxy = kellnr_settings::Proxy {
+            remove_deleted_versions,
+            ..cratesio_after_deletion(index).await
+        };
+        let db = TestDb::sqlite().await;
+        store_upstream(&db, "old").await;
+        let storage = memory_storage();
+        for vers in ["1.0.0", "1.1.0"] {
+            storage
+                .put(
+                    &upstream(),
+                    &Version::try_from(vers).unwrap(),
+                    Bytes::from_static(b"crate"),
+                )
+                .await
+                .unwrap();
+        }
+        let sync = test_sync_with_storage(db.provider(), Client::new(), &proxy, storage.clone());
+
+        let outcome = sync
+            .sync(
+                &upstream(),
+                SyncSource::Refresh {
+                    etag: Some("old".to_string()),
+                    last_modified: None,
+                },
+            )
+            .await;
+
+        let mut in_db = Vec::new();
+        let mut in_storage = Vec::new();
+        for vers in ["1.0.0", "1.1.0"] {
+            let version = Version::try_from(vers).unwrap();
+            let meta = db
+                .get_cratesio_version_meta(&upstream().to_canonical(), &version)
+                .await
+                .unwrap();
+            if meta.is_some() {
+                in_db.push(vers);
+            }
+            if storage.exists(&upstream(), &version).await.unwrap() {
+                in_storage.push(vers);
+            }
+        }
+        (outcome, in_db, in_storage)
+    }
+
+    #[tokio::test]
+    async fn deleted_version_is_removed_with_its_crate_file() {
+        let (outcome, in_db, in_storage) =
+            sync_after_deletion(Some(INDEX_WITHOUT_1_1_0), true).await;
+
+        assert!(matches!(outcome, SyncOutcome::Written(_)));
+        assert_eq!(vec!["1.0.0"], in_db);
+        assert_eq!(vec!["1.0.0"], in_storage);
+    }
+
+    #[tokio::test]
+    async fn deleted_crate_is_removed_with_its_crate_files() {
+        let (outcome, in_db, in_storage) = sync_after_deletion(None, true).await;
+
+        assert!(matches!(outcome, SyncOutcome::NotFound));
+        assert!(in_db.is_empty());
+        assert!(in_storage.is_empty());
+    }
+
+    #[tokio::test]
+    async fn deleted_versions_are_kept_by_default() {
+        for index in [Some(INDEX_WITHOUT_1_1_0), None] {
+            let (_, in_db, in_storage) = sync_after_deletion(index, false).await;
+
+            assert_eq!(vec!["1.0.0", "1.1.0"], in_db);
+            assert_eq!(vec!["1.0.0", "1.1.0"], in_storage);
+        }
+    }
 }

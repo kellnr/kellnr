@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
@@ -11,13 +11,13 @@ use kellnr_migration::http_date_to_db_date;
 use sea_orm::query::{QueryOrder, QuerySelect};
 use sea_orm::sea_query::{Condition, Expr, JoinType};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, ExprTrait, FromQueryResult,
-    ModelTrait, QueryFilter, RelationTrait, Set,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, ExprTrait,
+    FromQueryResult, ModelTrait, QueryFilter, RelationTrait, Set,
 };
 
 use super::{Database, operations, valid_version};
 use crate::error::DbError;
-use crate::provider::{CratesioVersionMeta, DbResult, PrefetchState};
+use crate::provider::{CachedCratesioVersion, CratesioVersionMeta, DbResult, PrefetchState};
 
 impl Database {
     pub(super) async fn is_cratesio_cache_up_to_date(
@@ -231,6 +231,74 @@ impl Database {
         })
     }
 
+    pub(super) async fn remove_deleted_cratesio_versions(
+        &self,
+        crate_name: &OriginalName,
+        upstream_versions: &[String],
+    ) -> DbResult<Vec<CachedCratesioVersion>> {
+        self.in_transaction(async |txn| {
+            let Some(krate) = find_cratesio_crate(txn, crate_name).await? else {
+                return Ok(Vec::new());
+            };
+
+            let upstream: HashSet<&str> = upstream_versions.iter().map(String::as_str).collect();
+            let removed: Vec<CachedCratesioVersion> = cratesio_index::Entity::find()
+                .filter(cratesio_index::Column::CratesIoFk.eq(krate.id))
+                .all(txn)
+                .await?
+                .into_iter()
+                .filter(|ci| !upstream.contains(ci.vers.as_str()))
+                .map(CachedCratesioVersion::from)
+                .collect();
+            if removed.is_empty() {
+                return Ok(removed);
+            }
+            let versions: Vec<&str> = removed.iter().map(|r| r.version.as_str()).collect();
+            cratesio_index::Entity::delete_many()
+                .filter(cratesio_index::Column::CratesIoFk.eq(krate.id))
+                .filter(cratesio_index::Column::Vers.is_in(versions.clone()))
+                .exec(txn)
+                .await?;
+            cratesio_meta::Entity::delete_many()
+                .filter(cratesio_meta::Column::CratesIoFk.eq(krate.id))
+                .filter(cratesio_meta::Column::Version.is_in(versions))
+                .exec(txn)
+                .await?;
+            Ok(removed)
+        })
+        .await
+    }
+
+    pub(super) async fn delete_cratesio_crate(
+        &self,
+        crate_name: &OriginalName,
+    ) -> DbResult<Vec<CachedCratesioVersion>> {
+        self.in_transaction(async |txn| {
+            let Some(krate) = find_cratesio_crate(txn, crate_name).await? else {
+                return Ok(Vec::new());
+            };
+
+            let versions = cratesio_index::Entity::find()
+                .filter(cratesio_index::Column::CratesIoFk.eq(krate.id))
+                .all(txn)
+                .await?
+                .into_iter()
+                .map(CachedCratesioVersion::from)
+                .collect();
+            cratesio_index::Entity::delete_many()
+                .filter(cratesio_index::Column::CratesIoFk.eq(krate.id))
+                .exec(txn)
+                .await?;
+            cratesio_meta::Entity::delete_many()
+                .filter(cratesio_meta::Column::CratesIoFk.eq(krate.id))
+                .exec(txn)
+                .await?;
+            krate.delete(txn).await?;
+            Ok(versions)
+        })
+        .await
+    }
+
     pub(super) async fn get_cratesio_index_update_list(
         &self,
     ) -> DbResult<Vec<CratesioPrefetchMsg>> {
@@ -286,5 +354,28 @@ impl Database {
             cksum: m.cksum,
             license: m.license,
         }))
+    }
+}
+
+/// The cached crate, if it is cached under the separators of `crate_name`.
+/// Like the index of crates.io, which answers 404 for the other spellings of
+/// an existing crate.
+async fn find_cratesio_crate(
+    txn: &DatabaseTransaction,
+    crate_name: &OriginalName,
+) -> DbResult<Option<cratesio_crate::Model>> {
+    Ok(cratesio_crate::Entity::find()
+        .filter(cratesio_crate::Column::Name.eq(crate_name.to_canonical()))
+        .one(txn)
+        .await?
+        .filter(|krate| krate.original_name.to_lowercase() == crate_name.to_lowercase()))
+}
+
+impl From<cratesio_index::Model> for CachedCratesioVersion {
+    fn from(index: cratesio_index::Model) -> Self {
+        Self {
+            name: OriginalName::from_unchecked(index.name),
+            version: index.vers,
+        }
     }
 }

@@ -1586,6 +1586,11 @@
             "minimum": 0,
             "type": "integer"
           },
+          "remove_deleted_versions": {
+            "default": false,
+            "description": "Remove crates and versions that were deleted from crates.io from the\ncache, with their cached crate files, when the index of the crate is\nrefreshed. Without it, they stay available from Kellnr",
+            "type": "boolean"
+          },
           "request_timeout_seconds": {
             "default": 30,
             "description": "Request timeout in seconds for upstream downloads",
@@ -1611,6 +1616,7 @@
           "enabled",
           "index",
           "num_threads",
+          "remove_deleted_versions",
           "request_timeout_seconds",
           "url",
           "user_agent"
@@ -2154,6 +2160,7 @@
               "enabled": false,
               "index": "https://index.crates.io/",
               "num_threads": 10,
+              "remove_deleted_versions": false,
               "request_timeout_seconds": 30,
               "url": "https://static.crates.io/crates/",
               "user_agent": "kellnr.io/kellnr"

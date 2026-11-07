@@ -78,7 +78,12 @@ fn state_with_db(db: Arc<dyn DbProvider>) -> AppStateData {
     ));
     let download_counter = Arc::new(DownloadCounter::new(db.clone(), 30));
     let proxy_client = kellnr_cratesio_sync::cratesio_downloader::CLIENT.clone();
-    let cratesio_sync = CratesioSync::new(db.clone(), proxy_client.clone(), &settings.proxy);
+    let cratesio_sync = CratesioSync::new(
+        db.clone(),
+        proxy_client.clone(),
+        &settings.proxy,
+        cratesio_storage.clone(),
+    );
     AppStateData {
         db,
         signing_key: Key::from(TEST_KEY),

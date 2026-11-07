@@ -62,6 +62,11 @@ pub struct Proxy {
     /// to get in contact, e.g. "kellnr.io/kellnr (contact@example.com)".
     #[arg(long = "proxy-user-agent")]
     pub user_agent: String,
+
+    /// Remove crates and versions that were deleted from crates.io from the
+    /// cache, with their cached crate files, when the index of the crate is
+    /// refreshed. Without it, they stay available from Kellnr
+    pub remove_deleted_versions: bool,
 }
 
 impl Default for Proxy {
@@ -76,6 +81,7 @@ impl Default for Proxy {
             connect_timeout_seconds: 5,
             request_timeout_seconds: 30,
             user_agent: default_user_agent(),
+            remove_deleted_versions: false,
         }
     }
 }
@@ -326,6 +332,15 @@ mod tests {
         let toml = r#"user_agent = "kellnr.io/kellnr (admin@example.com)""#;
         let proxy: Proxy = toml::from_str(toml).unwrap();
         assert_eq!(proxy.user_agent, "kellnr.io/kellnr (admin@example.com)");
+    }
+
+    #[test]
+    fn deleted_versions_are_kept_by_default() {
+        let proxy: Proxy = toml::from_str("enabled = true").unwrap();
+        assert!(!proxy.remove_deleted_versions);
+
+        let proxy: Proxy = toml::from_str("remove_deleted_versions = true").unwrap();
+        assert!(proxy.remove_deleted_versions);
     }
 
     #[test]
