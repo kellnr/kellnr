@@ -48,6 +48,14 @@ pub struct CratesioVersionMeta {
     pub license: Option<String>,
 }
 
+/// A version of a cached crates.io crate, with the name as written in its
+/// index entry, which is also the name of its cached `.crate` file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CachedCratesioVersion {
+    pub name: OriginalName,
+    pub version: String,
+}
+
 /// Which download-restricted crates a caller may see in crate listings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CrateVisibility {
@@ -379,6 +387,21 @@ pub trait DbProvider: Send + Sync {
         indices: &[IndexMetadata],
         licenses: &HashMap<String, String>,
     ) -> DbResult<Prefetch>;
+    /// Removes the cached versions of a crates.io crate that are not in
+    /// `upstream_versions`, as they were deleted upstream. Returns the removed
+    /// versions. The cached `.crate` files are not touched.
+    async fn remove_deleted_cratesio_versions(
+        &self,
+        crate_name: &OriginalName,
+        upstream_versions: &[String],
+    ) -> DbResult<Vec<CachedCratesioVersion>>;
+    /// Removes a crate that was deleted from crates.io from the cache, if it
+    /// is cached under the separators of `crate_name`. Returns the removed
+    /// versions. The cached `.crate` files are not touched.
+    async fn delete_cratesio_crate(
+        &self,
+        crate_name: &OriginalName,
+    ) -> DbResult<Vec<CachedCratesioVersion>>;
     async fn get_cratesio_index_update_list(&self) -> DbResult<Vec<CratesioPrefetchMsg>>;
     /// Checksum and license of a crates.io crate version from the cached
     /// index, if the version is known.

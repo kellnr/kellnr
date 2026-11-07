@@ -4226,6 +4226,7 @@ dependencies = [
  "kellnr-common",
  "kellnr-db",
  "kellnr-settings",
+ "kellnr-storage",
  "kellnr-test-db",
  "reqwest",
  "serde",

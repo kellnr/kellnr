@@ -553,6 +553,7 @@ mod tests {
                 db.clone(),
                 proxy_client.clone(),
                 &settings.proxy,
+                storage.clone(),
                 std::time::Duration::from_millis(10),
             ),
             download_filters,

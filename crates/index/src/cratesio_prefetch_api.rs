@@ -862,15 +862,16 @@ mod tests {
             let test_db = TestDb::sqlite().await;
             let db = test_db.provider();
             let (sender, recv) = flume::unbounded();
+            let storage = Arc::new(CratesIoCrateStorage::new(&settings, storage));
             let args = CratesIoPrefetchArgs {
                 db: db.clone(),
                 cache: Cache::builder().build(),
                 recv,
                 download_on_update: true,
                 url: proxy.download_url().unwrap(),
-                storage: Arc::new(CratesIoCrateStorage::new(&settings, storage)),
+                storage: storage.clone(),
                 proxy_settings: Arc::new(proxy.clone()),
-                sync: CratesioSync::new(db, Client::new(), proxy),
+                sync: CratesioSync::new(db, Client::new(), proxy, storage),
                 filters,
             };
             Worker {

@@ -199,7 +199,12 @@ async fn run_server(resolved: ResolvedSettings) {
         Duration::from_secs(settings.proxy.connect_timeout_seconds),
         Duration::from_secs(settings.proxy.request_timeout_seconds),
     );
-    let cratesio_sync = CratesioSync::new(db.clone(), proxy_client.clone(), &settings.proxy);
+    let cratesio_sync = CratesioSync::new(
+        db.clone(),
+        proxy_client.clone(),
+        &settings.proxy,
+        cratesio_storage.clone(),
+    );
 
     if settings.proxy.enabled {
         let prefetch_args = CratesIoPrefetchArgs {

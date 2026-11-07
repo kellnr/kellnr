@@ -4690,6 +4690,104 @@ async fn get_cratesio_version_meta_returns_checksum_and_license(test_db: &kellnr
     assert_eq!(None, upstream_meta(test_db, "2.0.0").await);
 }
 
+fn versions(versions: &[&str]) -> Vec<String> {
+    versions.iter().map(ToString::to_string).collect()
+}
+
+fn cached(name: &str, versions: &[&str]) -> Vec<kellnr_db::provider::CachedCratesioVersion> {
+    versions
+        .iter()
+        .map(|v| kellnr_db::provider::CachedCratesioVersion {
+            name: OriginalName::try_from(name).unwrap(),
+            version: (*v).to_string(),
+        })
+        .collect()
+}
+
+#[db_test]
+async fn remove_deleted_cratesio_versions_removes_versions_missing_upstream(
+    test_db: &kellnr_db::Database,
+) {
+    add_upstream(
+        test_db,
+        "etag",
+        &["1.0.0", "1.1.0", "1.2.0"],
+        &[("1.1.0", "MIT")],
+    )
+    .await;
+
+    let removed = test_db
+        .remove_deleted_cratesio_versions(
+            &OriginalName::try_from("upstream").unwrap(),
+            &versions(&["1.0.0", "1.2.0", "2.0.0"]),
+        )
+        .await
+        .unwrap();
+
+    // Named like in the index entry, also if requested in another case
+    assert_eq!(cached("Upstream", &["1.1.0"]), removed);
+    assert_eq!(None, upstream_meta(test_db, "1.1.0").await);
+    assert!(upstream_meta(test_db, "1.0.0").await.is_some());
+    assert!(upstream_meta(test_db, "1.2.0").await.is_some());
+    assert_eq!(2, test_db.get_total_cached_crate_versions().await.unwrap());
+}
+
+#[db_test]
+async fn remove_deleted_cratesio_versions_ignores_other_separators(test_db: &kellnr_db::Database) {
+    add_upstream(test_db, "etag", &["1.0.0"], &[]).await;
+
+    for name in ["upstream_x", "Unknown"] {
+        let removed = test_db
+            .remove_deleted_cratesio_versions(&OriginalName::try_from(name).unwrap(), &[])
+            .await
+            .unwrap();
+        assert!(removed.is_empty());
+    }
+    assert!(upstream_meta(test_db, "1.0.0").await.is_some());
+}
+
+#[db_test]
+async fn delete_cratesio_crate_removes_crate_with_its_versions(test_db: &kellnr_db::Database) {
+    add_upstream(test_db, "etag", &["1.0.0", "1.1.0"], &[("1.0.0", "MIT")]).await;
+    test_add_cached_crate(test_db, "other", "1.0.0")
+        .await
+        .unwrap();
+
+    let removed = test_db
+        .delete_cratesio_crate(&OriginalName::try_from("upstream").unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(cached("Upstream", &["1.0.0", "1.1.0"]), removed);
+    assert_eq!(None, upstream_meta(test_db, "1.0.0").await);
+    assert_eq!(
+        PrefetchState::NotFound,
+        test_db
+            .is_cratesio_cache_up_to_date(&OriginalName::try_from("Upstream").unwrap(), None, None)
+            .await
+            .unwrap()
+    );
+    assert_eq!(1, test_db.get_total_unique_cached_crates().await.unwrap());
+    assert_eq!(1, test_db.get_total_cached_crate_versions().await.unwrap());
+}
+
+#[db_test]
+async fn delete_cratesio_crate_keeps_crate_cached_under_other_separators(
+    test_db: &kellnr_db::Database,
+) {
+    test_add_cached_crate(test_db, "foo-bar", "1.0.0")
+        .await
+        .unwrap();
+
+    let removed = test_db
+        .delete_cratesio_crate(&OriginalName::try_from("foo_bar").unwrap())
+        .await
+        .unwrap();
+
+    assert!(removed.is_empty());
+    assert_eq!(1, test_db.get_total_unique_cached_crates().await.unwrap());
+}
+
 #[db_test]
 async fn cratesio_prefetch_fills_missing_licenses_of_cached_versions(
     test_db: &kellnr_db::Database,

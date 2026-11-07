@@ -44,8 +44,9 @@ use tracing::warn;
 
 use crate::error::DbError;
 use crate::provider::{
-    ChannelInfo, CrateSort, CrateTagFilter, CrateVisibility, CratesioVersionMeta, DbResult,
-    OAuth2StateData, PrefetchState, SessionInfo, ToolchainWithTargets,
+    CachedCratesioVersion, ChannelInfo, CrateSort, CrateTagFilter, CrateVisibility,
+    CratesioVersionMeta, DbResult, OAuth2StateData, PrefetchState, SessionInfo,
+    ToolchainWithTargets,
 };
 use crate::tables::init_database;
 use crate::{
@@ -624,6 +625,21 @@ impl DbProvider for Database {
             licenses,
         )
         .await
+    }
+
+    async fn remove_deleted_cratesio_versions(
+        &self,
+        crate_name: &OriginalName,
+        upstream_versions: &[String],
+    ) -> DbResult<Vec<CachedCratesioVersion>> {
+        Database::remove_deleted_cratesio_versions(self, crate_name, upstream_versions).await
+    }
+
+    async fn delete_cratesio_crate(
+        &self,
+        crate_name: &OriginalName,
+    ) -> DbResult<Vec<CachedCratesioVersion>> {
+        Database::delete_cratesio_crate(self, crate_name).await
     }
 
     async fn get_cratesio_index_update_list(&self) -> DbResult<Vec<CratesioPrefetchMsg>> {

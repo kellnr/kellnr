@@ -20,11 +20,13 @@ use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::license::UNKNOWN_LICENSE;
 use kellnr_common::original_name::OriginalName;
+use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
-use kellnr_db::provider::PrefetchState;
+use kellnr_db::provider::{CachedCratesioVersion, DbResult, PrefetchState};
+use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use reqwest::{Client, RequestBuilder, Response, StatusCode};
 use serde::Deserialize;
-use tracing::{error, trace, warn};
+use tracing::{error, info, trace, warn};
 
 /// Tries of a request to crates.io that fails with a transport error, 429 or
 /// a server error, with a backoff between them that starts at
@@ -62,7 +64,8 @@ pub enum SyncOutcome {
     Written(Arc<[IndexMetadata]>),
     /// The stored index is up to date, nothing was written.
     Unchanged,
-    /// The crate does not exist on crates.io.
+    /// The crate does not exist on crates.io. With
+    /// `proxy.remove_deleted_versions`, it was removed from the cache.
     NotFound,
     /// The sync failed, the error was logged.
     Failed,
@@ -88,6 +91,9 @@ pub struct CratesioSync {
 struct Inner {
     db: Arc<dyn DbProvider>,
     client: Client,
+    /// The cached `.crate` files, to remove those deleted upstream.
+    storage: Arc<CratesIoCrateStorage>,
+    remove_deleted: bool,
     /// An error only if the proxy is disabled, see [`kellnr_settings::Proxy::validate`].
     index_url: Result<BaseUrl, BaseUrlError>,
     api_url: Result<BaseUrl, BaseUrlError>,
@@ -96,8 +102,13 @@ struct Inner {
 }
 
 impl CratesioSync {
-    pub fn new(db: Arc<dyn DbProvider>, client: Client, proxy: &kellnr_settings::Proxy) -> Self {
-        Self::with_retry_base_delay(db, client, proxy, RETRY_BASE_DELAY)
+    pub fn new(
+        db: Arc<dyn DbProvider>,
+        client: Client,
+        proxy: &kellnr_settings::Proxy,
+        storage: Arc<CratesIoCrateStorage>,
+    ) -> Self {
+        Self::with_retry_base_delay(db, client, proxy, storage, RETRY_BASE_DELAY)
     }
 
     /// Like [`Self::new`], with another first wait between tries, e.g. to keep
@@ -106,12 +117,15 @@ impl CratesioSync {
         db: Arc<dyn DbProvider>,
         client: Client,
         proxy: &kellnr_settings::Proxy,
+        storage: Arc<CratesIoCrateStorage>,
         retry_base_delay: Duration,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 db,
                 client,
+                storage,
+                remove_deleted: proxy.remove_deleted_versions,
                 index_url: proxy.index_url(),
                 api_url: proxy.api_url(),
                 running: Mutex::new(HashMap::new()),
@@ -205,11 +219,11 @@ impl Inner {
                 last_modified,
             } => match self.fetch_index(name, etag, last_modified).await {
                 Ok(index) => index,
-                Err(outcome) => return outcome,
+                Err(outcome) => return self.not_written(name, outcome).await,
             },
             SyncSource::Fetch => match self.fetch_index(name, None, None).await {
                 Ok(index) => index,
-                Err(outcome) => return outcome,
+                Err(outcome) => return self.not_written(name, outcome).await,
             },
         };
 
@@ -235,12 +249,69 @@ impl Inner {
             )
             .await
         {
-            Ok(_) => SyncOutcome::Written(metadata.into()),
+            Ok(_) => {
+                if self.remove_deleted {
+                    let upstream: Vec<String> = metadata.iter().map(|m| m.vers.clone()).collect();
+                    let removed = self
+                        .db
+                        .remove_deleted_cratesio_versions(name, &upstream)
+                        .await;
+                    self.remove_cached_crates(name, removed).await;
+                }
+                SyncOutcome::Written(metadata.into())
+            }
             Err(e) => {
                 error!(
                     "Could not insert prefetch data from crates.io into database for {name}: {e}"
                 );
                 SyncOutcome::Failed
+            }
+        }
+    }
+
+    /// The outcome of a sync that fetched no index. A crate that crates.io
+    /// does not know (anymore) is removed from the cache, if configured.
+    async fn not_written(&self, name: &OriginalName, outcome: SyncOutcome) -> SyncOutcome {
+        if self.remove_deleted && matches!(outcome, SyncOutcome::NotFound) {
+            let removed = self.db.delete_cratesio_crate(name).await;
+            self.remove_cached_crates(name, removed).await;
+        }
+        outcome
+    }
+
+    /// Deletes the cached `.crate` files of the versions removed from the
+    /// cached index.
+    async fn remove_cached_crates(
+        &self,
+        name: &OriginalName,
+        removed: DbResult<Vec<CachedCratesioVersion>>,
+    ) {
+        let removed = match removed {
+            Ok(removed) => removed,
+            Err(e) => {
+                error!("Could not remove the deleted versions of {name} from the cache: {e}");
+                return;
+            }
+        };
+        for krate in removed {
+            info!(
+                "Removed {}@{} from the cache, it was deleted from crates.io",
+                krate.name, krate.version
+            );
+            let Ok(version) = Version::try_from(krate.version.as_str()) else {
+                // Never downloaded, as the version is invalid
+                continue;
+            };
+            let deleted = match self.storage.exists(&krate.name, &version).await {
+                Ok(true) => self.storage.delete(&krate.name, &version).await,
+                Ok(false) => Ok(()),
+                Err(e) => Err(e),
+            };
+            if let Err(e) = deleted {
+                error!(
+                    "Could not delete the cached crate file of {}@{}: {e}",
+                    krate.name, krate.version
+                );
             }
         }
     }

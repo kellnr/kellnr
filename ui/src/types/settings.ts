@@ -127,6 +127,7 @@ export type Proxy = {
   api: string
   connect_timeout_seconds: number
   request_timeout_seconds: number
+  remove_deleted_versions: boolean
 }
 
 export type Registry = {
@@ -197,7 +198,8 @@ export const emptySettings: Settings = {
     toolchain_bucket: "",
     docs_bucket: null,
     connect_timeout_seconds: 5,
-    request_timeout_seconds: 30
+    request_timeout_seconds: 30,
+    remove_deleted_versions: false
   },
   local: {
     ip: "",
