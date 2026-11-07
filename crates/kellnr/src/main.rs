@@ -362,6 +362,8 @@ async fn run_server(resolved: ResolvedSettings) {
         proxy_client,
         cratesio_sync,
         download_filters,
+        // No index filter can be configured yet
+        index_filters: Arc::default(),
         background_tasks: tasks.clone(),
     };
 

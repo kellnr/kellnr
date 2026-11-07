@@ -3,22 +3,22 @@ use std::time::Duration;
 
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, header};
 use hyper::StatusCode;
 use kellnr_common::background_tasks::BackgroundTasks;
 use kellnr_common::base_url::BaseUrl;
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, InsertData, UpdateData};
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::original_name::OriginalName;
-use kellnr_common::prefetch::Prefetch;
+use kellnr_common::prefetch::{Prefetch, is_not_modified, quote_etag};
 use kellnr_common::version::Version;
 use kellnr_cratesio_sync::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_cratesio_sync::{CratesioSync, SyncSource, crate_sub_path};
 use kellnr_db::DbProvider;
 use kellnr_db::provider::PrefetchState;
-use kellnr_filter::{CrateInfo, FilterChain, Verdict};
+use kellnr_filter::{CrateInfo, FilterChain, IndexFilterChain, Verdict};
 use kellnr_http::error::ApiResult;
-use kellnr_http::state::{CratesIoPrefetchSenderState, DbState, SettingsState};
+use kellnr_http::state::{CratesIoPrefetchSenderState, DbState, IndexFiltersState, SettingsState};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use moka::future::Cache;
 use reqwest::Client;
@@ -62,7 +62,8 @@ pub async fn config_cratesio(State(settings): SettingsState) -> Json<ConfigJson>
 /// Prefetch crate metadata from crates.io (3+ char names)
 ///
 /// Fetches and caches crate index metadata from crates.io for crates with
-/// names of 3 or more characters.
+/// names of 3 or more characters. Versions that an index filter leaves out
+/// are not served.
 #[utoipa::path(
     get,
     path = "/{a}/{b}/{name}",
@@ -86,16 +87,24 @@ pub async fn prefetch_cratesio(
     State(db): DbState,
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
+    State(index_filters): IndexFiltersState,
 ) -> ApiResult<PrefetchResponse> {
-    PrefetchResponse::from_result(
-        internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await,
+    serve_cratesio_index(
+        name,
+        headers,
+        &db,
+        &sender,
+        &settings.proxy,
+        &index_filters.cratesio,
     )
+    .await
 }
 
 /// Prefetch crate metadata from crates.io (1-2 char names)
 ///
 /// Fetches and caches crate index metadata from crates.io for crates with
-/// names of 1-2 characters.
+/// names of 1-2 characters. Versions that an index filter leaves out are not
+/// served.
 #[utoipa::path(
     get,
     path = "/{a}/{name}",
@@ -118,10 +127,17 @@ pub async fn prefetch_len2_cratesio(
     State(db): DbState,
     State(sender): CratesIoPrefetchSenderState,
     State(settings): SettingsState,
+    State(index_filters): IndexFiltersState,
 ) -> ApiResult<PrefetchResponse> {
-    PrefetchResponse::from_result(
-        internal_prefetch_cratesio(name, headers, &db, &sender, &settings.proxy).await,
+    serve_cratesio_index(
+        name,
+        headers,
+        &db,
+        &sender,
+        &settings.proxy,
+        &index_filters.cratesio,
     )
+    .await
 }
 
 pub fn init_cratesio_prefetch_thread(
@@ -163,6 +179,44 @@ fn spawn_index_update(
         let (db, sender) = (db.clone(), sender.clone());
         async move { Duration::from_secs(queue_update_round(db.as_ref(), &sender).await) }
     });
+}
+
+/// Answers a sparse index request for the crates.io crate `name`, without the
+/// versions that the index filters leave out.
+async fn serve_cratesio_index(
+    name: OriginalName,
+    headers: HeaderMap,
+    db: &Arc<dyn DbProvider>,
+    sender: &flume::Sender<CratesioPrefetchMsg>,
+    proxy_settings: &kellnr_settings::Proxy,
+    filters: &IndexFilterChain,
+) -> ApiResult<PrefetchResponse> {
+    if filters.is_empty() {
+        return PrefetchResponse::from_result(
+            internal_prefetch_cratesio(name, headers, db, sender, proxy_settings).await,
+        );
+    }
+
+    // A filter can decide differently over time, e.g. by the age of a
+    // version, also if the cached entry does not change. So the cached entry
+    // is always loaded, and only the ETag of the filtered entry answers with
+    // a 304.
+    let prefetch =
+        internal_prefetch_cratesio(name.clone(), HeaderMap::new(), db, sender, proxy_settings)
+            .await?;
+    let Some(data) = filters.filter(&name, &prefetch.data) else {
+        // Like a crate that does not exist on crates.io, so that cargo
+        // reports that no matching package was found.
+        return Err(StatusCode::NOT_FOUND.into());
+    };
+    let etag = quote_etag(&sha256::digest(&data));
+    let if_none_match = headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|h| h.to_str().ok());
+    if is_not_modified(if_none_match, None, &etag, "") {
+        return Ok(PrefetchResponse::NotModified);
+    }
+    Ok(PrefetchResponse::Filtered { data, etag })
 }
 
 async fn internal_prefetch_cratesio(
@@ -539,6 +593,7 @@ mod tests {
     use axum::routing::get;
     use http_body_util::BodyExt;
     use kellnr_db::test_utils::test_drop_table;
+    use kellnr_filter::IndexFilters;
     use kellnr_http::state::AppStateData;
     use kellnr_http::test_support::{TestServer, closed_port_url, sqlite_test_state};
     use kellnr_settings::Protocol;
@@ -716,7 +771,13 @@ mod tests {
     }
 
     async fn app() -> (Router, TestDb) {
-        let mut settings = kellnr_settings::test_settings();
+        app_with(kellnr_settings::test_settings(), IndexFilters::default()).await
+    }
+
+    async fn app_with(
+        mut settings: kellnr_settings::Settings,
+        index_filters: IndexFilters,
+    ) -> (Router, TestDb) {
         settings.origin = kellnr_settings::Origin {
             protocol: Protocol::Http,
             hostname: "test.api.com".to_string(),
@@ -739,6 +800,7 @@ mod tests {
         let state = AppStateData {
             settings: Arc::new(settings),
             cratesio_prefetch_sender: sender,
+            index_filters: Arc::new(index_filters),
             ..state
         };
 
@@ -746,6 +808,224 @@ mod tests {
             .nest("/api/v1/cratesio", cratesio_prefetch)
             .with_state(state);
         (app, db)
+    }
+
+    mod index_filter {
+        use std::sync::atomic::AtomicBool;
+
+        use axum::response::Response;
+        use kellnr_filter::IndexFilter;
+
+        use super::*;
+
+        const STORED_ETAG: &str = "\"stored-etag\"";
+        const STORED_DATE: &str = "Mon, 02 Nov 2026 10:00:00 GMT";
+
+        /// Leaves out the version 2.0.0, unless `hide` is switched off.
+        struct HideTwo {
+            hide: AtomicBool,
+        }
+
+        impl IndexFilter for HideTwo {
+            fn name(&self) -> &'static str {
+                "hide-two"
+            }
+
+            fn keep(&self, entry: &IndexMetadata) -> bool {
+                entry.vers != "2.0.0" || !self.hide.load(Ordering::SeqCst)
+            }
+        }
+
+        fn hide_two() -> Arc<HideTwo> {
+            Arc::new(HideTwo {
+                hide: AtomicBool::new(true),
+            })
+        }
+
+        fn filters(filter: Arc<HideTwo>) -> IndexFilters {
+            IndexFilters {
+                cratesio: IndexFilterChain::new(vec![filter]),
+            }
+        }
+
+        fn entry(name: &str, vers: &str) -> IndexMetadata {
+            IndexMetadata {
+                name: name.to_string(),
+                vers: vers.to_string(),
+                deps: vec![],
+                cksum: "cksum".to_string(),
+                features: std::collections::BTreeMap::new(),
+                features2: None,
+                pubtime: None,
+                yanked: false,
+                links: None,
+                v: Some(1),
+                rust_version: None,
+            }
+        }
+
+        async fn cache(db: &TestDb, name: &str, versions: &[&str]) {
+            let entries: Vec<_> = versions.iter().map(|v| entry(name, v)).collect();
+            db.add_cratesio_prefetch_data(
+                &OriginalName::try_from(name).unwrap(),
+                STORED_ETAG,
+                STORED_DATE,
+                None,
+                &entries,
+                &std::collections::HashMap::new(),
+            )
+            .await
+            .unwrap();
+        }
+
+        /// A Kellnr with the index filter `filter` and "rocket" 1.0.0 and
+        /// 2.0.0 cached.
+        async fn kellnr(filters: IndexFilters) -> (Router, TestDb) {
+            let (app, db) = app_with(kellnr_settings::test_settings(), filters).await;
+            cache(&db, "rocket", &["1.0.0", "2.0.0"]).await;
+            (app, db)
+        }
+
+        async fn get_index(
+            app: &Router,
+            path: &str,
+            headers: &[(header::HeaderName, &str)],
+        ) -> Response {
+            let mut request = Request::get(format!("/api/v1/cratesio/{path}"));
+            for (name, value) in headers {
+                request = request.header(name, *value);
+            }
+            app.clone()
+                .oneshot(request.body(Body::empty()).unwrap())
+                .await
+                .unwrap()
+        }
+
+        fn header_of<'a>(r: &'a Response, name: &header::HeaderName) -> Option<&'a str> {
+            r.headers().get(name).map(|v| v.to_str().unwrap())
+        }
+
+        async fn versions(r: Response) -> Vec<String> {
+            let body = r.into_body().collect().await.unwrap().to_bytes();
+            std::str::from_utf8(&body)
+                .unwrap()
+                .lines()
+                .map(|l| serde_json::from_str::<IndexMetadata>(l).unwrap().vers)
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn left_out_versions_are_not_served() {
+            let (app, _db) = kellnr(filters(hide_two())).await;
+
+            let r = get_index(&app, "ro/ck/rocket", &[]).await;
+
+            assert_eq!(StatusCode::OK, r.status());
+            assert_eq!(None, header_of(&r, &header::LAST_MODIFIED));
+            let etag = header_of(&r, &header::ETAG).unwrap().to_string();
+            let body = r.into_body().collect().await.unwrap().to_bytes();
+            assert_eq!(quote_etag(&sha256::digest(body.as_ref())), etag);
+            let lines: Vec<_> = std::str::from_utf8(&body).unwrap().lines().collect();
+            assert_eq!(1, lines.len());
+            assert!(lines[0].contains(r#""vers":"1.0.0""#));
+        }
+
+        #[tokio::test]
+        async fn only_the_etag_of_the_filtered_entry_is_not_modified() {
+            let (app, _db) = kellnr(filters(hide_two())).await;
+            let filtered = get_index(&app, "ro/ck/rocket", &[]).await;
+            let etag = header_of(&filtered, &header::ETAG).unwrap().to_string();
+
+            let r = get_index(&app, "ro/ck/rocket", &[(header::IF_NONE_MATCH, &etag)]).await;
+            assert_eq!(StatusCode::NOT_MODIFIED, r.status());
+
+            // A client that cached the unfiltered entry gets the filtered one
+            let r = get_index(
+                &app,
+                "ro/ck/rocket",
+                &[(header::IF_NONE_MATCH, STORED_ETAG)],
+            )
+            .await;
+            assert_eq!(StatusCode::OK, r.status());
+            assert_eq!(vec!["1.0.0"], versions(r).await);
+
+            // A date cannot tell whether a filter decides differently since
+            let r = get_index(
+                &app,
+                "ro/ck/rocket",
+                &[(header::IF_MODIFIED_SINCE, "Thu, 01 Jan 2099 00:00:00 GMT")],
+            )
+            .await;
+            assert_eq!(StatusCode::OK, r.status());
+        }
+
+        #[tokio::test]
+        async fn changed_filter_decision_is_served_although_the_cache_did_not_change() {
+            let filter = hide_two();
+            let (app, _db) = kellnr(filters(filter.clone())).await;
+            let filtered = get_index(&app, "ro/ck/rocket", &[]).await;
+            let etag = header_of(&filtered, &header::ETAG).unwrap().to_string();
+
+            // E.g. a version that got old enough
+            filter.hide.store(false, Ordering::SeqCst);
+            let r = get_index(&app, "ro/ck/rocket", &[(header::IF_NONE_MATCH, &etag)]).await;
+
+            assert_eq!(StatusCode::OK, r.status());
+            assert_ne!(Some(etag.as_str()), header_of(&r, &header::ETAG));
+            assert_eq!(vec!["1.0.0", "2.0.0"], versions(r).await);
+        }
+
+        #[tokio::test]
+        async fn crate_without_kept_versions_is_not_found() {
+            let (app, db) = kellnr(filters(hide_two())).await;
+            cache(&db, "two", &["2.0.0"]).await;
+
+            let r = get_index(&app, "3/t/two", &[]).await;
+
+            assert_eq!(StatusCode::NOT_FOUND, r.status());
+        }
+
+        #[tokio::test]
+        async fn without_index_filters_the_cached_entry_is_served() {
+            let (app, _db) = kellnr(IndexFilters::default()).await;
+
+            let r = get_index(&app, "ro/ck/rocket", &[]).await;
+            assert_eq!(StatusCode::OK, r.status());
+            assert_eq!(Some(STORED_ETAG), header_of(&r, &header::ETAG));
+            assert_eq!(Some(STORED_DATE), header_of(&r, &header::LAST_MODIFIED));
+            assert_eq!(vec!["1.0.0", "2.0.0"], versions(r).await);
+
+            let r = get_index(
+                &app,
+                "ro/ck/rocket",
+                &[(header::IF_NONE_MATCH, STORED_ETAG)],
+            )
+            .await;
+            assert_eq!(StatusCode::NOT_MODIFIED, r.status());
+        }
+
+        #[tokio::test]
+        async fn index_fetched_from_cratesio_is_filtered_too() {
+            let index = format!(
+                "{}\n{}\n",
+                serde_json::to_string(&entry("rocket", "1.0.0")).unwrap(),
+                serde_json::to_string(&entry("rocket", "2.0.0")).unwrap(),
+            );
+            let server = TestServer::start(
+                Router::new().route("/index/{a}/{b}/{name}", get(move || async move { index })),
+            )
+            .await;
+            let settings = kellnr_settings::Settings {
+                proxy: server.cratesio_proxy(),
+                ..kellnr_settings::test_settings()
+            };
+            let (app, _db) = app_with(settings, filters(hide_two())).await;
+
+            let r = get_index(&app, "ro/ck/rocket", &[]).await;
+
+            assert_eq!(StatusCode::OK, r.status());
+            assert_eq!(vec!["1.0.0"], versions(r).await);
+        }
     }
 
     mod worker {

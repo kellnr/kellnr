@@ -16,6 +16,7 @@ kellnr-settings.workspace = true
 
 # External dependencies
 moka = { workspace = true, features = ["sync"] }
+serde_json.workspace = true
 spdx.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

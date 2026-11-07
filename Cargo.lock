@@ -4355,6 +4355,7 @@ dependencies = [
  "kellnr-common",
  "kellnr-settings",
  "moka",
+ "serde_json",
  "spdx",
  "thiserror 2.0.21",
  "tracing",

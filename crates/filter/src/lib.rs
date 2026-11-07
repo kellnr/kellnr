@@ -1,13 +1,21 @@
-//! Filters that decide whether a crate may be downloaded.
+//! Filters that decide whether a crate may be downloaded, and which versions
+//! the sparse index of the crates.io proxy serves.
 //!
 //! A [`FilterChain`] runs all configured [`CrateFilter`]s. To add a filter,
 //! implement [`CrateFilter`] and add the data it needs to [`CrateInfo`].
+//!
+//! An [`IndexFilterChain`] runs all configured [`IndexFilter`]s on the
+//! entries of an index file. A filter that hides versions from cargo
+//! implements [`IndexFilter`], and [`CrateFilter`] too if their downloads must
+//! be denied as well.
 
+mod index;
 mod known_licenses;
 mod license;
 
 use std::sync::Arc;
 
+pub use index::{IndexFilter, IndexFilterChain, IndexFilters};
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
 use kellnr_settings::{CratesioFilter, RegistryFilter, Settings};

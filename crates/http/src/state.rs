@@ -8,7 +8,7 @@ use kellnr_common::cratesio_prefetch_msg::CratesioPrefetchMsg;
 use kellnr_cratesio_sync::CratesioSync;
 use kellnr_db::DbProvider;
 use kellnr_db::download_counter::DownloadCounter;
-use kellnr_filter::DownloadFilters;
+use kellnr_filter::{DownloadFilters, IndexFilters};
 use kellnr_settings::{Settings, SettingsProv};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
 use kellnr_storage::docs_storage::DocsStorage;
@@ -32,6 +32,7 @@ pub type LoginThrottleState = axum::extract::State<Arc<LoginThrottle>>;
 pub type ToolchainStorageState = axum::extract::State<Option<Arc<ToolchainStorage>>>;
 pub type ProxyClientState = axum::extract::State<Client>;
 pub type BackgroundTasksState = axum::extract::State<BackgroundTasks>;
+pub type IndexFiltersState = axum::extract::State<Arc<IndexFilters>>;
 
 #[derive(Clone, FromRef)]
 pub struct AppStateData {
@@ -57,6 +58,7 @@ pub struct AppStateData {
     pub proxy_client: Client,
     pub cratesio_sync: CratesioSync,
     pub download_filters: Arc<DownloadFilters>,
+    pub index_filters: Arc<IndexFilters>,
     /// Work that outlives a request, e.g. processing an upload, runs here so
     /// shutdown waits for it.
     pub background_tasks: BackgroundTasks,

@@ -4365,7 +4365,7 @@
     },
     "/api/v1/cratesio/{a}/{b}/{name}": {
       "get": {
-        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 3 or more characters.",
+        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 3 or more characters. Versions that an index filter leaves out\nare not served.",
         "operationId": "prefetch_cratesio",
         "parameters": [
           {
@@ -4437,7 +4437,7 @@
     },
     "/api/v1/cratesio/{a}/{name}": {
       "get": {
-        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 1-2 characters.",
+        "description": "Fetches and caches crate index metadata from crates.io for crates with\nnames of 1-2 characters. Versions that an index filter leaves out are not\nserved.",
         "operationId": "prefetch_len2_cratesio",
         "parameters": [
           {
