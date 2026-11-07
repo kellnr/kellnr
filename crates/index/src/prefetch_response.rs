@@ -8,6 +8,11 @@ use kellnr_http::error::ApiResult;
 pub enum PrefetchResponse {
     /// The index entry with its caching headers.
     Entry(Prefetch),
+    /// An index entry without the versions that index filters left out. The
+    /// `ETag` is computed from the data. There is no `Last-Modified` date, as
+    /// the filtered entry can also change when the entry it was filtered from
+    /// does not.
+    Filtered { data: Vec<u8>, etag: String },
     /// The client already has the current entry.
     NotModified,
 }
@@ -32,6 +37,13 @@ impl IntoResponse for PrefetchResponse {
                 .header("Last-Modified", prefetch.last_modified)
                 .status(StatusCode::OK)
                 .body(Body::from(prefetch.data))
+                .unwrap()
+                .into_response(),
+            Self::Filtered { data, etag } => Response::builder()
+                .header("Content-Length", data.len().to_string())
+                .header("ETag", etag)
+                .status(StatusCode::OK)
+                .body(Body::from(data))
                 .unwrap()
                 .into_response(),
             Self::NotModified => StatusCode::NOT_MODIFIED.into_response(),

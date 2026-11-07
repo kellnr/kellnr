@@ -557,6 +557,7 @@ mod tests {
                 std::time::Duration::from_millis(10),
             ),
             download_filters,
+            index_filters: Arc::default(),
             proxy_client,
             settings: settings.into(),
             cratesio_storage: storage,

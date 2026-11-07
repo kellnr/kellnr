@@ -100,6 +100,7 @@ fn state_with_db(db: Arc<dyn DbProvider>) -> AppStateData {
         proxy_client,
         cratesio_sync,
         download_filters: Arc::default(),
+        index_filters: Arc::default(),
         background_tasks: BackgroundTasks::new(),
     }
 }

@@ -30,6 +30,7 @@ moka.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha256.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
@@ -38,7 +39,6 @@ kellnr-settings = { workspace = true, features = ["test-support"] }
 kellnr-db = { workspace = true, features = ["test-support"] }
 kellnr-http = { workspace = true, features = ["test-support"] }
 kellnr-test-db.workspace = true
-sha256.workspace = true
 tempfile.workspace = true
 tower.workspace = true
 
