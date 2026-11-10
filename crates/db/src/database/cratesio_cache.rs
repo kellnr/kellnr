@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use chrono::NaiveDateTime;
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::cratesio_prefetch_msg::{CratesioPrefetchMsg, UpdateData};
 use kellnr_common::index_metadata::IndexMetadata;
@@ -325,6 +326,7 @@ impl Database {
         struct Meta {
             cksum: String,
             license: Option<String>,
+            pubtime: Option<NaiveDateTime>,
         }
 
         // One query, as it runs for every download from the crates.io proxy
@@ -342,6 +344,7 @@ impl Database {
             .select_only()
             .column(cratesio_index::Column::Cksum)
             .column(cratesio_meta::Column::License)
+            .column(cratesio_index::Column::Pubtime)
             .inner_join(cratesio_crate::Entity)
             .join(JoinType::LeftJoin, meta_of_version)
             .filter(cratesio_crate::Column::Name.eq(crate_name))
@@ -353,6 +356,7 @@ impl Database {
         Ok(meta.map(|m| CratesioVersionMeta {
             cksum: m.cksum,
             license: m.license,
+            pubtime: m.pubtime.map(|p| p.and_utc()),
         }))
     }
 }

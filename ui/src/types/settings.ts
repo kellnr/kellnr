@@ -31,7 +31,7 @@ export type SettingsDefaults = {
   s3: S3
   toolchain: Toolchain
   webhooks: Webhooks
-  cratesio_filter: CrateFilter
+  cratesio_filter: CratesioFilter
   registry_filter: CrateFilter
 }
 
@@ -62,7 +62,7 @@ export type Settings = {
   s3: S3
   toolchain: Toolchain
   webhooks: Webhooks
-  cratesio_filter: CrateFilter
+  cratesio_filter: CratesioFilter
   registry_filter: CrateFilter
   sources: SourceMap
   defaults?: SettingsDefaults
@@ -84,6 +84,11 @@ export type CrateFilter = {
   license_allowed: string[]
   license_unknown: string
   license_exempt_crates: string[]
+}
+
+export type CratesioFilter = CrateFilter & {
+  min_release_age_seconds: number
+  min_release_age_exempt_crates: string[]
 }
 
 export type Docs = {
@@ -284,7 +289,9 @@ export const emptySettings: Settings = {
     license_enabled: false,
     license_allowed: [],
     license_unknown: "deny",
-    license_exempt_crates: []
+    license_exempt_crates: [],
+    min_release_age_seconds: 0,
+    min_release_age_exempt_crates: []
   },
   registry_filter: {
     license_enabled: false,

@@ -111,6 +111,7 @@ pub(crate) fn env_list_keys() -> &'static [&'static str] {
         "docs.build_wrapper",
         "cratesio_filter.license_allowed",
         "cratesio_filter.license_exempt_crates",
+        "cratesio_filter.min_release_age_exempt_crates",
         "registry_filter.license_allowed",
         "registry_filter.license_exempt_crates",
     ]

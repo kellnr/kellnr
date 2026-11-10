@@ -10,8 +10,8 @@ use utoipa::ToSchema;
 
 /// Filters for downloads through the crates.io proxy.
 ///
-/// The fields are the same as in [`RegistryFilter`]. Both are separate structs
-/// because the CLI flag prefix is set per struct.
+/// The license fields are the same as in [`RegistryFilter`]. Both are
+/// separate structs because the CLI flag prefix is set per struct.
 #[derive(
     Debug, Default, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema,
 )]
@@ -35,11 +35,26 @@ pub struct CratesioFilter {
     #[configurable(env_list)]
     #[arg(value_delimiter = ',')]
     pub license_exempt_crates: Vec<String>,
+
+    /// Minimum age in seconds of a crates.io version before the proxy serves
+    /// it (0 = disabled), counted from the `pubtime` of its index entry.
+    /// Younger versions are left out of the index and their downloads are
+    /// denied. Entries without a `pubtime` are served. Turn on
+    /// `proxy.remove_deleted_versions` too, else a version that crates.io
+    /// deletes while it is held back is served once it is old enough
+    #[arg(long = "cratesio-filter-min-release-age")]
+    pub min_release_age_seconds: u64,
+
+    /// Crates (comma-separated) whose versions are served regardless of the
+    /// minimum release age, e.g. to let an urgent security fix through
+    #[configurable(env_list)]
+    #[arg(value_delimiter = ',')]
+    pub min_release_age_exempt_crates: Vec<String>,
 }
 
 /// Filters for downloads of crates hosted in Kellnr.
 ///
-/// The fields are the same as in [`CratesioFilter`].
+/// The fields are the license fields of [`CratesioFilter`].
 #[derive(
     Debug, Default, Deserialize, Serialize, Eq, PartialEq, Clone, Configurable, ClapArgs, ToSchema,
 )]
@@ -135,6 +150,13 @@ mod tests {
             settings.cratesio_filter.license_unknown
         );
         assert!(settings.cratesio_filter.license_exempt_crates.is_empty());
+        assert_eq!(0, settings.cratesio_filter.min_release_age_seconds);
+        assert!(
+            settings
+                .cratesio_filter
+                .min_release_age_exempt_crates
+                .is_empty()
+        );
     }
 
     #[test]
@@ -146,6 +168,8 @@ mod tests {
             license_allowed = ["MIT", "Apache-2.0"]
             license_unknown = "allow"
             license_exempt_crates = ["ring"]
+            min_release_age_seconds = 259200
+            min_release_age_exempt_crates = ["openssl", "tokio-util"]
 
             [registry_filter]
             license_enabled = true
@@ -160,6 +184,11 @@ mod tests {
                 license_allowed: vec!["MIT".to_string(), "Apache-2.0".to_string()],
                 license_unknown: LicenseUnknown::Allow,
                 license_exempt_crates: vec!["ring".to_string()],
+                min_release_age_seconds: 259_200,
+                min_release_age_exempt_crates: vec![
+                    "openssl".to_string(),
+                    "tokio-util".to_string()
+                ],
             },
             settings.cratesio_filter
         );
@@ -188,6 +217,7 @@ mod tests {
         for key in [
             "cratesio_filter.license_allowed",
             "cratesio_filter.license_exempt_crates",
+            "cratesio_filter.min_release_age_exempt_crates",
             "registry_filter.license_allowed",
             "registry_filter.license_exempt_crates",
         ] {

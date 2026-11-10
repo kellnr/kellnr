@@ -11,7 +11,7 @@ use kellnr_cratesio_sync::cratesio_downloader::{download_crate, has_checksum};
 use kellnr_cratesio_sync::{CratesioSync, SyncSource};
 use kellnr_db::DbProvider;
 use kellnr_db::provider::CratesioVersionMeta;
-use kellnr_filter::{CrateInfo, KnownLicense};
+use kellnr_filter::{CrateInfo, KnownLicense, KnownPubtime};
 use kellnr_http::error::{ApiResult, PlainTextError};
 use kellnr_http::state::{AppState, ProxyClientState, SettingsState};
 use kellnr_storage::cratesio_crate_storage::CratesIoCrateStorage;
@@ -97,8 +97,8 @@ pub async fn search(
     responses(
         (status = 200, description = "Crate archive", content_type = "application/octet-stream"),
         (status = 400, description = "Invalid package name or version"),
-        (status = 403, description = "Download denied by a crates.io filter, e.g. the license filter"),
-        (status = 404, description = "Crate not found or proxy disabled"),
+        (status = 403, description = "Download denied by a crates.io filter, e.g. the license filter or the minimum release age"),
+        (status = 404, description = "Crate not found, proxy disabled, or version missing from the index while a minimum release age applies"),
         (status = 422, description = "Failed to save crate"),
         (status = 502, description = "Crate from crates.io does not match the index checksum")
     ),
@@ -118,16 +118,23 @@ pub async fn download(
         .await
         .map_err(|e| storage_read_failed(&name, &version, &e))?;
 
-    // The license is only needed if filters are enabled, the checksum only to
-    // verify a crate that is not cached yet. Cache hits without filters need
-    // no database query.
+    // The license is only needed if filters are enabled, the publish time if
+    // a filter needs it, the checksum only to verify a crate that is not
+    // cached yet. Other cache hits need no database query.
     let known_license = if filters.is_empty() {
         None
     } else {
         filters.licenses().get(&canonical_name, &version)
     };
     let need_license = !filters.is_empty() && known_license.is_none();
-    let meta = if cached.is_none() || need_license {
+    let uses_pubtime = filters.needs_pubtime(&name);
+    let known_pubtime = if uses_pubtime {
+        filters.pubtimes().get(&canonical_name, &version)
+    } else {
+        None
+    };
+    let need_pubtime = uses_pubtime && known_pubtime.is_none();
+    let meta = if cached.is_none() || need_license || need_pubtime {
         synced_version_meta(
             &state.db,
             &state.cratesio_sync,
@@ -141,8 +148,26 @@ pub async fn download(
     };
 
     // Checked on cache hits too, as the policy may have changed since the
-    // crate was cached.
+    // crate was cached, and so that a pinned version cannot bypass the index
+    // filters.
     if !filters.is_empty() {
+        let pubtime = if let Some(known) = known_pubtime {
+            known.into_pubtime()
+        } else if need_pubtime {
+            // Its age cannot be checked, and a version that is not synced yet
+            // must not bypass the minimum release age.
+            let Some(meta) = &meta else {
+                warn!(
+                    "Download of {name}@{version} denied, its publish time is unknown as the version is not in the crates.io index"
+                );
+                return Err(StatusCode::NOT_FOUND.into());
+            };
+            let known = KnownPubtime::from(meta.pubtime);
+            filters.pubtimes().insert(&canonical_name, &version, known);
+            known.into_pubtime()
+        } else {
+            None
+        };
         let license = match known_license {
             Some(known) => known.into_license(),
             None => meta
@@ -164,6 +189,7 @@ pub async fn download(
             name: &name,
             version: &version,
             license: license.as_deref(),
+            pubtime,
         };
         if let Some(message) = filters.check(&krate).deny_message(&krate) {
             warn!("{message}");
@@ -199,10 +225,11 @@ pub async fn download(
     Ok(file.into_response())
 }
 
-/// Checksum and license of the version from the cached index. If the checksum
-/// or a needed license is missing, the crate is synced from crates.io first,
-/// or the running sync of it is awaited, so a cold download can be verified
-/// and cached right away.
+/// Checksum, license and publish time of the version from the cached index.
+/// If the checksum or a needed license is missing, the crate is synced from
+/// crates.io first, or the running sync of it is awaited, so a cold download
+/// can be verified and cached right away. A missing publish time causes no
+/// sync, as a sync does not add it to a cached version.
 async fn synced_version_meta(
     db: &Arc<dyn DbProvider>,
     sync: &CratesioSync,
@@ -458,7 +485,7 @@ mod tests {
             license_enabled: true,
             license_allowed: vec!["MIT".to_string()],
             license_unknown: unknown,
-            license_exempt_crates: vec![],
+            ..CratesioFilter::default()
         }
     }
 
@@ -466,6 +493,7 @@ mod tests {
         data_dir: tempfile::TempDir,
         client: Router,
         storage: Arc<CratesIoCrateStorage>,
+        db: Arc<dyn DbProvider>,
         upstream: Arc<Upstream>,
         _upstream_server: TestServer,
     }
@@ -492,8 +520,9 @@ mod tests {
 
             TestKellnr {
                 data_dir,
-                client: app(settings, storage.clone(), db),
+                client: app(settings, storage.clone(), db.clone()),
                 storage,
+                db,
                 upstream,
                 _upstream_server: upstream_server,
             }
@@ -866,5 +895,159 @@ mod tests {
         let (status, _) = kellnr.download("upstream", "1.1.0").await;
 
         assert_eq!(StatusCode::OK, status);
+    }
+
+    mod min_release_age {
+        use chrono::{DateTime, TimeDelta, Utc};
+
+        use super::*;
+
+        const THREE_DAYS: u64 = 3 * 86_400;
+
+        fn release_age(min_release_age_seconds: u64) -> CratesioFilter {
+            CratesioFilter {
+                min_release_age_seconds,
+                ..CratesioFilter::default()
+            }
+        }
+
+        fn ago(age: TimeDelta) -> DateTime<Utc> {
+            Utc::now() - age
+        }
+
+        /// Stores the index entry of "upstream" 1.0.0, published at
+        /// `pubtime`, with its license.
+        async fn add_upstream(db: &dyn DbProvider, pubtime: Option<DateTime<Utc>>) {
+            let index = IndexMetadata {
+                pubtime,
+                ..serde_json::from_str(&index_line("1.0.0", true)).unwrap()
+            };
+            let licenses = [("1.0.0".to_string(), "MIT".to_string())].into();
+            db.add_cratesio_prefetch_data(
+                &OriginalName::try_from("upstream").unwrap(),
+                "etag",
+                "",
+                None,
+                &[index],
+                &licenses,
+            )
+            .await
+            .unwrap();
+        }
+
+        /// A Kellnr with `filter` and "upstream" 1.0.0, published at
+        /// `pubtime`, in the database and the cache.
+        async fn kellnr(
+            filter: CratesioFilter,
+            pubtime: Option<DateTime<Utc>>,
+        ) -> (Router, TestDb, tempfile::TempDir) {
+            let db = TestDb::sqlite().await;
+            add_upstream(&*db, pubtime).await;
+            let (client, data_dir) = kellnr_with_cached_crate(db.provider(), filter).await;
+            (client, db, data_dir)
+        }
+
+        async fn download(client: &Router) -> StatusCode {
+            status_of(client, "/api/v1/cratesio/upstream/1.0.0/download").await
+        }
+
+        fn assert_held_back((status, body): (StatusCode, Bytes)) {
+            let message = String::from_utf8_lossy(&body);
+            assert_eq!(StatusCode::FORBIDDEN, status, "{message}");
+            assert!(
+                message.starts_with(
+                    "Download of upstream@1.0.0 denied by Kellnr release age filter: it was published on crates.io at "
+                ),
+                "{message}"
+            );
+            assert!(
+                message
+                    .contains("held back by the minimum release age of 3d for another 2d 22h 59m"),
+                "{message}"
+            );
+        }
+
+        #[tokio::test]
+        async fn young_version_is_denied_also_from_the_cache() {
+            let kellnr = TestKellnr::with_filter(release_age(THREE_DAYS)).await;
+            add_upstream(kellnr.db.as_ref(), Some(ago(TimeDelta::hours(1)))).await;
+
+            assert_held_back(kellnr.download("upstream", "1.0.0").await);
+            assert!(!kellnr.is_cached("upstream", "1.0.0").await);
+
+            // E.g. cached before the minimum release age was set
+            kellnr.cache("upstream", "1.0.0").await;
+            assert_held_back(kellnr.download("upstream", "1.0.0").await);
+        }
+
+        #[tokio::test]
+        async fn old_enough_version_is_served() {
+            let (client, _db, _data_dir) =
+                kellnr(release_age(THREE_DAYS), Some(ago(TimeDelta::days(4)))).await;
+
+            assert_eq!(StatusCode::OK, download(&client).await);
+        }
+
+        #[tokio::test]
+        async fn version_without_publish_time_is_served() {
+            let (client, _db, _data_dir) = kellnr(release_age(THREE_DAYS), None).await;
+
+            assert_eq!(StatusCode::OK, download(&client).await);
+        }
+
+        #[tokio::test]
+        async fn young_version_of_exempt_crate_is_served() {
+            let exempt = CratesioFilter {
+                min_release_age_exempt_crates: vec!["Upstream".to_string()],
+                ..release_age(THREE_DAYS)
+            };
+            let (client, _db, _data_dir) = kellnr(exempt, Some(ago(TimeDelta::hours(1)))).await;
+
+            assert_eq!(StatusCode::OK, download(&client).await);
+        }
+
+        #[tokio::test]
+        async fn young_version_is_served_without_min_release_age() {
+            let (client, _db, _data_dir) =
+                kellnr(release_age(0), Some(ago(TimeDelta::hours(1)))).await;
+
+            assert_eq!(StatusCode::OK, download(&client).await);
+        }
+
+        #[tokio::test]
+        async fn version_missing_from_the_index_is_not_found() {
+            let kellnr = TestKellnr::with_filter(release_age(THREE_DAYS)).await;
+
+            let (status, _) = kellnr.download("noindex", "1.0.0").await;
+
+            // Its age cannot be checked
+            assert_eq!(StatusCode::NOT_FOUND, status);
+            assert!(!kellnr.is_cached("noindex", "1.0.0").await);
+        }
+
+        #[tokio::test]
+        async fn license_filter_alone_serves_a_version_missing_from_the_index() {
+            let kellnr = TestKellnr::with_filter(license_filter(LicenseUnknown::Allow)).await;
+
+            let (status, body) = kellnr.download("noindex", "1.0.0").await;
+
+            // Served uncached, like without filters
+            assert_eq!(StatusCode::OK, status);
+            assert_eq!(UPSTREAM_CRATE, &body[..]);
+            assert!(!kellnr.is_cached("noindex", "1.0.0").await);
+        }
+
+        #[tokio::test]
+        async fn known_publish_time_is_not_queried_again() {
+            let (client, db, _data_dir) =
+                kellnr(release_age(THREE_DAYS), Some(ago(TimeDelta::days(4)))).await;
+
+            assert_eq!(StatusCode::OK, download(&client).await);
+            // Later downloads would fail if they looked up the publish time again.
+            test_drop_table(&db, "cratesio_index").await.unwrap();
+            for _ in 0..2 {
+                assert_eq!(StatusCode::OK, download(&client).await);
+            }
+        }
     }
 }

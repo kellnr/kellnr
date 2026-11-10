@@ -15,6 +15,7 @@ kellnr-common.workspace = true
 kellnr-settings.workspace = true
 
 # External dependencies
+chrono.workspace = true
 moka = { workspace = true, features = ["sync"] }
 serde_json.workspace = true
 spdx.workspace = true

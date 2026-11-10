@@ -629,7 +629,7 @@
         "type": "object"
       },
       "CratesioFilter": {
-        "description": "Filters for downloads through the crates.io proxy.\n\nThe fields are the same as in [`RegistryFilter`]. Both are separate structs\nbecause the CLI flag prefix is set per struct.",
+        "description": "Filters for downloads through the crates.io proxy.\n\nThe license fields are the same as in [`RegistryFilter`]. Both are\nseparate structs because the CLI flag prefix is set per struct.",
         "properties": {
           "license_allowed": {
             "default": [],
@@ -656,13 +656,30 @@
             "$ref": "#/components/schemas/LicenseUnknown",
             "default": "deny",
             "description": "Decision for crates without a known or valid license: \"deny\" or \"allow\".\nA license that is no valid SPDX expression counts as unknown"
+          },
+          "min_release_age_exempt_crates": {
+            "default": [],
+            "description": "Crates (comma-separated) whose versions are served regardless of the\nminimum release age, e.g. to let an urgent security fix through",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "min_release_age_seconds": {
+            "default": 0,
+            "description": "Minimum age in seconds of a crates.io version before the proxy serves\nit (0 = disabled), counted from the `pubtime` of its index entry.\nYounger versions are left out of the index and their downloads are\ndenied. Entries without a `pubtime` are served. Turn on\n`proxy.remove_deleted_versions` too, else a version that crates.io\ndeletes while it is held back is served once it is old enough",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
           "license_allowed",
           "license_enabled",
           "license_exempt_crates",
-          "license_unknown"
+          "license_unknown",
+          "min_release_age_exempt_crates",
+          "min_release_age_seconds"
         ],
         "type": "object"
       },
@@ -1882,7 +1899,7 @@
         "type": "object"
       },
       "RegistryFilter": {
-        "description": "Filters for downloads of crates hosted in Kellnr.\n\nThe fields are the same as in [`CratesioFilter`].",
+        "description": "Filters for downloads of crates hosted in Kellnr.\n\nThe fields are the license fields of [`CratesioFilter`].",
         "properties": {
           "license_allowed": {
             "default": [],
@@ -2067,7 +2084,9 @@
               "license_allowed": [],
               "license_enabled": false,
               "license_exempt_crates": [],
-              "license_unknown": "deny"
+              "license_unknown": "deny",
+              "min_release_age_exempt_crates": [],
+              "min_release_age_seconds": 0
             }
           },
           "docs": {
@@ -4326,7 +4345,7 @@
                 }
               }
             },
-            "description": "Download denied by a crates.io filter, e.g. the license filter"
+            "description": "Download denied by a crates.io filter, e.g. the license filter or the minimum release age"
           },
           "404": {
             "content": {
@@ -4336,7 +4355,7 @@
                 }
               }
             },
-            "description": "Crate not found or proxy disabled"
+            "description": "Crate not found, proxy disabled, or version missing from the index while a minimum release age applies"
           },
           "422": {
             "content": {

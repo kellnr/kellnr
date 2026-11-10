@@ -4353,6 +4353,7 @@ dependencies = [
 name = "kellnr-filter"
 version = "7.0.0"
 dependencies = [
+ "chrono",
  "kellnr-common",
  "kellnr-settings",
  "moka",

@@ -678,6 +678,7 @@ pub async fn download(
             name: &package,
             version: &version,
             license: license.as_deref(),
+            pubtime: None,
         };
         if let Some(message) = filters.check(&krate).deny_message(&krate) {
             warn!("{message}");
