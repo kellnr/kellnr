@@ -208,7 +208,7 @@ jobs:
 
   build-macos:
     name: Build macOS
-    runs-on: macos-14
+    runs-on: macos-15
     needs: [test]
     permissions: { contents: write }
     strategy:
