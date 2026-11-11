@@ -166,7 +166,17 @@ test.describe("Documentation Generation UI Tests", () => {
     await page.goto(`${baseUrl}/docs/full-toml/1.0.0/doc/full_toml/index.html`);
 
     const result = await page.evaluate(async () => {
-      const popup = window.open("/", "_blank");
+      let popupBlocked = false;
+      try {
+        const popup = window.open("/", "_blank");
+        popupBlocked = popup === null;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "InvalidAccessError") {
+          popupBlocked = true;
+        } else {
+          throw e;
+        }
+      }
       let fetchBlocked = false;
       try {
         await fetch("/api/v1/users");
@@ -180,7 +190,7 @@ test.describe("Documentation Generation UI Tests", () => {
       } catch {
         storageWorks = false;
       }
-      return { popupBlocked: popup === null, fetchBlocked, storageWorks };
+      return { popupBlocked, fetchBlocked, storageWorks };
     });
 
     expect(result).toEqual({
