@@ -16,7 +16,7 @@ jobs:
   # instead of running all tests again.
   test:
     name: Check Tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 90
     permissions:
       actions: read
@@ -55,7 +55,7 @@ jobs:
 
   sbom:
     name: Generate SBOM
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [test]
     permissions: { contents: write }
     steps:
@@ -82,7 +82,7 @@ jobs:
 
   build-kellnr:
     name: Build Binaries
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [test]
     permissions: { contents: write }
     strategy:
@@ -208,7 +208,7 @@ jobs:
 
   build-macos:
     name: Build macOS
-    runs-on: macos-14
+    runs-on: macos-26
     needs: [test]
     permissions: { contents: write }
     strategy:
@@ -308,7 +308,7 @@ jobs:
 
   crates-io-release:
     name: Publish to crates.io
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [test]
     steps:
       - name: Checkout repository
@@ -334,7 +334,7 @@ jobs:
 
   build-and-push-image:
     name: Build and Push Docker Image
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [build-kellnr]
     permissions:
       packages: write
@@ -367,7 +367,7 @@ jobs:
 
   dispatch-helm:
     name: Update Helm Chart
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [build-and-push-image]
     steps:
       - name: Extract Version
@@ -401,7 +401,7 @@ jobs:
 
   dispatch-website:
     name: Update Website Release Notes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [build-and-push-image]
     steps:
       - name: Checkout

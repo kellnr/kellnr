@@ -28,7 +28,7 @@ permissions:
 jobs:
   update-npm-hash:
     name: Update NPM dependencies hash
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: github.event.pull_request.user.login == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
     outputs:
       sha: ${{ steps.update.outputs.sha }}
@@ -69,7 +69,7 @@ jobs:
 
   changes:
     name: Detect Changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: github.event_name == 'pull_request'
     permissions:
       pull-requests: read
@@ -95,7 +95,7 @@ jobs:
     name: Format & Clippy
     needs: [update-npm-hash]
     if: ${{ always() && !failure() && !cancelled() }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - &checkout
@@ -152,7 +152,7 @@ jobs:
     name: Tests (Unit, PostgreSQL, S3, GCS)
     needs: [update-npm-hash]
     if: ${{ always() && !failure() && !cancelled() }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - *checkout
@@ -178,7 +178,7 @@ jobs:
     name: UI Tests (Playwright, ${{ matrix.shard }}/2)
     needs: [update-npm-hash]
     if: ${{ always() && !failure() && !cancelled() }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -206,7 +206,7 @@ jobs:
     name: Tests Passed
     needs: [test, test-ui]
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Check test results
@@ -224,7 +224,7 @@ jobs:
     name: Nix Build
     needs: [update-npm-hash, changes]
     if: ${{ always() && !failure() && !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.nix == 'true') }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - *checkout

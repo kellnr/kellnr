@@ -45,7 +45,7 @@ permissions:
 jobs:
   dispatch-website:
     name: Dispatch website from latest release
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout (for payload generator script)
         uses: actions/checkout@v7

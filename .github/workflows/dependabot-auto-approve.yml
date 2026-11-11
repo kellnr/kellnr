@@ -6,7 +6,7 @@ permissions:
 
 jobs:
   dependabot:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'kellnr/kellnr'
     steps:
       - name: Dependabot metadata
