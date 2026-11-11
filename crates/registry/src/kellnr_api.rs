@@ -665,7 +665,9 @@ pub async fn download(
 
     let filters = &state.download_filters.registry;
     if !filters.is_empty() {
-        let license = if let Some(known) = filters.licenses().get(&canonical_name, &version) {
+        let license = if !filters.needs_license(&package) {
+            None
+        } else if let Some(known) = filters.licenses().get(&canonical_name, &version) {
             known.into_license()
         } else {
             let license = db.get_crate_license(&canonical_name, &version).await?;

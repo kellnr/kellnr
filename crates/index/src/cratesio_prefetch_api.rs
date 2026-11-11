@@ -379,19 +379,23 @@ async fn is_denied(idx: &IndexMetadata, version: &Version, args: &CratesIoPrefet
         return false;
     }
     let name = OriginalName::from_unchecked(idx.name.clone());
-    let license = match args
-        .db
-        .get_cratesio_version_meta(&name.to_canonical(), version)
-        .await
-    {
-        Ok(meta) => meta.and_then(|m| m.license),
-        Err(e) => {
-            error!(
-                "Could not get license of crate {} version {}: {e}",
-                idx.name, idx.vers
-            );
-            None
+    let license = if args.filters.needs_license(&name) {
+        match args
+            .db
+            .get_cratesio_version_meta(&name.to_canonical(), version)
+            .await
+        {
+            Ok(meta) => meta.and_then(|m| m.license),
+            Err(e) => {
+                error!(
+                    "Could not get license of crate {} version {}: {e}",
+                    idx.name, idx.vers
+                );
+                None
+            }
         }
+    } else {
+        None
     };
     let verdict = args.filters.check(&CrateInfo {
         name: &name,

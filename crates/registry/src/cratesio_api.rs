@@ -118,15 +118,16 @@ pub async fn download(
         .await
         .map_err(|e| storage_read_failed(&name, &version, &e))?;
 
-    // The license is only needed if filters are enabled, the publish time if
-    // a filter needs it, the checksum only to verify a crate that is not
-    // cached yet. Other cache hits need no database query.
-    let known_license = if filters.is_empty() {
-        None
-    } else {
+    // The license and the publish time are only needed if a filter needs
+    // them, the checksum only to verify a crate that is not cached yet. Other
+    // cache hits need no database query.
+    let uses_license = filters.needs_license(&name);
+    let known_license = if uses_license {
         filters.licenses().get(&canonical_name, &version)
+    } else {
+        None
     };
-    let need_license = !filters.is_empty() && known_license.is_none();
+    let need_license = uses_license && known_license.is_none();
     let uses_pubtime = filters.needs_pubtime(&name);
     let known_pubtime = if uses_pubtime {
         filters.pubtimes().get(&canonical_name, &version)
@@ -170,6 +171,7 @@ pub async fn download(
         };
         let license = match known_license {
             Some(known) => known.into_license(),
+            None if !uses_license => None,
             None => meta
                 .as_ref()
                 .and_then(|m| m.license.clone())
@@ -1035,6 +1037,35 @@ mod tests {
             assert_eq!(StatusCode::OK, status);
             assert_eq!(UPSTREAM_CRATE, &body[..]);
             assert!(!kellnr.is_cached("noindex", "1.0.0").await);
+        }
+
+        #[tokio::test]
+        async fn missing_license_causes_no_sync_without_license_filter() {
+            let kellnr = TestKellnr::with_filter(release_age(THREE_DAYS)).await;
+            let index = IndexMetadata {
+                pubtime: Some(ago(TimeDelta::days(4))),
+                ..serde_json::from_str(&index_line("1.0.0", true)).unwrap()
+            };
+            // Without a license
+            kellnr
+                .db
+                .add_cratesio_prefetch_data(
+                    &OriginalName::try_from("upstream").unwrap(),
+                    "etag",
+                    "",
+                    None,
+                    &[index],
+                    &std::collections::HashMap::new(),
+                )
+                .await
+                .unwrap();
+            kellnr.cache("upstream", "1.0.0").await;
+
+            let (status, _) = kellnr.download("upstream", "1.0.0").await;
+
+            assert_eq!(StatusCode::OK, status);
+            assert_eq!(0, kellnr.api_calls());
+            assert_eq!(0, kellnr.upstream.index_calls.load(Ordering::SeqCst));
         }
 
         #[tokio::test]

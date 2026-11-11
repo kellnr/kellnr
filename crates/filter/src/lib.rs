@@ -3,7 +3,8 @@
 //!
 //! A [`FilterChain`] runs all configured [`CrateFilter`]s. To add a filter,
 //! implement [`CrateFilter`] and add the data it needs to [`CrateInfo`]. The
-//! publish time is only looked up for a download if a filter needs it, see
+//! license and the publish time are only looked up for a download if a filter
+//! needs them, see [`CrateFilter::needs_license`] and
 //! [`CrateFilter::needs_pubtime`].
 //!
 //! An [`IndexFilterChain`] runs all configured [`IndexFilter`]s on the
@@ -34,7 +35,8 @@ pub use release_age::ReleaseAgeFilter;
 pub struct CrateInfo<'a> {
     pub name: &'a OriginalName,
     pub version: &'a Version,
-    /// `None` if the license could not be determined.
+    /// `None` if the license could not be determined. It may stay `None` if
+    /// no filter needs it, see [`CrateFilter::needs_license`].
     pub license: Option<&'a str>,
     /// When the version was published on crates.io, from the `pubtime` of its
     /// index entry. `None` if the entry has none, and it may stay `None` if
@@ -68,6 +70,12 @@ impl Verdict {
 pub trait CrateFilter: Send + Sync {
     fn name(&self) -> &'static str;
     fn check(&self, krate: &CrateInfo) -> Verdict;
+
+    /// Whether the filter needs [`CrateInfo::license`] to check versions of
+    /// the crate `name`.
+    fn needs_license(&self, _name: &OriginalName) -> bool {
+        false
+    }
 
     /// Whether the filter needs [`CrateInfo::pubtime`] to check versions of
     /// the crate `name`.
@@ -175,6 +183,12 @@ impl FilterChain {
 
     pub fn is_empty(&self) -> bool {
         self.filters.is_empty()
+    }
+
+    /// Whether a filter needs [`CrateInfo::license`] to check versions of the
+    /// crate `name`.
+    pub fn needs_license(&self, name: &OriginalName) -> bool {
+        self.filters.iter().any(|f| f.needs_license(name))
     }
 
     /// Whether a filter needs [`CrateInfo::pubtime`] to check versions of the
@@ -330,6 +344,24 @@ mod tests {
 
         assert!(!license_only.needs_pubtime(&serde));
         assert!(!FilterChain::default().needs_pubtime(&serde));
+    }
+
+    #[test]
+    fn only_the_license_filter_needs_the_license_of_crates_not_exempt() {
+        let license = FilterChain::cratesio(&CratesioFilter {
+            license_enabled: true,
+            license_allowed: vec!["MIT".to_string()],
+            license_exempt_crates: vec!["openssl".to_string()],
+            ..CratesioFilter::default()
+        })
+        .unwrap();
+        let release_age_only = FilterChain::cratesio(&release_age(&[])).unwrap();
+        let serde = OriginalName::try_from("serde").unwrap();
+
+        assert!(license.needs_license(&serde));
+        assert!(!license.needs_license(&OriginalName::try_from("OpenSSL").unwrap()));
+        assert!(!release_age_only.needs_license(&serde));
+        assert!(!FilterChain::default().needs_license(&serde));
     }
 
     #[test]
