@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::license::UNKNOWN_LICENSE;
+use kellnr_common::original_name::OriginalName;
 use kellnr_settings::LicenseUnknown;
 use spdx::{Expression, LicenseReq, Licensee, ParseMode};
 use tracing::debug;
@@ -129,11 +130,14 @@ impl CrateFilter for LicenseFilter {
             }
         }
     }
+
+    fn needs_license(&self, name: &OriginalName) -> bool {
+        !self.exempt_crates.contains(&name.to_canonical())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use kellnr_common::original_name::OriginalName;
     use kellnr_common::version::Version;
 
     use super::*;
@@ -264,6 +268,14 @@ mod tests {
         assert_eq!(Verdict::Allow, check_crate(&f, "ring", Some("ISC")));
         assert_eq!(Verdict::Allow, check_crate(&f, "my-crate", Some("ISC")));
         assert!(!is_allowed(&f, Some("ISC")));
+    }
+
+    #[test]
+    fn only_crates_that_are_not_exempt_need_the_license() {
+        let f = filter(&["MIT"], LicenseUnknown::Deny, &["openssl"]);
+
+        assert!(f.needs_license(&OriginalName::try_from("serde").unwrap()));
+        assert!(!f.needs_license(&OriginalName::try_from("OpenSSL").unwrap()));
     }
 
     #[test]
