@@ -1,8 +1,12 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use kellnr_common::index_metadata::IndexMetadata;
 use kellnr_common::original_name::OriginalName;
+use kellnr_settings::{CratesioFilter, Settings};
 use tracing::{debug, warn};
+
+use crate::{FilterError, ReleaseAgeFilter};
 
 /// Decides whether an entry of a sparse index file is served. A left out
 /// version is hidden from cargo's resolver, but can still be downloaded, e.g.
@@ -23,6 +27,18 @@ pub struct IndexFilterChain {
 impl IndexFilterChain {
     pub fn new(filters: Vec<Arc<dyn IndexFilter>>) -> Self {
         Self { filters }
+    }
+
+    /// Index filters for the sparse index of the crates.io proxy.
+    pub fn cratesio(settings: &CratesioFilter) -> Result<Self, FilterError> {
+        let mut filters: Vec<Arc<dyn IndexFilter>> = Vec::new();
+        if settings.min_release_age_seconds > 0 {
+            filters.push(Arc::new(ReleaseAgeFilter::new(
+                Duration::from_secs(settings.min_release_age_seconds),
+                &settings.min_release_age_exempt_crates,
+            )?));
+        }
+        Ok(Self::new(filters))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -62,6 +78,14 @@ impl IndexFilterChain {
 #[derive(Clone, Default)]
 pub struct IndexFilters {
     pub cratesio: IndexFilterChain,
+}
+
+impl IndexFilters {
+    pub fn from_settings(settings: &Settings) -> Result<Self, FilterError> {
+        Ok(Self {
+            cratesio: IndexFilterChain::cratesio(&settings.cratesio_filter)?,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -153,5 +177,36 @@ mod tests {
             Some(String::from_utf8(data.clone()).unwrap()),
             filter(&chain, &data)
         );
+    }
+
+    #[test]
+    fn cratesio_chain_has_a_release_age_filter_if_a_minimum_age_is_set() {
+        let chain = |min_release_age_seconds| {
+            let settings = Settings {
+                cratesio_filter: CratesioFilter {
+                    min_release_age_seconds,
+                    ..CratesioFilter::default()
+                },
+                ..Settings::default()
+            };
+            IndexFilters::from_settings(&settings).unwrap().cratesio
+        };
+
+        assert!(chain(0).is_empty());
+        assert!(!chain(259_200).is_empty());
+    }
+
+    #[test]
+    fn invalid_min_release_age_exempt_crate_is_an_error() {
+        let result = IndexFilterChain::cratesio(&CratesioFilter {
+            min_release_age_seconds: 1,
+            min_release_age_exempt_crates: vec!["open ssl".to_string()],
+            ..CratesioFilter::default()
+        });
+
+        assert!(matches!(
+            result,
+            Err(FilterError::InvalidCrateName { name, .. }) if name == "open ssl"
+        ));
     }
 }

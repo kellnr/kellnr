@@ -397,6 +397,7 @@ async fn is_denied(idx: &IndexMetadata, version: &Version, args: &CratesIoPrefet
         name: &name,
         version,
         license: license.as_deref(),
+        pubtime: idx.pubtime,
     });
     verdict != Verdict::Allow
 }
@@ -866,12 +867,16 @@ mod tests {
 
         async fn cache(db: &TestDb, name: &str, versions: &[&str]) {
             let entries: Vec<_> = versions.iter().map(|v| entry(name, v)).collect();
+            cache_entries(db, name, &entries).await;
+        }
+
+        async fn cache_entries(db: &TestDb, name: &str, entries: &[IndexMetadata]) {
             db.add_cratesio_prefetch_data(
                 &OriginalName::try_from(name).unwrap(),
                 STORED_ETAG,
                 STORED_DATE,
                 None,
-                &entries,
+                entries,
                 &std::collections::HashMap::new(),
             )
             .await
@@ -1025,6 +1030,44 @@ mod tests {
 
             assert_eq!(StatusCode::OK, r.status());
             assert_eq!(vec!["1.0.0"], versions(r).await);
+        }
+
+        #[tokio::test]
+        async fn min_release_age_hides_young_versions() {
+            let settings = kellnr_settings::Settings {
+                cratesio_filter: kellnr_settings::CratesioFilter {
+                    min_release_age_seconds: 3 * 86_400,
+                    ..kellnr_settings::CratesioFilter::default()
+                },
+                ..kellnr_settings::test_settings()
+            };
+            let filters = IndexFilters::from_settings(&settings).unwrap();
+            let (app, db) = app_with(settings, filters).await;
+            let published = |name, vers, days_ago| IndexMetadata {
+                pubtime: Some(chrono::Utc::now() - chrono::TimeDelta::days(days_ago)),
+                ..entry(name, vers)
+            };
+            cache_entries(
+                &db,
+                "rocket",
+                &[
+                    published("rocket", "1.0.0", 10),
+                    entry("rocket", "1.1.0"),
+                    published("rocket", "2.0.0", 1),
+                ],
+            )
+            .await;
+            cache_entries(&db, "fresh", &[published("fresh", "0.1.0", 1)]).await;
+
+            // Old enough and without a publish time are served
+            let r = get_index(&app, "ro/ck/rocket", &[]).await;
+            assert_eq!(StatusCode::OK, r.status());
+            assert_eq!(None, header_of(&r, &header::LAST_MODIFIED));
+            assert_eq!(vec!["1.0.0", "1.1.0"], versions(r).await);
+
+            // No version is old enough
+            let r = get_index(&app, "fr/es/fresh", &[]).await;
+            assert_eq!(StatusCode::NOT_FOUND, r.status());
         }
     }
 
@@ -1208,6 +1251,29 @@ mod tests {
                 .unwrap();
 
             predownload_crates(&metadata(), &worker.args).await;
+
+            assert_eq!(vec!["1.0.0"], *upstream.downloads.lock().unwrap());
+            assert!(is_cached(&worker, "1.0.0").await);
+            assert!(!is_cached(&worker, "1.1.0").await);
+        }
+
+        #[tokio::test]
+        async fn predownload_skips_versions_younger_than_the_min_release_age() {
+            let upstream = Arc::new(Upstream::default());
+            let server = fake_cratesio(upstream.clone()).await;
+            let proxy = server.cratesio_proxy();
+            let filters = FilterChain::cratesio(&CratesioFilter {
+                min_release_age_seconds: 3 * 86_400,
+                ..CratesioFilter::default()
+            })
+            .unwrap();
+            let worker = worker(&proxy, filters).await;
+            // The publish time comes from the index entry
+            let mut metadata = metadata();
+            metadata[0].pubtime = Some(chrono::Utc::now() - chrono::TimeDelta::days(4));
+            metadata[1].pubtime = Some(chrono::Utc::now() - chrono::TimeDelta::hours(1));
+
+            predownload_crates(&metadata, &worker.args).await;
 
             assert_eq!(vec!["1.0.0"], *upstream.downloads.lock().unwrap());
             assert!(is_cached(&worker, "1.0.0").await);

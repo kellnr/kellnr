@@ -13,7 +13,7 @@ use kellnr_cratesio_sync::CratesioSync;
 use kellnr_cratesio_sync::cratesio_downloader::build_client;
 use kellnr_db::download_counter::DownloadCounter;
 use kellnr_db::{ConString, Database, DbProvider, PgConString, SqliteConString};
-use kellnr_filter::DownloadFilters;
+use kellnr_filter::{DownloadFilters, IndexFilters};
 use kellnr_http::login_throttle::LoginThrottle;
 use kellnr_http::state::AppStateData;
 use kellnr_http::token_cache::TokenCacheManager;
@@ -156,6 +156,7 @@ async fn run_server(resolved: ResolvedSettings) {
     }
 
     let download_filters = Arc::new(init_download_filters(&settings));
+    let index_filters = Arc::new(init_index_filters(&settings));
 
     let addr = SocketAddr::from((settings.local.ip, settings.local.port));
 
@@ -367,8 +368,7 @@ async fn run_server(resolved: ResolvedSettings) {
         proxy_client,
         cratesio_sync,
         download_filters,
-        // No index filter can be configured yet
-        index_filters: Arc::default(),
+        index_filters,
         background_tasks: tasks.clone(),
     };
 
@@ -574,6 +574,13 @@ fn init_docs_storage(settings: &Settings) -> DocsStorage {
 
 fn init_download_filters(settings: &Settings) -> DownloadFilters {
     DownloadFilters::from_settings(settings).unwrap_or_else(|e| {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    })
+}
+
+fn init_index_filters(settings: &Settings) -> IndexFilters {
+    IndexFilters::from_settings(settings).unwrap_or_else(|e| {
         eprintln!("Error: {e}");
         std::process::exit(1);
     })

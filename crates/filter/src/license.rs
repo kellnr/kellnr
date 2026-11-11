@@ -153,6 +153,7 @@ mod tests {
             name: &OriginalName::try_from(name).unwrap(),
             version: &Version::try_from("1.0.0").unwrap(),
             license,
+            pubtime: None,
         })
     }
 

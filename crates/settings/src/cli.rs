@@ -424,6 +424,43 @@ mod tests {
     }
 
     #[test]
+    fn min_release_age_flags_reach_the_settings() {
+        let CliResult::RunServer(resolved) = run_start(
+            None,
+            &[
+                "--cratesio-filter-min-release-age",
+                "259200",
+                "--cratesio-filter-min-release-age-exempt-crates",
+                "openssl,ring",
+            ],
+        ) else {
+            panic!("expected RunServer");
+        };
+
+        let cratesio = &resolved.settings.cratesio_filter;
+        assert_eq!(259_200, cratesio.min_release_age_seconds);
+        assert_eq!(
+            vec!["openssl", "ring"],
+            cratesio.min_release_age_exempt_crates
+        );
+        assert_eq!(
+            resolved
+                .prov
+                .cratesio_filter
+                .min_release_age_exempt_crates
+                .source()
+                .category(),
+            Category::Cli,
+        );
+        assert_eq!(
+            cli_flag_map()
+                .get("cratesio_filter.min_release_age_seconds")
+                .map(String::as_str),
+            Some("--cratesio-filter-min-release-age")
+        );
+    }
+
+    #[test]
     fn invalid_license_unknown_flag_is_rejected() {
         let result = Cli::try_parse_from([
             "kellnr",
