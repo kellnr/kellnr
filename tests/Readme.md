@@ -87,8 +87,8 @@ PLAYWRIGHT_UI=1 npm test
 
 # Specific browser
 npm test -- --project=chromium
-npm test -- --project=firefox
-npm test -- --project=webkit
+PLAYWRIGHT_UI=1 npm test -- --project=firefox
+PLAYWRIGHT_UI=1 npm test -- --project=webkit
 
 # Specific test file
 npm test -- ui-docs.spec.ts --project=chromium
