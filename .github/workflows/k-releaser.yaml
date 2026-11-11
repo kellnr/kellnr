@@ -10,7 +10,7 @@ jobs:
   # Release unpublished packages.
   k-releaser-release:
     name: k-releaser release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: ${{ github.repository_owner == 'kellnr' }} # Do not run on forks
     permissions:
       contents: write
@@ -34,7 +34,7 @@ jobs:
   # Create a PR with the new versions and changelog, preparing the next release.
   k-releaser-pr:
     name: k-releaser PR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: ${{ github.repository_owner == 'kellnr' }} # Do not run on forks
     permissions:
       contents: write
