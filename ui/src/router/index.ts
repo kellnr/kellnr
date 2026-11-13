@@ -65,6 +65,8 @@ const routes = [
     name: 'Crate',
     component: Crate,
     meta: {
+      // Placeholder until the crate page sets "<name> <version>"
+      title: 'Crate',
       requiresAuth: true,
     }
   },

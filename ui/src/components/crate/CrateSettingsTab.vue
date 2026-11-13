@@ -72,7 +72,7 @@
           <div>
             <!-- Saves on change, like the owner, user and group lists -->
             <v-checkbox :model-value="isDownloadRestricted" :disabled="!store.loggedInUserIsAdmin || savingAccess"
-              :loading="savingAccess" hide-details label="Restrict downloads to crate users only"
+              hide-details label="Restrict downloads to crate users only"
               class="settings-checkbox" data-testid="settings-download-restricted"
               @update:model-value="handleDownloadRestrictedChange"></v-checkbox>
             <p class="settings-help-text">
