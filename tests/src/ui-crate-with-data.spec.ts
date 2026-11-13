@@ -61,7 +61,8 @@ async function publishTestCrates(log: (msg: string) => void): Promise<void> {
 
 /**
  * Publishes test_lib 3.0.0 next to 2.0.0. Several tests need it, so a test
- * that runs alone publishes it itself; a second publish is a no-op.
+ * that runs alone publishes it itself; a second publish fails with
+ * "already exists", which the helper ignores.
  */
 async function publishTestLib3(): Promise<void> {
   const registryToken = extractRegistryTokenFromCargoConfig({

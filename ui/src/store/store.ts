@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import type { RoleFlags } from '../common/userRole'
 
 export interface State {
     loggedInUser: string | null
@@ -21,6 +22,10 @@ export const useStore = defineStore('store', {
     }),
     getters: {
         loggedIn: (state) => state.loggedInUser !== null,
+        loggedInUserFlags: (state): RoleFlags => ({
+            is_admin: state.loggedInUserIsAdmin,
+            is_read_only: state.loggedInUserIsReadOnly,
+        }),
         isDark: (state) => state.theme === 'dark',
         cargoSmallLogo: () => 'img/cargo-logo-small-light.png',
         kellnrSmallLogo: () => 'img/kellnr-crate.svg',

@@ -240,7 +240,7 @@ export async function addCrateOwner(
 ): Promise<ApiResult<void>> {
   return apiPut<void>(CRATE_OWNER(crateName, userName), null, {
     customErrors: {
-      403: 'Not allowed. Only existing owners or admins can add owners.',
+      403: 'Not allowed. Only crate owners with write access and admins can add owners.',
       404: 'User not found. Did you provide an existing user name?',
     },
   })
@@ -255,7 +255,7 @@ export async function removeCrateOwner(
 ): Promise<ApiResult<void>> {
   return apiDelete<void>(CRATE_OWNER(crateName, userName), undefined, {
     customErrors: {
-      403: 'Not allowed. Only existing owners or admins can remove owners.',
+      403: 'Not allowed. Only crate owners with write access and admins can remove owners.',
       409: 'A crate must have at least one owner.',
     },
   })

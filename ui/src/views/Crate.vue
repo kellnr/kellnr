@@ -100,7 +100,7 @@
 
           <!-- Versions Tab -->
           <CrateVersionsTab v-if="tab === 'versions'" :crate-name="crate.name" :versions="crate.versions"
-            :can-manage="canModifyCrate" @changed="refreshCrateData" />
+            :can-manage="userCanModifyCrate" @changed="refreshCrateData" />
 
           <!-- Dependencies Tab -->
           <template v-if="tab === 'dependencies'">
@@ -202,7 +202,7 @@ import CrateVersionsTab from "../components/crate/CrateVersionsTab.vue";
 import { EmptyState, SectionHeader } from "../components/common";
 import { computed, nextTick, onBeforeMount, ref, watch } from "vue";
 import { useNotification } from "../composables";
-import { canModifyCrate as canModifyCrateAs } from "../common/userRole";
+import { canModifyCrate } from "../common/userRole";
 import { useRoute, useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
@@ -328,25 +328,22 @@ function handleOwnersChanged(owners: string[]) {
   crateData.value.owners = owners;
 }
 
-// Admins and crate owners can manage owners, crate users and crate groups
-const canManageCrate = computed(() => {
-  if (store.loggedInUserIsAdmin) {
-    return true;
-  }
-  return store.loggedInUser !== null && crateData.value.owners.includes(store.loggedInUser);
-});
+const isCrateOwner = computed(() =>
+  store.loggedInUser !== null && crateData.value.owners.includes(store.loggedInUser)
+);
 
-const canModifyCrate = computed(() => canModifyCrateAs(
-  { is_admin: store.loggedInUserIsAdmin, is_read_only: store.loggedInUserIsReadOnly },
-  canManageCrate.value,
-));
+// Admins and crate owners see the settings tab and the access badge
+const canManageCrate = computed(() => store.loggedInUserIsAdmin || isCrateOwner.value);
+
+// Changes additionally need write access, see canModifyCrate
+const userCanModifyCrate = computed(() => canModifyCrate(store.loggedInUserFlags, isCrateOwner.value));
 
 function showBuildRustdoc(): boolean {
   if (!docsEnabled.value) {
     return false;
   }
   // The backend rejects doc builds by read-only owners
-  return canModifyCrate.value;
+  return userCanModifyCrate.value;
 }
 
 async function buildDoc(crateName: string, version: string) {
