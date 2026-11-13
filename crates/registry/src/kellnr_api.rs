@@ -34,6 +34,7 @@ use crate::pub_data::{EmptyCrateData, PubData};
 use crate::pub_success::{EmptyCrateSuccess, PubDataSuccess};
 use crate::registry_error::RegistryError;
 use crate::search_params::SearchParams;
+use crate::yank::{YankAction, change_yanked};
 use crate::yank_success::YankSuccess;
 use crate::{crate_group, crate_user, crate_version};
 
@@ -1011,25 +1012,14 @@ pub async fn yank(
     user: TokenUser,
     State(db): DbState,
 ) -> ApiResult<Json<YankSuccess>> {
-    // Check if user is read-only and can't yank crates.
-    // Admin users bypass this check as they can modify
-    // their read-only status.
-    require_writable(&user)?;
-
-    let crate_name = crate_name.to_canonical();
-    require_owner(&crate_name, &user, &db).await?;
-
-    db.yank_crate(&crate_name, &version).await?;
-
-    kellnr_webhooks::notify_crate(
-        WebhookEvent::CrateYank,
-        &Utc::now(),
-        &crate_name,
+    change_yanked(
+        YankAction::Yank,
+        &crate_name.to_canonical(),
         &version,
+        &user,
         &db,
     )
-    .await;
-
+    .await?;
     Ok(Json(YankSuccess::new()))
 }
 
@@ -1055,25 +1045,14 @@ pub async fn unyank(
     user: TokenUser,
     State(db): DbState,
 ) -> ApiResult<Json<YankSuccess>> {
-    // Check if user is read-only and can't unyank crates.
-    // Admin users bypass this check as they can modify
-    // their read-only status.
-    require_writable(&user)?;
-
-    let crate_name = crate_name.to_canonical();
-    require_owner(&crate_name, &user, &db).await?;
-
-    db.unyank_crate(&crate_name, &version).await?;
-
-    kellnr_webhooks::notify_crate(
-        WebhookEvent::CrateUnyank,
-        &Utc::now(),
-        &crate_name,
+    change_yanked(
+        YankAction::Unyank,
+        &crate_name.to_canonical(),
         &version,
+        &user,
         &db,
     )
-    .await;
-
+    .await?;
     Ok(Json(YankSuccess::new()))
 }
 
