@@ -4155,7 +4155,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4199,7 +4199,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-common"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "chrono",
  "rand 0.10.3",
@@ -4218,7 +4218,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-cratesio-sync"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "axum",
  "bytes",
@@ -4239,7 +4239,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-db"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "argon2",
  "chrono",
@@ -4267,7 +4267,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-db-testcontainer"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "quote",
  "syn 3.0.9",
@@ -4275,7 +4275,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-docgen"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4297,7 +4297,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-docs"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "axum",
  "bytes",
@@ -4323,7 +4323,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-embedded-resources"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "axum",
  "bytes",
@@ -4335,7 +4335,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-entity"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "sea-orm",
  "uuid",
@@ -4343,7 +4343,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-fakegcs-testcontainer"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "quote",
  "syn 3.0.9",
@@ -4351,7 +4351,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-filter"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "chrono",
  "kellnr-common",
@@ -4365,7 +4365,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-http"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4397,7 +4397,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-index"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "axum",
  "chrono",
@@ -4426,7 +4426,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-migration"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "async-std",
  "chrono",
@@ -4444,7 +4444,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-oauth2"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -4464,7 +4464,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-registry"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -4497,7 +4497,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-rustfs-testcontainer"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "quote",
  "syn 3.0.9",
@@ -4505,7 +4505,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-settings"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "clap",
  "kellnr-common",
@@ -4521,7 +4521,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-storage"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4543,7 +4543,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-test-db"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "kellnr-db",
  "kellnr-settings",
@@ -4557,7 +4557,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-toolchain"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "axum",
  "axum-extra",
@@ -4583,7 +4583,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-web-ui"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -4618,7 +4618,7 @@ dependencies = [
 
 [[package]]
 name = "kellnr-webhooks"
-version = "7.2.0"
+version = "7.3.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
