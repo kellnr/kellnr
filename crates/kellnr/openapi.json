@@ -1644,6 +1644,17 @@
         ],
         "type": "object"
       },
+      "ProxyEnabledResponse": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
       "PubDataSuccess": {
         "properties": {
           "warnings": {
@@ -6446,6 +6457,27 @@
           }
         },
         "summary": "Check if documentation generation is enabled",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/proxy_enabled": {
+      "get": {
+        "operationId": "proxy_enabled",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyEnabledResponse"
+                }
+              }
+            },
+            "description": "Crates.io proxy status"
+          }
+        },
+        "summary": "Check if the crates.io proxy is enabled",
         "tags": [
           "ui"
         ]
