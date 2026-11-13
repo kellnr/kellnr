@@ -46,8 +46,7 @@
             icon="mdi-package-variant-closed"
             text="Total crates"
             subtitle="Published to your registry"
-            to="/crates"
-            @click="showRegistryCrates">
+            :to="crateListLink(false)">
           </hero-stat-card>
         </v-col>
         <v-col cols="12" md="4">
@@ -56,8 +55,7 @@
             icon="mdi-tag-multiple"
             text="Total versions"
             subtitle="Across all crates"
-            :to="{ path: '/crates', query: { sort: 'updated' } }"
-            @click="showRegistryCrates">
+            :to="crateListLink(false, 'updated')">
           </hero-stat-card>
         </v-col>
         <v-col cols="12" md="4">
@@ -66,8 +64,7 @@
             icon="mdi-download"
             text="Total downloads"
             subtitle="From your registry"
-            :to="{ path: '/crates', query: { sort: 'downloads' } }"
-            @click="showRegistryCrates">
+            :to="crateListLink(false, 'downloads')">
           </hero-stat-card>
         </v-col>
       </v-row>
@@ -109,17 +106,16 @@
 
         <v-col cols="12" sm="6" md="4">
           <hero-stat-card :num="statistics.num_proxy_crates" icon="mdi-package-variant" text="Cached crates"
-            compact test-id-prefix="stat-card" to="/crates" @click="showCachedCrates"></hero-stat-card>
+            compact test-id-prefix="stat-card" :to="crateListLink(true)"></hero-stat-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <hero-stat-card :num="statistics.num_proxy_crate_versions" icon="mdi-tag-outline" text="Cached versions"
-            compact test-id-prefix="stat-card" :to="{ path: '/crates', query: { sort: 'updated' } }"
-            @click="showCachedCrates"></hero-stat-card>
+            compact test-id-prefix="stat-card" :to="crateListLink(true, 'updated')"></hero-stat-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <hero-stat-card :num="statistics.num_proxy_crate_downloads" icon="mdi-cloud-download"
             text="Cached downloads" compact test-id-prefix="stat-card"
-            :to="{ path: '/crates', query: { sort: 'downloads' } }" @click="showCachedCrates"></hero-stat-card>
+            :to="crateListLink(true, 'downloads')"></hero-stat-card>
         </v-col>
       </v-row>
     </template>
@@ -135,7 +131,8 @@ import type { CrateOverview } from '../types/crate_overview'
 import { crateService } from '../services'
 import { isSuccess } from '../services/api'
 import router from '../router'
-import { useStore } from '../store/store'
+import { buildCrateListQuery, DEFAULT_CRATE_SORT } from '../common/crateListQuery'
+import type { CrateSort } from '../types/api'
 
 // Crates shown in the "Recently updated" and "Most downloaded" lists
 const LIST_SIZE = 5
@@ -146,7 +143,6 @@ const statistics = ref<Statistics>()
 const recentCrates = ref<CrateOverview[]>([])
 const topCrates = ref<CrateOverview[]>([])
 const searchText = ref("")
-const store = useStore()
 
 onBeforeMount(async () => {
   const [stats, recent, top] = await Promise.all([
@@ -173,14 +169,8 @@ function searchCrates() {
   }
 }
 
-// The crate list shows registry or cached crates depending on the proxy switch.
-// A stat card link sets it before the list opens.
-function showRegistryCrates() {
-  store.searchCache = false
-}
-
-function showCachedCrates() {
-  store.searchCache = true
+function crateListLink(proxy: boolean, sort: CrateSort = DEFAULT_CRATE_SORT) {
+  return { path: '/crates', query: buildCrateListQuery({ search: '', sort, tags: {}, proxy }) }
 }
 
 </script>

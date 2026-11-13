@@ -17,6 +17,9 @@ export class LandingPage extends BasePage {
   readonly totalCratesCard: Locator;
   readonly totalVersionsCard: Locator;
   readonly totalDownloadsCard: Locator;
+  readonly cachedCratesCard: Locator;
+  readonly cachedVersionsCard: Locator;
+  readonly cachedDownloadsCard: Locator;
   readonly topCratesSection: Locator;
   readonly cachedCratesSection: Locator;
 
@@ -33,6 +36,9 @@ export class LandingPage extends BasePage {
     this.totalCratesCard = page.getByTestId("hero-stat-total-crates");
     this.totalVersionsCard = page.getByTestId("hero-stat-total-versions");
     this.totalDownloadsCard = page.getByTestId("hero-stat-total-downloads");
+    this.cachedCratesCard = page.getByTestId("stat-card-cached-crates");
+    this.cachedVersionsCard = page.getByTestId("stat-card-cached-versions");
+    this.cachedDownloadsCard = page.getByTestId("stat-card-cached-downloads");
 
     // Sections
     this.topCratesSection = page.getByTestId("landing-top-crates");

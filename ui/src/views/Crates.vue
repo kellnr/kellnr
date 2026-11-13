@@ -25,8 +25,8 @@
       </v-tooltip>
 
       <div v-if="proxyEnabled" class="d-flex align-center flex-grow-0">
-        <v-switch v-model="store.searchCache" color="primary" hide-details density="compact" class="flex-grow-0 proxy-switch"
-          data-testid="crates-proxy-toggle" @update:model-value="refreshCrates()">
+        <v-switch :model-value="proxy" color="primary" hide-details density="compact" class="flex-grow-0 proxy-switch"
+          data-testid="crates-proxy-toggle" @update:model-value="handleProxyChange">
           <template v-slot:label>
             <span class="switch-label" data-testid="crates-proxy-label">Crates proxy</span>
           </template>
@@ -99,13 +99,12 @@ import CrateCard from "../components/CrateCard.vue"
 import { PageHeader } from "../components/common"
 import type { CrateOverview } from "../types/crate_overview"
 import type { CrateSort, CrateTagFilter } from "../types/api"
-import { crateService } from "../services"
+import { crateService, settingsService } from "../services"
 import { isSuccess } from "../services/api"
 import { useRoute, useRouter } from "vue-router"
-import { useStore } from "../store/store"
 import { formatNumber } from "../common/format"
 import { debounce } from "../common/debounce"
-import { buildCrateListQuery, DEFAULT_CRATE_SORT, parseCrateSort } from "../common/crateListQuery"
+import { buildCrateListQuery, DEFAULT_CRATE_SORT, parseCrateProxy, parseCrateSort } from "../common/crateListQuery"
 
 // Constants
 const ITEMS_PER_PAGE = 20
@@ -131,12 +130,13 @@ const activeQuery = ref("")
 const sort = ref<CrateSort>(DEFAULT_CRATE_SORT)
 // Keyword and category filter, set by the links on a crate page
 const tags = ref<CrateTagFilter>({})
-// Hidden until the statistics confirm that the crates.io proxy is enabled
+// Lists the cached crates.io crates instead of the registry crates
+const proxy = ref(false)
+// Hides the proxy switch until the server confirms that the proxy is enabled
 const proxyEnabled = ref(false)
 const loadMoreSentinel = ref<HTMLElement | null>(null)
 const router = useRouter()
 const route = useRoute()
-const store = useStore()
 let observer: IntersectionObserver | undefined
 // Increased on every refresh, so responses for an older list are dropped
 let listGeneration = 0
@@ -174,6 +174,7 @@ onBeforeMount(() => {
     activeQuery.value = searchText.value.trim()
   }
   sort.value = parseCrateSort(query.sort) ?? DEFAULT_CRATE_SORT
+  proxy.value = parseCrateProxy(query.proxy)
   // A search and a tag filter are not combined, the search wins
   if (!activeQuery.value) {
     tags.value = tagsFromRoute()
@@ -190,6 +191,14 @@ watch(() => [route.query.keyword, route.query.category], () => {
     searchText.value = ""
     activeQuery.value = ""
   }
+  refreshCrates()
+})
+
+// A link to the registry or the cached crates while this view is open
+watch(() => route.query.proxy, value => {
+  const next = parseCrateProxy(value)
+  if (next === proxy.value) return
+  proxy.value = next
   refreshCrates()
 })
 
@@ -225,12 +234,13 @@ onBeforeUnmount(() => {
 })
 
 async function loadProxyEnabled() {
-  const result = await crateService.getStatistics()
+  const result = await settingsService.getProxyEnabled()
   if (!isSuccess(result)) return
-  proxyEnabled.value = result.data.proxy_enabled
-  // A switch left on while the proxy was enabled would otherwise stay on unseen
-  if (!proxyEnabled.value && store.searchCache) {
-    store.searchCache = false
+  proxyEnabled.value = result.data.enabled
+  // A link to the cached crates would otherwise keep the hidden switch on
+  if (!proxyEnabled.value && proxy.value) {
+    proxy.value = false
+    updateUrl()
     refreshCrates()
   }
 }
@@ -248,12 +258,12 @@ async function loadMoreCrates() {
       activeQuery.value,
       currentPage.value,
       ITEMS_PER_PAGE,
-      store.searchCache
+      proxy.value
     )
     : await crateService.getCrates(
       currentPage.value,
       ITEMS_PER_PAGE,
-      store.searchCache,
+      proxy.value,
       sort.value,
       tags.value
     )
@@ -311,7 +321,12 @@ function refreshCrates() {
 
 function updateUrl() {
   router.replace({
-    query: buildCrateListQuery({ search: activeQuery.value, sort: sort.value, tags: tags.value }),
+    query: buildCrateListQuery({
+      search: activeQuery.value,
+      sort: sort.value,
+      tags: tags.value,
+      proxy: proxy.value,
+    }),
   })
 }
 
@@ -334,6 +349,14 @@ function searchNow() {
 
 function clearTags() {
   tags.value = {}
+  updateUrl()
+  refreshCrates()
+}
+
+function handleProxyChange(value: boolean | null) {
+  const next = value === true
+  if (next === proxy.value) return
+  proxy.value = next
   updateUrl()
   refreshCrates()
 }

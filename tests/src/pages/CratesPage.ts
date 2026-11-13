@@ -50,6 +50,14 @@ export class CratesPage extends BasePage {
   }
 
   /**
+   * Navigate to the list of cached crates.io crates.
+   */
+  async gotoCachedCrates(): Promise<void> {
+    await super.goto("/crates?proxy=1");
+    await this.waitForPageLoad();
+  }
+
+  /**
    * Search for crates by name.
    */
   async search(query: string): Promise<void> {

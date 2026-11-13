@@ -4,6 +4,7 @@
  * Tests:
  * - Clicking "Total Crates" card navigates to crates page
  * - Clicking "Cached Crates" card navigates to crates page with proxy enabled
+ * - The stat card links carry the proxy mode in the URL
  * - Clicking a crate in the "Recently updated" list navigates to the crate page
  * - Non-clickable cards don't have cursor pointer styling
  *
@@ -100,7 +101,7 @@ test.describe("Landing Page Statistics Cards UI Tests", () => {
     // Verify we're on the crates page
     expect(page.url()).toBe(`${baseUrl}/crates`);
 
-    // Verify the proxy toggle is OFF (searchCache should be false)
+    // Without proxy=1 the list shows the registry crates
     const isProxyEnabled = await cratesPage.isCratesProxyEnabled();
     expect(isProxyEnabled).toBe(false);
   });
@@ -119,8 +120,7 @@ test.describe("Landing Page Statistics Cards UI Tests", () => {
     const hasCachedSection = await landingPage.hasCachedCratesSection();
     expect(hasCachedSection).toBe(true);
 
-    // Get the Cached Crates card
-    const cachedCratesCard = page.getByTestId("stat-card-cached-crates");
+    const cachedCratesCard = landingPage.cachedCratesCard;
     await expect(cachedCratesCard).toBeVisible();
 
     // Verify it has pointer cursor
@@ -129,16 +129,37 @@ test.describe("Landing Page Statistics Cards UI Tests", () => {
     // Click Cached Crates card
     await cachedCratesCard.click();
 
-    // Should navigate to crates page
-    await page.waitForURL(`${baseUrl}/crates`);
+    // The proxy mode is part of the URL
+    await page.waitForURL(`${baseUrl}/crates?proxy=1`);
     await cratesPage.waitForSearchResults();
 
-    // Verify we're on the crates page
-    expect(page.url()).toBe(`${baseUrl}/crates`);
+    expect(page.url()).toBe(`${baseUrl}/crates?proxy=1`);
 
-    // Verify the proxy toggle is ON (searchCache should be true)
+    // proxy=1 lists the cached crates.io crates
     const isProxyEnabled = await cratesPage.isCratesProxyEnabled();
     expect(isProxyEnabled).toBe(true);
+  });
+
+  test("stat card links carry the proxy mode", async ({ page }) => {
+    const landingPage = new LandingPage(page);
+
+    await page.goto(baseUrl);
+    await landingPage.waitForStatistics();
+
+    // Plain links, so a new tab opens the same list as a click
+    await expect(landingPage.totalCratesCard).toHaveAttribute("href", /\/crates$/);
+    await expect(landingPage.totalVersionsCard).toHaveAttribute("href", /\/crates\?sort=updated$/);
+    await expect(landingPage.totalDownloadsCard).toHaveAttribute("href", /\/crates\?sort=downloads$/);
+
+    await expect(landingPage.cachedCratesCard).toHaveAttribute("href", /\/crates\?proxy=1$/);
+    await expect(landingPage.cachedVersionsCard).toHaveAttribute(
+      "href",
+      /\/crates\?proxy=1&sort=updated$/
+    );
+    await expect(landingPage.cachedDownloadsCard).toHaveAttribute(
+      "href",
+      /\/crates\?proxy=1&sort=downloads$/
+    );
   });
 
   test("clicking a recently updated crate navigates to that crate's page", async ({
@@ -190,7 +211,7 @@ test.describe("Landing Page Statistics Cards UI Tests", () => {
     await expect(landingPage.totalCratesCard).toHaveCSS("cursor", "pointer");
 
     // Cached Crates card SHOULD have pointer cursor (it's clickable)
-    const cachedCratesCard = page.getByTestId("stat-card-cached-crates");
+    const cachedCratesCard = landingPage.cachedCratesCard;
     if (await cachedCratesCard.isVisible()) {
       await expect(cachedCratesCard).toHaveCSS("cursor", "pointer");
     }
