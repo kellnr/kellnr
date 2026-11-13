@@ -100,7 +100,7 @@
 
           <!-- Versions Tab -->
           <CrateVersionsTab v-if="tab === 'versions'" :crate-name="crate.name" :versions="crate.versions"
-            :can-manage="canChangeYank" @changed="refreshCrateData" />
+            :can-manage="canModifyCrate" @changed="refreshCrateData" />
 
           <!-- Dependencies Tab -->
           <template v-if="tab === 'dependencies'">
@@ -336,7 +336,7 @@ const canManageCrate = computed(() => {
 });
 
 // Admins are exempt from the read-only restriction, as in the backend
-const canChangeYank = computed(() =>
+const canModifyCrate = computed(() =>
   canManageCrate.value && (store.loggedInUserIsAdmin || !store.loggedInUserIsReadOnly)
 );
 
@@ -344,8 +344,8 @@ function showBuildRustdoc(): boolean {
   if (!docsEnabled.value) {
     return false;
   }
-  // Show the option to build the docs, if the current logged-in user is admin or owns the crate
-  return canManageCrate.value;
+  // Read-only owners cannot build docs, the backend rejects it like a yank
+  return canModifyCrate.value;
 }
 
 async function buildDoc(crateName: string, version: string) {
