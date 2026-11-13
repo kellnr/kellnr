@@ -2447,6 +2447,71 @@ async fn get_crate_overview_list_sorted_by_date_and_downloads(test_db: &kellnr_d
 }
 
 #[db_test]
+async fn get_crate_overview_list_sorts_names_case_insensitively(test_db: &kellnr_db::Database) {
+    let created = Utc.with_ymd_and_hms(2020, 10, 7, 13, 18, 00).unwrap();
+    for name in ["Zeta", "acme-core", "UpperCase-Name123", "beta"] {
+        test_add_crate_with_downloads(
+            test_db,
+            name,
+            "admin",
+            &Version::try_from("1.0.0").unwrap(),
+            None,
+            &created,
+            Some(1),
+        )
+        .await
+        .unwrap();
+    }
+    test_add_cached_crate_with_downloads(test_db, "Cached", "1.0.0", 1)
+        .await
+        .unwrap();
+    let names = |list: Vec<CrateOverview>| list.into_iter().map(|c| c.name).collect::<Vec<_>>();
+
+    let by_name = test_db
+        .get_crate_overview_list(
+            10,
+            0,
+            true,
+            &CrateVisibility::All,
+            CrateSort::Name,
+            &CrateTagFilter::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        vec!["acme-core", "beta", "Cached", "UpperCase-Name123", "Zeta"],
+        names(by_name)
+    );
+
+    // Equal download counts are ordered by name, ignoring case
+    let by_downloads = test_db
+        .get_crate_overview_list(
+            10,
+            0,
+            false,
+            &CrateVisibility::All,
+            CrateSort::Downloads,
+            &CrateTagFilter::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        vec!["acme-core", "beta", "UpperCase-Name123", "Zeta"],
+        names(by_downloads)
+    );
+
+    // Search results within one rank are ordered by name, ignoring case
+    let search = test_db
+        .search_in_crate_name_and_description("e", 10, 0, false, &CrateVisibility::All)
+        .await
+        .unwrap();
+    assert_eq!(
+        vec!["acme-core", "beta", "UpperCase-Name123", "Zeta"],
+        names(search)
+    );
+}
+
+#[db_test]
 async fn get_crate_overview_list_filters_by_keyword_and_category(test_db: &kellnr_db::Database) {
     let created = Utc::now();
     for (name, keywords, categories) in [

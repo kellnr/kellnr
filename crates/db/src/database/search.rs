@@ -288,6 +288,10 @@ impl Database {
                 ),
                 "search_rank",
             ),
+            (
+                Func::lower(Expr::col((CrateIden::Table, CrateIden::OriginalName))).into(),
+                "sort_name",
+            ),
         ]);
         query.from(CrateMetaIden::Table);
         query = Self::select_from_crates(query, contains);
@@ -317,6 +321,11 @@ impl Database {
                     ),
                     "search_rank",
                 ),
+                (
+                    Func::lower(Expr::col((CratesIoIden::Table, CratesIoIden::OriginalName)))
+                        .into(),
+                    "sort_name",
+                ),
             ]);
             query2.from(CratesIoMetaIden::Table);
             query2 = Self::select_from_cache(query2, contains);
@@ -325,7 +334,8 @@ impl Database {
         }
 
         // Ordering and optional limit/offset. The name breaks ties, so paging
-        // stays stable within one rank, date or download count.
+        // stays stable within one rank, date or download count. It is compared
+        // lowercased, as a UNION can only be ordered by its result columns.
         match sort {
             CrateSort::Name => query.order_by(Alias::new("search_rank"), Order::Asc),
             // Dates are stored as "YYYY-MM-DD HH:MM:SS", so they sort as text.
@@ -333,7 +343,9 @@ impl Database {
             CrateSort::Updated => query.order_by(Alias::new("date"), Order::Desc),
             CrateSort::Downloads => query.order_by(Alias::new("total_downloads"), Order::Desc),
         };
-        query.order_by(Alias::new("name"), Order::Asc);
+        query
+            .order_by(Alias::new("sort_name"), Order::Asc)
+            .order_by(Alias::new("name"), Order::Asc);
         if let Some((limit, offset)) = limit_offset {
             query.limit(limit).offset(offset);
         }
