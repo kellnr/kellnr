@@ -1,24 +1,33 @@
-##################
-# Builder image  #
-##################
-FROM alpine:3.23 AS builder
-
+# The kellnr binary comes from the GitHub release of VERSION. The release
+# workflow verifies the attestation of each zip and passes its digest, so the
+# download is pinned and recorded in the image provenance.
 ARG VERSION
+ARG KELLNR_SHA256_AMD64
+ARG KELLNR_SHA256_ARM64
 
-# Install only what's needed for downloading and extracting
-RUN apk add --no-cache curl zip lscpu sed bash
+FROM scratch AS kellnr-zip-amd64
+ARG VERSION
+ARG KELLNR_SHA256_AMD64
+ADD --checksum=sha256:${KELLNR_SHA256_AMD64} \
+    https://github.com/kellnr/kellnr/releases/download/v${VERSION}/kellnr-x86_64-unknown-linux-musl.zip /kellnr.zip
 
-# Download and install kellnr
-RUN curl -sL https://github.com/kellnr/installer/releases/download/v0.1.2/install.sh -o /tmp/install.sh && \
-    bash /tmp/install.sh -m -v ${VERSION} && \
-    rm /tmp/install.sh
+FROM scratch AS kellnr-zip-arm64
+ARG VERSION
+ARG KELLNR_SHA256_ARM64
+ADD --checksum=sha256:${KELLNR_SHA256_ARM64} \
+    https://github.com/kellnr/kellnr/releases/download/v${VERSION}/kellnr-aarch64-unknown-linux-musl.zip /kellnr.zip
+
+FROM kellnr-zip-${TARGETARCH} AS kellnr-zip
+
+FROM --platform=$BUILDPLATFORM alpine:3.23 AS kellnr-bin
+COPY --from=kellnr-zip /kellnr.zip /tmp/kellnr.zip
+RUN unzip -q /tmp/kellnr.zip -d /out && chmod 0755 /out/kellnr
 
 ##################
 # Runtime image  #
 ##################
 FROM alpine:3.23
 
-ARG DATADIR=/var/lib/kellnr
 ENV KELLNR_CONFIG_FILE=/etc/kellnr/kellnr.toml
 ENV KELLNR_SETUP__ADMIN_PWD=admin
 
@@ -31,17 +40,13 @@ RUN apk add --no-cache ca-certificates curl su-exec
 RUN addgroup -g 1000 kellnr && \
     adduser -D -u 1000 -G kellnr -h /home/kellnr -s /sbin/nologin kellnr
 
-# Copy the kellnr binary from the builder stage
-COPY --from=builder /usr/local/bin/kellnr /usr/local/bin/kellnr
-
-# COPY the config file from the builder stage
-RUN mkdir -p /etc/kellnr
-COPY --from=builder /etc/kellnr/kellnr.toml /etc/kellnr/kellnr.toml
+COPY --from=kellnr-bin /out/kellnr /usr/local/bin/kellnr
+COPY docker/kellnr.toml /etc/kellnr/kellnr.toml
 
 # Create the data directory
 # Group writable, so it works for the kellnr user, for --user 1000:1000 and
 # for root without capabilities (the entrypoint then keeps running as root).
-RUN install -d -o root -g kellnr -m 0775 ${DATADIR}
+RUN install -d -o root -g kellnr -m 0775 /var/lib/kellnr
 
 COPY docker/entrypoint.sh /usr/local/bin/kellnr-entrypoint.sh
 RUN chmod +x /usr/local/bin/kellnr-entrypoint.sh

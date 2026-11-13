@@ -173,6 +173,14 @@ sbom:
     cdxgen -r -o kellnr.cdx.json .
     @echo "SBOM generated: kellnr.cdx.json"
 
+# Reduce the SBOM to the crates and npm packages compiled into the kellnr binary
+sbom-binary: sbom
+    python3 .github/scripts/binary_sbom.py kellnr.cdx.json kellnr-binary.cdx.json
+
+# Test the Python scripts of the CI workflows
+test-scripts:
+    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts
+
 clean:
     cargo clean
 

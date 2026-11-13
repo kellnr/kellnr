@@ -1,0 +1,6 @@
+# Configuration of the Docker images. Settings that are not set here use
+# the defaults of kellnr, see "kellnr config show" for all settings.
+# KELLNR_* environment variables override this file.
+
+[registry]
+data_dir = "/var/lib/kellnr"

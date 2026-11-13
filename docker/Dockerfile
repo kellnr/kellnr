@@ -1,18 +1,38 @@
+# The kellnr binary comes from the GitHub release of VERSION. The release
+# workflow verifies the attestation of each zip and passes its digest, so the
+# download is pinned and recorded in the image provenance.
+ARG VERSION
+ARG KELLNR_SHA256_AMD64
+ARG KELLNR_SHA256_ARM64
+
+FROM scratch AS kellnr-zip-amd64
+ARG VERSION
+ARG KELLNR_SHA256_AMD64
+ADD --checksum=sha256:${KELLNR_SHA256_AMD64} \
+    https://github.com/kellnr/kellnr/releases/download/v${VERSION}/kellnr-x86_64-unknown-linux-gnu.zip /kellnr.zip
+
+FROM scratch AS kellnr-zip-arm64
+ARG VERSION
+ARG KELLNR_SHA256_ARM64
+ADD --checksum=sha256:${KELLNR_SHA256_ARM64} \
+    https://github.com/kellnr/kellnr/releases/download/v${VERSION}/kellnr-aarch64-unknown-linux-gnu.zip /kellnr.zip
+
+FROM kellnr-zip-${TARGETARCH} AS kellnr-zip
+
+FROM --platform=$BUILDPLATFORM alpine:3.23 AS kellnr-bin
+COPY --from=kellnr-zip /kellnr.zip /tmp/kellnr.zip
+RUN unzip -q /tmp/kellnr.zip -d /out && chmod 0755 /out/kellnr
+
 ##################
 # Runtime image  #
 ##################
 
 FROM rust:slim-trixie
 
-ARG VERSION
-
 RUN apt update
 RUN apt install -y \
     curl \
-    sed \
     git \
-    zip \
-    apt-utils \
     build-essential \
     llvm-dev \
     libclang-dev \
@@ -21,17 +41,15 @@ RUN apt install -y \
     pkg-config \
     libssl-dev
 
-RUN curl -sL https://github.com/kellnr/installer/releases/download/v0.1.2/install.sh -o /tmp/install.sh && \
-    bash /tmp/install.sh -v ${VERSION} && \
-    rm /tmp/install.sh
+COPY --from=kellnr-bin /out/kellnr /usr/local/bin/kellnr
+COPY docker/kellnr.toml /etc/kellnr/kellnr.toml
 RUN rustup component add rust-src
 
 # Capture the toolchain installed by the base image so the entrypoint can
 # pin RUSTUP_TOOLCHAIN to it. Prevents a rust-toolchain.toml shipped inside
 # a published crate (or a transitive dependency) from hijacking rustc
 # during docs generation. See issue #1176.
-RUN mkdir -p /etc/kellnr && \
-    rustup show active-toolchain | awk '{print $1}' > /etc/kellnr/active-toolchain
+RUN rustup show active-toolchain | awk '{print $1}' > /etc/kellnr/active-toolchain
 
 # Kellnr runs as an unprivileged user. The entrypoint starts as root to
 # update the CA certificates and to take over root-owned data volumes of
