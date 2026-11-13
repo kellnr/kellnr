@@ -1,12 +1,35 @@
 <template>
   <div>
-    <SectionHeader icon="mdi-shield-key" :title="SETTINGS_SECTION_TITLES.tokens" :count="tokens.length" />
+    <SectionHeader icon="mdi-shield-key" :title="SETTINGS_SECTION_TITLES.tokens" :count="tokens.length" role="heading" aria-level="2" />
 
     <div class="section-content">
       <p class="text-body-medium text-medium-emphasis mb-5">
         Authentication tokens allow you to publish crates via <code>cargo</code> without using your password.
         Tokens can be revoked at any time.
       </p>
+
+      <!-- The token is shown only once, so it stays until the user dismisses it -->
+      <v-alert
+        v-if="createdToken"
+        type="success"
+        variant="tonal"
+        closable
+        close-label="Dismiss token"
+        class="mb-6"
+        data-testid="token-created"
+        @click:close="createdToken = null"
+      >
+        <div class="token-created">
+          <p class="font-weight-medium mb-1">Token "{{ createdToken.name }}" created</p>
+          <p class="text-body-medium mb-3">Copy it now, it will not be shown again.</p>
+
+          <p class="text-body-medium mb-0">1. Run this command:</p>
+          <CodeBlock :code="loginCommand" class="token-code" />
+
+          <p class="text-body-medium mb-0">2. Paste the token when cargo asks for it:</p>
+          <CodeBlock :code="createdToken.value" language="plaintext" class="token-code" data-testid="token-value" />
+        </div>
+      </v-alert>
 
       <!-- Existing Tokens -->
       <div v-if="tokens.length > 0" class="tokens-section mb-6">
@@ -33,13 +56,13 @@
             </template>
             <template #actions>
               <v-btn
-                size="small"
-                color="error"
                 variant="tonal"
-                @click="handleDeleteToken(token)"
+                class="kellnr-danger-btn"
+                data-testid="token-revoke"
+                @click="handleRevokeToken(token)"
               >
-                <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
-                Delete
+                <v-icon icon="mdi-cancel" size="small" class="me-1"></v-icon>
+                Revoke
               </v-btn>
             </template>
           </ListItem>
@@ -59,6 +82,7 @@
           <div class="form-row">
             <v-text-field
               v-model="tokenName"
+              aria-label="Token name"
               placeholder="Enter a descriptive name for the token"
               prepend-inner-icon="mdi-tag-outline"
               variant="outlined"
@@ -78,36 +102,6 @@
           </div>
         </v-form>
 
-        <!-- Token Created Alert -->
-        <v-alert
-          v-if="createStatus.isSuccess"
-          type="success"
-          variant="tonal"
-          closable
-          @click:close="createStatus.clear()"
-          class="mt-4"
-        >
-          <div class="token-created">
-            <div class="d-flex align-center mb-2">
-              <span class="font-weight-medium">{{ createStatus.message }}</span>
-            </div>
-
-            <div v-if="createdTokenValue" class="token-display">
-              <code class="token-value">{{ createdTokenValue }}</code>
-              <v-btn
-                color="primary"
-                variant="flat"
-                @click="copyToken"
-                size="small"
-              >
-                <v-icon icon="mdi-content-copy" size="small" class="me-1"></v-icon>
-                Copy
-              </v-btn>
-            </div>
-          </div>
-        </v-alert>
-
-        <!-- Error Alert -->
         <v-alert
           v-if="createStatus.isError"
           type="error"
@@ -121,15 +115,21 @@
       </FormSection>
     </div>
 
-    <!-- Delete Confirmation Dialog -->
+    <NotificationSnackbar
+      v-model="notification.snackbar.show"
+      :message="notification.snackbar.message"
+      :color="notification.snackbar.color"
+      :timeout="notification.snackbar.timeout"
+    />
+
     <ConfirmDialog
       v-model="dialogOpen"
       :title="dialog.title"
       :message="dialog.message"
       sub-message="Any applications using this token will no longer be able to authenticate."
-      confirm-text="Delete token"
+      :confirm-text="dialog.confirmText"
       confirm-color="error"
-      confirm-icon="mdi-delete"
+      confirm-icon="mdi-cancel"
       @confirm="dialog.confirm()"
       @cancel="dialog.cancel()"
     />
@@ -138,10 +138,12 @@
 
 <script setup lang="ts">
 import { onBeforeMount, ref, computed } from "vue"
-import { useStatusMessage, useConfirmCallback, useRelativeTime } from "../composables"
+import { useStatusMessage, useConfirmCallback, useRelativeTime, useNotification } from "../composables"
 import { tokenService } from "../services"
 import { isSuccess } from "../services/api"
 import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
+import { cargoLoginCommand } from "../common/tokenSetup"
+import "../common/actionButtons.css"
 import type { Token } from "../types/token"
 import {
   SectionHeader,
@@ -150,16 +152,26 @@ import {
   EmptyState,
   FormSection,
   ConfirmDialog,
+  CodeBlock,
+  NotificationSnackbar,
 } from "./common"
+
+interface CreatedToken {
+  name: string
+  value: string
+}
+
+const loginCommand = cargoLoginCommand()
 
 // State
 const tokens = ref<Token[]>([])
 const tokenName = ref("")
-const createdTokenValue = ref("")
+const createdToken = ref<CreatedToken | null>(null)
 const createLoading = ref(false)
 
 // Composables
 const createStatus = useStatusMessage()
+const notification = useNotification()
 const { fromNow, exactDate } = useRelativeTime()
 const { dialog, showConfirm } = useConfirmCallback()
 
@@ -174,15 +186,15 @@ onBeforeMount(() => {
   loadTokens()
 })
 
-// Load tokens from API
 async function loadTokens() {
   const result = await tokenService.getTokens()
   if (isSuccess(result)) {
     tokens.value = result.data
+  } else {
+    notification.showError(`Failed to load tokens: ${result.error.message}`)
   }
 }
 
-// Create a new token
 async function handleCreateToken() {
   const name = tokenName.value.trim()
   if (!name) {
@@ -198,8 +210,7 @@ async function handleCreateToken() {
   createLoading.value = false
 
   if (isSuccess(result)) {
-    createdTokenValue.value = result.data.token
-    createStatus.setSuccess("Token created! Copy and save it now, it won't be shown again.")
+    createdToken.value = { name, value: result.data.token }
     tokenName.value = ""
     await loadTokens()
   } else {
@@ -207,34 +218,22 @@ async function handleCreateToken() {
   }
 }
 
-// Handle delete token with confirmation
-function handleDeleteToken(token: Token) {
+function handleRevokeToken(token: Token) {
   showConfirm({
-    title: "Delete token",
-    message: `Are you sure you want to delete the token "${token.name}"?`,
+    title: "Revoke token",
+    message: `Are you sure you want to revoke the token "${token.name}"?`,
+    confirmText: "Revoke token",
     confirmColor: "error",
     onConfirm: async () => {
       const result = await tokenService.deleteToken(token.id)
       if (isSuccess(result)) {
+        notification.showSuccess(`Token "${token.name}" revoked`)
         await loadTokens()
+      } else {
+        notification.showError(`Failed to revoke token "${token.name}": ${result.error.message}`)
       }
     }
   })
-}
-
-// Copy token to clipboard
-function copyToken() {
-  navigator.clipboard.writeText(createdTokenValue.value)
-    .then(() => {
-      const originalMessage = createStatus.message.value
-      createStatus.setSuccess("Token copied to clipboard!")
-      setTimeout(() => {
-        createStatus.setSuccess(originalMessage)
-      }, 2000)
-    })
-    .catch(err => {
-      console.error("Failed to copy token:", err)
-    })
 }
 </script>
 
@@ -285,27 +284,15 @@ function copyToken() {
 /* Token Created Display */
 .token-created {
   width: 100%;
+  min-width: 0;
 }
 
-.token-display {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: var(--kellnr-radius);
-  margin-top: 8px;
+.token-code {
+  margin: 8px 0 16px;
 }
 
-.token-value {
-  flex: 1;
-  word-break: break-all;
-  font-family: var(--kellnr-font-mono);
-  font-size: 13px;
-  background: transparent !important;
-  padding: 0 !important;
-  color: rgb(var(--v-theme-on-surface));
+.token-code:last-child {
+  margin-bottom: 0;
 }
 
 /* Responsive */
@@ -320,11 +307,6 @@ function copyToken() {
 
   .token-input {
     width: 100%;
-  }
-
-  .token-display {
-    flex-direction: column;
-    align-items: stretch;
   }
 }
 </style>

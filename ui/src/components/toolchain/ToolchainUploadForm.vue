@@ -1,57 +1,78 @@
 <template>
   <FormSection icon="mdi-upload" title="Upload toolchain">
     <v-form @submit.prevent="handleUpload" class="upload-form">
+      <p class="text-body-small text-medium-emphasis mb-3">Fields marked with <span aria-hidden="true">*</span> are required.</p>
       <div class="form-grid">
-        <v-text-field
-          v-model="uploadForm.name"
-          label="Component name"
-          placeholder="rust"
-          prepend-inner-icon="mdi-package-variant"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-        ></v-text-field>
+        <div class="form-field">
+          <label class="field-label" for="toolchain-name">Component name<span class="required-marker" aria-hidden="true"> *</span></label>
+          <v-text-field
+            id="toolchain-name"
+            v-model="uploadForm.name"
+            placeholder="rust"
+            prepend-inner-icon="mdi-package-variant"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            required
+          ></v-text-field>
+        </div>
 
-        <v-text-field
-          v-model="uploadForm.version"
-          label="Version"
-          placeholder="1.75.0"
-          prepend-inner-icon="mdi-tag"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-        ></v-text-field>
+        <div class="form-field">
+          <label class="field-label" for="toolchain-version">Version<span class="required-marker" aria-hidden="true"> *</span></label>
+          <v-text-field
+            id="toolchain-version"
+            v-model="uploadForm.version"
+            placeholder="1.75.0"
+            prepend-inner-icon="mdi-tag"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            required
+          ></v-text-field>
+        </div>
 
-        <v-text-field
-          v-model="uploadForm.target"
-          label="Target triple"
-          placeholder="x86_64-unknown-linux-gnu"
-          prepend-inner-icon="mdi-chip"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-        ></v-text-field>
+        <div class="form-field">
+          <label class="field-label" for="toolchain-target">Target triple<span class="required-marker" aria-hidden="true"> *</span></label>
+          <v-text-field
+            id="toolchain-target"
+            v-model="uploadForm.target"
+            placeholder="x86_64-unknown-linux-gnu"
+            prepend-inner-icon="mdi-chip"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            required
+          ></v-text-field>
+        </div>
 
-        <v-text-field
-          v-model="uploadForm.date"
-          label="Release date"
-          placeholder="2024-01-15"
-          prepend-inner-icon="mdi-calendar"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-        ></v-text-field>
+        <div class="form-field">
+          <label class="field-label" for="toolchain-date">Release date<span class="required-marker" aria-hidden="true"> *</span></label>
+          <v-text-field
+            id="toolchain-date"
+            v-model="uploadForm.date"
+            placeholder="2024-01-15"
+            prepend-inner-icon="mdi-calendar"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            required
+          ></v-text-field>
+        </div>
 
-        <v-select
-          v-model="uploadForm.channel"
-          :items="channelOptions"
-          label="Channel (Optional)"
-          prepend-inner-icon="mdi-source-branch"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-        ></v-select>
+        <div class="form-field">
+          <label class="field-label" for="toolchain-channel">Channel (optional)</label>
+          <v-select
+            id="toolchain-channel"
+            v-model="uploadForm.channel"
+            :items="channelOptions"
+            placeholder="No channel"
+            prepend-inner-icon="mdi-source-branch"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            clearable
+          ></v-select>
+        </div>
       </div>
 
       <div class="file-upload-area mt-4">
@@ -225,6 +246,22 @@ function formatSize(bytes: number): string {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.required-marker {
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
 .form-grid :deep(.v-field) {

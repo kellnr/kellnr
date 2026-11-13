@@ -1,147 +1,150 @@
 <template>
   <v-container fluid class="login-container pa-0">
-    <v-row justify="center">
-      <v-col cols="12" sm="10" md="6" lg="4" xl="3" class="login-col">
-        <v-card class="login-card" elevation="0">
-          <!-- Header -->
-          <div class="login-header">
-            <h1 class="login-title" data-testid="login-title">Welcome back</h1>
-            <p class="login-subtitle">Log in to your Kellnr account</p>
-          </div>
+    <div class="login-col">
+      <v-card class="login-card" elevation="0">
+        <!-- Header -->
+        <div class="login-header">
+          <h1 class="login-title" data-testid="login-title">Welcome back</h1>
+          <p class="login-subtitle">Log in to your Kellnr account</p>
+        </div>
 
-          <!-- Form -->
-          <v-card-text class="pa-6">
-            <v-form
-              v-if="!ssoEnforced"
-              ref="form"
-              @submit.prevent="handleLogin"
-              v-model="isFormValid"
-            >
-              <div class="input-group">
-                <label class="input-label" for="login-username">Username</label>
-                <v-text-field
-                  id="login-username"
-                  v-model="username"
-                  data-testid="login-username"
-                  autocomplete="username"
-                  hide-details="auto"
-                  placeholder="Enter your username"
-                  prepend-inner-icon="mdi-account-outline"
-                  variant="outlined"
-                  :rules="usernameRules"
-                  required
-                  density="comfortable"
-                  class="login-input"
-                  rounded="lg"
-                />
-              </div>
-
-              <div class="input-group">
-                <label class="input-label" for="login-password">Password</label>
-                <v-text-field
-                  id="login-password"
-                  v-model="password"
-                  data-testid="login-password"
-                  autocomplete="current-password"
-                  hide-details="auto"
-                  placeholder="Enter your password"
-                  prepend-inner-icon="mdi-lock-outline"
-                  type="password"
-                  variant="outlined"
-                  :rules="passwordRules"
-                  required
-                  density="comfortable"
-                  class="login-input"
-                  rounded="lg"
-                />
-              </div>
-
-              <v-checkbox
-                v-model="store.rememberMe"
-                data-testid="login-remember-me"
-                label="Remember me"
-                color="primary"
-                hide-details
-                class="remember-checkbox"
-              />
-
-              <v-alert
-                v-if="status.hasStatus"
-                data-testid="login-alert"
-                :type="status.isSuccess ? 'success' : 'error'"
-                class="mt-4"
-                density="compact"
-                variant="tonal"
-                closable
-                rounded="lg"
-                @click:close="status.clear()"
-              >
-                {{ status.message }}
-              </v-alert>
-
-              <v-btn
-                color="primary"
-                size="large"
-                type="submit"
-                data-testid="login-submit"
-                block
-                :disabled="!isFormValid"
-                :loading="loading"
-                class="login-button mt-6"
-                rounded="lg"
-              >
-                <v-icon icon="mdi-login" class="mr-2" />
-                Log in
-              </v-btn>
-            </v-form>
-
-            <!-- OAuth2/SSO Login -->
-            <template v-if="oauth2Enabled">
-              <div v-if="!ssoEnforced" class="oauth2-divider" data-testid="login-oauth2-divider">
-                <span>or</span>
-              </div>
-
-              <v-btn
-                color="primary"
-                size="large"
+        <!-- Form -->
+        <v-card-text class="pa-6">
+          <v-form
+            v-if="!ssoEnforced"
+            ref="form"
+            :validate-on="loginValidateOn(submitAttempted)"
+            @submit.prevent="handleLogin"
+          >
+            <div class="input-group">
+              <label class="input-label" for="login-username">Username</label>
+              <v-text-field
+                id="login-username"
+                ref="usernameField"
+                v-model="username"
+                data-testid="login-username"
+                autocomplete="username"
+                hide-details="auto"
+                placeholder="Enter your username"
+                prepend-inner-icon="mdi-account-outline"
                 variant="outlined"
-                block
-                data-testid="login-oauth2-button"
-                class="oauth2-button"
+                :rules="[required('Username')]"
+                required
+                density="comfortable"
+                class="login-input"
                 rounded="lg"
-                :disabled="!oauth2Available"
-                @click="handleOAuth2Login"
-              >
-                <v-icon icon="mdi-shield-account" class="mr-2" />
-                {{ oauth2ButtonText }}
-              </v-btn>
-              <p
-                v-if="!oauth2Available"
-                class="text-caption text-medium-emphasis text-center mt-2"
-                data-testid="login-oauth2-unavailable"
-              >
-                Single sign-on is temporarily unavailable. Please try again later.
-              </p>
-            </template>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
+              />
+            </div>
+
+            <div class="input-group">
+              <label class="input-label" for="login-password">Password</label>
+              <v-text-field
+                id="login-password"
+                ref="passwordField"
+                v-model="password"
+                data-testid="login-password"
+                autocomplete="current-password"
+                hide-details="auto"
+                placeholder="Enter your password"
+                prepend-inner-icon="mdi-lock-outline"
+                type="password"
+                variant="outlined"
+                :rules="[required('Password')]"
+                required
+                density="comfortable"
+                class="login-input"
+                rounded="lg"
+              />
+            </div>
+
+            <v-checkbox
+              v-model="store.rememberMe"
+              data-testid="login-remember-me"
+              label="Remember me"
+              color="primary"
+              hide-details
+              class="remember-checkbox"
+            />
+
+            <v-alert
+              v-if="status.hasStatus"
+              data-testid="login-alert"
+              :type="status.isSuccess ? 'success' : 'error'"
+              class="mt-4"
+              density="compact"
+              variant="tonal"
+              closable
+              rounded="lg"
+              @click:close="status.clear()"
+            >
+              {{ status.message }}
+            </v-alert>
+
+            <v-btn
+              color="primary"
+              size="large"
+              type="submit"
+              data-testid="login-submit"
+              block
+              :loading="loading"
+              class="login-button mt-6"
+              rounded="lg"
+            >
+              <v-icon icon="mdi-login" class="mr-2" />
+              Log in
+            </v-btn>
+          </v-form>
+
+          <!-- OAuth2/SSO Login -->
+          <template v-if="oauth2Enabled">
+            <div v-if="!ssoEnforced" class="oauth2-divider" data-testid="login-oauth2-divider">
+              <span>or</span>
+            </div>
+
+            <v-btn
+              color="primary"
+              size="large"
+              variant="outlined"
+              block
+              data-testid="login-oauth2-button"
+              class="oauth2-button"
+              rounded="lg"
+              :disabled="!oauth2Available"
+              @click="handleOAuth2Login"
+            >
+              <v-icon icon="mdi-shield-account" class="mr-2" />
+              {{ oauth2ButtonText }}
+            </v-btn>
+            <p
+              v-if="!oauth2Available"
+              class="text-caption text-medium-emphasis text-center mt-2"
+              data-testid="login-oauth2-unavailable"
+            >
+              Single sign-on is temporarily unavailable. Please try again later.
+            </p>
+          </template>
+        </v-card-text>
+      </v-card>
+    </div>
   </v-container>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { nextTick, onMounted, ref } from "vue"
+import type { VForm, VTextField } from "vuetify/components"
 import { useStore } from "../store/store"
 import { useStatusMessage } from "../composables"
 import { userService, settingsService } from "../services"
 import { isSuccess } from "../services/api"
 import router from "../router"
 import { startSsoLogin } from "../common/ssoLogin"
+import { loginValidateOn, required } from "../common/loginForm"
 
 // State
-const form = ref(null)
-const isFormValid = ref(false)
+const form = ref<VForm | null>(null)
+const usernameField = ref<VTextField | null>(null)
+const passwordField = ref<VTextField | null>(null)
+const submitAttempted = ref(false)
 const loading = ref(false)
 const username = ref("")
 const password = ref("")
@@ -156,19 +159,17 @@ const ssoEnforced = ref(false)
 // Composables
 const status = useStatusMessage()
 
-// Validation rules
-const usernameRules = [
-  (v: string) => !!v || 'Username is required',
-]
-
-const passwordRules = [
-  (v: string) => !!v || 'Password is required',
-]
-
 // Lifecycle
 onMounted(async () => {
   if (store.rememberMe && store.rememberMeUser !== null) {
     username.value = store.rememberMeUser
+  }
+  // A remembered username is filled in already, so the password comes next
+  await nextTick()
+  if (username.value) {
+    passwordField.value?.focus()
+  } else {
+    usernameField.value?.focus()
   }
 
   // Check for OAuth2 error in query params (from error callback)
@@ -197,7 +198,9 @@ function handleOAuth2Login() {
 
 // Handle login
 async function handleLogin() {
-  if (!isFormValid.value) {
+  submitAttempted.value = true
+  const validation = await form.value?.validate()
+  if (!validation?.valid) {
     return
   }
 
@@ -241,7 +244,9 @@ async function handleLogin() {
 
 <style scoped>
 .login-col {
-  margin-top: 32px;
+  width: 100%;
+  max-width: 400px;
+  margin: 32px auto 0;
 }
 
 .login-card {

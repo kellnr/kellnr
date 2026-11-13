@@ -4,9 +4,11 @@
       :icon="editingGroup ? 'mdi-account-group' : 'mdi-account-group'"
       :title="editingGroup ? `Edit Group: ${editingGroup}` : SETTINGS_SECTION_TITLES.groups"
       :count="!editingGroup ? groups.length : undefined"
+      role="heading"
+      aria-level="2"
     >
       <template v-if="editingGroup" #actions>
-        <v-btn variant="text" size="small" class="ms-auto" @click="cancelEditGroup">
+        <v-btn variant="text" class="ms-auto" data-testid="group-edit-back" @click="cancelEditGroup">
           <v-icon icon="mdi-arrow-left" size="small" class="me-1"></v-icon>
           Back
         </v-btn>
@@ -33,9 +35,8 @@
             >
               <template #actions>
                 <v-btn
-                  color="primary"
                   variant="tonal"
-                  size="small"
+                  data-testid="group-edit"
                   @click="startEditGroup(group.name)"
                 >
                   <v-icon icon="mdi-pencil-outline" size="small" class="me-1"></v-icon>
@@ -43,9 +44,9 @@
                 </v-btn>
 
                 <v-btn
-                  color="error"
                   variant="tonal"
-                  size="small"
+                  class="kellnr-danger-btn"
+                  data-testid="group-delete"
                   @click="handleDeleteGroup(group.name)"
                 >
                   <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
@@ -112,9 +113,9 @@
             >
               <template #actions>
                 <v-btn
-                  color="error"
                   variant="tonal"
-                  size="small"
+                  class="kellnr-danger-btn"
+                  data-testid="group-member-remove"
                   @click="handleRemoveMember(member.name)"
                 >
                   <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
@@ -202,6 +203,7 @@
 
 <script setup lang="ts">
 import { onBeforeMount, ref, computed } from "vue"
+import "../common/actionButtons.css"
 import { useStatusMessage, useConfirmCallback, useNotification } from "../composables"
 import { groupService, userService } from "../services"
 import { isSuccess } from "../services/api"
