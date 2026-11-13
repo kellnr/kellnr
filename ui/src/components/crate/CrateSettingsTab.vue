@@ -18,9 +18,9 @@
               <v-icon icon="mdi-account" size="small" class="me-3"></v-icon>
               <span class="settings-list-item-name" data-testid="settings-owner-name">{{ owner.login }}</span>
             </div>
-            <v-btn :disabled="!canManageOwners" color="error" variant="tonal" size="small"
+            <v-btn :disabled="!canManageOwners" variant="outlined" height="36"
               @click="handleDeleteOwner(owner.login)" data-testid="settings-owner-remove">
-              <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+              <v-icon icon="mdi-delete-outline" size="small" color="error" class="me-1"></v-icon>
               Remove
             </v-btn>
           </div>
@@ -69,10 +69,12 @@
           <v-alert v-if="!store.loggedInUserIsAdmin" type="info" variant="tonal" class="mb-4">
             Only admins can change download restrictions.
           </v-alert>
-          <v-form @submit.prevent="handleSaveAccessData">
-            <v-checkbox v-model="isDownloadRestricted" :disabled="!store.loggedInUserIsAdmin" hide-details
-              label="Restrict downloads to crate users only" class="settings-checkbox"
-              data-testid="settings-download-restricted"></v-checkbox>
+          <div>
+            <!-- Saves on change, like the owner, user and group lists -->
+            <v-checkbox :model-value="isDownloadRestricted" :disabled="!store.loggedInUserIsAdmin || savingAccess"
+              :loading="savingAccess" hide-details label="Restrict downloads to crate users only"
+              class="settings-checkbox" data-testid="settings-download-restricted"
+              @update:model-value="handleDownloadRestrictedChange"></v-checkbox>
             <p class="settings-help-text">
               When enabled, only users explicitly added as crate users can download this crate.
               Requires <code>auth_required = true</code> in kellnr configuration.
@@ -82,12 +84,7 @@
               @click:close="accessStatus.clear()" class="mb-3">
               {{ accessStatus.message }}
             </v-alert>
-            <v-btn :disabled="!store.loggedInUserIsAdmin" color="primary" type="submit" variant="flat" size="small"
-              data-testid="settings-save-access">
-              <v-icon icon="mdi-content-save" size="small" class="me-1"></v-icon>
-              Save changes
-            </v-btn>
-          </v-form>
+          </div>
         </div>
 
         <!-- Crate users -->
@@ -104,9 +101,9 @@
                 <v-icon icon="mdi-account" size="small" class="me-3"></v-icon>
                 <span class="settings-list-item-name" data-testid="settings-user-name">{{ user.login }}</span>
               </div>
-              <v-btn color="error" variant="tonal" size="small" @click="handleDeleteUser(user.login)"
+              <v-btn variant="outlined" height="36" @click="handleDeleteUser(user.login)"
                 data-testid="settings-user-remove">
-                <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                <v-icon icon="mdi-delete-outline" size="small" color="error" class="me-1"></v-icon>
                 Remove
               </v-btn>
             </div>
@@ -147,9 +144,9 @@
                 <v-icon icon="mdi-account-group" size="small" class="me-3"></v-icon>
                 <span class="settings-list-item-name" data-testid="settings-group-name">{{ group.name }}</span>
               </div>
-              <v-btn color="error" variant="tonal" size="small" @click="handleDeleteGroup(group.name)"
+              <v-btn variant="outlined" height="36" @click="handleDeleteGroup(group.name)"
                 data-testid="settings-group-remove">
-                <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
+                <v-icon icon="mdi-delete-outline" size="small" color="error" class="me-1"></v-icon>
                 Remove
               </v-btn>
             </div>
@@ -177,13 +174,20 @@
         </div>
       </v-card-text>
     </v-card>
+
+    <!-- Closing the dialog in any way other than confirming counts as cancel -->
+    <ConfirmDialog :model-value="confirmDialog.isOpen.value" :title="confirmDialog.title.value"
+      :message="confirmDialog.message.value" :confirm-text="confirmDialog.confirmText.value"
+      confirm-color="error" confirm-icon="mdi-delete" @confirm="confirmDialog.confirm()"
+      @update:model-value="(open: boolean) => { if (!open) confirmDialog.cancel() }" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useStore } from '../../store/store'
-import { useStatusMessage } from '../../composables'
+import { useConfirmDialog, useStatusMessage } from '../../composables'
+import { ConfirmDialog } from '../common'
 import { crateService, groupService } from '../../services'
 import { isSuccess } from '../../services/api'
 import type { CrateGroup } from '../../types/crate_data'
@@ -221,6 +225,17 @@ const allGroups = ref<CrateGroup[]>([])
 // null instead of '' so the combobox shows its placeholder
 const newGroupName = ref<string | null>(null)
 const isDownloadRestricted = ref(false)
+const savingAccess = ref(false)
+const confirmDialog = useConfirmDialog()
+
+function confirmRemoval(kind: string, name: string): Promise<boolean> {
+  return confirmDialog.show({
+    title: `Remove crate ${kind}`,
+    message: `Remove the crate ${kind} "${name}" from ${props.crateName}?`,
+    confirmText: 'Remove',
+    confirmColor: 'error',
+  })
+}
 
 // Computed
 const canManageOwners = computed(() => {
@@ -284,7 +299,7 @@ async function handleDeleteOwner(name: string) {
     return
   }
 
-  if (!confirm(`Delete crate owner "${name}"?`)) return
+  if (!await confirmRemoval('owner', name)) return
 
   const result = await crateService.deleteCrateOwner(props.crateName, name)
   deleteOwnerStatus.setFromResult(result, 'Crate owner successfully deleted.')
@@ -314,7 +329,7 @@ async function handleAddUser() {
 }
 
 async function handleDeleteUser(name: string) {
-  if (!confirm(`Delete crate user "${name}"?`)) return
+  if (!await confirmRemoval('user', name)) return
 
   const result = await crateService.deleteCrateUser(props.crateName, name)
   deleteUserStatus.setFromResult(result, 'Crate user successfully deleted.')
@@ -359,7 +374,7 @@ async function handleAddGroup() {
 }
 
 async function handleDeleteGroup(name: string) {
-  if (!confirm(`Delete crate group "${name}"?`)) return
+  if (!await confirmRemoval('group', name)) return
 
   const result = await crateService.deleteCrateGroup(props.crateName, name)
   deleteGroupStatus.setFromResult(result, 'Crate group successfully deleted.')
@@ -377,17 +392,23 @@ async function loadAccessData() {
   }
 }
 
-async function handleSaveAccessData() {
-  const result = await crateService.setCrateAccessData(props.crateName, isDownloadRestricted.value)
+async function handleDownloadRestrictedChange(value: boolean | null) {
+  const restricted = value === true
+  const previous = isDownloadRestricted.value
+  isDownloadRestricted.value = restricted
+  savingAccess.value = true
+  const result = await crateService.setCrateAccessData(props.crateName, restricted)
+  savingAccess.value = false
   if (isSuccess(result)) {
+    isDownloadRestricted.value = result.data.download_restricted
     const message = result.data.download_restricted
       ? 'Crate access restricted to crate users only.'
       : 'Crate access open to all.'
     accessStatus.setSuccess(message)
-    await loadAccessData()
     emit('access-changed')
   } else {
-    accessStatus.setError(result.error.message)
+    isDownloadRestricted.value = previous
+    accessStatus.setError(`Failed to change the download restriction: ${result.error.message}`)
   }
 }
 </script>

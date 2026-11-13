@@ -8,10 +8,14 @@
       <v-alert type="warning" variant="tonal" class="mb-5 admin-alert">
         <div class="admin-alert-content">
           <span>
-            Consider <a href="https://doc.rust-lang.org/cargo/commands/cargo-yank.html" target="_blank" rel="noopener noreferrer" class="admin-link">yanking</a>
-            the crate instead of deleting it. Yanking prevents new dependencies but doesn't break existing ones.
+            Consider yanking a version instead of deleting it. Yanking prevents new dependencies
+            but does not break existing ones.
           </span>
         </div>
+        <v-btn variant="outlined" class="mt-3" height="36" prepend-icon="mdi-tag-arrow-down-outline"
+          data-testid="admin-show-versions" @click="emit('show-versions')">
+          Yank in the Versions tab
+        </v-btn>
       </v-alert>
 
       <div class="admin-actions">
@@ -23,11 +27,14 @@
               <span class="admin-action-title">Delete version</span>
             </div>
             <p class="admin-action-desc">
-              Permanently delete version <code>{{ version }}</code> of this crate.
-              This action cannot be undone.
+              Permanently delete the selected version of this crate. This action cannot be undone.
             </p>
+            <v-select v-model="targetVersion" :items="versionItems" label="Version" variant="outlined"
+              density="comfortable" hide-details class="admin-version-select mt-3"
+              data-testid="admin-version-select" />
           </div>
-          <v-btn color="error" variant="flat" @click="handleDeleteVersion" data-testid="admin-delete-version">
+          <v-btn color="error" variant="flat" height="40" :disabled="!targetVersion"
+            @click="openDeleteVersion" data-testid="admin-delete-version">
             <v-icon icon="mdi-delete-outline" size="small" class="me-2"></v-icon>
             Delete version
           </v-btn>
@@ -45,51 +52,89 @@
               This will break all crates that depend on it.
             </p>
           </div>
-          <v-btn color="error" variant="flat" @click="handleDeleteCrate" data-testid="admin-delete-crate">
+          <v-btn color="error" variant="flat" height="40" @click="openDeleteCrate" data-testid="admin-delete-crate">
             <v-icon icon="mdi-delete-forever" size="small" class="me-2"></v-icon>
             Delete crate
           </v-btn>
         </div>
       </div>
+
+      <v-alert v-if="errorMessage" type="error" variant="tonal" closable class="mt-4"
+        data-testid="admin-error" @click:close="errorMessage = ''">
+        {{ errorMessage }}
+      </v-alert>
     </v-card-text>
+
+    <ConfirmDialog v-model="dialogOpen" :title="dialog.title" :message="dialog.message"
+      sub-message="This action cannot be undone." :confirm-text="dialog.confirmText" confirm-color="error"
+      confirm-icon="mdi-delete" :required-input="dialog.requiredInput" @confirm="confirmDelete" />
   </v-card>
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { ConfirmDialog } from '../common'
 import { crateService } from '../../services'
 import { isSuccess } from '../../services/api'
+import { versionSelectItems } from '../../common/crate'
+import type { CrateVersionData } from '../../types/crate_data'
 
-// Props
 const props = defineProps<{
   crateName: string
   version: string
+  versions: CrateVersionData[]
 }>()
 
-// Router
+const emit = defineEmits<{
+  'show-versions': []
+}>()
+
 const router = useRouter()
 
-// Handle delete version
-async function handleDeleteVersion() {
-  if (!confirm(`Delete "${props.crateName}" version "${props.version}"?`)) return
+const versionItems = computed(() => versionSelectItems(props.versions))
+const targetVersion = ref(props.version)
+watch(() => props.version, (version) => { targetVersion.value = version })
 
-  const result = await crateService.deleteVersion(props.crateName, props.version)
-  if (isSuccess(result)) {
-    router.push({ name: 'Crates' })
-  } else {
-    console.error('Failed to delete version:', result.error)
+type DeleteTarget = 'version' | 'crate'
+
+const dialogOpen = ref(false)
+const deleteTarget = ref<DeleteTarget>('version')
+const errorMessage = ref('')
+
+const dialog = computed(() => deleteTarget.value === 'crate'
+  ? {
+    title: 'Delete crate',
+    message: `Delete all versions of "${props.crateName}"?`,
+    confirmText: 'Delete crate',
+    requiredInput: props.crateName,
   }
+  : {
+    title: 'Delete version',
+    message: `Delete "${props.crateName}" version "${targetVersion.value}"?`,
+    confirmText: 'Delete version',
+    requiredInput: undefined,
+  })
+
+function openDeleteVersion() {
+  deleteTarget.value = 'version'
+  dialogOpen.value = true
 }
 
-// Handle delete crate
-async function handleDeleteCrate() {
-  if (!confirm(`Delete all versions of "${props.crateName}"?`)) return
+function openDeleteCrate() {
+  deleteTarget.value = 'crate'
+  dialogOpen.value = true
+}
 
-  const result = await crateService.deleteCrate(props.crateName)
+async function confirmDelete() {
+  errorMessage.value = ''
+  const result = deleteTarget.value === 'crate'
+    ? await crateService.deleteCrate(props.crateName)
+    : await crateService.deleteVersion(props.crateName, targetVersion.value)
   if (isSuccess(result)) {
     router.push({ name: 'Crates' })
   } else {
-    console.error('Failed to delete crate:', result.error)
+    errorMessage.value = `Failed to delete ${deleteTarget.value === 'crate' ? 'the crate' : `version ${targetVersion.value}`}: ${result.error.message}`
   }
 }
 </script>
@@ -145,14 +190,8 @@ async function handleDeleteCrate() {
   margin-top: 2px;
 }
 
-.admin-link {
-  color: rgb(var(--v-theme-primary));
-  font-weight: 500;
-  text-decoration: none;
-}
-
-.admin-link:hover {
-  text-decoration: underline;
+.admin-version-select {
+  max-width: 260px;
 }
 
 .admin-actions {

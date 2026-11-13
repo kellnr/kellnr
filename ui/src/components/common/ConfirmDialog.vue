@@ -11,6 +11,11 @@
         <p v-if="subMessage" class="text-body-medium text-medium-emphasis mb-0">
           {{ subMessage }}
         </p>
+        <!-- Irreversible actions ask the user to type a name to confirm -->
+        <v-text-field v-if="requiredInput" v-model="typedInput" class="mt-4" variant="outlined"
+          density="comfortable" hide-details autocomplete="off" spellcheck="false"
+          :label="`Type ${requiredInput} to confirm`" data-testid="confirm-dialog-input"
+          @keydown.enter="inputMatches && handleConfirm()" />
       </v-card-text>
 
       <v-card-actions class="pa-4 pt-0">
@@ -18,7 +23,8 @@
         <v-btn variant="text" data-testid="confirm-dialog-cancel" @click="handleCancel">
           {{ cancelText }}
         </v-btn>
-        <v-btn :color="confirmColor" variant="flat" data-testid="confirm-dialog-confirm" @click="handleConfirm">
+        <v-btn :color="confirmColor" variant="flat" :disabled="!inputMatches" data-testid="confirm-dialog-confirm"
+          @click="handleConfirm">
           <v-icon v-if="confirmIcon" :icon="confirmIcon" size="small" class="me-1"></v-icon>
           {{ confirmText }}
         </v-btn>
@@ -28,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = withDefaults(defineProps<{
   modelValue: boolean;
@@ -40,6 +46,8 @@ const props = withDefaults(defineProps<{
   confirmColor?: string;
   confirmIcon?: string;
   icon?: string;
+  /** Text the user has to type before the confirm button enables */
+  requiredInput?: string;
 }>(), {
   confirmText: 'Confirm',
   cancelText: 'Cancel',
@@ -57,6 +65,14 @@ const modelValue = computed({
   get: () => props.modelValue,
   set: (val: boolean) => emit('update:modelValue', val)
 });
+
+const typedInput = ref('');
+
+watch(() => props.modelValue, (open) => {
+  if (open) typedInput.value = '';
+});
+
+const inputMatches = computed(() => !props.requiredInput || typedInput.value === props.requiredInput);
 
 const iconColor = computed(() => props.confirmColor === 'error' ? 'error' : 'warning');
 

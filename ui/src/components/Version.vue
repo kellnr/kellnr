@@ -4,7 +4,8 @@
       <!-- Left: Version, with a marker if it is yanked -->
       <div class="version-info">
         <div class="version-header">
-          <span class="version-number" data-testid="version-number">{{ version.version }}</span>
+          <router-link :to="versionRoute" class="version-number" data-testid="version-number" @click.stop>{{
+            version.version }}</router-link>
           <span v-if="version.yanked" class="yanked-badge" data-testid="version-yanked">Yanked</span>
         </div>
 
@@ -45,6 +46,15 @@
       </div>
     </div>
 
+    <!-- Owners and admins yank or unyank a version from its row -->
+    <v-btn v-if="canManage" variant="outlined" height="36" class="yank-btn ms-3" :loading="busy"
+      :aria-label="`${version.yanked ? 'Unyank' : 'Yank'} version ${version.version}`"
+      :data-testid="version.yanked ? 'version-unyank' : 'version-yank'" @click.stop="emit('toggle-yank', version)">
+      <v-icon :icon="version.yanked ? 'mdi-tag-arrow-up-outline' : 'mdi-tag-arrow-down-outline'" size="small"
+        class="me-1" />
+      {{ version.yanked ? 'Unyank' : 'Yank' }}
+    </v-btn>
+
     <!-- Chevron indicator -->
     <v-icon icon="mdi-chevron-right" size="small" class="version-chevron"></v-icon>
   </div>
@@ -57,9 +67,18 @@ import { formatBytes, formatNumber } from "../common/format";
 import { useRelativeTime } from "../composables";
 import type { CrateVersionData } from "../types/crate_data";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   name: string,
   version: CrateVersionData,
+  canManage?: boolean,
+  busy?: boolean,
+}>(), {
+  canManage: false,
+  busy: false,
+});
+
+const emit = defineEmits<{
+  'toggle-yank': [version: CrateVersionData]
 }>();
 
 const router = useRouter();
@@ -79,8 +98,12 @@ const publisherTitle = computed(() => props.version.publisher_token
 
 const featureCount = computed(() => Object.keys(props.version.features).length);
 
+const versionRoute = computed(() => ({ name: 'Crate', query: { name: props.name, version: props.version.version } }));
+
+// The version number is the link for keyboard users, the whole row is a
+// larger click target for the mouse
 function openCrateVersionPage() {
-  router.push({ name: 'Crate', query: { name: props.name, version: props.version.version } });
+  router.push(versionRoute.value);
 }
 </script>
 
@@ -126,10 +149,20 @@ function openCrateVersionPage() {
 }
 
 .version-number {
+  text-decoration: none;
   font-weight: 600;
   font-size: 16px;
   font-family: var(--kellnr-font-mono);
   color: rgb(var(--v-theme-primary));
+}
+
+.version-number:hover,
+.version-number:focus-visible {
+  text-decoration: underline;
+}
+
+.yank-btn {
+  flex-shrink: 0;
 }
 
 /* A yanked version is still listed, but struck through */
@@ -143,8 +176,10 @@ function openCrateVersionPage() {
   border-radius: var(--kellnr-radius);
   font-size: 12px;
   font-weight: 500;
+  /* Body text color, the red tint alone is too weak for small red text */
   background: rgba(var(--v-theme-error), 0.12);
-  color: rgb(var(--v-theme-error));
+  border: 1px solid rgb(var(--v-theme-error));
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .version-meta {

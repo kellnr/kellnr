@@ -39,6 +39,10 @@ export const CRATES = "./api/v1/ui/crates";
 export const CRATE_DELETE = (name: string) => `./api/v1/ui/crates/${encodeURIComponent(name)}`;
 export const CRATE_DELETE_VERSION = (name: string, version: string) =>
   `./api/v1/ui/crates/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
+export const CRATE_YANK = (name: string, version: string) =>
+  `./api/v1/ui/crates/${encodeURIComponent(name)}/${encodeURIComponent(version)}/yank`;
+export const CRATE_UNYANK = (name: string, version: string) =>
+  `./api/v1/ui/crates/${encodeURIComponent(name)}/${encodeURIComponent(version)}/unyank`;
 export const VERSION = "./api/v1/ui/version";
 export const SETTINGS = "./api/v1/ui/settings";
 export const DOCS_ENABLED = "./api/v1/ui/docs_enabled";
