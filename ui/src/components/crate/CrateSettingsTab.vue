@@ -240,7 +240,7 @@ function confirmRemoval(kind: string, name: string): Promise<boolean> {
 
 // Computed
 const canEditCrate = computed(() => canModifyCrate(
-  { is_admin: store.loggedInUserIsAdmin, is_read_only: store.loggedInUserIsReadOnly },
+  store.loggedInUserFlags,
   crateOwners.value.some(o => o.login === store.loggedInUser),
 ))
 
@@ -277,11 +277,6 @@ async function loadOwners() {
 }
 
 async function handleAddOwner() {
-  if (!canEditCrate.value) {
-    addOwnerStatus.setError('Not allowed. Only crate owners with write access and admins can add owners.')
-    return
-  }
-
   const result = await crateService.addCrateOwner(props.crateName, newOwnerName.value)
   addOwnerStatus.setFromResult(result, 'Crate owner successfully added.')
   if (isSuccess(result)) {
@@ -291,11 +286,6 @@ async function handleAddOwner() {
 }
 
 async function handleDeleteOwner(name: string) {
-  if (!canEditCrate.value) {
-    deleteOwnerStatus.setError('Not allowed. Only crate owners with write access and admins can remove owners.')
-    return
-  }
-
   if ((crateOwners.value?.length ?? 0) <= 1) {
     deleteOwnerStatus.setError('A crate must have at least one owner.')
     return
