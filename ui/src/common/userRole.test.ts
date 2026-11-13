@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { roleChanges, roleFlags, roleOf } from "./userRole.ts";
+import { canModifyCrate, roleChanges, roleFlags, roleOf } from "./userRole.ts";
 
 test("each role maps to one combination of the API flags", () => {
   assert.deepEqual(roleFlags("user"), { is_admin: false, is_read_only: false });
@@ -41,4 +41,19 @@ test("demoting an admin with a stale read-only flag makes a plain user", () => {
     { flag: "admin", state: false },
     { flag: "readOnly", state: false },
   ]);
+});
+
+test("only owners and admins with write access may change a crate", () => {
+  const user = { is_admin: false, is_read_only: false };
+  const readOnly = { is_admin: false, is_read_only: true };
+  const admin = { is_admin: true, is_read_only: false };
+  const readOnlyAdmin = { is_admin: true, is_read_only: true };
+
+  assert.equal(canModifyCrate(user, true), true);
+  assert.equal(canModifyCrate(user, false), false);
+  assert.equal(canModifyCrate(readOnly, true), false);
+  assert.equal(canModifyCrate(readOnly, false), false);
+  // Admins are exempt from the read-only restriction, as in the backend
+  assert.equal(canModifyCrate(admin, false), true);
+  assert.equal(canModifyCrate(readOnlyAdmin, false), true);
 });

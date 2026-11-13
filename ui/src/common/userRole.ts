@@ -42,3 +42,12 @@ export function roleChanges(user: RoleFlags, target: UserRole): RoleChange[] {
   }
   return changes;
 }
+
+/**
+ * Whether the user may change a crate (owners, crate users and groups, yank, doc builds).
+ * Admins are exempt from the read-only restriction, as in the backend.
+ */
+export function canModifyCrate(user: RoleFlags, isOwner: boolean): boolean {
+  if (user.is_admin) return true;
+  return isOwner && !user.is_read_only;
+}

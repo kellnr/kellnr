@@ -59,6 +59,28 @@ async function publishTestCrates(log: (msg: string) => void): Promise<void> {
   });
 }
 
+/**
+ * Publishes test_lib 3.0.0 next to 2.0.0. Several tests need it, so a test
+ * that runs alone publishes it itself; a second publish is a no-op.
+ */
+async function publishTestLib3(): Promise<void> {
+  const registryToken = extractRegistryTokenFromCargoConfig({
+    crateDir: path.resolve(process.cwd(), "crates", "test-auth-req", "foo-bar"),
+    registryName: "kellnr-test",
+  });
+  try {
+    await publishCrate({
+      cratePath: "tests/crates/test-auth-req/test_lib-3",
+      registry: "kellnr-test",
+      registryToken,
+    });
+  } catch (error) {
+    if (!String(error).includes("already exists")) {
+      throw error;
+    }
+  }
+}
+
 test.describe("Crate Views with Data", () => {
   // These tests use fixed localhost:8000 port
   restrictToSingleWorkerBecauseFixedPorts();
@@ -283,15 +305,7 @@ test.describe("Crate Views with Data", () => {
     await expect(page.getByTestId("dependency-outdated")).toHaveCount(0);
 
     // A new major version of test_lib makes the requirement outdated
-    const registryToken = extractRegistryTokenFromCargoConfig({
-      crateDir: path.resolve(process.cwd(), "crates", "test-auth-req", "foo-bar"),
-      registryName: "kellnr-test",
-    });
-    await publishCrate({
-      cratePath: "tests/crates/test-auth-req/test_lib-3",
-      registry: "kellnr-test",
-      registryToken,
-    });
+    await publishTestLib3();
 
     await page.reload();
     await cratePage.waitForCrateData();
@@ -380,8 +394,7 @@ test.describe("Crate Views with Data", () => {
   });
 
   test("version select opens another version on the same tab", async ({ page }) => {
-    // Runs after "dependencies tab marks outdated dependencies", which
-    // published test_lib 3.0.0 next to 2.0.0.
+    await publishTestLib3();
     const cratePage = new CratePage(page);
     await page.goto(`${baseUrl}/crate?name=test_lib&tab=dependents`);
     await cratePage.waitForCrateData();

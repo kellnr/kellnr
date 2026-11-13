@@ -202,6 +202,7 @@ import CrateVersionsTab from "../components/crate/CrateVersionsTab.vue";
 import { EmptyState, SectionHeader } from "../components/common";
 import { computed, nextTick, onBeforeMount, ref, watch } from "vue";
 import { useNotification } from "../composables";
+import { canModifyCrate as canModifyCrateAs } from "../common/userRole";
 import { useRoute, useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
@@ -335,16 +336,16 @@ const canManageCrate = computed(() => {
   return store.loggedInUser !== null && crateData.value.owners.includes(store.loggedInUser);
 });
 
-// Admins are exempt from the read-only restriction, as in the backend
-const canModifyCrate = computed(() =>
-  canManageCrate.value && (store.loggedInUserIsAdmin || !store.loggedInUserIsReadOnly)
-);
+const canModifyCrate = computed(() => canModifyCrateAs(
+  { is_admin: store.loggedInUserIsAdmin, is_read_only: store.loggedInUserIsReadOnly },
+  canManageCrate.value,
+));
 
 function showBuildRustdoc(): boolean {
   if (!docsEnabled.value) {
     return false;
   }
-  // Read-only owners cannot build docs, the backend rejects it like a yank
+  // The backend rejects doc builds by read-only owners
   return canModifyCrate.value;
 }
 
