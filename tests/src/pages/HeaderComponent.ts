@@ -15,7 +15,6 @@ export class HeaderComponent extends BasePage {
   readonly appBar: Locator;
   readonly logo: Locator;
   readonly searchNavLink: Locator;
-  readonly settingsNavLink: Locator;
   readonly docQueueNavLink: Locator;
   readonly helpNavLink: Locator;
   readonly themeToggle: Locator;
@@ -36,7 +35,6 @@ export class HeaderComponent extends BasePage {
     // Desktop navigation links - each button has a dedicated testid,
     // which avoids matching the mobile drawer duplicates
     this.searchNavLink = page.getByTestId("header-nav-search");
-    this.settingsNavLink = page.getByTestId("header-nav-settings");
     this.docQueueNavLink = page.getByTestId("header-nav-docqueue");
     // Help link was removed from navigation
     const desktopNav = page.getByTestId("header-nav-desktop");
@@ -80,11 +78,11 @@ export class HeaderComponent extends BasePage {
   }
 
   /**
-   * Navigate to the Settings page.
-   * Note: This may redirect to login if not authenticated.
+   * Navigate to the Settings page through the user menu (only shown when logged in).
    */
   async navigateToSettings(): Promise<void> {
-    await this.settingsNavLink.click();
+    await this.userMenuButton.click();
+    await this.page.getByTestId("user-menu-settings").click();
   }
 
   /**

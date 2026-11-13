@@ -254,6 +254,67 @@ test.describe("Crate Settings UI Tests", () => {
     await expect(cratePage.accessBadge).toHaveCount(0);
   });
 
+  test("unknown crate shows a not-found page", async ({ page }) => {
+    await loginAndWait(page, baseUrl, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+
+    await page.goto(`${baseUrl}/crate?name=does-not-exist`);
+
+    await expect(page.getByTestId("crate-not-found")).toBeVisible();
+    await expect(page.getByTestId("crate-not-found")).toContainText("does-not-exist");
+    await expect(page).toHaveTitle("Crate not found - Kellnr");
+    // No install snippet or tabs for a crate that does not exist
+    await expect(page.getByRole("tab")).toHaveCount(0);
+
+    await page.getByTestId("crate-not-found-back").click();
+    await page.waitForURL("**/crates**");
+  });
+
+  test("admin can yank and unyank a version", async ({ page }) => {
+    await loginAndWait(page, baseUrl, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+
+    const cratePage = new CratePage(page);
+    await cratePage.goto("foo-bar");
+    await cratePage.waitForCrateData();
+    await expect(page).toHaveTitle(/^foo-bar \S+ - Kellnr$/);
+    await cratePage.clickTab("versions");
+
+    const row = page.getByTestId("version-row").first();
+    await expect(row.getByTestId("version-yanked")).toHaveCount(0);
+
+    await row.getByTestId("version-yank").click();
+    await cratePage.confirmDialog();
+    await expect(row.getByTestId("version-yanked")).toBeVisible();
+    // The button click must not open the version page
+    await expect(page).toHaveURL(/[?&]tab=versions/);
+
+    await row.getByTestId("version-unyank").click();
+    await expect(row.getByTestId("version-yanked")).toHaveCount(0);
+    await expect(row.getByTestId("version-yank")).toBeVisible();
+  });
+
+  test("deleting a whole crate requires typing its name", async ({ page }) => {
+    await loginAndWait(page, baseUrl, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+
+    const cratePage = new CratePage(page);
+    await cratePage.goto("foo-bar");
+    await cratePage.waitForCrateData();
+    await cratePage.clickTab("admin");
+    await cratePage.deleteCrateButton.click();
+
+    const dialog = page.getByTestId("confirm-dialog");
+    const confirm = dialog.getByTestId("confirm-dialog-confirm");
+    await expect(confirm).toBeDisabled();
+    await dialog.getByTestId("confirm-dialog-input").locator("input").fill("foo");
+    await expect(confirm).toBeDisabled();
+    await dialog.getByTestId("confirm-dialog-input").locator("input").fill("foo-bar");
+    await expect(confirm).toBeEnabled();
+
+    // Cancel keeps the crate
+    await dialog.getByTestId("confirm-dialog-cancel").click();
+    await expect(dialog).toBeHidden();
+    await expect(page).toHaveURL(/[?&]name=foo-bar/);
+  });
+
   test("admin can delete a crate version", async ({ page }) => {
     // Login as admin
     await page.goto(`${baseUrl}/login`);
@@ -284,10 +345,8 @@ test.describe("Crate Settings UI Tests", () => {
     expect(warningText).toContain("yanking");
 
     // Delete the crate version
-    // Set up dialog handler before clicking
-    page.on("dialog", (dialog) => dialog.accept());
-
     await cratePage.deleteVersionButton.click();
+    await cratePage.confirmDialog();
 
     // Should redirect to crates page after deletion
     await page.waitForURL("**/crates**");
