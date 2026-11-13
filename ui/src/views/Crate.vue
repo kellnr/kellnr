@@ -90,14 +90,6 @@
         </v-tabs>
       </div>
 
-      <!-- Snackbar for copy notification -->
-      <v-snackbar v-model="showSnackbar" :timeout="3000" color="success" location="bottom" data-testid="snackbar">
-        {{ snackbarText }}
-        <template v-slot:actions>
-          <v-btn variant="text" icon="mdi-close" @click="showSnackbar = false"></v-btn>
-        </template>
-      </v-snackbar>
-
       <v-row>
         <!-- Main Content Area -->
         <v-col cols="12" md="8">
@@ -209,6 +201,7 @@ import CrateInstall from "../components/crate/CrateInstall.vue";
 import CrateVersionsTab from "../components/crate/CrateVersionsTab.vue";
 import { EmptyState, SectionHeader } from "../components/common";
 import { computed, nextTick, onBeforeMount, ref, watch } from "vue";
+import { useNotification } from "../composables";
 import { useRoute, useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
 import { defaultCrateData, defaultCrateVersionData } from "../types/crate_data";
@@ -238,9 +231,7 @@ const pageState = ref<PageState>({ kind: "loading" });
 // Counts the changes in the settings tab, so the access badge reloads
 const accessVersion = ref(0);
 
-// Snackbar refs
-const showSnackbar = ref(false);
-const snackbarText = ref('');
+const notification = useNotification();
 
 // Expose crate as computed for template compatibility
 const crate = computed(() => crateData.value);
@@ -375,14 +366,8 @@ function sortByName(deps: Array<CrateRegistryDep>) {
 
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text)
-    .then(() => {
-      snackbarText.value = "Copied to clipboard!";
-      showSnackbar.value = true;
-    })
-    .catch(() => {
-      snackbarText.value = "Failed to copy. Please try again.";
-      showSnackbar.value = true;
-    });
+    .then(() => notification.showSuccess("Copied to clipboard"))
+    .catch(() => notification.showError("Failed to copy. Please try again."));
 }
 
 function openDocsPage() {

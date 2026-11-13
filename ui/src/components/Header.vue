@@ -83,19 +83,12 @@
         </v-list-item>
       </v-list>
     </v-navigation-drawer>
-
-    <!-- Snackbar for notifications -->
-    <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000" location="bottom" data-testid="snackbar">
-      {{ snackbarText }}
-      <template v-slot:actions>
-        <v-btn variant="text" icon="mdi-close" @click="showSnackbar = false" size="small" />
-      </template>
-    </v-snackbar>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onBeforeMount } from "vue";
+import { useNotification } from "../composables";
 import LoginButton from "./LoginButton.vue";
 import ThemeToggle from "./ThemeToggle.vue";
 import { useStore } from "../store/store";
@@ -105,10 +98,7 @@ const store = useStore();
 const vuetifyTheme = useTheme();
 const drawer = ref(false);
 
-// Snackbar state
-const showSnackbar = ref(false);
-const snackbarText = ref("");
-const snackbarColor = ref("success");
+const notification = useNotification();
 
 // Settings are in the user menu, so logging in does not shift these items.
 // Vuetify marks a link active only on its own route, "/" is not a prefix match.
@@ -141,19 +131,12 @@ onBeforeMount(() => {
 
 function handleThemeChange() {
   // Show notification for theme change
-  showNotification(`Switched to ${store.theme} theme`);
+  notification.showSuccess(`Switched to ${store.theme} theme`);
 }
 
 function setTheme(theme: string) {
   let body = document.getElementById("body");
   body?.setAttribute("color-theme", theme);
-}
-
-// Show notification snackbar
-function showNotification(message: string, isError: boolean = false) {
-  snackbarText.value = message;
-  snackbarColor.value = isError ? "error" : "success";
-  showSnackbar.value = true;
 }
 </script>
 

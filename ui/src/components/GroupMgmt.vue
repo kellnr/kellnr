@@ -182,13 +182,6 @@
     </div>
 
     <!-- Snackbar for notifications -->
-    <NotificationSnackbar
-      v-model="notification.snackbar.show"
-      :message="notification.snackbar.message"
-      :color="notification.snackbar.color"
-      :timeout="notification.snackbar.timeout"
-    />
-
     <!-- Confirmation Dialog -->
     <ConfirmDialog
       v-model="dialogOpen"
@@ -217,7 +210,6 @@ import {
   EmptyState,
   FormSection,
   ConfirmDialog,
-  NotificationSnackbar,
 } from "./common"
 
 // State

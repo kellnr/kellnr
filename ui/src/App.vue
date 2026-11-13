@@ -12,6 +12,10 @@
 
     <!-- Footer with full width -->
     <Footer />
+
+    <!-- The one snackbar of the app, see useNotification -->
+    <NotificationSnackbar v-model="notification.snackbar.show" :message="notification.snackbar.message"
+      :color="notification.snackbar.color" :timeout="notification.snackbar.timeout" />
   </v-app>
 </template>
 
@@ -21,11 +25,13 @@ import { onMounted } from 'vue';
 import Header from './components/Header.vue';
 import Footer from './components/Footer.vue';
 import { useTheme } from 'vuetify';
-import { useSearchShortcut } from './composables';
+import { useNotification, useSearchShortcut } from './composables';
+import { NotificationSnackbar } from './components/common';
 
 const store = useStore();
 const vuetifyTheme = useTheme();
 useSearchShortcut();
+const notification = useNotification();
 
 onMounted(() => {
   // Set Vuetify theme based on store
