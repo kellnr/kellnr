@@ -22,6 +22,7 @@ pub(super) fn create_routes(state: AppStateData) -> OpenApiRouter<AppStateData> 
         .routes(routes!(ui::cratesio_data))
         .routes(routes!(ui::settings))
         .routes(routes!(ui::docs_enabled))
+        .routes(routes!(ui::proxy_enabled))
         .routes(routes!(ui::sponsor_links_enabled))
         .layer(middleware::from_fn_with_state(
             (state, Accepts::Session),

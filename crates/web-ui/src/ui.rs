@@ -258,6 +258,27 @@ pub async fn docs_enabled(State(settings): SettingsState) -> Json<DocsEnabledRes
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
+pub struct ProxyEnabledResponse {
+    pub enabled: bool,
+}
+
+/// Check if the crates.io proxy is enabled
+#[utoipa::path(
+    get,
+    path = "/proxy_enabled",
+    tag = "ui",
+    responses(
+        (status = 200, description = "Crates.io proxy status", body = ProxyEnabledResponse)
+    )
+)]
+#[allow(clippy::unused_async)] // part of the router
+pub async fn proxy_enabled(State(settings): SettingsState) -> Json<ProxyEnabledResponse> {
+    Json(ProxyEnabledResponse {
+        enabled: settings.proxy.enabled,
+    })
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ToSchema)]
 pub struct SponsorLinksEnabledResponse {
     pub enabled: bool,
 }
@@ -1189,6 +1210,7 @@ mod tests {
             .route("/cratesio_data", get(cratesio_data))
             .route("/settings", get(settings))
             .route("/docs_enabled", get(docs_enabled))
+            .route("/proxy_enabled", get(proxy_enabled))
             .route("/sponsor_links_enabled", get(sponsor_links_enabled))
             .route("/migrate-storage", post(migrate_docs_storage))
             .route("/crates/{name}/{version}/yank", put(yank_crate_version))
@@ -1860,6 +1882,20 @@ mod tests {
         let response: DocsEnabledResponse = json(get_with(state, "/docs_enabled", "").await).await;
 
         assert!(response.enabled);
+    }
+
+    #[tokio::test]
+    async fn proxy_enabled_returns_the_proxy_setting() {
+        for enabled in [false, true] {
+            let mut settings = kellnr_settings::test_settings();
+            settings.proxy.enabled = enabled;
+            let state = with_settings(test_state(), settings);
+
+            let response: ProxyEnabledResponse =
+                json(get_with(state, "/proxy_enabled", "").await).await;
+
+            assert_eq!(response.enabled, enabled);
+        }
     }
 
     #[tokio::test]
