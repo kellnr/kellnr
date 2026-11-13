@@ -431,9 +431,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # X.Y.Z, X.Y and X for releases, only the full version for pre-releases.
+      # OCI labels and annotations: the generated values come from the GitHub
+      # repository; the ones below override them. GitHub detects only one of
+      # the two licenses. Annotations go on the platform manifests and the index.
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ${{ matrix.image }}
           flavor: latest=false
@@ -441,6 +446,11 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+          labels: &oci-overrides |
+            org.opencontainers.image.licenses=MIT OR Apache-2.0
+            org.opencontainers.image.url=https://kellnr.io
+            org.opencontainers.image.documentation=https://kellnr.io/documentation
+          annotations: *oci-overrides
 
       - name: Build and push
         id: build
@@ -452,6 +462,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           sbom: true
           provenance: mode=max,builder-id=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           build-args: |
