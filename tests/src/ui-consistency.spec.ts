@@ -221,6 +221,8 @@ test.describe("UI Consistency", () => {
 
     const hint = page.locator(".v-alert").filter({ hasText: "yanking" });
     await expect(hint).toBeVisible();
-    await expect(hint.locator(".v-icon")).toHaveCount(1);
+    // One leading status icon; the icon of the "Versions" button inside is not a second status icon
+    await expect(hint.locator(".v-alert__prepend .v-icon")).toHaveCount(1);
+    await expect(hint.locator(".v-alert__content .v-icon:not(.v-btn .v-icon)")).toHaveCount(0);
   });
 });

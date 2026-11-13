@@ -2,11 +2,11 @@
  * UI tests for crate-related views with actual crate data.
  *
  * These tests first upload test crates and then verify:
- * - Crate listing page with real crates
+ * - Crate listing page with real crates and search while typing
  * - Individual crate detail page
  * - Crate metadata (About tab)
  * - Dependencies display
- * - Versions tab
+ * - Versions tab and the version select in the header
  * - Used by tab
  * - Settings tab (admin only)
  * - Landing page statistics
@@ -132,6 +132,23 @@ test.describe("Crate Views with Data", () => {
     // Should show all crates again
     const hasFooBarAfterClear = await cratesPage.hasCrate("foo-bar");
     expect(hasFooBarAfterClear).toBe(true);
+  });
+
+  test("search updates the results while typing", async ({ page }) => {
+    await page.goto(`${baseUrl}/crates`);
+    const cratesPage = new CratesPage(page);
+    const cards = page.getByTestId("crate-card-name");
+    await expect(cards).toHaveCount(2);
+
+    // No Enter: the list follows the text after a short typing delay
+    await cratesPage.searchInput.fill("test_l");
+    await expect(page).toHaveURL(/[?&]search=test_l(&|$)/);
+    await expect(cards).toHaveText(["test_lib"]);
+
+    // Clearing the field shows all crates again and drops the search from the URL
+    await cratesPage.searchInput.fill("");
+    await expect(cards).toHaveCount(2);
+    await expect(page).not.toHaveURL(/[?&]search=/);
   });
 
   test("crate detail page displays crate information", async ({ page }) => {
@@ -360,6 +377,24 @@ test.describe("Crate Views with Data", () => {
       await anonymous.close();
       expect(await setRestricted(false)).toBe(200);
     }
+  });
+
+  test("version select opens another version on the same tab", async ({ page }) => {
+    // Runs after "dependencies tab marks outdated dependencies", which
+    // published test_lib 3.0.0 next to 2.0.0.
+    const cratePage = new CratePage(page);
+    await page.goto(`${baseUrl}/crate?name=test_lib&tab=dependents`);
+    await cratePage.waitForCrateData();
+    await expect(cratePage.crateVersion).toHaveText("3.0.0");
+
+    await page.getByTestId("crate-version-select").click();
+    await page.getByRole("option", { name: "2.0.0", exact: true }).click();
+
+    await expect(page).toHaveURL(/[?&]version=2\.0\.0(&|$)/);
+    await expect(page).toHaveURL(/[?&]tab=dependents(&|$)/);
+    await expect(cratePage.crateVersion).toHaveText("2.0.0");
+    await expect(cratePage.dependentsTab).toHaveAttribute("aria-selected", "true");
+    await expect(cratePage.dependentsSummary).toBeVisible();
   });
 
   test("crate cards link to the repository", async ({ page }) => {
