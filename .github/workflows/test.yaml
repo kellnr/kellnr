@@ -75,6 +75,8 @@ jobs:
       pull-requests: read
     outputs:
       nix: ${{ steps.filter.outputs.nix }}
+      docker: ${{ steps.filter.outputs.docker }}
+      sbom: ${{ steps.filter.outputs.sbom }}
 
     steps:
       - name: Check for packaging changes
@@ -89,6 +91,18 @@ jobs:
               - "**/Cargo.toml"
               - "ui/package.json"
               - "ui/package-lock.json"
+              - ".github/workflows/test.yaml"
+            docker:
+              - "docker/**"
+              - ".github/workflows/release.yaml"
+              - ".github/workflows/test.yaml"
+            sbom:
+              - ".github/scripts/**"
+              - "justfile"
+              - "Cargo.lock"
+              - "**/Cargo.toml"
+              - "ui/package-lock.json"
+              - ".github/workflows/release.yaml"
               - ".github/workflows/test.yaml"
 
   lint:
@@ -234,3 +248,78 @@ jobs:
 
       - name: Build with Nix
         run: nix build
+
+  # The release workflow builds the Docker images and the SBOMs. Check them
+  # on PRs that change them, so a broken build shows up before a release.
+  sbom:
+    name: SBOM
+    needs: [update-npm-hash, changes]
+    if: ${{ always() && !failure() && !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.sbom == 'true') }}
+    runs-on: ubuntu-26.04
+
+    steps:
+      - *checkout
+      - *install-nix
+
+      - name: Test scripts
+        run: nix develop --command just test-scripts
+
+      - name: Generate SBOMs
+        run: nix develop --command just sbom-binary
+
+  # Builds the Dockerfiles with the binaries of the latest release, without
+  # pushing the images.
+  docker-images:
+    name: Docker Image (${{ matrix.variant }})
+    needs: [update-npm-hash, changes]
+    if: ${{ always() && !failure() && !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.docker == 'true') }}
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: standard
+            dockerfile: docker/Dockerfile
+            linkage: gnu
+          - variant: minimal
+            dockerfile: docker/Dockerfile.minimal
+            linkage: musl
+
+    steps:
+      - *checkout
+
+      - name: Get the binaries of the latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINKAGE: ${{ matrix.linkage }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          digest() {
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets \
+              --jq ".assets[] | select(.name == \"$1\") | .digest | ltrimstr(\"sha256:\")"
+          }
+          {
+            echo "version=${tag#v}"
+            echo "sha256-amd64=$(digest "kellnr-x86_64-unknown-linux-$LINKAGE.zip")"
+            echo "sha256-arm64=$(digest "kellnr-aarch64-unknown-linux-$LINKAGE.zip")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: false
+          build-args: |
+            VERSION=${{ steps.release.outputs.version }}
+            KELLNR_SHA256_AMD64=${{ steps.release.outputs.sha256-amd64 }}
+            KELLNR_SHA256_ARM64=${{ steps.release.outputs.sha256-arm64 }}
