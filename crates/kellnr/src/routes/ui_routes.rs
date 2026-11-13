@@ -2,7 +2,7 @@ use axum::middleware;
 use kellnr_http::identity::Accepts;
 use kellnr_http::middleware::auth_when_required;
 use kellnr_http::state::AppStateData;
-use kellnr_web_ui::ui;
+use kellnr_web_ui::{ui, yank};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -13,8 +13,8 @@ pub(super) fn create_routes(state: AppStateData) -> OpenApiRouter<AppStateData> 
         .routes(routes!(ui::crates))
         .routes(routes!(ui::delete_crate_all))
         .routes(routes!(ui::delete_crate_version))
-        .routes(routes!(ui::yank_crate_version))
-        .routes(routes!(ui::unyank_crate_version))
+        .routes(routes!(yank::yank_crate_version))
+        .routes(routes!(yank::unyank_crate_version))
         .routes(routes!(ui::search))
         .routes(routes!(ui::statistic))
         .routes(routes!(ui::crate_data))

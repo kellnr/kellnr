@@ -5,3 +5,4 @@ mod pagination;
 mod session;
 pub mod ui;
 pub mod user;
+pub mod yank;
