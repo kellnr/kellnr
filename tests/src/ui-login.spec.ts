@@ -120,21 +120,21 @@ test.describe("Login UI Tests", () => {
 
     await page.goto(`${baseUrl}/login`);
 
-    // With empty fields, button should be disabled
-    let isEnabled = await loginPage.isConfirmButtonEnabled();
-    expect(isEnabled).toBe(false);
+    // The username field has focus and no error is shown before a submit
+    await expect(loginPage.usernameInput).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByText("Username is required")).toHaveCount(0);
 
-    // Fill only username
+    // Submitting empty fields shows both errors and stays on the login page
+    await loginPage.confirmButton.click();
+    await expect(page.getByText("Username is required")).toBeVisible();
+    await expect(page.getByText("Password is required")).toBeVisible();
+    await expect(page).toHaveURL(/\/login/);
+
+    // Typing clears the error of that field
     await loginPage.fillUsername(DEFAULT_ADMIN_USER);
-    // Button should still be disabled
-    isEnabled = await loginPage.isConfirmButtonEnabled();
-    expect(isEnabled).toBe(false);
-
-    // Fill password to enable button
-    await loginPage.fillPassword(DEFAULT_ADMIN_PASSWORD);
-    // Button should now be enabled
-    isEnabled = await loginPage.isConfirmButtonEnabled();
-    expect(isEnabled).toBe(true);
+    await expect(page.getByText("Username is required")).toHaveCount(0);
+    await expect(page.getByText("Password is required")).toBeVisible();
   });
 
   test("logout functionality", async ({ page }) => {

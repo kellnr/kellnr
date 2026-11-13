@@ -1,4 +1,4 @@
-import type { Page, Locator } from "@playwright/test";
+import { expect, type Page, type Locator } from "@playwright/test";
 import { BasePage } from "./BasePage";
 
 /**
@@ -60,7 +60,6 @@ export class CratePage extends BasePage {
   readonly addUserInput: Locator;
   readonly addUserButton: Locator;
   readonly downloadRestrictedCheckbox: Locator;
-  readonly changeAccessButton: Locator;
 
   // Admin tab locators
   readonly deleteVersionButton: Locator;
@@ -116,7 +115,6 @@ export class CratePage extends BasePage {
     this.downloadRestrictedCheckbox = page
       .getByTestId("settings-download-restricted")
       .locator('input[type="checkbox"]');
-    this.changeAccessButton = page.getByTestId("settings-save-access");
 
     // Admin tab
     this.deleteVersionButton = page.getByTestId("admin-delete-version");
@@ -337,10 +335,9 @@ export class CratePage extends BasePage {
    */
   async deleteOwner(username: string): Promise<void> {
     await this.clickTab("settings");
-    // Handle confirmation dialog
-    this.page.on("dialog", (dialog) => dialog.accept());
     const ownerRow = this.page.getByTestId("settings-owner-row").filter({ hasText: username });
     await ownerRow.getByTestId("settings-owner-remove").click();
+    await this.confirmDialog();
     await this.page.waitForTimeout(500);
   }
 
@@ -369,9 +366,9 @@ export class CratePage extends BasePage {
    */
   async toggleDownloadRestriction(): Promise<void> {
     await this.clickTab("settings");
+    // The restriction is saved as soon as the checkbox changes
     await this.downloadRestrictedCheckbox.click();
-    await this.changeAccessButton.click();
-    await this.page.waitForTimeout(500);
+    await expect(this.downloadRestrictedCheckbox).toBeEnabled();
   }
 
   /**
@@ -389,9 +386,8 @@ export class CratePage extends BasePage {
    */
   async deleteCurrentVersion(): Promise<void> {
     await this.clickTab("admin");
-    // Handle confirmation dialog
-    this.page.on("dialog", (dialog) => dialog.accept());
     await this.deleteVersionButton.click();
+    await this.confirmDialog();
     await this.waitForNavigation("/crates");
   }
 
@@ -400,10 +396,22 @@ export class CratePage extends BasePage {
    */
   async deleteEntireCrate(): Promise<void> {
     await this.clickTab("admin");
-    // Handle confirmation dialog
-    this.page.on("dialog", (dialog) => dialog.accept());
     await this.deleteCrateButton.click();
+    const crateName = new URL(this.page.url()).searchParams.get("name") ?? "";
+    await this.confirmDialog(crateName);
     await this.waitForNavigation("/crates");
+  }
+
+  /**
+   * Confirm the open confirmation dialog, typing the required text first if given.
+   */
+  async confirmDialog(requiredInput?: string): Promise<void> {
+    const dialog = this.page.getByTestId("confirm-dialog");
+    await expect(dialog).toBeVisible();
+    if (requiredInput !== undefined) {
+      await dialog.getByTestId("confirm-dialog-input").locator("input").fill(requiredInput);
+    }
+    await dialog.getByTestId("confirm-dialog-confirm").click();
   }
 
   // === Sidebar Methods ===

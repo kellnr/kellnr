@@ -127,7 +127,8 @@ test.describe("Browsing", () => {
     // A search is ordered by relevance and counts its matches
     await cratesPage.search("hyphens");
     await expect(page.getByTestId("crates-result-count")).toHaveText('1 crate found for "hyphens"');
-    await expect(page.getByTestId("crates-sort")).toHaveCount(0);
+    // The sort stays in place but is disabled while searching
+    await expect(page.getByTestId("crates-sort")).toHaveClass(/v-input--disabled/);
     await expect(page).toHaveURL(/[?&]search=hyphens/);
   });
 
@@ -207,7 +208,9 @@ test.describe("Browsing", () => {
     await expect(page.getByTestId("login-button")).toHaveCount(0);
 
     await loginAsAdmin(page);
-    await expect(page.getByTestId("header-nav-settings")).toBeVisible();
+    await expect(page.getByTestId("header-nav-settings")).toHaveCount(0);
+    await page.getByTestId("user-menu-button").click();
+    await expect(page.getByTestId("user-menu-settings")).toBeVisible();
   });
 
   test("icon buttons have accessible names", async ({ page }) => {

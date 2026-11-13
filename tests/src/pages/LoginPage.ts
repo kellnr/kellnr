@@ -166,13 +166,6 @@ export class LoginPage extends BasePage {
   }
 
   /**
-   * Check if the Confirm button is enabled.
-   */
-  async isConfirmButtonEnabled(): Promise<boolean> {
-    return await this.confirmButton.isEnabled();
-  }
-
-  /**
    * Check if the OAuth2/SSO button is visible.
    */
   async isOAuth2ButtonVisible(): Promise<boolean> {
