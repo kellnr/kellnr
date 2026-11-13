@@ -8,6 +8,7 @@ import type { OAuth2Config } from '../types/oauth2'
 import {
   SETTINGS,
   DOCS_ENABLED,
+  PROXY_ENABLED,
   SPONSOR_LINKS_ENABLED,
   VERSION,
   OAUTH2_CONFIG,
@@ -28,6 +29,19 @@ export async function getSettings(): Promise<ApiResult<Settings>> {
  */
 export async function getDocsEnabled(): Promise<ApiResult<DocsEnabled>> {
   return apiGet<DocsEnabled>(DOCS_ENABLED, undefined, {
+    redirectOnAuthError: false,
+  })
+}
+
+export type ProxyEnabled = {
+  enabled: boolean
+}
+
+/**
+ * Check if the crates.io proxy is enabled
+ */
+export async function getProxyEnabled(): Promise<ApiResult<ProxyEnabled>> {
+  return apiGet<ProxyEnabled>(PROXY_ENABLED, undefined, {
     redirectOnAuthError: false,
   })
 }

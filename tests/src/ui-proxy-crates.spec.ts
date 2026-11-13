@@ -2,7 +2,8 @@
  * UI tests for crates.io proxy functionality.
  *
  * These tests verify:
- * - Crates proxy toggle functionality
+ * - Crates proxy toggle functionality and its proxy=1 URL parameter
+ * - Opening /crates?proxy=1 directly shows the cached crates
  * - Cached crates display when proxy is enabled
  * - Landing page shows cached crates section
  * - Searching for crates.io crates via proxy
@@ -120,6 +121,9 @@ test.describe("Crates.io Proxy UI Tests", () => {
     await cratesPage.toggleCratesProxy();
     await cratesPage.waitForSearchResults();
 
+    // The mode is kept in the URL
+    await expect(page).toHaveURL(`${baseUrl}/crates?proxy=1`);
+
     // Proxy should now be enabled
     const isProxyEnabledAfterToggle = await cratesPage.isCratesProxyEnabled();
     expect(isProxyEnabledAfterToggle).toBe(true);
@@ -139,6 +143,8 @@ test.describe("Crates.io Proxy UI Tests", () => {
     await cratesPage.toggleCratesProxy();
     await cratesPage.waitForSearchResults();
 
+    await expect(page).toHaveURL(`${baseUrl}/crates`);
+
     // Proxy should be disabled
     const isProxyDisabled = await cratesPage.isCratesProxyEnabled();
     expect(isProxyDisabled).toBe(false);
@@ -146,6 +152,20 @@ test.describe("Crates.io Proxy UI Tests", () => {
     // Own crates should be visible again
     const hasFooBarAgain = await cratesPage.hasCrate("foo-bar");
     expect(hasFooBarAgain).toBe(true);
+  });
+
+  test("opening /crates?proxy=1 shows the cached crates with the switch on", async ({ page }) => {
+    const cratesPage = new CratesPage(page);
+    await cratesPage.gotoCachedCrates();
+    await cratesPage.waitForSearchResults();
+
+    expect(await cratesPage.isCratesProxyEnabled()).toBe(true);
+
+    const cratesIoCard = page.locator(".crate-card").filter({
+      has: page.locator("img[alt='Crates.io logo']"),
+    });
+    expect(await cratesIoCard.count()).toBeGreaterThan(0);
+    expect(await cratesPage.hasCrate("foo-bar")).toBe(false);
   });
 
   test("landing page shows cached crates section when proxy enabled", async ({ page }) => {
