@@ -11,8 +11,7 @@
  */
 
 import path from "node:path";
-import type { Page } from "@playwright/test";
-import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
+import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD, loginAndWait, apiCall } from "./lib/ui-fixtures";
 import { CratesPage, CratePage, LoginPage } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
@@ -52,34 +51,6 @@ async function publishTestCrates(log: (msg: string) => void): Promise<void> {
     registry,
     registryToken,
   });
-}
-
-/**
- * Logs in and waits until the server has accepted the login, so the session
- * cookie is set when the next request goes out.
- */
-async function loginAndWait(page: Page, baseUrl: string, user: string, password: string): Promise<void> {
-  await page.goto(`${baseUrl}/login`);
-  const loggedIn = page.waitForResponse(
-    (r) => r.url().endsWith("/api/v1/auth/login") && r.ok()
-  );
-  await new LoginPage(page).login(user, password);
-  await loggedIn;
-}
-
-/**
- * Calls the API from the page, so the request carries the session cookie.
- * Returns the HTTP status.
- */
-async function apiCall(page: Page, method: string, url: string, body?: unknown): Promise<number> {
-  return page.evaluate(async ({ method, url, body }) => {
-    const response = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    return response.status;
-  }, { method, url, body });
 }
 
 test.describe("Crate Settings UI Tests", () => {

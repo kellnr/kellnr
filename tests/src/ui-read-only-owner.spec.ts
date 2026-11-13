@@ -6,9 +6,8 @@
  */
 
 import path from "node:path";
-import type { Page } from "@playwright/test";
-import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
-import { CratePage, LoginPage } from "./pages";
+import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD, loginAndWait, apiCall } from "./lib/ui-fixtures";
+import { CratePage } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
   publishCrate,
@@ -18,27 +17,6 @@ import { startLocalKellnr, type StartedLocalKellnr } from "./lib/local";
 import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 
 const READER = { name: "reader-owner", password: "reader-owner-pwd" };
-
-async function loginAndWait(page: Page, baseUrl: string, user: string, password: string): Promise<void> {
-  await page.goto(`${baseUrl}/login`);
-  const loggedIn = page.waitForResponse(
-    (r) => r.url().endsWith("/api/v1/auth/login") && r.ok()
-  );
-  await new LoginPage(page).login(user, password);
-  await loggedIn;
-}
-
-/** Calls the API from the page with its session cookie and returns the HTTP status. */
-async function apiCall(page: Page, method: string, url: string, body?: unknown): Promise<number> {
-  return page.evaluate(async ({ method, url, body }) => {
-    const response = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    return response.status;
-  }, { method, url, body });
-}
 
 test.describe("Read-only crate owner", () => {
   restrictToSingleWorkerBecauseFixedPorts();
