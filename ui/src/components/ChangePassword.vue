@@ -1,91 +1,91 @@
 <template>
   <div>
-    <!-- Header -->
-    <div class="section-header">
-      <v-icon icon="mdi-key" size="small" color="primary" class="me-3"></v-icon>
-      <span class="text-title-large font-weight-bold" data-testid="section-title">{{ SETTINGS_SECTION_TITLES.password }}</span>
-    </div>
+    <SectionHeader icon="mdi-key" :title="SETTINGS_SECTION_TITLES.password" role="heading" aria-level="2" />
 
-    <!-- Form -->
-    <div class="form-container">
-      <p class="text-body-medium text-medium-emphasis mb-6">
+    <div class="section-content">
+      <p class="text-body-medium text-medium-emphasis mb-5">
         Update your password to keep your account secure. Choose a strong password that you don't use elsewhere.
       </p>
 
-      <v-form ref="form" @submit.prevent="handleChangePassword">
-        <!-- Tells password managers which account the new password belongs to -->
-        <input type="text" name="username" autocomplete="username" :value="store.loggedInUser ?? ''" readonly hidden />
+      <FormSection icon="mdi-lock-reset" title="Password">
+        <v-form ref="form" @submit.prevent="handleChangePassword">
+          <!-- Tells password managers which account the new password belongs to -->
+          <input type="text" name="username" autocomplete="username" :value="store.loggedInUser ?? ''" readonly hidden />
 
-        <div class="mb-4">
-          <label class="text-body-medium font-weight-medium d-block mb-2">Current password</label>
-          <v-text-field
-            v-model="oldPassword"
-            type="password"
-            autocomplete="current-password"
-            variant="outlined"
-            density="comfortable"
-            prepend-inner-icon="mdi-lock-outline"
-            placeholder="Enter your current password"
-            :rules="[rules.required]"
-            hide-details="auto"
-          ></v-text-field>
-        </div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="field-label" for="current-password">Current password</label>
+              <v-text-field
+                id="current-password"
+                v-model="oldPassword"
+                type="password"
+                autocomplete="current-password"
+                variant="outlined"
+                density="comfortable"
+                prepend-inner-icon="mdi-lock-outline"
+                placeholder="Current password"
+                :rules="[rules.required]"
+                hide-details="auto"
+              ></v-text-field>
+            </div>
 
-        <v-divider class="my-5"></v-divider>
+            <div class="form-field">
+              <label class="field-label" for="new-password">New password</label>
+              <v-text-field
+                id="new-password"
+                v-model="newPassword1"
+                type="password"
+                autocomplete="new-password"
+                variant="outlined"
+                density="comfortable"
+                prepend-inner-icon="mdi-lock-plus-outline"
+                placeholder="New password"
+                :rules="[rules.required]"
+                hide-details="auto"
+              ></v-text-field>
+            </div>
 
-        <div class="mb-4">
-          <label class="text-body-medium font-weight-medium d-block mb-2">New password</label>
-          <v-text-field
-            v-model="newPassword1"
-            type="password"
-            autocomplete="new-password"
-            variant="outlined"
-            density="comfortable"
-            prepend-inner-icon="mdi-lock-plus-outline"
-            placeholder="Enter your new password"
-            :rules="[rules.required]"
-            hide-details="auto"
-          ></v-text-field>
-        </div>
+            <div class="form-field">
+              <label class="field-label" for="new-password-confirm">Confirm new password</label>
+              <v-text-field
+                id="new-password-confirm"
+                v-model="newPassword2"
+                type="password"
+                autocomplete="new-password"
+                variant="outlined"
+                density="comfortable"
+                prepend-inner-icon="mdi-lock-check-outline"
+                placeholder="Repeat new password"
+                :rules="[rules.required, rules.passwordMatch]"
+                hide-details="auto"
+              ></v-text-field>
+            </div>
+          </div>
 
-        <div class="mb-5">
-          <label class="text-body-medium font-weight-medium d-block mb-2">Confirm new password</label>
-          <v-text-field
-            v-model="newPassword2"
-            type="password"
-            autocomplete="new-password"
-            variant="outlined"
-            density="comfortable"
-            prepend-inner-icon="mdi-lock-check-outline"
-            placeholder="Confirm your new password"
-            :rules="[rules.required, rules.passwordMatch]"
-            hide-details="auto"
-          ></v-text-field>
-        </div>
+          <v-alert
+            v-if="status.hasStatus"
+            :type="status.isSuccess ? 'success' : 'error'"
+            closable
+            variant="tonal"
+            @click:close="status.clear()"
+            class="mb-4"
+          >
+            {{ status.message }}
+          </v-alert>
 
-        <v-alert
-          v-if="status.hasStatus"
-          :type="status.isSuccess ? 'success' : 'error'"
-          closable
-          variant="tonal"
-          @click:close="status.clear()"
-          class="mb-5"
-        >
-          {{ status.message }}
-        </v-alert>
-
-        <v-divider class="mb-5"></v-divider>
-
-        <v-btn
-          color="primary"
-          type="submit"
-          :loading="loading"
-          size="large"
-        >
-          <v-icon icon="mdi-check" size="small" class="me-2"></v-icon>
-          Update password
-        </v-btn>
-      </v-form>
+          <div class="form-actions">
+            <v-btn
+              color="primary"
+              type="submit"
+              :loading="loading"
+              size="large"
+            >
+              <v-icon icon="mdi-check" size="small" class="me-2"></v-icon>
+              Update password
+            </v-btn>
+          </div>
+        </v-form>
+      </FormSection>
     </div>
   </div>
 </template>
@@ -97,6 +97,7 @@ import { userService } from "../services"
 import { isSuccess } from "../services/api"
 import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
 import { useStore } from "../store/store"
+import { SectionHeader, FormSection } from "./common"
 
 // State
 const store = useStore()
@@ -144,35 +145,47 @@ async function handleChangePassword() {
 </script>
 
 <style scoped>
-.section-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 24px;
-  background: rgba(var(--v-theme-primary), 0.05);
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
-}
-
-.form-container {
+/* Same layout as the add user form in the user management */
+.section-content {
   padding: 24px;
-  max-width: 500px;
 }
 
-:deep(.v-field) {
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.form-field :deep(.v-field) {
   border-radius: var(--kellnr-radius);
   background: rgb(var(--v-theme-surface));
 }
 
-:deep(.v-field--focused) {
-  background: rgb(var(--v-theme-surface));
+.form-actions {
+  padding-top: 16px;
+  border-top: 1px solid rgb(var(--v-theme-outline));
 }
 
-/* Labels */
-label {
-  color: rgb(var(--v-theme-on-surface));
-}
+@media (max-width: 600px) {
+  .section-content {
+    padding: 20px;
+  }
 
-/* Dividers */
-:deep(.v-divider) {
-  opacity: 0.5;
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

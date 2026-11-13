@@ -1,6 +1,6 @@
 <template>
   <div>
-    <SectionHeader icon="mdi-account-multiple" :title="SETTINGS_SECTION_TITLES.users" :count="users.length" />
+    <SectionHeader icon="mdi-account-multiple" :title="SETTINGS_SECTION_TITLES.users" :count="users.length" role="heading" aria-level="2" />
 
     <div class="section-content">
       <p class="text-body-medium text-medium-emphasis mb-5">
@@ -21,46 +21,43 @@
           >
             <template #badges>
               <div class="user-badges">
-                <span class="role-badge" :class="user.is_admin ? 'admin' : 'user'">
-                  {{ user.is_admin ? 'Admin' : 'User' }}
-                </span>
-                <span v-if="user.is_read_only" class="role-badge readonly">
-                  Read-only
+                <span class="role-badge" :class="roleOf(user)" data-testid="user-role-badge">
+                  {{ roleLabel(roleOf(user)) }}
                 </span>
                 <span v-if="user.name === currentUserName" class="role-badge self" data-testid="user-self-badge">
                   You
                 </span>
               </div>
             </template>
-            <!-- Admins cannot demote, lock or delete themselves, so these actions are not offered -->
+            <!--
+              Each user has one of the three roles. Promote and Demote switch between admin and user,
+              Lock and Unlock between read-only and user. Admins cannot demote, lock or delete themselves.
+            -->
             <template #actions>
               <v-btn
                 v-if="user.name !== currentUserName"
-                :color="user.is_admin ? 'warning' : 'primary'"
                 variant="tonal"
-                size="small"
-                @click="handleToggleAdmin(user)"
+                data-testid="user-toggle-admin"
+                @click="handleChangeRole(user, roleOf(user) === 'admin' ? 'user' : 'admin')"
               >
-                <v-icon :icon="user.is_admin ? 'mdi-shield-off-outline' : 'mdi-shield-crown-outline'" size="small" class="me-1"></v-icon>
-                {{ user.is_admin ? 'Demote' : 'Promote' }}
+                <v-icon :icon="roleOf(user) === 'admin' ? 'mdi-shield-off-outline' : 'mdi-shield-crown-outline'" size="small" class="me-1"></v-icon>
+                {{ roleOf(user) === 'admin' ? 'Demote' : 'Promote' }}
               </v-btn>
 
               <v-btn
-                v-if="user.name !== currentUserName || user.is_read_only"
-                :color="user.is_read_only ? 'info' : 'default'"
+                v-if="roleOf(user) !== 'admin'"
                 variant="tonal"
-                size="small"
-                @click="handleToggleReadOnly(user)"
+                data-testid="user-toggle-read-only"
+                @click="handleChangeRole(user, roleOf(user) === 'read-only' ? 'user' : 'read-only')"
               >
-                <v-icon :icon="user.is_read_only ? 'mdi-lock-open-outline' : 'mdi-lock-outline'" size="small" class="me-1"></v-icon>
-                {{ user.is_read_only ? 'Unlock' : 'Lock' }}
+                <v-icon :icon="roleOf(user) === 'read-only' ? 'mdi-lock-open-outline' : 'mdi-lock-outline'" size="small" class="me-1"></v-icon>
+                {{ roleOf(user) === 'read-only' ? 'Unlock' : 'Lock' }}
               </v-btn>
 
               <v-btn
                 v-if="!ssoEnforced"
-                color="warning"
                 variant="tonal"
-                size="small"
+                data-testid="user-reset-password"
                 @click="handleResetPassword(user.name)"
               >
                 <v-icon icon="mdi-key-outline" size="small" class="me-1"></v-icon>
@@ -69,9 +66,9 @@
 
               <v-btn
                 v-if="user.name !== currentUserName"
-                color="error"
                 variant="tonal"
-                size="small"
+                class="kellnr-danger-btn"
+                data-testid="user-delete"
                 @click="handleDeleteUser(user.name)"
               >
                 <v-icon icon="mdi-delete-outline" size="small" class="me-1"></v-icon>
@@ -94,8 +91,9 @@
         <v-form @submit.prevent="handleAddUser" class="add-user-form">
           <div class="form-grid">
             <div class="form-field">
-              <label class="field-label">Username</label>
+              <label class="field-label" for="new-user-name">Username</label>
               <v-text-field
+                id="new-user-name"
                 v-model="newUserName"
                 placeholder="Enter username"
                 autocomplete="off"
@@ -107,8 +105,9 @@
             </div>
 
             <div class="form-field">
-              <label class="field-label">Password</label>
+              <label class="field-label" for="new-user-password">Password</label>
               <v-text-field
+                id="new-user-password"
                 v-model="newUserPwd1"
                 placeholder="Enter password"
                 prepend-inner-icon="mdi-lock-outline"
@@ -121,8 +120,9 @@
             </div>
 
             <div class="form-field">
-              <label class="field-label">Confirm password</label>
+              <label class="field-label" for="new-user-password-confirm">Confirm password</label>
               <v-text-field
+                id="new-user-password-confirm"
                 v-model="newUserPwd2"
                 placeholder="Confirm password"
                 prepend-inner-icon="mdi-lock-check-outline"
@@ -135,35 +135,32 @@
             </div>
           </div>
 
-          <div class="form-options">
-            <v-checkbox
-              v-model="newUserIsAdmin"
+          <fieldset class="form-options">
+            <legend class="field-label">Role</legend>
+            <v-radio-group
+              v-model="newUserRole"
+              inline
               hide-details
               density="compact"
-              class="option-checkbox"
+              data-testid="new-user-role"
             >
-              <template v-slot:label>
-                <div class="checkbox-label">
-                  <span class="checkbox-title">Administrator</span>
-                  <span class="checkbox-desc">Full access to all features</span>
-                </div>
-              </template>
-            </v-checkbox>
-
-            <v-checkbox
-              v-model="newUserIsReadOnly"
-              hide-details
-              density="compact"
-              class="option-checkbox"
-            >
-              <template v-slot:label>
-                <div class="checkbox-label">
-                  <span class="checkbox-title">Read-only</span>
-                  <span class="checkbox-desc">Can only view crates</span>
-                </div>
-              </template>
-            </v-checkbox>
-          </div>
+              <v-radio
+                v-for="role in USER_ROLES"
+                :key="role.value"
+                :value="role.value"
+                color="primary"
+                class="role-option"
+                :data-testid="`new-user-role-${role.value}`"
+              >
+                <template v-slot:label>
+                  <div class="role-label">
+                    <span class="role-title">{{ role.label }}</span>
+                    <span class="role-desc">{{ role.description }}</span>
+                  </div>
+                </template>
+              </v-radio>
+            </v-radio-group>
+          </fieldset>
 
           <v-alert
             v-if="addStatus.hasStatus"
@@ -212,6 +209,8 @@ import { useStatusMessage, useConfirmCallback, useNotification } from "../compos
 import { userService } from "../services"
 import { isSuccess } from "../services/api"
 import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
+import { USER_ROLES, roleChanges, roleFlags, roleLabel, roleOf, type UserRole } from "../common/userRole"
+import "../common/actionButtons.css"
 import type { User } from "../types/user"
 import { useStore } from "../store/store"
 import {
@@ -231,8 +230,7 @@ const users = ref<User[]>([])
 const newUserName = ref("")
 const newUserPwd1 = ref("")
 const newUserPwd2 = ref("")
-const newUserIsAdmin = ref(false)
-const newUserIsReadOnly = ref(false)
+const newUserRole = ref<UserRole>("user")
 
 // Store
 const store = useStore()
@@ -270,8 +268,7 @@ async function handleAddUser() {
     name: newUserName.value,
     pwd1: newUserPwd1.value,
     pwd2: newUserPwd2.value,
-    is_admin: newUserIsAdmin.value,
-    is_read_only: newUserIsReadOnly.value,
+    ...roleFlags(newUserRole.value),
   })
 
   if (isSuccess(result)) {
@@ -280,8 +277,7 @@ async function handleAddUser() {
     newUserName.value = ""
     newUserPwd1.value = ""
     newUserPwd2.value = ""
-    newUserIsAdmin.value = false
-    newUserIsReadOnly.value = false
+    newUserRole.value = "user"
     await loadUsers()
   } else {
     addStatus.setError(result.error.message)
@@ -325,48 +321,42 @@ function handleResetPassword(name: string) {
   })
 }
 
-// Toggle read-only status with confirmation
-function handleToggleReadOnly(user: User) {
-  const newState = !user.is_read_only
-  const actionText = newState ? "read-only" : "unlocked"
-
-  showConfirm({
-    title: "Change Read-only Status",
-    message: newState
-      ? `Make "${user.name}" read-only? They will only be able to view crates.`
-      : `Remove read-only restriction from "${user.name}"?`,
-    confirmColor: "primary",
-    onConfirm: async () => {
-      const result = await userService.setReadOnly(user.name, newState)
-      if (isSuccess(result)) {
-        user.is_read_only = newState
-        notification.showSuccess(`"${user.name}" is now ${actionText}`)
-      } else {
-        notification.showError(result.error.message)
-      }
-    }
-  })
+const ROLE_CHANGE_MESSAGES: Record<UserRole, (name: string) => string> = {
+  admin: (name) => `Promote "${name}" to admin? They will have full access to all features.`,
+  "read-only": (name) => `Make "${name}" read-only? They will only be able to view crates.`,
+  user: (name) => `Make "${name}" a regular user? They will be able to view and publish crates, but not administer Kellnr.`,
 }
 
-// Toggle admin status with confirmation
-function handleToggleAdmin(user: User) {
-  const newState = !user.is_admin
-  const actionText = newState ? "an admin" : "a regular user"
+async function applyRoleChanges(user: User, target: UserRole): Promise<string | null> {
+  for (const change of roleChanges(user, target)) {
+    const result = change.flag === "admin"
+      ? await userService.setAdmin(user.name, change.state)
+      : await userService.setReadOnly(user.name, change.state)
+    if (!isSuccess(result)) {
+      return result.error.message
+    }
+    if (change.flag === "admin") {
+      user.is_admin = change.state
+    } else {
+      user.is_read_only = change.state
+    }
+  }
+  return null
+}
 
+function handleChangeRole(user: User, target: UserRole) {
   showConfirm({
-    title: "Change admin status",
-    message: newState
-      ? `Promote "${user.name}" to admin? They will have full access to all features.`
-      : `Demote "${user.name}" from admin? They will lose administrative privileges.`,
-    confirmColor: newState ? "primary" : "warning",
+    title: "Change role",
+    message: ROLE_CHANGE_MESSAGES[target](user.name),
+    confirmColor: "primary",
     onConfirm: async () => {
-      const result = await userService.setAdmin(user.name, newState)
-      if (isSuccess(result)) {
-        user.is_admin = newState
-        notification.showSuccess(`"${user.name}" is now ${actionText}`)
-      } else {
-        notification.showError(result.error.message)
+      const error = await applyRoleChanges(user, target)
+      if (error) {
+        notification.showError(`Failed to change the role of "${user.name}": ${error}`)
+        await loadUsers()
+        return
       }
+      notification.showSuccess(`"${user.name}" is now ${roleLabel(target).toLowerCase()}`)
     }
   })
 }
@@ -408,11 +398,7 @@ function handleToggleAdmin(user: User) {
   color: rgb(var(--v-theme-info));
 }
 
-.role-badge.readonly {
-  background: rgba(var(--v-theme-warning), 0.15);
-  color: rgb(var(--v-theme-warning));
-}
-
+.role-badge.read-only,
 .role-badge.self {
   background: rgb(var(--v-theme-surface-variant));
   color: rgb(var(--v-theme-on-surface-variant));
@@ -447,31 +433,33 @@ function handleToggleAdmin(user: User) {
 }
 
 .form-options {
-  display: flex;
-  gap: 24px;
-  padding: 16px;
+  margin: 0 0 16px;
+  padding: 12px 16px 16px;
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
   border-radius: var(--kellnr-radius);
-  margin-bottom: 16px;
 }
 
-.option-checkbox {
-  flex: 1;
+.form-options legend {
+  padding: 0 4px;
 }
 
-.checkbox-label {
+.role-option {
+  margin-right: 24px;
+}
+
+.role-label {
   display: flex;
   flex-direction: column;
 }
 
-.checkbox-title {
+.role-title {
   font-size: 14px;
   font-weight: 500;
   color: rgb(var(--v-theme-on-surface));
 }
 
-.checkbox-desc {
+.role-desc {
   font-size: 12px;
   color: rgb(var(--v-theme-on-surface-variant));
 }
@@ -482,13 +470,6 @@ function handleToggleAdmin(user: User) {
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-  .form-options {
-    flex-direction: column;
-    gap: 12px;
-  }
-}
-
 @media (max-width: 600px) {
   .section-content {
     padding: 20px;

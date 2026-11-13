@@ -1,6 +1,6 @@
 <template>
   <div>
-    <SectionHeader icon="mdi-hammer-wrench" :title="SETTINGS_SECTION_TITLES.toolchains" :count="toolchains.length" data-testid="toolchain-section-header" />
+    <SectionHeader icon="mdi-hammer-wrench" :title="SETTINGS_SECTION_TITLES.toolchains" :count="toolchains.length" data-testid="toolchain-section-header" role="heading" aria-level="2" />
 
     <div class="section-content">
       <p class="text-body-medium text-medium-emphasis mb-5">

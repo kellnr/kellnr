@@ -58,9 +58,8 @@
               <div class="targets-header">
                 <span class="text-body-medium font-weight-medium">Targets</span>
                 <v-btn
-                  color="error"
                   variant="tonal"
-                  size="small"
+                  class="kellnr-danger-btn"
                   data-testid="toolchain-delete"
                   @click.stop="$emit('delete-toolchain', toolchain.name, toolchain.version)"
                 >
@@ -90,9 +89,8 @@
                   </template>
                   <template #actions>
                     <v-btn
-                      color="error"
                       variant="tonal"
-                      size="small"
+                      class="kellnr-danger-btn"
                       data-testid="toolchain-target-delete"
                       @click.stop="$emit('delete-target', toolchain.name, toolchain.version, target.target)"
                     >
@@ -120,6 +118,7 @@
 
 <script setup lang="ts">
 import type { Toolchain } from "../../types/toolchain"
+import "../../common/actionButtons.css"
 import { SubsectionHeader, ListItem, EmptyState } from "../common"
 
 defineProps<{

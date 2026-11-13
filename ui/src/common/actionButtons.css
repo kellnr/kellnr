@@ -1,0 +1,13 @@
+/*
+ * Destructive list actions (revoke, delete, remove) as tonal buttons.
+ * The theme error colors reach only about 4.3:1 as tonal text, so these tones
+ * keep the text above 4.5:1 on the tonal background in both themes.
+ */
+.kellnr-danger-btn {
+  color: #b71c1c;
+}
+
+.v-theme--dark .kellnr-danger-btn,
+.kellnr-danger-btn.v-theme--dark {
+  color: #ff8a80;
+}

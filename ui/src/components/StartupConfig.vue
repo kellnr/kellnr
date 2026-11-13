@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="section-header">
       <v-icon icon="mdi-tune" size="small" color="primary" class="me-3"></v-icon>
-      <span class="text-title-large font-weight-bold" data-testid="section-title">{{ SETTINGS_SECTION_TITLES.config }}</span>
+      <h2 class="section-heading text-title-large font-weight-bold" data-testid="section-title">{{ SETTINGS_SECTION_TITLES.config }}</h2>
       <span v-if="totalConfigured > 0" class="section-count configured">{{ totalConfigured }}/{{ totalSettings }} configured</span>
       <span class="section-count">{{ visibleSectionsCount }} sections</span>
     </div>
@@ -246,6 +246,10 @@ onBeforeMount(async () => {
 </script>
 
 <style scoped>
+.section-heading {
+  margin: 0;
+}
+
 .section-header {
   display: flex;
   align-items: center;
