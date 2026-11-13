@@ -165,7 +165,8 @@ test.describe("Crates.io Proxy UI Tests", () => {
       has: page.locator("img[alt='Crates.io logo']"),
     });
     expect(await cratesIoCard.count()).toBeGreaterThan(0);
-    expect(await cratesPage.hasCrate("foo-bar")).toBe(false);
+    // The proxy view lists the own crates next to the cached ones
+    expect(await cratesPage.hasCrate("foo-bar")).toBe(true);
   });
 
   test("landing page shows cached crates section when proxy enabled", async ({ page }) => {
