@@ -3,7 +3,7 @@
     <!-- Login button for logged out users, not needed on the login page itself.
          The component stays mounted there, it shows the welcome message. -->
     <v-btn v-if="store.loggedIn === false && route.name !== 'Login'" :to="'/login'" variant="outlined" color="primary"
-      density="comfortable" prepend-icon="mdi-login" :loading="isLoading" :disabled="isLoading"
+      prepend-icon="mdi-login" :loading="isLoading" :disabled="isLoading"
       data-testid="login-button">
       Log in
     </v-btn>
@@ -11,7 +11,7 @@
     <!-- User menu for logged in users -->
     <v-menu v-else-if="store.loggedIn !== false" location="bottom end">
       <template v-slot:activator="{ props }">
-        <v-btn v-bind="props" variant="outlined" color="primary" density="comfortable"
+        <v-btn v-bind="props" variant="outlined" color="primary"
           :loading="isLoading" :disabled="isLoading" :aria-label="`User menu for ${store.loggedInUser}`"
           data-testid="user-menu-button">
           <v-icon icon="mdi-account-circle" class="me-sm-2"></v-icon>

@@ -33,7 +33,7 @@
           :target="item.href ? '_blank' : undefined"
           :ripple="false"
           variant="text"
-          :class="['nav-btn', { 'nav-btn-active': item.route && route.path.startsWith(item.route) }]"
+          class="nav-btn"
           :prepend-icon="item.icon"
           :data-testid="`header-nav-${item.slug}`"
         >
@@ -95,16 +95,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onBeforeMount, computed } from "vue";
+import { ref, onBeforeMount } from "vue";
 import LoginButton from "./LoginButton.vue";
 import ThemeToggle from "./ThemeToggle.vue";
 import { useStore } from "../store/store";
-import { useRoute } from "vue-router";
 import { useTheme } from "vuetify";
 
 const store = useStore();
 const vuetifyTheme = useTheme();
-const route = useRoute();
 const drawer = ref(false);
 
 // Snackbar state
@@ -112,21 +110,15 @@ const showSnackbar = ref(false);
 const snackbarText = ref("");
 const snackbarColor = ref("success");
 
-// Navigation items. Settings only exist for logged-in users, who also find
-// them in the user menu.
-const navItems = computed(() => [
+// Settings are in the user menu, so logging in does not shift these items.
+// Vuetify marks a link active only on its own route, "/" is not a prefix match.
+const navItems = [
   {
     title: "Search",
     slug: "search",
     icon: "mdi-magnify",
     route: "/crates"
   },
-  ...(store.loggedIn ? [{
-    title: "Settings",
-    slug: "settings",
-    icon: "mdi-cog",
-    route: "/settings"
-  }] : []),
   {
     title: "Doc queue",
     slug: "docqueue",
@@ -139,7 +131,7 @@ const navItems = computed(() => [
     icon: "mdi-api",
     href: "./api/docs/"
   }
-]);
+];
 
 onBeforeMount(() => {
   // Apply the current theme
@@ -232,7 +224,6 @@ function showNotification(message: string, isError: boolean = false) {
   color: rgb(var(--v-theme-primary));
 }
 
-.nav-btn.nav-btn-active,
 .nav-btn.v-btn--active {
   background: rgba(var(--v-theme-primary), 0.12) !important;
   color: rgb(var(--v-theme-primary)) !important;
@@ -244,7 +235,6 @@ function showNotification(message: string, isError: boolean = false) {
 }
 
 .nav-btn:hover :deep(.v-icon),
-.nav-btn.nav-btn-active :deep(.v-icon),
 .nav-btn.v-btn--active :deep(.v-icon) {
   opacity: 1;
 }

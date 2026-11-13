@@ -1,11 +1,11 @@
 <template>
   <v-card
     class="hero-stat-card"
-    :class="{ 'clickable': props.onClick, 'compact': props.compact }"
+    :class="{ 'clickable': props.to, 'compact': props.compact }"
     elevation="0"
-    :ripple="!!props.onClick"
-    :data-testid="`${props.testIdPrefix}-${textToTestId(text)}`"
-    @click="handleClick">
+    :to="props.to"
+    :ripple="!!props.to"
+    :data-testid="`${props.testIdPrefix}-${textToTestId(text)}`">
     <v-card-text class="d-flex align-center ga-4 pa-4">
       <div class="icon-tile">
         <v-icon :icon="icon" :size="props.compact ? 22 : 26"></v-icon>
@@ -22,13 +22,14 @@
           {{ subtitle }}
         </div>
       </div>
-      <v-icon v-if="props.onClick" icon="mdi-chevron-right" size="small" class="ms-auto chevron"></v-icon>
+      <v-icon v-if="props.to" icon="mdi-chevron-right" size="small" class="ms-auto chevron"></v-icon>
     </v-card-text>
   </v-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import type { RouteLocationRaw } from 'vue-router';
 import { formatNumber } from '../common/format';
 
 const props = withDefaults(defineProps<{
@@ -39,17 +40,12 @@ const props = withDefaults(defineProps<{
   /** Smaller variant for secondary statistics */
   compact?: boolean;
   testIdPrefix?: string;
-  onClick?: () => void;
+  /** Makes the card a link */
+  to?: RouteLocationRaw;
 }>(), {
   compact: false,
   testIdPrefix: 'hero-stat',
 });
-
-function handleClick() {
-  if (props.onClick) {
-    props.onClick();
-  }
-}
 
 const formattedNum = computed(() => formatNumber(props.num));
 

@@ -1,32 +1,43 @@
 <template>
   <v-container fluid class="pa-0">
+    <PageHeader title="Search" icon="mdi-magnify" class="mb-4" />
+
     <!-- Search, sort order and the proxy switch in one row -->
     <div class="crates-toolbar mb-2">
       <v-text-field v-model="searchText" placeholder="Search for crates" variant="outlined" density="comfortable"
         hide-details prepend-inner-icon="mdi-magnify" color="primary" data-testid="crates-search"
-        data-search-shortcut @keyup.enter="handleSearch(searchText)" class="search-field" bg-color="surface">
+        :loading="isLoading" aria-label="Search for crates"
+        data-search-shortcut @keyup.enter="searchNow" class="search-field" bg-color="surface">
         <template v-slot:append-inner>
           <kbd class="shortcut-hint" title="Press / or S to search">/</kbd>
         </template>
       </v-text-field>
 
-      <v-select v-if="!activeQuery" v-model="sort" :items="SORT_OPTIONS" density="comfortable" variant="outlined"
-        hide-details class="sort-select" bg-color="surface" aria-label="Sort crates" data-testid="crates-sort"
-        @update:model-value="handleSortChange"></v-select>
-
-      <v-switch v-model="store.searchCache" color="primary" hide-details density="compact" class="flex-grow-0 proxy-switch"
-        data-testid="crates-proxy-toggle" @update:model-value="refreshCrates()">
-        <template v-slot:label>
-          <div class="d-flex align-center" data-testid="crates-proxy-label">
-            <span class="mr-2 switch-label">Crates proxy</span>
-            <v-tooltip location="top" text="Display crates from the crates.io proxy">
-              <template v-slot:activator="{ props }">
-                <v-icon icon="mdi-information-outline" size="small" v-bind="props" class="info-icon" />
-              </template>
-            </v-tooltip>
+      <!-- Stays in place while searching, so the row does not shift -->
+      <v-tooltip location="top" text="Search results are sorted by relevance" :disabled="!activeQuery">
+        <template v-slot:activator="{ props: tooltipProps }">
+          <div v-bind="tooltipProps" class="sort-select" data-testid="crates-sort-wrapper">
+            <v-select :model-value="activeQuery ? RELEVANCE : sort" :items="sortItems" :disabled="!!activeQuery"
+              density="comfortable" variant="outlined" hide-details bg-color="surface" aria-label="Sort crates"
+              data-testid="crates-sort" @update:model-value="handleSortChange"></v-select>
           </div>
         </template>
-      </v-switch>
+      </v-tooltip>
+
+      <div v-if="proxyEnabled" class="d-flex align-center flex-grow-0">
+        <v-switch v-model="store.searchCache" color="primary" hide-details density="compact" class="flex-grow-0 proxy-switch"
+          data-testid="crates-proxy-toggle" @update:model-value="refreshCrates()">
+          <template v-slot:label>
+            <span class="switch-label" data-testid="crates-proxy-label">Crates proxy</span>
+          </template>
+        </v-switch>
+        <v-tooltip location="top" text="Display crates from the crates.io proxy">
+          <template v-slot:activator="{ props: tooltipProps }">
+            <v-btn v-bind="tooltipProps" icon="mdi-information-outline" variant="text" size="small"
+              class="info-icon ms-1" aria-label="About the crates proxy" data-testid="crates-proxy-info"></v-btn>
+          </template>
+        </v-tooltip>
+      </div>
     </div>
 
     <!-- Result count and the active keyword or category filter -->
@@ -85,6 +96,7 @@
 <script setup lang="ts">
 import { computed, onBeforeMount, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import CrateCard from "../components/CrateCard.vue"
+import { PageHeader } from "../components/common"
 import type { CrateOverview } from "../types/crate_overview"
 import type { CrateSort, CrateTagFilter } from "../types/api"
 import { crateService } from "../services"
@@ -92,14 +104,19 @@ import { isSuccess } from "../services/api"
 import { useRoute, useRouter } from "vue-router"
 import { useStore } from "../store/store"
 import { formatNumber } from "../common/format"
+import { debounce } from "../common/debounce"
+import { buildCrateListQuery, DEFAULT_CRATE_SORT, parseCrateSort } from "../common/crateListQuery"
 
 // Constants
 const ITEMS_PER_PAGE = 20
+const SEARCH_DELAY_MS = 300
 const SORT_OPTIONS: { title: string, value: CrateSort }[] = [
   { title: "Name", value: "name" },
   { title: "Recently updated", value: "updated" },
   { title: "Most downloaded", value: "downloads" },
 ]
+// Shown in the disabled sort field while a search is active
+const RELEVANCE = "relevance"
 
 // State
 const crates = ref<CrateOverview[]>([])
@@ -111,14 +128,22 @@ const searchText = ref("")
 // The query the currently displayed list belongs to. Empty means "browse all".
 // Kept apart from `searchText` so typing does not change what the next page is.
 const activeQuery = ref("")
-const sort = ref<CrateSort>("name")
+const sort = ref<CrateSort>(DEFAULT_CRATE_SORT)
 // Keyword and category filter, set by the links on a crate page
 const tags = ref<CrateTagFilter>({})
+// Hidden until the statistics confirm that the crates.io proxy is enabled
+const proxyEnabled = ref(false)
 const loadMoreSentinel = ref<HTMLElement | null>(null)
 const router = useRouter()
 const route = useRoute()
 const store = useStore()
 let observer: IntersectionObserver | undefined
+// Increased on every refresh, so responses for an older list are dropped
+let listGeneration = 0
+
+const sortItems = computed(() =>
+  activeQuery.value ? [{ title: "Relevance", value: RELEVANCE }] : SORT_OPTIONS
+)
 
 const resultCountText = computed(() => {
   const count = total.value ?? 0
@@ -148,10 +173,7 @@ onBeforeMount(() => {
     searchText.value = query.search as string
     activeQuery.value = searchText.value.trim()
   }
-  const requestedSort = SORT_OPTIONS.find(option => option.value === query.sort)
-  if (requestedSort) {
-    sort.value = requestedSort.value
-  }
+  sort.value = parseCrateSort(query.sort) ?? DEFAULT_CRATE_SORT
   // A search and a tag filter are not combined, the search wins
   if (!activeQuery.value) {
     tags.value = tagsFromRoute()
@@ -171,8 +193,20 @@ watch(() => [route.query.keyword, route.query.category], () => {
   refreshCrates()
 })
 
+const searchWhileTyping = debounce((text: string) => handleSearch(text), SEARCH_DELAY_MS)
+
+watch(searchText, text => {
+  // Also covers text set by this view itself, which already matches the list
+  if (text.trim() === activeQuery.value) {
+    searchWhileTyping.cancel()
+    return
+  }
+  searchWhileTyping(text)
+})
+
 onMounted(() => {
   loadMoreCrates()
+  loadProxyEnabled()
 
   // Load the next page shortly before the end of the list becomes visible
   observer = new IntersectionObserver(entries => {
@@ -187,7 +221,19 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   observer?.disconnect()
+  searchWhileTyping.cancel()
 })
+
+async function loadProxyEnabled() {
+  const result = await crateService.getStatistics()
+  if (!isSuccess(result)) return
+  proxyEnabled.value = result.data.proxy_enabled
+  // A switch left on while the proxy was enabled would otherwise stay on unseen
+  if (!proxyEnabled.value && store.searchCache) {
+    store.searchCache = false
+    refreshCrates()
+  }
+}
 
 // Load more crates for infinite scrolling. Search and the full crate list are
 // paginated the same way, so both are loaded through here.
@@ -195,6 +241,7 @@ async function loadMoreCrates() {
   if (isLoading.value || allLoaded.value) return
 
   isLoading.value = true
+  const generation = listGeneration
 
   const result = activeQuery.value
     ? await crateService.searchCrates(
@@ -210,6 +257,9 @@ async function loadMoreCrates() {
       sort.value,
       tags.value
     )
+
+  // The list was refreshed meanwhile, the refresh loads its own first page
+  if (generation !== listGeneration) return
 
   isLoading.value = false
 
@@ -248,33 +298,38 @@ function loadMoreIfSentinelVisible() {
 
 // Refresh crates (used when changing filters)
 function refreshCrates() {
+  listGeneration++
   crates.value = []
   currentPage.value = 0
   allLoaded.value = false
+  isLoading.value = false
   total.value = null
   window.scrollTo({ top: 0 })
 
   loadMoreCrates()
 }
 
-// Keep search and sort order in the URL, so the list can be linked and
-// survives a reload.
 function updateUrl() {
   router.replace({
-    query: {
-      ...(activeQuery.value ? { search: activeQuery.value } : {}),
-      ...(sort.value !== "name" ? { sort: sort.value } : {}),
-      ...tags.value,
-    },
+    query: buildCrateListQuery({ search: activeQuery.value, sort: sort.value, tags: tags.value }),
   })
 }
 
 // Search crates by name. An empty query goes back to the full crate list.
 function handleSearch(query: string) {
-  activeQuery.value = query.trim()
+  const trimmed = query.trim()
+  const hasTags = Boolean(tags.value.keyword || tags.value.category)
+  if (trimmed === activeQuery.value && !hasTags) return
+  activeQuery.value = trimmed
   tags.value = {}
   updateUrl()
   refreshCrates()
+}
+
+// Enter searches at once instead of waiting for the typing delay
+function searchNow() {
+  searchWhileTyping.cancel()
+  handleSearch(searchText.value)
 }
 
 function clearTags() {
@@ -283,7 +338,10 @@ function clearTags() {
   refreshCrates()
 }
 
-function handleSortChange() {
+function handleSortChange(value: unknown) {
+  const next = parseCrateSort(value)
+  if (!next || next === sort.value) return
+  sort.value = next
   updateUrl()
   refreshCrates()
 }

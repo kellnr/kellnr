@@ -1,5 +1,7 @@
 <template>
-  <v-card class="crate-card mb-3" elevation="0" data-testid="crate-card" @click="navigateToCrate">
+  <!-- The name is the link, it stretches over the whole card. A link around
+       the card would nest the Docs and Repository links inside it. -->
+  <v-card class="crate-card mb-3" elevation="0" data-testid="crate-card">
     <v-card-text class="pa-4">
       <div class="d-flex align-start">
         <!-- Origin Logo -->
@@ -16,7 +18,10 @@
           <!-- Header Row: Name + Version + Stats -->
           <div class="d-flex flex-wrap align-center justify-space-between mb-2">
             <div class="d-flex align-center flex-wrap crate-header">
-              <span class="crate-name font-weight-bold me-3" data-testid="crate-card-name">{{ crate }}</span>
+              <a v-if="props.isCache" :href="cratesIoUrl" target="_blank" rel="noopener noreferrer"
+                class="crate-name crate-link font-weight-bold me-3" data-testid="crate-card-name">{{ crate }}</a>
+              <router-link v-else :to="crateRoute" class="crate-name crate-link font-weight-bold me-3"
+                data-testid="crate-card-name">{{ crate }}</router-link>
               <span class="version-label tabular-nums" data-testid="crate-card-version">v{{ version }}</span>
             </div>
 
@@ -42,13 +47,13 @@
 
               <!-- Only crates with docs get a link, so it never leads nowhere -->
               <a v-if="isSafeUrl(docLink)" :href="docLink" class="stat-item doc-link" target="_blank"
-                rel="noopener noreferrer" data-testid="crate-card-docs-link" @click.stop>
+                rel="noopener noreferrer" data-testid="crate-card-docs-link">
                 <v-icon icon="mdi-file-document-outline" size="x-small" />
                 <span>Docs</span>
               </a>
 
               <a v-if="isSafeUrl(repository)" :href="repository" class="stat-item doc-link" target="_blank"
-                rel="noopener noreferrer" data-testid="crate-card-repository-link" @click.stop>
+                rel="noopener noreferrer" data-testid="crate-card-repository-link">
                 <v-icon icon="mdi-source-repository" size="x-small" />
                 <span>Repository</span>
               </a>
@@ -68,13 +73,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useStore } from "../store/store";
-import { useRouter } from "vue-router";
 import { isSafeUrl } from "../common/url";
 import { formatNumber } from "../common/format";
 import { useRelativeTime } from "../composables";
 
 const store = useStore();
-const router = useRouter();
 
 const props = defineProps<{
   crate: string
@@ -91,25 +94,17 @@ const { fromNow, exactDate } = useRelativeTime();
 
 const humanizedLastUpdated = computed(() => fromNow(props.updated))
 
-// Navigate to crate details or crates.io
-function navigateToCrate() {
-  if (props.isCache) {
-    window.open(`https://crates.io/crates/${props.crate}`, '_blank', 'noopener,noreferrer');
-  } else {
-    router.push({
-      name: 'Crate',
-      query: {
-        name: props.crate,
-        version: props.version
-      }
-    });
-  }
-}
+const cratesIoUrl = computed(() => `https://crates.io/crates/${encodeURIComponent(props.crate)}`)
+
+const crateRoute = computed(() => ({
+  name: "Crate",
+  query: { name: props.crate, version: props.version },
+}))
 </script>
 
 <style scoped>
 .crate-card {
-  cursor: pointer;
+  position: relative;
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline));
   transition: all 0.2s ease;
@@ -118,6 +113,29 @@ function navigateToCrate() {
 .crate-card:hover {
   background: rgba(var(--v-theme-primary), 0.04);
   border-color: rgb(var(--v-theme-primary));
+}
+
+.crate-card:has(.crate-link:focus-visible) {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+.crate-link {
+  text-decoration: none;
+  outline: none;
+}
+
+/* Makes the whole card the click target of the name link */
+.crate-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* Links and tooltips inside the card stay on top of the stretched link */
+.stat-item {
+  position: relative;
+  z-index: 1;
 }
 
 .min-width-0 {
