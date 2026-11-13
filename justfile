@@ -173,9 +173,11 @@ sbom:
     cdxgen -r -o kellnr.cdx.json .
     @echo "SBOM generated: kellnr.cdx.json"
 
-# Reduce the SBOM to the crates and npm packages compiled into the kellnr binary
+# Reduce the SBOM to the crates and npm packages compiled into the kellnr binary of each platform
 sbom-binary: sbom
-    python3 .github/scripts/binary_sbom.py kellnr.cdx.json kellnr-binary.cdx.json
+    python3 .github/scripts/binary_sbom.py linux kellnr.cdx.json kellnr-binary-linux.cdx.json
+    python3 .github/scripts/binary_sbom.py windows kellnr.cdx.json kellnr-binary-windows.cdx.json
+    python3 .github/scripts/binary_sbom.py macos kellnr.cdx.json kellnr-binary-macos.cdx.json
 
 # Test the Python scripts of the CI workflows
 test-scripts:

@@ -70,22 +70,19 @@ jobs:
           echo "VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
 
       - name: Generate SBOMs
-        run: nix develop --command just sbom-binary
+        run: |
+          nix develop --command just sbom-binary
+          mkdir sboms
+          for sbom in kellnr kellnr-binary-linux kellnr-binary-windows kellnr-binary-macos; do
+            mv "$sbom.cdx.json" "sboms/$sbom-$VERSION.cdx.json"
+          done
 
-      - name: Upload repository SBOM to release
+      - name: Upload SBOMs to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: kellnr.cdx.json
-          asset_name: kellnr-${{ env.VERSION }}.cdx.json
-          tag: ${{ github.ref }}
-
-      - name: Upload binary SBOM to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: kellnr-binary.cdx.json
-          asset_name: kellnr-binary-${{ env.VERSION }}.cdx.json
+          file: sboms/*.cdx.json
+          file_glob: true
           tag: ${{ github.ref }}
 
   build-kellnr:
@@ -411,7 +408,7 @@ jobs:
           amd64="kellnr-x86_64-unknown-linux-$LINKAGE.zip"
           arm64="kellnr-aarch64-unknown-linux-$LINKAGE.zip"
           gh release download "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" \
-            --pattern "$amd64" --pattern "$arm64" --pattern "kellnr-binary-$RELEASE_VERSION.cdx.json"
+            --pattern "$amd64" --pattern "$arm64" --pattern "kellnr-binary-linux-$RELEASE_VERSION.cdx.json"
           for zip in "$amd64" "$arm64"; do
             gh attestation verify "$zip" --repo "$GITHUB_REPOSITORY" \
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
@@ -476,8 +473,51 @@ jobs:
         with:
           subject-name: ${{ matrix.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
-          sbom-path: release-assets/kellnr-binary-${{ env.RELEASE_VERSION }}.cdx.json
+          sbom-path: release-assets/kellnr-binary-linux-${{ env.RELEASE_VERSION }}.cdx.json
           push-to-registry: true
+
+  # Attaches the SBOM of each platform to its release archives, so
+  # "gh attestation verify --predicate-type https://cyclonedx.org/bom"
+  # works for every archive.
+  attest-sboms:
+    name: Attest SBOMs of the Binaries
+    runs-on: ubuntu-26.04
+    needs: [sbom, build-kellnr, build-windows, build-macos]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download release archives and SBOMs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "kellnr-*.zip"
+          for platform in linux windows macos; do
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --pattern "kellnr-binary-$platform-$version.cdx.json" --output "kellnr-binary-$platform.cdx.json"
+          done
+          ls -l
+
+      - name: Attest Linux SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: kellnr-*-unknown-linux-*.zip
+          sbom-path: kellnr-binary-linux.cdx.json
+
+      - name: Attest Windows SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: kellnr-*-windows.zip
+          sbom-path: kellnr-binary-windows.cdx.json
+
+      - name: Attest macOS SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: kellnr-*-apple-darwin.zip
+          sbom-path: kellnr-binary-macos.cdx.json
 
   dispatch-helm:
     name: Update Helm Chart
