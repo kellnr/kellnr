@@ -367,7 +367,14 @@ export class CratePage extends BasePage {
   async toggleDownloadRestriction(): Promise<void> {
     await this.clickTab("settings");
     // The restriction is saved as soon as the checkbox changes
+    const saved = this.page.waitForResponse(
+      (response) =>
+        response.request().method() === "PUT" &&
+        new URL(response.url()).pathname.includes("/api/v1/acl/"),
+    );
     await this.downloadRestrictedCheckbox.click();
+    const response = await saved;
+    expect(response.ok(), `saving the download restriction returned ${response.status()}`).toBe(true);
     await expect(this.downloadRestrictedCheckbox).toBeEnabled();
   }
 
@@ -397,7 +404,8 @@ export class CratePage extends BasePage {
   async deleteEntireCrate(): Promise<void> {
     await this.clickTab("admin");
     await this.deleteCrateButton.click();
-    const crateName = new URL(this.page.url()).searchParams.get("name") ?? "";
+    // The dialog asks for the original crate name, which the URL may spell differently
+    const crateName = (await this.crateTitle.innerText()).trim();
     await this.confirmDialog(crateName);
     await this.waitForNavigation("/crates");
   }

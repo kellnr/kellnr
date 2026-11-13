@@ -4,6 +4,7 @@
  * Tests the flow: cargo login tells users to visit /me to get a token.
  * - When logged in: /me should show the token management page
  * - When not logged in: /me should redirect to login, then back to tokens
+ * - A created token shows the cargo login setup and can be revoked
  *
  * Performance: All tests share a single local Kellnr instance.
  */
@@ -89,7 +90,7 @@ test.describe("/me Route Tests (cargo login flow)", () => {
     await expect(page).toHaveURL(/\/settings/, { timeout: 10000 });
 
     // Tokens tab should be active (Auth tokens heading visible)
-    await expect(page.locator("span:text('Auth tokens')")).toBeVisible();
+    await expect(page.getByTestId("section-title")).toHaveText("Auth tokens");
   });
 
   test("login redirects back to /me (tokens) after authentication", async ({ page }) => {
@@ -109,7 +110,7 @@ test.describe("/me Route Tests (cargo login flow)", () => {
 
     // Should redirect back to settings with tokens tab in URL
     await expect(page).toHaveURL(/\/settings.*tab=tokens/, { timeout: 10000 });
-    await expect(page.locator("span:text('Auth tokens')")).toBeVisible();
+    await expect(page.getByTestId("section-title")).toHaveText("Auth tokens");
   });
 
   test("can create token from /me page", async ({ page }) => {
@@ -137,5 +138,37 @@ test.describe("/me Route Tests (cargo login flow)", () => {
     // Should see create token button
     const createButton = page.getByRole("button", { name: /create/i });
     await expect(createButton).toBeVisible();
+  });
+
+  test("created token shows the cargo login setup and can be revoked", async ({ page }) => {
+    await page.goto(`${baseUrl}/login`);
+    await new LoginPage(page).login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await page.waitForURL(`${baseUrl}/`);
+    await page.goto(`${baseUrl}/settings?tab=tokens`);
+
+    const tokenName = `setup-${Date.now()}`;
+    await page.getByPlaceholder("Enter a descriptive name for the token").fill(tokenName);
+    await page.getByRole("button", { name: "Create token" }).click();
+
+    // The login command and the token each come with a copy button
+    const created = page.getByTestId("token-created");
+    await expect(created).toContainText(`Token "${tokenName}" created`);
+    await expect(created.getByTestId("code-block-copy")).toHaveCount(2);
+    const loginCommand = created.getByTestId("code-block");
+    await expect(loginCommand).toContainText("cargo login --registry kellnr");
+    await expect(loginCommand.getByTestId("code-block-copy")).toBeVisible();
+    const tokenValue = created.getByTestId("token-value");
+    await expect(tokenValue).toContainText(/\S{16,}/);
+    await expect(tokenValue.getByTestId("code-block-copy")).toBeVisible();
+
+    // Revoking asks in an in-app dialog first
+    const tokenItem = page.getByTestId("token-item").filter({ hasText: tokenName });
+    await expect(tokenItem).toHaveCount(1);
+    await tokenItem.getByTestId("token-revoke").click();
+    const dialog = page.getByTestId("confirm-dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByTestId("confirm-dialog-confirm").click();
+    await expect(dialog).toBeHidden();
+    await expect(tokenItem).toHaveCount(0);
   });
 });

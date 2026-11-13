@@ -191,9 +191,8 @@ test.describe("Crate Settings UI Tests", () => {
     const checkbox = page.getByLabel("Restrict downloads to crate users only");
     await expect(checkbox).toBeVisible();
 
-    // Verify save changes button exists - new UI has "Save changes" instead
-    const saveButton = page.getByRole("button", { name: "Save changes" });
-    await expect(saveButton).toBeVisible();
+    // The restriction saves on change, so there is no save button
+    await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
   });
 
   test("owners and admins see who can access a restricted crate", async ({ page, browser }) => {
