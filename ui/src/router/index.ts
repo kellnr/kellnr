@@ -4,6 +4,7 @@ import { useStore } from "../store/store";
 import { settingsService } from "../services";
 import { isSuccess } from "../services/api";
 import { startSsoLogin } from "../common/ssoLogin";
+import { setPageTitle } from "../common/pageTitle";
 
 const Crates = () => import("../views/Crates.vue")
 const Login = () => import("../views/Login.vue")
@@ -19,6 +20,7 @@ const routes = [
     name: 'Landing',
     component: Landing,
     meta: {
+      title: 'Home',
       requiresAuth: true,
     }
   },
@@ -27,6 +29,7 @@ const routes = [
     name: 'Crates',
     component: Crates,
     meta: {
+      title: 'Search',
       requiresAuth: true,
     }
   },
@@ -35,6 +38,7 @@ const routes = [
     name: 'Login',
     component: Login,
     meta: {
+      title: 'Log in',
       requiresAuth: false,
     }
   },
@@ -43,6 +47,7 @@ const routes = [
     name: 'Settings',
     component: Settings,
     meta: {
+      title: 'Settings',
       requiresAuth: true,
     }
   },
@@ -51,6 +56,7 @@ const routes = [
     name: 'PublishDocs',
     component: PublishDocs,
     meta: {
+      title: 'Publish docs',
       requiresAuth: true,
     }
   },
@@ -67,6 +73,7 @@ const routes = [
     name: 'DocQueue',
     component: DocQueue,
     meta: {
+      title: 'Doc queue',
       requiresAuth: true,
     }
   },
@@ -124,6 +131,14 @@ router.beforeEach(async (to) => {
         return { name: 'Login', query: { ...redirectQuery, ...fromQuery } }
       }
     }
+  }
+});
+
+// Pages with a dynamic title (the crate page) set it themselves once their data is loaded.
+router.afterEach((to) => {
+  const title = to.meta['title'];
+  if (typeof title === 'string') {
+    setPageTitle(title);
   }
 });
 
