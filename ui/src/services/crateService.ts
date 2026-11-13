@@ -24,6 +24,8 @@ import {
   CRATESIO_DATA,
   CRATE_DELETE,
   CRATE_DELETE_VERSION,
+  CRATE_YANK,
+  CRATE_UNYANK,
   STATISTICS,
   CRATE_ACL,
   CRATE_OWNERS,
@@ -111,6 +113,26 @@ export async function deleteCrateVersion(
 
 // Alias for consistency
 export const deleteVersion = deleteCrateVersion
+
+// A 403 means the user may not yank this crate, not that the session expired
+const YANK_OPTIONS = {
+  redirectOnAuthError: false,
+  customErrors: { 403: 'Only crate owners and admins can yank versions.' },
+}
+
+/**
+ * Yank a version, so cargo no longer selects it for new lockfiles
+ */
+export async function yankVersion(name: string, version: string): Promise<ApiResult<void>> {
+  return apiPut<void>(CRATE_YANK(name, version), undefined, YANK_OPTIONS)
+}
+
+/**
+ * Undo the yank of a version
+ */
+export async function unyankVersion(name: string, version: string): Promise<ApiResult<void>> {
+  return apiPut<void>(CRATE_UNYANK(name, version), undefined, YANK_OPTIONS)
+}
 
 /**
  * Delete all versions of a crate

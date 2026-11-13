@@ -2,35 +2,13 @@
   <v-card elevation="0" class="sidebar-card" data-testid="crate-sidebar">
     <!-- Header -->
     <v-card-text class="pa-5">
-      <!-- Install Section -->
-      <div class="sidebar-section" data-testid="install-section">
-        <div class="d-flex align-center mb-2">
-          <v-icon size="small" class="me-2 section-icon">mdi-code-braces</v-icon>
-          <span class="section-title">Install</span>
-        </div>
+      <!-- Install Section, the crate page shows it above the tabs on small screens -->
+      <div v-if="showInstall">
+        <CrateInstall :crate-name="crateName" :version="version" class="sidebar-section"
+          @copy-to-clipboard="copyToClipboard" />
 
-        <div v-for="snippet in installSnippets" :key="snippet.testId" class="snippet">
-          <div class="text-body-small snippet-label">{{ snippet.label }}</div>
-          <div class="d-flex align-center copy-container mt-1">
-            <!-- Lines break only between words, never inside a name or version -->
-            <div class="copy-text text-body-medium" :data-testid="snippet.testId">
-              <template v-for="(word, i) in snippet.text.split(' ')" :key="i">{{ i > 0 ? ' ' : '' }}<span
-                  class="word">{{ word }}</span></template>
-            </div>
-            <v-tooltip text="Copy to clipboard">
-              <template v-slot:activator="{ props }">
-                <v-btn v-bind="props" icon variant="text" density="comfortable" color="primary"
-                  :aria-label="`Copy ${snippet.label}`" @click="copyToClipboard(snippet.text)"
-                  class="copy-btn ml-auto" :data-testid="snippet.copyTestId">
-                  <v-icon size="small">mdi-content-copy</v-icon>
-                </v-btn>
-              </template>
-            </v-tooltip>
-          </div>
-        </div>
+        <v-divider class="my-3"></v-divider>
       </div>
-
-      <v-divider class="my-3"></v-divider>
 
       <!-- Uploaded Section -->
       <div class="sidebar-section">
@@ -122,7 +100,7 @@
             Add documentation
           </router-link>
 
-          <v-btn v-if="canBuildDocs" color="primary" variant="outlined" size="small" density="comfortable"
+          <v-btn v-if="canBuildDocs" color="primary" variant="outlined" height="36"
             prepend-icon="mdi-cog" @click="buildDocs" data-testid="sidebar-build-docs">
             {{ documentationLink ? 'Rebuild docs' : 'Build docs' }}
           </v-btn>
@@ -133,13 +111,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import CrateInstall from "./crate/CrateInstall.vue";
 import { formatNumber } from "../common/format";
-import { cargoAddCommand, cargoTomlDependency } from "../common/registry";
 import { safeUrl } from "../common/url";
 import { useRelativeTime } from "../composables";
 
-const props = defineProps({
+defineProps({
   crateName: {
     type: String,
     required: true
@@ -188,6 +165,10 @@ const props = defineProps({
   license: {
     type: String,
     default: ''
+  },
+  showInstall: {
+    type: Boolean,
+    default: true
   }
 });
 
@@ -198,23 +179,6 @@ const emit = defineEmits<{
 }>();
 
 const { fromNow, exactDate } = useRelativeTime();
-
-// Crates on this page are hosted in Kellnr, so the snippets name the registry.
-// Without it, cargo looks the crate up on crates.io.
-const installSnippets = computed(() => [
-  {
-    label: "Cargo.toml",
-    text: cargoTomlDependency(props.crateName, props.version),
-    testId: "install-snippet",
-    copyTestId: "sidebar-copy-button",
-  },
-  {
-    label: "Command line",
-    text: cargoAddCommand(props.crateName),
-    testId: "install-command",
-    copyTestId: "sidebar-copy-command-button",
-  },
-]);
 
 // Links are shown without the scheme, which only takes up space
 function displayUrl(url: string): string {
@@ -256,38 +220,6 @@ function buildDocs() {
   color: rgb(var(--v-theme-on-surface));
 }
 
-/* Copy button and container styling */
-.copy-container {
-  position: relative;
-  padding: 8px 12px;
-  background: rgb(var(--v-theme-surface-variant));
-  border-radius: var(--kellnr-radius);
-  min-height: 36px;
-  border: 1px solid rgb(var(--v-theme-outline));
-  width: 100%;
-}
-
-.copy-text {
-  white-space: normal;
-  min-width: 0;
-  flex: 1;
-  padding-right: 8px;
-  font-family: var(--kellnr-font-mono);
-  color: rgb(var(--v-theme-on-surface));
-}
-
-.word {
-  white-space: nowrap;
-}
-
-.snippet + .snippet {
-  margin-top: 12px;
-}
-
-.snippet-label {
-  color: rgb(var(--v-theme-on-surface-variant));
-}
-
 .sidebar-link {
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
@@ -296,15 +228,6 @@ function buildDocs() {
 
 .sidebar-link:hover {
   text-decoration: underline;
-}
-
-.copy-btn {
-  opacity: 0.7;
-  transition: opacity 0.2s;
-}
-
-.copy-container:hover .copy-btn {
-  opacity: 1;
 }
 
 /* Download display */

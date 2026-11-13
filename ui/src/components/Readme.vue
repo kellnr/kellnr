@@ -5,38 +5,22 @@
 </template>
 
 <script setup lang="ts">
-import { Marked } from 'marked';
-import { mangle } from 'marked-mangle';
-import { gfmHeadingId } from "marked-gfm-heading-id";
-import { markedHighlight } from "marked-highlight";
 import DOMPurify from 'dompurify';
 import { README_SANITIZE_CONFIG } from '../common/sanitize';
+import { renderReadme } from '../common/readme';
 import { computed, watchEffect } from "vue";
-import hljs from 'highlight.js';
 import githubLight from '@/assets/hljs-github.css?inline';
 import githubDark from '@/assets/hljs-github-dark.css?inline';
 import { useTheme } from 'vuetify';
 
 const theme = useTheme();
 
-const marked = new Marked(
-  markedHighlight({
-    langPrefix: 'hljs language-',
-    highlight(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-      return hljs.highlight(code, { language }).value;
-    }
-  })
-);
-marked.use(mangle());
-marked.use(gfmHeadingId());
-
 const props = defineProps<{
   readme: string | null
 }>();
 
 const markedReadme = computed(() => {
-  return DOMPurify.sanitize(marked.parse(props.readme || ''), README_SANITIZE_CONFIG);
+  return DOMPurify.sanitize(renderReadme(props.readme || ''), README_SANITIZE_CONFIG);
 });
 
 // Switch the highlight.js theme with the Vuetify theme, using locally bundled
@@ -111,16 +95,21 @@ watchEffect(() => {
   color: rgb(var(--v-theme-on-surface));
 }
 
-.markdown-body :deep(h1) {
-  font-size: 2em;
-}
-
 .markdown-body :deep(h2) {
-  font-size: 1.5em;
+  font-size: 1.6em;
 }
 
 .markdown-body :deep(h3) {
-  font-size: 1.25em;
+  font-size: 1.3em;
+}
+
+.markdown-body :deep(h4) {
+  font-size: 1.125em;
+}
+
+.markdown-body :deep(h5),
+.markdown-body :deep(h6) {
+  font-size: 1em;
 }
 
 .markdown-body :deep(p) {
