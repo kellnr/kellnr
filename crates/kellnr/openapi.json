@@ -6215,6 +6215,166 @@
         ]
       }
     },
+    "/api/v1/ui/crates/{name}/{version}/unyank": {
+      "put": {
+        "description": "Removes the yanked status from a crate version. Requires ownership of the\ncrate without read-only restriction or admin access.",
+        "operationId": "unyank_crate_version",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Version to unyank",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Version unyanked"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid crate name or version"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not logged in"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner of the crate or read-only"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Version does not exist"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Unyank a crate version",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/api/v1/ui/crates/{name}/{version}/yank": {
+      "put": {
+        "description": "Marks a crate version as yanked, so that cargo no longer selects it for\nnew dependencies. Requires ownership of the crate without read-only\nrestriction or admin access.",
+        "operationId": "yank_crate_version",
+        "parameters": [
+          {
+            "description": "Crate name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Version to yank",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Version yanked"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Invalid crate name or version"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not logged in"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Not an owner of the crate or read-only"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetails"
+                }
+              }
+            },
+            "description": "Version does not exist"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Yank a crate version",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
     "/api/v1/ui/cratesio_data": {
       "get": {
         "operationId": "cratesio_data",

@@ -13,6 +13,8 @@ pub(super) fn create_routes(state: AppStateData) -> OpenApiRouter<AppStateData> 
         .routes(routes!(ui::crates))
         .routes(routes!(ui::delete_crate_all))
         .routes(routes!(ui::delete_crate_version))
+        .routes(routes!(ui::yank_crate_version))
+        .routes(routes!(ui::unyank_crate_version))
         .routes(routes!(ui::search))
         .routes(routes!(ui::statistic))
         .routes(routes!(ui::crate_data))

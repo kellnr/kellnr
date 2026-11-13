@@ -7,4 +7,5 @@ mod pub_data;
 mod pub_success;
 mod registry_error;
 mod search_params;
+pub mod yank;
 mod yank_success;
