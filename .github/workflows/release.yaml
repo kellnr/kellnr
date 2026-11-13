@@ -155,7 +155,10 @@ jobs:
     name: Build Windows
     runs-on: windows-latest
     needs: [test]
-    permissions: { contents: write }
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         include:
@@ -198,6 +201,11 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path target/${{ matrix.target }}/release/kellnr.exe -DestinationPath ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
 
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
+
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -210,7 +218,10 @@ jobs:
     name: Build macOS
     runs-on: macos-26
     needs: [test]
-    permissions: { contents: write }
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         include:
@@ -291,6 +302,12 @@ jobs:
             --issuer "$AC_API_ISSUER_ID" \
             --wait
           rm -f AuthKey.p8
+
+      # Attest after notarization, so only archives accepted by Apple are attested.
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
