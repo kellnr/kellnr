@@ -36,7 +36,7 @@ pub async fn yank_crate_version(
     user: SessionUser,
     State(db): DbState,
 ) -> Result<(), ApiError> {
-    change_yanked_impl(YankAction::Yank, &name, &version, &user, &db).await
+    parse_and_change_yanked(YankAction::Yank, &name, &version, &user, &db).await
 }
 
 /// Unyank a crate version
@@ -65,10 +65,10 @@ pub async fn unyank_crate_version(
     user: SessionUser,
     State(db): DbState,
 ) -> Result<(), ApiError> {
-    change_yanked_impl(YankAction::Unyank, &name, &version, &user, &db).await
+    parse_and_change_yanked(YankAction::Unyank, &name, &version, &user, &db).await
 }
 
-async fn change_yanked_impl(
+async fn parse_and_change_yanked(
     action: YankAction,
     name: &str,
     version: &str,

@@ -117,7 +117,7 @@ export const deleteVersion = deleteCrateVersion
 // A 403 means the user may not yank this crate, not that the session expired
 const YANK_OPTIONS = {
   redirectOnAuthError: false,
-  customErrors: { 403: 'Only crate owners without read-only restriction and admins can change the yank status.' },
+  customErrors: { 403: 'Only crate owners with write access and admins can yank or unyank versions.' },
 }
 
 /**

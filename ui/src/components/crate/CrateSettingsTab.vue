@@ -8,8 +8,8 @@
         <span class="settings-count">{{ crateOwners.length }}</span>
       </div>
       <v-card-text class="settings-content">
-        <v-alert v-if="!canManageOwners" type="info" variant="tonal" class="mb-4">
-          Only existing crate owners or admins can add/remove crate owners.
+        <v-alert v-if="!canEditCrate" type="info" variant="tonal" class="mb-4">
+          Only crate owners with write access and admins can change owners, crate users and crate groups.
         </v-alert>
 
         <div v-if="crateOwners.length > 0" class="settings-list" data-testid="settings-owners">
@@ -18,7 +18,7 @@
               <v-icon icon="mdi-account" size="small" class="me-3"></v-icon>
               <span class="settings-list-item-name" data-testid="settings-owner-name">{{ owner.login }}</span>
             </div>
-            <v-btn :disabled="!canManageOwners" variant="outlined" height="36"
+            <v-btn :disabled="!canEditCrate" variant="outlined" height="36"
               @click="handleDeleteOwner(owner.login)" data-testid="settings-owner-remove">
               <v-icon icon="mdi-delete-outline" size="small" color="error" class="me-1"></v-icon>
               Remove
@@ -39,8 +39,8 @@
           </div>
           <v-form @submit.prevent="handleAddOwner" class="settings-form" data-testid="settings-add-owner">
             <v-text-field v-model="newOwnerName" placeholder="Enter username" prepend-inner-icon="mdi-account-star"
-              variant="outlined" density="comfortable" :disabled="!canManageOwners" hide-details class="settings-input"></v-text-field>
-            <v-btn :disabled="!canManageOwners" color="primary" type="submit" variant="flat">
+              variant="outlined" density="comfortable" :disabled="!canEditCrate" hide-details class="settings-input"></v-text-field>
+            <v-btn :disabled="!canEditCrate" color="primary" type="submit" variant="flat">
               <v-icon icon="mdi-plus" size="small" class="me-1"></v-icon>
               Add
             </v-btn>
@@ -101,7 +101,7 @@
                 <v-icon icon="mdi-account" size="small" class="me-3"></v-icon>
                 <span class="settings-list-item-name" data-testid="settings-user-name">{{ user.login }}</span>
               </div>
-              <v-btn variant="outlined" height="36" @click="handleDeleteUser(user.login)"
+              <v-btn :disabled="!canEditCrate" variant="outlined" height="36" @click="handleDeleteUser(user.login)"
                 data-testid="settings-user-remove">
                 <v-icon icon="mdi-delete-outline" size="small" color="error" class="me-1"></v-icon>
                 Remove
@@ -118,8 +118,8 @@
 
           <v-form @submit.prevent="handleAddUser" class="settings-form" data-testid="settings-add-user">
             <v-text-field v-model="newUserName" placeholder="Enter username" prepend-inner-icon="mdi-account"
-              variant="outlined" density="comfortable" hide-details class="settings-input"></v-text-field>
-            <v-btn color="primary" type="submit" variant="flat">
+              variant="outlined" density="comfortable" :disabled="!canEditCrate" hide-details class="settings-input"></v-text-field>
+            <v-btn :disabled="!canEditCrate" color="primary" type="submit" variant="flat">
               <v-icon icon="mdi-plus" size="small" class="me-1"></v-icon>
               Add
             </v-btn>
@@ -144,7 +144,7 @@
                 <v-icon icon="mdi-account-group" size="small" class="me-3"></v-icon>
                 <span class="settings-list-item-name" data-testid="settings-group-name">{{ group.name }}</span>
               </div>
-              <v-btn variant="outlined" height="36" @click="handleDeleteGroup(group.name)"
+              <v-btn :disabled="!canEditCrate" variant="outlined" height="36" @click="handleDeleteGroup(group.name)"
                 data-testid="settings-group-remove">
                 <v-icon icon="mdi-delete-outline" size="small" color="error" class="me-1"></v-icon>
                 Remove
@@ -160,9 +160,9 @@
           </v-alert>
 
           <v-form @submit.prevent="handleAddGroup" class="settings-form" data-testid="settings-add-group">
-            <v-combobox v-model="newGroupName" :items="availableGroups" placeholder="Select or enter group"
+            <v-combobox v-model="newGroupName" :items="availableGroups" :disabled="!canEditCrate" placeholder="Select or enter group"
               prepend-inner-icon="mdi-account-group" variant="outlined" density="comfortable" hide-details class="settings-input" />
-            <v-btn color="primary" type="submit" variant="flat">
+            <v-btn :disabled="!canEditCrate" color="primary" type="submit" variant="flat">
               <v-icon icon="mdi-plus" size="small" class="me-1"></v-icon>
               Add
             </v-btn>
@@ -186,6 +186,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useStore } from '../../store/store'
+import { canModifyCrate } from '../../common/userRole'
 import { useConfirmDialog, useStatusMessage } from '../../composables'
 import { ConfirmDialog } from '../common'
 import { crateService, groupService } from '../../services'
@@ -238,9 +239,10 @@ function confirmRemoval(kind: string, name: string): Promise<boolean> {
 }
 
 // Computed
-const canManageOwners = computed(() => {
-  return store.loggedInUserIsAdmin || crateOwners.value.some(o => o.login === store.loggedInUser)
-})
+const canEditCrate = computed(() => canModifyCrate(
+  { is_admin: store.loggedInUserIsAdmin, is_read_only: store.loggedInUserIsReadOnly },
+  crateOwners.value.some(o => o.login === store.loggedInUser),
+))
 
 const availableGroups = computed(() => {
   const assigned = new Set(crateGroups.value.map(g => g.name))
@@ -275,8 +277,8 @@ async function loadOwners() {
 }
 
 async function handleAddOwner() {
-  if (!canManageOwners.value) {
-    addOwnerStatus.setError('Not allowed. Only existing owners or admins can add owners.')
+  if (!canEditCrate.value) {
+    addOwnerStatus.setError('Not allowed. Only crate owners with write access and admins can add owners.')
     return
   }
 
@@ -289,8 +291,8 @@ async function handleAddOwner() {
 }
 
 async function handleDeleteOwner(name: string) {
-  if (!canManageOwners.value) {
-    deleteOwnerStatus.setError('Not allowed. Only existing owners or admins can remove owners.')
+  if (!canEditCrate.value) {
+    deleteOwnerStatus.setError('Not allowed. Only crate owners with write access and admins can remove owners.')
     return
   }
 
