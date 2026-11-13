@@ -315,6 +315,7 @@ pub async fn delete(
 pub struct LoggedInUser {
     user: String,
     is_admin: bool,
+    is_read_only: bool,
     is_logged_in: bool,
 }
 
@@ -377,6 +378,7 @@ pub async fn login(
         LoggedInUser {
             user: credentials.user.clone(),
             is_admin: user.is_admin,
+            is_read_only: user.is_read_only,
             is_logged_in: true,
         }
         .into(),
@@ -392,17 +394,19 @@ pub async fn login(
         (status = 200, description = "Current login state", body = LoggedInUser)
     )
 )]
-#[expect(clippy::unused_async)] // part of the router
+#[allow(clippy::unused_async)] // part of the router, used in tests as well
 pub async fn login_state(user: Option<SessionUser>) -> Json<LoggedInUser> {
     match user {
         Some(SessionUser(user)) => LoggedInUser {
             user: user.name.into_inner(),
             is_admin: user.is_admin,
+            is_read_only: user.is_read_only,
             is_logged_in: true,
         },
         None => LoggedInUser {
             user: String::new(),
             is_admin: false,
+            is_read_only: false,
             is_logged_in: false,
         },
     }
@@ -614,6 +618,7 @@ mod tests {
     fn app(state: AppStateData) -> Router {
         Router::new()
             .route("/login", post(login))
+            .route("/state", axum::routing::get(login_state))
             .route("/logout", post(logout))
             .route("/", post(add))
             .route("/{name}", axum::routing::delete(delete))
@@ -699,6 +704,63 @@ mod tests {
         db.add_session_token(&UserName::new(name).unwrap(), &PlainToken::from(token))
             .await
             .unwrap();
+    }
+
+    async fn json_body(response: Response<Body>) -> serde_json::Value {
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = http_body_util::BodyExt::collect(response.into_body())
+            .await
+            .unwrap()
+            .to_bytes();
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    #[tokio::test]
+    async fn login_returns_read_only_flag() {
+        let (state, db) = sqlite_test_state().await;
+        add_user(&db, "reader", UserFlags::read_only()).await;
+        add_user(&db, "writer", UserFlags::normal()).await;
+
+        for (user, read_only) in [("reader", true), ("writer", false)] {
+            let response = send(
+                state.clone(),
+                Method::POST,
+                "/login",
+                "",
+                Some(&format!(r#"{{"user":"{user}","pwd":"pwd"}}"#)),
+            )
+            .await;
+
+            let body = json_body(response).await;
+            assert_eq!(body["is_read_only"], read_only, "{user}");
+            assert_eq!(body["is_logged_in"], true, "{user}");
+        }
+    }
+
+    #[tokio::test]
+    async fn login_state_returns_read_only_flag() {
+        let (state, db) = sqlite_test_state().await;
+        let reader = session_cookie(&db, "reader", UserFlags::read_only()).await;
+        let writer = session_cookie(&db, "writer", UserFlags::normal()).await;
+
+        for (cookie, read_only) in [(reader, true), (writer, false)] {
+            let response = send(state.clone(), Method::GET, "/state", &cookie, None).await;
+
+            let body = json_body(response).await;
+            assert_eq!(body["is_read_only"], read_only);
+            assert_eq!(body["is_logged_in"], true);
+        }
+    }
+
+    #[tokio::test]
+    async fn login_state_without_session_is_not_read_only() {
+        let (state, _db) = sqlite_test_state().await;
+
+        let response = send(state, Method::GET, "/state", "", None).await;
+
+        let body = json_body(response).await;
+        assert_eq!(body["is_read_only"], false);
+        assert_eq!(body["is_logged_in"], false);
     }
 
     // ==========================

@@ -25,6 +25,8 @@ export interface LoginCredentials {
 export interface LoginResponse {
   user: string
   is_admin: boolean
+  is_read_only: boolean
+  is_logged_in: boolean
 }
 
 export interface PasswordResetResponse {

@@ -1177,6 +1177,9 @@
           "is_logged_in": {
             "type": "boolean"
           },
+          "is_read_only": {
+            "type": "boolean"
+          },
           "user": {
             "type": "string"
           }
@@ -1184,6 +1187,7 @@
         "required": [
           "user",
           "is_admin",
+          "is_read_only",
           "is_logged_in"
         ],
         "type": "object"

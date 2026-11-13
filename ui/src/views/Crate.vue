@@ -100,7 +100,7 @@
 
           <!-- Versions Tab -->
           <CrateVersionsTab v-if="tab === 'versions'" :crate-name="crate.name" :versions="crate.versions"
-            :can-manage="canManageCrate" @changed="refreshCrateData" />
+            :can-manage="canChangeYank" @changed="refreshCrateData" />
 
           <!-- Dependencies Tab -->
           <template v-if="tab === 'dependencies'">
@@ -334,6 +334,11 @@ const canManageCrate = computed(() => {
   }
   return store.loggedInUser !== null && crateData.value.owners.includes(store.loggedInUser);
 });
+
+// Admins are exempt from the read-only restriction, as in the backend
+const canChangeYank = computed(() =>
+  canManageCrate.value && (store.loggedInUserIsAdmin || !store.loggedInUserIsReadOnly)
+);
 
 function showBuildRustdoc(): boolean {
   if (!docsEnabled.value) {
