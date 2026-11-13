@@ -39,11 +39,15 @@
         <div class="d-flex flex-wrap align-center ga-3">
           <h1 class="text-headline-large font-weight-bold my-0 text-break crate-title" data-testid="crate-title">{{
             crate.name }}</h1>
-          <span class="text-title-large tabular-nums version-text" data-testid="crate-version">{{
-            selected_version.version }}</span>
+          <!-- The version select also shows the current version, so it is not repeated as text -->
           <v-select :model-value="selected_version.version" :items="versionItems" aria-label="Select version"
             density="compact" variant="outlined" hide-details class="version-select"
-            data-testid="crate-version-select" @update:model-value="selectVersion" />
+            data-testid="crate-version-select" @update:model-value="selectVersion">
+            <template #selection>
+              <span class="text-title-large tabular-nums version-text" data-testid="crate-version">{{
+                selected_version.version }}</span>
+            </template>
+          </v-select>
           <!-- Owners and admins see who can download a restricted crate -->
           <CrateAccessBadge v-if="canManageCrate" :crate-name="crate.name" :refresh-key="accessVersion"
             @open="openAccessSettings" />
@@ -509,7 +513,7 @@ watch(() => [route.query.tab, canManageCrate.value, store.loggedInUserIsAdmin], 
 
 .version-select {
   flex: 0 0 auto;
-  width: 200px;
+  min-width: 140px;
 }
 
 .crate-state {

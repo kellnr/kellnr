@@ -161,8 +161,10 @@ function openCrateVersionPage() {
   text-decoration: underline;
 }
 
+/* Same width for Yank and Unyank, so the row does not reflow after a yank */
 .yank-btn {
   flex-shrink: 0;
+  min-width: 112px;
 }
 
 /* A yanked version is still listed, but struck through */
