@@ -1,8 +1,10 @@
 import unittest
 
 from binary_sbom import (
+    PLATFORMS,
     MissingComponentsError,
     Package,
+    cargo_tree_args,
     filter_sbom,
     npm_runtime_packages,
     parse_cargo_tree,
@@ -65,6 +67,40 @@ class ParseCargoTreeTest(unittest.TestCase):
         self.assertEqual(
             parse_cargo_tree(output),
             {Package("kellnr", "7.2.0"), Package("tokio", "1.0.0"), Package("serde_derive", "1.0.1")},
+        )
+
+
+class CargoTreeArgsTest(unittest.TestCase):
+    def test_uses_the_features_of_the_release_build_of_each_platform(self):
+        linux = cargo_tree_args(PLATFORMS["linux"], "x86_64-unknown-linux-musl")
+        windows = cargo_tree_args(PLATFORMS["windows"], "aarch64-pc-windows-msvc")
+        macos = cargo_tree_args(PLATFORMS["macos"], "aarch64-apple-darwin")
+
+        self.assertIn("--features vendored-openssl --target x86_64-unknown-linux-musl", " ".join(linux))
+        self.assertIn("--no-default-features --target aarch64-pc-windows-msvc", " ".join(windows))
+        self.assertNotIn("--no-default-features", macos)
+        self.assertNotIn("--features", macos)
+
+    def test_lists_normal_and_build_dependencies_of_the_kellnr_crate(self):
+        args = " ".join(cargo_tree_args(PLATFORMS["macos"], "aarch64-apple-darwin"))
+
+        self.assertIn("--package kellnr", args)
+        self.assertIn("--edges normal,build", args)
+
+    def test_covers_all_release_targets(self):
+        targets = {t for platform in PLATFORMS.values() for t in platform.targets}
+
+        self.assertEqual(
+            targets,
+            {
+                "x86_64-unknown-linux-gnu",
+                "x86_64-unknown-linux-musl",
+                "aarch64-unknown-linux-gnu",
+                "aarch64-unknown-linux-musl",
+                "x86_64-pc-windows-msvc",
+                "aarch64-pc-windows-msvc",
+                "aarch64-apple-darwin",
+            },
         )
 
 

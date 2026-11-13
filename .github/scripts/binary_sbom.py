@@ -1,12 +1,12 @@
-"""Reduce the CycloneDX SBOM of the repository to the kellnr binary.
+"""Reduce the CycloneDX SBOM of the repository to the kellnr binary of a platform.
 
 The SBOM of `cdxgen` describes the whole repository, including test crates,
 dev tooling and CI actions. This script keeps only the crates compiled into
-the release binaries of the Linux targets (normal and build dependencies) and
+the release binaries of one platform (normal and build dependencies) and
 the npm packages of the embedded web UI that npm installs without dev and
 optional dependencies.
 
-Usage: binary_sbom.py <repository SBOM> <output SBOM>
+Usage: binary_sbom.py <linux|windows|macos> <repository SBOM> <output SBOM>
 """
 
 import copy
@@ -19,13 +19,30 @@ from typing import NamedTuple
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UI_LOCKFILE = REPO_ROOT / "ui" / "package-lock.json"
 ROOT_CRATE = "kellnr"
-RELEASE_FEATURES = "vendored-openssl"
-LINUX_TARGETS = (
-    "x86_64-unknown-linux-gnu",
-    "x86_64-unknown-linux-musl",
-    "aarch64-unknown-linux-gnu",
-    "aarch64-unknown-linux-musl",
-)
+
+
+class Platform(NamedTuple):
+    targets: tuple[str, ...]
+    cargo_features: tuple[str, ...]
+
+
+# Targets and feature flags of the release builds in .github/workflows/release.yaml.
+PLATFORMS = {
+    "linux": Platform(
+        targets=(
+            "x86_64-unknown-linux-gnu",
+            "x86_64-unknown-linux-musl",
+            "aarch64-unknown-linux-gnu",
+            "aarch64-unknown-linux-musl",
+        ),
+        cargo_features=("--features", "vendored-openssl"),
+    ),
+    "windows": Platform(
+        targets=("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"),
+        cargo_features=("--no-default-features",),
+    ),
+    "macos": Platform(targets=("aarch64-apple-darwin",), cargo_features=()),
+}
 
 
 class Package(NamedTuple):
@@ -55,19 +72,23 @@ def npm_runtime_packages(lock: dict) -> set[Package]:
     }
 
 
-def crates_of_release_binaries() -> set[Package]:
+def cargo_tree_args(platform: Platform, target: str) -> list[str]:
+    return [
+        "cargo", "tree", "--quiet",
+        "--package", ROOT_CRATE,
+        *platform.cargo_features,
+        "--target", target,
+        "--edges", "normal,build",
+        "--prefix", "none",
+        "--format", "{p}",
+    ]
+
+
+def crates_of_release_binaries(platform: Platform) -> set[Package]:
     crates = set()
-    for target in LINUX_TARGETS:
+    for target in platform.targets:
         output = subprocess.run(
-            [
-                "cargo", "tree", "--quiet",
-                "--package", ROOT_CRATE,
-                "--features", RELEASE_FEATURES,
-                "--edges", "normal,build",
-                "--target", target,
-                "--prefix", "none",
-                "--format", "{p}",
-            ],
+            cargo_tree_args(platform, target),
             cwd=REPO_ROOT,
             check=True,
             capture_output=True,
@@ -124,11 +145,12 @@ def filter_dependencies(dependencies: list[dict], components: list[dict], root: 
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 4 or sys.argv[1] not in PLATFORMS:
         sys.exit(__doc__)
-    source, output = map(Path, sys.argv[1:])
+    platform = PLATFORMS[sys.argv[1]]
+    source, output = map(Path, sys.argv[2:])
 
-    crates = crates_of_release_binaries()
+    crates = crates_of_release_binaries(platform)
     root = next(p for p in crates if p.name == ROOT_CRATE)
     npm = npm_runtime_packages(json.loads(UI_LOCKFILE.read_text()))
     bom = filter_sbom(json.loads(source.read_text()), crates, npm, root)
