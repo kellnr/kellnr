@@ -115,13 +115,6 @@
       </FormSection>
     </div>
 
-    <NotificationSnackbar
-      v-model="notification.snackbar.show"
-      :message="notification.snackbar.message"
-      :color="notification.snackbar.color"
-      :timeout="notification.snackbar.timeout"
-    />
-
     <ConfirmDialog
       v-model="dialogOpen"
       :title="dialog.title"
@@ -153,7 +146,6 @@ import {
   FormSection,
   ConfirmDialog,
   CodeBlock,
-  NotificationSnackbar,
 } from "./common"
 
 interface CreatedToken {

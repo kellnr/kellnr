@@ -20,7 +20,7 @@ export type {
   ConfirmCallbackOptions,
 } from './useConfirmDialog'
 
-export { useNotification, useGlobalNotification } from './useNotification'
+export { useNotification } from './useNotification'
 export type { SnackbarState, UseNotificationReturn } from './useNotification'
 
 export { useCrudManager } from './useCrudManager'

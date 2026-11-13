@@ -22,13 +22,6 @@
     </div>
 
     <!-- Snackbar for notifications -->
-    <NotificationSnackbar
-      v-model="notification.snackbar.show"
-      :message="notification.snackbar.message"
-      :color="notification.snackbar.color"
-      :timeout="notification.snackbar.timeout"
-    />
-
     <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
       v-model="dialogOpen"
@@ -48,7 +41,7 @@ import { toolchainService } from "../services"
 import { isSuccess } from "../services/api"
 import { SETTINGS_SECTION_TITLES } from "../common/settingsSections"
 import type { Toolchain } from "../types/toolchain"
-import { SectionHeader, ConfirmDialog, NotificationSnackbar } from "./common"
+import { SectionHeader, ConfirmDialog } from "./common"
 import { ToolchainList, ToolchainUploadForm } from "./toolchain"
 
 const toolchains = ref<Toolchain[]>([])

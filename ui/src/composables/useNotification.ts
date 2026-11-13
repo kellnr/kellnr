@@ -1,26 +1,6 @@
 /**
- * Composable for centralized snackbar notifications
- *
- * Usage:
- * ```ts
- * const { snackbar, showSuccess, showError, showInfo, close } = useNotification()
- *
- * // In template (once in App.vue or layout):
- * // <v-snackbar
- * //   v-model="snackbar.show"
- * //   :color="snackbar.color"
- * //   :timeout="snackbar.timeout"
- * // >
- * //   {{ snackbar.message }}
- * //   <template v-slot:actions>
- * //     <v-btn @click="close">Close</v-btn>
- * //   </template>
- * // </v-snackbar>
- *
- * // To show notification:
- * showSuccess('User created successfully')
- * showError('Failed to delete user')
- * ```
+ * Snackbar notifications shared by the whole app. `App.vue` renders the one
+ * snackbar; every caller of `useNotification()` changes the same state.
  */
 import { reactive } from 'vue'
 
@@ -48,13 +28,14 @@ export interface UseNotificationReturn {
 
 const DEFAULT_TIMEOUT = 5000
 
+const snackbar = reactive<SnackbarState>({
+  show: false,
+  message: '',
+  color: 'success',
+  timeout: DEFAULT_TIMEOUT,
+})
+
 export function useNotification(): UseNotificationReturn {
-  const snackbar = reactive<SnackbarState>({
-    show: false,
-    message: '',
-    color: 'success',
-    timeout: DEFAULT_TIMEOUT,
-  })
 
   function show(message: string, color: string, timeout: number = DEFAULT_TIMEOUT) {
     snackbar.message = message
@@ -91,17 +72,4 @@ export function useNotification(): UseNotificationReturn {
     showWarning,
     close,
   }
-}
-
-/**
- * Create a singleton notification instance
- * Use this when you want to share notification state across components
- */
-let globalNotification: UseNotificationReturn | null = null
-
-export function useGlobalNotification(): UseNotificationReturn {
-  if (!globalNotification) {
-    globalNotification = useNotification()
-  }
-  return globalNotification
 }

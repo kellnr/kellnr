@@ -27,19 +27,12 @@
         <v-list-item prepend-icon="mdi-logout" title="Log out" @click="logOut()" data-testid="logout-button"></v-list-item>
       </v-list>
     </v-menu>
-
-    <!-- Snackbar for notifications -->
-    <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000" location="bottom" class="mb-4" data-testid="snackbar">
-      {{ snackbarText }}
-      <template v-slot:actions>
-        <v-btn variant="text" icon="mdi-close" @click="showSnackbar = false" size="small"></v-btn>
-      </template>
-    </v-snackbar>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onBeforeMount, ref, watch } from 'vue'
+import { useNotification } from '../composables'
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "../store/store"
 import { userService } from "../services";
@@ -57,16 +50,14 @@ const isLoading = ref(false)
 // that check was already logged in, so no welcome message is shown.
 const checkingLoginStatus = ref(false)
 
-// Snackbar state
-const showSnackbar = ref(false)
-const snackbarText = ref('')
-const snackbarColor = ref('success')
+const notification = useNotification()
 
-// Show notification snackbar
 function showNotification(message: string, isError: boolean = false) {
-  snackbarText.value = message
-  snackbarColor.value = isError ? 'error' : 'success'
-  showSnackbar.value = true
+  if (isError) {
+    notification.showError(message)
+  } else {
+    notification.showSuccess(message)
+  }
 }
 
 onBeforeMount(() => {
