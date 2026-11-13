@@ -3,7 +3,7 @@
     <SectionHeader :icon="icon" :title="title" />
     <v-list class="py-1" density="compact" bg-color="transparent">
       <v-list-item v-for="crate in crates" :key="crate.name" class="crate-row px-6" :data-testid="rowTestId"
-        @click="openCrate(crate.name)">
+        :to="crateRoute(crate.name)">
         <div class="d-flex align-center ga-3">
           <div class="crate-text">
             <span class="crate-name">{{ crate.name }}</span>
@@ -24,7 +24,6 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { useRouter } from "vue-router";
 import type { CrateOverview } from "../types/crate_overview";
 import type { CrateSort } from "../types/api";
 import { SectionHeader } from "./common";
@@ -41,7 +40,6 @@ const props = defineProps<{
   rowTestId: string
 }>();
 
-const router = useRouter();
 const { fromNow, exactDate } = useRelativeTime();
 
 const viewAllRoute = computed(() => ({ path: "/crates", query: { sort: props.sort } }));
@@ -58,8 +56,8 @@ function metaTitle(crate: CrateOverview): string | undefined {
   return props.sort === "updated" ? exactDate(crate.date) : undefined;
 }
 
-function openCrate(name: string) {
-  router.push({ name: "Crate", query: { name } });
+function crateRoute(name: string) {
+  return { name: "Crate", query: { name } };
 }
 </script>
 

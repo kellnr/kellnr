@@ -46,7 +46,8 @@
             icon="mdi-package-variant-closed"
             text="Total crates"
             subtitle="Published to your registry"
-            :onClick="navigateToCrates">
+            to="/crates"
+            @click="showRegistryCrates">
           </hero-stat-card>
         </v-col>
         <v-col cols="12" md="4">
@@ -54,7 +55,9 @@
             :num="statistics.num_crate_versions"
             icon="mdi-tag-multiple"
             text="Total versions"
-            subtitle="Across all crates">
+            subtitle="Across all crates"
+            :to="{ path: '/crates', query: { sort: 'updated' } }"
+            @click="showRegistryCrates">
           </hero-stat-card>
         </v-col>
         <v-col cols="12" md="4">
@@ -62,7 +65,9 @@
             :num="statistics.num_crate_downloads"
             icon="mdi-download"
             text="Total downloads"
-            subtitle="From your registry">
+            subtitle="From your registry"
+            :to="{ path: '/crates', query: { sort: 'downloads' } }"
+            @click="showRegistryCrates">
           </hero-stat-card>
         </v-col>
       </v-row>
@@ -104,15 +109,17 @@
 
         <v-col cols="12" sm="6" md="4">
           <hero-stat-card :num="statistics.num_proxy_crates" icon="mdi-package-variant" text="Cached crates"
-            compact test-id-prefix="stat-card" :onClick="navigateToCachedCrates"></hero-stat-card>
+            compact test-id-prefix="stat-card" to="/crates" @click="showCachedCrates"></hero-stat-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <hero-stat-card :num="statistics.num_proxy_crate_versions" icon="mdi-tag-outline" text="Cached versions"
-            compact test-id-prefix="stat-card"></hero-stat-card>
+            compact test-id-prefix="stat-card" :to="{ path: '/crates', query: { sort: 'updated' } }"
+            @click="showCachedCrates"></hero-stat-card>
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <hero-stat-card :num="statistics.num_proxy_crate_downloads" icon="mdi-cloud-download"
-            text="Cached downloads" compact test-id-prefix="stat-card"></hero-stat-card>
+            text="Cached downloads" compact test-id-prefix="stat-card"
+            :to="{ path: '/crates', query: { sort: 'downloads' } }" @click="showCachedCrates"></hero-stat-card>
         </v-col>
       </v-row>
     </template>
@@ -166,14 +173,14 @@ function searchCrates() {
   }
 }
 
-function navigateToCrates() {
+// The crate list shows registry or cached crates depending on the proxy switch.
+// A stat card link sets it before the list opens.
+function showRegistryCrates() {
   store.searchCache = false
-  router.push({ path: '/crates' })
 }
 
-function navigateToCachedCrates() {
+function showCachedCrates() {
   store.searchCache = true
-  router.push({ path: '/crates' })
 }
 
 </script>
