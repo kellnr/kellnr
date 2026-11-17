@@ -1,4 +1,4 @@
-import type { Page, Locator } from "@playwright/test";
+import { expect, type Page, type Locator } from "@playwright/test";
 import { BasePage } from "./BasePage";
 
 /**
@@ -79,9 +79,17 @@ export class CratesPage extends BasePage {
    * Toggle the crates proxy switch.
    */
   async toggleCratesProxy(): Promise<void> {
+    const nextProxyMode = !(await this.cratesProxySwitch.isChecked());
+    const results = this.page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return response.ok() &&
+        ["/api/v1/ui/crates", "/api/v1/ui/search"].some((path) => url.pathname.endsWith(path)) &&
+        url.searchParams.get("cache") === String(nextProxyMode) &&
+        url.searchParams.get("page") === "0";
+    });
     // Click the visible switch label, not the hidden input
     await this.page.getByTestId("crates-proxy-label").click();
-    // Wait for crates to refresh
+    await results;
     await this.waitForSearchResults();
   }
 
@@ -97,14 +105,14 @@ export class CratesPage extends BasePage {
    * Wait for search results to load.
    */
   async waitForSearchResults(timeout: number = 10000): Promise<void> {
-    // Wait for loading to finish
-    try {
-      await this.loadingIndicator.waitFor({ state: "hidden", timeout });
-    } catch {
-      // Loading might be too fast to catch
+    const query = (await this.searchInput.inputValue()).trim();
+    const resultCount = this.page.getByTestId("crates-result-count");
+    if (query) {
+      await expect(resultCount).toContainText(`found for "${query}"`, { timeout });
+    } else {
+      await expect(resultCount).toHaveText(/\bcrates?(?: with)?$/, { timeout });
     }
-    // Give Vue more time to update the DOM after state changes (e.g., proxy toggle)
-    await this.page.waitForTimeout(500);
+    await expect(this.loadingIndicator).toBeHidden({ timeout });
   }
 
   /**
