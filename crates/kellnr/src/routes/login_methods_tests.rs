@@ -25,6 +25,7 @@ use kellnr_settings::Settings;
 use kellnr_settings::constants::COOKIE_SESSION_ID;
 use kellnr_storage::docs_storage::{DocsName, DocsStorage};
 use kellnr_storage::object_storage::MemoryStorage;
+use tokio::sync::Semaphore;
 use tower::ServiceExt;
 
 use super::create_router;
@@ -327,12 +328,20 @@ async fn row(method: &str, uri: &str) -> String {
     format!("{method} {uri} | {}", groups.join(" | "))
 }
 
-// Every endpoint has its own database, so the rows are computed in parallel.
+// Every endpoint has its own database. Limit concurrent rows so their SQLite
+// connection pools do not exhaust the process's open-file limit.
 #[tokio::test(flavor = "multi_thread")]
 async fn endpoints_accept_the_same_login_methods() {
+    let limit = Arc::new(Semaphore::new(4));
     let rows: Vec<_> = ENDPOINTS
         .iter()
-        .map(|(method, uri)| tokio::spawn(row(method, uri)))
+        .map(|&(method, uri)| {
+            let limit = Arc::clone(&limit);
+            tokio::spawn(async move {
+                let _permit = limit.acquire_owned().await.unwrap();
+                row(method, uri).await
+            })
+        })
         .collect();
     let mut actual = String::new();
     for row in rows {
