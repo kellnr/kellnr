@@ -17,6 +17,7 @@ mod m20261028_000001_cratesio_meta_license;
 mod m20261030_000001_cratesio_last_updated;
 mod m20261030_000002_unique_crate_tags;
 mod m20261031_000001_canonical_crate_names;
+mod m20261117_000001_doc_build;
 
 /// Fills the dependency table from the index, as the migration does. Public
 /// for the database tests.
@@ -57,6 +58,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261030_000001_cratesio_last_updated::Migration),
             Box::new(m20261030_000002_unique_crate_tags::Migration),
             Box::new(m20261031_000001_canonical_crate_names::Migration),
+            Box::new(m20261117_000001_doc_build::Migration),
         ]
     }
 }

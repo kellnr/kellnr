@@ -50,8 +50,8 @@ use crate::provider::{
 };
 use crate::tables::init_database;
 use crate::{
-    AuthToken, AuthTokenId, ConString, CrateId, CrateMeta, DbProvider, DocQueueEntry, Group,
-    ToolchainTargetStatus, User, UserFlags,
+    AuthToken, AuthTokenId, ConString, CrateId, CrateMeta, DbProvider, DocBuild, DocQueueEntry,
+    Group, RecordedDocBuild, ToolchainTargetStatus, User, UserFlags,
 };
 
 const DB_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
@@ -508,6 +508,14 @@ impl DbProvider for Database {
         Database::get_doc_queue(self).await
     }
 
+    async fn add_doc_build(&self, build: &DocBuild, keep: u64) -> DbResult<()> {
+        Database::add_doc_build(self, build, keep).await
+    }
+
+    async fn get_doc_builds(&self, limit: u64) -> DbResult<Vec<RecordedDocBuild>> {
+        Database::get_doc_builds(self, limit).await
+    }
+
     async fn delete_crate(&self, krate: &CanonicalName, version: &Version) -> DbResult<()> {
         Database::delete_crate(self, krate, version).await
     }
@@ -878,6 +886,12 @@ fn valid_version(value: &str, crate_name: &str) -> Option<Version> {
 
 fn parse_db_version(value: &str) -> DbResult<Version> {
     Version::try_from(value).map_err(|_| DbError::InvalidVersion(value.to_owned()))
+}
+
+fn parse_db_date(value: &str) -> DbResult<DateTime<Utc>> {
+    chrono::NaiveDateTime::parse_from_str(value, DB_DATE_FORMAT)
+        .map(|date| date.and_utc())
+        .map_err(|_| DbError::InvalidDate(value.to_owned()))
 }
 
 #[cfg(test)]

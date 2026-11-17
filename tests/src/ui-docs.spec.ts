@@ -6,6 +6,7 @@
  * - Waits for rustdoc to generate documentation
  * - Verifies docs files exist on disk
  * - Verifies docs link is clickable in the UI and opens in new tab
+ * - Verifies the doc queue page lists the finished build
  *
  * Performance: Uses a single local Kellnr instance for the test.
  */
@@ -160,6 +161,17 @@ test.describe("Documentation Generation UI Tests", () => {
 
     // Close the new page
     await newPage.close();
+  });
+
+  test("doc queue lists the finished build", async ({ page }) => {
+    await page.goto(`${baseUrl}/docqueue`);
+
+    const build = page
+      .getByTestId("doc-build-item")
+      .filter({ hasText: "full-toml" });
+    await expect(build).toBeVisible({ timeout: 30000 });
+    await expect(build.getByTestId("doc-build-status")).toHaveText("Succeeded");
+    await expect(build.getByTestId("doc-build-rebuild")).toHaveCount(0);
   });
 
   test("docs scripts cannot reach the UI or API", async ({ page }) => {

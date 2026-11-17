@@ -21,8 +21,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::DbError;
 use crate::{
-    AuthToken, AuthTokenId, CrateId, DocQueueEntry, Group, ToolchainTargetStatus, User, UserFlags,
-    crate_meta,
+    AuthToken, AuthTokenId, CrateId, DocBuild, DocQueueEntry, Group, RecordedDocBuild,
+    ToolchainTargetStatus, User, UserFlags, crate_meta,
 };
 
 pub type DbResult<T> = Result<T, DbError>;
@@ -318,6 +318,10 @@ pub trait DbProvider: Send + Sync {
     ) -> DbResult<()>;
     async fn delete_doc_queue(&self, id: i64) -> DbResult<()>;
     async fn get_doc_queue(&self) -> DbResult<Vec<DocQueueEntry>>;
+    /// Records a finished docs build and keeps only the newest `keep` builds.
+    async fn add_doc_build(&self, build: &DocBuild, keep: u64) -> DbResult<()>;
+    /// The newest `limit` docs builds, newest first.
+    async fn get_doc_builds(&self, limit: u64) -> DbResult<Vec<RecordedDocBuild>>;
     async fn delete_crate(&self, krate: &CanonicalName, version: &Version) -> DbResult<()>;
     async fn get_crate_meta_list(&self, crate_name: &CanonicalName) -> DbResult<Vec<CrateMeta>>;
     async fn search_in_crate_name_and_description(

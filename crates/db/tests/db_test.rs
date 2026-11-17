@@ -17,8 +17,8 @@ use kellnr_common::webhook::{Webhook, WebhookEvent};
 use kellnr_db::provider::PrefetchState;
 use kellnr_db::test_utils::*;
 use kellnr_db::{
-    AuthTokenId, CrateId, CrateSort, CrateTagFilter, CrateVisibility, DbProvider, DocQueueEntry,
-    UserFlags, UserId,
+    AuthTokenId, CrateId, CrateSort, CrateTagFilter, CrateVisibility, DbProvider, DocBuild,
+    DocBuildStatus, DocQueueEntry, UserFlags, UserId,
 };
 use kellnr_db_testcontainer::db_test;
 use serde_json::json;
@@ -1761,6 +1761,86 @@ async fn delete_doc_queue_entry(test_db: &kellnr_db::Database) {
         },
         queue_entries[0]
     );
+}
+
+fn doc_build(name: &str, version: &str, status: DocBuildStatus, minute: u32) -> DocBuild {
+    let started = Utc.with_ymd_and_hms(2026, 11, 17, 10, minute, 0).unwrap();
+    DocBuild {
+        name: OriginalName::try_from(name).unwrap(),
+        version: Version::try_from(version).unwrap(),
+        status,
+        error: (status != DocBuildStatus::Succeeded).then(|| format!("error of {name}")),
+        started,
+        finished: started + TimeDelta::seconds(30),
+    }
+}
+
+async fn doc_builds(test_db: &kellnr_db::Database, limit: u64) -> Vec<DocBuild> {
+    let recorded = test_db.get_doc_builds(limit).await.unwrap();
+    recorded
+        .into_iter()
+        .map(|recorded| recorded.build)
+        .collect()
+}
+
+async fn add_crate_versions(test_db: &kellnr_db::Database, name: &str, versions: &[&str]) {
+    let created = Utc.with_ymd_and_hms(2026, 11, 17, 9, 0, 0).unwrap();
+    for version in versions {
+        test_add_crate(
+            test_db,
+            name,
+            "admin",
+            &Version::try_from(*version).unwrap(),
+            &created,
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[db_test]
+async fn doc_builds_are_listed_newest_first_and_only_the_newest_are_kept(
+    test_db: &kellnr_db::Database,
+) {
+    add_crate_versions(test_db, "My_Crate", &["1.0.0", "2.0.0", "3.0.0"]).await;
+    let builds = [
+        doc_build("My_Crate", "1.0.0", DocBuildStatus::Succeeded, 1),
+        doc_build("My_Crate", "2.0.0", DocBuildStatus::Failed, 2),
+        doc_build("My_Crate", "3.0.0", DocBuildStatus::TimedOut, 3),
+    ];
+    for build in &builds {
+        test_db.add_doc_build(build, 2).await.unwrap();
+    }
+
+    let listed = doc_builds(test_db, 10).await;
+    assert_eq!(vec![builds[2].clone(), builds[1].clone()], listed);
+
+    let limited = doc_builds(test_db, 1).await;
+    assert_eq!(vec![builds[2].clone()], limited);
+}
+
+#[db_test]
+async fn doc_builds_are_deleted_with_their_version(test_db: &kellnr_db::Database) {
+    add_crate_versions(test_db, "my_crate", &["1.0.0", "2.0.0"]).await;
+    let kept = doc_build("my_crate", "2.0.0", DocBuildStatus::Succeeded, 2);
+    test_db
+        .add_doc_build(
+            &doc_build("my_crate", "1.0.0", DocBuildStatus::Failed, 1),
+            10,
+        )
+        .await
+        .unwrap();
+    test_db.add_doc_build(&kept, 10).await.unwrap();
+
+    test_db
+        .delete_crate(
+            &CanonicalName::try_from("my_crate").unwrap(),
+            &Version::try_from("1.0.0").unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(vec![kept], doc_builds(test_db, 10).await);
 }
 
 #[db_test]

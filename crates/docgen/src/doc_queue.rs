@@ -10,12 +10,14 @@ use cargo::core::compiler::UserIntent;
 use cargo::core::resolver::CliFeatures;
 use cargo::ops::{self, CompileOptions, DocOptions, OutputFormat};
 use cargo::util::Filesystem;
+use chrono::{DateTime, Utc};
 use flate2::read::GzDecoder;
 use kellnr_common::background_tasks::{BackgroundTasks, FirstRound};
 use kellnr_common::canonical_name::CanonicalName;
 use kellnr_common::original_name::OriginalName;
 use kellnr_common::version::Version;
-use kellnr_db::{DbProvider, DocQueueEntry};
+use kellnr_db::error::DbError;
+use kellnr_db::{DbProvider, DocBuild, DocBuildStatus, DocQueueEntry};
 use kellnr_docs::docs_error::DocsError;
 use kellnr_docs::unpack::{ExtractLimits, unpack_crate};
 use kellnr_docs::upload::upload_dir_and_prune;
@@ -62,6 +64,7 @@ pub fn doc_extraction_queue(
         limits: ExtractLimits::from_max_docs_size(settings.docs.max_size),
         processed: Mutex::default(),
         shutdown: tasks.shutdown_token(),
+        build_history_size: settings.docs.build_history_size,
     });
 
     tasks.spawn_periodic(
@@ -92,6 +95,8 @@ struct DocQueueWorker {
     processed: Mutex<HashSet<i64>>,
     /// Stops the queue after the current entry and kills a running build.
     shutdown: CancellationToken,
+    /// Number of finished builds kept for the doc queue page, 0 keeps none.
+    build_history_size: u64,
 }
 
 /// Whether a queue entry is done or should be processed again later.
@@ -156,6 +161,7 @@ impl DocQueueWorker {
             }
         };
 
+        let started = Utc::now();
         let result = self
             .build_docs(entry, name, &original_name, version, contents)
             .await;
@@ -167,6 +173,8 @@ impl DocQueueWorker {
         }
         // A failure afterwards must not trigger another build.
         self.processed.lock().unwrap().insert(entry.id);
+        self.record_build(&original_name, version, &result, started)
+            .await;
         if let Err(e) = result {
             error!("Failed to build the docs of {name} {version}: {e}");
             return Outcome::Done;
@@ -250,6 +258,38 @@ impl DocQueueWorker {
         Ok(())
     }
 
+    /// Adds the result of a build to the build history. A version deleted
+    /// during the build has no history.
+    async fn record_build(
+        &self,
+        name: &OriginalName,
+        version: &Version,
+        result: &Result<(), DocsError>,
+        started: DateTime<Utc>,
+    ) {
+        if self.build_history_size == 0 || matches!(result, Err(DocsError::CrateDoesNotExist(..))) {
+            return;
+        }
+        let status = match result {
+            Ok(()) => DocBuildStatus::Succeeded,
+            Err(DocsError::BuildTimeout(_)) => DocBuildStatus::TimedOut,
+            Err(_) => DocBuildStatus::Failed,
+        };
+        let build = DocBuild {
+            name: name.clone(),
+            version: version.clone(),
+            status,
+            error: result.as_ref().err().map(build_error_text),
+            started,
+            finished: Utc::now(),
+        };
+        match self.db.add_doc_build(&build, self.build_history_size).await {
+            // The version was deleted after the build.
+            Ok(()) | Err(DbError::CrateMetaNotFound(..)) => {}
+            Err(e) => error!("Failed to record the docs build of {name} {version}: {e}"),
+        }
+    }
+
     fn is_processed(&self, id: i64) -> bool {
         self.processed.lock().unwrap().contains(&id)
     }
@@ -261,6 +301,22 @@ impl DocQueueWorker {
             }
             Err(e) => error!("Failed to remove entry {id} from the docs queue: {e}"),
         }
+    }
+}
+
+/// Error text of a build whose failure is not caused by the crate. Owners of
+/// the crate see the build history, the details are only logged.
+const INTERNAL_BUILD_ERROR: &str = "Internal error, see the Kellnr log";
+
+/// The error shown in the build history. Only failures caused by the crate
+/// keep their text, others could reveal database or storage details.
+fn build_error_text(e: &DocsError) -> String {
+    match e {
+        DocsError::CargoError(_)
+        | DocsError::BuildTimeout(_)
+        | DocsError::ArchiveTooLarge
+        | DocsError::ExtractFailed => e.to_string(),
+        _ => INTERNAL_BUILD_ERROR.to_string(),
     }
 }
 
@@ -543,6 +599,7 @@ mod tests {
             limits: ExtractLimits::from_max_docs_size(1),
             processed: Mutex::default(),
             shutdown: CancellationToken::new(),
+            build_history_size: 10,
         }
     }
 
@@ -587,6 +644,19 @@ mod tests {
             .collect()
     }
 
+    /// Name, status and error of the recorded builds, newest first.
+    async fn history(db: &TestDb) -> Vec<(String, DocBuildStatus, Option<String>)> {
+        db.get_doc_builds(100)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|recorded| {
+                let build = recorded.build;
+                (build.name.to_string(), build.status, build.error)
+            })
+            .collect()
+    }
+
     async fn docs_link(db: &TestDb, name: &str) -> Option<String> {
         let name = CanonicalName::try_from(name).unwrap();
         let data = db.get_crate_data(&name).await.unwrap();
@@ -610,6 +680,74 @@ mod tests {
         assert!(paths.iter().all(|p| !p.exists()));
         assert!(queued(&db).await.is_empty());
         assert_eq!(docs_link(&db, "a").await, None);
+        let history = history(&db).await;
+        let names: Vec<_> = history.iter().map(|(name, ..)| name.as_str()).collect();
+        assert_eq!(names, vec!["b", "a"]);
+        for (_, status, error) in &history {
+            assert_eq!(*status, DocBuildStatus::Failed);
+            assert!(
+                error
+                    .as_deref()
+                    .is_some_and(|e| e.contains("docs build failed")),
+                "error: {error:?}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_records_build_outcome() {
+        // (row, build script, timeout, status, error)
+        let rows = [
+            (
+                "timed out",
+                "sleep 30",
+                Duration::from_millis(100),
+                DocBuildStatus::TimedOut,
+                "Docs build timed out after 0 seconds",
+            ),
+            (
+                // The build succeeds without docs, so reading `target/doc` fails.
+                "internal error",
+                "true",
+                Duration::ZERO,
+                DocBuildStatus::Failed,
+                INTERNAL_BUILD_ERROR,
+            ),
+        ];
+        for (row, script, timeout, status, error) in rows {
+            let data_dir = tempfile::tempdir().unwrap();
+            let db = TestDb::sqlite().await;
+            add_crates(&db, &["a"]).await;
+            queue(&db, data_dir.path(), &["a"]).await;
+            let builder = shell_builder(script, data_dir.path()).with_timeout(timeout);
+            let worker = worker(&db, data_dir.path(), &["a"], builder).await;
+
+            worker.process_queue().await.unwrap();
+
+            assert_eq!(
+                history(&db).await,
+                vec![("a".to_string(), status, Some(error.to_string()))],
+                "{row}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_queue_records_no_builds_if_history_is_disabled() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let build_log = data_dir.path().join("builds.log");
+        let db = TestDb::sqlite().await;
+        add_crates(&db, &["a"]).await;
+        queue(&db, data_dir.path(), &["a"]).await;
+        let mut worker = failing_worker(&db, data_dir.path(), &build_log).await;
+        worker.build_history_size = 0;
+
+        worker.process_queue().await.unwrap();
+
+        assert_eq!(build_count(&build_log), 1);
+        assert!(history(&db).await.is_empty());
     }
 
     #[cfg(unix)]
@@ -637,6 +775,7 @@ mod tests {
         assert_eq!(builds.lines().count(), 1, "builds: {builds}");
         assert!(!paths[0].exists());
         assert_eq!(queued(&db).await, vec!["a", "b"]);
+        assert!(history(&db).await.is_empty());
     }
 
     #[cfg(unix)]
@@ -665,6 +804,10 @@ mod tests {
             Some("/docs/my-crate/1.0.0/doc/My_Crate/index.html")
         );
         assert!(queued(&db).await.is_empty());
+        assert_eq!(
+            history(&db).await,
+            vec![("My-Crate".to_string(), DocBuildStatus::Succeeded, None)]
+        );
     }
 
     const SUCCESSFUL_BUILD: &str = "echo \"$3\" >> \"$0\"; mkdir -p \"$3/target/doc/a\" && echo docs > \"$3/target/doc/a/index.html\"";
@@ -784,6 +927,7 @@ mod tests {
         );
         assert!(worker.docs_storage.list(&prefix).await.unwrap().is_empty());
         assert!(queued(&db).await.is_empty());
+        assert!(history(&db).await.is_empty());
     }
 
     /// Docs storage that drops `table` when the first file is stored, so the
@@ -835,33 +979,39 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn process_queue_publishes_docs_once_if_docs_link_cannot_be_updated() {
-        let data_dir = tempfile::tempdir().unwrap();
-        let build_log = data_dir.path().join("builds.log");
-        let db = Arc::new(TestDb::sqlite().await);
-        add_crates(&db, &["a"]).await;
-        queue(&db, data_dir.path(), &["a"]).await;
-        let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
-        let mut worker = worker(&db, data_dir.path(), &["a"], builder).await;
-        // Updating the docs link fails, as the crate versions are gone.
-        worker.docs_storage = Arc::new(DocsStorage::new(Box::new(DropTableOnUpload {
-            inner: MemoryStorage::new(),
-            db: db.clone(),
-            table: "crate_meta",
-            dropped: AtomicBool::new(false),
-        })));
+    async fn process_queue_publishes_docs_once_if_database_fails_after_build() {
+        // (row, table dropped when the docs are uploaded)
+        let rows = [
+            ("docs link cannot be updated", "crate_meta"),
+            ("build cannot be recorded", "doc_build"),
+        ];
+        for (row, table) in rows {
+            let data_dir = tempfile::tempdir().unwrap();
+            let build_log = data_dir.path().join("builds.log");
+            let db = Arc::new(TestDb::sqlite().await);
+            add_crates(&db, &["a"]).await;
+            queue(&db, data_dir.path(), &["a"]).await;
+            let builder = shell_builder(SUCCESSFUL_BUILD, &build_log);
+            let mut worker = worker(&db, data_dir.path(), &["a"], builder).await;
+            worker.docs_storage = Arc::new(DocsStorage::new(Box::new(DropTableOnUpload {
+                inner: MemoryStorage::new(),
+                db: db.clone(),
+                table,
+                dropped: AtomicBool::new(false),
+            })));
 
-        worker.process_queue().await.unwrap();
-        worker.process_queue().await.unwrap();
+            worker.process_queue().await.unwrap();
+            worker.process_queue().await.unwrap();
 
-        assert_eq!(build_count(&build_log), 1);
-        let key = DocsStorage::file_key(
-            &DocsName::from(&OriginalName::try_from("a").unwrap()),
-            &version(),
-            "doc/a/index.html",
-        );
-        assert!(worker.docs_storage.exists(&key).await.unwrap());
-        assert!(queued(&db).await.is_empty());
+            assert_eq!(build_count(&build_log), 1, "{row}");
+            let key = DocsStorage::file_key(
+                &DocsName::from(&OriginalName::try_from("a").unwrap()),
+                &version(),
+                "doc/a/index.html",
+            );
+            assert!(worker.docs_storage.exists(&key).await.unwrap(), "{row}");
+            assert!(queued(&db).await.is_empty(), "{row}");
+        }
     }
 
     #[cfg(unix)]

@@ -15,6 +15,7 @@ pub use super::crate_user::Entity as CrateUser;
 pub use super::cratesio_crate::Entity as CratesioCrate;
 pub use super::cratesio_index::Entity as CratesioIndex;
 pub use super::cratesio_meta::Entity as CratesioMeta;
+pub use super::doc_build::Entity as DocBuild;
 pub use super::doc_queue::Entity as DocQueue;
 pub use super::group::Entity as Group;
 pub use super::group_user::Entity as GroupUser;

@@ -20,6 +20,7 @@ kellnr-storage.workspace = true
 # External dependencies from crates.io
 bytes.workspace = true
 cargo.workspace = true
+chrono.workspace = true
 flate2.workspace = true
 tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "time"] }
 tokio-util.workspace = true

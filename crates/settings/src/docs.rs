@@ -20,6 +20,10 @@ pub struct Docs {
     /// Builds that take longer are killed and the crate is skipped.
     pub build_timeout_seconds: u64,
 
+    /// Number of finished rustdoc builds kept for the doc queue page
+    /// (0 = no build history). Older builds are removed.
+    pub build_history_size: u64,
+
     /// Command prefix (comma-separated) for the rustdoc build process.
     ///
     /// Building docs compiles the published crate, which runs its build
@@ -52,6 +56,7 @@ impl Default for Docs {
             enabled: false,
             max_size: 100,
             build_timeout_seconds: 1800,
+            build_history_size: 100,
             build_wrapper: Vec::new(),
         }
     }

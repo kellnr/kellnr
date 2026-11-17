@@ -1,5 +1,6 @@
 pub mod api;
 mod doc_archive;
+mod doc_build_response;
 mod doc_queue_response;
 pub mod docs_error;
 pub mod unpack;

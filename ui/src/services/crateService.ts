@@ -35,8 +35,10 @@ import {
   CRATE_GROUPS,
   CRATE_GROUP,
   DOCS_BUILDS,
+  DOCS_BUILDS_RECENT,
 } from '../remote-routes'
 import type { DocQueueItem } from '../types/doc_queue_item'
+import type { DocBuild } from '../types/doc_build'
 
 /**
  * Get paginated list of crates
@@ -308,6 +310,17 @@ export async function getDocsQueue(): Promise<ApiResult<DocQueueItem[]>> {
     return { data: null, error: result.error }
   }
   return { data: result.data?.queue ?? [], error: null }
+}
+
+/**
+ * Get the recently finished documentation builds, newest first
+ */
+export async function getRecentDocBuilds(): Promise<ApiResult<DocBuild[]>> {
+  const result = await apiGet<{ builds: DocBuild[] }>(DOCS_BUILDS_RECENT)
+  if (result.error) {
+    return { data: null, error: result.error }
+  }
+  return { data: result.data?.builds ?? [], error: null }
 }
 
 // --- Helper for getting all groups (used in crate settings) ---

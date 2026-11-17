@@ -20,6 +20,7 @@ kellnr-storage.workspace = true
 # External dependencies from crates.io
 axum.workspace = true
 bytes.workspace = true
+chrono = { workspace = true, features = ["serde"] }
 utoipa.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true

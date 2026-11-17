@@ -68,6 +68,7 @@ const ENDPOINTS: &[(&str, &str)] = &[
     ("GET", "/api/v1/acl/restricted"),
     ("PUT", "/api/v1/acl/restricted"),
     ("GET", "/api/v1/docs/builds"),
+    ("GET", "/api/v1/docs/builds/recent"),
     ("POST", "/api/v1/docs/builds?package=missing&version=1.0.0"),
     ("POST", "/api/v1/docs/migrate-storage"),
     ("GET", "/api/v1/docs/restricted/latest"),
@@ -154,6 +155,7 @@ DELETE /api/v1/groups/missing/members/missing | 401 401 404 401 404 | 401 401 40
 GET /api/v1/acl/restricted | 401 200* 200* 401 200* | 401 200* 200* 401 200*
 PUT /api/v1/acl/restricted | 401 401 415 401 415 | 401 401 415 401 415
 GET /api/v1/docs/builds | 401 401 200 401 200 | 200 200 200 200 200
+GET /api/v1/docs/builds/recent | 401 401 200 401 200 | 200 200 200 200 200
 POST /api/v1/docs/builds?package=missing&version=1.0.0 | 401 401 400 401 400 | 401 401 400 401 400
 POST /api/v1/docs/migrate-storage | 401 401 400 401 400 | 401 401 400 401 400
 GET /api/v1/docs/restricted/latest | 401 401 307 401 307 | 307 307 307 307 307

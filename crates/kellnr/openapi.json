@@ -717,6 +717,81 @@
         ],
         "type": "object"
       },
+      "DocBuildResponse": {
+        "description": "A finished documentation build",
+        "properties": {
+          "can_rebuild": {
+            "description": "Whether the user may queue the build again",
+            "type": "boolean"
+          },
+          "error": {
+            "description": "Why the build failed. Only shown to admins and owners of the crate.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finished": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "Id of the build",
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Crate name",
+            "type": "string"
+          },
+          "started": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocBuildStatus"
+          },
+          "version": {
+            "description": "Crate version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "status",
+          "started",
+          "finished",
+          "can_rebuild"
+        ],
+        "type": "object"
+      },
+      "DocBuildStatus": {
+        "description": "Outcome of a rustdoc build.",
+        "enum": [
+          "succeeded",
+          "failed",
+          "timed_out"
+        ],
+        "type": "string"
+      },
+      "DocBuildsResponse": {
+        "description": "Recently finished documentation builds",
+        "properties": {
+          "builds": {
+            "description": "Finished builds, newest first",
+            "items": {
+              "$ref": "#/components/schemas/DocBuildResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "builds"
+        ],
+        "type": "object"
+      },
       "DocQueueEntryResponse": {
         "description": "Entry in the documentation build queue",
         "properties": {
@@ -781,6 +856,13 @@
       },
       "Docs": {
         "properties": {
+          "build_history_size": {
+            "default": 100,
+            "description": "Number of finished rustdoc builds kept for the doc queue page\n(0 = no build history). Older builds are removed.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "build_timeout_seconds": {
             "default": 1800,
             "description": "Max duration of a single rustdoc build in seconds (0 = unlimited).\nBuilds that take longer are killed and the crate is skipped.",
@@ -809,6 +891,7 @@
           }
         },
         "required": [
+          "build_history_size",
           "build_timeout_seconds",
           "build_wrapper",
           "enabled",
@@ -2107,6 +2190,7 @@
           "docs": {
             "$ref": "#/components/schemas/Docs",
             "default": {
+              "build_history_size": 100,
               "build_timeout_seconds": 1800,
               "build_wrapper": [],
               "enabled": false,
@@ -4629,6 +4713,33 @@
           }
         ],
         "summary": "Trigger documentation build for a crate",
+        "tags": [
+          "docs"
+        ]
+      }
+    },
+    "/api/v1/docs/builds/recent": {
+      "get": {
+        "description": "Returns the newest finished documentation builds, newest first, at most\n`docs.build_history_size`. Download-restricted crates are only listed for\nusers who may read their docs. The error output of failed builds is only\nshown to admins and owners of the crate.",
+        "operationId": "recent_builds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocBuildsResponse"
+                }
+              }
+            },
+            "description": "Recent documentation builds"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Get recent documentation builds",
         "tags": [
           "docs"
         ]

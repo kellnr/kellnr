@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::Json;
@@ -10,12 +11,13 @@ use kellnr_common::version::Version;
 use kellnr_db::DbProvider;
 use kellnr_http::authz::{can_read_crate, require_owner, require_writable};
 use kellnr_http::error::ApiResult;
-use kellnr_http::identity::{AnyUser, Identity, TokenUser};
+use kellnr_http::identity::{AnyUser, Identity, Source, TokenUser};
 use kellnr_http::state::{AppState, DbState, DocsStorageState, SettingsState};
 use kellnr_storage::docs_storage::DocsName;
 use tracing::error;
 
 use crate::doc_archive::DocArchive;
+use crate::doc_build_response::{BuildAccess, DocBuildResponse, DocBuildsResponse};
 use crate::doc_queue_response::DocQueueResponse;
 use crate::docs_error::DocsError;
 use crate::upload::upload_dir_and_prune;
@@ -49,6 +51,64 @@ pub async fn docs_in_queue(
         }
     }
     Ok(Json(DocQueueResponse::from(visible)))
+}
+
+/// Get recent documentation builds
+///
+/// Returns the newest finished documentation builds, newest first, at most
+/// `docs.build_history_size`. Download-restricted crates are only listed for
+/// users who may read their docs. The error output of failed builds is only
+/// shown to admins and owners of the crate.
+#[utoipa::path(
+    get,
+    path = "/builds/recent",
+    tag = "docs",
+    responses(
+        (status = 200, description = "Recent documentation builds", body = DocBuildsResponse)
+    ),
+    security(("session_cookie" = []))
+)]
+pub async fn recent_builds(
+    user: Option<AnyUser>,
+    State(db): DbState,
+    State(settings): SettingsState,
+) -> ApiResult<Json<DocBuildsResponse>> {
+    let user = user.as_deref();
+    // Builds are queued from the web UI, which needs a session.
+    let can_queue_builds = settings.docs.enabled
+        && user.is_some_and(|user| {
+            matches!(user.source, Source::Session) && require_writable(user).is_ok()
+        });
+    let mut access_by_crate = HashMap::new();
+    let mut builds = Vec::new();
+    for recorded in db.get_doc_builds(settings.docs.build_history_size).await? {
+        let name = recorded.build.name.to_canonical();
+        let access = if let Some(access) = access_by_crate.get(&name) {
+            *access
+        } else {
+            let access = build_access(&name, user, &db).await?;
+            access_by_crate.insert(name, access);
+            access
+        };
+        if access.can_read {
+            builds.push(DocBuildResponse::new(recorded, access, can_queue_builds));
+        }
+    }
+    Ok(Json(DocBuildsResponse { builds }))
+}
+
+async fn build_access(
+    name: &CanonicalName,
+    user: Option<&Identity>,
+    db: &Arc<dyn DbProvider>,
+) -> ApiResult<BuildAccess> {
+    let can_read = can_read_docs(name, user, db).await;
+    let is_owner = if let Some(user) = user.filter(|_| can_read) {
+        user.is_admin || db.is_owner(name, &user.name).await?
+    } else {
+        false
+    };
+    Ok(BuildAccess { can_read, is_owner })
 }
 
 /// Redirect to latest documentation
@@ -199,14 +259,15 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use axum::routing::{get, put};
+    use chrono::Utc;
     use http_body_util::BodyExt;
     use kellnr_common::account_name::{GroupName, UserName};
     use kellnr_common::canonical_name::CanonicalName;
     use kellnr_common::plain_token::PlainToken;
-    use kellnr_db::UserFlags;
     use kellnr_db::test_utils::{TestCrateBuilder, test_drop_table};
+    use kellnr_db::{DocBuild, DocBuildStatus, UserFlags};
     use kellnr_http::state::AppStateData;
-    use kellnr_http::test_support::sqlite_test_state;
+    use kellnr_http::test_support::{session_cookie, sqlite_test_state};
     use kellnr_storage::cached_crate_storage::DynStorage;
     use kellnr_storage::docs_storage::DocsStorage;
     use kellnr_storage::fs_storage::FSStorage;
@@ -215,6 +276,7 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
+    use crate::doc_build_response::DocBuildResponse;
     use crate::doc_queue_response::DocQueueEntryResponse;
 
     /// Token of the user `admin` in every test database.
@@ -224,6 +286,7 @@ mod tests {
     fn app(state: AppStateData, docs_storage: Arc<DocsStorage>) -> Router {
         Router::new()
             .route("/builds", get(docs_in_queue))
+            .route("/builds/recent", get(recent_builds))
             .route("/{package}/latest", get(latest_docs))
             .route("/{package}/{version}", put(publish_docs))
             .with_state(AppStateData {
@@ -379,6 +442,117 @@ mod tests {
         let names = queued_names(state, Some(&token)).await;
 
         assert_eq!(names, vec!["public", "secret"]);
+    }
+
+    /// Records a build of version 1.0.0 of `name`, with an error unless it
+    /// succeeded.
+    async fn add_doc_build(db: &TestDb, name: &str, status: DocBuildStatus) {
+        let now = Utc::now();
+        let build = DocBuild {
+            name: OriginalName::try_from(name).unwrap(),
+            version: Version::try_from("1.0.0").unwrap(),
+            status,
+            error: (status != DocBuildStatus::Succeeded).then(|| "build output".to_string()),
+            started: now,
+            finished: now,
+        };
+        db.add_doc_build(&build, 100).await.unwrap();
+    }
+
+    /// The recent builds as seen by a caller with the header `auth`.
+    async fn get_recent_builds(
+        state: AppStateData,
+        auth: Option<(header::HeaderName, &str)>,
+    ) -> Vec<DocBuildResponse> {
+        let mut request = Request::get("/builds/recent");
+        if let Some((name, value)) = auth {
+            request = request.header(name, value);
+        }
+        let r = app(state, memory_docs_storage())
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(r.status(), StatusCode::OK);
+        let body = r.into_body().collect().await.unwrap().to_bytes();
+        serde_json::from_slice::<DocBuildsResponse>(&body)
+            .unwrap()
+            .builds
+    }
+
+    #[tokio::test]
+    async fn recent_builds_hide_restricted_crate_from_anonymous_user() {
+        let (state, db) = sqlite_test_state().await;
+        add_restricted_crate(&db, "public", false).await;
+        add_restricted_crate(&db, "secret", true).await;
+        add_doc_build(&db, "public", DocBuildStatus::Succeeded).await;
+        add_doc_build(&db, "secret", DocBuildStatus::Failed).await;
+
+        let builds = get_recent_builds(state, None).await;
+
+        let names: Vec<_> = builds.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, vec!["public"]);
+    }
+
+    #[tokio::test]
+    async fn recent_builds_show_error_and_rebuild_only_to_owners_and_admins() {
+        let (mut state, db) = sqlite_test_state().await;
+        let mut settings = (*state.settings).clone();
+        settings.docs.enabled = true;
+        state.settings = Arc::new(settings);
+        add_crate(&db, "a", "1.0.0").await;
+        add_doc_build(&db, "a", DocBuildStatus::Failed).await;
+        let owner_token = token_user(&db, "alice", UserFlags::normal()).await;
+        let other = session_cookie(&db, "bob", UserFlags::normal()).await;
+        let owner = session_cookie(&db, "alice", UserFlags::normal()).await;
+        let read_only_owner = session_cookie(&db, "carol", UserFlags::read_only()).await;
+        let admin = session_cookie(&db, "admin", UserFlags::admin()).await;
+        for name in ["alice", "carol"] {
+            db.add_owner(&canonical("a"), &user_name(name))
+                .await
+                .unwrap();
+        }
+        let cookie = |value: &str| Some((header::COOKIE, value.to_string()));
+
+        // (row, auth header, error visible, rebuild allowed). Rebuilds are
+        // queued from the web UI, so only session users may rebuild.
+        let rows = [
+            ("anonymous", None, false, false),
+            ("other user", cookie(&other), false, false),
+            ("owner", cookie(&owner), true, true),
+            (
+                "owner with cargo token",
+                Some((header::AUTHORIZATION, owner_token)),
+                true,
+                false,
+            ),
+            ("read-only owner", cookie(&read_only_owner), true, false),
+            ("admin", cookie(&admin), true, true),
+        ];
+        for (row, auth, error_visible, can_rebuild) in rows {
+            let auth = auth
+                .as_ref()
+                .map(|(name, value)| (name.clone(), value.as_str()));
+            let builds = get_recent_builds(state.clone(), auth).await;
+
+            assert_eq!(builds.len(), 1, "{row}");
+            assert_eq!(builds[0].status, DocBuildStatus::Failed, "{row}");
+            assert_eq!(builds[0].error.is_some(), error_visible, "{row}");
+            assert_eq!(builds[0].can_rebuild, can_rebuild, "{row}");
+        }
+    }
+
+    #[tokio::test]
+    async fn recent_builds_offer_no_rebuild_if_docs_are_disabled() {
+        let (state, db) = sqlite_test_state().await;
+        add_crate(&db, "a", "1.0.0").await;
+        add_doc_build(&db, "a", DocBuildStatus::Failed).await;
+
+        let admin = session_cookie(&db, "admin", UserFlags::admin()).await;
+
+        let builds = get_recent_builds(state, Some((header::COOKIE, admin.as_str()))).await;
+
+        assert!(builds[0].error.is_some());
+        assert!(!builds[0].can_rebuild);
     }
 
     fn build_zip(files: &[(&str, &[u8])]) -> Vec<u8> {

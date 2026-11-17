@@ -21,6 +21,7 @@ pub(super) fn create_routes(
 
     OpenApiRouter::new()
         .routes(routes!(api::docs_in_queue, ui::build_rustdoc))
+        .routes(routes!(api::recent_builds))
         .routes(routes!(ui::migrate_docs_storage))
         .routes(routes!(api::latest_docs))
         .layer(middleware::from_fn_with_state(

@@ -17,6 +17,7 @@ pub mod crate_user;
 pub mod cratesio_crate;
 pub mod cratesio_index;
 pub mod cratesio_meta;
+pub mod doc_build;
 pub mod doc_queue;
 pub mod group;
 pub mod group_user;

@@ -327,3 +327,16 @@ pub enum CrateDependencyIden {
     VersionReq,
     Kind,
 }
+
+#[derive(Iden, Copy, Clone)]
+pub enum DocBuildIden {
+    #[iden = "doc_build"]
+    Table,
+    Id,
+    #[iden = "crate_meta_fk"]
+    CrateMetaFk,
+    Status,
+    Error,
+    Started,
+    Finished,
+}

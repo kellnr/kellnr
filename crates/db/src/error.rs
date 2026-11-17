@@ -72,6 +72,8 @@ pub enum DbError {
     CrateVersionExists(String, String),
     #[error("Path is not valid UTF-8: {0}")]
     NonUtf8Path(String),
+    #[error("Invalid date {0} in the database")]
+    InvalidDate(String),
 }
 
 impl DbError {

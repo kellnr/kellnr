@@ -54,6 +54,7 @@ export const STATISTICS = "./api/v1/ui/statistics";
 export const SEARCH = "./api/v1/ui/search";
 
 export const DOCS_BUILDS = "./api/v1/docs/builds";
+export const DOCS_BUILDS_RECENT = "./api/v1/docs/builds/recent";
 
 // OAuth2/OIDC
 export const OAUTH2_CONFIG = "./api/v1/oauth2/config";
