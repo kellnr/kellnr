@@ -2,15 +2,14 @@
  * UI tests for Startup Configuration (Settings > Startup config).
  *
  * Tests:
- * - Expand all opens all config sections
- * - Collapse all closes all config sections
+ * - Expand all opens config sections and Collapse all closes them
  * - The license filter sections show their settings
  *
  * Uses the same local Kellnr + Playwright pattern as other ui-*.spec.ts tests.
  */
 
-import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
-import { LoginPage } from "./pages";
+import type { Page } from "@playwright/test";
+import { test, expect, loginAndWait, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
   assertKellnrBinaryExists,
@@ -22,6 +21,17 @@ test.describe("Startup config UI Tests", () => {
 
   let started: StartedLocalKellnr;
   let baseUrl: string;
+
+  async function openStartupConfig(page: Page): Promise<void> {
+    await loginAndWait(page, baseUrl, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+    await expect(page.getByTestId("user-menu-button")).toBeVisible();
+    await page.goto(`${baseUrl}/settings`);
+
+    const configNavItem = page.getByTestId("nav-startup-config");
+    await expect(configNavItem).toBeVisible();
+    await configNavItem.click();
+    await expect(page.locator(".v-expansion-panel").filter({ hasText: "Registry Filter" })).toBeVisible();
+  }
 
   test.beforeAll(async () => {
     test.setTimeout(60_000);
@@ -52,21 +62,8 @@ test.describe("Startup config UI Tests", () => {
     }
   });
 
-  test("Expand all opens config sections", async ({ page }) => {
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    await page.waitForTimeout(1000);
-
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const configNavItem = page.getByTestId("nav-startup-config");
-    await expect(configNavItem).toBeVisible();
-    await configNavItem.click();
-    await page.waitForTimeout(500);
+  test("Expand all opens config sections and Collapse all closes them", async ({ page }) => {
+    await openStartupConfig(page);
 
     // Startup Configuration header and buttons should be visible
     await expect(
@@ -78,65 +75,19 @@ test.describe("Startup config UI Tests", () => {
     await expect(expandBtn).toBeVisible();
     await expect(collapseBtn).toBeVisible();
 
-    // Initially panels may be closed; click Expand all
     await expandBtn.click();
-    await page.waitForTimeout(300);
 
-    // After expand all, at least one section content should be visible (e.g. Registry "Data Directory")
-    const dataDirRow = page.locator(".config-row").filter({ hasText: "Data Directory" });
-    await expect(dataDirRow).toBeVisible();
-  });
-
-  test("Collapse all closes config sections", async ({ page }) => {
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    await page.waitForTimeout(1000);
-
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const configNavItem = page.getByTestId("nav-startup-config");
-    await expect(configNavItem).toBeVisible();
-    await configNavItem.click();
-    await page.waitForTimeout(500);
-
-    const expandBtn = page.getByRole("button", { name: "Expand all" });
-    const collapseBtn = page.getByRole("button", { name: "Collapse all" });
-    await expandBtn.click();
-    await page.waitForTimeout(300);
-
-    // Content should be visible after expand
     const dataDirRow = page.locator(".config-row").filter({ hasText: "Data Directory" });
     await expect(dataDirRow).toBeVisible();
 
     await collapseBtn.click();
-    await page.waitForTimeout(300);
-
-    // After collapse all, panel content should be hidden (Vuetify collapses the panel body)
     await expect(dataDirRow).toBeHidden();
   });
 
   test("License filter sections show their settings", async ({ page }) => {
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    await page.waitForTimeout(1000);
-
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const configNavItem = page.getByTestId("nav-startup-config");
-    await expect(configNavItem).toBeVisible();
-    await configNavItem.click();
-    await page.waitForTimeout(500);
+    await openStartupConfig(page);
 
     await page.getByRole("button", { name: "Expand all" }).click();
-    await page.waitForTimeout(300);
 
     const cratesioPanel = page
       .locator(".v-expansion-panel")
@@ -151,6 +102,7 @@ test.describe("Startup config UI Tests", () => {
     const allowed = cratesioPanel
       .locator(".config-row")
       .filter({ hasText: "Allowed Licenses" });
+    await expect(allowed).toBeVisible();
     await expect(allowed).toContainText("MIT");
     await expect(allowed).toContainText("Apache-2.0");
     await expect(allowed).toContainText("KELLNR_CRATESIO_FILTER__LICENSE_ALLOWED");
