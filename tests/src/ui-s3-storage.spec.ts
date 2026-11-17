@@ -106,22 +106,9 @@ test.describe("S3 Storage UI Tests", () => {
 
     console.log(`[setup] RustFS accessible at ${s3UrlForLocalKellnr}`);
 
-    // Wait for RustFS to be fully ready by checking the health endpoint
-    console.log("[setup] Waiting for RustFS health check...");
-    const healthUrl = `${s3UrlForLocalKellnr}/health/live`;
-    for (let i = 0; i < 30; i++) {
-      try {
-        const res = await fetch(healthUrl);
-        if (res.ok) {
-          console.log("[setup] RustFS health check passed");
-          break;
-        }
-      } catch {
-        // Not ready yet
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
+    // startS3RustFsContainer already waits for its listening port. The crate
+    // publishes below exercise the buckets. In the baseline run /health/live
+    // did not pass, but its old loop silently continued after 30 seconds.
     started = await startLocalKellnr({
       name: `kellnr-s3-${suffix}`,
       env: {
