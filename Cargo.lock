@@ -4169,11 +4169,13 @@ dependencies = [
  "kellnr-docgen",
  "kellnr-docs",
  "kellnr-embedded-resources",
+ "kellnr-fakegcs-testcontainer",
  "kellnr-filter",
  "kellnr-http",
  "kellnr-index",
  "kellnr-oauth2",
  "kellnr-registry",
+ "kellnr-rustfs-testcontainer",
  "kellnr-settings",
  "kellnr-storage",
  "kellnr-test-db",
@@ -4183,9 +4185,11 @@ dependencies = [
  "mime_guess",
  "moka",
  "openssl",
+ "reqwest",
  "serde",
  "serde_json",
  "tempfile",
+ "testcontainers",
  "tokio",
  "toml",
  "tower",
@@ -4195,6 +4199,7 @@ dependencies = [
  "utoipa",
  "utoipa-axum",
  "utoipa-swagger-ui",
+ "zip",
 ]
 
 [[package]]

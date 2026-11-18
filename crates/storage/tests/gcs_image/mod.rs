@@ -12,12 +12,12 @@ use testcontainers::{BuildableImage, Image};
 // client sends (see https://github.com/fsouza/fake-gcs-server/issues/1164), and the fork
 // image `object_store`'s own CI uses is a personal, amd64-only `latest` tag. The Dockerfile
 // under `tests/fixtures/test-gcs-storage` builds a pinned upstream release with kellnr's
-// XML API patch applied, which also gives a native image on arm64. The Playwright UI tests
-// build the very same Dockerfile, see `tests/src/lib/docker.ts`.
+// XML API patch applied, which also gives a native image on arm64. The storage backend
+// tests of the kellnr binary use the same image, see `crates/kellnr/tests/storage_backends.rs`.
 const IMAGE_NAME: &str = "kellnr-fake-gcs-server";
 const IMAGE_TAG: &str = "local";
 
-/// Build context for [`FakeGcsServer`], shared with the Playwright UI tests.
+/// Build context for [`FakeGcsServer`].
 pub(crate) struct FakeGcsServerImage;
 
 impl FakeGcsServerImage {

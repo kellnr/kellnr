@@ -6,8 +6,6 @@ All tests verify both backend functionality AND UI accessibility through browser
 
 ## Test Suite Overview
 
-**115 UI tests across 19 test files:**
-
 | Test File | Tests | What It Verifies |
 |-----------|-------|------------------|
 | `ui-crate-settings.spec.ts` | 4 | Crate owner management, access control, version deletion |
@@ -15,7 +13,6 @@ All tests verify both backend functionality AND UI accessibility through browser
 | `ui-crates.spec.ts` | 7 | Crates page, search, filters, empty states |
 | `ui-docs-path-prefix.spec.ts` | 2 | Documentation served under a path prefix |
 | `ui-docs.spec.ts` | 2 | Documentation generation + UI link verification |
-| `ui-gcs-storage.spec.ts` | 4 | GCS storage backend + UI verification |
 | `ui-landing-stats.spec.ts` | 5 | Landing page statistics cards clickability |
 | `ui-login.spec.ts` | 6 | Login/logout, auth, form validation, protected routes |
 | `ui-me.spec.ts` | 4 | /me route, cargo login flow, token management |
@@ -23,21 +20,21 @@ All tests verify both backend functionality AND UI accessibility through browser
 | `ui-navigation.spec.ts` | 7 | Header nav, theme toggle, routing, branding |
 | `ui-oauth2.spec.ts` | 14 | OAuth2 login/logout, auto-provisioning, sessions, SSO enforcement |
 | `ui-proxy-crates.spec.ts` | 3 | Proxy toggle, cached crates, statistics |
-| `ui-s3-storage.spec.ts` | 4 | S3 storage backend + UI verification |
 | `ui-startup-config.spec.ts` | 2 | Startup configuration page, setting sources |
-| `ui-toolchains-gcs.spec.ts` | 8 | Toolchain upload/download/manifests on GCS storage |
-| `ui-toolchains-s3.spec.ts` | 8 | Toolchain upload/download/manifests on S3 storage |
 | `ui-toolchains.spec.ts` | 20 | Toolchain management on local filesystem storage |
 | `ui-user-management.spec.ts` | 9 | User management, admin promotion/demotion, settings tabs |
 
 `src/cli.spec.ts` adds 16 non-UI tests for the `kellnr` command line interface. They run in
 the same Playwright project but do not drive a browser.
 
+The S3 and GCS storage backends are tested without a browser in
+`crates/kellnr/tests/storage_backends.rs` (`just test-docker`).
+
 ## Prerequisites
 
 - Node.js and npm
 - A Rust toolchain (for building Kellnr)
-- Docker (only for S3, GCS, and migration tests)
+- Docker (only for the migration and rustup toolchain tests)
 
 Optional:
 - Nix development shell via the repo `flake.nix`
@@ -126,7 +123,7 @@ tests/src/
 ├── lib/                 # Test infrastructure
 │   ├── ui-fixtures.ts   # Playwright fixtures
 │   ├── local.ts         # Local Kellnr process management
-│   ├── docker.ts        # Docker container helpers (S3, GCS, migration)
+│   ├── docker.ts        # Docker container helpers
 │   ├── kellnr.ts        # Kellnr configuration helpers
 │   └── registry.ts      # Cargo registry helpers
 └── ui-*.spec.ts         # Test specifications
@@ -143,8 +140,6 @@ Each test file starts a local Kellnr process that is shared by all tests in that
 Data isolation is achieved via unique directories: `/tmp/kellnr-test-ui/<uuid>/`
 
 **Exceptions:**
-- **S3 tests**: Use Docker for MinIO container, local Kellnr connects to it
-- **GCS tests**: Use Docker for fake-gcs-server container, local Kellnr connects to it
 - **Migration tests**: Use Docker for old Kellnr version, local for new version
 
 ## Notes on Ports / Parallelism

@@ -53,10 +53,17 @@ kellnr-settings = { workspace = true, features = ["test-support"] }
 kellnr-db = { workspace = true, features = ["test-support"] }
 kellnr-http = { workspace = true, features = ["test-support"] }
 kellnr-test-db.workspace = true
+kellnr-rustfs-testcontainer.workspace = true
+# Path only (no version), so cargo drops it when packaging kellnr.
+# The test helper itself is never published.
+kellnr-fakegcs-testcontainer = { path = "../storage/fakegcs-testcontainer" }
 chrono.workspace = true
 hyper.workspace = true
+reqwest.workspace = true
 serde_json.workspace = true
+testcontainers.workspace = true
 tower.workspace = true
+zip.workspace = true
 
 [features]
 default = ["vendored-openssl"]

@@ -3,27 +3,15 @@ import net from "node:net";
 import path from "node:path";
 import type { TestInfo } from "@playwright/test";
 import type { BeforeAllTestInfo } from "../testUtils";
-import { execa } from "execa";
-import {
-  GenericContainer,
-  Network,
-  Wait,
-  type StartedTestContainer,
-  type StartedNetwork,
-} from "testcontainers";
+import { GenericContainer, Wait, type StartedTestContainer } from "testcontainers";
 
 /**
  * Central docker/testcontainers helper library for tests.
  *
  * Goals:
  * - Keep test specs idiomatic: use `testcontainers` directly (option 2)
- * - Avoid duplicated boilerplate: container naming, network creation, log capture, bind mounts
+ * - Avoid duplicated boilerplate: container naming, log capture, bind mounts
  * - Integrate nicely with Playwright: attach logs on failure / always
- *
- * Notes:
- * - globalSetup is responsible for building the shared Kellnr integration image.
- * - This module *can* build test-specific helper images (e.g. RustFS for S3 test) via
- *   `ImageFromDockerfile`, so individual specs don't shell out to the Docker CLI.
  *
  * Logging:
  * - Docker Desktop can hang if we try to read container logs until end-of-stream after a long run.
@@ -36,7 +24,7 @@ export type PortBindings = Record<number, number>; // containerPort -> hostPort 
 
 export type StartContainerOptions = {
   /**
-   * Docker image name, e.g. "ghcr.io/kellnr/kellnr:latest" or "rustfs/rustfs:latest"
+   * Docker image name, e.g. "ghcr.io/kellnr/kellnr:latest"
    */
   image: string;
 
@@ -59,16 +47,6 @@ export type StartContainerOptions = {
   bindMounts?: Record<string, string>;
 
   /**
-   * Optional network to attach the container to (for inter-container communication).
-   */
-  network?: StartedNetwork;
-
-  /**
-   * Optional network aliases (e.g. ["rustfs"]).
-   */
-  networkAliases?: string[];
-
-  /**
    * Container port -> host port.
    *
    * When provided, the given host port is bound to the container port via testcontainers'
@@ -80,38 +58,17 @@ export type StartContainerOptions = {
   ports?: PortBindings;
 
   /**
-   * Expose container ports to random host ports.
-   *
-   * Use this when you need to access a container port from the host but don't need
-   * a specific host port. Call `container.getMappedPort(containerPort)` to get the
-   * assigned host port.
-   */
-  exposedPorts?: number[];
-
-  /**
    * Command override passed to Docker (ENTRYPOINT stays, CMD replaced).
-   * Use for images like RustFS where you might want e.g. ["server","/data"].
    */
   cmd?: string[];
 
   /**
-   * Additional wait strategy. For HTTP readiness, prefer `waitForHttp(...)`.
+   * Additional wait strategy.
    */
   waitFor?:
     | ReturnType<typeof Wait.forLogMessage>
     | ReturnType<typeof Wait.forListeningPorts>
     | ReturnType<typeof Wait.forHttp>;
-
-  /**
-   * Optional labels (handy for debugging / cleanup).
-   */
-  labels?: Record<string, string>;
-
-  /**
-   * Run container as specific user (e.g. "1000:1000" or "runner").
-   * Useful for ensuring files created in bind mounts are owned by the host user.
-   */
-  user?: string;
 
   /**
    * Extra /etc/hosts entries (e.g. `{ host: "host.docker.internal", ipAddress: "host-gateway" }`).
@@ -134,13 +91,6 @@ export type Started = {
    */
   stopLogStreaming?: () => void;
 };
-
-/**
- * Result of `startGcsFakeServerContainer` when `exposeToHost` is set: carries the host port
- * reserved up front and baked into fake-gcs-server's `-public-host`, so callers don't need
- * (and shouldn't use) `container.getMappedPort(4443)` to find it.
- */
-export type StartedGcs = Started & { hostPort?: number };
 
 function nowIsoNoMs(): string {
   return new Date()
@@ -184,168 +134,6 @@ export function uniqueContainerName(base: string, testInfo?: TestInfo | BeforeAl
   const slug = sluggifyForName(base);
   const worker = testInfo ? `w${testInfo.workerIndex}` : "w?";
   return `${slug}-${worker}-${Date.now()}`;
-}
-
-/**
- * Start a network for a test.
- *
- * Use this when a container needs to reach another container via alias (e.g. Kellnr -> rustfs).
- */
-export async function createNetwork(
-  name: string,
-  testInfo?: TestInfo | BeforeAllTestInfo,
-): Promise<StartedNetwork> {
-  const netName = uniqueContainerName(name, testInfo);
-
-  // `Network` in the currently used `testcontainers` API does not support `.withName(...)`.
-  // It will create a uniquely named network on start; we keep `netName` for logging/debugging.
-  const network: Network = await new Network().start();
-  return network;
-}
-
-/**
- * Build the custom RustFS image used by the S3 smoke test from the repository Dockerfile.
- *
- * The `testcontainers` build-from-Dockerfile helper is not available in the currently used
- * `testcontainers` package API here, so we centralize a Docker CLI fallback in this library.
- *
- * This keeps the spec code idiomatic (it just calls one helper) while remaining compatible.
- *
- * Dockerfile/context mirror the previous behavior:
- * - Dockerfile: <repoRoot>/tests/test-s3-storage/Dockerfile
- * - Context:    <repoRoot>/tests/test-s3-storage
- *
- * NOTE: This function assumes it's called from within tests (process.cwd() == tests root).
- */
-/**
- * Check if a Docker image exists locally.
- */
-async function dockerImageExists(imageName: string): Promise<boolean> {
-  try {
-    const result = await execa("docker", ["inspect", imageName], {
-      reject: false,
-    });
-    return result.exitCode === 0;
-  } catch {
-    return false;
-  }
-}
-
-export async function buildS3RustFsImage(options: {
-  imageName: string;
-  cratesBucket: string;
-  cratesioBucket: string;
-  toolchainBucket?: string;
-}): Promise<void> {
-  // Check if image already exists
-  if (await dockerImageExists(options.imageName)) {
-    console.log(`[docker] Image ${options.imageName} already exists, skipping build`);
-    return;
-  }
-
-  const repoRoot = path.resolve(process.cwd(), "..");
-
-  // We build the RustFS fixture image from `tests/fixtures/test-s3-storage`.
-  const contextDir = path.resolve(
-    repoRoot,
-    "tests",
-    "fixtures",
-    "test-s3-storage",
-  );
-  const dockerfile = path.resolve(contextDir, "Dockerfile");
-
-  const args = [
-    "build",
-    "-t",
-    options.imageName,
-    "-f",
-    dockerfile,
-    "--build-arg",
-    `CRATES_BUCKET=${options.cratesBucket}`,
-    "--build-arg",
-    `CRATESIO_BUCKET=${options.cratesioBucket}`,
-  ];
-
-  if (options.toolchainBucket) {
-    args.push("--build-arg", `TOOLCHAIN_BUCKET=${options.toolchainBucket}`);
-  }
-
-  args.push(contextDir);
-
-  const res = await execa("docker", args, {
-    cwd: repoRoot,
-    stdio: "inherit",
-  });
-
-  if (res.exitCode !== 0) {
-    throw new Error(
-      `Failed to build RustFS image ${options.imageName} (exitCode=${res.exitCode})`,
-    );
-  }
-}
-
-/**
- * Build the custom fake-gcs-server image used by the GCS smoke test from the repository
- * Dockerfile, mirroring `buildS3RustFsImage` above.
- *
- * The Dockerfile builds fake-gcs-server from a pinned upstream release with kellnr's GCS
- * XML API patch applied, so the tests depend only on the public upstream repository and the
- * image builds natively on every architecture. The Rust integration tests build the same
- * Dockerfile, see `crates/storage/tests/gcs_image.rs`.
- *
- * - Dockerfile: <repoRoot>/tests/fixtures/test-gcs-storage/Dockerfile
- * - Context:    <repoRoot>/tests/fixtures/test-gcs-storage
- */
-export async function buildGcsFakeServerImage(options: {
-  imageName: string;
-  cratesBucket: string;
-  cratesioBucket: string;
-  toolchainBucket?: string;
-}): Promise<void> {
-  // Check if image already exists
-  if (await dockerImageExists(options.imageName)) {
-    console.log(`[docker] Image ${options.imageName} already exists, skipping build`);
-    return;
-  }
-
-  const repoRoot = path.resolve(process.cwd(), "..");
-
-  const contextDir = path.resolve(
-    repoRoot,
-    "tests",
-    "fixtures",
-    "test-gcs-storage",
-  );
-  const dockerfile = path.resolve(contextDir, "Dockerfile");
-
-  const args = [
-    "build",
-    "-t",
-    options.imageName,
-    "-f",
-    dockerfile,
-    "--build-arg",
-    `CRATES_BUCKET=${options.cratesBucket}`,
-    "--build-arg",
-    `CRATESIO_BUCKET=${options.cratesioBucket}`,
-  ];
-
-  if (options.toolchainBucket) {
-    args.push("--build-arg", `TOOLCHAIN_BUCKET=${options.toolchainBucket}`);
-  }
-
-  args.push(contextDir);
-
-  const res = await execa("docker", args, {
-    cwd: repoRoot,
-    stdio: "inherit",
-  });
-
-  if (res.exitCode !== 0) {
-    throw new Error(
-      `Failed to build fake-gcs-server image ${options.imageName} (exitCode=${res.exitCode})`,
-    );
-  }
 }
 
 /**
@@ -477,7 +265,6 @@ async function startStreamingContainerLogs(options: {
 /**
  * Start a container with common concerns handled in one place:
  * - deterministic name
- * - optional network/aliases
  * - optional bind mounts
  * - optional host port bindings
  * - optional wait strategy
@@ -494,10 +281,6 @@ export async function startContainer(
     for (const [k, v] of Object.entries(options.env)) {
       container = container.withEnvironment({ [k]: v });
     }
-  }
-
-  if (options.labels) {
-    container = container.withLabels(options.labels);
   }
 
   if (options.cmd?.length) {
@@ -527,23 +310,6 @@ export async function startContainer(
         host: hostPort,
       });
     }
-  }
-
-  if (options.exposedPorts?.length) {
-    // Expose ports to random host ports (testcontainers picks an available port).
-    // Use container.getMappedPort(containerPort) to get the assigned host port.
-    container = container.withExposedPorts(...options.exposedPorts);
-  }
-
-  if (options.network) {
-    container = container.withNetwork(options.network);
-    if (options.networkAliases?.length) {
-      container = container.withNetworkAliases(...options.networkAliases);
-    }
-  }
-
-  if (options.user) {
-    container = container.withUser(options.user);
   }
 
   if (options.extraHosts?.length) {
@@ -589,80 +355,8 @@ export async function startContainer(
 }
 
 /**
- * Convenience: create a wait strategy for an HTTP endpoint within the container.
- *
- * Example:
- *   waitFor: waitForHttp(8000, "/health")
- */
-export function waitForHttp(
-  port: number,
-  pathName: string,
-  opts?: { statusCode?: number; startupTimeoutMs?: number },
-) {
-  const statusCode = opts?.statusCode ?? 200;
-  const startupTimeoutMs = opts?.startupTimeoutMs ?? 60_000;
-
-  // The container port is the second argument of `Wait.forHttp`; `HttpWaitStrategy` has
-  // no `forPort` method.
-  return Wait.forHttp(pathName, port)
-    .forStatusCode(statusCode)
-    .withStartupTimeout(startupTimeoutMs);
-}
-
-/**
- * Start the RustFS container for the S3 smoke test on the given network with a stable alias.
- *
- * This is a thin convenience wrapper around `startContainer` to avoid repeating:
- * - env wiring
- * - network alias
- * - (optional) wait strategy
- */
-export async function startS3RustFsContainer(
-  options: {
-    name: string;
-    image: string;
-    network: StartedNetwork;
-    rootUser: string;
-    rootPassword: string;
-    /**
-     * If true, expose port 9000 to a random host port.
-     * Use container.getMappedPort(9000) to get the assigned port.
-     * Required when Kellnr runs locally (not in Docker) and needs to access RustFS.
-     */
-    exposeToHost?: boolean;
-  },
-  testInfo?: TestInfo | BeforeAllTestInfo,
-): Promise<Started> {
-  return await startContainer(
-    {
-      name: options.name,
-      image: options.image,
-      network: options.network,
-      networkAliases: ["rustfs"],
-      env: {
-        RUSTFS_ACCESS_KEY: options.rootUser,
-        RUSTFS_SECRET_KEY: options.rootPassword,
-      },
-      // Expose port 9000 to a random host port if requested (for local Kellnr access)
-      ...(options.exposeToHost ? { exposedPorts: [9000] } : {}),
-      // RustFS images typically listen quickly; the default listening-ports wait is sufficient.
-      // Note: caller should add a delay if needed for bucket initialization
-    },
-    testInfo,
-  );
-}
-
-/**
  * Reserve a free TCP port on the host by briefly binding to it, then releasing it.
- *
- * `fake-gcs-server`'s `-public-host` flag must match the exact host:port the client
- * connects through for its flat, GCS-XML-API-style object routes (used by `object_store`)
- * to dispatch correctly; a Docker-assigned random host port that differs from the
- * `-public-host` baked into the container causes every GET/PUT to 404/405. The port must
- * therefore be known and baked into the container's command *before* it starts, rather than
- * read back afterwards via `getMappedPort`. This is inherently a little racy (another
- * process could grab the port between release and Docker binding it), but it's the same
- * technique used on the Rust test side (see `fakegcs-testcontainer`).
+ * Another process could take the port before the caller binds it.
  */
 export async function reserveFreePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -679,113 +373,4 @@ export async function reserveFreePort(): Promise<number> {
       });
     });
   });
-}
-
-/**
- * Start the fake-gcs-server container for the GCS smoke test on the given network with a
- * stable alias, mirroring `startS3RustFsContainer` above.
- */
-export async function startGcsFakeServerContainer(
-  options: {
-    name: string;
-    image: string;
-    network: StartedNetwork;
-    /**
-     * If true, reserve a free host port up front, publish container port 4443 on it, and
-     * bake that same host:port into `-public-host` so fake-gcs-server's flat object routes
-     * dispatch correctly. The reserved port is returned as `hostPort` on the result.
-     * Required when Kellnr runs locally (not in Docker) and needs to access fake-gcs-server.
-     */
-    exposeToHost?: boolean;
-  },
-  testInfo?: TestInfo | BeforeAllTestInfo,
-): Promise<StartedGcs> {
-  if (!options.exposeToHost) {
-    return await startContainer(
-      {
-        name: options.name,
-        image: options.image,
-        network: options.network,
-        networkAliases: ["fake-gcs-server"],
-        // The bucket-listing endpoint responds with 200 once the server is up.
-        waitFor: waitForHttp(4443, "/storage/v1/b"),
-      },
-      testInfo,
-    );
-  }
-
-  const hostPort = await reserveFreePort();
-
-  const started = await startContainer(
-    {
-      name: options.name,
-      image: options.image,
-      network: options.network,
-      networkAliases: ["fake-gcs-server"],
-      ports: { 4443: hostPort },
-      cmd: ["-public-host", `localhost:${hostPort}`],
-      // The bucket-listing endpoint responds with 200 once the server is up.
-      waitFor: waitForHttp(4443, "/storage/v1/b"),
-    },
-    testInfo,
-  );
-
-  return { ...started, hostPort };
-}
-
-/**
- * Run a function with a started container and guaranteed cleanup.
- *
- * - On error: attaches logs then rethrows
- * - Always: stops container
- * - Optional: always collects logs (even on success)
- */
-export async function withStartedContainer<T>(
-  testInfo: TestInfo,
-  started: Started,
-  fn: (container: StartedTestContainer) => Promise<T>,
-  opts?: { alwaysCollectLogs?: boolean },
-): Promise<T> {
-  try {
-    return await fn(started.container);
-  } catch (e) {
-    await attachContainerLogs(testInfo, started.container, {
-      name: started.name,
-      filePath: started.logsFilePath,
-    });
-    throw e;
-  } finally {
-    try {
-      if (opts?.alwaysCollectLogs) {
-        await attachContainerLogs(testInfo, started.container, {
-          name: started.name,
-          filePath: started.logsFilePath,
-        });
-      }
-    } finally {
-      // Stop log streaming before stopping the container to avoid dangling listeners/handles.
-      try {
-        started.stopLogStreaming?.();
-      } catch {
-        // ignore
-      }
-
-      // Best-effort cleanup
-      await started.container.stop().catch(() => {});
-    }
-  }
-}
-
-/**
- * Run a function with a started network and guaranteed cleanup.
- */
-export async function withStartedNetwork<T>(
-  startedNetwork: StartedNetwork,
-  fn: (network: StartedNetwork) => Promise<T>,
-): Promise<T> {
-  try {
-    return await fn(startedNetwork);
-  } finally {
-    await startedNetwork.stop().catch(() => {});
-  }
 }
