@@ -5,13 +5,17 @@
  * - Starts fake-gcs-server (GCS emulator) in Docker
  * - Starts local Kellnr with GCS backend enabled
  * - Publishes crates to GCS storage
- * - Verifies crates are visible and accessible in the UI
+ * - Verifies the crates are shown in the UI and downloadable from the storage
+ *
+ * List, search and dependencies read only the database and are tested with the
+ * filesystem backend in ui-crate-with-data.spec.ts.
  *
  * Performance: Uses local Kellnr with Docker fake-gcs-server for GCS storage.
  */
 
 import { test, expect } from "./lib/ui-fixtures";
-import { CratesPage, CratePage } from "./pages";
+import { CratePage } from "./pages";
+import { expectCrateDownloadMatchesIndex, PUBLISHED_STORAGE_TEST_CRATES } from "./lib/storage-checks";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
   assertKellnrBinaryExists,
@@ -102,22 +106,7 @@ test.describe("GCS Storage UI Tests", () => {
 
     console.log(`[setup] fake-gcs-server accessible at ${gcsUrlForLocalKellnr}`);
 
-    // Wait for fake-gcs-server to be fully ready by checking the bucket-listing endpoint
-    console.log("[setup] Waiting for fake-gcs-server health check...");
-    const healthUrl = `${gcsUrlForLocalKellnr}/storage/v1/b`;
-    for (let i = 0; i < 30; i++) {
-      try {
-        const res = await fetch(healthUrl);
-        if (res.ok) {
-          console.log("[setup] fake-gcs-server health check passed");
-          break;
-        }
-      } catch {
-        // Not ready yet
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
+    // startGcsFakeServerContainer already waits for the bucket-listing endpoint.
     started = await startLocalKellnr({
       name: `kellnr-gcs-${suffix}`,
       env: {
@@ -198,24 +187,6 @@ test.describe("GCS Storage UI Tests", () => {
     console.log("[teardown] Cleanup complete");
   });
 
-  test("crates stored in GCS are visible in the UI", async ({ page }) => {
-    const cratesPage = new CratesPage(page);
-
-    await page.goto(`${baseUrl}/crates`);
-    await cratesPage.waitForPageLoad();
-    await cratesPage.waitForSearchResults();
-
-    // Verify all three crates are visible
-    const hasFooBar = await cratesPage.hasCrate("foo-bar");
-    expect(hasFooBar).toBe(true);
-
-    const hasTestLib = await cratesPage.hasCrate("test_lib");
-    expect(hasTestLib).toBe(true);
-
-    const hasUpperCase = await cratesPage.hasCrate("UpperCase-Name123");
-    expect(hasUpperCase).toBe(true);
-  });
-
   test("crate details from GCS storage are accessible", async ({ page }) => {
     await page.goto(`${baseUrl}/crate?name=foo-bar`);
     const cratePage = new CratePage(page);
@@ -229,39 +200,15 @@ test.describe("GCS Storage UI Tests", () => {
     const version = await cratePage.getVersion();
     expect(version).toBe("1.0.0");
 
-    // Verify install snippet (stored in GCS) is available
+    // Verify install snippet is shown
     const installSnippet = await cratePage.getInstallSnippet();
     expect(installSnippet).toContain("foo-bar");
     expect(installSnippet).toContain("1.0.0");
   });
 
-  test("crate dependencies from GCS storage are displayed", async ({ page }) => {
-    await page.goto(`${baseUrl}/crate?name=foo-bar`);
-    const cratePage = new CratePage(page);
-    await cratePage.waitForCrateData();
-
-    // Click on dependencies tab
-    await cratePage.clickTab("dependencies");
-    await page.waitForTimeout(500);
-
-    // Verify test_lib dependency is shown
-    const testLibDep = page.locator(".dep-name").filter({ hasText: "test_lib" });
-    await expect(testLibDep).toBeVisible();
-  });
-
-  test("search works with GCS-stored crates", async ({ page }) => {
-    const cratesPage = new CratesPage(page);
-
-    await page.goto(`${baseUrl}/crates`);
-    await cratesPage.waitForPageLoad();
-
-    // Search for foo-bar
-    await cratesPage.searchInput.fill("foo");
-    await cratesPage.searchInput.press("Enter");
-    await cratesPage.waitForSearchResults();
-
-    // Verify foo-bar is in search results
-    const hasFooBar = await cratesPage.hasCrate("foo-bar");
-    expect(hasFooBar).toBe(true);
+  test("published crates are downloadable from GCS storage", async () => {
+    for (const crate of PUBLISHED_STORAGE_TEST_CRATES) {
+      await expectCrateDownloadMatchesIndex(baseUrl, crate);
+    }
   });
 });

@@ -5,13 +5,17 @@
  * - Starts RustFS (S3-compatible storage) in Docker
  * - Starts local Kellnr with S3 backend enabled
  * - Publishes crates to S3 storage
- * - Verifies crates are visible and accessible in the UI
+ * - Verifies the crates are shown in the UI and downloadable from the storage
+ *
+ * List, search and dependencies read only the database and are tested with the
+ * filesystem backend in ui-crate-with-data.spec.ts.
  *
  * Performance: Uses local Kellnr with Docker RustFS for S3 storage.
  */
 
 import { test, expect } from "./lib/ui-fixtures";
-import { CratesPage, CratePage } from "./pages";
+import { CratePage } from "./pages";
+import { expectCrateDownloadMatchesIndex, PUBLISHED_STORAGE_TEST_CRATES } from "./lib/storage-checks";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
   assertKellnrBinaryExists,
@@ -106,9 +110,7 @@ test.describe("S3 Storage UI Tests", () => {
 
     console.log(`[setup] RustFS accessible at ${s3UrlForLocalKellnr}`);
 
-    // startS3RustFsContainer already waits for its listening port. The crate
-    // publishes below exercise the buckets. In the baseline run /health/live
-    // did not pass, but its old loop silently continued after 30 seconds.
+    // startS3RustFsContainer already waits for its listening port; the tests exercise the buckets.
     started = await startLocalKellnr({
       name: `kellnr-s3-${suffix}`,
       env: {
@@ -190,24 +192,6 @@ test.describe("S3 Storage UI Tests", () => {
     console.log("[teardown] Cleanup complete");
   });
 
-  test("crates stored in S3 are visible in the UI", async ({ page }) => {
-    const cratesPage = new CratesPage(page);
-
-    await page.goto(`${baseUrl}/crates`);
-    await cratesPage.waitForPageLoad();
-    await cratesPage.waitForSearchResults();
-
-    // Verify all three crates are visible
-    const hasFooBar = await cratesPage.hasCrate("foo-bar");
-    expect(hasFooBar).toBe(true);
-
-    const hasTestLib = await cratesPage.hasCrate("test_lib");
-    expect(hasTestLib).toBe(true);
-
-    const hasUpperCase = await cratesPage.hasCrate("UpperCase-Name123");
-    expect(hasUpperCase).toBe(true);
-  });
-
   test("crate details from S3 storage are accessible", async ({ page }) => {
     await page.goto(`${baseUrl}/crate?name=foo-bar`);
     const cratePage = new CratePage(page);
@@ -221,39 +205,15 @@ test.describe("S3 Storage UI Tests", () => {
     const version = await cratePage.getVersion();
     expect(version).toBe("1.0.0");
 
-    // Verify install snippet (stored in S3) is available
+    // Verify install snippet is shown
     const installSnippet = await cratePage.getInstallSnippet();
     expect(installSnippet).toContain("foo-bar");
     expect(installSnippet).toContain("1.0.0");
   });
 
-  test("crate dependencies from S3 storage are displayed", async ({ page }) => {
-    await page.goto(`${baseUrl}/crate?name=foo-bar`);
-    const cratePage = new CratePage(page);
-    await cratePage.waitForCrateData();
-
-    // Click on dependencies tab
-    await cratePage.clickTab("dependencies");
-    await page.waitForTimeout(500);
-
-    // Verify test_lib dependency is shown
-    const testLibDep = page.locator(".dep-name").filter({ hasText: "test_lib" });
-    await expect(testLibDep).toBeVisible();
-  });
-
-  test("search works with S3-stored crates", async ({ page }) => {
-    const cratesPage = new CratesPage(page);
-
-    await page.goto(`${baseUrl}/crates`);
-    await cratesPage.waitForPageLoad();
-
-    // Search for foo-bar
-    await cratesPage.searchInput.fill("foo");
-    await cratesPage.searchInput.press("Enter");
-    await cratesPage.waitForSearchResults();
-
-    // Verify foo-bar is in search results
-    const hasFooBar = await cratesPage.hasCrate("foo-bar");
-    expect(hasFooBar).toBe(true);
+  test("published crates are downloadable from S3 storage", async () => {
+    for (const crate of PUBLISHED_STORAGE_TEST_CRATES) {
+      await expectCrateDownloadMatchesIndex(baseUrl, crate);
+    }
   });
 });
