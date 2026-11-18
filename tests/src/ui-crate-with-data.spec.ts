@@ -191,7 +191,6 @@ test.describe("Crate Views with Data", () => {
 
     // Verify About tab metadata
     await cratePage.clickTab("about");
-    await page.waitForTimeout(500);
 
     // Check for authors (foo-bar has secana)
     const aboutContent = await page.locator(".v-card").filter({ hasText: "Authors" }).textContent();
@@ -199,7 +198,6 @@ test.describe("Crate Views with Data", () => {
 
     // Verify Dependencies tab
     await cratePage.clickTab("dependencies");
-    await page.waitForTimeout(500);
 
     // Check for normal dependencies - foo-bar depends on test_lib
     // Look for the dependency name in the dependencies section
@@ -208,7 +206,6 @@ test.describe("Crate Views with Data", () => {
 
     // Verify Versions tab
     await cratePage.clickTab("versions");
-    await page.waitForTimeout(500);
 
     // Should show version 1.0.0 - use first() to avoid strict mode violation (version appears multiple times)
     const versionText = page.getByText("1.0.0").first();
@@ -482,9 +479,6 @@ test.describe("Crate Views with Data", () => {
     await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
     await loginPage.waitForNavigation("/");
 
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
     // Navigate to crate detail page
     await page.goto(`${baseUrl}/crate?name=foo-bar`);
     const cratePage = new CratePage(page);
@@ -501,7 +495,6 @@ test.describe("Crate Views with Data", () => {
 
     // Open Settings tab and verify content
     await cratePage.clickTab("settings");
-    await page.waitForTimeout(500);
 
     // Should see crate owners section - new UI uses settings-card
     const ownersCard = page.locator(".settings-card").filter({ hasText: "Crate owners" });
@@ -513,7 +506,6 @@ test.describe("Crate Views with Data", () => {
 
     // Open Admin tab and verify content
     await cratePage.clickTab("admin");
-    await page.waitForTimeout(500);
 
     // Should see delete buttons
     await expect(cratePage.deleteVersionButton).toBeVisible();
@@ -607,9 +599,22 @@ test.describe("Crate Views with Data", () => {
 
     test("short pages do not scroll", async ({ page }) => {
       await page.setViewportSize({ width: 1440, height: 900 });
-      for (const route of ["/", "/login", "/docqueue", "/crates"]) {
+      // Each page is measured once the data that sizes it is rendered
+      const waitAfterGoto: Record<string, () => Promise<void>> = {
+        "/": () => new LandingPage(page).waitForPageLoad(),
+        "/login": () => new LoginPage(page).waitForPageLoad(),
+        "/docqueue": () => page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))),
+        "/crates": () => new CratesPage(page).waitForPageLoad(),
+      };
+      for (const [route, waitForPage] of Object.entries(waitAfterGoto)) {
+        // The doc queue page has no loading state, so wait for its queue and builds requests
+        const docQueueLoaded = route === "/docqueue"
+          ? Promise.all(["/api/v1/docs/builds", "/api/v1/docs/builds/recent"].map((path) =>
+            page.waitForResponse((r) => new URL(r.url()).pathname.endsWith(path)).then((r) => r.finished())))
+          : undefined;
         await page.goto(`${baseUrl}${route}`);
-        await page.waitForLoadState("networkidle");
+        await docQueueLoaded;
+        await waitForPage();
         const { scrollHeight, innerHeight } = await page.evaluate(() => ({
           scrollHeight: document.documentElement.scrollHeight,
           innerHeight: window.innerHeight,

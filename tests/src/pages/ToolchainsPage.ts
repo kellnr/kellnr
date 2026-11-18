@@ -100,6 +100,13 @@ export class ToolchainsPage extends BasePage {
   }
 
   /**
+   * Wait until the settings navigation is shown.
+   */
+  async waitForPageLoad(): Promise<void> {
+    await this.toolchainsNavItem.waitFor({ state: "visible" });
+  }
+
+  /**
    * Navigate to the Settings page.
    */
   async goto(): Promise<void> {

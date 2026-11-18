@@ -46,6 +46,13 @@ export class LandingPage extends BasePage {
   }
 
   /**
+   * Wait until the statistics are shown.
+   */
+  async waitForPageLoad(): Promise<void> {
+    await this.waitForStatistics();
+  }
+
+  /**
    * Navigate to the landing page.
    */
   async goto(): Promise<void> {

@@ -34,6 +34,13 @@ export class CratesPage extends BasePage {
   }
 
   /**
+   * Wait until the first page of results is shown.
+   */
+  async waitForPageLoad(): Promise<void> {
+    await this.waitForSearchResults();
+  }
+
+  /**
    * Navigate to the crates page.
    */
   async goto(): Promise<void> {
@@ -174,17 +181,6 @@ export class CratesPage extends BasePage {
       hasText: crateName,
     });
     return await card.isVisible();
-  }
-
-  /**
-   * Scroll to load more crates (infinite scroll).
-   */
-  async scrollToLoadMore(): Promise<void> {
-    await this.page.evaluate(() => {
-      window.scrollTo(0, document.documentElement.scrollHeight);
-    });
-    // Wait for potential loading
-    await this.page.waitForTimeout(500);
   }
 
   /**

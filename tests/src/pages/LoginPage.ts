@@ -44,6 +44,13 @@ export class LoginPage extends BasePage {
   }
 
   /**
+   * Wait until the login form is shown.
+   */
+  async waitForPageLoad(): Promise<void> {
+    await this.signInTitle.waitFor({ state: "visible" });
+  }
+
+  /**
    * Navigate to the login page.
    */
   async goto(): Promise<void> {
