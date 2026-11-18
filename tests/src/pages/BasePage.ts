@@ -7,6 +7,9 @@ import type { Page, Locator } from "@playwright/test";
  * - Page reference management
  * - Common wait utilities
  * - Vuetify-specific helper methods
+ *
+ * Each page object waits for its own content in `waitForPageLoad`, not for an
+ * idle network, which needs 500 ms without requests.
  */
 export abstract class BasePage {
   constructor(protected readonly page: Page) {}
@@ -16,22 +19,6 @@ export abstract class BasePage {
    */
   async goto(path: string = "/"): Promise<void> {
     await this.page.goto(path);
-  }
-
-  /**
-   * Wait for the page to be fully loaded (network idle).
-   */
-  async waitForPageLoad(): Promise<void> {
-    await this.page.waitForLoadState("networkidle");
-  }
-
-  /**
-   * Wait for a Vuetify component to be visible and stable.
-   */
-  async waitForVuetifyComponent(locator: Locator): Promise<void> {
-    await locator.waitFor({ state: "visible" });
-    // Vuetify components often have transitions, wait for stability
-    await this.page.waitForTimeout(100);
   }
 
   /**
@@ -88,12 +75,10 @@ export abstract class BasePage {
   }
 
   /**
-   * Wait for navigation to a specific path.
-   * Handles Vue Router SPA navigation by waiting for URL change and network idle.
+   * Wait for navigation to a path. The URL path must end with it, so "/" does
+   * not match "/login" and an instance under a path prefix still matches.
    */
   async waitForNavigation(path: string, timeout: number = 10000): Promise<void> {
-    await this.page.waitForURL(`**${path}**`, { timeout });
-    // Wait for Vue Router to finish rendering after navigation
-    await this.page.waitForLoadState("domcontentloaded");
+    await this.page.waitForURL((url) => url.pathname.endsWith(path), { timeout });
   }
 }

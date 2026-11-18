@@ -1,4 +1,4 @@
-import type { Page, Locator } from "@playwright/test";
+import { expect, type Page, type Locator, type Response } from "@playwright/test";
 import { BasePage } from "./BasePage";
 
 /**
@@ -82,6 +82,30 @@ export class ToolchainsPage extends BasePage {
     });
   }
 
+  private waitForApiResponse(method: string, path: string): Promise<Response> {
+    return this.page.waitForResponse((response) =>
+      response.request().method() === method && new URL(response.url()).pathname.endsWith(path)
+    );
+  }
+
+  private async waitForListRendered(response: Response): Promise<void> {
+    if (!response.ok()) {
+      throw new Error(`Loading toolchains failed: HTTP ${response.status()}`);
+    }
+    const toolchains: unknown = await response.json();
+    if (!Array.isArray(toolchains)) {
+      throw new Error("Loading toolchains returned a non-array response");
+    }
+    await expect(this.page.getByTestId("toolchain-panel")).toHaveCount(toolchains.length);
+  }
+
+  /**
+   * Wait until the settings navigation is shown.
+   */
+  async waitForPageLoad(): Promise<void> {
+    await this.toolchainsNavItem.waitFor({ state: "visible" });
+  }
+
   /**
    * Navigate to the Settings page.
    */
@@ -102,8 +126,10 @@ export class ToolchainsPage extends BasePage {
    * Click on the Toolchains navigation item.
    */
   async clickToolchainsTab(): Promise<void> {
+    const listResponse = this.waitForApiResponse("GET", "/api/v1/toolchains");
     await this.toolchainsNavItem.click();
-    await this.page.waitForTimeout(500);
+    await this.sectionHeader.waitFor({ state: "visible" });
+    await this.waitForListRendered(await listResponse);
   }
 
   /**
@@ -209,8 +235,11 @@ export class ToolchainsPage extends BasePage {
    */
   async expandToolchain(name: string, version: string): Promise<void> {
     const panel = this.toolchainPanel(name, version);
-    await panel.click();
-    await this.page.waitForTimeout(300);
+    const channelSelect = panel.getByTestId("toolchain-channel-select");
+    if (!(await channelSelect.isVisible())) {
+      await panel.getByTestId("toolchain-panel-title").click();
+    }
+    await channelSelect.waitFor({ state: "visible" });
   }
 
   /**
@@ -239,13 +268,21 @@ export class ToolchainsPage extends BasePage {
     await this.expandToolchain(name, version);
 
     // Find the target item and click delete
-    const targetItem = this.page.getByTestId("target-item").filter({ hasText: target });
+    const targetItem = this.toolchainPanel(name, version)
+      .getByTestId("target-item").filter({ hasText: target });
     const deleteButton = targetItem.getByTestId("toolchain-target-delete");
     await deleteButton.click();
 
     // Confirm deletion
+    const deleted = this.waitForApiResponse("DELETE", `/api/v1/toolchains/${encodeURIComponent(name)}/${encodeURIComponent(version)}/targets/${encodeURIComponent(target)}`);
+    const listResponse = this.waitForApiResponse("GET", "/api/v1/toolchains");
     await this.confirmButton.click();
-    await this.page.waitForTimeout(500);
+    const deleteResponse = await deleted;
+    if (!deleteResponse.ok()) {
+      throw new Error(`Deleting toolchain target failed: HTTP ${deleteResponse.status()}`);
+    }
+    await this.waitForListRendered(await listResponse);
+    await expect(targetItem).toHaveCount(0);
   }
 
   /**
@@ -261,8 +298,15 @@ export class ToolchainsPage extends BasePage {
     await deleteAllButton.click();
 
     // Confirm deletion
+    const deleted = this.waitForApiResponse("DELETE", `/api/v1/toolchains/${encodeURIComponent(name)}/${encodeURIComponent(version)}`);
+    const listResponse = this.waitForApiResponse("GET", "/api/v1/toolchains");
     await this.confirmButton.click();
-    await this.page.waitForTimeout(500);
+    const deleteResponse = await deleted;
+    if (!deleteResponse.ok()) {
+      throw new Error(`Deleting toolchain failed: HTTP ${deleteResponse.status()}`);
+    }
+    await this.waitForListRendered(await listResponse);
+    await expect(panel).toHaveCount(0);
   }
 
   /**
@@ -288,11 +332,17 @@ export class ToolchainsPage extends BasePage {
     const panel = this.toolchainPanel(name, version);
     const channelSelect = panel.getByTestId("toolchain-channel-select");
     await channelSelect.click();
-    await this.page.waitForTimeout(200);
 
     // Vuetify renders select options in an overlay; use role-based selection
+    const updated = this.waitForApiResponse("PUT", `/api/v1/toolchains/channels/${encodeURIComponent(channel)}`);
+    const listResponse = this.waitForApiResponse("GET", "/api/v1/toolchains");
     await this.page.getByRole("option", { name: channel }).click();
-    await this.page.waitForTimeout(500);
+    const updateResponse = await updated;
+    if (!updateResponse.ok()) {
+      throw new Error(`Setting toolchain channel failed: HTTP ${updateResponse.status()}`);
+    }
+    await this.waitForListRendered(await listResponse);
+    await expect(panel.getByTestId("toolchain-channel-chip")).toHaveText(channel);
   }
 
   /**
@@ -308,7 +358,7 @@ export class ToolchainsPage extends BasePage {
     const clearButton = panel.getByTestId("toolchain-channel-select").getByRole("button");
     if (await clearButton.isVisible()) {
       await clearButton.click();
-      await this.page.waitForTimeout(500);
+      await expect(panel.getByTestId("toolchain-channel-chip")).toHaveCount(0);
     }
   }
 
@@ -343,7 +393,7 @@ export class ToolchainsPage extends BasePage {
     const closeButton = snackbar.getByRole("button", { name: "Close" });
     if (await closeButton.isVisible()) {
       await closeButton.click();
-      await this.page.waitForTimeout(300);
+      await snackbar.waitFor({ state: "hidden" });
     }
   }
 }

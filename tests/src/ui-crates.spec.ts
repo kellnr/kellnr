@@ -137,27 +137,27 @@ test.describe("Crates Page UI Tests", () => {
   });
 
   test("page shows loading indicator while fetching", async ({ page }) => {
-    // Add a delay to the crates API to observe loading state
-    await page.route("**/api/crates*", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+    let releaseResponse!: () => void;
+    let requestStarted!: () => void;
+    const responseGate = new Promise<void>((resolve) => { releaseResponse = resolve; });
+    const requestIntercepted = new Promise<void>((resolve) => { requestStarted = resolve; });
+    await page.route("**/api/v1/ui/crates*", async (route) => {
+      requestStarted();
+      await responseGate;
       await route.continue();
     });
 
-    // Start navigation
-    const navigationPromise = page.goto(`${baseUrl}/crates`);
-
-    // Check for loading indicator (may be quick)
-    await page.waitForTimeout(100);
-
-    // Complete navigation
-    await navigationPromise;
-
-    // Verify loading completes
+    await page.goto(`${baseUrl}/crates`, { waitUntil: "domcontentloaded" });
     const cratesPage = new CratesPage(page);
+    try {
+      await requestIntercepted;
+      await expect(cratesPage.loadingIndicator).toBeVisible();
+    } finally {
+      releaseResponse();
+    }
     await cratesPage.waitForSearchResults();
 
-    // Loading should be done
-    const isLoading = await cratesPage.isLoading();
-    expect(isLoading).toBe(false);
+    await expect(cratesPage.emptyState).toBeVisible();
+    await expect(cratesPage.loadingIndicator).toBeHidden();
   });
 });

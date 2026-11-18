@@ -7,9 +7,8 @@
 # depend only on the public upstream repository, and so the image builds natively on every
 # architecture (the fork image is amd64 only).
 #
-# Both test suites build this same image:
-#   - crates/storage/tests/gcs_image.rs (Rust integration tests)
-#   - tests/src/lib/docker.ts           (Playwright UI tests)
+# The GCS tests build this image through crates/storage/tests/gcs_image/mod.rs, which
+# crates/kellnr/tests/storage_backends.rs includes as well.
 
 ARG GO_VERSION=1.26
 ARG FAKE_GCS_SERVER_VERSION=v1.56.1
@@ -46,11 +45,8 @@ RUN mkdir -p /data/${CRATES_BUCKET} /data/${CRATESIO_BUCKET} /data/${TOOLCHAIN_B
 # Run in HTTP mode (no TLS) so kellnr can talk to it without a trusted cert, and skip
 # request signing on the kellnr side (fake-gcs-server does not validate auth by default).
 #
-# `-public-host` must match the exact host:port the client connects through for the flat,
-# GCS-XML-API-style object routes to dispatch correctly (a mismatch causes 404/405 on every
-# GET/PUT). Since that host:port (a dynamically reserved host port) isn't known at build
-# time, it's kept out of ENTRYPOINT and left as an overridable CMD default so callers can
-# replace it (see startGcsFakeServerContainer in tests/src/lib/docker.ts and
-# fakegcs-testcontainer on the Rust side).
+# The flat, GCS-XML-API-style object routes dispatch only for requests whose host matches
+# `-public-host`. Without a port in it, only the host name is compared, so clients connect
+# through `localhost` on any published port (see crates/storage/tests/gcs_image/mod.rs).
 ENTRYPOINT ["/bin/fake-gcs-server", "-data", "/data", "-scheme", "http"]
-CMD ["-public-host", "fake-gcs-server:4443"]
+CMD ["-public-host", "localhost"]

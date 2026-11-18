@@ -13,8 +13,9 @@
  * Performance: All tests share a single local Kellnr instance per describe block.
  */
 
-import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
-import { LoginPage, ToolchainsPage, HeaderComponent } from "./pages";
+import { test, expect, loginAndWait, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
+import type { Page } from "@playwright/test";
+import { ToolchainsPage, HeaderComponent } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
   assertKellnrBinaryExists,
@@ -27,6 +28,18 @@ import {
 } from "./lib/docker";
 import fs from "node:fs";
 import path from "node:path";
+
+async function loginAsAdmin(page: Page, baseUrl: string): Promise<void> {
+  await loginAndWait(page, baseUrl, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
+  await expect(page.getByTestId("user-menu-button")).toBeVisible();
+}
+
+async function openToolchainSettings(page: Page, baseUrl: string): Promise<ToolchainsPage> {
+  await page.goto(`${baseUrl}/settings`);
+  const toolchainsPage = new ToolchainsPage(page);
+  await toolchainsPage.clickToolchainsTab();
+  return toolchainsPage;
+}
 
 test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
   // These tests use fixed localhost:8000 port
@@ -67,18 +80,9 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
   });
 
   test("toolchains tab is visible when feature is enabled", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
+    await loginAsAdmin(page, baseUrl);
 
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to settings page
     await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
 
     // The Toolchains nav item should be visible for admin users when feature is enabled
     const toolchainsPage = new ToolchainsPage(page);
@@ -86,21 +90,8 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
   });
 
   test("admin can view toolchains section with empty state", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to settings page and click toolchains tab
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const toolchainsPage = new ToolchainsPage(page);
-    await toolchainsPage.clickToolchainsTab();
+    await loginAsAdmin(page, baseUrl);
+    const toolchainsPage = await openToolchainSettings(page, baseUrl);
 
     // Verify we're on the toolchains section
     await expect(toolchainsPage.sectionHeader).toBeVisible();
@@ -110,21 +101,8 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
   });
 
   test("upload form has correct fields", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to toolchains section
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const toolchainsPage = new ToolchainsPage(page);
-    await toolchainsPage.clickToolchainsTab();
+    await loginAsAdmin(page, baseUrl);
+    const toolchainsPage = await openToolchainSettings(page, baseUrl);
 
     // Verify all upload form fields are visible
     await expect(toolchainsPage.nameInput).toBeVisible();
@@ -137,21 +115,8 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
   });
 
   test("upload button is disabled when form is incomplete", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to toolchains section
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const toolchainsPage = new ToolchainsPage(page);
-    await toolchainsPage.clickToolchainsTab();
+    await loginAsAdmin(page, baseUrl);
+    const toolchainsPage = await openToolchainSettings(page, baseUrl);
 
     // Verify upload button is disabled when form is empty
     // (name field has default value "rust", but no file is selected)
@@ -160,21 +125,8 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
   });
 
   test("can fill upload form fields", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to toolchains section
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const toolchainsPage = new ToolchainsPage(page);
-    await toolchainsPage.clickToolchainsTab();
+    await loginAsAdmin(page, baseUrl);
+    const toolchainsPage = await openToolchainSettings(page, baseUrl);
 
     // Fill in the form fields
     await toolchainsPage.fillUploadForm({
@@ -197,21 +149,13 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
 
   test("non-admin user cannot access toolchains management", async ({ page }) => {
     // First create a non-admin user via admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
+    await loginAsAdmin(page, baseUrl);
 
     // Navigate to user management and create a test user
     await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
     const userMgmtNavItem = page.getByTestId("nav-user-management");
     await userMgmtNavItem.click();
-    await page.waitForTimeout(500);
+    await expect(page.locator(".section-header").filter({ hasText: "Users" })).toBeVisible();
 
     // Fill in the user creation form
     const usernameField = page.locator(".form-field").filter({ hasText: "Username" }).locator("input");
@@ -225,29 +169,23 @@ test.describe("Toolchain Management UI Tests - Feature Enabled", () => {
     const createButton = page.getByRole("button", { name: "Create user" });
     await createButton.click();
 
-    // Wait for user to be created
-    await page.waitForTimeout(1000);
+    await expect(page.getByTestId("user-item").filter({ hasText: "toolchainuser" })).toBeVisible();
 
     // Logout admin
-    await page.goto(`${baseUrl}`);
-    await page.waitForTimeout(500);
-    const header = new HeaderComponent(page);
-    if (await header.isLoggedIn()) {
-      await header.clickLogout();
-      await page.waitForTimeout(500);
-    }
+    await new HeaderComponent(page).clickLogout();
+    await expect(page.getByTestId("login-title")).toBeVisible();
 
     // Login as the non-admin user
-    await page.goto(`${baseUrl}/login`);
-    await loginPage.login("toolchainuser", "testpassword");
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
+    await loginAndWait(page, baseUrl, "toolchainuser", "testpassword");
+    await expect(page.getByTestId("user-menu-button")).toBeVisible();
 
     // Navigate to settings page
+    const settingsLoaded = page.waitForResponse((response) =>
+      response.url().endsWith("/api/v1/ui/settings") && response.status() === 403
+    );
     await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
+    await settingsLoaded;
+    await expect(page.locator(".section-header").filter({ hasText: "Change password" })).toBeVisible();
 
     // Toolchains nav item should not be visible for non-admin users
     const toolchainsPage = new ToolchainsPage(page);
@@ -294,18 +232,15 @@ test.describe("Toolchain Management UI Tests - Feature Disabled", () => {
   });
 
   test("toolchains tab is not visible when feature is disabled", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
+    await loginAsAdmin(page, baseUrl);
 
     // Navigate to settings page
+    const settingsLoaded = page.waitForResponse((response) =>
+      response.url().endsWith("/api/v1/ui/settings") && response.ok()
+    );
     await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
+    await settingsLoaded;
+    await expect(page.locator(".section-header").filter({ hasText: "Change password" })).toBeVisible();
 
     // The Toolchains nav item should NOT be visible when feature is disabled
     const toolchainsPage = new ToolchainsPage(page);
@@ -366,12 +301,7 @@ test.describe("Toolchain API and Distribution Tests", () => {
   });
 
   test("can upload toolchain via API", async ({ page }) => {
-    // First login to get a session cookie
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(500);
+    await loginAsAdmin(page, baseUrl);
 
     // Get session cookie from browser context
     const cookies = await page.context().cookies();
@@ -481,12 +411,7 @@ test.describe("Toolchain API and Distribution Tests", () => {
   });
 
   test("toolchain appears in list API", async ({ page }) => {
-    // Login to get session
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(500);
+    await loginAsAdmin(page, baseUrl);
 
     const cookies = await page.context().cookies();
     const session = cookies.find(c => c.name === "kellnr_session_id");
@@ -514,12 +439,7 @@ test.describe("Toolchain API and Distribution Tests", () => {
   });
 
   test("channel appears in channels API", async ({ page }) => {
-    // Login to get session
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(500);
+    await loginAsAdmin(page, baseUrl);
 
     const cookies = await page.context().cookies();
     const session = cookies.find(c => c.name === "kellnr_session_id");
@@ -543,19 +463,8 @@ test.describe("Toolchain API and Distribution Tests", () => {
   });
 
   test("toolchain appears in UI list", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(500);
-
-    // Navigate to toolchains section
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const toolchainsPage = new ToolchainsPage(page);
-    await toolchainsPage.clickToolchainsTab();
+    await loginAsAdmin(page, baseUrl);
+    const toolchainsPage = await openToolchainSettings(page, baseUrl);
 
     // Verify toolchain is visible
     const count = await toolchainsPage.getToolchainCount();
@@ -567,19 +476,8 @@ test.describe("Toolchain API and Distribution Tests", () => {
   });
 
   test("can view toolchain channel in UI", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(500);
-
-    // Navigate to toolchains section
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const toolchainsPage = new ToolchainsPage(page);
-    await toolchainsPage.clickToolchainsTab();
+    await loginAsAdmin(page, baseUrl);
+    const toolchainsPage = await openToolchainSettings(page, baseUrl);
 
     // Check that the toolchain shows its channel
     const channel = await toolchainsPage.getToolchainChannel("rust", "1.0.0-test");
@@ -663,12 +561,7 @@ test.describe("Toolchain UI Channel and Delete Tests", () => {
   }
 
   test("can change toolchain channel via UI dropdown", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(500);
+    await loginAsAdmin(page, baseUrl);
 
     // Get session cookie for API calls
     const cookies = await page.context().cookies();
@@ -678,12 +571,7 @@ test.describe("Toolchain UI Channel and Delete Tests", () => {
     // Upload a toolchain without channel
     await uploadToolchain("rust", "1.80.0", "x86_64-unknown-linux-gnu", "2024-07-01");
 
-    // Navigate to toolchains section
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const toolchainsPage = new ToolchainsPage(page);
-    await toolchainsPage.clickToolchainsTab();
+    const toolchainsPage = await openToolchainSettings(page, baseUrl);
 
     // Verify toolchain has no channel initially
     let channel = await toolchainsPage.getToolchainChannel("rust", "1.80.0");
@@ -699,7 +587,6 @@ test.describe("Toolchain UI Channel and Delete Tests", () => {
 
     // Reload page to verify persistence
     await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
     await toolchainsPage.clickToolchainsTab();
 
     // Verify channel is now "beta"
@@ -708,12 +595,7 @@ test.describe("Toolchain UI Channel and Delete Tests", () => {
   });
 
   test("can delete entire toolchain via UI", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(500);
+    await loginAsAdmin(page, baseUrl);
 
     // Get session cookie
     const cookies = await page.context().cookies();
@@ -724,12 +606,7 @@ test.describe("Toolchain UI Channel and Delete Tests", () => {
     await uploadToolchain("rust", "1.81.0", "x86_64-unknown-linux-gnu", "2024-08-01", "nightly");
     await uploadToolchain("rust", "1.81.0", "aarch64-unknown-linux-gnu", "2024-08-01");
 
-    // Navigate to toolchains section
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const toolchainsPage = new ToolchainsPage(page);
-    await toolchainsPage.clickToolchainsTab();
+    const toolchainsPage = await openToolchainSettings(page, baseUrl);
 
     // Verify toolchain exists with 2 targets
     const targets = await toolchainsPage.getTargetsForToolchain("rust", "1.81.0");
@@ -752,12 +629,7 @@ test.describe("Toolchain UI Channel and Delete Tests", () => {
   });
 
   test("deleting last target auto-deletes toolchain", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(500);
+    await loginAsAdmin(page, baseUrl);
 
     // Get session cookie
     const cookies = await page.context().cookies();
@@ -767,12 +639,7 @@ test.describe("Toolchain UI Channel and Delete Tests", () => {
     // Upload a toolchain with single target
     await uploadToolchain("rust", "1.82.0", "x86_64-unknown-linux-gnu", "2024-09-01");
 
-    // Navigate to toolchains section
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    const toolchainsPage = new ToolchainsPage(page);
-    await toolchainsPage.clickToolchainsTab();
+    const toolchainsPage = await openToolchainSettings(page, baseUrl);
 
     // Verify toolchain exists
     const initialCount = await toolchainsPage.getToolchainCount();

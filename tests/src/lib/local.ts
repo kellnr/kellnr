@@ -11,6 +11,7 @@
  */
 
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import process from "node:process";
 import { randomUUID } from "node:crypto";
@@ -24,6 +25,42 @@ import { type BeforeAllTestInfo, getKellnrBinaryPath } from "../testUtils";
  * Base directory for test data directories.
  */
 const TEST_DATA_BASE_DIR = "/tmp/kellnr-test-ui";
+
+/**
+ * Kellnr processes that have not exited yet. A worker that exits before its
+ * afterAll hook ran, for example after a hook timeout, would otherwise leave
+ * them running and holding their port. A worker killed with SIGKILL still
+ * leaves them running; the port check of the next start then reports it.
+ */
+const runningProcesses = new Set<ChildProcess>();
+process.on("exit", () => {
+    for (const child of runningProcesses) {
+        child.kill("SIGKILL");
+    }
+});
+
+function acceptsConnections(host: string, port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+        const socket = net.connect({ port, host });
+        socket.once("connect", () => {
+            socket.destroy();
+            resolve(true);
+        });
+        socket.once("error", () => resolve(false));
+    });
+}
+
+/**
+ * Checks IPv4 and IPv6 loopback, as `localhost` in the base URL can resolve
+ * to either.
+ */
+async function isPortInUse(port: number): Promise<boolean> {
+    const results = await Promise.all([
+        acceptsConnections("127.0.0.1", port),
+        acceptsConnections("::1", port),
+    ]);
+    return results.includes(true);
+}
 
 /**
  * Result of starting a local Kellnr instance.
@@ -127,6 +164,7 @@ function removeDataDir(dataDir: string): void {
  */
 async function waitForHttpOk(
     url: string,
+    exitDescription: () => string | null,
     options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<void> {
     const timeoutMs = options?.timeoutMs ?? 60_000;
@@ -134,6 +172,10 @@ async function waitForHttpOk(
     const start = Date.now();
 
     while (true) {
+        const exited = exitDescription();
+        if (exited) {
+            throw new Error(`Kellnr ${exited} before ${url} returned HTTP 200`);
+        }
         try {
             const res = await fetch(url, { redirect: "manual" });
             if (res.status === 200) return;
@@ -175,6 +217,14 @@ export async function startLocalKellnr(
     const logLevel = options.logLevel ?? "debug";
     const webLogLevel = options.webLogLevel ?? "debug";
     const baseUrl = `http://localhost:${port}`;
+
+    // A process already on the port would answer the health check while the
+    // new Kellnr fails to bind, so the tests would run against a stale server.
+    if (await isPortInUse(port)) {
+        throw new Error(
+            `Port ${port} is already in use, possibly by a Kellnr left over from an earlier run (see \`lsof -i :${port}\`)`,
+        );
+    }
 
     // Check if user provided an explicit data directory via env
     const userProvidedDataDir = options.env?.KELLNR_REGISTRY__DATA_DIR;
@@ -227,12 +277,16 @@ export async function startLocalKellnr(
         stdio: ["ignore", "pipe", "pipe"],
         detached: false,
     });
+    runningProcesses.add(childProcess);
 
     // Pipe stdout/stderr to log file (and optionally to console)
     const handleOutput = (stream: NodeJS.ReadableStream, prefix: string) => {
         stream.on("data", (chunk: Buffer) => {
             const text = chunk.toString("utf8");
-            logStream.write(`[${prefix}] ${text}`);
+            // Output can arrive after stop() closed the log, when the process did not close its streams in time
+            if (!logStream.writableEnded) {
+                logStream.write(`[${prefix}] ${text}`);
+            }
             if (options.logToStdout) {
                 process.stdout.write(`[${options.name}:${prefix}] ${text}`);
             }
@@ -245,39 +299,44 @@ export async function startLocalKellnr(
     // Track if we've already stopped
     let stopped = false;
 
+    // "close" fires after the process exited and its stdout and stderr ended,
+    // so all output is in the log. Registered now, as it can fire before stop().
+    const closed = new Promise<void>((resolve) => {
+        childProcess.on("close", () => resolve());
+    });
+    const isRunning = () =>
+        childProcess.pid !== undefined && childProcess.exitCode === null && childProcess.signalCode === null;
+    const exitDescription = (): string | null => {
+        if (childProcess.pid === undefined) return `could not be started from ${binaryPath}`;
+        if (childProcess.exitCode !== null) return `exited with code ${childProcess.exitCode}`;
+        if (childProcess.signalCode !== null) return `was killed by ${childProcess.signalCode}`;
+        return null;
+    };
+
     const stop = async (): Promise<void> => {
         if (stopped) return;
         stopped = true;
 
-        // Close log stream
-        try {
-            logStream.end();
-        } catch {
-            // Ignore
-        }
-
-        // Kill the process
-        if (childProcess.pid && !childProcess.killed) {
+        if (isRunning()) {
             try {
                 // Try graceful shutdown first
                 childProcess.kill("SIGTERM");
+                await Promise.race([closed, sleep(5000)]);
 
-                // Wait for process to exit (with timeout)
-                await Promise.race([
-                    new Promise<void>((resolve) => {
-                        childProcess.on("exit", () => resolve());
-                    }),
-                    sleep(5000),
-                ]);
-
-                // Force kill if still running
-                if (!childProcess.killed) {
+                if (isRunning()) {
                     childProcess.kill("SIGKILL");
                 }
             } catch {
                 // Best effort
             }
         }
+
+        // Also after SIGKILL or an earlier exit: the port is free and the
+        // remaining output, such as a crash message, is in the log
+        await Promise.race([closed, sleep(2000)]);
+
+        // Close the log once its output ended, as Kellnr logs its shutdown
+        await new Promise<void>((resolve) => logStream.end(resolve));
 
         // Clean up data directory (only if we created it, not if externally provided)
         if (!options.keepDataDir && !isExternalDataDir) {
@@ -291,6 +350,7 @@ export async function startLocalKellnr(
     });
 
     childProcess.on("exit", (code, signal) => {
+        runningProcesses.delete(childProcess);
         if (!stopped) {
             console.log(
                 `[${options.name}] Process exited unexpectedly: code=${code}, signal=${signal}`,
@@ -303,7 +363,7 @@ export async function startLocalKellnr(
         ? `${baseUrl}${options.healthCheckPath}`
         : `${baseUrl}/api/v1/health`;
     try {
-        await waitForHttpOk(healthCheckUrl, { timeoutMs: 60_000, intervalMs: 500 });
+        await waitForHttpOk(healthCheckUrl, exitDescription, { timeoutMs: 60_000, intervalMs: 500 });
     } catch (e) {
         // Server failed to start - clean up and rethrow
         await stop();

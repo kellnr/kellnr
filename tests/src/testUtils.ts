@@ -188,18 +188,7 @@ export async function execOrThrow(
 }
 
 /**
- * Docker helpers have been moved to a central library that uses `testcontainers`
- * (see `src/lib/docker.ts`).
- *
- * Keep this module focused on non-docker concerns (logging, HTTP waits, cargo publish, etc.).
- *
- * The following legacy Docker CLI helpers were intentionally removed:
- * - dockerBuild / dockerPull / dockerNetworkCreate / dockerNetworkRemove
- * - dockerRun / dockerStop / dockerLogs / writeDockerLogsArtifact
- * - withDockerContainer
- *
- * Specs should now use idiomatic `testcontainers` container/network objects directly,
- * with shared helpers living in the central docker library.
+ * Docker helpers live in `src/lib/docker.ts`; keep this module free of Docker concerns.
  */
 
 /**
@@ -342,16 +331,6 @@ export function requireEnv(name: string): string {
     expect(v, `Environment variable ${name} must be set`).toBeTruthy();
     return v as string;
 }
-
-/**
- * Legacy helper removed: withDockerContainer
- *
- * Use `withStartedContainer(...)` from `src/lib/docker.ts` together with
- * `startContainer(...)` to get:
- * - deterministic container naming
- * - automatic stop on teardown
- * - automatic Playwright log attachments on failure (or always)
- */
 
 /**
  * A helper to make it explicit that tests using localhost:8000 cannot run in parallel.

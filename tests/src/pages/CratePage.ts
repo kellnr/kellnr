@@ -1,5 +1,7 @@
-import { expect, type Page, type Locator } from "@playwright/test";
+import { expect, type Page, type Locator, type Response } from "@playwright/test";
 import { BasePage } from "./BasePage";
+
+export type CrateTab = "readme" | "about" | "dependencies" | "versions" | "dependents" | "settings" | "admin";
 
 /**
  * Page object for the individual Crate detail page (/crate?name=xxx).
@@ -8,7 +10,6 @@ import { BasePage } from "./BasePage";
  * - Crate header (name, version, description)
  * - Tabs (Readme, About, Dependencies, Versions, Used by, Settings, Admin)
  * - Sidebar (install info, downloads, documentation)
- * - Owner management
  * - Access control settings
  * - Admin actions (delete)
  *
@@ -36,9 +37,6 @@ export class CratePage extends BasePage {
   // Content locators
   readonly readmeContent: Locator;
   readonly versionCards: Locator;
-  readonly dependencyList: Locator;
-  readonly devDependencyList: Locator;
-  readonly buildDependencyList: Locator;
   readonly dependentsSummary: Locator;
   readonly dependentRows: Locator;
   readonly restrictedDependentRows: Locator;
@@ -46,7 +44,6 @@ export class CratePage extends BasePage {
   // Sidebar locators
   readonly sidebar: Locator;
   readonly installSection: Locator;
-  readonly copyButton: Locator;
   readonly versionDownloads: Locator;
   readonly totalDownloads: Locator;
   readonly openDocsButton: Locator;
@@ -54,7 +51,6 @@ export class CratePage extends BasePage {
 
   // Settings tab locators
   readonly ownersList: Locator;
-  readonly addOwnerInput: Locator;
   readonly addOwnerButton: Locator;
   readonly crateUsersList: Locator;
   readonly addUserInput: Locator;
@@ -89,9 +85,6 @@ export class CratePage extends BasePage {
     // Content areas
     this.readmeContent = page.getByTestId("crate-readme");
     this.versionCards = page.getByTestId("version-row");
-    this.dependencyList = page.getByTestId("crate-deps-normal");
-    this.devDependencyList = page.getByTestId("crate-deps-dev");
-    this.buildDependencyList = page.getByTestId("crate-deps-build");
     this.dependentsSummary = page.getByTestId("dependents-summary");
     this.dependentRows = page.getByTestId("dependent-row");
     this.restrictedDependentRows = page.getByTestId("dependent-restricted");
@@ -99,7 +92,6 @@ export class CratePage extends BasePage {
     // Sidebar
     this.sidebar = page.getByTestId("crate-sidebar");
     this.installSection = page.getByTestId("install-section");
-    this.copyButton = page.getByTestId("sidebar-copy-button");
     this.versionDownloads = page.getByTestId("sidebar-version-downloads");
     this.totalDownloads = page.getByTestId("sidebar-total-downloads");
     this.openDocsButton = page.getByTestId("sidebar-open-docs");
@@ -107,7 +99,6 @@ export class CratePage extends BasePage {
 
     // Settings tab
     this.ownersList = page.getByTestId("settings-owners");
-    this.addOwnerInput = page.getByTestId("settings-add-owner").getByRole("textbox");
     this.addOwnerButton = page.getByTestId("settings-add-owner").getByRole("button", { name: "Add" });
     this.crateUsersList = page.getByTestId("settings-users");
     this.addUserInput = page.getByTestId("settings-add-user").getByRole("textbox");
@@ -136,6 +127,16 @@ export class CratePage extends BasePage {
   }
 
   /**
+   * Wait until the crate, its not-found state or its load error is shown.
+   */
+  async waitForPageLoad(): Promise<void> {
+    await this.crateTitle
+      .or(this.page.getByTestId("crate-not-found"))
+      .or(this.page.getByTestId("crate-load-error"))
+      .waitFor({ state: "visible" });
+  }
+
+  /**
    * Get the crate name from the page.
    */
   async getCrateName(): Promise<string> {
@@ -160,13 +161,8 @@ export class CratePage extends BasePage {
     }
   }
 
-  /**
-   * Click on a tab by name.
-   */
-  async clickTab(
-    tabName: "readme" | "about" | "dependencies" | "versions" | "dependents" | "settings" | "admin"
-  ): Promise<void> {
-    const tabMap = {
+  private tab(tabName: CrateTab): Locator {
+    const tabs: Record<CrateTab, Locator> = {
       readme: this.readmeTab,
       about: this.aboutTab,
       dependencies: this.dependenciesTab,
@@ -175,26 +171,67 @@ export class CratePage extends BasePage {
       settings: this.settingsTab,
       admin: this.adminTab,
     };
-    await tabMap[tabName].click();
-    await this.page.waitForTimeout(300); // Wait for tab content to load
+    return tabs[tabName];
+  }
+
+  private waitForCrateApiResponse(method: string, matches: (path: string) => boolean): Promise<Response> {
+    return this.page.waitForResponse((response) =>
+      response.request().method() === method && matches(new URL(response.url()).pathname)
+    );
+  }
+
+  /**
+   * Waits for the owners, users and access data the settings tab requests when
+   * it opens. Requests, not responses, are matched, so the earlier requests of
+   * the access badge for the same data cannot satisfy the wait.
+   */
+  private waitForSettingsData(): Promise<unknown> {
+    const matchers = [
+      (path: string) => path.endsWith("/owners"),
+      (path: string) => path.endsWith("/crate_users"),
+      (path: string) => path.includes("/api/v1/acl/"),
+    ];
+    return Promise.all(
+      matchers.map(async (matches) => {
+        const request = await this.page.waitForRequest((r) => r.method() === "GET" && matches(new URL(r.url()).pathname));
+        const response = await request.response();
+        expect(response?.ok(), `${request.url()} returned ${response?.status()}`).toBe(true);
+      }),
+    );
+  }
+
+  /**
+   * Waits for the rendered content of a tab that loads data. Every crate has
+   * an owner, so the owners list shows once the settings data has loaded.
+   */
+  private async waitForTabContent(tabName: CrateTab): Promise<void> {
+    if (tabName === "settings") {
+      await this.ownersList.waitFor({ state: "visible" });
+    } else if (tabName === "dependents") {
+      await expect(this.page.getByTestId("crate-dependents").locator(".loading-state")).toHaveCount(0);
+    }
+  }
+
+  /**
+   * Open a tab and wait until its content has loaded. A tab that is already
+   * open, for example from the URL, is not clicked again.
+   */
+  async clickTab(tabName: CrateTab): Promise<void> {
+    const tab = this.tab(tabName);
+    if ((await tab.getAttribute("aria-selected")) !== "true") {
+      const settingsLoaded = tabName === "settings" ? this.waitForSettingsData() : undefined;
+      await tab.click();
+      await expect(tab).toHaveAttribute("aria-selected", "true");
+      await settingsLoaded;
+    }
+    await this.waitForTabContent(tabName);
   }
 
   /**
    * Check if a tab is visible.
    */
-  async isTabVisible(
-    tabName: "readme" | "about" | "dependencies" | "versions" | "dependents" | "settings" | "admin"
-  ): Promise<boolean> {
-    const tabMap = {
-      readme: this.readmeTab,
-      about: this.aboutTab,
-      dependencies: this.dependenciesTab,
-      versions: this.versionsTab,
-      dependents: this.dependentsTab,
-      settings: this.settingsTab,
-      admin: this.adminTab,
-    };
-    return await tabMap[tabName].isVisible();
+  async isTabVisible(tabName: CrateTab): Promise<boolean> {
+    return await this.tab(tabName).isVisible();
   }
 
   // === About Tab Methods ===
@@ -234,15 +271,6 @@ export class CratePage extends BasePage {
   }
 
   /**
-   * Get authors from About tab.
-   */
-  async getAuthors(): Promise<string[]> {
-    await this.clickTab("about");
-    const texts = await this.page.getByTestId("about-author").allTextContents();
-    return texts.map((t) => t.trim()).filter((t) => t.length > 0);
-  }
-
-  /**
    * Get keywords from the crate header, without the leading "#".
    */
   async getKeywords(): Promise<string[]> {
@@ -258,98 +286,7 @@ export class CratePage extends BasePage {
     return texts.map((t) => t.trim()).filter((t) => t.length > 0);
   }
 
-  // === Dependencies Tab Methods ===
-
-  /**
-   * Get dependency names from Dependencies tab.
-   */
-  async getDependencies(): Promise<string[]> {
-    await this.clickTab("dependencies");
-    const names = await this.dependencyList.getByTestId("dependency-name").allTextContents();
-    return names.map((n) => n.trim()).filter((n) => n.length > 0);
-  }
-
-  /**
-   * Check if dev dependencies section is visible.
-   */
-  async hasDevDependencies(): Promise<boolean> {
-    await this.clickTab("dependencies");
-    return await this.devDependencyList.isVisible();
-  }
-
-  /**
-   * Check if build dependencies section is visible.
-   */
-  async hasBuildDependencies(): Promise<boolean> {
-    await this.clickTab("dependencies");
-    return await this.buildDependencyList.isVisible();
-  }
-
-  // === Versions Tab Methods ===
-
-  /**
-   * Get all version strings from Versions tab.
-   */
-  async getVersions(): Promise<string[]> {
-    await this.clickTab("versions");
-    const texts = await this.page.getByTestId("version-number").allTextContents();
-    return texts.map((t) => t.trim()).filter((t) => t.length > 0);
-  }
-
-  /**
-   * Click on a specific version to view it.
-   */
-  async clickVersion(version: string): Promise<void> {
-    await this.clickTab("versions");
-    const versionRow = this.page.getByTestId("version-row").filter({
-      has: this.page.getByText(version, { exact: true }),
-    });
-    await versionRow.first().click();
-    await this.waitForPageLoad();
-  }
-
   // === Settings Tab Methods (Admin only) ===
-
-  /**
-   * Get current crate owners.
-   */
-  async getOwners(): Promise<string[]> {
-    await this.clickTab("settings");
-    await this.page.waitForTimeout(500); // Wait for data to load
-    const names = await this.page.getByTestId("settings-owner-name").allTextContents();
-    return names.map((n) => n.trim()).filter((n) => n.length > 0);
-  }
-
-  /**
-   * Add a crate owner.
-   */
-  async addOwner(username: string): Promise<void> {
-    await this.clickTab("settings");
-    await this.addOwnerInput.fill(username);
-    await this.addOwnerButton.click();
-    await this.page.waitForTimeout(500);
-  }
-
-  /**
-   * Delete a crate owner.
-   */
-  async deleteOwner(username: string): Promise<void> {
-    await this.clickTab("settings");
-    const ownerRow = this.page.getByTestId("settings-owner-row").filter({ hasText: username });
-    await ownerRow.getByTestId("settings-owner-remove").click();
-    await this.confirmDialog();
-    await this.page.waitForTimeout(500);
-  }
-
-  /**
-   * Get current crate users.
-   */
-  async getCrateUsers(): Promise<string[]> {
-    await this.clickTab("settings");
-    await this.page.waitForTimeout(500);
-    const names = await this.page.getByTestId("settings-user-name").allTextContents();
-    return names.map((n) => n.trim()).filter((n) => n.length > 0);
-  }
 
   /**
    * Add a crate user.
@@ -357,8 +294,11 @@ export class CratePage extends BasePage {
   async addCrateUser(username: string): Promise<void> {
     await this.clickTab("settings");
     await this.addUserInput.fill(username);
+    const added = this.waitForCrateApiResponse("PUT", (path) => path.endsWith(`/crate_users/${encodeURIComponent(username)}`));
     await this.addUserButton.click();
-    await this.page.waitForTimeout(500);
+    const response = await added;
+    expect(response.ok(), `adding crate user ${username} returned ${response.status()}`).toBe(true);
+    await expect(this.page.getByTestId("settings-user-name").filter({ hasText: username })).toBeVisible();
   }
 
   /**
@@ -367,23 +307,11 @@ export class CratePage extends BasePage {
   async toggleDownloadRestriction(): Promise<void> {
     await this.clickTab("settings");
     // The restriction is saved as soon as the checkbox changes
-    const saved = this.page.waitForResponse(
-      (response) =>
-        response.request().method() === "PUT" &&
-        new URL(response.url()).pathname.includes("/api/v1/acl/"),
-    );
+    const saved = this.waitForCrateApiResponse("PUT", (path) => path.includes("/api/v1/acl/"));
     await this.downloadRestrictedCheckbox.click();
     const response = await saved;
     expect(response.ok(), `saving the download restriction returned ${response.status()}`).toBe(true);
     await expect(this.downloadRestrictedCheckbox).toBeEnabled();
-  }
-
-  /**
-   * Check if download is restricted.
-   */
-  async isDownloadRestricted(): Promise<boolean> {
-    await this.clickTab("settings");
-    return await this.downloadRestrictedCheckbox.isChecked();
   }
 
   // === Admin Tab Methods ===
@@ -438,14 +366,6 @@ export class CratePage extends BasePage {
   }
 
   /**
-   * Copy install snippet to clipboard.
-   */
-  async copyInstallSnippet(): Promise<void> {
-    await this.copyButton.click();
-    await this.page.waitForTimeout(300);
-  }
-
-  /**
    * Get version downloads count.
    */
   async getVersionDownloads(): Promise<number | null> {
@@ -496,17 +416,5 @@ export class CratePage extends BasePage {
    */
   async waitForCrateData(timeout: number = 10000): Promise<void> {
     await this.crateTitle.waitFor({ state: "visible", timeout });
-  }
-
-  /**
-   * Check if the crate page loaded successfully.
-   */
-  async isLoaded(): Promise<boolean> {
-    try {
-      await this.crateTitle.waitFor({ state: "visible", timeout: 5000 });
-      return true;
-    } catch {
-      return false;
-    }
   }
 }

@@ -1,4 +1,4 @@
-import type { Page, Locator } from "@playwright/test";
+import { expect, type Page, type Locator } from "@playwright/test";
 import { BasePage } from "./BasePage";
 
 /**
@@ -62,11 +62,7 @@ export class HeaderComponent extends BasePage {
     // Use Home navigation button (v-btn with to="/") instead of clicking logo (which is now non-clickable)
     const homeLink = this.page.getByTestId("header-nav-home");
     await homeLink.click();
-    // Wait for Vue Router navigation to complete
-    await this.page.waitForURL("**/", { timeout: 5000 }).catch(() => {
-      // URL might already be at root or navigation might be hash-based
-    });
-    await this.page.waitForLoadState("domcontentloaded");
+    await this.waitForNavigation("/");
   }
 
   /**
@@ -104,9 +100,13 @@ export class HeaderComponent extends BasePage {
    * Toggle the theme (light/dark mode).
    */
   async toggleTheme(): Promise<void> {
+    // The label names the theme the toggle switches to
+    const label = await this.themeToggle.getAttribute("aria-label");
+    if (label === null) {
+      throw new Error("The theme toggle has no aria-label");
+    }
     await this.themeToggle.click();
-    // Wait for theme transition
-    await this.page.waitForTimeout(300);
+    await expect(this.themeToggle).not.toHaveAttribute("aria-label", label);
   }
 
   /**

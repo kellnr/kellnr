@@ -1,16 +1,13 @@
 /**
- * UI tests for documentation generation with KELLNR_ORIGIN__PATH prefix.
+ * UI tests for documentation links with KELLNR_ORIGIN__PATH prefix.
  *
  * Tests:
- * - Publishes a crate with docs enabled when Kellnr runs under a path prefix
- * - Waits for rustdoc to generate documentation
- * - Verifies docs files exist on disk
+ * - Publishes a crate under a path prefix and uploads a small docs archive
+ * - Verifies the uploaded docs file exists on disk
  * - Verifies docs link includes the path prefix and opens correctly
  *
- * This test verifies the fix for issue #983:
- * "Web UI 'Open documentation' link ignores KELLNR_ORIGIN__PATH"
- *
- * Performance: Uses a single local Kellnr instance for the test.
+ * The normal-path suite tests automatic rustdoc generation. This suite checks
+ * the path-prefix link without running the expensive generator a second time.
  */
 
 import { test, expect } from "./lib/ui-fixtures";
@@ -25,29 +22,7 @@ import { extractRegistryTokenFromCargoConfig } from "./lib/registry";
 import fs from "node:fs";
 import path from "node:path";
 
-function fileExists(p: string): boolean {
-  try {
-    return fs.existsSync(p);
-  } catch {
-    return false;
-  }
-}
-
-async function waitForFile(
-  filePath: string,
-  opts: { attempts: number; delayMs: number; log?: (msg: string) => void },
-): Promise<void> {
-  for (let i = 1; i <= opts.attempts; i++) {
-    if (fileExists(filePath)) return;
-    opts.log?.(
-      `Docs not found yet (attempt ${i}/${opts.attempts}): ${filePath}`,
-    );
-    await new Promise((r) => setTimeout(r, opts.delayMs));
-  }
-  throw new Error(`Docs file not generated in time: ${filePath}`);
-}
-
-test.describe("Documentation Generation UI Tests with Path Prefix", () => {
+test.describe("Documentation UI Tests with Path Prefix", () => {
   // These tests use fixed localhost:8000 port
   restrictToSingleWorkerBecauseFixedPorts();
 
@@ -57,8 +32,8 @@ test.describe("Documentation Generation UI Tests with Path Prefix", () => {
   const pathPrefix = "/kellnr";
 
   test.beforeAll(async () => {
-    // Docs generation needs more time
-    test.setTimeout(15 * 60 * 1000); // 15 minutes for docs generation
+    // Publishing the fixture can still be slow with an empty Cargo cache.
+    test.setTimeout(15 * 60 * 1000);
 
     assertKellnrBinaryExists();
     console.log("[setup] Kellnr binary is available");
@@ -68,7 +43,8 @@ test.describe("Documentation Generation UI Tests with Path Prefix", () => {
     started = await startLocalKellnr({
       name: `kellnr-ui-docs-path-${suffix}`,
       env: {
-        KELLNR_DOCS__ENABLED: "true",
+        // The normal-path suite covers auto-generation; don't queue rustdoc here.
+        KELLNR_DOCS__ENABLED: "false",
         KELLNR_ORIGIN__PATH: pathPrefix,
       },
       healthCheckPath: `${pathPrefix}/api/v1/health`,
@@ -92,7 +68,7 @@ test.describe("Documentation Generation UI Tests with Path Prefix", () => {
     console.log(`[setup] Path prefix: ${pathPrefix}`);
     console.log(`[setup] Data directory: ${started.dataDir}`);
 
-    // Publish crate with docs (using path-prefixed registry config)
+    // Publish the crate using the path-prefixed registry config.
     const registry = "kellnr-test-path";
     const fullTomlCrateDir = path.resolve(
       process.cwd(),
@@ -113,13 +89,21 @@ test.describe("Documentation Generation UI Tests with Path Prefix", () => {
       registryToken,
     });
 
-    console.log("[setup] Waiting for docs to be generated");
-    await waitForFile(expectedDocsPath, {
-      attempts: 60,
-      delayMs: 2_000,
-      log: console.log,
+    // Manual upload exercises the same docs URL generation as the auto-builder
+    // without compiling the crate's dependencies a second time.
+    // The tiny ZIP contains doc/full_toml/index.html.
+    const archivePath = path.resolve(process.cwd(), "fixtures", "test-docs", "full-toml.zip");
+    const response = await fetch(`${baseUrl}/api/v1/docs/full-toml/1.0.0`, {
+      method: "PUT",
+      headers: {
+        Authorization: registryToken,
+        "Content-Type": "application/octet-stream",
+      },
+      body: fs.readFileSync(archivePath),
     });
-    console.log("[setup] Docs generated");
+    const responseBody = await response.text();
+    expect(response.status, responseBody).toBe(200);
+    expect(JSON.parse(responseBody).url).toBe(`${pathPrefix}/docs/full-toml/1.0.0/doc/full_toml/index.html`);
     console.log("[setup] Done");
   });
 
@@ -131,7 +115,6 @@ test.describe("Documentation Generation UI Tests with Path Prefix", () => {
   });
 
   test("docs file exists on disk", async () => {
-    // Verify the docs file was generated
     const contents = fs.readFileSync(expectedDocsPath, "utf8");
     expect(contents).toContain("full_toml");
   });
@@ -140,9 +123,6 @@ test.describe("Documentation Generation UI Tests with Path Prefix", () => {
     page,
     context,
   }) => {
-    // Docs are confirmed to exist on disk (first test passed)
-    // Background job should have indexed them by now
-
     // Navigate to the crate page using the path prefix
     await page.goto(`${baseUrl}/crate?name=full-toml`);
     const cratePage = new CratePage(page);
@@ -162,7 +142,7 @@ test.describe("Documentation Generation UI Tests with Path Prefix", () => {
     await newPage.waitForLoadState();
     const docsUrl = newPage.url();
 
-    // The docs URL should include the path prefix (this is the fix for #983)
+    // The docs URL should include the path prefix.
     expect(docsUrl).toContain(`${pathPrefix}/docs/full-toml/1.0.0`);
 
     // Verify the docs page has content

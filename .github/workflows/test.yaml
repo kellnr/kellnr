@@ -143,6 +143,26 @@ jobs:
         uses: cachix/install-nix-action@v31
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
 
+      # The dev shell is the same in every job. Without the cache, each job
+      # spends about 3 minutes building it, mostly the Rust toolchain. Only
+      # main writes the cache, PRs restore it.
+      - &cache-nix
+        name: Cache Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 8G
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - &cache-npm
+        name: Cache npm downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('ui/package-lock.json', 'tests/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
+
       # Only main writes the cache, PRs restore it. The toolchain comes from
       # the flake, so flake.lock is part of the key.
       - name: Cache Rust build
@@ -173,6 +193,8 @@ jobs:
       - *check-disk-space
       - *free-disk-space
       - *install-nix
+      - *cache-nix
+      - *cache-npm
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
@@ -203,6 +225,8 @@ jobs:
       - *check-disk-space
       - *free-disk-space
       - *install-nix
+      - *cache-nix
+      - *cache-npm
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2

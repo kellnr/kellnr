@@ -45,8 +45,8 @@ function binaryExists(binaryPath: string): boolean {
  *
  * This replaces the previous Docker-based approach for faster iteration.
  * Docker is still used for:
- * - S3 tests (MinIO container)
  * - Migration tests (old Kellnr version in Docker)
+ * - The rustup toolchain test
  */
 export default async function globalSetup(_config: FullConfig) {
     const repoRoot = repoRootFromTests();

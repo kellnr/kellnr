@@ -98,15 +98,11 @@ test.describe("Crate Settings UI Tests", () => {
     await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
     await loginPage.waitForNavigation("/");
 
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
     // Navigate to crate settings
     await page.goto(`${baseUrl}/crate?name=foo-bar`);
     const cratePage = new CratePage(page);
     await cratePage.waitForCrateData();
     await cratePage.clickTab("settings");
-    await page.waitForTimeout(500);
 
     // Verify owners list is displayed - new UI uses settings-card with settings-header
     const ownersCard = page.locator(".settings-card").filter({ hasText: "Crate owners" });
@@ -132,15 +128,11 @@ test.describe("Crate Settings UI Tests", () => {
     await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
     await loginPage.waitForNavigation("/");
 
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
     // Navigate to crate settings
     await page.goto(`${baseUrl}/crate?name=foo-bar`);
     const cratePage = new CratePage(page);
     await cratePage.waitForCrateData();
     await cratePage.clickTab("settings");
-    await page.waitForTimeout(500);
 
     // Verify access control section is displayed - new UI uses settings-card
     const accessControlCard = page.locator(".settings-card").filter({ hasText: "Access control" });
@@ -292,15 +284,11 @@ test.describe("Crate Settings UI Tests", () => {
     await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
     await loginPage.waitForNavigation("/");
 
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
     // Navigate to crate admin tab
     await page.goto(`${baseUrl}/crate?name=test_lib`);
     const cratePage = new CratePage(page);
     await cratePage.waitForCrateData();
     await cratePage.clickTab("admin");
-    await page.waitForTimeout(500);
 
     // Verify delete buttons are visible
     await expect(cratePage.deleteVersionButton).toBeVisible();

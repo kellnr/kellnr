@@ -79,7 +79,7 @@ test.describe("Navigation UI Tests", () => {
 
     // Start on landing page
     await page.goto(baseUrl);
-    await page.waitForLoadState("networkidle");
+    await new LandingPage(page).waitForPageLoad();
 
     // Click search navigation link
     await header.navigateToSearch();
@@ -97,12 +97,12 @@ test.describe("Navigation UI Tests", () => {
 
     // Navigate to crates page first
     await page.goto(`${baseUrl}/crates`);
-    await page.waitForLoadState("networkidle");
+    await new CratesPage(page).waitForPageLoad();
     expect(page.url()).toContain("/crates");
 
     // Click logo to return home
     await header.clickLogo();
-    await page.waitForLoadState("networkidle");
+    await landingPage.waitForPageLoad();
 
     // Verify back on landing page
     // URL might be "/" or "/index.html" depending on deployment
@@ -119,7 +119,7 @@ test.describe("Navigation UI Tests", () => {
 
     // Start on landing page
     await page.goto(baseUrl);
-    await page.waitForLoadState("networkidle");
+    await new LandingPage(page).waitForPageLoad();
 
     // Click doc queue navigation link
     await header.navigateToDocQueue();
@@ -140,7 +140,7 @@ test.describe("Navigation UI Tests", () => {
 
     // Navigate to landing page
     await page.goto(baseUrl);
-    await page.waitForLoadState("networkidle");
+    await new LandingPage(page).waitForPageLoad();
 
     // Record initial state
     const initialDark = await header.isDarkMode();
@@ -180,7 +180,7 @@ test.describe("Navigation UI Tests", () => {
 
     // Navigate to landing page
     await page.goto(baseUrl);
-    await page.waitForLoadState("networkidle");
+    await new LandingPage(page).waitForPageLoad();
 
     // Verify login button is visible
     const isVisible = await header.isLoginButtonVisible();

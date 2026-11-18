@@ -16,8 +16,9 @@
  * are available in later tests.
  */
 
-import { test, expect, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
-import { LoginPage, HeaderComponent } from "./pages";
+import { test, expect, loginAndWait, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD } from "./lib/ui-fixtures";
+import type { Page } from "@playwright/test";
+import { HeaderComponent } from "./pages";
 import {
   restrictToSingleWorkerBecauseFixedPorts,
   assertKellnrBinaryExists,
@@ -30,6 +31,19 @@ test.describe("User Management UI Tests", () => {
 
   let started: StartedLocalKellnr;
   let baseUrl: string;
+
+  async function loginAs(page: Page, user = DEFAULT_ADMIN_USER, password = DEFAULT_ADMIN_PASSWORD): Promise<void> {
+    await loginAndWait(page, baseUrl, user, password);
+    await expect(page.getByTestId("user-menu-button")).toBeVisible();
+  }
+
+  async function openUsers(page: Page): Promise<void> {
+    await page.goto(`${baseUrl}/settings`);
+    const navItem = page.getByTestId("nav-user-management");
+    await expect(navItem).toBeVisible();
+    await navItem.click();
+    await expect(page.locator(".section-header").filter({ hasText: "Users" })).toBeVisible();
+  }
 
   test.beforeAll(async () => {
     // Local process setup is faster but still allow extra time
@@ -60,24 +74,9 @@ test.describe("User Management UI Tests", () => {
   });
 
   test("admin can view user management section", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
+    await loginAs(page);
 
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to settings page
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    // Click on Users in the sidebar navigation
-    const userMgmtNavItem = page.getByTestId("nav-user-management");
-    await expect(userMgmtNavItem).toBeVisible();
-    await userMgmtNavItem.click();
-    await page.waitForTimeout(500);
+    await openUsers(page);
 
     // Verify Users section header is visible in the content area
     const userMgmtHeader = page.locator(".section-header").filter({ hasText: "Users" });
@@ -96,11 +95,7 @@ test.describe("User Management UI Tests", () => {
   // Tokens tab unconditionally, which broke the default tab and every deep
   // link even on instances with OAuth2 switched off.
   test("settings opens the password tab by default when SSO is not enforced", async ({ page }) => {
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(1000);
+    await loginAs(page);
 
     await page.goto(`${baseUrl}/settings`);
 
@@ -109,11 +104,7 @@ test.describe("User Management UI Tests", () => {
   });
 
   test("settings honours the tab query parameter when SSO is not enforced", async ({ page }) => {
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-    await page.waitForTimeout(1000);
+    await loginAs(page);
 
     await page.goto(`${baseUrl}/settings?tab=users`);
 
@@ -122,23 +113,8 @@ test.describe("User Management UI Tests", () => {
   });
 
   test("admin promote/demote button is disabled for self", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to settings page
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    // Click on Users in the sidebar navigation
-    const userMgmtNavItem = page.getByTestId("nav-user-management");
-    await userMgmtNavItem.click();
-    await page.waitForTimeout(500);
+    await loginAs(page);
+    await openUsers(page);
 
     // Find the admin user's row
     const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
@@ -150,23 +126,8 @@ test.describe("User Management UI Tests", () => {
   });
 
   test("admin can create a new user", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to settings page
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    // Click on Users in the sidebar navigation
-    const userMgmtNavItem = page.getByTestId("nav-user-management");
-    await userMgmtNavItem.click();
-    await page.waitForTimeout(500);
+    await loginAs(page);
+    await openUsers(page);
 
     // Fill in the user creation form using labels
     const usernameField = page.locator(".form-field").filter({ hasText: "Username" }).locator("input");
@@ -196,23 +157,8 @@ test.describe("User Management UI Tests", () => {
   });
 
   test("admin can promote and demote a user", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to settings page
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    // Click on Users in the sidebar navigation
-    const userMgmtNavItem = page.getByTestId("nav-user-management");
-    await userMgmtNavItem.click();
-    await page.waitForTimeout(500);
+    await loginAs(page);
+    await openUsers(page);
 
     // Find the test user created in the previous test
     const testUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: "testuser" });
@@ -235,9 +181,6 @@ test.describe("User Management UI Tests", () => {
     await expect(confirmButton).toBeVisible();
     await confirmButton.click();
 
-    // Wait for the change to take effect
-    await page.waitForTimeout(1000);
-
     // Verify the user now has "Admin" badge
     const adminBadge = testUserItem.locator(".role-badge.admin");
     await expect(adminBadge).toBeVisible();
@@ -257,9 +200,6 @@ test.describe("User Management UI Tests", () => {
     await expect(confirmButton).toBeVisible();
     await confirmButton.click();
 
-    // Wait for the change to take effect
-    await page.waitForTimeout(1000);
-
     // Verify the user now has "User" badge instead of "Admin"
     const userBadgeAfterDemotion = testUserItem.locator(".role-badge.user");
     await expect(userBadgeAfterDemotion).toBeVisible();
@@ -270,23 +210,8 @@ test.describe("User Management UI Tests", () => {
   });
 
   test("admin cannot lock themselves", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to settings page
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    // Click on Users in the sidebar navigation
-    const userMgmtNavItem = page.getByTestId("nav-user-management");
-    await userMgmtNavItem.click();
-    await page.waitForTimeout(500);
+    await loginAs(page);
+    await openUsers(page);
 
     // Find the admin user's row
     const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
@@ -298,23 +223,8 @@ test.describe("User Management UI Tests", () => {
   });
 
   test("admin cannot delete themselves", async ({ page }) => {
-    // Login as admin
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Navigate to settings page
-    await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
-
-    // Click on Users in the sidebar navigation
-    const userMgmtNavItem = page.getByTestId("nav-user-management");
-    await userMgmtNavItem.click();
-    await page.waitForTimeout(500);
+    await loginAs(page);
+    await openUsers(page);
 
     // Find the admin user's row
     const adminUserItem = page.locator('[data-testid="user-item"]').filter({ hasText: DEFAULT_ADMIN_USER });
@@ -329,35 +239,20 @@ test.describe("User Management UI Tests", () => {
     // This test uses the "testuser" created in "admin can create a new user" test.
     // That user was demoted back to regular user in the previous test.
 
-    // Login as admin to verify testuser exists and is a regular user
-    await page.goto(`${baseUrl}/login`);
-    const loginPage = new LoginPage(page);
-    await loginPage.login(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD);
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
-
-    // Logout admin
-    await page.goto(`${baseUrl}`);
-    await page.waitForTimeout(500);
-    const header = new HeaderComponent(page);
-    if (await header.isLoggedIn()) {
-      await header.clickLogout();
-      await page.waitForTimeout(500);
-    }
+    await loginAs(page);
+    await new HeaderComponent(page).clickLogout();
+    await expect(page.getByTestId("login-title")).toBeVisible();
 
     // Login as the non-admin testuser
-    await page.goto(`${baseUrl}/login`);
-    await loginPage.login("testuser", "testpassword");
-    await loginPage.waitForNavigation("/");
-
-    // Give the session time to establish
-    await page.waitForTimeout(1000);
+    await loginAs(page, "testuser", "testpassword");
 
     // Try to navigate to settings page
+    const settingsLoaded = page.waitForResponse((response) =>
+      response.url().endsWith("/api/v1/ui/settings") && response.status() === 403
+    );
     await page.goto(`${baseUrl}/settings`);
-    await page.waitForTimeout(500);
+    await settingsLoaded;
+    await expect(page.locator(".section-header").filter({ hasText: "Change password" })).toBeVisible();
 
     // Users nav item should not be visible for non-admin users
     const userMgmtNavItemNonAdmin = page.getByTestId("nav-user-management");

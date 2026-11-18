@@ -91,6 +91,7 @@ Test each behavior once, at the lowest layer that can show it:
 | Database | Query semantics, the only tests that touch SQL | `crates/db/tests/db_test.rs`, `#[db_test]` runs each test on SQLite and PostgreSQL |
 | Handlers | Status codes, auth decisions, error mapping | Unit tests next to the handler, an in-process router on SQLite (`sqlite_test_state`) |
 | Router | Wiring only: middleware, path prefix, headers | `crates/kellnr/src/routes/`; `login_methods_tests.rs` pins the accepted login methods of every endpoint |
+| Storage backends | The binary configured only through env vars against S3 and GCS containers | `crates/kellnr/tests/storage_backends.rs` (`just test-docker`) |
 | UI | End-to-end flows in the browser | Playwright tests in `tests/` |
 
 Before adding a test, check whether a lower layer or the login methods table already covers it. Shared helpers:
