@@ -232,7 +232,10 @@ export async function startLocalKellnr(
     const handleOutput = (stream: NodeJS.ReadableStream, prefix: string) => {
         stream.on("data", (chunk: Buffer) => {
             const text = chunk.toString("utf8");
-            logStream.write(`[${prefix}] ${text}`);
+            // Output can arrive after stop() closed the log, when the process did not close its streams in time
+            if (!logStream.writableEnded) {
+                logStream.write(`[${prefix}] ${text}`);
+            }
             if (options.logToStdout) {
                 process.stdout.write(`[${options.name}:${prefix}] ${text}`);
             }
@@ -245,39 +248,38 @@ export async function startLocalKellnr(
     // Track if we've already stopped
     let stopped = false;
 
+    // "close" fires after the process exited and its stdout and stderr ended,
+    // so all output is in the log. Registered now, as it can fire before stop().
+    const closed = new Promise<void>((resolve) => {
+        childProcess.on("close", () => resolve());
+    });
+    const isRunning = () =>
+        childProcess.pid !== undefined && childProcess.exitCode === null && childProcess.signalCode === null;
+
     const stop = async (): Promise<void> => {
         if (stopped) return;
         stopped = true;
 
-        // Close log stream
-        try {
-            logStream.end();
-        } catch {
-            // Ignore
-        }
-
-        // Kill the process
-        if (childProcess.pid && !childProcess.killed) {
+        if (isRunning()) {
             try {
                 // Try graceful shutdown first
                 childProcess.kill("SIGTERM");
+                await Promise.race([closed, sleep(5000)]);
 
-                // Wait for process to exit (with timeout)
-                await Promise.race([
-                    new Promise<void>((resolve) => {
-                        childProcess.on("exit", () => resolve());
-                    }),
-                    sleep(5000),
-                ]);
-
-                // Force kill if still running
-                if (!childProcess.killed) {
+                if (isRunning()) {
                     childProcess.kill("SIGKILL");
                 }
             } catch {
                 // Best effort
             }
         }
+
+        // Also after SIGKILL or an earlier exit: the port is free and the
+        // remaining output, such as a crash message, is in the log
+        await Promise.race([closed, sleep(2000)]);
+
+        // Close the log once its output ended, as Kellnr logs its shutdown
+        await new Promise<void>((resolve) => logStream.end(resolve));
 
         // Clean up data directory (only if we created it, not if externally provided)
         if (!options.keepDataDir && !isExternalDataDir) {
