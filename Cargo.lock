@@ -4186,6 +4186,7 @@ dependencies = [
  "moka",
  "openssl",
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "tempfile",

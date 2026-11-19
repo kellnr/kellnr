@@ -45,6 +45,8 @@ mod routes;
 
 #[tokio::main]
 async fn main() {
+    install_rustls_crypto_provider();
+
     let cli_result = parse_cli().unwrap_or_else(|e| {
         eprintln!("Error: cannot read the configuration: {e}");
         std::process::exit(1);
@@ -75,6 +77,15 @@ async fn main() {
             }
         }
     }
+}
+
+/// Kellnr's dependencies enable both rustls crypto backends: `ring` (sqlx, via
+/// sea-orm) and `aws-lc-rs` (reqwest, `object_store`). With both enabled, rustls
+/// cannot choose a process-wide default provider, and code that needs one
+/// panics, e.g. sqlx connecting to Postgres with `sslmode=verify-ca`.
+fn install_rustls_crypto_provider() {
+    // An error only means a provider is already installed, which is fine.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
 fn show_config(resolved: &ResolvedSettings, options: &ShowConfigOptions) {

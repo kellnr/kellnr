@@ -40,6 +40,7 @@ flume.workspace = true
 mime_guess.workspace = true
 serde.workspace = true
 moka.workspace = true
+rustls.workspace = true
 openssl = { version = "0.10", optional = true } # Not needed directly but for cross-compilation with the vendored-openssl feature
 tempfile.workspace = true
 tokio.workspace = true
