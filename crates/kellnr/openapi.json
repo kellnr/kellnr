@@ -1410,6 +1410,11 @@
               "null"
             ]
           },
+          "auto_provision_read_only": {
+            "default": false,
+            "description": "Create automatically provisioned users as read-only, unless the admin\ngroup claim grants them admin rights. Ignored if\n`read_only_group_claim` is configured, as the provider then decides.",
+            "type": "boolean"
+          },
           "auto_provision_users": {
             "default": true,
             "description": "Automatically create local user accounts for new `OAuth2` users",
@@ -1484,6 +1489,7 @@
           "additional_audiences",
           "admin_group_claim",
           "admin_group_value",
+          "auto_provision_read_only",
           "auto_provision_users",
           "auto_redirect",
           "button_text",
@@ -2233,6 +2239,7 @@
               "additional_audiences": [],
               "admin_group_claim": null,
               "admin_group_value": null,
+              "auto_provision_read_only": false,
               "auto_provision_users": true,
               "auto_redirect": false,
               "button_text": "Log in with SSO",

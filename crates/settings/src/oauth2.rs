@@ -47,6 +47,11 @@ pub struct OAuth2 {
     /// Automatically create local user accounts for new `OAuth2` users
     pub auto_provision_users: bool,
 
+    /// Create automatically provisioned users as read-only, unless the admin
+    /// group claim grants them admin rights. Ignored if
+    /// `read_only_group_claim` is configured, as the provider then decides.
+    pub auto_provision_read_only: bool,
+
     /// Claim name to check for admin group membership (e.g., "groups"),
     /// requires `admin_group_value`
     pub admin_group_claim: Option<String>,
@@ -81,6 +86,7 @@ impl Default for OAuth2 {
             additional_audiences: Vec::new(),
             scopes: default_scopes(),
             auto_provision_users: true,
+            auto_provision_read_only: false,
             admin_group_claim: None,
             admin_group_value: None,
             read_only_group_claim: None,
@@ -159,6 +165,16 @@ impl OAuth2 {
         )
     }
 
+    /// Whether a user created by auto-provisioning is read-only.
+    /// `is_admin` and `claim_read_only` are the privileges the configured
+    /// group claims grant the user.
+    pub fn provisioned_read_only(&self, is_admin: bool, claim_read_only: bool) -> bool {
+        if self.read_only_claim().is_some() {
+            return claim_read_only;
+        }
+        self.auto_provision_read_only && !is_admin
+    }
+
     /// Configuration that is accepted but most likely a mistake, for
     /// example a group claim without its value, which grants nothing.
     pub fn warnings(&self) -> Vec<String> {
@@ -177,6 +193,20 @@ impl OAuth2 {
             warnings.push(
                 "OAuth2 read_only_group_claim and read_only_group_value must be set \
                  together, read-only status is not synced from the provider"
+                    .to_string(),
+            );
+        }
+        if self.auto_provision_read_only && !self.auto_provision_users {
+            warnings.push(
+                "OAuth2 auto_provision_read_only has no effect without \
+                 auto_provision_users"
+                    .to_string(),
+            );
+        }
+        if self.auto_provision_read_only && self.read_only_claim().is_some() {
+            warnings.push(
+                "OAuth2 auto_provision_read_only is ignored, as read_only_group_claim \
+                 and read_only_group_value let the provider decide"
                     .to_string(),
             );
         }
@@ -221,6 +251,7 @@ mod tests {
         assert!(oauth2.additional_audiences.is_empty());
         assert_eq!(oauth2.scopes, vec!["openid", "profile", "email"]);
         assert!(oauth2.auto_provision_users);
+        assert!(!oauth2.auto_provision_read_only);
         assert_eq!(oauth2.button_text, "Log in with SSO");
         assert!(!oauth2.enforced);
         assert!(!oauth2.auto_redirect);
@@ -365,6 +396,56 @@ mod tests {
         };
         assert_eq!(oauth2.admin_claim(), None);
         assert_eq!(oauth2.read_only_claim(), None);
+    }
+
+    #[test]
+    fn provisioned_users_are_writable_by_default() {
+        let oauth2 = OAuth2::default();
+        assert!(!oauth2.provisioned_read_only(false, false));
+    }
+
+    #[test]
+    fn provisioned_users_are_read_only_unless_admin() {
+        let oauth2 = OAuth2 {
+            auto_provision_read_only: true,
+            ..OAuth2::default()
+        };
+        assert!(oauth2.provisioned_read_only(false, false));
+        assert!(!oauth2.provisioned_read_only(true, false));
+    }
+
+    #[test]
+    fn read_only_claim_decides_over_provisioning_default() {
+        let oauth2 = OAuth2 {
+            auto_provision_read_only: true,
+            read_only_group_claim: Some("groups".to_string()),
+            read_only_group_value: Some("readers".to_string()),
+            ..OAuth2::default()
+        };
+        assert!(!oauth2.provisioned_read_only(false, false));
+        assert!(oauth2.provisioned_read_only(false, true));
+    }
+
+    #[test]
+    fn warns_about_ineffective_auto_provision_read_only() {
+        let oauth2 = OAuth2 {
+            auto_provision_users: false,
+            auto_provision_read_only: true,
+            ..enabled()
+        };
+        let warnings = oauth2.warnings();
+        assert_eq!(1, warnings.len());
+        assert!(warnings[0].contains("no effect"));
+
+        let oauth2 = OAuth2 {
+            auto_provision_read_only: true,
+            read_only_group_claim: Some("groups".to_string()),
+            read_only_group_value: Some("readers".to_string()),
+            ..enabled()
+        };
+        let warnings = oauth2.warnings();
+        assert_eq!(1, warnings.len());
+        assert!(warnings[0].contains("is ignored"));
     }
 
     #[test]
