@@ -367,10 +367,13 @@ pub async fn callback(
                 ApiError::from(StatusCode::INTERNAL_SERVER_ERROR)
             })?;
             let username = UserName::from_unchecked(username);
+            let read_only = handler
+                .settings()
+                .provisioned_read_only(user_info.is_admin, user_info.is_read_only);
 
             trace!(
                 "Creating new OAuth2 user '{}' (admin: {}, read_only: {})",
-                username, user_info.is_admin, user_info.is_read_only
+                username, user_info.is_admin, read_only
             );
 
             // Create new user with OAuth2 identity
@@ -383,7 +386,7 @@ pub async fn callback(
                     user_info.email.clone(),
                     UserFlags {
                         admin: user_info.is_admin,
-                        read_only: user_info.is_read_only,
+                        read_only,
                     },
                 )
                 .await
