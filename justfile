@@ -173,15 +173,30 @@ sbom:
     cdxgen -r -o kellnr.cdx.json .
     @echo "SBOM generated: kellnr.cdx.json"
 
-# Reduce the SBOM to the crates and npm packages compiled into the kellnr binary of each platform
-sbom-binary: sbom
-    python3 .github/scripts/binary_sbom.py linux kellnr.cdx.json kellnr-binary-linux.cdx.json
-    python3 .github/scripts/binary_sbom.py windows kellnr.cdx.json kellnr-binary-windows.cdx.json
-    python3 .github/scripts/binary_sbom.py macos kellnr.cdx.json kellnr-binary-macos.cdx.json
-
-# Test the Python scripts of the CI workflows
-test-scripts:
-    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts
+# SBOM of a release zip, written next to it as <name>.cdx.json. Syft reads the
+# crates from the auditable binary and the npm packages from
+# sbom/kellnr-ui.cdx.json (the sbom-cataloger is opt-in). Fails if either is missing.
+[unix]
+sbom-zip zip version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    zip={{ quote(zip) }}
+    out="${zip%.zip}.cdx.json"
+    unpacked=$(mktemp -d)
+    trap 'rm -rf "$unpacked"' EXIT
+    unzip -q "$zip" -d "$unpacked"
+    syft scan "dir:$unpacked" --quiet \
+        --select-catalogers +sbom-cataloger \
+        --source-name kellnr --source-version {{ quote(version) }} \
+        --output "cyclonedx-json=$out"
+    count() { jq --arg p "$1" '[.components[]? | select(.purl // "" | startswith($p))] | length' "$out"; }
+    crates=$(count pkg:cargo/)
+    npm=$(count pkg:npm/)
+    echo "$out: $crates crates, $npm npm packages"
+    if [ "$crates" -eq 0 ] || [ "$npm" -eq 0 ]; then
+        echo "The SBOM of $zip misses the crates or the npm packages."
+        exit 1
+    fi
 
 clean:
     cargo clean
@@ -259,64 +274,13 @@ update-npm-hash:
 ##########################################
 # Commands used by the Github Actions CI
 ##########################################
-# Set the target for the ci-release command.
-# The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
-# "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl".
-# It's used by the Github Actions CI to build the release binary for the specified target.
-
-target := "x86_64-unknown-linux-gnu"
-
-[unix]
-ci-release: clean npm-build
-    cross build --release --target {{ target }} --features vendored-openssl
-
-[windows]
-ci-release:
-    @echo "ci-release with cross is not supported on Windows"
-
-##########################################
-# Commands for cross-rs to build the
-# release binary for different targets
-##########################################
-
-[unix]
-x-aarch64-musl:
-    cross build --target aarch64-unknown-linux-musl --features vendored-openssl
-
-[unix]
-x-aarch64-gnu:
-    cross build --target aarch64-unknown-linux-gnu --features vendored-openssl
-
-[unix]
-x-x86_64-musl:
-    cross build --target x86_64-unknown-linux-musl --features vendored-openssl
-
-[unix]
-x-x86_64-gnu:
-    cross build --target x86_64-unknown-linux-gnu --features vendored-openssl
-
-[unix]
-x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu
-
-[windows]
-x-aarch64-musl:
-    @echo "cross compilation is not supported on Windows"
-
-[windows]
-x-aarch64-gnu:
-    @echo "cross compilation is not supported on Windows"
-
-[windows]
-x-x86_64-musl:
-    @echo "cross compilation is not supported on Windows"
-
-[windows]
-x-x86_64-gnu:
-    @echo "cross compilation is not supported on Windows"
-
-[windows]
-x-all:
-    @echo "cross compilation is not supported on Windows"
+# Release build of one target, run natively on a runner of that target
+# (host == target). cargo auditable embeds the dependency list, so scanners
+# find the crates in the binary. The UI must already be in
+# crates/embedded-resources/static (CI downloads it from the ui job).
+# Example: just ci-release x86_64-pc-windows-msvc --no-default-features
+ci-release target *cargo-args:
+    cargo auditable build --release --locked --target {{ target }} {{ cargo-args }}
 
 ##########################################
 # Aliases

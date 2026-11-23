@@ -76,7 +76,7 @@ jobs:
     outputs:
       nix: ${{ steps.filter.outputs.nix }}
       docker: ${{ steps.filter.outputs.docker }}
-      sbom: ${{ steps.filter.outputs.sbom }}
+      build: ${{ steps.filter.outputs.build }}
 
     steps:
       - name: Check for packaging changes
@@ -96,12 +96,13 @@ jobs:
               - "docker/**"
               - ".github/workflows/release.yaml"
               - ".github/workflows/test.yaml"
-            sbom:
-              - ".github/scripts/**"
+            build:
               - "justfile"
               - "Cargo.lock"
               - "**/Cargo.toml"
+              - "ui/package.json"
               - "ui/package-lock.json"
+              - ".github/workflows/build.yaml"
               - ".github/workflows/release.yaml"
               - ".github/workflows/test.yaml"
 
@@ -273,23 +274,16 @@ jobs:
       - name: Build with Nix
         run: nix build
 
-  # The release workflow builds the Docker images and the SBOMs. Check them
-  # on PRs that change them, so a broken build shows up before a release.
-  sbom:
-    name: SBOM
+  # Builds the release zips of all targets and their SBOMs like the release
+  # workflow, on PRs that can break them (dependency bumps can break single
+  # targets). The zips are kept as artifacts for 7 days.
+  build:
+    name: Release Build
     needs: [update-npm-hash, changes]
-    if: ${{ always() && !failure() && !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.sbom == 'true') }}
-    runs-on: ubuntu-26.04
-
-    steps:
-      - *checkout
-      - *install-nix
-
-      - name: Test scripts
-        run: nix develop --command just test-scripts
-
-      - name: Generate SBOMs
-        run: nix develop --command just sbom-binary
+    if: ${{ always() && !failure() && !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.build == 'true') }}
+    uses: ./.github/workflows/build.yaml
+    with:
+      version: 0.0.0-ci
 
   # Builds the Dockerfiles with the binaries of the latest release, without
   # pushing the images.

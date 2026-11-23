@@ -21,7 +21,8 @@ FROM kellnr-zip-${TARGETARCH} AS kellnr-zip
 
 FROM --platform=$BUILDPLATFORM alpine:3.23 AS kellnr-bin
 COPY --from=kellnr-zip /kellnr.zip /tmp/kellnr.zip
-RUN unzip -q /tmp/kellnr.zip -d /out && chmod 0755 /out/kellnr
+# Zips of older releases have no sbom/ directory.
+RUN mkdir -p /out/sbom && unzip -q /tmp/kellnr.zip -d /out && chmod 0755 /out/kellnr
 
 ##################
 # Runtime image  #
@@ -42,6 +43,8 @@ RUN apt install -y \
     libssl-dev
 
 COPY --from=kellnr-bin /out/kellnr /usr/local/bin/kellnr
+# SBOM of the npm packages of the embedded UI, read by Trivy and BuildKit's SBOM scan.
+COPY --from=kellnr-bin /out/sbom/ /usr/share/kellnr/sbom/
 COPY docker/kellnr.toml /etc/kellnr/kellnr.toml
 RUN rustup component add rust-src
 

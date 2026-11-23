@@ -166,12 +166,16 @@
               rust-analyzer
               cargo-nextest
               cargo-machete
-              cdxgen
+              cargo-auditable
               # The upstream test suite fails in the nixpkgs build on
               # aarch64-darwin with cargo 1.99; the tool itself works.
               (cargo-llvm-cov.overrideAttrs (_: {
                 doCheck = false;
               }))
+              # SBOM tools. CI pins its own syft version in build.yaml.
+              cdxgen
+              syft
+              unzip
 
               # Node.js for UI development, same version as the UI build
               nodejs

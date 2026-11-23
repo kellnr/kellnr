@@ -53,6 +53,7 @@ jobs:
           echo "Timed out waiting for the Test run of $SHA."
           exit 1
 
+  # SBOM of the whole repository, including test and build dependencies.
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-26.04
@@ -69,207 +70,41 @@ jobs:
         run: |
           echo "VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
 
-      - name: Generate SBOMs
+      - name: Generate SBOM
         run: |
-          nix develop --command just sbom-binary
-          mkdir sboms
-          for sbom in kellnr kellnr-binary-linux kellnr-binary-windows kellnr-binary-macos; do
-            mv "$sbom.cdx.json" "sboms/$sbom-$VERSION.cdx.json"
-          done
+          nix develop --command just sbom
+          mv kellnr.cdx.json "kellnr-$VERSION.cdx.json"
 
-      - name: Upload SBOMs to release
+      - name: Upload SBOM to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: sboms/*.cdx.json
-          file_glob: true
+          file: kellnr-${{ env.VERSION }}.cdx.json
           tag: ${{ github.ref }}
 
-  build-kellnr:
-    name: Build Binaries
-    runs-on: ubuntu-26.04
+  build:
+    name: Build
     needs: [test]
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    strategy:
-      matrix:
-        target:
-          [
-            "x86_64-unknown-linux-gnu",
-            "x86_64-unknown-linux-musl",
-            "aarch64-unknown-linux-gnu",
-            "aarch64-unknown-linux-musl",
-          ]
+    uses: ./.github/workflows/build.yaml
+    with:
+      version: ${{ github.ref_name }}
+      # Attested binaries are built from a clean target dir.
+      cache: false
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Update APT Repositories
-        run: sudo apt update
-
-      - name: Install dependencies
-        run: sudo apt install -y sed zip
-
-      - name: Install Just
-        uses: taiki-e/install-action@v2.90.5
-        with: { tool: just }
-
-      - name: Setup Rust
-        uses: hecrj/setup-rust-action@v2
-
-      - name: Add Rust Targets
-        run: rustup target add ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install cross-rs
-        uses: taiki-e/install-action@v2.90.5
-        with: { tool: cross }
-
-      - name: Extract Version
-        run: |
-          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-          echo $KELLNR_COMPTIME__VERSION
-
-      - name: Build Release ${{ matrix.target }}
-        run: just target=${{ matrix.target }} ci-release
-
-      - name: Set Package Name
-        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_COMPTIME__VERSION.zip" >> $GITHUB_ENV
-
-      - name: Print Package Name
-        run: echo $KELLNR_PACKAGE
-
-      - name: Package Kellnr
-        uses: montudor/action-zip@v1.0.0
-        with:
-          args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/release/kellnr
-
-      # The Docker images verify this attestation before they use the zip.
-      - name: Attest build provenance
-        uses: actions/attest@v4
-        with:
-          subject-path: ${{ env.KELLNR_PACKAGE }}
-
-      - name: Set Asset Name
-        run: echo "KELLNR_ASSET=kellnr-${{ matrix.target }}.zip" >> $GITHUB_ENV
-
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.KELLNR_PACKAGE }}
-          asset_name: ${{ env.KELLNR_ASSET }}
-          tag: ${{ github.ref }}
-
-  build-windows:
-    name: Build Windows
-    runs-on: windows-latest
-    needs: [test]
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-pc-windows-msvc
-            artifact: kellnr-x86_64-windows
-          - target: aarch64-pc-windows-msvc
-            artifact: kellnr-aarch64-windows
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Rust
-        uses: hecrj/setup-rust-action@v2
-
-      - name: Add Rust target
-        run: rustup target add ${{ matrix.target }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-
-      - name: Install Just
-        uses: taiki-e/install-action@v2.90.5
-        with: { tool: just }
-
-      - name: Extract Version
-        shell: bash
-        run: |
-          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-
-      - name: Build UI assets
-        run: just npm-build
-
-      - name: Build Release
-        run: cargo build --release --target ${{ matrix.target }} --no-default-features
-
-      - name: Package Kellnr
-        shell: pwsh
-        run: Compress-Archive -Path target/${{ matrix.target }}/release/kellnr.exe -DestinationPath ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-
-      - name: Attest build provenance
-        uses: actions/attest@v4
-        with:
-          subject-path: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-          asset_name: ${{ matrix.artifact }}.zip
-          tag: ${{ github.ref }}
-
-  build-macos:
-    name: Build macOS
+  sign-macos:
+    name: Sign macOS
     runs-on: macos-26
-    needs: [test]
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    strategy:
-      matrix:
-        include:
-          - target: aarch64-apple-darwin
-            artifact: kellnr-aarch64-apple-darwin
-
+    needs: [build]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Rust
-        uses: hecrj/setup-rust-action@v2
-
-      - name: Add Rust target
-        run: rustup target add ${{ matrix.target }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      - name: Download unsigned zip
+        uses: actions/download-artifact@v8
         with:
-          node-version: "24"
+          name: unsigned-kellnr-aarch64-apple-darwin
 
-      - name: Install Just
-        uses: taiki-e/install-action@v2.90.5
-        with: { tool: just }
-
-      - name: Extract Version
+      - name: Unpack
         run: |
-          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-
-      - name: Build UI assets
-        run: just npm-build
-
-      - name: Build Release
-        run: cargo build --release --target ${{ matrix.target }}
+          unzip -q kellnr-aarch64-apple-darwin.zip -d package
+          rm kellnr-aarch64-apple-darwin.zip
 
       - name: Import signing certificate
         env:
@@ -293,14 +128,11 @@ jobs:
         run: |
           codesign --force --options runtime --timestamp \
             --sign "$MACOS_SIGN_IDENTITY" \
-            target/${{ matrix.target }}/release/kellnr
-          codesign --verify --strict --verbose=2 target/${{ matrix.target }}/release/kellnr
+            package/kellnr
+          codesign --verify --strict --verbose=2 package/kellnr
 
-      - name: Package Kellnr
-        run: |
-          zip -qq -j \
-            ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip \
-            target/${{ matrix.target }}/release/kellnr
+      - name: Package
+        run: cd package && zip -qr ../kellnr-aarch64-apple-darwin.zip .
 
       - name: Notarize
         env:
@@ -309,27 +141,20 @@ jobs:
           AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
         run: |
           echo "$AC_API_KEY_P8" | base64 --decode > AuthKey.p8
-          xcrun notarytool submit \
-            ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip \
+          xcrun notarytool submit kellnr-aarch64-apple-darwin.zip \
             --key AuthKey.p8 \
             --key-id "$AC_API_KEY_ID" \
             --issuer "$AC_API_ISSUER_ID" \
             --wait
           rm -f AuthKey.p8
 
-      # Attest after notarization, so only archives accepted by Apple are attested.
-      - name: Attest build provenance
-        uses: actions/attest@v4
+      - name: Upload signed zip
+        uses: actions/upload-artifact@v7
         with:
-          subject-path: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-          asset_name: ${{ matrix.artifact }}.zip
-          tag: ${{ github.ref }}
+          name: kellnr-aarch64-apple-darwin
+          path: kellnr-aarch64-apple-darwin.zip
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Clean up keychain
         if: always()
@@ -337,6 +162,78 @@ jobs:
           security delete-keychain build.keychain || true
           rm -f cert.p12 AuthKey.p8
 
+  # Attests each release zip (build provenance and its SBOM from build.yaml)
+  # and uploads both to the release, so
+  # "gh attestation verify --predicate-type https://cyclonedx.org/bom" works
+  # for every archive. The attestations must be created in this workflow: the
+  # image job and the documented verification check
+  # --signer-workflow .github/workflows/release.yaml.
+  # The Linux zips do not wait for the signing and notarization of the macOS
+  # zip, so the images start right after the build.
+  publish-linux:
+    name: Publish ${{ matrix.asset }}
+    runs-on: ubuntu-26.04
+    needs: [build]
+    permissions: &publish-permissions
+      contents: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        asset: ${{ fromJSON(needs.build.outputs.linux-assets) }}
+    steps: &publish-steps
+      - name: Download zip
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.asset }}
+          path: out
+
+      - name: Download SBOMs
+        uses: actions/download-artifact@v8
+        with:
+          name: sboms
+          path: sboms
+
+      - name: Select SBOM
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: mv "sboms/$ASSET.cdx.json" out/
+
+      # The Docker images verify this attestation before they use the zip.
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: out/${{ matrix.asset }}.zip
+
+      - name: Attest SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: out/${{ matrix.asset }}.zip
+          sbom-path: out/${{ matrix.asset }}.cdx.json
+
+      - name: Upload zip and SBOM to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: out/*
+          file_glob: true
+          tag: ${{ github.ref }}
+
+  # Notarization runs before, so only macOS archives accepted by Apple are attested.
+  publish-other:
+    name: Publish ${{ matrix.asset }}
+    runs-on: ubuntu-26.04
+    needs: [build, sign-macos]
+    permissions: *publish-permissions
+    strategy:
+      fail-fast: false
+      matrix:
+        asset: ${{ fromJSON(needs.build.outputs.other-assets) }}
+    steps: *publish-steps
+
+  # Builds the UI itself, so the crates.io release does not wait for the
+  # binaries. Same commit and lock file as the UI in the binaries.
   crates-io-release:
     name: Publish to crates.io
     runs-on: ubuntu-26.04
@@ -346,6 +243,11 @@ jobs:
         uses: actions/checkout@v7
         with: { fetch-depth: 0, persist-credentials: false }
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
       - name: Install Just
         uses: taiki-e/install-action@v2.90.5
         with: { tool: just }
@@ -353,8 +255,10 @@ jobs:
       - name: Setup Rust
         uses: hecrj/setup-rust-action@v2
 
-      - name: Build static resources
-        run: just npm-build
+      - name: Build UI assets
+        run: |
+          (cd ui && npm ci)
+          just npm-build
 
       - name: Publish to crates.io
         uses: secana/k-releaser@v1
@@ -366,7 +270,7 @@ jobs:
   build-and-push-image:
     name: Build and Push Docker Image (${{ matrix.variant }})
     runs-on: ubuntu-26.04
-    needs: [build-kellnr, sbom]
+    needs: [publish-linux]
     permissions:
       contents: read
       packages: write
@@ -408,14 +312,25 @@ jobs:
           amd64="kellnr-x86_64-unknown-linux-$LINKAGE.zip"
           arm64="kellnr-aarch64-unknown-linux-$LINKAGE.zip"
           gh release download "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" \
-            --pattern "$amd64" --pattern "$arm64" --pattern "kellnr-binary-linux-$RELEASE_VERSION.cdx.json"
+            --pattern "$amd64" --pattern "$arm64"
           for zip in "$amd64" "$arm64"; do
             gh attestation verify "$zip" --repo "$GITHUB_REPOSITORY" \
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
               --source-ref "$GITHUB_REF"
           done
-          echo "sha256-amd64=$(sha256sum "$amd64" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "sha256-arm64=$(sha256sum "$arm64" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          {
+            echo "sha256-amd64=$(sha256sum "$amd64" | cut -d ' ' -f 1)"
+            echo "sha256-arm64=$(sha256sum "$arm64" | cut -d ' ' -f 1)"
+            echo "sbom=sboms/${amd64%.zip}.cdx.json"
+          } >> "$GITHUB_OUTPUT"
+
+      # The SBOM of the same run, not the release asset, so nobody can swap it
+      # between publish-linux and this job.
+      - name: Download SBOMs
+        uses: actions/download-artifact@v8
+        with:
+          name: sboms
+          path: sboms
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -477,58 +392,15 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-      # The SBOM of the image only sees the OS packages, not the crates and
-      # npm packages compiled into kellnr. Attach the SBOM of the binary.
+      # Signed SBOM of the kellnr binary in the image (the x86_64 zip of its
+      # linkage). The unsigned BuildKit SBOM above covers the OS packages too.
       - name: Attest SBOM
         uses: actions/attest@v4
         with:
           subject-name: ${{ matrix.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
-          sbom-path: release-assets/kellnr-binary-linux-${{ env.RELEASE_VERSION }}.cdx.json
+          sbom-path: ${{ steps.assets.outputs.sbom }}
           push-to-registry: true
-
-  # Attaches the SBOM of each platform to its release archives, so
-  # "gh attestation verify --predicate-type https://cyclonedx.org/bom"
-  # works for every archive.
-  attest-sboms:
-    name: Attest SBOMs of the Binaries
-    runs-on: ubuntu-26.04
-    needs: [sbom, build-kellnr, build-windows, build-macos]
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    steps:
-      - name: Download release archives and SBOMs
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "kellnr-*.zip"
-          for platform in linux windows macos; do
-            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              --pattern "kellnr-binary-$platform-$version.cdx.json" --output "kellnr-binary-$platform.cdx.json"
-          done
-          ls -l
-
-      - name: Attest Linux SBOM
-        uses: actions/attest@v4
-        with:
-          subject-path: kellnr-*-unknown-linux-*.zip
-          sbom-path: kellnr-binary-linux.cdx.json
-
-      - name: Attest Windows SBOM
-        uses: actions/attest@v4
-        with:
-          subject-path: kellnr-*-windows.zip
-          sbom-path: kellnr-binary-windows.cdx.json
-
-      - name: Attest macOS SBOM
-        uses: actions/attest@v4
-        with:
-          subject-path: kellnr-*-apple-darwin.zip
-          sbom-path: kellnr-binary-macos.cdx.json
 
   dispatch-helm:
     name: Update Helm Chart
