@@ -302,8 +302,9 @@ jobs:
             just sbom-zip "$zip" "$VERSION"
           done
 
-      # The release publishes exactly these zips, so a new target needs no
-      # second list in release.yaml.
+      # The release publishes exactly these zips and downloads each artifact by
+      # its zip name, so a new Linux or Windows target needs no second list in
+      # release.yaml (a new macOS target also needs sign-macos).
       - name: List assets
         id: assets
         run: |
