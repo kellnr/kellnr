@@ -164,12 +164,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Rust 1.100 makes cargo pass the rustc arguments of kellnr in an
+          # @argfile on Windows, which cargo-auditable 0.7.7 ignores, so the
+          # binary gets no dependency list. Remove the pin once it is fixed:
+          # https://github.com/kellnr/kellnr/issues/1533
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             asset: kellnr-x86_64-windows
+            toolchain: 1.99.1
           - target: aarch64-pc-windows-msvc
             runner: windows-11-arm
             asset: kellnr-aarch64-windows
+            toolchain: 1.99.1
     steps:
       - *checkout
 
@@ -181,9 +187,10 @@ jobs:
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
+          TOOLCHAIN: ${{ matrix.toolchain }}
         run: |
-          rustup toolchain install "stable-$TARGET" --profile minimal
-          rustup default "stable-$TARGET"
+          rustup toolchain install "$TOOLCHAIN-$TARGET" --profile minimal
+          rustup default "$TOOLCHAIN-$TARGET"
           rustc -vV
 
       - *install-tools
@@ -221,6 +228,7 @@ jobs:
     strategy:
       matrix:
         target: [aarch64-apple-darwin]
+        toolchain: [stable]
     env:
       KELLNR_COMPTIME__VERSION: ${{ needs.ui.outputs.version }}
     steps:
