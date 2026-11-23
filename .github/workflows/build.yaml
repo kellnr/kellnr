@@ -19,6 +19,13 @@ on:
         description: Restore and save the Rust build cache. Release builds start clean.
         type: boolean
         default: true
+    outputs:
+      linux-assets:
+        description: JSON list of the Linux zip names without ".zip".
+        value: ${{ jobs.sboms.outputs.linux-assets }}
+      other-assets:
+        description: JSON list of the Windows and macOS zip names without ".zip".
+        value: ${{ jobs.sboms.outputs.other-assets }}
 
 permissions:
   contents: read
@@ -265,6 +272,9 @@ jobs:
     name: SBOMs
     needs: [ui, linux, windows, macos]
     runs-on: ubuntu-26.04
+    outputs:
+      linux-assets: ${{ steps.assets.outputs.linux }}
+      other-assets: ${{ steps.assets.outputs.other }}
     steps:
       - *checkout
 
@@ -291,6 +301,17 @@ jobs:
           for zip in dist/kellnr-*.zip; do
             just sbom-zip "$zip" "$VERSION"
           done
+
+      # The release publishes exactly these zips, so a new target needs no
+      # second list in release.yaml.
+      - name: List assets
+        id: assets
+        run: |
+          set -euo pipefail
+          names=$(find dist -maxdepth 1 -name 'kellnr-*.zip' -printf '%f\n' | sed 's/\.zip$//' | sort)
+          to_json() { jq -R . | jq -sc .; }
+          echo "linux=$(grep -- '-linux-' <<< "$names" | to_json)" >> "$GITHUB_OUTPUT"
+          echo "other=$(grep -v -- '-linux-' <<< "$names" | to_json)" >> "$GITHUB_OUTPUT"
 
       - name: Upload SBOMs
         uses: actions/upload-artifact@v7

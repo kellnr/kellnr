@@ -180,14 +180,14 @@ sbom:
 sbom-zip zip version:
     #!/usr/bin/env bash
     set -euo pipefail
-    zip="{{ zip }}"
+    zip={{ quote(zip) }}
     out="${zip%.zip}.cdx.json"
     unpacked=$(mktemp -d)
     trap 'rm -rf "$unpacked"' EXIT
     unzip -q "$zip" -d "$unpacked"
     syft scan "dir:$unpacked" --quiet \
         --select-catalogers +sbom-cataloger \
-        --source-name kellnr --source-version "{{ version }}" \
+        --source-name kellnr --source-version {{ quote(version) }} \
         --output "cyclonedx-json=$out"
     count() { jq --arg p "$1" '[.components[]? | select(.purl // "" | startswith($p))] | length' "$out"; }
     crates=$(count pkg:cargo/)
