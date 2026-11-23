@@ -173,10 +173,18 @@ jobs:
     steps:
       - *checkout
 
+      # The runner images ship rustup. Install the toolchain of the target
+      # itself, so host == target. rustup-init in Git Bash would pick an
+      # x86_64 host on windows-11-arm, as Git Bash runs emulated there.
       - &setup-rust
         name: Setup Rust
-        uses: hecrj/setup-rust-action@v2
-        with: { targets: "${{ matrix.target }}" }
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          rustup toolchain install "stable-$TARGET" --profile minimal
+          rustup default "stable-$TARGET"
+          rustc -vV
 
       - *install-tools
       - *rust-cache
