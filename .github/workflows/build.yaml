@@ -1,0 +1,242 @@
+name: Build
+
+# Builds the release zips of all targets natively (no cross compilation) with
+# cargo auditable, so scanners find the crates in the binaries. Every zip holds
+# the binary and sbom/kellnr-ui.cdx.json, the npm packages of the embedded UI.
+#
+# This workflow needs no secrets and only reads the repository. Signing,
+# attestations and uploads to the release happen in release.yaml, which must
+# stay the signer workflow of the attestations.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version compiled into kellnr, with or without a leading "v".
+        type: string
+        required: true
+      cache:
+        description: Restore and save the Rust build cache. Release builds start clean.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ui:
+    name: Build UI
+    runs-on: ubuntu-26.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with: { persist-credentials: false }
+
+      - name: Normalize version
+        id: version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: echo "version=${VERSION#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Install Just
+        uses: taiki-e/install-action@v2.90.5
+        with: { tool: just }
+
+      # npm ci installs exactly the lock file, so the UI and its SBOM match it.
+      # The npm install in npm-build then has nothing to change.
+      - name: Install npm dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build UI assets
+        run: just npm-build
+
+      - name: Generate npm SBOM of the UI
+        working-directory: ui
+        run: npm sbom --omit dev --sbom-format cyclonedx > ../kellnr-ui.cdx.json
+
+      - name: Upload UI assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-static
+          path: crates/embedded-resources/static
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload UI SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-sbom
+          path: kellnr-ui.cdx.json
+          if-no-files-found: error
+          retention-days: 7
+
+  # The gnu binaries are built on the oldest Debian with security support,
+  # which sets their glibc floor. musl is built in the same image.
+  linux:
+    name: Build ${{ matrix.target }}
+    needs: [ui]
+    runs-on: ${{ matrix.runner }}
+    container: rust:bookworm
+    env:
+      KELLNR_COMPTIME__VERSION: ${{ needs.ui.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, runner: ubuntu-26.04 }
+          - { target: x86_64-unknown-linux-musl, runner: ubuntu-26.04 }
+          - { target: aarch64-unknown-linux-gnu, runner: ubuntu-26.04-arm }
+          - { target: aarch64-unknown-linux-musl, runner: ubuntu-26.04-arm }
+    steps:
+      - &checkout
+        name: Checkout
+        uses: actions/checkout@v7
+        with: { persist-credentials: false }
+
+      - name: Install system packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends musl-tools zip
+
+      - &install-tools
+        name: Install Just and cargo-auditable
+        uses: taiki-e/install-action@v2.90.5
+        with: { tool: "just,cargo-auditable" }
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - &rust-cache
+        uses: Swatinem/rust-cache@v2
+        if: inputs.cache
+        with: { key: "${{ matrix.target }}" }
+
+      - &download-ui-static
+        name: Download UI assets
+        uses: actions/download-artifact@v8
+        with:
+          name: ui-static
+          path: crates/embedded-resources/static
+
+      - &download-ui-sbom
+        name: Download UI SBOM
+        uses: actions/download-artifact@v8
+        with:
+          name: ui-sbom
+          path: package/sbom
+
+      - name: Build
+        run: just ci-release ${{ matrix.target }}
+
+      - name: Package
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          cp "target/$TARGET/release/kellnr" package/
+          cd package && zip -qr "../kellnr-$TARGET.zip" .
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: kellnr-${{ matrix.target }}
+          path: kellnr-${{ matrix.target }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Build ${{ matrix.target }}
+    needs: [ui]
+    runs-on: ${{ matrix.runner }}
+    env:
+      KELLNR_COMPTIME__VERSION: ${{ needs.ui.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            asset: kellnr-x86_64-windows
+          - target: aarch64-pc-windows-msvc
+            runner: windows-11-arm
+            asset: kellnr-aarch64-windows
+    steps:
+      - *checkout
+
+      - &setup-rust
+        name: Setup Rust
+        uses: hecrj/setup-rust-action@v2
+        with: { targets: "${{ matrix.target }}" }
+
+      - *install-tools
+      - *rust-cache
+      - *download-ui-static
+      - *download-ui-sbom
+
+      - name: Build
+        run: just ci-release ${{ matrix.target }} --no-default-features
+
+      - name: Package
+        shell: pwsh
+        env:
+          TARGET: ${{ matrix.target }}
+          ASSET: ${{ matrix.asset }}
+        run: |
+          Copy-Item "target/$env:TARGET/release/kellnr.exe" package/
+          Compress-Archive -Path package/* -DestinationPath "$env:ASSET.zip"
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  # Unsigned: signing and notarization need secrets and run in release.yaml.
+  # The artifact name does not start with "kellnr-", so the release only
+  # picks up the signed zip.
+  macos:
+    name: Build ${{ matrix.target }}
+    needs: [ui]
+    runs-on: macos-26
+    strategy:
+      matrix:
+        target: [aarch64-apple-darwin]
+    env:
+      KELLNR_COMPTIME__VERSION: ${{ needs.ui.outputs.version }}
+    steps:
+      - *checkout
+      - *setup-rust
+      - *install-tools
+      - *rust-cache
+      - *download-ui-static
+      - *download-ui-sbom
+
+      - name: Build
+        run: just ci-release ${{ matrix.target }}
+
+      - name: Package
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          cp "target/$TARGET/release/kellnr" package/
+          cd package && zip -qr "../kellnr-$TARGET.zip" .
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-kellnr-${{ matrix.target }}
+          path: kellnr-${{ matrix.target }}.zip
+          if-no-files-found: error
+          retention-days: 7

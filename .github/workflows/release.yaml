@@ -85,191 +85,29 @@ jobs:
           file_glob: true
           tag: ${{ github.ref }}
 
-  build-kellnr:
-    name: Build Binaries
-    runs-on: ubuntu-26.04
+  build:
+    name: Build
     needs: [test]
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    strategy:
-      matrix:
-        target:
-          [
-            "x86_64-unknown-linux-gnu",
-            "x86_64-unknown-linux-musl",
-            "aarch64-unknown-linux-gnu",
-            "aarch64-unknown-linux-musl",
-          ]
+    uses: ./.github/workflows/build.yaml
+    with:
+      version: ${{ github.ref_name }}
+      # Attested binaries are built from a clean target dir.
+      cache: false
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Update APT Repositories
-        run: sudo apt update
-
-      - name: Install dependencies
-        run: sudo apt install -y sed zip
-
-      - name: Install Just
-        uses: taiki-e/install-action@v2.90.5
-        with: { tool: just }
-
-      - name: Setup Rust
-        uses: hecrj/setup-rust-action@v2
-
-      - name: Add Rust Targets
-        run: rustup target add ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install cross-rs
-        uses: taiki-e/install-action@v2.90.5
-        with: { tool: cross }
-
-      - name: Extract Version
-        run: |
-          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-          echo $KELLNR_COMPTIME__VERSION
-
-      - name: Build Release ${{ matrix.target }}
-        run: just target=${{ matrix.target }} ci-release
-
-      - name: Set Package Name
-        run: echo "KELLNR_PACKAGE=kellnr-${{ matrix.target }}-$KELLNR_COMPTIME__VERSION.zip" >> $GITHUB_ENV
-
-      - name: Print Package Name
-        run: echo $KELLNR_PACKAGE
-
-      - name: Package Kellnr
-        uses: montudor/action-zip@v1.0.0
-        with:
-          args: zip -qq -j ${{ env.KELLNR_PACKAGE }} target/${{ matrix.target }}/release/kellnr
-
-      # The Docker images verify this attestation before they use the zip.
-      - name: Attest build provenance
-        uses: actions/attest@v4
-        with:
-          subject-path: ${{ env.KELLNR_PACKAGE }}
-
-      - name: Set Asset Name
-        run: echo "KELLNR_ASSET=kellnr-${{ matrix.target }}.zip" >> $GITHUB_ENV
-
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.KELLNR_PACKAGE }}
-          asset_name: ${{ env.KELLNR_ASSET }}
-          tag: ${{ github.ref }}
-
-  build-windows:
-    name: Build Windows
-    runs-on: windows-latest
-    needs: [test]
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-pc-windows-msvc
-            artifact: kellnr-x86_64-windows
-          - target: aarch64-pc-windows-msvc
-            artifact: kellnr-aarch64-windows
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Rust
-        uses: hecrj/setup-rust-action@v2
-
-      - name: Add Rust target
-        run: rustup target add ${{ matrix.target }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-
-      - name: Install Just
-        uses: taiki-e/install-action@v2.90.5
-        with: { tool: just }
-
-      - name: Extract Version
-        shell: bash
-        run: |
-          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-
-      - name: Build UI assets
-        run: just npm-build
-
-      - name: Build Release
-        run: cargo build --release --target ${{ matrix.target }} --no-default-features
-
-      - name: Package Kellnr
-        shell: pwsh
-        run: Compress-Archive -Path target/${{ matrix.target }}/release/kellnr.exe -DestinationPath ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-
-      - name: Attest build provenance
-        uses: actions/attest@v4
-        with:
-          subject-path: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-          asset_name: ${{ matrix.artifact }}.zip
-          tag: ${{ github.ref }}
-
-  build-macos:
-    name: Build macOS
+  sign-macos:
+    name: Sign macOS
     runs-on: macos-26
-    needs: [test]
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    strategy:
-      matrix:
-        include:
-          - target: aarch64-apple-darwin
-            artifact: kellnr-aarch64-apple-darwin
-
+    needs: [build]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Rust
-        uses: hecrj/setup-rust-action@v2
-
-      - name: Add Rust target
-        run: rustup target add ${{ matrix.target }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      - name: Download unsigned zip
+        uses: actions/download-artifact@v8
         with:
-          node-version: "24"
+          name: unsigned-kellnr-aarch64-apple-darwin
 
-      - name: Install Just
-        uses: taiki-e/install-action@v2.90.5
-        with: { tool: just }
-
-      - name: Extract Version
+      - name: Unpack
         run: |
-          echo "KELLNR_COMPTIME__VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-
-      - name: Build UI assets
-        run: just npm-build
-
-      - name: Build Release
-        run: cargo build --release --target ${{ matrix.target }}
+          unzip -q kellnr-aarch64-apple-darwin.zip -d package
+          rm kellnr-aarch64-apple-darwin.zip
 
       - name: Import signing certificate
         env:
@@ -293,14 +131,11 @@ jobs:
         run: |
           codesign --force --options runtime --timestamp \
             --sign "$MACOS_SIGN_IDENTITY" \
-            target/${{ matrix.target }}/release/kellnr
-          codesign --verify --strict --verbose=2 target/${{ matrix.target }}/release/kellnr
+            package/kellnr
+          codesign --verify --strict --verbose=2 package/kellnr
 
-      - name: Package Kellnr
-        run: |
-          zip -qq -j \
-            ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip \
-            target/${{ matrix.target }}/release/kellnr
+      - name: Package
+        run: cd package && zip -qr ../kellnr-aarch64-apple-darwin.zip .
 
       - name: Notarize
         env:
@@ -309,27 +144,20 @@ jobs:
           AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
         run: |
           echo "$AC_API_KEY_P8" | base64 --decode > AuthKey.p8
-          xcrun notarytool submit \
-            ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip \
+          xcrun notarytool submit kellnr-aarch64-apple-darwin.zip \
             --key AuthKey.p8 \
             --key-id "$AC_API_KEY_ID" \
             --issuer "$AC_API_ISSUER_ID" \
             --wait
           rm -f AuthKey.p8
 
-      # Attest after notarization, so only archives accepted by Apple are attested.
-      - name: Attest build provenance
-        uses: actions/attest@v4
+      - name: Upload signed zip
+        uses: actions/upload-artifact@v7
         with:
-          subject-path: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ matrix.artifact }}-${{ env.KELLNR_COMPTIME__VERSION }}.zip
-          asset_name: ${{ matrix.artifact }}.zip
-          tag: ${{ github.ref }}
+          name: kellnr-aarch64-apple-darwin
+          path: kellnr-aarch64-apple-darwin.zip
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Clean up keychain
         if: always()
@@ -337,24 +165,69 @@ jobs:
           security delete-keychain build.keychain || true
           rm -f cert.p12 AuthKey.p8
 
+  # Attests and uploads all release zips. The attestations must be created in
+  # this workflow: the image job and the documented verification check
+  # --signer-workflow .github/workflows/release.yaml.
+  publish:
+    name: Publish Binaries
+    runs-on: ubuntu-26.04
+    needs: [build, sign-macos]
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      # Matches the Linux and Windows zips and the signed macOS zip, not the
+      # unsigned one ("unsigned-kellnr-...").
+      - name: Download zips
+        uses: actions/download-artifact@v8
+        with:
+          pattern: kellnr-*
+          path: dist
+          merge-multiple: true
+
+      - name: Check zips
+        run: |
+          set -euo pipefail
+          ls -l dist
+          count=$(find dist -maxdepth 1 -name 'kellnr-*.zip' | wc -l)
+          if [ "$count" -ne 7 ]; then
+            echo "Expected 7 release zips, found $count."
+            exit 1
+          fi
+
+      # The Docker images verify this attestation before they use the zip.
+      # Notarization ran before, so only macOS archives accepted by Apple are attested.
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/kellnr-*.zip
+
+      - name: Upload zips to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dist/kellnr-*.zip
+          file_glob: true
+          tag: ${{ github.ref }}
+
   crates-io-release:
     name: Publish to crates.io
     runs-on: ubuntu-26.04
-    needs: [test]
+    needs: [build]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
         with: { fetch-depth: 0, persist-credentials: false }
 
-      - name: Install Just
-        uses: taiki-e/install-action@v2.90.5
-        with: { tool: just }
-
       - name: Setup Rust
         uses: hecrj/setup-rust-action@v2
 
-      - name: Build static resources
-        run: just npm-build
+      - name: Download UI assets
+        uses: actions/download-artifact@v8
+        with:
+          name: ui-static
+          path: crates/embedded-resources/static
 
       - name: Publish to crates.io
         uses: secana/k-releaser@v1
@@ -366,7 +239,7 @@ jobs:
   build-and-push-image:
     name: Build and Push Docker Image (${{ matrix.variant }})
     runs-on: ubuntu-26.04
-    needs: [build-kellnr, sbom]
+    needs: [publish, sbom]
     permissions:
       contents: read
       packages: write
@@ -493,7 +366,7 @@ jobs:
   attest-sboms:
     name: Attest SBOMs of the Binaries
     runs-on: ubuntu-26.04
-    needs: [sbom, build-kellnr, build-windows, build-macos]
+    needs: [sbom, publish]
     permissions:
       contents: read
       id-token: write

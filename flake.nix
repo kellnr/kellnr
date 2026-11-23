@@ -166,6 +166,7 @@
               rust-analyzer
               cargo-nextest
               cargo-machete
+              cargo-auditable
               cdxgen
               # The upstream test suite fails in the nixpkgs build on
               # aarch64-darwin with cargo 1.99; the tool itself works.

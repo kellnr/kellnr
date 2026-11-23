@@ -41,7 +41,9 @@ mime_guess.workspace = true
 serde.workspace = true
 moka.workspace = true
 rustls.workspace = true
-openssl = { version = "0.10", optional = true } # Not needed directly but for cross-compilation with the vendored-openssl feature
+# Not used directly; vendored-openssl links OpenSSL statically into the native
+# libraries of cargo (curl, libgit2, libssh2) for doc builds.
+openssl = { version = "0.10", optional = true }
 tempfile.workspace = true
 tokio.workspace = true
 toml.workspace = true

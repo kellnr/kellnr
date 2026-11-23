@@ -259,64 +259,13 @@ update-npm-hash:
 ##########################################
 # Commands used by the Github Actions CI
 ##########################################
-# Set the target for the ci-release command.
-# The target can be "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
-# "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl".
-# It's used by the Github Actions CI to build the release binary for the specified target.
-
-target := "x86_64-unknown-linux-gnu"
-
-[unix]
-ci-release: clean npm-build
-    cross build --release --target {{ target }} --features vendored-openssl
-
-[windows]
-ci-release:
-    @echo "ci-release with cross is not supported on Windows"
-
-##########################################
-# Commands for cross-rs to build the
-# release binary for different targets
-##########################################
-
-[unix]
-x-aarch64-musl:
-    cross build --target aarch64-unknown-linux-musl --features vendored-openssl
-
-[unix]
-x-aarch64-gnu:
-    cross build --target aarch64-unknown-linux-gnu --features vendored-openssl
-
-[unix]
-x-x86_64-musl:
-    cross build --target x86_64-unknown-linux-musl --features vendored-openssl
-
-[unix]
-x-x86_64-gnu:
-    cross build --target x86_64-unknown-linux-gnu --features vendored-openssl
-
-[unix]
-x-all: x-aarch64-musl x-aarch64-gnu x-x86_64-musl x-x86_64-gnu
-
-[windows]
-x-aarch64-musl:
-    @echo "cross compilation is not supported on Windows"
-
-[windows]
-x-aarch64-gnu:
-    @echo "cross compilation is not supported on Windows"
-
-[windows]
-x-x86_64-musl:
-    @echo "cross compilation is not supported on Windows"
-
-[windows]
-x-x86_64-gnu:
-    @echo "cross compilation is not supported on Windows"
-
-[windows]
-x-all:
-    @echo "cross compilation is not supported on Windows"
+# Release build of one target, run natively on a runner of that target
+# (host == target). cargo auditable embeds the dependency list, so scanners
+# find the crates in the binary. The UI must already be in
+# crates/embedded-resources/static (CI downloads it from the ui job).
+# Example: just ci-release x86_64-pc-windows-msvc --no-default-features
+ci-release target *cargo-args:
+    cargo auditable build --release --locked --target {{ target }} {{ cargo-args }}
 
 ##########################################
 # Aliases
