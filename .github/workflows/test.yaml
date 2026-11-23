@@ -97,7 +97,6 @@ jobs:
               - ".github/workflows/release.yaml"
               - ".github/workflows/test.yaml"
             sbom:
-              - ".github/scripts/**"
               - "justfile"
               - "Cargo.lock"
               - "**/Cargo.toml"
@@ -273,8 +272,8 @@ jobs:
       - name: Build with Nix
         run: nix build
 
-  # The release workflow builds the Docker images and the SBOMs. Check them
-  # on PRs that change them, so a broken build shows up before a release.
+  # The release workflow generates the SBOM of the whole repository. Check it
+  # on PRs that change it, so a broken generation shows up before a release.
   sbom:
     name: SBOM
     needs: [update-npm-hash, changes]
@@ -285,11 +284,8 @@ jobs:
       - *checkout
       - *install-nix
 
-      - name: Test scripts
-        run: nix develop --command just test-scripts
-
-      - name: Generate SBOMs
-        run: nix develop --command just sbom-binary
+      - name: Generate SBOM
+        run: nix develop --command just sbom
 
   # Builds the Dockerfiles with the binaries of the latest release, without
   # pushing the images.

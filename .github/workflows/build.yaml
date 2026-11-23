@@ -240,3 +240,46 @@ jobs:
           path: kellnr-${{ matrix.target }}.zip
           if-no-files-found: error
           retention-days: 7
+
+  # One SBOM per zip, checked on every build. release.yaml attests them; this
+  # job runs syft without the permissions to sign anything. Signing the macOS
+  # binary does not change its crates, so the SBOM of the unsigned zip also
+  # describes the signed one.
+  sboms:
+    name: SBOMs
+    needs: [ui, linux, windows, macos]
+    runs-on: ubuntu-26.04
+    steps:
+      - *checkout
+
+      - name: Download zips
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "*kellnr-*"
+          path: dist
+          merge-multiple: true
+
+      - name: Install Just
+        uses: taiki-e/install-action@v2.90.5
+        with: { tool: just }
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0.24.3
+        with: { syft-version: v1.57.2 }
+
+      - name: Generate SBOMs
+        env:
+          VERSION: ${{ needs.ui.outputs.version }}
+        run: |
+          set -euo pipefail
+          for zip in dist/kellnr-*.zip; do
+            just sbom-zip "$zip" "$VERSION"
+          done
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v7
+        with:
+          name: sboms
+          path: dist/*.cdx.json
+          if-no-files-found: error
+          retention-days: 7
