@@ -56,7 +56,7 @@ jobs:
           node-version: "24"
 
       - name: Install Just
-        uses: taiki-e/install-action@v2.90.5
+        uses: taiki-e/install-action@v2.90.8
         with: { tool: just }
 
       # npm ci installs exactly the lock file, so the UI and its SBOM match it.
@@ -118,7 +118,7 @@ jobs:
 
       - &install-tools
         name: Install Just and cargo-auditable
-        uses: taiki-e/install-action@v2.90.5
+        uses: taiki-e/install-action@v2.90.8
         with: { tool: "just,cargo-auditable" }
 
       - name: Add Rust target
@@ -286,11 +286,11 @@ jobs:
           merge-multiple: true
 
       - name: Install Just
-        uses: taiki-e/install-action@v2.90.5
+        uses: taiki-e/install-action@v2.90.8
         with: { tool: just }
 
       - name: Install Syft
-        uses: anchore/sbom-action/download-syft@v0.24.3
+        uses: anchore/sbom-action/download-syft@v0.24.4
         with: { syft-version: v1.57.2 }
 
       - name: Generate SBOMs

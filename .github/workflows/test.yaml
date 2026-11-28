@@ -141,7 +141,7 @@ jobs:
           swap-storage: false
 
       - &install-nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v32
         with: { nix_path: "nixpkgs=channel:nixos-unstable" }
 
       # The dev shell is the same in every job. Without the cache, each job
