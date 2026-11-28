@@ -1242,9 +1242,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.6.8"
+version = "4.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac230478587d0269d8d6998b82ae69ea51509d55df66d9e92edd1f986904cd4a"
+checksum = "50066ca966813ca8957ee15361752f19424a8ff620dbe9c8993d9f99d99b04b3"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1252,9 +1252,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.6.7"
+version = "4.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0797fb7aeb1406c84efac526901f7ec3ead2124f946b494e72879d4b54704d"
+checksum = "a0ed97c96ef4efb3cc84e09fa388df4463e7cc3224ec38d7b1d9e45749333590"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1277,9 +1277,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.6.8"
+version = "4.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "895c9d8d2ac2dd8b8a29f3724a14e72aaaa6debcf8c38c82f97305c6a172767a"
+checksum = "b4c174f11f949b9ca8c60580925e282b9cbd5454750e506f08648b2038080cd7"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -1426,9 +1426,9 @@ dependencies = [
 
 [[package]]
 name = "cookie"
-version = "0.18.2"
+version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a373e3602691c3cdea496d2f0ee5935151e6168fe87739483c463db1b2f2f87"
+checksum = "d55f2d6c30eeec7d5c6f98bd4395d4abb1895629eab97ee6522d340623615f8a"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -2211,9 +2211,9 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.2"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
+checksum = "afa489199eaffb1211795df1c6236ce1ad0d41a6fa45250add73e3b02420f06e"
 dependencies = [
  "percent-encoding",
 ]
@@ -3664,9 +3664,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.12.0"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c3e324da4c95177d6291d4c8730197c0d1822f8a9766814a4a44fa5ab797c9c"
+checksum = "229c6ff5584df4c6becbfe00567128bac768c8cd32ebc8a8366bd81ed072e8f3"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -5239,7 +5239,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.21.7",
  "chrono",
  "getrandom 0.2.17",
  "http",
@@ -8226,9 +8226,9 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "url"
-version = "2.5.8"
+version = "2.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed"
+checksum = "f00cd2407bb42c0ef17be88d4cf020f5cceffd121665bac9b8b9493a369b3b1a"
 dependencies = [
  "form_urlencoded",
  "idna",
